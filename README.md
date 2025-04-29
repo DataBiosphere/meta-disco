@@ -2,10 +2,8 @@
 
 ## Setup
 
-```bash
-docker build -t terra-jupyter-ollama .
-```
-
+1. Start an Interactive Node
+Use srun to start an interactive session with access to GPUs and sufficient resources:
 ```bash
 srun --ntasks=1 \
 	--cpus-per-task=32 \
@@ -16,6 +14,14 @@ srun --ntasks=1 \
 	--pty bash
 ```
 
+2. Build the Docker Container
+Once on the interactive node, build the Docker image:
+```bash
+docker build -t terra-jupyter-ollama .
+```
+
+3. Run the Docker Container
+After building the image, run the container with GPU access, mounted volumes, and port forwarding:
 ```bash
 docker run -it --rm \
   --gpus all \
