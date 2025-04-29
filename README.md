@@ -49,7 +49,7 @@ ssh -N -L 8889:localhost:8889 \
 
 Once connected, you can open:
 
-http://localhost:8889 for JupyterLab
+http://localhost:8889/notebooks/ for JupyterLab
 
 http://localhost:11434 for Ollama
 
