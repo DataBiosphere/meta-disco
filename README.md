@@ -6,6 +6,7 @@ This README provides instructions to set up and run the terra-jupyter-ollama Doc
 This README provides instructions to set up and run the terra-jupyter-ollama Docker container on an interactive GPU node managed by the SLURM workload manager.
 
 **1. Start an Interactive Node**
+
 Use srun to start an interactive session with access to GPUs and sufficient resources:
 ```bash
 srun --ntasks=1 \
@@ -19,12 +20,14 @@ srun --ntasks=1 \
 ```
 
 **2. Build the Docker Container**
+
 Once on the interactive node, build the Docker image:
 ```bash
 docker build -t terra-jupyter-ollama .
 ```
 
 **3. Run the Docker Container**
+
 After building the image, run the container with GPU access, mounted volumes, and port forwarding:
 ```bash
 docker run -it --rm \
@@ -39,6 +42,7 @@ docker run -it --rm \
 NOTE: When running the container, please make the mounted volume readable and writeable by the container. 
 
 **4. SSH Tunnel to Phoenix**
+
 To access the JupyterLab and Ollama services from your local machine, set up an SSH tunnel:
 
 ```bash
@@ -54,6 +58,7 @@ http://localhost:8889/notebooks/ for JupyterLab
 http://localhost:11434 for Ollama
 
 **5. Ollama Example: NHGRI AnVIL Title Summarizer**
+
 This Ollama model summarizes the number of files associated with each unique datasets.title entry from a .tsv file exported from the NHGRI AnVIL platform.
 
 Create the model from the Modelfile
