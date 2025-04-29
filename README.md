@@ -1,5 +1,4 @@
 # meta-disco
-This README provides instructions to set up and run the terra-jupyter-ollama Docker container on an interactive GPU node.
 
 ## Terra Jupyter Ollama Setup
 
