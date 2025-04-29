@@ -1,6 +1,9 @@
 # meta-disco
+This README provides instructions to set up and run the terra-jupyter-ollama Docker container on an interactive GPU node.
 
-## Setup
+## Terra Jupyter Ollama Setup
+
+This README provides instructions to set up and run the terra-jupyter-ollama Docker container on an interactive GPU node managed by the SLURM workload manager.
 
 1. Start an Interactive Node
 Use srun to start an interactive session with access to GPUs and sufficient resources:
@@ -10,6 +13,7 @@ srun --ntasks=1 \
 	--mem=128G \
 	--gres=gpu:2 \
 	--partition=gpu \
+	--nodelist=phoenix-00 \
 	--time=10:00:00 \
 	--pty bash
 ```
@@ -33,4 +37,19 @@ docker run -it --rm \
 ```
 
 NOTE: When running the container, please make the mounted volume readable and writeable by the container. 
+
+4. SSH Tunnel to Phoenix
+To access the JupyterLab and Ollama services from your local machine, set up an SSH tunnel:
+
+```bash
+ssh -N -L 8889:localhost:8889 \
+          -L 11434:localhost:11434 \
+          -J genomics-institute@mustard.prism genomics-institute@phoenix-00
+```
+
+Once connected, you can open:
+
+http://localhost:8889 for JupyterLab
+
+http://localhost:11434 for Ollama
 
