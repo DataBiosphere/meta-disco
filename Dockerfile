@@ -20,5 +20,13 @@ RUN curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
 
 RUN curl -fsSL https://ollama.com/install.sh | bash
 
+# --- Minimal Conda permission fix ---
+RUN mkdir -p /home/jupyter/.conda && \
+    chown -R jupyter:jupyter /home/jupyter/.conda
+
 USER jupyter
 WORKDIR /home/jupyter
+
+RUN conda config --add pkgs_dirs /home/jupyter/.conda/pkgs && \
+    conda config --add envs_dirs /home/jupyter/.conda/envs && \
+    conda config --set auto_activate_base false
