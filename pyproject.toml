@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "meta-disco"
+version = "0.1.0"
+description = "A metadata validation and discovery tool for biological data files, built with LinkML"
+authors = ["Dave Rogers <dave@clevercanary.com>"]
+readme = "README.md"
+packages = [{ include = "meta_disco", from = "src" }]
+
+
+[tool.poetry.dependencies]
+python = "^3.10"
+linkml-runtime = "^1.9.1"
+linkml-validator = "^0.4.5"
+linkml = "^1.9.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,4 @@
+id: "ex:file2"
+filename: "sample2.fasta"
+reference_assembly: "GRCh39"   # ❌ Invalid: not one of GRCh37, GRCh38, CHM13
+data_modality: "proteomic"      # ❌ Invalid: not genomic or transcriptomic
