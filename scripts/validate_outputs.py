@@ -55,7 +55,8 @@ def main():
         print("Usage: python scripts/validate_outputs.py <instance_file>")
         sys.exit(1)
     instance_path = sys.argv[1]
-    validate_instance(instance_path, schema_path)
+    result = validate_instance(instance_path, schema_path)
+    sys.exit(0 if result else 1)  # Exit with 0 (success) or 1 (failure)
 
 if __name__ == "__main__":
     main()
