@@ -52,7 +52,7 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
 def main():
     schema_path = "src/meta_disco/schema/anvil_file.yaml"
     if len(sys.argv) < 2:
-        print("Usage: python scripts/validate_llm_outputs.py <instance_file>")
+        print("Usage: python scripts/validate_outputs.py <instance_file>")
         sys.exit(1)
     instance_path = sys.argv[1]
     validate_instance(instance_path, schema_path)
