@@ -1,4 +1,4 @@
-# meta-disco
+# meta-disc🪩
 
 ## Terra Jupyter Ollama Setup
 
