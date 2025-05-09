@@ -26,7 +26,15 @@ find "$(poetry config virtualenvs.path)" -name "*meta-disco*" -type d -exec rm -
 
 # Create a fresh environment
 echo "Creating a fresh virtual environment..."
-poetry env use python3.10
+
+# Extract Python version from pyproject.toml (macOS compatible)
+PYTHON_VERSION=$(grep 'python = ' pyproject.toml | sed 's/python = "\^\([0-9.]*\)"/\1/')
+if [ -z "$PYTHON_VERSION" ]; then
+    echo "Error: Unable to determine Python version from pyproject.toml."
+    exit 1
+fi
+echo "Using Python version: $PYTHON_VERSION"
+poetry env use "python$PYTHON_VERSION"
 
 # Install dependencies using Poetry
 echo "Installing dependencies for meta-disco schema validation..."
