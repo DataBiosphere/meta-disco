@@ -1,4 +1,4 @@
-id: http://example.org/anvil_file
+id: https://github.com/DataBiosphere/meta-disco/blob/main/schema/src/meta_disco/schema/anvil_file.yaml#
 name: anvil_file
 prefixes:
   ex: http://anvilproject.org/
