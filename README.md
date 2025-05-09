@@ -4,6 +4,21 @@
 
 Meta-disco is a project focused on metadata inference for biological data files, leveraging both code and AI technologies (LLMs) to automatically extract and validate experimental metadata for the AnVIL Explorer and Terra Data Repository. The goal is to enhance the discoverability and usability of genomic and transcriptomic datasets by ensuring they have accurate, structured metadata.
 
+## Project Components
+
+The meta-disco project consists of two main components:
+
+1. **LLM Component**: Responsible for running the Large Language Models to extract metadata from biological data files.
+2. **Schema Validation Component**: Responsible for validating the extracted metadata against LinkML schemas.
+
+### LLM Component
+
+The LLM component uses Conda for environment management and Ollama for running the LLM models. Setup instructions can be found in the "Terra Jupyter Ollama Setup" section below.
+
+### Schema Validation Component
+
+The Schema Validation component is now located in the `schema/` directory and uses Poetry for dependency management. For setup and usage instructions, see the README in the `schema/` directory.
+
 ## Schema and Validation
 
 A core component of meta-disco is its schema-based approach to metadata validation. The project uses LinkML (Linked Data Modeling Language) to define schemas that specify the expected structure and constraints for metadata associated with biological data files.
@@ -35,15 +50,19 @@ The validator checks:
 
 ### Installation
 
-This project uses Poetry for dependency management:
+This project has two separate setup processes:
 
 ```bash
 # Clone the repository
 git clone https://github.com/DataBiosphere/meta-disco.git
 cd meta-disco
 
-# Install dependencies with Poetry
-poetry install
+# Set up the LLM component
+./setup.sh
+
+# Set up the Schema Validation component
+cd schema
+./setup.sh
 ```
 
 ### Validation Command
@@ -51,55 +70,22 @@ poetry install
 The `validate` command checks if metadata files conform to the schema:
 
 ```bash
-# Using make
-make validate INSTANCE=path/to/metadata.yaml
+# Navigate to the schema directory
+cd schema
 
-# Or directly
+# Using Poetry
 poetry run python scripts/validate_outputs.py path/to/metadata.yaml
 ```
 
 This validation is crucial for ensuring that metadata inferred by AI models is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
 
-### Testing
-
-Run the test suite to verify the validation functionality:
-
-```bash
-# Run all validation tests
-make test
-
-# Or directly
-poetry run pytest tests/test_validation.py
-```
-
-### Generating Models
-
-If you modify the schema, you need to regenerate the Python models:
-
-```bash
-# Generate Python models from LinkML schema
-make generate
-
-# Or directly
-poetry run linkml generate python src/meta_disco/schema/anvil_file.yaml > src/meta_disco/models/anvil_models.py
-```
-
 ## Project Structure
 
-- `src/meta_disco/schema/`: LinkML schema definitions
-- `src/meta_disco/models/`: Generated Python models from schemas
-- `scripts/`: Utility scripts for validation and metadata inference
-- `tests/`: Test files and test data
-
-## AI Integration
-
-The project aims to use AI technologies to infer metadata from various sources, including:
-- Raw data files
-- Associated documentation
-- Publication information
-- Related datasets
-
-The inferred metadata is then validated against the LinkML schema to ensure it meets the structural requirements before being incorporated into data repositories.
+- `schema/`: Contains the LinkML schema validation component
+  - `src/meta_disco/schema/`: LinkML schema definitions
+  - `scripts/`: Validation scripts
+- `src/meta_disco/`: Main project source code
+- `scripts/`: Utility scripts for metadata inference
 
 ## Terra Jupyter Ollama Setup
 

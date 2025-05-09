@@ -50,10 +50,14 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
         return False
 
 def main():
-    schema_path = "src/meta_disco/schema/anvil_file.yaml"
+    # Updated schema path to use the new location
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                              "src/meta_disco/schema/anvil_file.yaml")
+    
     if len(sys.argv) < 2:
         print("Usage: python scripts/validate_outputs.py <instance_file>")
         sys.exit(1)
+    
     instance_path = sys.argv[1]
     result = validate_instance(instance_path, schema_path)
     sys.exit(0 if result else 1)  # Exit with 0 (success) or 1 (failure)

@@ -1,5 +1,5 @@
 # Auto generated from anvil_file.yaml by pythongen.py version: 0.0.1
-# Generation date: 2025-04-27T02:47:57
+# Generation date: 2025-05-08T22:48:52
 # Schema: anvil_file
 #
 # id: http://example.org/anvil_file
