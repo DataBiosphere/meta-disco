@@ -8,7 +8,7 @@ This README provides instructions to set up and run the terra-jupyter-ollama Doc
 
 Use srun to start an interactive session with access to GPUs and sufficient resources:
 ```bash
-srun --ntasks=1 \
+$ srun --ntasks=1 \
     --cpus-per-task=16 \
     --mem=64G \
     --gres=gpu:1 \
@@ -29,7 +29,7 @@ docker build -t terra-jupyter-ollama .
 
 After building the image, run the container with GPU access, mounted volumes, and port forwarding:
 ```bash
-docker run -it --rm \
+$ docker run -it --rm \
   --gpus all \
   -p 8889:8889 -p 11434:11434 \
   -v /private/groups:/home/jupyter/work \
@@ -45,7 +45,7 @@ NOTE: When running the container, please make the mounted volume readable and wr
 To access the JupyterLab and Ollama services from your local machine, set up an SSH tunnel:
 
 ```bash
-ssh -N -L 8889:localhost:8889 \
+$ ssh -N -L 8889:localhost:8889 \
           -L 11434:localhost:11434 \
           -J genomics-institute@mustard.prism genomics-institute@phoenix-00
 ```
@@ -62,22 +62,24 @@ http://localhost:11434 for Ollama
 Open a terminal in JupyterLab and cd to the work dir to create the conda environment.
 
 ```bash
-conda env create -f environment.yaml
+$ conda env create -f environment.yaml
 
 # after installation initialization
-conda init bash
+$ conda init bash
 
 # close the terminal and then open a new one to activate the environment
-conda init metadisco
+$ conda init metadisco
 ```
 
 Next, pull an Ollama model.
 
 ```
-ollama pull llama3.2
+$ ollama pull llama3.2
 ```
 
-**6. Ollama Example: NHGRI AnVIL Title Summarizer**
+If you open
+
+**7. Ollama Example: NHGRI AnVIL Title Summarizer**
 
 This Ollama model summarizes the number of files associated with each unique datasets.title entry from a .tsv file exported from the NHGRI AnVIL platform.
 
