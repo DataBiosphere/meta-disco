@@ -77,9 +77,13 @@ Next, pull an Ollama model.
 $ ollama pull llama3.2
 ```
 
-If you open
+If you open a new notebook, please select the kernel titled:
 
-**7. Ollama Example: NHGRI AnVIL Title Summarizer**
+```bash
+Python [conda env:.conda-metadisco]
+```
+
+**6. Ollama Example: NHGRI AnVIL Title Summarizer**
 
 This Ollama model summarizes the number of files associated with each unique datasets.title entry from a .tsv file exported from the NHGRI AnVIL platform.
 
