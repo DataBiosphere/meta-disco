@@ -34,6 +34,17 @@ if [ -z "$PYTHON_VERSION" ]; then
     exit 1
 fi
 echo "Using Python version: $PYTHON_VERSION"
+
+# Check if the specified Python version is installed
+if ! pyenv versions --bare | grep -q "^${PYTHON_VERSION}\(\..*\)\?$"; then
+  echo
+  echo "Python version ${PYTHON_VERSION} is not installed. Installing it with pyenv..."
+  pyenv install "${PYTHON_VERSION}"
+fi
+
+# Temporarily set Pyenv version in order to create Poetry environment
+export PYENV_VERSION="$PYTHON_VERSION"
+
 poetry env use "python$PYTHON_VERSION"
 
 # Install dependencies using Poetry
