@@ -48,22 +48,9 @@ make test
 poetry run pytest tests/test_validation.py
 ```
 
-### Generating Models
-
-If you modify the schema, you can regenerate the Python models:
-
-```bash
-# Using the Makefile
-make generate
-
-# Or directly with Poetry
-poetry run linkml generate python src/meta_disco/schema/anvil_file.yaml > src/meta_disco/models/anvil_models.py
-```
-
 ## Directory Structure
 
 - `src/meta_disco/schema/` - Contains the LinkML schema definitions
-- `src/meta_disco/models/` - Generated Python models from schemas
 - `scripts/` - Contains validation scripts
 - `tests/` - Test files and test data
 
