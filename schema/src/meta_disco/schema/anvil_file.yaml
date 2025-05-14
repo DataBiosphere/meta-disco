@@ -1,13 +1,11 @@
 id: https://github.com/DataBiosphere/meta-disco/blob/main/schema/src/meta_disco/schema/anvil_file.yaml#
 name: anvil_file
 prefixes:
-  ex: http://anvilproject.org/
   linkml: https://w3id.org/linkml/
 
 imports:
   - linkml:types
 
-default_prefix: ex
 default_range: string
 
 classes:
