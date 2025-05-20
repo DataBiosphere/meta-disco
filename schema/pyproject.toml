@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "meta-disco-schema"
+version = "0.1.0"
+description = "LinkML schema validation component for meta-disco"
+authors = ["Dave Rogers <dave@clevercanary.com>"]
+readme = "README.md"
+packages = [{ include = "meta_disco", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+linkml-runtime = "^1.9.1"
+linkml-validator = "^0.4.5"
+linkml = "^1.9.1"
+pyyaml = "^6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,56 @@
+id: https://github.com/DataBiosphere/meta-disco/blob/main/schema/src/meta_disco/schema/anvil_file.yaml#
+name: anvil_file
+prefixes:
+  linkml: https://w3id.org/linkml/
+
+imports:
+  - linkml:types
+
+default_range: string
+
+classes:
+  File:
+    description: A file associated with biological data
+    slots:
+      - id
+      - filename
+      - reference_assembly
+      - data_modality
+    slot_usage:
+      reference_assembly:
+        required: true
+      data_modality:
+        required: true
+
+slots:
+  id:
+    description: A unique identifier for the file
+    range: uriorcurie
+    required: true
+  filename:
+    description: Name of the file
+
+  reference_assembly:
+    description: The genome reference assembly used
+    range: reference_assembly_enum
+
+  data_modality:
+    description: The modality of the biological data (genomic, transcriptomic, etc.)
+    range: data_modality_enum
+
+enums:
+  reference_assembly_enum:
+    permissible_values:
+      GRCh37:
+        text: "GRCh37"
+      GRCh38:
+        text: "GRCh38"
+      CHM13:
+        text: "CHM13"
+
+  data_modality_enum:
+    permissible_values:
+      genomic:
+        text: "genomic"
+      transcriptomic:
+        text: "transcriptomic"

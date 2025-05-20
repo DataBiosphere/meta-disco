@@ -1,0 +1,4 @@
+id: "ex:file1"
+filename: "sample1.fasta"
+reference_assembly: "GRCh38"
+data_modality: "genomic"
