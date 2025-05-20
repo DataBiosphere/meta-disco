@@ -1,5 +1,4 @@
-FROM us.gcr.io/broad-dsp-gcr-public/terra-jupyter-base:1.0.0
-
+FROM us.gcr.io/broad-dsp-gcr-public/terra-jupyter-base:latest
 USER root
 
 RUN find /etc/apt/sources.list.d/ -type f -exec sed -i '/cloud.google.com\|nvidia\|gcsfuse/d' {} \; && \
