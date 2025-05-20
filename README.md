@@ -57,9 +57,15 @@ This project has two separate setup processes:
 git clone https://github.com/DataBiosphere/meta-disco.git
 cd meta-disco
 
-# Set up the LLM component
-./setup.sh
+# NOTE: Assumes user is in Jupyter Lab container (section: Terra Jupyter Ollama Setup)
 
+# Set up the LLM component package managed through conda and pip
+./setup_conda.sh
+# Activate metadisco environmen
+./post_setup.sh
+```
+
+```bash
 # Set up the Schema Validation component
 cd schema
 ./setup.sh
@@ -91,3 +97,79 @@ This validation is crucial for ensuring that metadata inferred by AI models is s
 
 This section provides instructions to set up and run the terra-jupyter-ollama Docker container on an interactive GPU node managed by the SLURM workload manager.
 
+**1. Start an Interactive Node**
+
+With GPU support (e.g., with NVIDIA A100 GPUs)
+
+```bash
+# interactive session with gpu support
+$ srun --ntasks=1 \
+    --cpus-per-task=16 \
+    --mem=32G \
+    --gres=gpu:1 \
+    --partition=gpu \
+    --nodelist=phoenix-00 \ # specify a gpu node
+    --time=02:00:00 \
+    --pty bash
+```
+or with only CPU:
+
+```bash 
+# interactive session with no gpu
+$ srun --ntasks=1 \
+    --cpus-per-task=16 \
+    --mem=32G \
+    --time=02:00:00 \
+    --partition=medium \
+    --pty bash
+```
+
+**2. Build the Docker Container**
+
+Once on the interactive node, build the Docker image:
+
+```bash
+docker build -t terra-jupyter-ollama .
+```
+
+**3. Run the Docker Container**
+
+After building the image, run the container with GPU access, mounted volumes, and port forwarding:
+
+```bash
+docker run -d --rm --user $(id -u):$(id -g) \
+--cpus "${SLURM_CPUS_PER_TASK}" \
+--memory 32G \
+--gpus="\"device=${SLURM_JOB_GPUS}\"" \
+-e HOME=/userhome \
+-v "${STORAGE_LOCATION}:/userhome/.ollama" \
+-p "${EXPOSED_PORT}:11434" \--name "${CONTAINER_NAME}" ollama/ollama
+```
+
+**4. SSH Tunnel to Phoenix**
+
+To access the JupyterLab and Ollama services from your local machine, set up an SSH tunnel:
+
+```bash
+$ ssh -N -L 8889:localhost:8889 \
+          -L 11434:localhost:11434 \
+          -J genomics-institute@mustard.prism genomics-institute@phoenix-00
+```
+
+Once connected, you can open:
+
+http://localhost:8889/notebooks/lab for JupyterLab
+
+http://localhost:11434 for Ollama
+
+
+**5. Configure Environment**
+
+Open a terminal in JupyterLab and cd to the work dir to create the conda environment.
+
+```bash
+# Set up the LLM component package managed through conda and pip
+./setup_conda.sh
+# Activate metadisco environmen
+./post_setup.sh
+```
