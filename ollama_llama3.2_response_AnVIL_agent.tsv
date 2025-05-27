@@ -1,0 +1,147 @@
+files.file_name	files.data_modality	files.reference_genome	files.determination_data_modality	files.confidence_data_modality	files.justification_data_modality
+m84081_230628_194051_s3.hifi_reads.bc1018.bam	genomic	GRCh38	logic	0.98	
+IRF2BP1-BGRSLV04-12_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.99	
+RBBP6-BGRSLV06-19_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+07_20_21_R941_HG02602_1_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_fail.bam	genomic	GRCh38	logic	1.0	
+PPP1CA-BG293LV06-57_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	unknown
+LUC7L-BG293LV06-104B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+TPD52L2-BG293LV05-70_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.99	genomic
+PRPF40A-BG293LV06-108B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	none
+HG006vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	1.0	
+07_20_21_R941_HG02602_2_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic		
+SMNDC1-BG293LV06-91B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.95	logic
+PRRC2B-BG293LV06-39_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+HG002vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	1.0	
+BL-BGRSLV04-71_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+MBNL2-BG293LV05-62_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+YTHDF1-BG293LV06-63B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.99	logic
+CSTF2T-BG293LV06-97B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+1_11_23_R941_HG01175_2_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic	1.0	
+m54329U_200215_021808.hifi_reads.bam	genomic	GRCh38	logic		
+RNF113A-BGRSDLV03-29_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+SRP68-BG293LV06-54_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+m64330e_220902_175209_q9_forDC.bam	genomic	GRCh38	logic	1.0	
+ZFP36L1-BGRSLV03-52_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	logic
+HG_HG02723_Guppy_6.1.2_pass.bam	genomic	GRCh38	logic	0.0	
+HG003vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	
+HNRNPH2-BG293LV05-41_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+m84091_230905_205913_s4.fail_reads.unassigned.bam	genomic	GRCh38	logic	0.999	logic
+HG02723vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic		
+m84046_230630_233157_s3.bc2052--bc2052.bam	genomic	GRCh38	logic	0.0	
+m64043_200316_214923.ccs.bam	genomic	GRCh38	logic	0.0	
+ZNF473-BGRSDTLV02-91doxtot_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+HG01243vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	1.0	none
+CISD1-BGRSLV03-11_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+m84081_231222_081401_s1.fail_reads.bc2026.bam	genomic	GRCh38	logic	0.0	
+U2AF1-BGRSDLV04-8dox_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.999	
+HG03492vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic		
+HG02055vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	
+HG01109vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	
+HG02723_R10_638.bam	genomic	GRCh38	logic		
+HG00621.paternal.GRCh38_no_alt.bam	genomic	GRCh38	logic		
+ZC3HAV1-BG293LV06-35_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.5	
+HG02080vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	1.0	
+G2E3-BGRSDLV02-27dox_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	none
+m64055_210512_103416.hifi_reads.bam	genomic	GRCh38	logic	0.0	logic
+NT-BGRSLV02-1_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.97	HMM
+ZNF706-BGRSDLV04-80dox_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+NR5A2-BGRSLV03-39_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+HG006vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic		
+m54329U_211208_005551-bc1008.5mc.hifi_reads.bam	genomic	GRCh38	logic	1.0	logic
+CDCA7-BGRSLV03-10_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+HG03516.f1_assembly_v2.hap1.bam	genomic	GRCh38	logic	0.0	
+TRNAU1AP-BG293LV03-26_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+m84091_230905_202807_s3.fail_reads.bc1015.bam	genomic	GRCh38	logic	1.0	
+ZMAT5-BGRSDLV02-66_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG005vGRCh38_wm_ONT.sort.bam	genomic	GRCh38	logic		
+GM24385_R10_638.bam	genomic	GRCh38	logic		
+USP44-BGRSLV04-63_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+NT-BG293LV06-2B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+UBR7-BGRSLV04-61_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+07_13_21_R941_HG02074_1_Guppy_6.4.6_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic		
+ZFP37-BGRSLV02-38_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	genomic
+TUT1-BGRSLV06-48_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+HG00733_R10_reseq.638.bam	genomic	GRCh38	logic		
+HG02723vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	1.0	
+ZNF22-BGRSLV02-35_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+MBNL2-BG293LV06-14_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+TOB2-BG293LV06-117B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+NT-BG293LV06-1Bmerged_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.95	none
+EIF4H-BG293LV06-93B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+08_25_21_R941_HG01981_2_Guppy_6.4.6_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic	1.0	
+HG007vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic		
+NUDT21-BG293LV04-40_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+HG006vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	0.999	
+ZMAT3-BG293LV06-80B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+ZNF593-BGRSDLV04-68dox_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+NT-BG293LV06-73_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG00733vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	1.0	none
+YTHDF1-BG293LV05-26_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+m84091_230802_183430_s4.fail_reads.unassigned.bam	genomic	GRCh38	logic		
+CNOT4-BGRSDLV03-5_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	
+HG03579_3_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic		
+HG004vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	0.94	
+HG02622_1_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic	0.0	
+HG03098vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	1.0	
+HG_HG733C_Guppy_6.1.2_pass.bam	genomic	GRCh38	logic	0.0	
+HG02080vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic		
+HG007vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic		
+HNRNPCL1-BG293LV04-33_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+m64330e_220819_173115.hifi_reads.bam	genomic	GRCh38	logic		
+m54306Ue_220922_132103.hifi_reads.bam	genomic	GRCh38	logic	1.0	logic
+HG02257.maternal.ont.bam	genomic	GRCh38	logic		
+HG004vGRCh38_wm_ONT.sort.bam	genomic	GRCh38	logic		
+RBM10-BG293LV06-20_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.999	
+HG002vGRCh38_wm_ONT.sort.bam	genomic	GRCh38	logic		
+FUS-BGRSDLV03-20dox_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	logic
+HG002vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	
+RNPS1-BG293LV06-10_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.999	genomics
+HG01442vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic		
+RNF150-BGRSLV05-7_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+08_25_21_R941_HG01981_2_Guppy_6.4.6_450bps_modbases_5mc_cg_sup_prom_fail.bam	genomic	hg19	logic	0.0	
+ZNF800-BGRSLV02-42_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	genomic
+m84091_230905_192642_s1.hifi_reads.bc1015.bam	genomic	GRCh38	logic	0.0	
+HG02080vGRCh38_wm_ONT.sort.bam	genomic	GRCh38	logic		
+PPP1CA-BG293LV06-58_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	logic
+02_08_22_R941_HG01252_2_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_fail.bam	genomic	GRCh38	logic		
+HG02818.f1_assembly_v2.hap1.bam	genomic	GRCh38	logic	0.0	
+LSM1-BG293LV05-22_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	logic
+FUBP1-BG293LV06-99B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+07_27_21_R941_HG00408_3_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic	1.0	genomic
+HG03492vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	none
+ZNF770-BGRSLV08-50_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+RBM14-BG293LV06-29_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG005vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	1.0	logic
+RNPS1-BG293LV03-11_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG01109vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	0.0	logic
+m64043_200412_040054.ccs.bam	genomic	GRCh38	logic		
+BRCA1-BGRSDLV02-10_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+RNF26-BGRSLV06-31_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.999	logic
+ZC3HC1-BGRSLV04-66_Aligned.sortedByCoord.out.bam	genomic	hg19	logic	0.0	
+r54329U_20211215_223817_A01_q9_forDC.bam	genomic	GRCh38	logic	0.999	logic
+HG007vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic		
+ZCCHC9-BGRSLV05-51_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+CPSF6-BG293LV05-4_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+CPSF4-BGRSLV03-18_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+HNRNPF-BG293LV05-7_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.99	
+HG02145vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic	1.0	logic
+ZCRB1-BGRSLV05-56_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.999	logic
+HG004vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic	0.0	
+TRNAU1AP-BG293LV03-25_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	logic
+UBE2I-BG293LV03-28_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	1.0	logic
+HG0733vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic		logic
+m84046_230711_230656_s2.hifi_reads.bc2062.bam	genomic	GRCh38	logic	0.0	
+HG03492vCHM13_20200921_wm_ONT.sort.bam	genomic	T2T-CHM13	logic		
+HG003vCHM13_20200921_wm_ONT.sort.bam	T2T-CHM13 genomic	T2T-CHM13	logic	1.0	
+HG_GM24385_Guppy_6.1.2_pass.bam	genomic	GRCh38	logic		
+07_27_21_R941_HG04115_2_Guppy_6.5.7_450bps_modbases_5mc_cg_sup_prom_pass.bam	genomic	GRCh38	logic	1.0	
+m64076_221001_041132-bc1012.5mc.hifi_reads.bam	genomic	GRCh38	logic	0.0	
+CPSF4-BGRSLV03-17_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG03098vCHM13_20200921_wm_PBCCS.sort.bam	genomic	T2T-CHM13	logic		
+STAU2-BG293LV06-81B_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG02622_aligned_GRCh38_winnowmap.sorted.bam	genomic	GRCh38	logic		
+RYBP-BGRSLV06-36_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.0	
+HG00621.f1_assembly_v2.hap1.bam	genomic	GRCh38	logic	0.0	
+RNF31-BGRSLV07-21_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic	0.95	
+CNBP-BGRSLV03-15_Aligned.sortedByCoord.out.bam	genomic	GRCh38	logic		
+HG003vGRCh38_wm_PBCCS.sort.bam	genomic	GRCh38	logic	1.0	n/A
