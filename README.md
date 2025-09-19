@@ -55,13 +55,6 @@ This project has two separate setup processes:
 # Clone the repository
 git clone https://github.com/DataBiosphere/meta-disco.git
 cd meta-disco
-
-# NOTE: Assumes user is in Jupyter Lab container (section: Terra Jupyter Ollama Setup)
-
-# Set up the LLM component package managed through conda and pip
-./setup_conda.sh
-# Activate metadisco environmen
-./post_setup.sh
 ```
 
 ```bash
