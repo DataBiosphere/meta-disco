@@ -1,7 +1,7 @@
 # meta-disco
 
 ## Introduction
-Meta-disco is a project focused on metadata inference for biological data files, using natural language processing and large language models to extract and validate clinical and experimental sequencing data for the AnVIL Explorer and Terra Data Repository.
+Meta-disco is a project focused on metadata discovery for biological data files, using natural language processing and large language models to extract and validate clinical and experimental sequencing data for the AnVIL Explorer and Terra Data Repository.
 
 ## Project Components
 
