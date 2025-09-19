@@ -1,4 +1,6 @@
+# -------------------------
 # Base Terra Jupyter image
+# -------------------------
 FROM us.gcr.io/broad-dsp-gcr-public/terra-jupyter-base:latest
 
 # -------------------------
@@ -54,9 +56,20 @@ RUN ln -sf ${LLAMA_PREFIX}/build-cpu/bin /usr/local/llama-cpu && \
     ln -sf ${LLAMA_PREFIX}/build-cuda/bin /usr/local/llama-cuda || true
 
 # -------------------------
-# Ollama (optional)
+# Ollama (optional local models)
 # -------------------------
 RUN curl -fsSL https://ollama.com/install.sh | sh || true
+
+# -------------------------
+# Node.js (for Claude Code CLI)
+# -------------------------
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+ENV PATH=$PATH:/usr/local/bin
 
 # -------------------------
 # Conda/Jupyter setup
@@ -71,6 +84,7 @@ RUN conda config --add pkgs_dirs /home/jupyter/.conda/pkgs && \
     conda config --add envs_dirs /home/jupyter/.conda/envs && \
     conda config --set auto_activate_base false
 
+# Your env file
 COPY --chown=jupyter:jupyter environment.yaml /home/jupyter/environment.yaml
 
 # --- FIX: ensure conda notices cache is writable ---
@@ -80,6 +94,7 @@ RUN mkdir -p /home/jupyter/.cache/conda/notices && \
 USER jupyter
 # ---------------------------------------------------
 
+# Create env
 RUN conda env create -f environment.yaml
 
 # Torch GPU wheels (cu118)
@@ -87,6 +102,33 @@ RUN conda run -n metadisco pip install \
       torch==2.2.0+cu118 torchvision==0.17.0+cu118 torchaudio==2.2.0+cu118 \
       --index-url https://download.pytorch.org/whl/cu118
 
+# Pin numpy if desired (prevents ABI surprises)
 RUN conda run -n metadisco conda install -y numpy
+
+# Jupyter kernel
 RUN conda run -n metadisco python -m ipykernel install --user \
       --name metadisco --display-name "meta-disco"
+
+# -------------------------
+# Claude SDKs (Python) + optional Bedrock
+# -------------------------
+# Official Anthropic Python client for use inside notebooks
+RUN conda run -n metadisco pip install --no-cache-dir anthropic>=0.34
+
+# OPTIONAL: AWS Bedrock client (if you prefer Claude via Bedrock IAM)
+# Comment out if not needed
+RUN conda run -n metadisco pip install --no-cache-dir boto3 botocore
+
+# Default model hint (override at runtime as needed)
+ENV CLAUDE_MODEL="claude-3-5-sonnet-latest"
+
+# NOTE: Do NOT bake secrets into the image.
+# Expect ANTHROPIC_API_KEY (and AWS creds/role if using Bedrock) to be set at runtime:
+#   - ANTHROPIC_API_KEY
+#   - AWS_REGION (e.g., us-east-1)
+#   - BEDROCK_CLAUDE_MODEL (e.g., anthropic.claude-3-5-sonnet-20240620-v1:0)
+
+# -------------------------
+# Final working dir
+# -------------------------
+WORKDIR /home/jupyter
