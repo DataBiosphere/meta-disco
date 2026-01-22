@@ -794,6 +794,7 @@ instrument model, and read type without inspecting the sequence data.
 |----------|------------------|--------|
 | **Illumina (modern)** | `@A00488:61:HFWFVDSXX:1:1101:1000:1000` | `@instrument:run:flowcell:lane:tile:x:y` |
 | **Illumina (legacy)** | `@HWUSI-EAS100R:6:73:941:1973#0/1` | `@instrument:lane:tile:x:y#index/read` |
+| **ENA/SRA reformatted** | `@ERR123456.1 A00297:44:HFKH3DSXX:...` | `@accession.seq [original read name]` |
 | **PacBio CCS/HiFi** | `@m64011_190830_220126/1/ccs` | `@movie/zmw/ccs` |
 | **PacBio CLR** | `@m64011_190830_220126/1234/0_5000` | `@movie/zmw/start_end` |
 | **ONT** | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | `@uuid [key=value...]` |
@@ -924,6 +925,46 @@ instrument model, and read type without inspecting the sequence data.
 - **Confidence**: 80%
 
 **Rationale**: Ultima Genomics read names include flow-space encoded sequences in the read identifier.
+
+---
+
+### Archive Accessions (ENA/SRA/DDBJ)
+
+When FASTQ files are submitted to public archives (ENA, SRA, DDBJ), read names are
+prefixed with accession IDs. The original instrument information is often preserved after the accession.
+
+**Example**: `@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839/1`
+- Archive accession: `ERR3242571` (ENA)
+- Original read name: `A00297:44:HFKH3DSXX:2:1354:30508:28839/1` (NovaSeq)
+
+The accession can be used to query archive APIs for study metadata:
+- **ENA**: `https://www.ebi.ac.uk/ena/browser/api/xml/ERRxxxxxxx`
+- **SRA**: `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&id=SRRxxxxxxx`
+- **DDBJ**: `https://ddbj.nig.ac.jp/resource/sra-run/DRRxxxxxxx`
+
+#### `fastq_ena_err`
+
+- **Pattern**: `^@ERR\d+\.\d+`
+- **Archive**: ENA
+- **Confidence**: 60%
+
+**Rationale**: ERR accessions indicate data from the European Nucleotide Archive (ENA). The accession can be used to look up study metadata via ENA API. Original platform info may be preserved after the accession.
+
+#### `fastq_sra_srr`
+
+- **Pattern**: `^@SRR\d+\.\d+`
+- **Archive**: SRA
+- **Confidence**: 60%
+
+**Rationale**: SRR accessions indicate data from NCBI Sequence Read Archive (SRA). The accession can be used to query SRA metadata. Original instrument info may follow after a space.
+
+#### `fastq_ddbj_drr`
+
+- **Pattern**: `^@DRR\d+\.\d+`
+- **Archive**: DDBJ
+- **Confidence**: 60%
+
+**Rationale**: DRR accessions indicate data from DDBJ Sequence Read Archive (Japan). The accession links to DDBJ metadata resources.
 
 ---
 

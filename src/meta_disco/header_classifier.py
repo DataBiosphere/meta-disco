@@ -981,6 +981,41 @@ FASTQ_ULTIMA_RULES = [
     ),
 ]
 
+# ENA/SRA archive accession patterns
+# When data is submitted to ENA/SRA, read names get prefixed with accession IDs
+# but the original instrument info is usually preserved after a space
+FASTQ_ARCHIVE_RULES = [
+    FASTQHeaderRule(
+        id="fastq_ena_err",
+        pattern=r"^@ERR\d+\.\d+",
+        classification=None,  # Platform determined from text after accession
+        platform=None,
+        confidence=0.60,
+        rationale="ERR accessions indicate data from the European Nucleotide Archive (ENA). "
+                  "The accession can be used to look up study metadata via ENA API. "
+                  "Original platform info may be preserved after the accession."
+    ),
+    FASTQHeaderRule(
+        id="fastq_sra_srr",
+        pattern=r"^@SRR\d+\.\d+",
+        classification=None,
+        platform=None,
+        confidence=0.60,
+        rationale="SRR accessions indicate data from NCBI Sequence Read Archive (SRA). "
+                  "The accession can be used to query SRA metadata. "
+                  "Original instrument info may follow after a space."
+    ),
+    FASTQHeaderRule(
+        id="fastq_ddbj_drr",
+        pattern=r"^@DRR\d+\.\d+",
+        classification=None,
+        platform=None,
+        confidence=0.60,
+        rationale="DRR accessions indicate data from DDBJ Sequence Read Archive (Japan). "
+                  "The accession links to DDBJ metadata resources."
+    ),
+]
+
 # Paired-end detection (works across platforms)
 FASTQ_PAIREDEND_RULES = [
     FASTQHeaderRule(
@@ -1002,6 +1037,7 @@ ALL_FASTQ_RULES = (
     FASTQ_MGI_RULES +
     FASTQ_ELEMENT_RULES +
     FASTQ_ULTIMA_RULES +
+    FASTQ_ARCHIVE_RULES +
     FASTQ_PAIREDEND_RULES
 )
 
@@ -1576,6 +1612,8 @@ def classify_from_fastq_header(
         "confidence": 0.0,
         "is_paired_end": None,
         "instrument_hint": None,
+        "archive_accession": None,  # ENA/SRA/DDBJ accession if present
+        "archive_source": None,     # "ENA", "SRA", or "DDBJ"
         "matched_rules": [],
         "evidence": [],
         "warnings": [],
@@ -1587,6 +1625,20 @@ def classify_from_fastq_header(
     # Check multiple reads for consistency (use first 10)
     sample_reads = read_lines[:10]
     platform_votes = {}
+
+    # First pass: extract archive accession if present
+    accession_pattern = re.compile(r"^@(ERR|SRR|DRR)(\d+)\.\d+\s*(.*)$")
+    archive_sources = {"ERR": "ENA", "SRR": "SRA", "DRR": "DDBJ"}
+
+    for read_name in sample_reads:
+        if not read_name.startswith("@"):
+            continue
+        match = accession_pattern.match(read_name)
+        if match:
+            prefix, acc_num, remainder = match.groups()
+            result["archive_accession"] = f"{prefix}{acc_num}"
+            result["archive_source"] = archive_sources[prefix]
+            break  # All reads should have the same accession
 
     for read_name in sample_reads:
         if not read_name.startswith("@"):
@@ -1602,27 +1654,41 @@ def classify_from_fastq_header(
             FASTQ_ULTIMA_RULES
         )
 
-        for rule in all_platform_rules:
-            if re.search(rule.pattern, read_name):
-                platform_votes[rule.platform] = platform_votes.get(rule.platform, 0) + 1
+        # For archive-reformatted reads, also check the text after the accession
+        # Format: @ERR123456.1 A00297:44:HFKH3DSXX:... -> original is after space
+        texts_to_check = [read_name]
+        acc_match = accession_pattern.match(read_name)
+        if acc_match and acc_match.group(3):
+            # Add the remainder (original read name after accession) with @ prefix
+            remainder = "@" + acc_match.group(3).strip()
+            if remainder != "@":
+                texts_to_check.append(remainder)
 
-                # Only add evidence once per rule
-                if rule.id not in result["matched_rules"]:
-                    result["evidence"].append({
-                        "rule_id": rule.id,
-                        "matched": read_name[:80] + "..." if len(read_name) > 80 else read_name,
-                        "classification": rule.classification,
-                        "platform": rule.platform,
-                        "confidence": rule.confidence,
-                        "rationale": rule.rationale,
-                    })
-                    result["matched_rules"].append(rule.id)
+        for text in texts_to_check:
+            for rule in all_platform_rules:
+                if re.search(rule.pattern, text):
+                    platform_votes[rule.platform] = platform_votes.get(rule.platform, 0) + 1
 
-                    # Update classification if higher confidence
-                    if rule.confidence > result["confidence"]:
-                        result["data_modality"] = rule.classification
-                        result["platform"] = rule.platform
-                        result["confidence"] = rule.confidence
+                    # Only add evidence once per rule
+                    if rule.id not in result["matched_rules"]:
+                        matched_text = text[:80] + "..." if len(text) > 80 else text
+                        if text != read_name:
+                            matched_text = f"(from original: {matched_text})"
+                        result["evidence"].append({
+                            "rule_id": rule.id,
+                            "matched": matched_text,
+                            "classification": rule.classification,
+                            "platform": rule.platform,
+                            "confidence": rule.confidence,
+                            "rationale": rule.rationale,
+                        })
+                        result["matched_rules"].append(rule.id)
+
+                        # Update classification if higher confidence
+                        if rule.confidence > result["confidence"]:
+                            result["data_modality"] = rule.classification
+                            result["platform"] = rule.platform
+                            result["confidence"] = rule.confidence
 
         # Check for paired-end indicators
         for rule in FASTQ_PAIREDEND_RULES:
@@ -1643,7 +1709,14 @@ def classify_from_fastq_header(
     if result["platform"] == "ILLUMINA" and sample_reads:
         first_read = sample_reads[0]
         # Modern format: @instrument:run:flowcell:...
+        # Also check after archive accession: @ERR123.1 A00297:44:...
         match = re.match(r"@([A-Z0-9-]+):", first_read)
+        if not match:
+            # Try extracting from text after archive accession
+            acc_match = accession_pattern.match(first_read)
+            if acc_match and acc_match.group(3):
+                remainder = acc_match.group(3).strip()
+                match = re.match(r"([A-Z0-9-]+):", remainder)
         if match:
             result["instrument_hint"] = match.group(1)
 
@@ -1912,6 +1985,7 @@ instrument model, and read type without inspecting the sequence data.
 |----------|------------------|--------|
 | **Illumina (modern)** | `@A00488:61:HFWFVDSXX:1:1101:1000:1000` | `@instrument:run:flowcell:lane:tile:x:y` |
 | **Illumina (legacy)** | `@HWUSI-EAS100R:6:73:941:1973#0/1` | `@instrument:lane:tile:x:y#index/read` |
+| **ENA/SRA reformatted** | `@ERR123456.1 A00297:44:HFKH3DSXX:...` | `@accession.seq [original read name]` |
 | **PacBio CCS/HiFi** | `@m64011_190830_220126/1/ccs` | `@movie/zmw/ccs` |
 | **PacBio CLR** | `@m64011_190830_220126/1234/0_5000` | `@movie/zmw/start_end` |
 | **ONT** | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | `@uuid [key=value...]` |
@@ -1966,6 +2040,28 @@ instrument model, and read type without inspecting the sequence data.
         doc += f"- **Pattern**: `{rule.pattern}`\n"
         doc += f"- **Platform**: {rule.platform}\n"
         doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Archive Accessions (ENA/SRA/DDBJ)\n\n"
+    doc += """When FASTQ files are submitted to public archives (ENA, SRA, DDBJ), read names are
+prefixed with accession IDs. The original instrument information is often preserved after the accession.
+
+**Example**: `@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839/1`
+- Archive accession: `ERR3242571` (ENA)
+- Original read name: `A00297:44:HFKH3DSXX:2:1354:30508:28839/1` (NovaSeq)
+
+The accession can be used to query archive APIs for study metadata:
+- **ENA**: `https://www.ebi.ac.uk/ena/browser/api/xml/ERRxxxxxxx`
+- **SRA**: `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&id=SRRxxxxxxx`
+- **DDBJ**: `https://ddbj.nig.ac.jp/resource/sra-run/DRRxxxxxxx`
+
+"""
+
+    for rule in FASTQ_ARCHIVE_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Archive**: {rule.id.split('_')[1].upper()}\n"
         doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
         doc += f"**Rationale**: {rule.rationale}\n\n"
 
