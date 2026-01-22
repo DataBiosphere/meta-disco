@@ -1,0 +1,1556 @@
+"""BAM/CRAM and VCF header-based classification rules with rationales."""
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class HeaderRule:
+    """A classification rule based on BAM header content."""
+    id: str
+    header_section: str  # @HD, @RG, @PG, @SQ
+    field: str | None    # e.g., PL, PN, SN
+    pattern: str | None  # regex or substring to match
+    classification: str | None  # modality or reference
+    confidence: float
+    rationale: str       # explanation of why this indicates the classification
+
+
+@dataclass
+class VCFHeaderRule:
+    """A classification rule based on VCF header content."""
+    id: str
+    header_type: str     # ##reference, ##source, ##contig, ##INFO, ##FORMAT
+    pattern: str         # regex pattern to match
+    classification: str | None  # modality, reference, or variant_type
+    confidence: float
+    rationale: str
+
+
+# =============================================================================
+# HEADER FIELD REFERENCE
+# =============================================================================
+#
+# @HD (Header) - File-level metadata
+#   VN: SAM format version
+#   SO: Sort order (coordinate, queryname, unsorted, unknown)
+#
+# @SQ (Sequence Dictionary) - Reference sequences the reads are aligned to
+#   SN: Sequence name (e.g., chr1, NC_000001.11)
+#   LN: Sequence length
+#   AS: Genome assembly identifier (e.g., GRCh38)
+#   M5: MD5 checksum of sequence
+#   SP: Species
+#   UR: URI of the sequence
+#
+# @RG (Read Group) - Metadata about a set of reads
+#   ID: Read group identifier
+#   PL: Platform/technology (ILLUMINA, PACBIO, ONT, etc.)
+#   PM: Platform model (e.g., SEQUELII, NovaSeq, MinION)
+#   PU: Platform unit (flowcell-barcode.lane)
+#   LB: Library name
+#   SM: Sample name
+#   DS: Description (PacBio uses this for READTYPE=CCS, etc.)
+#   CN: Sequencing center
+#   DT: Date of sequencing
+#
+# @PG (Program) - Software used to create/modify the file
+#   ID: Program record identifier
+#   PN: Program name
+#   VN: Program version
+#   CL: Command line
+#   PP: Previous program ID (for tracking pipeline order)
+#
+# =============================================================================
+
+
+# Platform rules - from @RG PL field
+PLATFORM_RULES = [
+    HeaderRule(
+        id="platform_pacbio",
+        header_section="@RG",
+        field="PL",
+        pattern="PACBIO",
+        classification="genomic",  # Default, refined by read type
+        confidence=0.70,
+        rationale="PL:PACBIO indicates PacBio long-read sequencing. PacBio is primarily "
+                  "used for whole genome sequencing, structural variant detection, and "
+                  "de novo assembly due to its long read lengths (10-25kb average for HiFi). "
+                  "Can also be used for IsoSeq (transcriptomics) but this is less common."
+    ),
+    HeaderRule(
+        id="platform_illumina",
+        header_section="@RG",
+        field="PL",
+        pattern="ILLUMINA",
+        classification=None,  # Ambiguous - Illumina does WGS, WES, RNA-seq, ChIP-seq, etc.
+        confidence=0.0,
+        rationale="PL:ILLUMINA indicates Illumina short-read sequencing. Illumina platforms "
+                  "are used for diverse applications including WGS, WES, RNA-seq, ChIP-seq, "
+                  "ATAC-seq, bisulfite sequencing, and more. Platform alone is insufficient "
+                  "to determine modality - requires program info or study context."
+    ),
+    HeaderRule(
+        id="platform_ont",
+        header_section="@RG",
+        field="PL",
+        pattern="ONT",
+        classification="genomic",  # Default for Oxford Nanopore
+        confidence=0.70,
+        rationale="PL:ONT indicates Oxford Nanopore long-read sequencing. ONT is primarily "
+                  "used for whole genome sequencing, structural variants, and direct RNA "
+                  "sequencing. The ultra-long reads (>100kb possible) make it valuable for "
+                  "resolving complex genomic regions and phasing."
+    ),
+    HeaderRule(
+        id="platform_ont_alt",
+        header_section="@RG",
+        field="PL",
+        pattern="NANOPORE",
+        classification="genomic",
+        confidence=0.70,
+        rationale="Alternative platform identifier for Oxford Nanopore Technology."
+    ),
+]
+
+
+# PacBio read type rules - from @RG DS field
+PACBIO_READTYPE_RULES = [
+    HeaderRule(
+        id="pacbio_hifi",
+        header_section="@RG",
+        field="DS",
+        pattern="READTYPE=CCS",
+        classification="genomic.whole_genome",
+        confidence=0.85,
+        rationale="READTYPE=CCS indicates PacBio HiFi (High-Fidelity) reads. CCS (Circular "
+                  "Consensus Sequencing) generates highly accurate long reads (>Q20, ~99% accuracy) "
+                  "by sequencing the same molecule multiple times. HiFi is the current standard "
+                  "for PacBio WGS, used extensively in projects like HPRC for diploid assembly."
+    ),
+    HeaderRule(
+        id="pacbio_clr",
+        header_section="@RG",
+        field="DS",
+        pattern="READTYPE=SUBREAD",
+        classification="genomic.whole_genome",
+        confidence=0.80,
+        rationale="READTYPE=SUBREAD indicates PacBio CLR (Continuous Long Read) data. "
+                  "These are raw subreads from a single pass around the circular molecule, "
+                  "longer but less accurate than HiFi. Still used for some assembly applications."
+    ),
+]
+
+
+# RNA-seq aligner programs - from @PG PN field
+RNASEQ_PROGRAM_RULES = [
+    HeaderRule(
+        id="program_star",
+        header_section="@PG",
+        field="PN",
+        pattern="STAR",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="STAR (Spliced Transcripts Alignment to a Reference) is the most widely "
+                  "used RNA-seq aligner. It performs splice-aware alignment essential for "
+                  "mapping reads across exon-exon junctions. Presence of STAR in @PG strongly "
+                  "indicates RNA-seq data."
+    ),
+    HeaderRule(
+        id="program_hisat2",
+        header_section="@PG",
+        field="PN",
+        pattern="hisat2",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="HISAT2 is a splice-aware aligner optimized for RNA-seq. It uses a graph-based "
+                  "index that incorporates known splice sites and SNPs. Like STAR, its presence "
+                  "strongly indicates transcriptomic data."
+    ),
+    HeaderRule(
+        id="program_tophat",
+        header_section="@PG",
+        field="PN",
+        pattern="tophat",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="TopHat was an early splice-aware aligner for RNA-seq (now superseded by "
+                  "HISAT2). It identifies splice junctions and aligns reads across them. "
+                  "Legacy RNA-seq data may still have TopHat in the header."
+    ),
+    HeaderRule(
+        id="program_salmon",
+        header_section="@PG",
+        field="PN",
+        pattern="salmon",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="Salmon is a transcript-level quantification tool for RNA-seq. It uses "
+                  "quasi-mapping for fast, accurate abundance estimation. Presence indicates "
+                  "processed RNA-seq data."
+    ),
+    HeaderRule(
+        id="program_kallisto",
+        header_section="@PG",
+        field="PN",
+        pattern="kallisto",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="Kallisto performs rapid transcript quantification using pseudoalignment. "
+                  "Like Salmon, it's specifically designed for RNA-seq analysis."
+    ),
+]
+
+
+# DNA aligner programs - from @PG PN field
+DNA_PROGRAM_RULES = [
+    HeaderRule(
+        id="program_bwa",
+        header_section="@PG",
+        field="PN",
+        pattern="bwa",
+        classification="genomic",
+        confidence=0.80,
+        rationale="BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA "
+                  "sequencing. It's optimized for aligning reads to a reference genome without "
+                  "splice awareness. Commonly used for WGS, WES, and ChIP-seq. Confidence is "
+                  "not 100% because BWA can technically be used for non-spliced RNA alignment."
+    ),
+    HeaderRule(
+        id="program_minimap2",
+        header_section="@PG",
+        field="PN",
+        pattern="minimap2",
+        classification="genomic",
+        confidence=0.75,
+        rationale="Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. "
+                  "While primarily used for genomic alignment, it can also be used for direct "
+                  "RNA sequencing with appropriate presets (-ax splice). Confidence moderate "
+                  "due to this dual use."
+    ),
+    HeaderRule(
+        id="program_bowtie2",
+        header_section="@PG",
+        field="PN",
+        pattern="bowtie2",
+        classification="genomic",
+        confidence=0.75,
+        rationale="Bowtie2 is a fast short-read aligner commonly used for ChIP-seq, ATAC-seq, "
+                  "and WGS. It doesn't handle spliced alignment, so presence suggests genomic "
+                  "or epigenomic data rather than RNA-seq. However, it's sometimes used for "
+                  "small RNA sequencing."
+    ),
+]
+
+
+# PacBio-specific program rules
+PACBIO_PROGRAM_RULES = [
+    HeaderRule(
+        id="program_ccs",
+        header_section="@PG",
+        field="PN",
+        pattern="ccs",
+        classification="genomic.whole_genome",
+        confidence=0.85,
+        rationale="The 'ccs' program generates HiFi reads from PacBio subreads. Its presence "
+                  "confirms this is PacBio HiFi data, typically used for high-quality genome "
+                  "assembly and variant calling."
+    ),
+    HeaderRule(
+        id="program_isoseq",
+        header_section="@PG",
+        field="PN",
+        pattern="isoseq",
+        classification="transcriptomic",
+        confidence=0.95,
+        rationale="IsoSeq is PacBio's full-length transcript sequencing method. The 'isoseq' "
+                  "program in @PG indicates this is long-read RNA-seq data for transcript "
+                  "discovery and isoform characterization."
+    ),
+    HeaderRule(
+        id="program_lima",
+        header_section="@PG",
+        field="PN",
+        pattern="lima",
+        classification=None,  # Demultiplexer, doesn't indicate modality
+        confidence=0.0,
+        rationale="Lima is PacBio's barcode demultiplexer. It separates multiplexed samples "
+                  "but doesn't indicate data modality. Other header info needed."
+    ),
+]
+
+
+# Reference assembly rules - from @SQ SN or AS fields
+REFERENCE_RULES = [
+    HeaderRule(
+        id="ref_grch38_hg38",
+        header_section="@SQ",
+        field="SN",
+        pattern=r"(?i)(grch38|hg38|hs38)",
+        classification="GRCh38",
+        confidence=0.95,
+        rationale="Contig names containing 'GRCh38', 'hg38', or 'hs38' indicate alignment to "
+                  "the GRCh38 human reference genome (released 2013, current standard). The @SQ "
+                  "lines list all reference sequences the reads are aligned against."
+    ),
+    HeaderRule(
+        id="ref_grch37_hg19",
+        header_section="@SQ",
+        field="SN",
+        pattern=r"(?i)(grch37|hg19|hs37)",
+        classification="GRCh37",
+        confidence=0.95,
+        rationale="Contig names containing 'GRCh37', 'hg19', or 'hs37' indicate alignment to "
+                  "the GRCh37 human reference (released 2009). Still used for legacy data and "
+                  "some clinical pipelines for compatibility."
+    ),
+    HeaderRule(
+        id="ref_chm13_t2t",
+        header_section="@SQ",
+        field="SN",
+        pattern=r"(?i)(chm13|t2t|hs1)",
+        classification="CHM13",
+        confidence=0.95,
+        rationale="Contig names containing 'CHM13', 'T2T', or 'hs1' indicate alignment to the "
+                  "T2T-CHM13 reference (released 2022). This is the first complete human genome "
+                  "assembly, filling gaps in GRCh38 including centromeres and telomeres."
+    ),
+    HeaderRule(
+        id="ref_assembly_tag",
+        header_section="@SQ",
+        field="AS",
+        pattern=r".*",  # Any AS field indicates reference info
+        classification=None,  # Extracted from value
+        confidence=0.90,
+        rationale="The AS (Assembly) tag in @SQ lines explicitly names the reference assembly. "
+                  "When present, it provides definitive reference identification."
+    ),
+]
+
+
+# Unaligned indicator
+UNALIGNED_RULES = [
+    HeaderRule(
+        id="unaligned_no_sq",
+        header_section="@SQ",
+        field=None,  # Absence of @SQ
+        pattern=None,
+        classification="unaligned",
+        confidence=0.90,
+        rationale="Absence of @SQ lines in the header indicates unaligned reads. The BAM "
+                  "contains raw sequencing data not yet mapped to a reference genome. Common "
+                  "for PacBio HiFi deliverables before alignment."
+    ),
+]
+
+
+# =============================================================================
+# FILE SIZE RULES FOR WGS vs WES DISTINCTION
+# =============================================================================
+#
+# File size can help distinguish WGS from WES:
+# - WGS 30x coverage: ~50-150 GB BAM, ~15-50 GB CRAM
+# - WES 100x coverage: ~5-15 GB BAM, ~2-8 GB CRAM
+#
+# The ~10:1 ratio exists because WGS covers the whole genome (~3B bases)
+# while WES only covers exons (~1-2% of genome, ~30-60M bases).
+#
+# Caveats:
+# - Coverage depth varies (higher coverage = larger files)
+# - CRAM is ~60-70% smaller than BAM
+# - Some files may be subsets or downsampled
+# - Long-read BAMs (PacBio/ONT) are typically larger due to read length
+
+@dataclass
+class FileSizeRule:
+    """A rule based on file size for WGS vs WES distinction."""
+    id: str
+    min_size_gb: float | None  # Minimum file size in GB
+    max_size_gb: float | None  # Maximum file size in GB
+    file_format: str | None    # .bam, .cram, or None for any
+    platform: str | None       # ILLUMINA, PACBIO, ONT, or None for any
+    classification: str
+    confidence: float
+    rationale: str
+
+
+FILE_SIZE_RULES = [
+    # Illumina BAM size rules
+    FileSizeRule(
+        id="illumina_bam_wgs_large",
+        min_size_gb=50.0,
+        max_size_gb=None,
+        file_format=".bam",
+        platform="ILLUMINA",
+        classification="genomic.whole_genome",
+        confidence=0.80,
+        rationale="Illumina BAM files >50 GB strongly suggest WGS. At 30x coverage, a human "
+                  "WGS BAM is typically 80-120 GB. WES files rarely exceed 20 GB even at high coverage."
+    ),
+    FileSizeRule(
+        id="illumina_bam_wgs_medium",
+        min_size_gb=30.0,
+        max_size_gb=50.0,
+        file_format=".bam",
+        platform="ILLUMINA",
+        classification="genomic.whole_genome",
+        confidence=0.65,
+        rationale="Illumina BAM files 30-50 GB likely indicate WGS at lower coverage (15-20x) "
+                  "or WES at very high coverage (200x+). WGS is more common in this range."
+    ),
+    FileSizeRule(
+        id="illumina_bam_wes_likely",
+        min_size_gb=5.0,
+        max_size_gb=20.0,
+        file_format=".bam",
+        platform="ILLUMINA",
+        classification="genomic.exome",
+        confidence=0.60,
+        rationale="Illumina BAM files 5-20 GB are typical for WES at 80-150x coverage. "
+                  "Could also be low-coverage WGS, but WES is more common in this size range."
+    ),
+
+    # Illumina CRAM size rules (CRAM is ~60-70% smaller than BAM)
+    FileSizeRule(
+        id="illumina_cram_wgs_large",
+        min_size_gb=20.0,
+        max_size_gb=None,
+        file_format=".cram",
+        platform="ILLUMINA",
+        classification="genomic.whole_genome",
+        confidence=0.80,
+        rationale="Illumina CRAM files >20 GB strongly suggest WGS. CRAM compression reduces "
+                  "file size by 60-70% vs BAM, so a 20 GB CRAM corresponds to ~50-70 GB BAM."
+    ),
+    FileSizeRule(
+        id="illumina_cram_wgs_medium",
+        min_size_gb=10.0,
+        max_size_gb=20.0,
+        file_format=".cram",
+        platform="ILLUMINA",
+        classification="genomic.whole_genome",
+        confidence=0.65,
+        rationale="Illumina CRAM files 10-20 GB likely indicate WGS at moderate coverage."
+    ),
+    FileSizeRule(
+        id="illumina_cram_wes_likely",
+        min_size_gb=2.0,
+        max_size_gb=8.0,
+        file_format=".cram",
+        platform="ILLUMINA",
+        classification="genomic.exome",
+        confidence=0.60,
+        rationale="Illumina CRAM files 2-8 GB are typical for WES. This corresponds to "
+                  "~5-20 GB BAM, the standard WES size range."
+    ),
+
+    # PacBio long-read rules (typically larger due to read length)
+    FileSizeRule(
+        id="pacbio_large_wgs",
+        min_size_gb=20.0,
+        max_size_gb=None,
+        file_format=None,
+        platform="PACBIO",
+        classification="genomic.whole_genome",
+        confidence=0.75,
+        rationale="Large PacBio files (>20 GB) typically indicate WGS. PacBio is rarely used "
+                  "for WES due to cost; it's primarily used for WGS and structural variant detection."
+    ),
+
+    # ONT long-read rules
+    FileSizeRule(
+        id="ont_large_wgs",
+        min_size_gb=20.0,
+        max_size_gb=None,
+        file_format=None,
+        platform="ONT",
+        classification="genomic.whole_genome",
+        confidence=0.75,
+        rationale="Large ONT files (>20 GB) typically indicate WGS. ONT is rarely used for "
+                  "targeted sequencing; its strength is in long-range structural analysis."
+    ),
+]
+
+
+# =============================================================================
+# VCF HEADER CLASSIFICATION RULES
+# =============================================================================
+#
+# VCF files have rich metadata in ## header lines:
+#
+# ##fileformat=VCFv4.2              - VCF version
+# ##reference=file:///path/to/ref   - Reference genome path/URL
+# ##contig=<ID=chr1,length=N,assembly=GRCh38>  - Contig definitions with assembly
+# ##source=GATK HaplotypeCaller     - Variant caller used
+# ##INFO=<ID=...,Description=...>   - INFO field definitions
+# ##FORMAT=<ID=...,Description=...> - FORMAT field definitions
+#
+# Key signals:
+# - ##reference and ##contig lines reveal reference genome
+# - ##source reveals variant caller (germline vs somatic, SNV vs SV)
+# - Specific INFO/FORMAT fields indicate variant type
+#
+
+# Reference assembly rules from VCF headers
+VCF_REFERENCE_RULES = [
+    VCFHeaderRule(
+        id="vcf_ref_grch38",
+        header_type="##reference",
+        pattern=r"(?i)(grch38|hg38|hs38|GCA_000001405\.15)",
+        classification="GRCh38",
+        confidence=0.95,
+        rationale="##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession "
+                  "(GCA_000001405.15) indicates variants were called against the GRCh38 reference."
+    ),
+    VCFHeaderRule(
+        id="vcf_ref_grch37",
+        header_type="##reference",
+        pattern=r"(?i)(grch37|hg19|hs37|GCA_000001405\.1[^5]|b37)",
+        classification="GRCh37",
+        confidence=0.95,
+        rationale="##reference line containing GRCh37, hg19, b37, or earlier GRCh37 accessions "
+                  "indicates variants were called against the GRCh37 reference."
+    ),
+    VCFHeaderRule(
+        id="vcf_ref_chm13",
+        header_type="##reference",
+        pattern=r"(?i)(chm13|t2t|hs1)",
+        classification="CHM13",
+        confidence=0.95,
+        rationale="##reference line containing CHM13 or T2T indicates variants called against "
+                  "the T2T-CHM13 complete human genome assembly."
+    ),
+    VCFHeaderRule(
+        id="vcf_contig_grch38",
+        header_type="##contig",
+        pattern=r"(?i)assembly=(grch38|hg38|GCA_000001405\.15)",
+        classification="GRCh38",
+        confidence=0.95,
+        rationale="##contig lines with assembly=GRCh38 explicitly declare the reference genome."
+    ),
+    VCFHeaderRule(
+        id="vcf_contig_grch37",
+        header_type="##contig",
+        pattern=r"(?i)assembly=(grch37|hg19|b37)",
+        classification="GRCh37",
+        confidence=0.95,
+        rationale="##contig lines with assembly=GRCh37 explicitly declare the reference genome."
+    ),
+    VCFHeaderRule(
+        id="vcf_contig_chm13",
+        header_type="##contig",
+        pattern=r"(?i)assembly=(chm13|t2t|hs1)",
+        classification="CHM13",
+        confidence=0.95,
+        rationale="##contig lines with assembly=CHM13 explicitly declare the reference genome."
+    ),
+]
+
+# Variant caller rules - germline callers
+VCF_GERMLINE_CALLER_RULES = [
+    VCFHeaderRule(
+        id="vcf_gatk_haplotypecaller",
+        header_type="##source",
+        pattern=r"(?i)haplotypecaller",
+        classification="genomic.germline_variants",
+        confidence=0.90,
+        rationale="GATK HaplotypeCaller is the standard germline SNV/indel caller. It performs "
+                  "local de novo assembly to call variants, optimized for diploid germline samples."
+    ),
+    VCFHeaderRule(
+        id="vcf_deepvariant",
+        header_type="##source",
+        pattern=r"(?i)deepvariant",
+        classification="genomic.germline_variants",
+        confidence=0.90,
+        rationale="DeepVariant is Google's deep learning-based germline variant caller. "
+                  "It's trained on truth sets and excels at both SNVs and indels."
+    ),
+    VCFHeaderRule(
+        id="vcf_gatk_genotypegvcfs",
+        header_type="##source",
+        pattern=r"(?i)genotypegvcfs",
+        classification="genomic.germline_variants",
+        confidence=0.90,
+        rationale="GATK GenotypeGVCFs performs joint genotyping on gVCF files, "
+                  "used in cohort germline variant calling workflows."
+    ),
+    VCFHeaderRule(
+        id="vcf_glnexus",
+        header_type="##source",
+        pattern=r"(?i)glnexus",
+        classification="genomic.germline_variants",
+        confidence=0.90,
+        rationale="GLnexus is a scalable gVCF merging and joint genotyping tool, "
+                  "commonly used with DeepVariant for population-scale germline calling."
+    ),
+    VCFHeaderRule(
+        id="vcf_bcftools_call",
+        header_type="##source",
+        pattern=r"(?i)bcftools.*call",
+        classification="genomic.germline_variants",
+        confidence=0.85,
+        rationale="bcftools call is a lightweight germline variant caller using "
+                  "the multiallelic or consensus caller models."
+    ),
+    VCFHeaderRule(
+        id="vcf_freebayes",
+        header_type="##source",
+        pattern=r"(?i)freebayes",
+        classification="genomic.germline_variants",
+        confidence=0.85,
+        rationale="FreeBayes is a Bayesian haplotype-based germline variant caller "
+                  "that can handle pooled or mixed samples."
+    ),
+    VCFHeaderRule(
+        id="vcf_strelka2_germline",
+        header_type="##source",
+        pattern=r"(?i)strelka2.*germline|strelka2(?!.*somatic)",
+        classification="genomic.germline_variants",
+        confidence=0.85,
+        rationale="Strelka2 in germline mode calls SNVs and indels from germline samples."
+    ),
+]
+
+# Variant caller rules - somatic callers
+VCF_SOMATIC_CALLER_RULES = [
+    VCFHeaderRule(
+        id="vcf_mutect2",
+        header_type="##source",
+        pattern=r"(?i)mutect2?",
+        classification="genomic.somatic_variants",
+        confidence=0.95,
+        rationale="GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal "
+                  "or tumor-only analysis. Its presence strongly indicates cancer genomics data."
+    ),
+    VCFHeaderRule(
+        id="vcf_strelka_somatic",
+        header_type="##source",
+        pattern=r"(?i)strelka.*somatic|strelka(?!.*germline)",
+        classification="genomic.somatic_variants",
+        confidence=0.90,
+        rationale="Strelka/Strelka2 in somatic mode calls somatic variants from tumor-normal pairs."
+    ),
+    VCFHeaderRule(
+        id="vcf_varscan_somatic",
+        header_type="##source",
+        pattern=r"(?i)varscan.*somatic",
+        classification="genomic.somatic_variants",
+        confidence=0.90,
+        rationale="VarScan somatic mode calls somatic variants from tumor-normal pairs "
+                  "using a heuristic/statistical approach."
+    ),
+    VCFHeaderRule(
+        id="vcf_somaticsniper",
+        header_type="##source",
+        pattern=r"(?i)somaticsniper",
+        classification="genomic.somatic_variants",
+        confidence=0.90,
+        rationale="SomaticSniper identifies somatic point mutations in tumor-normal pairs."
+    ),
+    VCFHeaderRule(
+        id="vcf_muse",
+        header_type="##source",
+        pattern=r"(?i)muse",
+        classification="genomic.somatic_variants",
+        confidence=0.90,
+        rationale="MuSE calls somatic point mutations using a Markov substitution model, "
+                  "designed for tumor-normal pairs."
+    ),
+]
+
+# Structural variant caller rules
+VCF_SV_CALLER_RULES = [
+    VCFHeaderRule(
+        id="vcf_manta",
+        header_type="##source",
+        pattern=r"(?i)manta",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="Manta calls structural variants (deletions, insertions, inversions, "
+                  "translocations) and large indels from short-read data."
+    ),
+    VCFHeaderRule(
+        id="vcf_delly",
+        header_type="##source",
+        pattern=r"(?i)delly",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="DELLY discovers structural variants using paired-end and split-read analysis."
+    ),
+    VCFHeaderRule(
+        id="vcf_lumpy",
+        header_type="##source",
+        pattern=r"(?i)lumpy",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="LUMPY is a probabilistic SV caller using multiple alignment signals."
+    ),
+    VCFHeaderRule(
+        id="vcf_smoove",
+        header_type="##source",
+        pattern=r"(?i)smoove",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="Smoove simplifies SV calling by wrapping LUMPY with additional filtering."
+    ),
+    VCFHeaderRule(
+        id="vcf_svim",
+        header_type="##source",
+        pattern=r"(?i)svim",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="SVIM detects structural variants from long-read sequencing data (PacBio/ONT)."
+    ),
+    VCFHeaderRule(
+        id="vcf_sniffles",
+        header_type="##source",
+        pattern=r"(?i)sniffles",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="Sniffles is a long-read SV caller optimized for PacBio and ONT data, "
+                  "detecting complex SVs that short reads miss."
+    ),
+    VCFHeaderRule(
+        id="vcf_pbsv",
+        header_type="##source",
+        pattern=r"(?i)pbsv",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="PBSV is PacBio's structural variant caller for HiFi and CLR data."
+    ),
+    VCFHeaderRule(
+        id="vcf_cutesv",
+        header_type="##source",
+        pattern=r"(?i)cutesv",
+        classification="genomic.structural_variants",
+        confidence=0.90,
+        rationale="CuteSV is a fast long-read SV caller using clustering of signatures."
+    ),
+]
+
+# Copy number variant caller rules
+VCF_CNV_CALLER_RULES = [
+    VCFHeaderRule(
+        id="vcf_cnvkit",
+        header_type="##source",
+        pattern=r"(?i)cnvkit",
+        classification="genomic.copy_number_variants",
+        confidence=0.90,
+        rationale="CNVkit detects copy number variants from targeted/exome or WGS data."
+    ),
+    VCFHeaderRule(
+        id="vcf_gatk_cnv",
+        header_type="##source",
+        pattern=r"(?i)gatk.*(cnv|copynumber)|modelsegments",
+        classification="genomic.copy_number_variants",
+        confidence=0.90,
+        rationale="GATK CNV tools (ModelSegments, etc.) call copy number variants "
+                  "from read depth data."
+    ),
+    VCFHeaderRule(
+        id="vcf_canvas",
+        header_type="##source",
+        pattern=r"(?i)canvas",
+        classification="genomic.copy_number_variants",
+        confidence=0.90,
+        rationale="Canvas is Illumina's CNV caller for WGS and tumor-normal analysis."
+    ),
+]
+
+# INFO field indicators
+VCF_INFO_RULES = [
+    VCFHeaderRule(
+        id="vcf_info_somatic",
+        header_type="##INFO",
+        pattern=r"ID=(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)",
+        classification="genomic.somatic_variants",
+        confidence=0.85,
+        rationale="INFO fields with SOMATIC, TUMOR_, or NORMAL_ prefixes indicate "
+                  "this VCF contains somatic variant calls from tumor-normal analysis."
+    ),
+    VCFHeaderRule(
+        id="vcf_info_sv",
+        header_type="##INFO",
+        pattern=r"ID=(SVTYPE|SVLEN|END|CIPOS|CIEND|MATEID|IMPRECISE)",
+        classification="genomic.structural_variants",
+        confidence=0.80,
+        rationale="Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate "
+                  "this VCF contains structural variant calls."
+    ),
+    VCFHeaderRule(
+        id="vcf_info_cnv",
+        header_type="##INFO",
+        pattern=r"ID=(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)",
+        classification="genomic.copy_number_variants",
+        confidence=0.80,
+        rationale="CNV-specific INFO fields indicate copy number variant calls."
+    ),
+]
+
+# Combine all VCF rules
+ALL_VCF_RULES = (
+    VCF_REFERENCE_RULES +
+    VCF_GERMLINE_CALLER_RULES +
+    VCF_SOMATIC_CALLER_RULES +
+    VCF_SV_CALLER_RULES +
+    VCF_CNV_CALLER_RULES +
+    VCF_INFO_RULES
+)
+
+
+# All BAM/CRAM rules combined for easy iteration
+ALL_RULES = (
+    PLATFORM_RULES +
+    PACBIO_READTYPE_RULES +
+    RNASEQ_PROGRAM_RULES +
+    DNA_PROGRAM_RULES +
+    PACBIO_PROGRAM_RULES +
+    REFERENCE_RULES +
+    UNALIGNED_RULES
+)
+
+
+# =============================================================================
+# CONSISTENCY VALIDATION RULES
+# =============================================================================
+#
+# These rules define expected relationships between header signals.
+# Convergent signals should agree and increase confidence.
+# Conflicting signals indicate errors or unusual edge cases.
+
+@dataclass
+class ConsistencyRule:
+    """A rule defining expected consistency between header signals."""
+    id: str
+    signal_a: str  # Rule ID or signal type
+    signal_b: str  # Rule ID or signal type
+    relationship: str  # "convergent" or "conflicting"
+    expected_agreement: str | None  # What they should agree on (for convergent)
+    rationale: str
+
+
+CONVERGENT_RULES = [
+    ConsistencyRule(
+        id="pacbio_platform_readtype",
+        signal_a="platform_pacbio",
+        signal_b="pacbio_hifi",
+        relationship="convergent",
+        expected_agreement="genomic.whole_genome",
+        rationale="PL:PACBIO and READTYPE=CCS both indicate PacBio HiFi sequencing, "
+                  "which is used for whole genome sequencing. These signals reinforce each other."
+    ),
+    ConsistencyRule(
+        id="pacbio_platform_ccs_program",
+        signal_a="platform_pacbio",
+        signal_b="program_ccs",
+        relationship="convergent",
+        expected_agreement="genomic.whole_genome",
+        rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi data generation."
+    ),
+    ConsistencyRule(
+        id="pacbio_hifi_ccs_program",
+        signal_a="pacbio_hifi",
+        signal_b="program_ccs",
+        relationship="convergent",
+        expected_agreement="genomic.whole_genome",
+        rationale="READTYPE=CCS and PN:ccs both indicate HiFi consensus calling was performed."
+    ),
+    ConsistencyRule(
+        id="illumina_bwa",
+        signal_a="platform_illumina",
+        signal_b="program_bwa",
+        relationship="convergent",
+        expected_agreement="genomic",
+        rationale="Illumina platform with BWA aligner is the standard WGS/WES pipeline. "
+                  "Both indicate short-read DNA sequencing."
+    ),
+    ConsistencyRule(
+        id="illumina_star",
+        signal_a="platform_illumina",
+        signal_b="program_star",
+        relationship="convergent",
+        expected_agreement="transcriptomic",
+        rationale="Illumina platform with STAR aligner indicates standard RNA-seq workflow."
+    ),
+    ConsistencyRule(
+        id="pacbio_minimap2",
+        signal_a="platform_pacbio",
+        signal_b="program_minimap2",
+        relationship="convergent",
+        expected_agreement="genomic",
+        rationale="PacBio platform with minimap2 is the standard long-read alignment pipeline."
+    ),
+    ConsistencyRule(
+        id="ont_minimap2",
+        signal_a="platform_ont",
+        signal_b="program_minimap2",
+        relationship="convergent",
+        expected_agreement="genomic",
+        rationale="ONT platform with minimap2 is the standard nanopore alignment pipeline."
+    ),
+    ConsistencyRule(
+        id="pacbio_isoseq",
+        signal_a="platform_pacbio",
+        signal_b="program_isoseq",
+        relationship="convergent",
+        expected_agreement="transcriptomic",
+        rationale="PacBio platform with IsoSeq program indicates long-read RNA sequencing."
+    ),
+]
+
+CONFLICTING_RULES = [
+    ConsistencyRule(
+        id="pacbio_star_conflict",
+        signal_a="platform_pacbio",
+        signal_b="program_star",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="STAR is a short-read splice-aware aligner not designed for PacBio long reads. "
+                  "This combination is unexpected and may indicate a pipeline error or misannotation."
+    ),
+    ConsistencyRule(
+        id="illumina_ccs_conflict",
+        signal_a="platform_illumina",
+        signal_b="pacbio_hifi",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="READTYPE=CCS is PacBio-specific. Finding it with PL:ILLUMINA indicates "
+                  "a header error or file corruption."
+    ),
+    ConsistencyRule(
+        id="illumina_ccs_program_conflict",
+        signal_a="platform_illumina",
+        signal_b="program_ccs",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="The ccs program is PacBio-specific. Finding it with Illumina platform "
+                  "indicates a header error."
+    ),
+    ConsistencyRule(
+        id="ont_ccs_conflict",
+        signal_a="platform_ont",
+        signal_b="pacbio_hifi",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="READTYPE=CCS is PacBio-specific and incompatible with ONT platform."
+    ),
+    ConsistencyRule(
+        id="bwa_star_conflict",
+        signal_a="program_bwa",
+        signal_b="program_star",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="BWA (DNA aligner) and STAR (RNA aligner) in the same file suggests "
+                  "mixed or incorrectly processed data. Files should use one or the other."
+    ),
+    ConsistencyRule(
+        id="dna_rna_aligner_conflict",
+        signal_a="program_bowtie2",
+        signal_b="program_star",
+        relationship="conflicting",
+        expected_agreement=None,
+        rationale="Bowtie2 (DNA/ChIP aligner) and STAR (RNA aligner) indicate conflicting "
+                  "data modalities in the same file."
+    ),
+]
+
+ALL_CONSISTENCY_RULES = CONVERGENT_RULES + CONFLICTING_RULES
+
+
+def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
+    """
+    Check for consistency between matched rules.
+
+    Returns dict with:
+        - convergent_signals: list of matching convergent rule pairs
+        - conflicting_signals: list of matching conflicting rule pairs
+        - confidence_boost: float adjustment based on convergent signals
+        - warnings: list of warning messages for conflicts
+        - reference_consistency: bool indicating if all @SQ refs agree
+    """
+    result = {
+        "convergent_signals": [],
+        "conflicting_signals": [],
+        "confidence_boost": 0.0,
+        "warnings": [],
+        "reference_consistency": True,
+        "reference_assemblies_found": set(),
+    }
+
+    matched_set = set(matched_rules)
+
+    # Check convergent rules
+    for rule in CONVERGENT_RULES:
+        if rule.signal_a in matched_set and rule.signal_b in matched_set:
+            result["convergent_signals"].append({
+                "rule_id": rule.id,
+                "signal_a": rule.signal_a,
+                "signal_b": rule.signal_b,
+                "agreement": rule.expected_agreement,
+                "rationale": rule.rationale,
+            })
+            # Boost confidence for each convergent pair (diminishing returns)
+            result["confidence_boost"] += 0.05 * (0.8 ** len(result["convergent_signals"]))
+
+    # Check conflicting rules
+    for rule in CONFLICTING_RULES:
+        if rule.signal_a in matched_set and rule.signal_b in matched_set:
+            result["conflicting_signals"].append({
+                "rule_id": rule.id,
+                "signal_a": rule.signal_a,
+                "signal_b": rule.signal_b,
+                "rationale": rule.rationale,
+            })
+            result["warnings"].append(
+                f"CONFLICT [{rule.id}]: {rule.signal_a} + {rule.signal_b} - {rule.rationale}"
+            )
+
+    # Check reference consistency from evidence
+    for e in evidence:
+        if e["rule_id"].startswith("ref_") and e["classification"]:
+            result["reference_assemblies_found"].add(e["classification"])
+
+    if len(result["reference_assemblies_found"]) > 1:
+        result["reference_consistency"] = False
+        refs = ", ".join(sorted(result["reference_assemblies_found"]))
+        result["warnings"].append(
+            f"REFERENCE INCONSISTENCY: Multiple reference assemblies detected: {refs}. "
+            "This may indicate mixed data or incorrect reference annotation."
+        )
+
+    # Convert set to list for JSON serialization
+    result["reference_assemblies_found"] = list(result["reference_assemblies_found"])
+
+    return result
+
+
+def classify_from_header(
+    header_text: str,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """
+    Classify data modality and reference from BAM header text.
+
+    Returns dict with:
+        - data_modality: str or None
+        - reference_assembly: str or None
+        - confidence: float
+        - matched_rules: list of rule IDs that matched
+        - evidence: list of dicts with rule details and rationales
+    """
+    import re
+
+    result = {
+        "data_modality": None,
+        "reference_assembly": None,
+        "confidence": 0.0,
+        "is_aligned": None,
+        "platform": None,
+        "matched_rules": [],
+        "evidence": [],
+    }
+
+    lines = header_text.strip().split("\n")
+
+    # Parse header into sections
+    sq_lines = [l for l in lines if l.startswith("@SQ")]
+    rg_lines = [l for l in lines if l.startswith("@RG")]
+    pg_lines = [l for l in lines if l.startswith("@PG")]
+
+    # Check for unaligned (no @SQ)
+    if not sq_lines:
+        result["is_aligned"] = False
+        result["evidence"].append({
+            "rule_id": "unaligned_no_sq",
+            "matched": "No @SQ lines present",
+            "classification": "unaligned",
+            "confidence": 0.90,
+            "rationale": UNALIGNED_RULES[0].rationale,
+        })
+        result["matched_rules"].append("unaligned_no_sq")
+    else:
+        result["is_aligned"] = True
+
+    # Check platform from @RG
+    for rg in rg_lines:
+        for rule in PLATFORM_RULES:
+            if f"PL:{rule.pattern}" in rg.upper():
+                result["platform"] = rule.pattern
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": f"PL:{rule.pattern}",
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+                if rule.classification and rule.confidence > result["confidence"]:
+                    result["data_modality"] = rule.classification
+                    result["confidence"] = rule.confidence
+
+    # Check PacBio read type from @RG DS
+    for rg in rg_lines:
+        for rule in PACBIO_READTYPE_RULES:
+            if rule.pattern in rg:
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": rule.pattern,
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+                if rule.confidence > result["confidence"]:
+                    result["data_modality"] = rule.classification
+                    result["confidence"] = rule.confidence
+
+    # Check programs from @PG
+    all_program_rules = RNASEQ_PROGRAM_RULES + DNA_PROGRAM_RULES + PACBIO_PROGRAM_RULES
+    for pg in pg_lines:
+        for rule in all_program_rules:
+            # Match PN field case-insensitively
+            if re.search(rf"PN:{rule.pattern}", pg, re.IGNORECASE):
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": f"PN:{rule.pattern}",
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+                if rule.classification and rule.confidence > result["confidence"]:
+                    result["data_modality"] = rule.classification
+                    result["confidence"] = rule.confidence
+
+    # Check reference assembly from @SQ
+    for sq in sq_lines:
+        for rule in REFERENCE_RULES:
+            if rule.field == "SN" and re.search(rule.pattern, sq, re.IGNORECASE):
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": f"SN matches {rule.pattern}",
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+                if rule.classification and not result["reference_assembly"]:
+                    result["reference_assembly"] = rule.classification
+
+    # Check file size rules for WGS vs WES distinction
+    if file_size is not None:
+        file_size_gb = file_size / (1024 ** 3)  # Convert bytes to GB
+        for rule in FILE_SIZE_RULES:
+            # Check platform match (if rule specifies one)
+            if rule.platform and result["platform"] != rule.platform:
+                continue
+            # Check file format match (if rule specifies one)
+            if rule.file_format and file_format and rule.file_format != file_format:
+                continue
+            # Check size range
+            if rule.min_size_gb is not None and file_size_gb < rule.min_size_gb:
+                continue
+            if rule.max_size_gb is not None and file_size_gb >= rule.max_size_gb:
+                continue
+
+            # Rule matches
+            result["evidence"].append({
+                "rule_id": rule.id,
+                "matched": f"file_size={file_size_gb:.1f}GB",
+                "classification": rule.classification,
+                "confidence": rule.confidence,
+                "rationale": rule.rationale,
+            })
+            result["matched_rules"].append(rule.id)
+
+            # Update modality if this rule has higher confidence and modality is still generic
+            # Only refine from "genomic" to "genomic.whole_genome" or "genomic.exome"
+            if rule.classification and result["data_modality"] in [None, "genomic"]:
+                if rule.confidence > 0.5:  # Only apply if reasonably confident
+                    result["evidence"].append({
+                        "rule_id": f"{rule.id}_applied",
+                        "matched": f"Refined modality based on {file_size_gb:.1f}GB file size",
+                        "classification": rule.classification,
+                        "confidence": rule.confidence,
+                        "rationale": f"File size suggests {rule.classification}. {rule.rationale}",
+                    })
+                    # Don't override high-confidence classifications
+                    if result["confidence"] < 0.85:
+                        result["data_modality"] = rule.classification
+            break  # Only apply first matching size rule
+
+    # Run consistency validation
+    consistency = check_consistency(result["matched_rules"], result["evidence"])
+    result["consistency"] = {
+        "convergent_signals": consistency["convergent_signals"],
+        "conflicting_signals": consistency["conflicting_signals"],
+        "reference_consistency": consistency["reference_consistency"],
+        "warnings": consistency["warnings"],
+    }
+
+    # Apply confidence boost from convergent signals
+    if consistency["convergent_signals"] and not consistency["conflicting_signals"]:
+        result["confidence"] = min(0.99, result["confidence"] + consistency["confidence_boost"])
+
+    # Reduce confidence if there are conflicts
+    if consistency["conflicting_signals"]:
+        result["confidence"] = max(0.1, result["confidence"] - 0.2)
+
+    return result
+
+
+def classify_from_vcf_header(
+    header_text: str,
+    file_size: int | None = None,
+) -> dict:
+    """
+    Classify data modality, variant type, and reference from VCF header text.
+
+    Args:
+        header_text: The VCF header (lines starting with ##)
+        file_size: Optional file size in bytes
+
+    Returns dict with:
+        - data_modality: str or None (e.g., genomic.germline_variants)
+        - variant_type: str or None (germline, somatic, structural, cnv)
+        - reference_assembly: str or None
+        - confidence: float
+        - matched_rules: list of rule IDs that matched
+        - evidence: list of dicts with rule details and rationales
+        - caller: str or None (detected variant caller)
+    """
+    import re
+
+    result = {
+        "data_modality": None,
+        "variant_type": None,
+        "reference_assembly": None,
+        "confidence": 0.0,
+        "caller": None,
+        "matched_rules": [],
+        "evidence": [],
+        "warnings": [],
+    }
+
+    lines = header_text.strip().split("\n")
+
+    # Parse header lines by type
+    reference_lines = [l for l in lines if l.startswith("##reference=")]
+    contig_lines = [l for l in lines if l.startswith("##contig=")]
+    source_lines = [l for l in lines if l.startswith("##source=")]
+    info_lines = [l for l in lines if l.startswith("##INFO=")]
+    format_lines = [l for l in lines if l.startswith("##FORMAT=")]
+
+    # Check reference assembly
+    for line in reference_lines + contig_lines:
+        for rule in VCF_REFERENCE_RULES:
+            if re.search(rule.pattern, line, re.IGNORECASE):
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": line[:100] + "..." if len(line) > 100 else line,
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+                if rule.classification and not result["reference_assembly"]:
+                    result["reference_assembly"] = rule.classification
+                break  # Only match first reference rule per line
+
+    # Check variant caller from ##source
+    all_caller_rules = (
+        VCF_GERMLINE_CALLER_RULES +
+        VCF_SOMATIC_CALLER_RULES +
+        VCF_SV_CALLER_RULES +
+        VCF_CNV_CALLER_RULES
+    )
+    for line in source_lines:
+        for rule in all_caller_rules:
+            if re.search(rule.pattern, line, re.IGNORECASE):
+                result["evidence"].append({
+                    "rule_id": rule.id,
+                    "matched": line,
+                    "classification": rule.classification,
+                    "confidence": rule.confidence,
+                    "rationale": rule.rationale,
+                })
+                result["matched_rules"].append(rule.id)
+
+                # Extract caller name
+                caller_match = re.search(r"##source=(.+)", line)
+                if caller_match and not result["caller"]:
+                    result["caller"] = caller_match.group(1).strip()
+
+                # Update classification if higher confidence
+                if rule.classification and rule.confidence > result["confidence"]:
+                    result["data_modality"] = rule.classification
+                    result["confidence"] = rule.confidence
+
+                    # Set variant type based on classification
+                    if "germline" in rule.classification:
+                        result["variant_type"] = "germline"
+                    elif "somatic" in rule.classification:
+                        result["variant_type"] = "somatic"
+                    elif "structural" in rule.classification:
+                        result["variant_type"] = "structural"
+                    elif "copy_number" in rule.classification:
+                        result["variant_type"] = "cnv"
+
+    # Check INFO fields for variant type hints
+    info_text = "\n".join(info_lines)
+    for rule in VCF_INFO_RULES:
+        if re.search(rule.pattern, info_text, re.IGNORECASE):
+            result["evidence"].append({
+                "rule_id": rule.id,
+                "matched": f"INFO field pattern: {rule.pattern}",
+                "classification": rule.classification,
+                "confidence": rule.confidence,
+                "rationale": rule.rationale,
+            })
+            result["matched_rules"].append(rule.id)
+
+            # Only use INFO rules if no caller was detected
+            if not result["data_modality"] and rule.classification:
+                result["data_modality"] = rule.classification
+                result["confidence"] = rule.confidence
+
+    # Default to genomic if no specific modality detected but we have evidence
+    if not result["data_modality"] and result["evidence"]:
+        result["data_modality"] = "genomic"
+        result["confidence"] = 0.5
+
+    # Check for conflicting signals
+    variant_types_found = set()
+    for e in result["evidence"]:
+        classification = e.get("classification", "")
+        if classification:
+            if "germline" in classification:
+                variant_types_found.add("germline")
+            elif "somatic" in classification:
+                variant_types_found.add("somatic")
+
+    if len(variant_types_found) > 1:
+        result["warnings"].append(
+            f"VARIANT TYPE CONFLICT: Both {' and '.join(variant_types_found)} signals detected. "
+            "This may indicate a multi-caller VCF or annotation error."
+        )
+        result["confidence"] = max(0.3, result["confidence"] - 0.2)
+
+    return result
+
+
+def get_rules_documentation() -> str:
+    """Generate markdown documentation of all header classification rules."""
+    doc = """# BAM/CRAM and VCF Header Classification Rules
+
+## Overview
+
+This document describes the rules used to classify BAM/CRAM files based on their
+header content. BAM/CRAM headers contain metadata about sequencing platform, alignment
+software, and reference genome that can definitively identify data modality and reference assembly.
+
+## Header Sections Reference
+
+### @HD (Header)
+File-level metadata including SAM format version and sort order.
+
+### @SQ (Sequence Dictionary)
+Reference sequences the reads are aligned to. Key fields:
+- **SN**: Sequence name (e.g., chr1, NC_000001.11)
+- **LN**: Sequence length
+- **AS**: Genome assembly identifier (e.g., GRCh38)
+- **M5**: MD5 checksum of sequence
+
+### @RG (Read Group)
+Metadata about a set of reads. Key fields:
+- **ID**: Read group identifier
+- **PL**: Platform/technology (ILLUMINA, PACBIO, ONT)
+- **PM**: Platform model (e.g., SEQUELII, NovaSeq)
+- **SM**: Sample name
+- **DS**: Description (PacBio uses for READTYPE)
+
+### @PG (Program)
+Software used to create/modify the file. Key fields:
+- **ID**: Program record identifier
+- **PN**: Program name (e.g., bwa, STAR, minimap2)
+- **VN**: Program version
+- **CL**: Command line used
+
+---
+
+## Classification Rules
+
+"""
+
+    sections = [
+        ("Platform Detection", "@RG PL field", PLATFORM_RULES),
+        ("PacBio Read Type", "@RG DS field", PACBIO_READTYPE_RULES),
+        ("RNA-seq Programs", "@PG PN field", RNASEQ_PROGRAM_RULES),
+        ("DNA Alignment Programs", "@PG PN field", DNA_PROGRAM_RULES),
+        ("PacBio Programs", "@PG PN field", PACBIO_PROGRAM_RULES),
+        ("Reference Assembly", "@SQ SN/AS fields", REFERENCE_RULES),
+        ("Unaligned Detection", "@SQ absence", UNALIGNED_RULES),
+    ]
+
+    for section_name, header_location, rules in sections:
+        doc += f"### {section_name}\n\n"
+        doc += f"*Source: {header_location}*\n\n"
+
+        for rule in rules:
+            pattern = rule.pattern or "(absent)"
+            classification = rule.classification or "N/A (ambiguous)"
+            doc += f"#### `{rule.id}`\n\n"
+            doc += f"- **Pattern**: `{pattern}`\n"
+            doc += f"- **Classification**: {classification}\n"
+            doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+            doc += f"**Rationale**: {rule.rationale}\n\n"
+
+        doc += "---\n\n"
+
+    # Add consistency validation rules
+    doc += """## Consistency Validation Rules
+
+The classifier validates that multiple signals in the same header are consistent.
+Convergent signals (that agree) increase confidence, while conflicting signals
+indicate potential errors and reduce confidence.
+
+### Convergent Signals (Should Agree)
+
+These signal pairs reinforce each other when both are present:
+
+"""
+
+    for rule in CONVERGENT_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Signal A**: `{rule.signal_a}`\n"
+        doc += f"- **Signal B**: `{rule.signal_b}`\n"
+        doc += f"- **Expected Agreement**: {rule.expected_agreement}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Conflicting Signals (Indicate Errors)\n\n"
+    doc += "These signal pairs should NOT appear together. If found, confidence is reduced:\n\n"
+
+    for rule in CONFLICTING_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Signal A**: `{rule.signal_a}`\n"
+        doc += f"- **Signal B**: `{rule.signal_b}`\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += """---
+
+## File Size Rules (WGS vs WES)
+
+File size helps distinguish Whole Genome Sequencing (WGS) from Whole Exome Sequencing (WES):
+
+| Type | Typical BAM Size | Typical CRAM Size |
+|------|------------------|-------------------|
+| WGS 30x | 50-150 GB | 15-50 GB |
+| WES 100x | 5-15 GB | 2-8 GB |
+
+The ~10:1 ratio exists because WGS covers the whole genome (~3 billion bases) while
+WES only covers exons (~1-2% of genome, ~30-60 million bases).
+
+**Caveats:**
+- Coverage depth varies (higher coverage = larger files)
+- CRAM is ~60-70% smaller than BAM
+- Some files may be subsets or downsampled
+- Long-read BAMs (PacBio/ONT) are typically larger due to read length
+
+"""
+
+    for rule in FILE_SIZE_RULES:
+        min_size = f"{rule.min_size_gb:.0f} GB" if rule.min_size_gb else "any"
+        max_size = f"{rule.max_size_gb:.0f} GB" if rule.max_size_gb else "any"
+        size_range = f"{min_size} - {max_size}"
+        platform = rule.platform or "any"
+        file_format = rule.file_format or "any"
+
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Size Range**: {size_range}\n"
+        doc += f"- **Platform**: {platform}\n"
+        doc += f"- **File Format**: {file_format}\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += """---
+
+## VCF Header Classification Rules
+
+VCF files contain rich metadata in `##` header lines that can identify:
+- Reference genome (from `##reference=` and `##contig=` lines)
+- Variant caller (from `##source=` line)
+- Variant type (germline, somatic, structural, CNV)
+
+### VCF Header Line Reference
+
+| Line Type | Description | Example |
+|-----------|-------------|---------|
+| `##fileformat` | VCF version | `##fileformat=VCFv4.2` |
+| `##reference` | Reference genome path | `##reference=file:///path/to/GRCh38.fa` |
+| `##contig` | Contig definitions | `##contig=<ID=chr1,length=248956422,assembly=GRCh38>` |
+| `##source` | Variant caller | `##source=GATK HaplotypeCaller` |
+| `##INFO` | INFO field definitions | `##INFO=<ID=DP,Number=1,Type=Integer,...>` |
+| `##FORMAT` | FORMAT field definitions | `##FORMAT=<ID=GT,Number=1,Type=String,...>` |
+
+### Reference Assembly Detection
+
+"""
+
+    for rule in VCF_REFERENCE_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Header Type**: `{rule.header_type}`\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Germline Variant Callers\n\n"
+
+    for rule in VCF_GERMLINE_CALLER_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Somatic Variant Callers\n\n"
+
+    for rule in VCF_SOMATIC_CALLER_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Structural Variant Callers\n\n"
+
+    for rule in VCF_SV_CALLER_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Copy Number Variant Callers\n\n"
+
+    for rule in VCF_CNV_CALLER_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### INFO Field Indicators\n\n"
+
+    for rule in VCF_INFO_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n"
+
+    return doc
