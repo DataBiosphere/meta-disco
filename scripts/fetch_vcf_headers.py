@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Fetch VCF headers from S3 mirror for files needing header inspection."""
+"""Fetch VCF headers from S3 mirror for files needing header inspection.
+
+Headers are cached in data/evidence/vcf/ for:
+- Resumability after interruption
+- Audit trail of classification evidence
+"""
 
 import argparse
-import gzip
 import json
-import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
-from io import BytesIO
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,16 +20,60 @@ import requests
 from src.meta_disco.header_classifier import classify_from_vcf_header, get_rules_documentation
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
+EVIDENCE_DIR = Path("data/evidence/vcf")
 
 
-def get_vcf_header(md5sum: str, is_gzipped: bool = True) -> str | None:
+def get_evidence_path(md5sum: str) -> Path:
+    """Get path for cached header evidence file."""
+    # Use first 2 chars of MD5 as subdirectory to avoid too many files in one dir
+    return EVIDENCE_DIR / md5sum[:2] / f"{md5sum}.json"
+
+
+def load_cached_header(md5sum: str) -> dict | None:
+    """Load cached header if it exists."""
+    path = get_evidence_path(md5sum)
+    if path.exists():
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return None
+    return None
+
+
+def save_header_evidence(md5sum: str, file_name: str, header_text: str, raw_bytes: int):
+    """Save fetched header as evidence for audit trail."""
+    path = get_evidence_path(md5sum)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    evidence = {
+        "md5sum": md5sum,
+        "file_name": file_name,
+        "header_text": header_text,
+        "header_line_count": len(header_text.split('\n')),
+        "raw_bytes_fetched": raw_bytes,
+        "fetch_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    with open(path, "w") as f:
+        json.dump(evidence, f, indent=2)
+
+
+def get_vcf_header(md5sum: str, file_name: str = "", is_gzipped: bool = True,
+                   use_cache: bool = True) -> str | None:
     """
     Read VCF header from S3 mirror.
 
     VCF headers are all lines starting with # at the beginning of the file.
     For gzipped VCFs, we fetch the first chunk and decompress.
+
+    Headers are cached in data/evidence/vcf/ for resumability.
     """
-    import zlib
+    # Check cache first
+    if use_cache:
+        cached = load_cached_header(md5sum)
+        if cached and cached.get("header_text"):
+            return cached["header_text"]
 
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
 
@@ -39,6 +86,7 @@ def get_vcf_header(md5sum: str, is_gzipped: bool = True) -> str | None:
             return None
 
         content = resp.content
+        raw_bytes = len(content)
 
         # Decompress if gzipped
         if is_gzipped and content[:2] == b'\x1f\x8b':
@@ -66,7 +114,11 @@ def get_vcf_header(md5sum: str, is_gzipped: bool = True) -> str | None:
                 break
 
         if header_lines:
-            return '\n'.join(header_lines)
+            header_text = '\n'.join(header_lines)
+            # Save to cache for resumability
+            save_header_evidence(md5sum, file_name, header_text, raw_bytes)
+            return header_text
+
         return None
 
     except requests.Timeout:
@@ -82,9 +134,10 @@ def classify_single_vcf(
     file_name: str = "",
     file_size: int | None = None,
     is_gzipped: bool = True,
+    use_cache: bool = True,
 ) -> dict | None:
     """Fetch header and classify a single VCF file by MD5."""
-    header_text = get_vcf_header(md5sum, is_gzipped)
+    header_text = get_vcf_header(md5sum, file_name, is_gzipped, use_cache=use_cache)
     if not header_text:
         return None
 
@@ -98,8 +151,16 @@ def classify_single_vcf(
     return classification
 
 
-def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = None):
-    """Process VCF files that need header inspection."""
+def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = None,
+                      resume: bool = True):
+    """Process VCF files that need header inspection.
+
+    Args:
+        input_path: Path to classification results JSON
+        output_path: Path to save header classifications
+        limit: Maximum number of files to process
+        resume: If True, skip files with cached headers
+    """
 
     # Load classification results or raw metadata
     with open(input_path) as f:
@@ -121,6 +182,13 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
 
     print(f"Found {len(needs_inspection)} VCF files with MD5 for header inspection")
 
+    # Check how many are already cached
+    if resume:
+        cached_count = sum(1 for r in needs_inspection
+                         if load_cached_header(r.get("file_md5sum")) is not None)
+        print(f"  Already cached: {cached_count}")
+        print(f"  Remaining to fetch: {len(needs_inspection) - cached_count}")
+
     if limit:
         needs_inspection = needs_inspection[:limit]
         print(f"Processing first {limit} files")
@@ -128,6 +196,10 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
     classifications = []
     successful = 0
     failed = 0
+    from_cache = 0
+
+    # Ensure evidence directory exists
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
     for i, record in enumerate(needs_inspection):
         md5 = record.get("file_md5sum")
@@ -139,9 +211,14 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
         # Check if gzipped
         is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
 
-        print(f"\r[{i+1}/{len(needs_inspection)}] {file_name[:50]:<52}", end="", flush=True)
+        # Check cache first for progress indicator
+        was_cached = load_cached_header(md5) is not None
+        cache_indicator = "[cached] " if was_cached else ""
 
-        result = classify_single_vcf(md5, file_name, file_size=file_size, is_gzipped=is_gzipped)
+        print(f"\r[{i+1}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
+
+        result = classify_single_vcf(md5, file_name, file_size=file_size,
+                                     is_gzipped=is_gzipped, use_cache=resume)
 
         if result:
             result["entry_id"] = entry_id
@@ -150,33 +227,53 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
                 "file_size": file_size,
                 "dataset_title": record.get("dataset_title"),
             }
+            result["from_cache"] = was_cached
             classifications.append(result)
             successful += 1
+            if was_cached:
+                from_cache += 1
         else:
             failed += 1
 
-        # Brief delay to be nice to servers
-        time.sleep(0.1)
+        # Brief delay only for new fetches
+        if not was_cached:
+            time.sleep(0.1)
+
+        # Save incremental progress every 100 files
+        if (i + 1) % 100 == 0:
+            save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\n\nSuccessfully classified: {successful}")
+    print(f"  From cache: {from_cache}")
+    print(f"  New fetches: {successful - from_cache}")
     print(f"Failed to fetch header: {failed}")
 
-    # Save results
+    # Save final results
+    save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache, final=True)
+
+    print(f"\nSaved to {output_path}")
+    print(f"Evidence cached in: {EVIDENCE_DIR}/")
+
+    # Print summary
+    print_vcf_classification_summary(classifications)
+
+
+def save_progress(output_path: Path, classifications: list, total: int,
+                  successful: int, failed: int, from_cache: int, final: bool = False):
+    """Save current progress to output file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({
             "metadata": {
-                "total_processed": len(needs_inspection),
+                "total_to_process": total,
+                "processed": successful + failed,
                 "successful": successful,
                 "failed": failed,
+                "from_cache": from_cache,
+                "complete": final,
             },
             "classifications": classifications,
         }, f, indent=2)
-
-    print(f"\nSaved to {output_path}")
-
-    # Print summary
-    print_vcf_classification_summary(classifications)
 
 
 def print_vcf_classification_summary(classifications: list[dict]):
@@ -260,6 +357,8 @@ def main():
                         help="File is gzipped (default: True)")
     parser.add_argument("--no-gzip", action="store_true",
                         help="File is not gzipped")
+    parser.add_argument("--no-resume", action="store_true",
+                        help="Don't use cached headers, re-fetch all")
     parser.add_argument("--docs", action="store_true",
                         help="Print rules documentation and exit")
     args = parser.parse_args()
@@ -284,7 +383,8 @@ def main():
     process_vcf_files(
         Path(args.input),
         Path(args.output),
-        args.limit
+        args.limit,
+        resume=not args.no_resume
     )
 
 

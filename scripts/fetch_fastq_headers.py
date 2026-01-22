@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Fetch FASTQ headers from S3 mirror for files needing header inspection."""
+"""Fetch FASTQ headers from S3 mirror for files needing header inspection.
+
+Headers are cached in data/evidence/fastq/ for:
+- Resumability after interruption
+- Audit trail of classification evidence
+"""
 
 import argparse
 import json
@@ -15,15 +20,60 @@ import requests
 from src.meta_disco.header_classifier import classify_from_fastq_header, get_rules_documentation
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
+EVIDENCE_DIR = Path("data/evidence/fastq")
 
 
-def get_fastq_reads(md5sum: str, is_gzipped: bool = True, num_reads: int = 10) -> list[str] | None:
+def get_evidence_path(md5sum: str) -> Path:
+    """Get path for cached header evidence file."""
+    # Use first 2 chars of MD5 as subdirectory to avoid too many files in one dir
+    return EVIDENCE_DIR / md5sum[:2] / f"{md5sum}.json"
+
+
+def load_cached_header(md5sum: str) -> dict | None:
+    """Load cached header if it exists."""
+    path = get_evidence_path(md5sum)
+    if path.exists():
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return None
+    return None
+
+
+def save_header_evidence(md5sum: str, file_name: str, read_names: list[str], raw_bytes: int):
+    """Save fetched header as evidence for audit trail."""
+    path = get_evidence_path(md5sum)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    evidence = {
+        "md5sum": md5sum,
+        "file_name": file_name,
+        "read_names": read_names,
+        "raw_bytes_fetched": raw_bytes,
+        "fetch_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    with open(path, "w") as f:
+        json.dump(evidence, f, indent=2)
+
+
+def get_fastq_reads(md5sum: str, file_name: str = "", is_gzipped: bool = True,
+                    num_reads: int = 10, use_cache: bool = True) -> list[str] | None:
     """
     Read first N read names from a FASTQ file on S3.
 
     For gzipped files, fetches first chunk and decompresses.
     Returns list of read name lines (starting with @).
+
+    Headers are cached in data/evidence/fastq/ for resumability.
     """
+    # Check cache first
+    if use_cache:
+        cached = load_cached_header(md5sum)
+        if cached and cached.get("read_names"):
+            return cached["read_names"]
+
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
 
     try:
@@ -35,6 +85,7 @@ def get_fastq_reads(md5sum: str, is_gzipped: bool = True, num_reads: int = 10) -
             return None
 
         content = resp.content
+        raw_bytes = len(content)
 
         # Decompress if gzipped
         if is_gzipped and content[:2] == b'\x1f\x8b':
@@ -62,6 +113,10 @@ def get_fastq_reads(md5sum: str, is_gzipped: bool = True, num_reads: int = 10) -
             else:
                 i += 1
 
+        # Save to cache for resumability
+        if read_names:
+            save_header_evidence(md5sum, file_name, read_names, raw_bytes)
+
         return read_names if read_names else None
 
     except requests.Timeout:
@@ -77,9 +132,10 @@ def classify_single_fastq(
     file_name: str = "",
     file_size: int | None = None,
     is_gzipped: bool = True,
+    use_cache: bool = True,
 ) -> dict | None:
     """Fetch reads and classify a single FASTQ file by MD5."""
-    read_names = get_fastq_reads(md5sum, is_gzipped)
+    read_names = get_fastq_reads(md5sum, file_name, is_gzipped, use_cache=use_cache)
     if not read_names:
         return None
 
@@ -93,8 +149,16 @@ def classify_single_fastq(
     return classification
 
 
-def process_fastq_files(input_path: Path, output_path: Path, limit: int | None = None):
-    """Process FASTQ files that need header inspection."""
+def process_fastq_files(input_path: Path, output_path: Path, limit: int | None = None,
+                        resume: bool = True):
+    """Process FASTQ files that need header inspection.
+
+    Args:
+        input_path: Path to classification results JSON
+        output_path: Path to save header classifications
+        limit: Maximum number of files to process
+        resume: If True, skip files with cached headers
+    """
 
     # Load classification results or raw metadata
     with open(input_path) as f:
@@ -116,6 +180,13 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
 
     print(f"Found {len(needs_inspection)} FASTQ files with MD5 for header inspection")
 
+    # Check how many are already cached
+    if resume:
+        cached_count = sum(1 for r in needs_inspection
+                         if load_cached_header(r.get("file_md5sum")) is not None)
+        print(f"  Already cached: {cached_count}")
+        print(f"  Remaining to fetch: {len(needs_inspection) - cached_count}")
+
     if limit:
         needs_inspection = needs_inspection[:limit]
         print(f"Processing first {limit} files")
@@ -123,6 +194,10 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
     classifications = []
     successful = 0
     failed = 0
+    from_cache = 0
+
+    # Ensure evidence directory exists
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
     for i, record in enumerate(needs_inspection):
         md5 = record.get("file_md5sum")
@@ -134,9 +209,14 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
         # Check if gzipped
         is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
 
-        print(f"\r[{i+1}/{len(needs_inspection)}] {file_name[:50]:<52}", end="", flush=True)
+        # Check cache first for progress indicator
+        was_cached = load_cached_header(md5) is not None
+        cache_indicator = "[cached] " if was_cached else ""
 
-        result = classify_single_fastq(md5, file_name, file_size=file_size, is_gzipped=is_gzipped)
+        print(f"\r[{i+1}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
+
+        result = classify_single_fastq(md5, file_name, file_size=file_size,
+                                       is_gzipped=is_gzipped, use_cache=resume)
 
         if result:
             result["entry_id"] = entry_id
@@ -145,33 +225,53 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
                 "file_size": file_size,
                 "dataset_title": record.get("dataset_title"),
             }
+            result["from_cache"] = was_cached
             classifications.append(result)
             successful += 1
+            if was_cached:
+                from_cache += 1
         else:
             failed += 1
 
-        # Brief delay to be nice to servers
-        time.sleep(0.1)
+        # Brief delay only for new fetches
+        if not was_cached:
+            time.sleep(0.1)
+
+        # Save incremental progress every 100 files
+        if (i + 1) % 100 == 0:
+            save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\n\nSuccessfully classified: {successful}")
+    print(f"  From cache: {from_cache}")
+    print(f"  New fetches: {successful - from_cache}")
     print(f"Failed to fetch header: {failed}")
 
-    # Save results
+    # Save final results
+    save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache, final=True)
+
+    print(f"\nSaved to {output_path}")
+    print(f"Evidence cached in: {EVIDENCE_DIR}/")
+
+    # Print summary
+    print_fastq_classification_summary(classifications)
+
+
+def save_progress(output_path: Path, classifications: list, total: int,
+                  successful: int, failed: int, from_cache: int, final: bool = False):
+    """Save current progress to output file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({
             "metadata": {
-                "total_processed": len(needs_inspection),
+                "total_to_process": total,
+                "processed": successful + failed,
                 "successful": successful,
                 "failed": failed,
+                "from_cache": from_cache,
+                "complete": final,
             },
             "classifications": classifications,
         }, f, indent=2)
-
-    print(f"\nSaved to {output_path}")
-
-    # Print summary
-    print_fastq_classification_summary(classifications)
 
 
 def print_fastq_classification_summary(classifications: list[dict]):
@@ -189,6 +289,7 @@ def print_fastq_classification_summary(classifications: list[dict]):
     modalities = {}
     paired_count = 0
     instrument_models = {}
+    archive_sources = {}
 
     for c in classifications:
         plat = c.get("platform") or "unknown"
@@ -203,6 +304,10 @@ def print_fastq_classification_summary(classifications: list[dict]):
         model = c.get("instrument_model")
         if model:
             instrument_models[model] = instrument_models.get(model, 0) + 1
+
+        source = c.get("archive_source")
+        if source:
+            archive_sources[source] = archive_sources.get(source, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
     print(f"  Paired-end detected: {paired_count}")
@@ -220,6 +325,11 @@ def print_fastq_classification_summary(classifications: list[dict]):
         for model, count in sorted(instrument_models.items(), key=lambda x: -x[1]):
             print(f"  {model:<30} {count:>5}")
 
+    if archive_sources:
+        print("\nArchive Accessions:")
+        for source, count in sorted(archive_sources.items(), key=lambda x: -x[1]):
+            print(f"  {source:<30} {count:>5}")
+
     # Show sample evidence
     print("\n" + "-" * 70)
     print("SAMPLE EVIDENCE (first 3 files):")
@@ -232,6 +342,8 @@ def print_fastq_classification_summary(classifications: list[dict]):
         print(f"  Paired-end: {c.get('is_paired_end')}")
         if c.get("instrument_model"):
             print(f"  Instrument: {c.get('instrument_model')}")
+        if c.get("archive_accession"):
+            print(f"  Archive: {c.get('archive_source')} - {c.get('archive_accession')}")
         print(f"  Sample read: {c.get('sample_reads', [''])[0][:70]}...")
 
     print("=" * 70)
@@ -251,6 +363,8 @@ def main():
                         help="File is gzipped (default: True)")
     parser.add_argument("--no-gzip", action="store_true",
                         help="File is not gzipped")
+    parser.add_argument("--no-resume", action="store_true",
+                        help="Don't use cached headers, re-fetch all")
     parser.add_argument("--docs", action="store_true",
                         help="Print rules documentation and exit")
     args = parser.parse_args()
@@ -275,7 +389,8 @@ def main():
     process_fastq_files(
         Path(args.input),
         Path(args.output),
-        args.limit
+        args.limit,
+        resume=not args.no_resume
     )
 
 
