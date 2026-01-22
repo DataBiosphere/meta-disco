@@ -11,7 +11,9 @@ import json
 import sys
 import time
 import zlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -151,15 +153,49 @@ def classify_single_vcf(
     return classification
 
 
+def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:
+    """Process a single VCF record. Returns (classification, was_cached)."""
+    md5 = record.get("file_md5sum")
+    file_name = record.get("file_name", "")
+    file_size = record.get("file_size")
+    file_format = record.get("file_format", "")
+    entry_id = record.get("entry_id")
+
+    # Check if gzipped
+    is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
+
+    # Check cache first
+    was_cached = load_cached_header(md5) is not None
+
+    result = classify_single_vcf(md5, file_name, file_size=file_size,
+                                 is_gzipped=is_gzipped, use_cache=resume)
+
+    if result:
+        result["entry_id"] = entry_id
+        result["original_record"] = {
+            "file_format": file_format,
+            "file_size": file_size,
+            "dataset_title": record.get("dataset_title"),
+        }
+        result["from_cache"] = was_cached
+        return result, was_cached
+
+    return None, was_cached
+
+
 def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = None,
-                      resume: bool = True):
+                      resume: bool = True, workers: int = 1, skip_complete: bool = False,
+                      skip_cached: bool = False):
     """Process VCF files that need header inspection.
 
     Args:
         input_path: Path to classification results JSON
         output_path: Path to save header classifications
         limit: Maximum number of files to process
-        resume: If True, skip files with cached headers
+        resume: If True, use cached headers instead of re-fetching
+        workers: Number of parallel workers (default: 1)
+        skip_complete: If True, skip if output already has all files classified
+        skip_cached: If True, skip files entirely if header is already cached (no re-analysis)
     """
 
     # Load classification results or raw metadata
@@ -180,68 +216,94 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
         and not r.get("skip")
     ]
 
+    # Check if output is already complete
+    if skip_complete and output_path.exists():
+        try:
+            with open(output_path) as f:
+                existing = json.load(f)
+            existing_count = len(existing.get("classifications", []))
+            if existing.get("metadata", {}).get("complete") and existing_count >= len(needs_inspection):
+                print(f"Output already complete with {existing_count} classifications. Skipping.")
+                return
+        except (json.JSONDecodeError, IOError):
+            pass
+
     print(f"Found {len(needs_inspection)} VCF files with MD5 for header inspection")
 
     # Check how many are already cached
-    if resume:
-        cached_count = sum(1 for r in needs_inspection
-                         if load_cached_header(r.get("file_md5sum")) is not None)
-        print(f"  Already cached: {cached_count}")
-        print(f"  Remaining to fetch: {len(needs_inspection) - cached_count}")
+    cached_count = sum(1 for r in needs_inspection
+                       if load_cached_header(r.get("file_md5sum")) is not None)
+    print(f"  Already cached: {cached_count}")
+    print(f"  Remaining to fetch: {len(needs_inspection) - cached_count}")
+
+    # Skip cached files entirely if requested (no re-analysis)
+    if skip_cached and cached_count > 0:
+        needs_inspection = [r for r in needs_inspection
+                          if load_cached_header(r.get("file_md5sum")) is None]
+        print(f"  Skipping cached files, processing only {len(needs_inspection)} new files")
 
     if limit:
         needs_inspection = needs_inspection[:limit]
         print(f"Processing first {limit} files")
 
+    # Ensure evidence directory exists
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+
     classifications = []
     successful = 0
     failed = 0
     from_cache = 0
+    processed = 0
 
-    # Ensure evidence directory exists
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    # Thread-safe lock for updating shared state
+    lock = Lock()
 
-    for i, record in enumerate(needs_inspection):
-        md5 = record.get("file_md5sum")
-        file_name = record.get("file_name", "")
-        file_size = record.get("file_size")
-        file_format = record.get("file_format", "")
-        entry_id = record.get("entry_id")
+    print(f"Using {workers} parallel workers")
 
-        # Check if gzipped
-        is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
+    def update_progress(result, was_cached, file_name):
+        nonlocal successful, failed, from_cache, processed
+        with lock:
+            processed += 1
+            if result:
+                classifications.append(result)
+                successful += 1
+                if was_cached:
+                    from_cache += 1
+            else:
+                failed += 1
 
-        # Check cache first for progress indicator
-        was_cached = load_cached_header(md5) is not None
-        cache_indicator = "[cached] " if was_cached else ""
+            cache_indicator = "[cached] " if was_cached else ""
+            print(f"\r[{processed}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
 
-        print(f"\r[{i+1}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
+            # Save incremental progress every 500 files
+            if processed % 500 == 0:
+                save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
 
-        result = classify_single_vcf(md5, file_name, file_size=file_size,
-                                     is_gzipped=is_gzipped, use_cache=resume)
-
-        if result:
-            result["entry_id"] = entry_id
-            result["original_record"] = {
-                "file_format": file_format,
-                "file_size": file_size,
-                "dataset_title": record.get("dataset_title"),
+    if workers == 1:
+        # Sequential processing
+        for record in needs_inspection:
+            result, was_cached = process_single_record(record, resume)
+            update_progress(result, was_cached, record.get("file_name", ""))
+    else:
+        # Parallel processing
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            # Submit all tasks
+            future_to_record = {
+                executor.submit(process_single_record, record, resume): record
+                for record in needs_inspection
             }
-            result["from_cache"] = was_cached
-            classifications.append(result)
-            successful += 1
-            if was_cached:
-                from_cache += 1
-        else:
-            failed += 1
 
-        # Brief delay only for new fetches
-        if not was_cached:
-            time.sleep(0.1)
-
-        # Save incremental progress every 100 files
-        if (i + 1) % 100 == 0:
-            save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
+            # Process as they complete
+            for future in as_completed(future_to_record):
+                record = future_to_record[future]
+                try:
+                    result, was_cached = future.result()
+                    update_progress(result, was_cached, record.get("file_name", ""))
+                except Exception as e:
+                    print(f"\nError processing {record.get('file_name')}: {e}")
+                    with lock:
+                        processed += 1
+                        failed += 1
 
     print(f"\n\nSuccessfully classified: {successful}")
     print(f"  From cache: {from_cache}")
@@ -359,6 +421,12 @@ def main():
                         help="File is not gzipped")
     parser.add_argument("--no-resume", action="store_true",
                         help="Don't use cached headers, re-fetch all")
+    parser.add_argument("--workers", "-w", type=int, default=10,
+                        help="Number of parallel workers (default: 10)")
+    parser.add_argument("--skip-complete", action="store_true",
+                        help="Skip if output file already has all files classified")
+    parser.add_argument("--skip-cached", action="store_true",
+                        help="Skip files entirely if header is already cached (no re-analysis)")
     parser.add_argument("--docs", action="store_true",
                         help="Print rules documentation and exit")
     args = parser.parse_args()
@@ -384,7 +452,10 @@ def main():
         Path(args.input),
         Path(args.output),
         args.limit,
-        resume=not args.no_resume
+        resume=not args.no_resume,
+        workers=args.workers,
+        skip_complete=args.skip_complete,
+        skip_cached=args.skip_cached
     )
 
 
