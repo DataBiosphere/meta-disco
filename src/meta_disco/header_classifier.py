@@ -798,6 +798,214 @@ ALL_VCF_RULES = (
 )
 
 
+# =============================================================================
+# FASTQ HEADER CLASSIFICATION RULES
+# =============================================================================
+#
+# FASTQ read names have platform-specific formats that can identify:
+# - Sequencing platform (Illumina, PacBio, ONT, MGI/BGI)
+# - Instrument model
+# - Run/flowcell information
+# - Read type (single-end, paired-end, CCS, etc.)
+#
+# Format examples:
+#
+# ILLUMINA (modern Casava 1.8+):
+#   @A00488:61:HFWFVDSXX:1:1101:1000:1000 1:N:0:ATCACG
+#   @instrument:run:flowcell:lane:tile:x:y read:filtered:control:index
+#
+# ILLUMINA (legacy):
+#   @HWUSI-EAS100R:6:73:941:1973#0/1
+#   @instrument:lane:tile:x:y#index/read
+#
+# PACBIO CCS/HiFi:
+#   @m64011_190830_220126/1/ccs
+#   @movie/zmw/ccs
+#
+# PACBIO CLR (subreads):
+#   @m64011_190830_220126/1234/0_5000
+#   @movie/zmw/start_end
+#
+# ONT:
+#   @a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123...
+#   @uuid [key=value pairs]
+#
+# MGI/BGI:
+#   @V350012345L1C001R0010000001/1
+#   @flowcell_lane_column_row_readnum/pair
+#
+
+@dataclass
+class FASTQHeaderRule:
+    """A classification rule based on FASTQ read name format."""
+    id: str
+    pattern: str         # regex pattern to match read name
+    classification: str | None  # platform or modality
+    platform: str | None  # detected platform
+    confidence: float
+    rationale: str
+
+
+# Illumina read name patterns
+FASTQ_ILLUMINA_RULES = [
+    FASTQHeaderRule(
+        id="fastq_illumina_modern",
+        pattern=r"^@[A-Z0-9-]+:\d+:[A-Z0-9]+:\d+:\d+:\d+:\d+",
+        classification="genomic",
+        platform="ILLUMINA",
+        confidence=0.90,
+        rationale="Modern Illumina read names (Casava 1.8+) follow the format "
+                  "@instrument:run:flowcell:lane:tile:x:y. This format is used by "
+                  "HiSeq 2500+, NovaSeq, NextSeq, and MiSeq instruments."
+    ),
+    FASTQHeaderRule(
+        id="fastq_illumina_legacy",
+        pattern=r"^@[A-Z0-9-]+:\d+:\d+:\d+:\d+#",
+        classification="genomic",
+        platform="ILLUMINA",
+        confidence=0.85,
+        rationale="Legacy Illumina read names follow @instrument:lane:tile:x:y#index format. "
+                  "Used by older instruments like GA, GAIIx, HiSeq 2000."
+    ),
+    FASTQHeaderRule(
+        id="fastq_illumina_srr",
+        pattern=r"^@SRR\d+\.\d+",
+        classification="genomic",
+        platform="ILLUMINA",
+        confidence=0.70,
+        rationale="SRA-reformatted read names starting with @SRR typically indicate Illumina data "
+                  "downloaded from NCBI SRA. Lower confidence as original platform info is lost."
+    ),
+]
+
+# PacBio read name patterns
+FASTQ_PACBIO_RULES = [
+    FASTQHeaderRule(
+        id="fastq_pacbio_ccs",
+        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+/ccs",
+        classification="genomic.whole_genome",
+        platform="PACBIO",
+        confidence=0.95,
+        rationale="PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix "
+                  "indicates Circular Consensus Sequencing was performed, producing high-accuracy "
+                  "long reads (>Q20). Movie names start with 'm' followed by instrument ID and timestamp."
+    ),
+    FASTQHeaderRule(
+        id="fastq_pacbio_clr",
+        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+/\d+_\d+",
+        classification="genomic.whole_genome",
+        platform="PACBIO",
+        confidence=0.90,
+        rationale="PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format. "
+                  "The start_end coordinates indicate the position within the ZMW polymerase read."
+    ),
+    FASTQHeaderRule(
+        id="fastq_pacbio_generic",
+        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+",
+        classification="genomic.whole_genome",
+        platform="PACBIO",
+        confidence=0.85,
+        rationale="Generic PacBio read names follow @movie/zmw format. The movie name encodes "
+                  "the instrument (m=RSII/Sequel, followed by instrument ID) and run timestamp."
+    ),
+]
+
+# ONT read name patterns
+FASTQ_ONT_RULES = [
+    FASTQHeaderRule(
+        id="fastq_ont_uuid",
+        pattern=r"^@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
+        classification="genomic",
+        platform="ONT",
+        confidence=0.95,
+        rationale="ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). "
+                  "This uniquely identifies Oxford Nanopore data. Additional metadata "
+                  "like runid, read number, and channel may follow as key=value pairs."
+    ),
+    FASTQHeaderRule(
+        id="fastq_ont_metadata",
+        pattern=r"runid=[a-f0-9]+",
+        classification="genomic",
+        platform="ONT",
+        confidence=0.95,
+        rationale="ONT reads often include 'runid=' metadata in the header line, "
+                  "providing the unique run identifier from MinKNOW."
+    ),
+]
+
+# MGI/BGI read name patterns
+FASTQ_MGI_RULES = [
+    FASTQHeaderRule(
+        id="fastq_mgi",
+        pattern=r"^@[A-Z]\d{9}L\dC\d{3}R\d{3}\d+",
+        classification="genomic",
+        platform="MGI",
+        confidence=0.90,
+        rationale="MGI/BGI-SEQ read names follow @flowcellLaneCcolumnRrow format. "
+                  "MGI (formerly BGI) instruments use this distinctive naming convention "
+                  "with embedded lane (L), column (C), and row (R) identifiers."
+    ),
+    FASTQHeaderRule(
+        id="fastq_mgi_alt",
+        pattern=r"^@[A-Z]\d+L\d+C\d+R\d+",
+        classification="genomic",
+        platform="MGI",
+        confidence=0.85,
+        rationale="Alternative MGI/BGI read name format with varying digit lengths."
+    ),
+]
+
+# Element Biosciences read name patterns
+FASTQ_ELEMENT_RULES = [
+    FASTQHeaderRule(
+        id="fastq_element",
+        pattern=r"^@[A-Z0-9]+:[A-Z0-9]+:\d+:\d+:\d+:\d+:\d+",
+        classification="genomic",
+        platform="ELEMENT",
+        confidence=0.80,
+        rationale="Element Biosciences AVITI read names follow a similar format to Illumina "
+                  "but with different instrument ID patterns."
+    ),
+]
+
+# Ultima Genomics read name patterns
+FASTQ_ULTIMA_RULES = [
+    FASTQHeaderRule(
+        id="fastq_ultima",
+        pattern=r"^@[A-Z0-9]+_\d+_\d+_\d+_[ACGT]+",
+        classification="genomic",
+        platform="ULTIMA",
+        confidence=0.80,
+        rationale="Ultima Genomics read names include flow-space encoded sequences "
+                  "in the read identifier."
+    ),
+]
+
+# Paired-end detection (works across platforms)
+FASTQ_PAIREDEND_RULES = [
+    FASTQHeaderRule(
+        id="fastq_paired_r1",
+        pattern=r"[/\s][12]$|[/\s][12]:|_R[12]_|\.R[12]\.|_r[12]_|\.r[12]\.",
+        classification=None,  # Doesn't change modality
+        platform=None,
+        confidence=0.80,
+        rationale="Read 1 or Read 2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing. "
+                  "This is common for Illumina WGS, WES, and RNA-seq workflows."
+    ),
+]
+
+# Combine all FASTQ rules
+ALL_FASTQ_RULES = (
+    FASTQ_ILLUMINA_RULES +
+    FASTQ_PACBIO_RULES +
+    FASTQ_ONT_RULES +
+    FASTQ_MGI_RULES +
+    FASTQ_ELEMENT_RULES +
+    FASTQ_ULTIMA_RULES +
+    FASTQ_PAIREDEND_RULES
+)
+
+
 # All BAM/CRAM rules combined for easy iteration
 ALL_RULES = (
     PLATFORM_RULES +
@@ -1340,14 +1548,154 @@ def classify_from_vcf_header(
     return result
 
 
+def classify_from_fastq_header(
+    read_lines: list[str],
+    file_name: str = "",
+) -> dict:
+    """
+    Classify data modality and platform from FASTQ read name format.
+
+    Args:
+        read_lines: List of read name lines (starting with @)
+        file_name: Optional filename for additional context
+
+    Returns dict with:
+        - data_modality: str or None
+        - platform: str or None (ILLUMINA, PACBIO, ONT, MGI, etc.)
+        - confidence: float
+        - matched_rules: list of rule IDs that matched
+        - evidence: list of dicts with rule details and rationales
+        - is_paired_end: bool or None
+        - instrument_hint: str or None (extracted instrument ID if available)
+    """
+    import re
+
+    result = {
+        "data_modality": None,
+        "platform": None,
+        "confidence": 0.0,
+        "is_paired_end": None,
+        "instrument_hint": None,
+        "matched_rules": [],
+        "evidence": [],
+        "warnings": [],
+    }
+
+    if not read_lines:
+        return result
+
+    # Check multiple reads for consistency (use first 10)
+    sample_reads = read_lines[:10]
+    platform_votes = {}
+
+    for read_name in sample_reads:
+        if not read_name.startswith("@"):
+            continue
+
+        # Check platform-specific patterns
+        all_platform_rules = (
+            FASTQ_ILLUMINA_RULES +
+            FASTQ_PACBIO_RULES +
+            FASTQ_ONT_RULES +
+            FASTQ_MGI_RULES +
+            FASTQ_ELEMENT_RULES +
+            FASTQ_ULTIMA_RULES
+        )
+
+        for rule in all_platform_rules:
+            if re.search(rule.pattern, read_name):
+                platform_votes[rule.platform] = platform_votes.get(rule.platform, 0) + 1
+
+                # Only add evidence once per rule
+                if rule.id not in result["matched_rules"]:
+                    result["evidence"].append({
+                        "rule_id": rule.id,
+                        "matched": read_name[:80] + "..." if len(read_name) > 80 else read_name,
+                        "classification": rule.classification,
+                        "platform": rule.platform,
+                        "confidence": rule.confidence,
+                        "rationale": rule.rationale,
+                    })
+                    result["matched_rules"].append(rule.id)
+
+                    # Update classification if higher confidence
+                    if rule.confidence > result["confidence"]:
+                        result["data_modality"] = rule.classification
+                        result["platform"] = rule.platform
+                        result["confidence"] = rule.confidence
+
+        # Check for paired-end indicators
+        for rule in FASTQ_PAIREDEND_RULES:
+            if re.search(rule.pattern, read_name):
+                result["is_paired_end"] = True
+                if rule.id not in result["matched_rules"]:
+                    result["evidence"].append({
+                        "rule_id": rule.id,
+                        "matched": "Paired-end indicator found",
+                        "classification": None,
+                        "platform": None,
+                        "confidence": rule.confidence,
+                        "rationale": rule.rationale,
+                    })
+                    result["matched_rules"].append(rule.id)
+
+    # Extract instrument hint for Illumina
+    if result["platform"] == "ILLUMINA" and sample_reads:
+        first_read = sample_reads[0]
+        # Modern format: @instrument:run:flowcell:...
+        match = re.match(r"@([A-Z0-9-]+):", first_read)
+        if match:
+            result["instrument_hint"] = match.group(1)
+
+            # Infer instrument model from ID prefix
+            inst_id = match.group(1)
+            if inst_id.startswith("A"):
+                result["instrument_model"] = "NovaSeq 6000" if inst_id.startswith("A0") else "NovaSeq"
+            elif inst_id.startswith("M"):
+                result["instrument_model"] = "MiSeq"
+            elif inst_id.startswith("D"):
+                result["instrument_model"] = "HiSeq 2500"
+            elif inst_id.startswith("E"):
+                result["instrument_model"] = "HiSeq X"
+            elif inst_id.startswith("N"):
+                result["instrument_model"] = "NextSeq"
+            elif inst_id.startswith("V"):
+                result["instrument_model"] = "NextSeq 2000"
+
+    # Check for platform consistency
+    if len(platform_votes) > 1:
+        result["warnings"].append(
+            f"PLATFORM INCONSISTENCY: Multiple platforms detected in reads: "
+            f"{', '.join(f'{p}({c})' for p, c in platform_votes.items())}. "
+            "This may indicate mixed data or format conversion artifacts."
+        )
+        result["confidence"] = max(0.3, result["confidence"] - 0.2)
+
+    # Boost confidence if all reads agree
+    elif platform_votes and len(sample_reads) >= 3:
+        dominant_platform = max(platform_votes.keys(), key=lambda k: platform_votes[k])
+        if platform_votes[dominant_platform] == len([r for r in sample_reads if r.startswith("@")]):
+            result["confidence"] = min(0.99, result["confidence"] + 0.05)
+
+    # Check filename for additional hints
+    if file_name:
+        file_lower = file_name.lower()
+        if "_r1" in file_lower or "_r2" in file_lower or ".r1." in file_lower or ".r2." in file_lower:
+            result["is_paired_end"] = True
+        if "ccs" in file_lower or "hifi" in file_lower:
+            result["data_modality"] = "genomic.whole_genome"
+
+    return result
+
+
 def get_rules_documentation() -> str:
     """Generate markdown documentation of all header classification rules."""
-    doc = """# BAM/CRAM and VCF Header Classification Rules
+    doc = """# BAM/CRAM, VCF, and FASTQ Header Classification Rules
 
 ## Overview
 
-This document describes the rules used to classify BAM/CRAM files based on their
-header content. BAM/CRAM headers contain metadata about sequencing platform, alignment
+This document describes the rules used to classify BAM/CRAM, VCF, and FASTQ files based on their
+header content. Headers contain metadata about sequencing platform, alignment
 software, and reference genome that can definitively identify data modality and reference assembly.
 
 ## Header Sections Reference
@@ -1548,6 +1896,84 @@ VCF files contain rich metadata in `##` header lines that can identify:
         doc += f"#### `{rule.id}`\n\n"
         doc += f"- **Pattern**: `{rule.pattern}`\n"
         doc += f"- **Classification**: {rule.classification}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += """---
+
+## FASTQ Read Name Classification Rules
+
+FASTQ read names have platform-specific formats that can identify the sequencing platform,
+instrument model, and read type without inspecting the sequence data.
+
+### Read Name Format Examples
+
+| Platform | Example Read Name | Format |
+|----------|------------------|--------|
+| **Illumina (modern)** | `@A00488:61:HFWFVDSXX:1:1101:1000:1000` | `@instrument:run:flowcell:lane:tile:x:y` |
+| **Illumina (legacy)** | `@HWUSI-EAS100R:6:73:941:1973#0/1` | `@instrument:lane:tile:x:y#index/read` |
+| **PacBio CCS/HiFi** | `@m64011_190830_220126/1/ccs` | `@movie/zmw/ccs` |
+| **PacBio CLR** | `@m64011_190830_220126/1234/0_5000` | `@movie/zmw/start_end` |
+| **ONT** | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | `@uuid [key=value...]` |
+| **MGI/BGI** | `@V350012345L1C001R0010000001/1` | `@flowcellLaneCcolumnRrow/pair` |
+
+### Illumina Read Names
+
+"""
+
+    for rule in FASTQ_ILLUMINA_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Platform**: {rule.platform}\n"
+        doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### PacBio Read Names\n\n"
+
+    for rule in FASTQ_PACBIO_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Platform**: {rule.platform}\n"
+        doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Oxford Nanopore (ONT) Read Names\n\n"
+
+    for rule in FASTQ_ONT_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Platform**: {rule.platform}\n"
+        doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### MGI/BGI Read Names\n\n"
+
+    for rule in FASTQ_MGI_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Platform**: {rule.platform}\n"
+        doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Other Platforms\n\n"
+
+    for rule in FASTQ_ELEMENT_RULES + FASTQ_ULTIMA_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
+        doc += f"- **Platform**: {rule.platform}\n"
+        doc += f"- **Classification**: {rule.classification or 'N/A'}\n"
+        doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
+        doc += f"**Rationale**: {rule.rationale}\n\n"
+
+    doc += "---\n\n### Paired-End Detection\n\n"
+
+    for rule in FASTQ_PAIREDEND_RULES:
+        doc += f"#### `{rule.id}`\n\n"
+        doc += f"- **Pattern**: `{rule.pattern}`\n"
         doc += f"- **Confidence**: {rule.confidence:.0%}\n\n"
         doc += f"**Rationale**: {rule.rationale}\n\n"
 

@@ -1,9 +1,9 @@
-# BAM/CRAM and VCF Header Classification Rules
+# BAM/CRAM, VCF, and FASTQ Header Classification Rules
 
 ## Overview
 
-This document describes the rules used to classify BAM/CRAM files based on their
-header content. BAM/CRAM headers contain metadata about sequencing platform, alignment
+This document describes the rules used to classify BAM/CRAM, VCF, and FASTQ files based on their
+header content. Headers contain metadata about sequencing platform, alignment
 software, and reference genome that can definitively identify data modality and reference assembly.
 
 ## Header Sections Reference
@@ -780,6 +780,161 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Confidence**: 80%
 
 **Rationale**: CNV-specific INFO fields indicate copy number variant calls.
+
+---
+
+## FASTQ Read Name Classification Rules
+
+FASTQ read names have platform-specific formats that can identify the sequencing platform,
+instrument model, and read type without inspecting the sequence data.
+
+### Read Name Format Examples
+
+| Platform | Example Read Name | Format |
+|----------|------------------|--------|
+| **Illumina (modern)** | `@A00488:61:HFWFVDSXX:1:1101:1000:1000` | `@instrument:run:flowcell:lane:tile:x:y` |
+| **Illumina (legacy)** | `@HWUSI-EAS100R:6:73:941:1973#0/1` | `@instrument:lane:tile:x:y#index/read` |
+| **PacBio CCS/HiFi** | `@m64011_190830_220126/1/ccs` | `@movie/zmw/ccs` |
+| **PacBio CLR** | `@m64011_190830_220126/1234/0_5000` | `@movie/zmw/start_end` |
+| **ONT** | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | `@uuid [key=value...]` |
+| **MGI/BGI** | `@V350012345L1C001R0010000001/1` | `@flowcellLaneCcolumnRrow/pair` |
+
+### Illumina Read Names
+
+#### `fastq_illumina_modern`
+
+- **Pattern**: `^@[A-Z0-9-]+:\d+:[A-Z0-9]+:\d+:\d+:\d+:\d+`
+- **Platform**: ILLUMINA
+- **Classification**: genomic
+- **Confidence**: 90%
+
+**Rationale**: Modern Illumina read names (Casava 1.8+) follow the format @instrument:run:flowcell:lane:tile:x:y. This format is used by HiSeq 2500+, NovaSeq, NextSeq, and MiSeq instruments.
+
+#### `fastq_illumina_legacy`
+
+- **Pattern**: `^@[A-Z0-9-]+:\d+:\d+:\d+:\d+#`
+- **Platform**: ILLUMINA
+- **Classification**: genomic
+- **Confidence**: 85%
+
+**Rationale**: Legacy Illumina read names follow @instrument:lane:tile:x:y#index format. Used by older instruments like GA, GAIIx, HiSeq 2000.
+
+#### `fastq_illumina_srr`
+
+- **Pattern**: `^@SRR\d+\.\d+`
+- **Platform**: ILLUMINA
+- **Classification**: genomic
+- **Confidence**: 70%
+
+**Rationale**: SRA-reformatted read names starting with @SRR typically indicate Illumina data downloaded from NCBI SRA. Lower confidence as original platform info is lost.
+
+---
+
+### PacBio Read Names
+
+#### `fastq_pacbio_ccs`
+
+- **Pattern**: `^@m\d+[_e]?\d*_\d+_\d+/\d+/ccs`
+- **Platform**: PACBIO
+- **Classification**: genomic.whole_genome
+- **Confidence**: 95%
+
+**Rationale**: PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates Circular Consensus Sequencing was performed, producing high-accuracy long reads (>Q20). Movie names start with 'm' followed by instrument ID and timestamp.
+
+#### `fastq_pacbio_clr`
+
+- **Pattern**: `^@m\d+[_e]?\d*_\d+_\d+/\d+/\d+_\d+`
+- **Platform**: PACBIO
+- **Classification**: genomic.whole_genome
+- **Confidence**: 90%
+
+**Rationale**: PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format. The start_end coordinates indicate the position within the ZMW polymerase read.
+
+#### `fastq_pacbio_generic`
+
+- **Pattern**: `^@m\d+[_e]?\d*_\d+_\d+/\d+`
+- **Platform**: PACBIO
+- **Classification**: genomic.whole_genome
+- **Confidence**: 85%
+
+**Rationale**: Generic PacBio read names follow @movie/zmw format. The movie name encodes the instrument (m=RSII/Sequel, followed by instrument ID) and run timestamp.
+
+---
+
+### Oxford Nanopore (ONT) Read Names
+
+#### `fastq_ont_uuid`
+
+- **Pattern**: `^@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`
+- **Platform**: ONT
+- **Classification**: genomic
+- **Confidence**: 95%
+
+**Rationale**: ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). This uniquely identifies Oxford Nanopore data. Additional metadata like runid, read number, and channel may follow as key=value pairs.
+
+#### `fastq_ont_metadata`
+
+- **Pattern**: `runid=[a-f0-9]+`
+- **Platform**: ONT
+- **Classification**: genomic
+- **Confidence**: 95%
+
+**Rationale**: ONT reads often include 'runid=' metadata in the header line, providing the unique run identifier from MinKNOW.
+
+---
+
+### MGI/BGI Read Names
+
+#### `fastq_mgi`
+
+- **Pattern**: `^@[A-Z]\d{9}L\dC\d{3}R\d{3}\d+`
+- **Platform**: MGI
+- **Classification**: genomic
+- **Confidence**: 90%
+
+**Rationale**: MGI/BGI-SEQ read names follow @flowcellLaneCcolumnRrow format. MGI (formerly BGI) instruments use this distinctive naming convention with embedded lane (L), column (C), and row (R) identifiers.
+
+#### `fastq_mgi_alt`
+
+- **Pattern**: `^@[A-Z]\d+L\d+C\d+R\d+`
+- **Platform**: MGI
+- **Classification**: genomic
+- **Confidence**: 85%
+
+**Rationale**: Alternative MGI/BGI read name format with varying digit lengths.
+
+---
+
+### Other Platforms
+
+#### `fastq_element`
+
+- **Pattern**: `^@[A-Z0-9]+:[A-Z0-9]+:\d+:\d+:\d+:\d+:\d+`
+- **Platform**: ELEMENT
+- **Classification**: genomic
+- **Confidence**: 80%
+
+**Rationale**: Element Biosciences AVITI read names follow a similar format to Illumina but with different instrument ID patterns.
+
+#### `fastq_ultima`
+
+- **Pattern**: `^@[A-Z0-9]+_\d+_\d+_\d+_[ACGT]+`
+- **Platform**: ULTIMA
+- **Classification**: genomic
+- **Confidence**: 80%
+
+**Rationale**: Ultima Genomics read names include flow-space encoded sequences in the read identifier.
+
+---
+
+### Paired-End Detection
+
+#### `fastq_paired_r1`
+
+- **Pattern**: `[/\s][12]$|[/\s][12]:|_R[12]_|\.R[12]\.|_r[12]_|\.r[12]\.`
+- **Confidence**: 80%
+
+**Rationale**: Read 1 or Read 2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing. This is common for Illumina WGS, WES, and RNA-seq workflows.
 
 ---
 
