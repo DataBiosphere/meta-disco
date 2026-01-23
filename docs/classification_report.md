@@ -16,31 +16,139 @@ The source AnVIL metadata contained **758,658 files** but with minimal semantic 
 
 **Files by format (classifiable types):**
 
-| Format     | Count   | Description              |
-| ---------- | ------- | ------------------------ |
-| .vcf.gz    | 204,384 | Compressed variant calls |
-| .fastq.gz  | 16,255  | Compressed sequences     |
-| .cram      | 10,829  | Compressed alignments    |
-| .bam       | 7,834   | Alignments               |
-| .fast5     | 12,394  | ONT signal data          |
+| Format | Count | Classification Method |
+| ------ | ----- | --------------------- |
+| .vcf.gz | 204,384 | Header inspection (contig lengths, caller) |
+| .tbi/.csi/.crai/.bai/.pbi | 224,037 | Inherited from parent file |
+| .svs | 25,708 | Extension → imaging.histology |
+| .fastq.gz | 16,255 | Read name parsing (platform detection) |
+| .bed | 13,660 | Filename patterns + dataset context |
+| .fast5 | 12,394 | Extension → genomic (raw ONT signal) |
+| .cram | 10,829 | Header inspection (@RG, @PG, @SQ) |
+| .pvar/.psam/.pgen | 8,562 | Extension + dataset → germline variants |
+| .bam | 7,834 | Header inspection (@RG, @PG, @SQ) |
+| .png | 8,049 | Extension → N/A (derived visualizations) |
 
-The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 total) to infer missing metadata from headers and filenames.
+The classification system processes these file types (539,178 total) using header inspection, filename patterns, extension rules, and dataset context.
+
+### Output Files
+
+Classification results are stored in JSON files in the `output/` directory:
+
+| File | Contents | Records |
+| ---- | -------- | ------- |
+| [`bam_headers.json`](../output/bam_headers.json) | BAM/CRAM classifications | 18,662 |
+| [`vcf_headers.json`](../output/vcf_headers.json) | VCF classifications | 205,010 |
+| [`fastq_headers.json`](../output/fastq_headers.json) | FASTQ classifications | 23,096 |
+| [`index_file_classifications.json`](../output/index_file_classifications.json) | Index file classifications | 224,037 |
+| [`image_classifications.json`](../output/image_classifications.json) | Image classifications | 33,757 |
+| [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
+| [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
+
+#### Output File Structure
+
+Each JSON file contains:
+
+```json
+{
+  "metadata": {
+    "total_to_process": 205033,
+    "processed": 205033,
+    "successful": 205010,
+    "complete": true
+  },
+  "classifications": [ ... ]
+}
+```
+
+#### Classification Record Structure
+
+Each record in `classifications` contains:
+
+```json
+{
+  "file_name": "HG01874.chr17.hc.vcf.gz",
+  "md5sum": "e1dca89aef536083f15093c39a0daa8f",
+  "file_size": 158571384,
+  "data_modality": "genomic.germline_variants",
+  "reference_assembly": "CHM13",
+  "confidence": 0.90,
+  "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller"],
+  "evidence": [
+    {
+      "rule_id": "vcf_contig_length",
+      "matched": "4 contigs matched CHM13 chromosome lengths",
+      "classification": "CHM13",
+      "confidence": 0.98,
+      "rationale": "Chromosome lengths are unique to each reference assembly..."
+    }
+  ]
+}
+```
+
+#### Confidence Score Interpretation
+
+| Score | Level | Meaning |
+| ----- | ----- | ------- |
+| 0.95-1.0 | Definitive | Explicit metadata tag or exact match (e.g., contig lengths) |
+| 0.85-0.94 | High | Strong program indicator (e.g., STAR aligner → transcriptomic) |
+| 0.70-0.84 | Medium | Filename pattern match or dataset context |
+| 0.50-0.69 | Low | Size heuristic or weak signal |
+| <0.50 | Uncertain | Needs manual review |
+
+The overall `confidence` score is the maximum confidence from matched rules. When multiple rules agree (convergent evidence), confidence increases. When rules conflict, confidence decreases and warnings are added.
+
+#### Evidence Interpretation
+
+Each `evidence` entry explains why a classification was made:
+
+- **rule_id**: Identifier of the rule that matched (e.g., `vcf_contig_length`, `bam_star_aligner`)
+- **matched**: The specific signal found (e.g., `"##source=HaplotypeCaller"`, `"4 contigs matched CHM13"`)
+- **classification**: What value this rule assigned (e.g., `"CHM13"`, `"transcriptomic"`)
+- **confidence**: How confident this specific rule is (0.0-1.0)
+- **rationale**: Human-readable explanation of why this signal indicates this classification
+
+Multiple evidence entries indicate multiple rules matched. Review files with conflicting evidence (check `warnings` field) for potential misclassification.
 
 ### Classification Results
 
 **Coverage of all AnVIL files (758,658 total):**
 
-| Category                          | Count   | % of Total |
-| --------------------------------- | ------- | ---------- |
-| Classified (BAM/CRAM/VCF/FASTQ)*  | 246,768 | 32.5%      |
-| Index files (.tbi, .csi, .crai)   | 222,903 | 29.4%      |
-| Auxiliary (.txt, .md5, .tar, etc) | 191,030 | 25.2%      |
-| Images (.svs, .png)               | 33,757  | 4.4%       |
-| Other formats                     | 64,200  | 8.5%       |
+| Category                          | Count   | % of Total | Status |
+| --------------------------------- | ------- | ---------- | ------ |
+| Data files (BAM/CRAM/VCF/FASTQ)*  | 246,768 | 32.5%      | ✅ Header classified |
+| Index files (.tbi, .csi, .crai)   | 224,037 | 29.5%      | ✅ Inherited from parent |
+| Images (.svs, .png)               | 33,757  | 4.4%       | ✅ Extension rules |
+| Auxiliary genomic (FAST5, PLINK)  | 20,956  | 2.8%       | ✅ Extension + dataset |
+| BED files                         | 13,660  | 1.8%       | ✅ Pattern + dataset |
+| **Total classified**              | **539,178** | **71.1%** | |
+| Unclassified (.txt, .tar, .md5, etc) | 219,480 | 28.9%   | Skipped |
 
 *Files with MD5 checksums enabling S3 mirror header retrieval.
 
-**Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Images are classified by extension (SVS → histology, PNG → N/A). Auxiliary files (.txt, .md5, .tar, etc.) are not processed for classification.
+**Unclassified files inventory (219,480 files):**
+
+| Format | Count | Description |
+| ------ | ----- | ----------- |
+| .tar | 124,645 | Archives (would need content inspection) |
+| .txt | 42,456 | Ambiguous (stats, metadata, logs) |
+| .md5 | 15,565 | Checksums - skip |
+| .log | 5,066 | Processing logs - skip |
+| .hist | 3,870 | Histogram files |
+| .txt.gz | 3,310 | Compressed text |
+| .pdf | 3,028 | Documentation |
+| .bw | 2,536 | BigWig signal tracks |
+| .yaml.gz | 1,949 | Compressed config/metadata |
+| .fa.gz | 1,633 | Reference sequences |
+| .tsv | 1,278 | Tab-separated data |
+| .tar.gz | 1,181 | Compressed archives |
+| Other | 12,964 | Various formats |
+
+These files are excluded from classification as they are primarily:
+- **Archives/checksums**: Not primary data (.tar, .md5)
+- **Logs/documentation**: Processing artifacts (.log, .pdf, .txt)
+- **Signal tracks**: Could classify as genomic (.bw) but low priority
+- **Reference files**: Not experimental data (.fa.gz)
 
 **Classification results (539,178 files: 246,768 data + 224,037 index + 33,757 images + 20,956 auxiliary + 13,660 BED):**
 
