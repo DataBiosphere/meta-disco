@@ -42,21 +42,21 @@ The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 tota
 
 **Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Images are classified by extension (SVS → histology, PNG → N/A). Auxiliary files (.txt, .md5, .tar, etc.) are not processed for classification.
 
-**Classification results (504,562 files: 246,768 data + 224,037 index + 33,757 images):**
+**Classification results (525,518 files: 246,768 data + 224,037 index + 33,757 images + 20,956 auxiliary):**
 
 | Metric                                 | Count   | % of Total |
 | -------------------------------------- | ------- | ---------- |
-| Files with `data_modality`             | 485,339 | 96.2%      |
-| Files with `reference_assembly`        | 425,142 | 84.3%      |
-| High-confidence classifications (≥80%) | 488,455 | 96.8%      |
+| Files with `data_modality`             | 506,295 | 96.3%      |
+| Files with `reference_assembly`        | 433,704 | 82.5%      |
+| High-confidence classifications (≥80%) | 507,208 | 96.5%      |
 | Files needing manual review (<50%)     | ~2,000  | <1%        |
 
 **Improvement summary:**
 
 | Field                | Before | After  | Improvement |
 | -------------------- | ------ | ------ | ----------- |
-| `data_modality`      | 0.9%   | 96.2%  | +95.3pp     |
-| `reference_assembly` | 0.6%   | 84.3%  | +83.7pp     |
+| `data_modality`      | 0.9%   | 96.3%  | +95.4pp     |
+| `reference_assembly` | 0.6%   | 82.5%  | +81.9pp     |
 
 ---
 
@@ -450,10 +450,13 @@ High confidence (≥80%): 204,085 (99.5%)
 | VCF       | 205,010 | 99.9%         | 98.8%          | 99.5%           |
 | Index     | 224,037 | 96.7%         | 94.5%          | 96.7%           |
 | Image     | 33,757  | 76.2%**       | N/A            | 100%            |
-| **Total** | 504,562 | 96.4%         | 85.7%          | 96.7%           |
+| FAST5     | 12,394  | 100%          | N/A***         | 90%             |
+| PLINK     | 8,562   | 100%          | 100%           | 95%             |
+| **Total** | 525,518 | 96.6%         | 83.5%          | 96.5%           |
 
 *FASTQ modality defaults to "genomic" when platform is detected but no RNA-seq indicators found.
 **PNG files (8,049) classified as N/A (derived visualizations) - not primary data.
+***FAST5 files are raw ONT signal data (pre-basecalling) - reference not applicable.
 
 ### 5.5 Index File Inheritance Results
 
@@ -492,6 +495,28 @@ Image files are classified by extension using domain-specific rules.
 
 **Implementation**: `scripts/classify_images.py`
 
+### 5.7 Auxiliary Genomic File Classification Results
+
+FAST5 and PLINK files are classified by extension with dataset-based reference inference.
+
+**Total auxiliary genomic files: 20,956**
+
+| Extension | Count  | Data Modality             | Reference | Confidence |
+| --------- | ------ | ------------------------- | --------- | ---------- |
+| `.fast5`  | 12,394 | genomic                   | N/A*      | 90%        |
+| `.pvar`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
+| `.psam`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
+| `.pgen`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
+
+*FAST5 files contain raw ONT electrical signal data (pre-basecalling). Reference not applicable until basecalling and alignment.
+
+**Classification rules:**
+
+- **FAST5**: Extension-based. Raw nanopore signal data from ANVIL_NIA_CARD_Coriell_Cell_Lines_Open dataset.
+- **PLINK**: Extension-based modality + dataset-based reference. All from ANVIL_1000G_PRIMED_data_model (1000 Genomes Project uses GRCh38).
+
+**Implementation**: `scripts/classify_auxiliary_genomic.py`
+
 ---
 
 ## 6. Limitations and Future Work
@@ -526,7 +551,8 @@ Image files are classified by extension using domain-specific rules.
 | File size rules          | 8          |
 | Index inheritance rules  | 5          |
 | Image extension rules    | 2          |
-| **Total**                | **110**    |
+| Auxiliary genomic rules  | 5          |
+| **Total**                | **115**    |
 
 ---
 

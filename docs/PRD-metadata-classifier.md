@@ -40,7 +40,8 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 | **Data files** | ~305K | 40% | VCF, BAM, CRAM, FASTQ, etc. - ✅ classified via header inspection |
 | **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
 | **Image files** | ~34K | 4% | SVS, PNG - ✅ classified by extension |
-| **Other/ambiguous** | ~180K | 24% | TXT, TAR, LOG - mixed utility |
+| **Auxiliary genomic** | ~21K | 3% | FAST5, PLINK - ✅ classified by extension + dataset |
+| **Other/ambiguous** | ~159K | 21% | TXT, TAR, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
 
 ### Top File Formats (Open Access)
@@ -293,7 +294,26 @@ Image files are classified by extension using domain-specific rules.
 
 PNG files are excluded from data_modality assignment as they are derived artifacts (assembly graphs, QC plots), not primary experimental data.
 
-### 6.4 Confidence Scoring
+### 6.4 Auxiliary Genomic File Classification
+
+FAST5 and PLINK files are classified by extension with dataset-based reference inference.
+
+| Extension | Data Modality             | Reference | Rule Type |
+|-----------|---------------------------|-----------|-----------|
+| `.fast5`  | genomic                   | N/A       | Extension |
+| `.pvar`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
+| `.psam`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
+| `.pgen`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
+
+*Reference inferred from dataset context (ANVIL_1000G_PRIMED uses GRCh38).
+
+**Implementation**: `scripts/classify_auxiliary_genomic.py`
+
+**Results** (20,956 files):
+- FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
+- PLINK: 8,562 files → `genomic.germline_variants`, GRCh38
+
+### 6.5 Confidence Scoring
 
 Each tier contributes evidence with weights:
 
@@ -320,7 +340,7 @@ confidence = {
 }
 ```
 
-### 6.5 Decision Thresholds
+### 6.6 Decision Thresholds
 
 | Confidence Score | Action |
 |------------------|--------|
