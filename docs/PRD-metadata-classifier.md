@@ -39,7 +39,8 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 |----------|-------|---|-------------|
 | **Data files** | ~305K | 40% | VCF, BAM, CRAM, FASTQ, etc. - ✅ classified via header inspection |
 | **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
-| **Other/ambiguous** | ~214K | 28% | TXT, TAR, PNG, LOG - mixed utility |
+| **Image files** | ~34K | 4% | SVS, PNG - ✅ classified by extension |
+| **Other/ambiguous** | ~180K | 24% | TXT, TAR, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
 
 ### Top File Formats (Open Access)
@@ -275,7 +276,24 @@ Index files (`.tbi`, `.csi`, `.bai`, `.crai`, `.pbi`) inherit metadata from thei
 
 Index files without `reference_assembly` inherit from unaligned parent BAMs (raw HiFi/ONT reads) where reference is correctly N/A.
 
-### 6.2 Confidence Scoring
+### 6.3 Image File Classification
+
+Image files are classified by extension using domain-specific rules.
+
+| Extension | Data Modality     | Reference | Confidence | Rationale |
+|-----------|-------------------|-----------|------------|-----------|
+| `.svs`    | imaging.histology | N/A       | 95%        | Aperio whole-slide histology images |
+| `.png`    | N/A               | N/A       | 90%        | Derived visualizations (QC plots) |
+
+**Implementation**: `scripts/classify_images.py`
+
+**Results** (33,757 image files):
+- SVS: 25,708 files (GTEx tissue slides) → `imaging.histology`
+- PNG: 8,049 files (HPRC QC plots) → N/A (not primary data)
+
+PNG files are excluded from data_modality assignment as they are derived artifacts (assembly graphs, QC plots), not primary experimental data.
+
+### 6.4 Confidence Scoring
 
 Each tier contributes evidence with weights:
 
@@ -302,7 +320,7 @@ confidence = {
 }
 ```
 
-### 6.3 Decision Thresholds
+### 6.5 Decision Thresholds
 
 | Confidence Score | Action |
 |------------------|--------|

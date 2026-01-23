@@ -40,23 +40,23 @@ The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 tota
 
 *Files with MD5 checksums enabling S3 mirror header retrieval.
 
-**Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Auxiliary and image files are not processed for `data_modality` or `reference_assembly` inference - these would require separate classification approaches (e.g., imaging modality detection for histology slides).
+**Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Images are classified by extension (SVS → histology, PNG → N/A). Auxiliary files (.txt, .md5, .tar, etc.) are not processed for classification.
 
-**Classification results (470,805 files: 246,768 data + 224,037 index):**
+**Classification results (504,562 files: 246,768 data + 224,037 index + 33,757 images):**
 
 | Metric                                 | Count   | % of Total |
 | -------------------------------------- | ------- | ---------- |
-| Files with `data_modality`             | 459,631 | 97.6%      |
-| Files with `reference_assembly`        | 425,142 | 90.3%      |
-| High-confidence classifications (≥80%) | 454,698 | 96.6%      |
+| Files with `data_modality`             | 485,339 | 96.2%      |
+| Files with `reference_assembly`        | 425,142 | 84.3%      |
+| High-confidence classifications (≥80%) | 488,455 | 96.8%      |
 | Files needing manual review (<50%)     | ~2,000  | <1%        |
 
 **Improvement summary:**
 
 | Field                | Before | After  | Improvement |
 | -------------------- | ------ | ------ | ----------- |
-| `data_modality`      | 0.9%   | 97.6%  | +96.7pp     |
-| `reference_assembly` | 0.6%   | 90.3%  | +89.7pp     |
+| `data_modality`      | 0.9%   | 96.2%  | +95.3pp     |
+| `reference_assembly` | 0.6%   | 84.3%  | +83.7pp     |
 
 ---
 
@@ -85,6 +85,7 @@ data_modality
 │   ├── epigenomic.chromatin_accessibility  # ATAC-seq
 │   └── epigenomic.histone_modification     # ChIP-seq
 └── imaging                          # Histology, microscopy
+    └── imaging.histology            # Whole-slide tissue images
 ```
 
 ### 1.2 Reference Assembly Values
@@ -448,9 +449,11 @@ High confidence (≥80%): 204,085 (99.5%)
 | FASTQ     | 23,096  | 100%*         | N/A            | 88.6%           |
 | VCF       | 205,010 | 99.9%         | 98.8%          | 99.5%           |
 | Index     | 224,037 | 96.7%         | 94.5%          | 96.7%           |
-| **Total** | 470,805 | 97.8%         | 91.4%          | 96.5%           |
+| Image     | 33,757  | 76.2%**       | N/A            | 100%            |
+| **Total** | 504,562 | 96.4%         | 85.7%          | 96.7%           |
 
 *FASTQ modality defaults to "genomic" when platform is detected but no RNA-seq indicators found.
+**PNG files (8,049) classified as N/A (derived visualizations) - not primary data.
 
 ### 5.5 Index File Inheritance Results
 
@@ -470,6 +473,24 @@ Index files inherit metadata from their parent data files by filename matching w
 *Parent BAM files are unaligned reads (raw HiFi/ONT) - reference_assembly is correctly N/A.
 
 **Inheritance rule**: Index files (e.g., `sample.vcf.gz.tbi`) are matched to parent files (e.g., `sample.vcf.gz`) within the same dataset. The parent's `data_modality` and `reference_assembly` are propagated to the index.
+
+### 5.6 Image File Classification Results
+
+Image files are classified by extension using domain-specific rules.
+
+**Total image files: 33,757**
+
+| Extension | Count  | Data Modality      | Confidence | Source Dataset        |
+| --------- | ------ | ------------------ | ---------- | --------------------- |
+| `.svs`    | 25,708 | imaging.histology  | 95%        | GTEx (tissue slides)  |
+| `.png`    | 8,049  | N/A                | 90%        | HPRC (QC/assembly plots) |
+
+**Classification approach**: Extension-based rules only.
+
+- **SVS files**: Aperio whole-slide histology images used for pathology analysis. All from GTEx public dataset containing tissue slide images.
+- **PNG files**: Derived visualizations (QC plots, assembly graphs) - not primary experimental data. Excluded from `data_modality` assignment as they are derived artifacts, not primary data files.
+
+**Implementation**: `scripts/classify_images.py`
 
 ---
 
@@ -504,7 +525,8 @@ Index files inherit metadata from their parent data files by filename matching w
 | Consistency rules        | 12         |
 | File size rules          | 8          |
 | Index inheritance rules  | 5          |
-| **Total**                | **108**    |
+| Image extension rules    | 2          |
+| **Total**                | **110**    |
 
 ---
 
