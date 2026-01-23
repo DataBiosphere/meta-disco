@@ -42,21 +42,21 @@ The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 tota
 
 **Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Images are classified by extension (SVS → histology, PNG → N/A). Auxiliary files (.txt, .md5, .tar, etc.) are not processed for classification.
 
-**Classification results (525,518 files: 246,768 data + 224,037 index + 33,757 images + 20,956 auxiliary):**
+**Classification results (539,178 files: 246,768 data + 224,037 index + 33,757 images + 20,956 auxiliary + 13,660 BED):**
 
 | Metric                                 | Count   | % of Total |
 | -------------------------------------- | ------- | ---------- |
-| Files with `data_modality`             | 506,295 | 96.3%      |
-| Files with `reference_assembly`        | 433,704 | 82.5%      |
-| High-confidence classifications (≥80%) | 507,208 | 96.5%      |
+| Files with `data_modality`             | 511,855 | 94.9%      |
+| Files with `reference_assembly`        | 440,772 | 81.7%      |
+| High-confidence classifications (≥80%) | 518,819 | 96.2%      |
 | Files needing manual review (<50%)     | ~2,000  | <1%        |
 
 **Improvement summary:**
 
 | Field                | Before | After  | Improvement |
 | -------------------- | ------ | ------ | ----------- |
-| `data_modality`      | 0.9%   | 96.3%  | +95.4pp     |
-| `reference_assembly` | 0.6%   | 82.5%  | +81.9pp     |
+| `data_modality`      | 0.9%   | 94.9%  | +94.0pp     |
+| `reference_assembly` | 0.6%   | 81.7%  | +81.1pp     |
 
 ---
 
@@ -452,11 +452,13 @@ High confidence (≥80%): 204,085 (99.5%)
 | Image     | 33,757  | 76.2%**       | N/A            | 100%            |
 | FAST5     | 12,394  | 100%          | N/A***         | 90%             |
 | PLINK     | 8,562   | 100%          | 100%           | 95%             |
-| **Total** | 525,518 | 96.6%         | 83.5%          | 96.5%           |
+| BED       | 13,660  | 62.7%****     | 51.7%          | 85%             |
+| **Total** | 539,178 | 94.9%         | 81.2%          | 96.2%           |
 
 *FASTQ modality defaults to "genomic" when platform is detected but no RNA-seq indicators found.
 **PNG files (8,049) classified as N/A (derived visualizations) - not primary data.
 ***FAST5 files are raw ONT signal data (pre-basecalling) - reference not applicable.
+****5,100 BED files are assembly QC artifacts (N/A) - not primary data.
 
 ### 5.5 Index File Inheritance Results
 
@@ -517,6 +519,38 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 
 **Implementation**: `scripts/classify_auxiliary_genomic.py`
 
+### 5.8 BED File Classification Results
+
+BED files are classified using filename pattern matching and dataset context.
+
+**Total BED files: 13,660**
+
+| Rule | Count | Data Modality | Description |
+| ---- | ----- | ------------- | ----------- |
+| `bed_regions` | 6,997 | genomic | `.regions.bed` analysis regions |
+| `bed_assembly_qc` | 5,100 | N/A | Assembly QC (haplotype, flagger, switch) |
+| `bed_default` | 1,523 | genomic | Unmatched patterns (default) |
+| `bed_methylation` | 28 | epigenomic.methylation | CpG methylation (modbam2bed) |
+| `bed_expression` | 12 | transcriptomic | Expression quantification (TMM, leafcutter) |
+
+**Reference assembly detection:**
+
+| Reference | Count | Source |
+| --------- | ----- | ------ |
+| CHM13 | 7,031 | T2T datasets + filename patterns |
+| GRCh38 | 36 | Filename patterns (hg38) |
+| GRCh37 | 1 | Filename patterns (hg19) |
+| N/A | 6,592 | No reference signal |
+
+**Classification approach:**
+1. **Pattern-based modality**: Filename patterns identify methylation, expression, peaks, regions, or assembly QC
+2. **Filename-based reference**: Explicit reference in filename (hg38, chm13, etc.)
+3. **Dataset-based reference**: T2T datasets default to CHM13
+
+Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs marked as N/A.
+
+**Implementation**: `scripts/classify_bed_files.py`
+
 ---
 
 ## 6. Limitations and Future Work
@@ -552,7 +586,8 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 | Index inheritance rules  | 5          |
 | Image extension rules    | 2          |
 | Auxiliary genomic rules  | 5          |
-| **Total**                | **115**    |
+| BED pattern rules        | 8          |
+| **Total**                | **123**    |
 
 ---
 

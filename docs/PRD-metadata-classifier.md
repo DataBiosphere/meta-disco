@@ -41,7 +41,8 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 | **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
 | **Image files** | ~34K | 4% | SVS, PNG - ✅ classified by extension |
 | **Auxiliary genomic** | ~21K | 3% | FAST5, PLINK - ✅ classified by extension + dataset |
-| **Other/ambiguous** | ~159K | 21% | TXT, TAR, LOG - mixed utility |
+| **BED files** | ~14K | 2% | Genomic intervals - ✅ classified by pattern + dataset |
+| **Other/ambiguous** | ~145K | 19% | TXT, TAR, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
 
 ### Top File Formats (Open Access)
@@ -313,7 +314,28 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
 - PLINK: 8,562 files → `genomic.germline_variants`, GRCh38
 
-### 6.5 Confidence Scoring
+### 6.5 BED File Classification
+
+BED files are classified using filename pattern matching and dataset context.
+
+| Pattern | Data Modality | Example |
+|---------|---------------|---------|
+| `modbam2bed\|cpg\|methylat` | epigenomic.methylation | CpG calls |
+| `TMM\|TPM\|counts\|leafcutter` | transcriptomic | Expression quantification |
+| `peak\|summit\|chip\|atac` | epigenomic.chromatin_accessibility | Peak calls |
+| `.regions.bed` | genomic | Callable regions |
+| Assembly QC patterns | N/A | Derived artifacts |
+
+Reference inferred from filename patterns (hg38, chm13) or dataset context (T2T → CHM13).
+
+**Implementation**: `scripts/classify_bed_files.py`
+
+**Results** (13,660 files):
+- 8,560 with data_modality (62.7%)
+- 7,068 with reference_assembly (51.7%)
+- 5,100 assembly QC files marked as N/A (derived artifacts)
+
+### 6.6 Confidence Scoring
 
 Each tier contributes evidence with weights:
 
@@ -340,7 +362,7 @@ confidence = {
 }
 ```
 
-### 6.6 Decision Thresholds
+### 6.7 Decision Thresholds
 
 | Confidence Score | Action |
 |------------------|--------|
