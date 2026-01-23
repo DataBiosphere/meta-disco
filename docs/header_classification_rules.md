@@ -8,6 +8,10 @@ software, and reference genome that can definitively identify data modality and 
 
 ## Header Sections Reference
 
+> **Specification**: [SAM/BAM Format Specification v1](https://samtools.github.io/hts-specs/SAMv1.pdf) |
+> [SAM Tags](https://samtools.github.io/hts-specs/SAMtags.pdf) |
+> [hts-specs GitHub](https://github.com/samtools/hts-specs)
+
 ### @HD (Header)
 File-level metadata including SAM format version and sort order.
 
@@ -79,6 +83,9 @@ Software used to create/modify the file. Key fields:
 
 *Source: @RG DS field*
 
+> **Reference**: [PacBio BAM Format Specification](https://pacbiofileformats.readthedocs.io/en/latest/BAM.html) |
+> [CCS Documentation](https://ccs.how/)
+
 #### `pacbio_hifi`
 
 - **Pattern**: `READTYPE=CCS`
@@ -106,6 +113,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `STAR`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [GitHub](https://github.com/alexdobin/STAR) | [PMID:23104886](https://pubmed.ncbi.nlm.nih.gov/23104886/)
 
 **Rationale**: STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. It performs splice-aware alignment essential for mapping reads across exon-exon junctions. Presence of STAR in @PG strongly indicates RNA-seq data.
 
@@ -114,6 +122,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `hisat2`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [Documentation](http://daehwankimlab.github.io/hisat2/) | [GitHub](https://github.com/DaehwanKimLab/hisat2)
 
 **Rationale**: HISAT2 is a splice-aware aligner optimized for RNA-seq. It uses a graph-based index that incorporates known splice sites and SNPs. Like STAR, its presence strongly indicates transcriptomic data.
 
@@ -122,6 +131,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `tophat`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [Manual](https://ccb.jhu.edu/software/tophat/manual.shtml) | [GitHub](https://github.com/DaehwanKimLab/tophat)
 
 **Rationale**: TopHat was an early splice-aware aligner for RNA-seq (now superseded by HISAT2). It identifies splice junctions and aligns reads across them. Legacy RNA-seq data may still have TopHat in the header.
 
@@ -130,6 +140,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `salmon`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [Documentation](https://salmon.readthedocs.io/) | [GitHub](https://github.com/COMBINE-lab/salmon)
 
 **Rationale**: Salmon is a transcript-level quantification tool for RNA-seq. It uses quasi-mapping for fast, accurate abundance estimation. Presence indicates processed RNA-seq data.
 
@@ -138,6 +149,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `kallisto`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [Manual](https://pachterlab.github.io/kallisto/manual) | [DOI:10.1038/nbt.3519](https://doi.org/10.1038/nbt.3519)
 
 **Rationale**: Kallisto performs rapid transcript quantification using pseudoalignment. Like Salmon, it's specifically designed for RNA-seq analysis.
 
@@ -152,6 +164,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `bwa`
 - **Classification**: genomic
 - **Confidence**: 80%
+- **Reference**: [GitHub](https://github.com/lh3/bwa) | [BWA-MEM2](https://github.com/bwa-mem2/bwa-mem2)
 
 **Rationale**: BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. It's optimized for aligning reads to a reference genome without splice awareness. Commonly used for WGS, WES, and ChIP-seq. Confidence is not 100% because BWA can technically be used for non-spliced RNA alignment.
 
@@ -160,6 +173,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `minimap2`
 - **Classification**: genomic
 - **Confidence**: 75%
+- **Reference**: [GitHub](https://github.com/lh3/minimap2) | [Man Page](https://lh3.github.io/minimap2/minimap2.html)
 
 **Rationale**: Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. While primarily used for genomic alignment, it can also be used for direct RNA sequencing with appropriate presets (-ax splice). Confidence moderate due to this dual use.
 
@@ -168,6 +182,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `bowtie2`
 - **Classification**: genomic
 - **Confidence**: 75%
+- **Reference**: [Manual](https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml) | [GitHub](https://github.com/BenLangmead/bowtie2)
 
 **Rationale**: Bowtie2 is a fast short-read aligner commonly used for ChIP-seq, ATAC-seq, and WGS. It doesn't handle spliced alignment, so presence suggests genomic or epigenomic data rather than RNA-seq. However, it's sometimes used for small RNA sequencing.
 
@@ -182,6 +197,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `ccs`
 - **Classification**: genomic.whole_genome
 - **Confidence**: 85%
+- **Reference**: [GitHub](https://github.com/PacificBiosciences/ccs) | [Documentation](https://ccs.how/)
 
 **Rationale**: The 'ccs' program generates HiFi reads from PacBio subreads. Its presence confirms this is PacBio HiFi data, typically used for high-quality genome assembly and variant calling.
 
@@ -190,6 +206,7 @@ Software used to create/modify the file. Key fields:
 - **Pattern**: `isoseq`
 - **Classification**: transcriptomic
 - **Confidence**: 95%
+- **Reference**: [GitHub](https://github.com/PacificBiosciences/IsoSeq) | [Documentation](https://isoseq.how/)
 
 **Rationale**: IsoSeq is PacBio's full-length transcript sequencing method. The 'isoseq' program in @PG indicates this is long-read RNA-seq data for transcript discovery and isoform characterization.
 
@@ -206,6 +223,12 @@ Software used to create/modify the file. Key fields:
 ### Reference Assembly
 
 *Source: @SQ SN/AS fields*
+
+> **References**:
+> - GRCh38: [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000001405.40/) | [GRC Data](https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh38.p14)
+> - GRCh37: [NCBI Assembly](https://www.ncbi.nlm.nih.gov/assembly/2758) | [Ensembl Archive](https://grch37.ensembl.org)
+> - CHM13: [GitHub](https://github.com/marbl/CHM13) | [Science 2022](https://www.science.org/doi/10.1126/science.abj6987)
+> - [GATK Reference Guide](https://gatk.broadinstitute.org/hc/en-us/articles/360035890951-Human-genome-reference-builds-GRCh38-or-hg38-b37-hg19)
 
 #### `ref_grch38_hg38`
 
@@ -481,6 +504,10 @@ WES only covers exons (~1-2% of genome, ~30-60 million bases).
 
 ## VCF Header Classification Rules
 
+> **Specification**: [VCF v4.5](https://samtools.github.io/hts-specs/VCFv4.5.pdf) |
+> [VCF v4.3](https://samtools.github.io/hts-specs/VCFv4.3.pdf) |
+> [hts-specs GitHub](https://github.com/samtools/hts-specs)
+
 VCF files contain rich metadata in `##` header lines that can identify:
 - Reference genome (from `##reference=` and `##contig=` lines)
 - Variant caller (from `##source=` line)
@@ -555,6 +582,38 @@ VCF files contain rich metadata in `##` header lines that can identify:
 
 ---
 
+### Reference Assembly Detection by Contig Length
+
+Chromosome lengths are unique to each reference assembly, providing definitive identification even when `##reference` or `assembly=` tags are missing. The classifier matches `##contig=<ID=chr1,length=...>` lines against known reference sizes.
+
+| Chromosome | GRCh37      | GRCh38      | CHM13       |
+|------------|-------------|-------------|-------------|
+| chr1       | 249,250,621 | 248,956,422 | 248,387,497 |
+| chr2       | 243,199,373 | 242,193,529 | 242,696,747 |
+| chr3       | 198,022,430 | 198,295,559 | 201,106,605 |
+| chr10      | 135,534,747 | 133,797,422 | 134,758,134 |
+| chr22      |  51,304,566 |  50,818,468 |  51,324,926 |
+
+#### `vcf_contig_length`
+
+- **Header Type**: `##contig`
+- **Pattern**: `##contig=<ID=([^,>]+),length=(\d+)`
+- **Classification**: GRCh38, GRCh37, or CHM13
+- **Confidence**: 98% (exact match), 95% (fuzzy match ±1000bp)
+
+**Rationale**: Chromosome lengths are unique fingerprints for each reference assembly. Matching multiple contig lengths against known reference sizes provides definitive assembly identification. Fuzzy matching handles minor version differences (e.g., CHM13 v1.0 vs v2.0).
+
+#### `vcf_max_positions`
+
+- **Header Type**: Variant data (first 100 records)
+- **Pattern**: Position exceeds chromosome length
+- **Classification**: GRCh38, GRCh37, or CHM13 (by elimination)
+- **Confidence**: 90%
+
+**Rationale**: When header-based detection fails, max variant positions can rule out references where positions exceed chromosome lengths. For example, a variant at chr1:249,000,000 rules out CHM13 (248,387,497) and GRCh38 (248,956,422), leaving GRCh37.
+
+---
+
 ### Germline Variant Callers
 
 #### `vcf_gatk_haplotypecaller`
@@ -562,6 +621,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)haplotypecaller`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 90%
+- **Reference**: [GATK Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller) | [GitHub](https://github.com/broadinstitute/gatk)
 
 **Rationale**: GATK HaplotypeCaller is the standard germline SNV/indel caller. It performs local de novo assembly to call variants, optimized for diploid germline samples.
 
@@ -570,6 +630,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)deepvariant`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/google/deepvariant) | [Documentation](https://google.github.io/deepvariant/)
 
 **Rationale**: DeepVariant is Google's deep learning-based germline variant caller. It's trained on truth sets and excels at both SNVs and indels.
 
@@ -578,6 +639,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)genotypegvcfs`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 90%
+- **Reference**: [GATK Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360037057852-GenotypeGVCFs)
 
 **Rationale**: GATK GenotypeGVCFs performs joint genotyping on gVCF files, used in cohort germline variant calling workflows.
 
@@ -586,6 +648,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)glnexus`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/dnanexus-rnd/GLnexus)
 
 **Rationale**: GLnexus is a scalable gVCF merging and joint genotyping tool, commonly used with DeepVariant for population-scale germline calling.
 
@@ -594,6 +657,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)bcftools.*call`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 85%
+- **Reference**: [samtools.github.io](https://samtools.github.io/bcftools/bcftools.html#call)
 
 **Rationale**: bcftools call is a lightweight germline variant caller using the multiallelic or consensus caller models.
 
@@ -602,6 +666,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)freebayes`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 85%
+- **Reference**: [GitHub](https://github.com/freebayes/freebayes)
 
 **Rationale**: FreeBayes is a Bayesian haplotype-based germline variant caller that can handle pooled or mixed samples.
 
@@ -610,6 +675,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)strelka2.*germline|strelka2(?!.*somatic)`
 - **Classification**: genomic.germline_variants
 - **Confidence**: 85%
+- **Reference**: [GitHub](https://github.com/Illumina/strelka)
 
 **Rationale**: Strelka2 in germline mode calls SNVs and indels from germline samples.
 
@@ -622,6 +688,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)mutect2?`
 - **Classification**: genomic.somatic_variants
 - **Confidence**: 95%
+- **Reference**: [GATK Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360037593851-Mutect2) | [GitHub](https://github.com/broadinstitute/gatk)
 
 **Rationale**: GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal or tumor-only analysis. Its presence strongly indicates cancer genomics data.
 
@@ -630,6 +697,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)strelka.*somatic|strelka(?!.*germline)`
 - **Classification**: genomic.somatic_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/Illumina/strelka)
 
 **Rationale**: Strelka/Strelka2 in somatic mode calls somatic variants from tumor-normal pairs.
 
@@ -638,6 +706,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)varscan.*somatic`
 - **Classification**: genomic.somatic_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/dkoboldt/varscan)
 
 **Rationale**: VarScan somatic mode calls somatic variants from tumor-normal pairs using a heuristic/statistical approach.
 
@@ -646,6 +715,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)somaticsniper`
 - **Classification**: genomic.somatic_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/genome/somatic-sniper)
 
 **Rationale**: SomaticSniper identifies somatic point mutations in tumor-normal pairs.
 
@@ -654,6 +724,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)muse`
 - **Classification**: genomic.somatic_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/danielfan/MuSE)
 
 **Rationale**: MuSE calls somatic point mutations using a Markov substitution model, designed for tumor-normal pairs.
 
@@ -666,6 +737,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)manta`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/Illumina/manta) | [DOI:10.1093/bioinformatics/btv710](https://doi.org/10.1093/bioinformatics/btv710)
 
 **Rationale**: Manta calls structural variants (deletions, insertions, inversions, translocations) and large indels from short-read data.
 
@@ -674,6 +746,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)delly`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/dellytools/delly) | [PMID:22962449](https://pubmed.ncbi.nlm.nih.gov/22962449/)
 
 **Rationale**: DELLY discovers structural variants using paired-end and split-read analysis.
 
@@ -682,6 +755,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)lumpy`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/arq5x/lumpy-sv)
 
 **Rationale**: LUMPY is a probabilistic SV caller using multiple alignment signals.
 
@@ -690,6 +764,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)smoove`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/brentp/smoove)
 
 **Rationale**: Smoove simplifies SV calling by wrapping LUMPY with additional filtering.
 
@@ -698,6 +773,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)svim`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/eldariont/svim)
 
 **Rationale**: SVIM detects structural variants from long-read sequencing data (PacBio/ONT).
 
@@ -706,6 +782,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)sniffles`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/fritzsedlazeck/Sniffles)
 
 **Rationale**: Sniffles is a long-read SV caller optimized for PacBio and ONT data, detecting complex SVs that short reads miss.
 
@@ -714,6 +791,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)pbsv`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/PacificBiosciences/pbsv)
 
 **Rationale**: PBSV is PacBio's structural variant caller for HiFi and CLR data.
 
@@ -722,6 +800,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)cutesv`
 - **Classification**: genomic.structural_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/tjiangHIT/cuteSV)
 
 **Rationale**: CuteSV is a fast long-read SV caller using clustering of signatures.
 
@@ -734,6 +813,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)cnvkit`
 - **Classification**: genomic.copy_number_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/etal/cnvkit) | [Documentation](https://cnvkit.readthedocs.io/)
 
 **Rationale**: CNVkit detects copy number variants from targeted/exome or WGS data.
 
@@ -742,6 +822,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)gatk.*(cnv|copynumber)|modelsegments`
 - **Classification**: genomic.copy_number_variants
 - **Confidence**: 90%
+- **Reference**: [GATK CNV Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360035531092-Copy-Number-Variation-Pipelines)
 
 **Rationale**: GATK CNV tools (ModelSegments, etc.) call copy number variants from read depth data.
 
@@ -750,6 +831,7 @@ VCF files contain rich metadata in `##` header lines that can identify:
 - **Pattern**: `(?i)canvas`
 - **Classification**: genomic.copy_number_variants
 - **Confidence**: 90%
+- **Reference**: [GitHub](https://github.com/Illumina/canvas)
 
 **Rationale**: Canvas is Illumina's CNV caller for WGS and tumor-normal analysis.
 
@@ -784,6 +866,12 @@ VCF files contain rich metadata in `##` header lines that can identify:
 ---
 
 ## FASTQ Read Name Classification Rules
+
+> **References**:
+> - Illumina: [FASTQ Files Documentation](https://help.basespace.illumina.com/files-used-by-basespace/fastq-files) | [Knowledge Base](https://knowledge.illumina.com/software/general/software-general-reference_material-list/000002211)
+> - PacBio: [BAM Format Specification](https://pacbiofileformats.readthedocs.io/en/latest/BAM.html)
+> - ONT: [Output Specifications](https://software-docs.nanoporetech.com/output-specifications/25.05/read_formats/fastq/)
+> - Archives: [ENA Accessions](https://ena-docs.readthedocs.io/en/latest/submit/general-guide/accessions.html) | [INSDC](https://www.insdc.org/)
 
 FASTQ read names have platform-specific formats that can identify the sequencing platform,
 instrument model, and read type without inspecting the sequence data.

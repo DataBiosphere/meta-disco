@@ -43,7 +43,39 @@ def load_cached_header(md5sum: str) -> dict | None:
     return None
 
 
-def save_header_evidence(md5sum: str, file_name: str, header_text: str, raw_bytes: int):
+def extract_max_positions(variant_lines: list[str], max_variants: int = 100) -> dict[str, int]:
+    """Extract max position per chromosome from variant lines.
+
+    This is used for reference assembly detection when header-based
+    detection fails. Only stores the max position per chromosome,
+    not the raw variant data.
+    """
+    max_positions: dict[str, int] = {}
+    count = 0
+
+    for line in variant_lines:
+        if count >= max_variants:
+            break
+        if not line or line.startswith('#'):
+            continue
+
+        parts = line.split('\t')
+        if len(parts) < 2:
+            continue
+
+        chrom = parts[0].replace('chr', '')
+        try:
+            pos = int(parts[1])
+            max_positions[chrom] = max(max_positions.get(chrom, 0), pos)
+            count += 1
+        except ValueError:
+            continue
+
+    return max_positions
+
+
+def save_header_evidence(md5sum: str, file_name: str, header_text: str,
+                         raw_bytes: int, max_positions: dict[str, int] | None = None):
     """Save fetched header as evidence for audit trail."""
     path = get_evidence_path(md5sum)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,6 +88,9 @@ def save_header_evidence(md5sum: str, file_name: str, header_text: str, raw_byte
         "raw_bytes_fetched": raw_bytes,
         "fetch_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
+    if max_positions:
+        evidence["max_positions"] = max_positions
 
     with open(path, "w") as f:
         json.dump(evidence, f, indent=2)
@@ -106,19 +141,26 @@ def get_vcf_header(md5sum: str, file_name: str = "", is_gzipped: bool = True,
         except UnicodeDecodeError:
             text = content.decode('latin-1')
 
-        # Extract header lines (starting with #)
+        # Extract header lines and variant lines
         header_lines = []
+        variant_lines = []
+        in_header = True
+
         for line in text.split('\n'):
             if line.startswith('#'):
                 header_lines.append(line)
-            elif line.strip() and not line.startswith('#'):
-                # First non-header line, stop
-                break
+            elif line.strip():
+                in_header = False
+                # Collect variant lines for position-based reference detection
+                if len(variant_lines) < 100:
+                    variant_lines.append(line)
 
         if header_lines:
             header_text = '\n'.join(header_lines)
+            # Extract max positions from variant lines (for fallback ref detection)
+            max_positions = extract_max_positions(variant_lines) if variant_lines else None
             # Save to cache for resumability
-            save_header_evidence(md5sum, file_name, header_text, raw_bytes)
+            save_header_evidence(md5sum, file_name, header_text, raw_bytes, max_positions)
             return header_text
 
         return None
@@ -143,7 +185,13 @@ def classify_single_vcf(
     if not header_text:
         return None
 
-    classification = classify_from_vcf_header(header_text, file_size=file_size)
+    # Load max_positions from cache for fallback reference detection
+    cached = load_cached_header(md5sum)
+    max_positions = cached.get("max_positions") if cached else None
+
+    classification = classify_from_vcf_header(
+        header_text, file_size=file_size, max_positions=max_positions
+    )
     classification["file_name"] = file_name
     classification["md5sum"] = md5sum
     classification["file_size"] = file_size

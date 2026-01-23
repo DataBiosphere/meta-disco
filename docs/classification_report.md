@@ -4,17 +4,59 @@
 
 This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers `data_modality` and `reference_assembly` from file metadata without requiring full file downloads.
 
-### Key Metrics
+### Initial State (Before Classification)
 
-| Metric                                 | Count   | Percentage |
-| -------------------------------------- | ------- | ---------- |
-| Total files classified                 | 246,768 | 100%       |
-| Files with `data_modality`             | 243,098 | 98.5%      |
-| Files with `reference_assembly`        | 42,700  | 19.1%*     |
-| High-confidence classifications (≥80%) | 240,153 | 97.3%      |
-| Files needing manual review (<50%)     | ~2,000  | <1%        |
+The source AnVIL metadata contained **758,658 files** but with minimal semantic annotation:
 
-*Reference assembly detection limited to BAM/CRAM and VCF files with explicit header annotations.
+| Field                | Files Populated | Percentage |
+| -------------------- | --------------- | ---------- |
+| `file_format`        | 758,658         | 100%       |
+| `data_modality`      | 6,755           | 0.9%       |
+| `reference_assembly` | 4,696           | 0.6%       |
+
+**Files by format (classifiable types):**
+
+| Format     | Count   | Description              |
+| ---------- | ------- | ------------------------ |
+| .vcf.gz    | 204,384 | Compressed variant calls |
+| .fastq.gz  | 16,255  | Compressed sequences     |
+| .cram      | 10,829  | Compressed alignments    |
+| .bam       | 7,834   | Alignments               |
+| .fast5     | 12,394  | ONT signal data          |
+
+The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 total) to infer missing metadata from headers and filenames.
+
+### Classification Results
+
+**Coverage of all AnVIL files (758,658 total):**
+
+| Category                          | Count   | % of Total |
+| --------------------------------- | ------- | ---------- |
+| Classified (BAM/CRAM/VCF/FASTQ)*  | 246,768 | 32.5%      |
+| Index files (.tbi, .csi, .crai)   | 222,903 | 29.4%      |
+| Auxiliary (.txt, .md5, .tar, etc) | 191,030 | 25.2%      |
+| Images (.svs, .png)               | 33,757  | 4.4%       |
+| Other formats                     | 64,200  | 8.5%       |
+
+*Files with MD5 checksums enabling S3 mirror header retrieval.
+
+**Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Auxiliary and image files are not processed for `data_modality` or `reference_assembly` inference - these would require separate classification approaches (e.g., imaging modality detection for histology slides).
+
+**Classification results (246,768 classifiable files):**
+
+| Metric                                 | Count   | % of Classifiable |
+| -------------------------------------- | ------- | ----------------- |
+| Files with `data_modality`             | 243,098 | 98.5%             |
+| Files with `reference_assembly`        | 213,392 | 86.4%             |
+| High-confidence classifications (≥80%) | 240,153 | 97.3%             |
+| Files needing manual review (<50%)     | ~2,000  | <1%               |
+
+**Improvement summary (classifiable files):**
+
+| Field                | Before | After  | Improvement |
+| -------------------- | ------ | ------ | ----------- |
+| `data_modality`      | 0.9%   | 98.5%  | +97.6pp     |
+| `reference_assembly` | 0.6%   | 86.4%  | +85.8pp     |
 
 ---
 
@@ -22,7 +64,7 @@ This report documents the rule-based metadata classification system for biologic
 
 ### 1.1 Data Modality Hierarchy
 
-The classification system maps files to a hierarchical data modality ontology:
+The classification system maps files to a hierarchical data modality ontology based on the [Experimental Factor Ontology (EFO)](https://www.ebi.ac.uk/efo/):
 
 ```
 data_modality
@@ -86,7 +128,7 @@ data_modality
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   Tier 4: Header Inspection                         │
-│  BAM @RG/@PG, VCF ##source/##reference, FASTQ read names            │
+│  BAM @RG/@PG, VCF ##source/##contig, FASTQ read names               │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -106,7 +148,7 @@ data_modality
 
 Rules are evaluated in order of confidence, with higher-confidence rules taking precedence:
 
-1. **Definitive signals** (95%): Explicit tags like `PL:PACBIO`, `##source=HaplotypeCaller`
+1. **Definitive signals** (95-98%): Explicit tags like `PL:PACBIO`, contig lengths, `##source=HaplotypeCaller`
 2. **Strong indicators** (85-90%): Aligner programs like STAR (RNA-seq), BWA (DNA)
 3. **Pattern matches** (70-85%): Filename patterns like `_RNA_`, `_WGS_`, `.hg38.`
 4. **Size heuristics** (60-70%): File size ranges typical for WGS vs WES
@@ -144,6 +186,7 @@ Parse file headers (without downloading entire files) to extract metadata.
 - `##reference=` - Reference genome path
 - `##source=` - Variant caller (HaplotypeCaller, Mutect2, Manta)
 - `##contig=<...,assembly=>` - Assembly annotation
+- `##contig=<...,length=>` - Chromosome length (definitive assembly detection)
 
 **FASTQ Read Names:**
 
@@ -193,9 +236,9 @@ Size-based rules provide fallback classification when other signals are absent:
 
 #### Base Confidence Levels
 
-| Level      | Range  | Description                                   |
-| ---------- | ------ | --------------------------------------------- |
-| Definitive | 95-99% | Explicit metadata tag (e.g., `PL:PACBIO`)     |
+| Level      | Range  | Description                                          |
+| ---------- | ------ | ---------------------------------------------------- |
+| Definitive | 95-99% | Explicit metadata tag or contig length match         |
 | High       | 85-94% | Strong program indicator (e.g., STAR aligner) |
 | Medium     | 70-84% | Filename pattern match                        |
 | Low        | 50-69% | Size heuristic or weak pattern                |
@@ -237,6 +280,28 @@ Size-based rules provide fallback classification when other signals are absent:
 | pbmm2    | genomic        | 90%        | PacBio-specific aligner  |
 
 ### 4.2 VCF Header Rules
+
+**Reference Assembly Detection (by Contig Length):**
+
+Chromosome lengths are unique to each reference assembly, providing definitive identification even when `##reference` or `assembly=` tags are missing. The classifier matches `##contig=<ID=chr1,length=...>` lines against known reference sizes.
+
+| Chromosome | GRCh37      | GRCh38      | CHM13       |
+| ---------- | ----------- | ----------- | ----------- |
+| chr1       | 249,250,621 | 248,956,422 | 248,387,497 |
+| chr2       | 243,199,373 | 242,193,529 | 242,696,747 |
+| chr3       | 198,022,430 | 198,295,559 | 201,106,605 |
+| chr10      | 135,534,747 | 133,797,422 | 134,758,134 |
+| chr22      |  51,304,566 |  50,818,468 |  51,324,926 |
+
+| Rule ID            | Method                        | Confidence |
+| ------------------ | ----------------------------- | ---------- |
+| `vcf_contig_length` | Exact match on contig lengths | 98%        |
+| `vcf_contig_length` | Fuzzy match (±1000bp)         | 95%        |
+| `vcf_max_positions` | Position exceeds chrom length | 90%        |
+
+**Reference Assembly Detection (by Variant Position):**
+
+When header-based detection fails, max variant positions can rule out references where positions exceed chromosome lengths. For example, a variant at chr1:249,000,000 rules out CHM13 and GRCh38.
 
 **Variant Caller Detection:**
 
@@ -333,8 +398,8 @@ High confidence (≥80%): 20,462 (88.6%)
 | --------------------------- | ------- | ---------- |
 | genomic.germline_variants   | 158,858 | 77.5%      |
 | genomic.structural_variants | 45,227  | 22.1%      |
-| genomic                     | 559     | 0.3%       |
-| Unknown                     | 366     | 0.2%       |
+| genomic                     | 915     | 0.4%       |
+| Unknown                     | 10      | 0.0%       |
 
 **Variant Types:**
 
@@ -348,9 +413,30 @@ High confidence (≥80%): 20,462 (88.6%)
 
 | Assembly | Count   | Percentage |
 | -------- | ------- | ---------- |
-| GRCh38   | 31,673  | 15.4%      |
-| CHM13    | 198     | 0.1%       |
-| Unknown  | 173,139 | 84.5%      |
+| CHM13    | 159,251 | 77.7%      |
+| GRCh38   | 43,297  | 21.1%      |
+| GRCh37   | 11      | 0.0%       |
+| Unknown  | 2,451   | 1.2%       |
+
+**Top Variant Callers:**
+
+| Caller          | Count   | Percentage |
+| --------------- | ------- | ---------- |
+| HaplotypeCaller | 158,858 | 77.5%      |
+| Sniffles        | 304     | 0.1%       |
+| SVIM            | 197     | 0.1%       |
+| PBSV            | 168     | 0.1%       |
+| Unknown         | 45,483  | 22.2%      |
+
+**Rules Matched:**
+
+| Rule                     | Matches |
+| ------------------------ | ------- |
+| vcf_ref_grch38           | 873,506 |
+| vcf_info_sv              | 204,083 |
+| vcf_contig_length        | 170,688 |
+| vcf_gatk_haplotypecaller | 158,858 |
+| vcf_ref_chm13            | 1,398   |
 
 High confidence (≥80%): 204,085 (99.5%)
 
@@ -360,8 +446,8 @@ High confidence (≥80%): 204,085 (99.5%)
 | --------- | ------- | ------------- | -------------- | --------------- |
 | BAM/CRAM  | 18,662  | 96.3%         | 58.0%          | 83.6%           |
 | FASTQ     | 23,096  | 100%*         | N/A            | 88.6%           |
-| VCF       | 205,010 | 99.8%         | 15.5%          | 99.5%           |
-| **Total** | 246,768 | 98.5%         | 19.1%          | 97.3%           |
+| VCF       | 205,010 | 99.9%         | 98.8%          | 99.5%           |
+| **Total** | 246,768 | 98.5%         | 86.4%          | 97.3%           |
 
 *FASTQ modality defaults to "genomic" when platform is detected but no RNA-seq indicators found.
 
@@ -374,14 +460,13 @@ High confidence (≥80%): 204,085 (99.5%)
 1. **Header-only inspection**: Cannot detect modality for files without informative headers
 2. **Archive reformatting**: Some SRA/ENA files lose original metadata
 3. **Mixed-content files**: Cannot detect if BAM contains both DNA and RNA
-4. **Reference version ambiguity**: Some files use non-standard contig names
+4. **Non-standard contig names**: Some files use custom contig naming that doesn't match standard assemblies
 
 ### 6.2 Planned Improvements
 
-1. Add contig length-based reference detection
-2. Implement study-level context propagation
-3. Add support for additional file types (10X, spatial transcriptomics)
-4. Machine learning model for ambiguous cases
+1. Implement study-level context propagation
+2. Add support for additional file types (10X, spatial transcriptomics)
+3. Machine learning model for ambiguous cases
 
 ---
 
@@ -392,13 +477,13 @@ High confidence (≥80%): 204,085 (99.5%)
 | BAM/CRAM platform rules  | 8          |
 | BAM/CRAM program rules   | 15         |
 | BAM/CRAM reference rules | 6          |
-| VCF reference rules      | 6          |
+| VCF reference rules      | 8          |
 | VCF caller rules         | 27         |
 | FASTQ platform rules     | 16         |
 | FASTQ archive rules      | 3          |
 | Consistency rules        | 12         |
 | File size rules          | 8          |
-| **Total**                | **101**    |
+| **Total**                | **103**    |
 
 ---
 
