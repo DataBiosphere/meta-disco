@@ -42,21 +42,21 @@ The classification system processes BAM/CRAM, VCF, and FASTQ files (246,768 tota
 
 **Non-classifiable files:** Index files inherit metadata from their parent files (e.g., a `.tbi` index accompanies a `.vcf.gz`). Auxiliary and image files are not processed for `data_modality` or `reference_assembly` inference - these would require separate classification approaches (e.g., imaging modality detection for histology slides).
 
-**Classification results (246,768 classifiable files):**
+**Classification results (470,805 files: 246,768 data + 224,037 index):**
 
-| Metric                                 | Count   | % of Classifiable |
-| -------------------------------------- | ------- | ----------------- |
-| Files with `data_modality`             | 243,098 | 98.5%             |
-| Files with `reference_assembly`        | 213,392 | 86.4%             |
-| High-confidence classifications (≥80%) | 240,153 | 97.3%             |
-| Files needing manual review (<50%)     | ~2,000  | <1%               |
+| Metric                                 | Count   | % of Total |
+| -------------------------------------- | ------- | ---------- |
+| Files with `data_modality`             | 459,631 | 97.6%      |
+| Files with `reference_assembly`        | 425,142 | 90.3%      |
+| High-confidence classifications (≥80%) | 454,698 | 96.6%      |
+| Files needing manual review (<50%)     | ~2,000  | <1%        |
 
-**Improvement summary (classifiable files):**
+**Improvement summary:**
 
 | Field                | Before | After  | Improvement |
 | -------------------- | ------ | ------ | ----------- |
-| `data_modality`      | 0.9%   | 98.5%  | +97.6pp     |
-| `reference_assembly` | 0.6%   | 86.4%  | +85.8pp     |
+| `data_modality`      | 0.9%   | 97.6%  | +96.7pp     |
+| `reference_assembly` | 0.6%   | 90.3%  | +89.7pp     |
 
 ---
 
@@ -447,9 +447,29 @@ High confidence (≥80%): 204,085 (99.5%)
 | BAM/CRAM  | 18,662  | 96.3%         | 58.0%          | 83.6%           |
 | FASTQ     | 23,096  | 100%*         | N/A            | 88.6%           |
 | VCF       | 205,010 | 99.9%         | 98.8%          | 99.5%           |
-| **Total** | 246,768 | 98.5%         | 86.4%          | 97.3%           |
+| Index     | 224,037 | 96.7%         | 94.5%          | 96.7%           |
+| **Total** | 470,805 | 97.8%         | 91.4%          | 96.5%           |
 
 *FASTQ modality defaults to "genomic" when platform is detected but no RNA-seq indicators found.
+
+### 5.5 Index File Inheritance Results
+
+Index files inherit metadata from their parent data files by filename matching within the same dataset.
+
+**Total index files: 224,037**
+
+| Index Type | Total   | Matched | With Modality | With Reference |
+| ---------- | ------- | ------- | ------------- | -------------- |
+| `.tbi`     | 169,537 | 100.0%  | 100.0%        | 99.8%          |
+| `.csi`     | 41,186  | 99.9%   | 82.9%         | 78.1%          |
+| `.crai`    | 10,319  | 100.0%  | 100.0%        | 100.0%         |
+| `.bai`     | 1,861   | 99.9%   | 81.5%         | 0.0%*          |
+| `.pbi`     | 1,134   | 97.2%   | 97.2%         | 0.0%*          |
+| **Total**  | 224,037 | 99.96%  | 96.7%         | 94.5%          |
+
+*Parent BAM files are unaligned reads (raw HiFi/ONT) - reference_assembly is correctly N/A.
+
+**Inheritance rule**: Index files (e.g., `sample.vcf.gz.tbi`) are matched to parent files (e.g., `sample.vcf.gz`) within the same dataset. The parent's `data_modality` and `reference_assembly` are propagated to the index.
 
 ---
 
@@ -483,7 +503,8 @@ High confidence (≥80%): 204,085 (99.5%)
 | FASTQ archive rules      | 3          |
 | Consistency rules        | 12         |
 | File size rules          | 8          |
-| **Total**                | **103**    |
+| Index inheritance rules  | 5          |
+| **Total**                | **108**    |
 
 ---
 

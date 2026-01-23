@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""Propagate metadata from parent files to index files.
+
+Index files (.bai, .tbi, .csi, .crai, .pbi) inherit data_modality and
+reference_assembly from their parent files (.bam, .vcf.gz, .cram).
+"""
+
+import argparse
+import json
+from collections import defaultdict
+from pathlib import Path
+
+# Index extension -> parent extension mapping
+INDEX_TO_PARENT = {
+    ".bai": [".bam"],
+    ".tbi": [".vcf.gz", ".gz"],
+    ".csi": [".vcf.gz", ".gz"],
+    ".crai": [".cram"],
+    ".pbi": [".bam"],
+}
+
+
+def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
+    """Get possible parent filenames for an index file.
+
+    Handles both patterns:
+    - sample.bam.bai -> sample.bam
+    - sample.bai -> sample.bam
+    """
+    candidates = []
+    parent_exts = INDEX_TO_PARENT.get(index_ext, [])
+
+    if index_name.endswith(index_ext):
+        base = index_name[:-len(index_ext)]
+
+        # Pattern 1: index ext appended to parent (sample.bam.bai)
+        for parent_ext in parent_exts:
+            if base.endswith(parent_ext):
+                candidates.append(base)
+
+        # Pattern 2: index ext replaces parent ext (sample.bai -> sample.bam)
+        for parent_ext in parent_exts:
+            candidates.append(base + parent_ext)
+
+    return candidates
+
+
+def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
+    """Load classifications keyed by md5sum."""
+    classifications = {}
+
+    # Load BAM/CRAM classifications
+    if bam_path.exists():
+        with open(bam_path) as f:
+            data = json.load(f)
+        for c in data.get("classifications", []):
+            md5 = c.get("md5sum")
+            if md5:
+                classifications[md5] = {
+                    "data_modality": c.get("data_modality"),
+                    "reference_assembly": c.get("reference_assembly"),
+                    "confidence": c.get("confidence"),
+                    "source_file": c.get("file_name"),
+                }
+
+    # Load VCF classifications
+    if vcf_path.exists():
+        with open(vcf_path) as f:
+            data = json.load(f)
+        for c in data.get("classifications", []):
+            md5 = c.get("md5sum")
+            if md5:
+                classifications[md5] = {
+                    "data_modality": c.get("data_modality"),
+                    "reference_assembly": c.get("reference_assembly"),
+                    "confidence": c.get("confidence"),
+                    "source_file": c.get("file_name"),
+                }
+
+    return classifications
+
+
+def propagate_to_index_files(
+    metadata_path: Path,
+    bam_classifications_path: Path,
+    vcf_classifications_path: Path,
+    output_path: Path,
+):
+    """Propagate metadata from parent files to index files."""
+
+    # Load source metadata
+    with open(metadata_path) as f:
+        data = json.load(f)
+
+    files = data if isinstance(data, list) else data.get("files", data.get("results", []))
+    print(f"Loaded {len(files):,} files from metadata")
+
+    # Load classifications
+    classifications = load_classifications(bam_classifications_path, vcf_classifications_path)
+    print(f"Loaded {len(classifications):,} parent classifications")
+
+    # Group files by dataset for matching
+    by_dataset = defaultdict(list)
+    for f in files:
+        ds = f.get("dataset_id", "unknown")
+        by_dataset[ds].append(f)
+
+    # Build filename -> file lookup per dataset
+    # Also build filename -> md5 lookup
+    filename_to_file = {}
+    filename_to_md5 = {}
+    for ds, ds_files in by_dataset.items():
+        for f in ds_files:
+            name = f.get("file_name")
+            md5 = f.get("file_md5sum")
+            if name:
+                key = (ds, name)
+                filename_to_file[key] = f
+                if md5:
+                    filename_to_md5[key] = md5
+
+    # Find index files and match to parents
+    results = []
+    stats = defaultdict(lambda: {"total": 0, "matched": 0, "with_modality": 0, "with_ref": 0})
+
+    for ds, ds_files in by_dataset.items():
+        for f in ds_files:
+            name = f.get("file_name", "")
+            fmt = f.get("file_format", "")
+
+            # Check if this is an index file
+            index_ext = None
+            for ext in INDEX_TO_PARENT.keys():
+                if fmt == ext or name.endswith(ext):
+                    index_ext = ext
+                    break
+
+            if not index_ext:
+                continue
+
+            stats[index_ext]["total"] += 1
+
+            # Find parent file
+            parent_candidates = get_parent_candidates(name, index_ext)
+            parent_md5 = None
+            parent_name = None
+
+            for candidate in parent_candidates:
+                key = (ds, candidate)
+                if key in filename_to_md5:
+                    parent_md5 = filename_to_md5[key]
+                    parent_name = candidate
+                    break
+
+            if not parent_md5:
+                continue
+
+            stats[index_ext]["matched"] += 1
+
+            # Get parent classification
+            parent_class = classifications.get(parent_md5, {})
+
+            result = {
+                "entry_id": f.get("entry_id"),
+                "file_name": name,
+                "file_format": fmt,
+                "file_md5sum": f.get("file_md5sum"),
+                "dataset_id": ds,
+                "dataset_title": f.get("dataset_title"),
+                "parent_file": parent_name,
+                "parent_md5sum": parent_md5,
+                "data_modality": parent_class.get("data_modality"),
+                "reference_assembly": parent_class.get("reference_assembly"),
+                "confidence": parent_class.get("confidence"),
+                "inheritance_source": "parent_file",
+            }
+
+            if result["data_modality"]:
+                stats[index_ext]["with_modality"] += 1
+            if result["reference_assembly"]:
+                stats[index_ext]["with_ref"] += 1
+
+            results.append(result)
+
+    # Print stats
+    print("\n" + "=" * 70)
+    print("INDEX FILE INHERITANCE RESULTS")
+    print("=" * 70)
+
+    total_all = 0
+    matched_all = 0
+    modality_all = 0
+    ref_all = 0
+
+    for ext in INDEX_TO_PARENT.keys():
+        s = stats[ext]
+        if s["total"] > 0:
+            match_pct = s["matched"] / s["total"] * 100
+            mod_pct = s["with_modality"] / s["total"] * 100 if s["total"] > 0 else 0
+            ref_pct = s["with_ref"] / s["total"] * 100 if s["total"] > 0 else 0
+            print(f"\n{ext}:")
+            print(f"  Total:              {s['total']:>7,}")
+            print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
+            print(f"  With data_modality: {s['with_modality']:>7,} ({mod_pct:.1f}%)")
+            print(f"  With reference:     {s['with_ref']:>7,} ({ref_pct:.1f}%)")
+
+            total_all += s["total"]
+            matched_all += s["matched"]
+            modality_all += s["with_modality"]
+            ref_all += s["with_ref"]
+
+    print(f"\n{'=' * 70}")
+    print(f"TOTAL:")
+    print(f"  Index files:        {total_all:>7,}")
+    print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
+    print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
+    print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
+    print("=" * 70)
+
+    # Save results in same format as other classification outputs
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Convert to standard classification format (matching bam_headers.json / vcf_headers.json)
+    standard_results = []
+    for r in results:
+        standard_results.append({
+            "file_name": r["file_name"],
+            "file_format": r["file_format"],
+            "md5sum": r.get("file_md5sum"),
+            "file_size": None,  # Not tracked for index files
+            "entry_id": r["entry_id"],
+            "dataset_id": r["dataset_id"],
+            "dataset_title": r["dataset_title"],
+            "data_modality": r["data_modality"],
+            "reference_assembly": r["reference_assembly"],
+            "confidence": r["confidence"],
+            "matched_rules": ["inherited_from_parent"],
+            "evidence": [{
+                "rule_id": "inherited_from_parent",
+                "matched": f"Parent file: {r['parent_file']}",
+                "classification": r["data_modality"],
+                "confidence": r["confidence"],
+                "rationale": "Index files inherit metadata from their parent data files.",
+            }],
+            "parent_file": r["parent_file"],
+            "parent_md5sum": r["parent_md5sum"],
+        })
+
+    with open(output_path, "w") as f:
+        json.dump({
+            "metadata": {
+                "total_index_files": total_all,
+                "matched_to_parent": matched_all,
+                "with_data_modality": modality_all,
+                "with_reference_assembly": ref_all,
+                "complete": True,
+            },
+            "classifications": standard_results,
+        }, f, indent=2)
+
+    print(f"\nSaved {len(standard_results):,} index file classifications to {output_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Propagate metadata to index files")
+    parser.add_argument(
+        "--metadata", "-m",
+        type=Path,
+        default=Path("data/anvil_files_metadata.json"),
+        help="Path to source metadata JSON",
+    )
+    parser.add_argument(
+        "--bam", "-b",
+        type=Path,
+        default=Path("output/bam_headers.json"),
+        help="Path to BAM/CRAM classifications",
+    )
+    parser.add_argument(
+        "--vcf", "-v",
+        type=Path,
+        default=Path("output/vcf_headers.json"),
+        help="Path to VCF classifications",
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=Path,
+        default=Path("output/index_file_classifications.json"),
+        help="Output path for index classifications",
+    )
+    args = parser.parse_args()
+
+    propagate_to_index_files(
+        args.metadata,
+        args.bam,
+        args.vcf,
+        args.output,
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -37,8 +37,8 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 
 | Category | Count | % | Description |
 |----------|-------|---|-------------|
-| **Data files** | ~305K | 40% | VCF, BAM, CRAM, FASTQ, etc. - need classification |
-| **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - inherit from parent |
+| **Data files** | ~305K | 40% | VCF, BAM, CRAM, FASTQ, etc. - ✅ classified via header inspection |
+| **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
 | **Other/ambiguous** | ~214K | 28% | TXT, TAR, PNG, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
 
@@ -46,16 +46,16 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 
 | Format | Count | Classification Notes |
 |--------|-------|---------------------|
-| `.vcf.gz` | 204,384 | Genomic (variant calls) |
-| `.tbi` | 169,537 | Index - skip |
+| `.vcf.gz` | 204,384 | ✅ Genomic (variant calls) - header classified |
+| `.tbi` | 169,537 | ✅ Index - inherits from parent VCF |
 | `Other` | 100,906 | Needs extension re-parsing |
 | `.txt` | 42,120 | Ambiguous (stats, metadata, data) |
-| `.csi` | 41,186 | Index - skip |
+| `.csi` | 41,186 | ✅ Index - inherits from parent VCF |
 | `.tar` | 31,984 | Archive - needs content inspection |
 | `.svs` | 25,708 | Imaging (histology slides) |
-| `.fastq.gz` | 16,255 | Sequencing reads |
-| `.cram` | 10,829 | Alignments |
-| `.bam` | 7,834 | Alignments |
+| `.fastq.gz` | 16,255 | ✅ Sequencing reads - header classified |
+| `.cram` | 10,829 | ✅ Alignments - header classified |
+| `.bam` | 7,834 | ✅ Alignments - header classified |
 
 ### Data Quality Issues Discovered
 
@@ -253,6 +253,27 @@ Process files through tiers of increasing complexity/cost:
 ```
 
 **Note**: This spike will focus on Tiers 1-5 (deterministic rules + header inspection). LLM integration will be evaluated based on what gaps remain after deterministic classification.
+
+### 6.2 Index File Inheritance
+
+Index files (`.tbi`, `.csi`, `.bai`, `.crai`, `.pbi`) inherit metadata from their parent data files by filename matching within the same dataset.
+
+| Index | Parent | Match Rate | Notes |
+|-------|--------|------------|-------|
+| `.tbi` | `.vcf.gz` | 100.0% | VCF tabix index |
+| `.csi` | `.vcf.gz` | 99.9% | VCF coordinate-sorted index |
+| `.crai` | `.cram` | 100.0% | CRAM index |
+| `.bai` | `.bam` | 99.9% | BAM index |
+| `.pbi` | `.bam` | 97.2% | PacBio BAM index |
+
+**Implementation**: `scripts/propagate_index_metadata.py`
+
+**Results** (224,037 index files):
+- 223,953 matched to parent (99.96%)
+- 216,533 with `data_modality` (96.7%)
+- 211,750 with `reference_assembly` (94.5%)
+
+Index files without `reference_assembly` inherit from unaligned parent BAMs (raw HiFi/ONT reads) where reference is correctly N/A.
 
 ### 6.2 Confidence Scoring
 
