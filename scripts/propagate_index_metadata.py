@@ -11,10 +11,11 @@ from collections import defaultdict
 from pathlib import Path
 
 # Index extension -> parent extension mapping
+# List specific compound extensions to avoid false candidates from bare .gz
 INDEX_TO_PARENT = {
     ".bai": [".bam"],
-    ".tbi": [".vcf.gz", ".gz"],
-    ".csi": [".vcf.gz", ".gz"],
+    ".tbi": [".vcf.gz", ".bed.gz", ".txt.gz", ".tsv.gz", ".gff.gz", ".gtf.gz"],
+    ".csi": [".vcf.gz", ".bcf"],
     ".crai": [".cram"],
     ".pbi": [".bam"],
 }
@@ -24,8 +25,8 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     """Get possible parent filenames for an index file.
 
     Handles both patterns:
-    - sample.bam.bai -> sample.bam
-    - sample.bai -> sample.bam
+    - sample.bam.bai -> sample.bam (Pattern 1: index appended to parent)
+    - sample.bai -> sample.bam (Pattern 2: index replaces parent ext)
     """
     candidates = []
     parent_exts = INDEX_TO_PARENT.get(index_ext, [])
@@ -33,14 +34,22 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     if index_name.endswith(index_ext):
         base = index_name[:-len(index_ext)]
 
-        # Pattern 1: index ext appended to parent (sample.bam.bai)
+        # Pattern 1: index ext appended to parent (sample.bam.bai -> sample.bam)
+        # This is the most common pattern
+        pattern1_matched = False
         for parent_ext in parent_exts:
             if base.endswith(parent_ext):
                 candidates.append(base)
+                pattern1_matched = True
+                break  # Only add once
 
         # Pattern 2: index ext replaces parent ext (sample.bai -> sample.bam)
-        for parent_ext in parent_exts:
-            candidates.append(base + parent_ext)
+        # Only try this if Pattern 1 didn't match (avoids junk like sample.vcf.gz.vcf.gz)
+        if not pattern1_matched:
+            for parent_ext in parent_exts:
+                candidate = base + parent_ext
+                if candidate not in candidates:
+                    candidates.append(candidate)
 
     return candidates
 
