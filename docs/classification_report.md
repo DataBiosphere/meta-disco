@@ -661,9 +661,53 @@ Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs
 
 ---
 
-## 6. Limitations and Future Work
+## 6. Data Quality Issues
 
-### 6.1 Current Limitations
+The classification process surfaced data integrity issues in the source AnVIL metadata that may warrant investigation.
+
+### 6.1 Orphaned Index Files
+
+Index files exist without corresponding parent data files in the same dataset.
+
+**Total orphaned indexes: 84** (0.04% of 224,037 index files)
+
+| Index Type | Orphaned | Description |
+| ---------- | -------: | ----------- |
+| `.csi`     | 48       | CSI indexes for VCF files that don't exist |
+| `.pbi`     | 32       | PacBio indexes referencing missing BAMs |
+| `.tbi`     | 2        | Tabix indexes without parent |
+| `.bai`     | 2        | BAM indexes without parent |
+
+**Example orphaned file:**
+```
+File: 1kgp.chr8.recalibrated.snp_indel.pass.singleton.chm13.draft_v1.0_plus38Y.no_snyteny_1Mbp.Homo_sapiens_assembly38.liftover.vcf.gz.csi
+Dataset: ANVIL_T2T
+Tried parent: 1kgp.chr8...liftover.vcf.gz
+Result: Parent VCF not found in dataset
+```
+
+**Possible causes:**
+1. Parent files were deleted but indexes retained
+2. Files were moved between datasets without indexes
+3. Incomplete data uploads
+
+**Output location:** Orphaned files are recorded in `index_file_classifications.json` under the `unmatched_files` array with:
+- `file_name`: Index filename
+- `dataset_id`: Dataset containing the orphan
+- `candidates_tried`: Parent filenames attempted
+- `reason`: `no_matching_parent_in_dataset`
+
+### 6.2 Recommendations
+
+1. **Audit orphaned indexes** - Determine if parent files exist elsewhere or should be re-uploaded
+2. **Add integrity checks** - Validate parent-child relationships during data ingest
+3. **Document expected orphans** - Some may be intentional (e.g., shared reference indexes)
+
+---
+
+## 7. Limitations and Future Work
+
+### 7.1 Current Limitations
 
 1. **Header-only inspection**: Cannot detect modality for files without informative headers
 2. **Archive reformatting**: Some SRA/ENA files lose original metadata
@@ -672,7 +716,7 @@ Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs
 5. **Confidence uses max() not additive**: When multiple rules converge, confidence is the maximum single-rule score rather than boosted for agreement. Documentation describes "+5% per converging pair" but this is not implemented.
 6. **N/A classifications lack semantic distinction**: Files with `data_modality: null` include both "derived artifacts" (PNG plots, assembly QC BEDs) and "pre-processing data" (FAST5 raw signal). These have different meanings but identical output representation.
 
-### 6.2 Planned Improvements
+### 7.2 Planned Improvements
 
 1. Implement study-level context propagation
 2. Add support for additional file types (10X, spatial transcriptomics)

@@ -256,6 +256,26 @@ T2T (CHM13) dominates — reflects modern HPRC data
 
 ---
 
+# Data Quality Issues
+
+Classification surfaced data integrity problems in the source metadata:
+
+| Issue | Count | Description |
+| ----- | ----: | ----------- |
+| Orphaned indexes | 84 | Index files with no matching parent in dataset |
+| Missing parents | 48 | `.csi` indexes for VCFs that don't exist |
+| Cross-dataset refs | 32 | `.pbi` indexes referencing other datasets |
+
+**Example orphaned file:**
+```
+1kgp.chr8...Homo_sapiens_assembly38.liftover.vcf.gz.csi
+  → Parent VCF not found in ANVIL_T2T dataset
+```
+
+These are logged in `unmatched_files` array of output JSON.
+
+---
+
 # Next Steps
 
 1. Integrate into Terra Data Repository ingest pipeline
