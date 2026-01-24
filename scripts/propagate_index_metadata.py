@@ -15,7 +15,7 @@ from pathlib import Path
 INDEX_TO_PARENT = {
     ".bai": [".bam"],
     ".tbi": [".vcf.gz", ".bed.gz", ".txt.gz", ".tsv.gz", ".gff.gz", ".gtf.gz"],
-    ".csi": [".vcf.gz", ".bcf"],
+    ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
 }
@@ -130,7 +130,8 @@ def propagate_to_index_files(
 
     # Find index files and match to parents
     results = []
-    stats = defaultdict(lambda: {"total": 0, "matched": 0, "with_modality": 0, "with_ref": 0})
+    unmatched = []  # Track failed lookups
+    stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "with_modality": 0, "with_ref": 0})
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -162,6 +163,19 @@ def propagate_to_index_files(
                     break
 
             if not parent_md5:
+                # Track the failure with diagnostic info
+                stats[index_ext]["unmatched"] += 1
+                unmatched.append({
+                    "file_name": name,
+                    "file_format": fmt,
+                    "file_md5sum": f.get("file_md5sum"),
+                    "entry_id": f.get("entry_id"),
+                    "dataset_id": ds,
+                    "dataset_title": f.get("dataset_title"),
+                    "index_extension": index_ext,
+                    "candidates_tried": parent_candidates,
+                    "reason": "no_matching_parent_in_dataset",
+                })
                 continue
 
             stats[index_ext]["matched"] += 1
@@ -198,6 +212,7 @@ def propagate_to_index_files(
 
     total_all = 0
     matched_all = 0
+    unmatched_all = 0
     modality_all = 0
     ref_all = 0
 
@@ -205,16 +220,19 @@ def propagate_to_index_files(
         s = stats[ext]
         if s["total"] > 0:
             match_pct = s["matched"] / s["total"] * 100
+            unmatch_pct = s["unmatched"] / s["total"] * 100
             mod_pct = s["with_modality"] / s["total"] * 100 if s["total"] > 0 else 0
             ref_pct = s["with_ref"] / s["total"] * 100 if s["total"] > 0 else 0
             print(f"\n{ext}:")
             print(f"  Total:              {s['total']:>7,}")
             print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
+            print(f"  Unmatched:          {s['unmatched']:>7,} ({unmatch_pct:.1f}%)")
             print(f"  With data_modality: {s['with_modality']:>7,} ({mod_pct:.1f}%)")
             print(f"  With reference:     {s['with_ref']:>7,} ({ref_pct:.1f}%)")
 
             total_all += s["total"]
             matched_all += s["matched"]
+            unmatched_all += s["unmatched"]
             modality_all += s["with_modality"]
             ref_all += s["with_ref"]
 
@@ -222,9 +240,18 @@ def propagate_to_index_files(
     print(f"TOTAL:")
     print(f"  Index files:        {total_all:>7,}")
     print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
+    print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all/total_all*100:.1f}%)")
     print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
     print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
     print("=" * 70)
+
+    # Print sample of unmatched files for diagnostics
+    if unmatched:
+        print(f"\nSample unmatched index files (showing up to 10):")
+        for u in unmatched[:10]:
+            print(f"  {u['file_name']}")
+            print(f"    Dataset: {u['dataset_id']}")
+            print(f"    Tried: {u['candidates_tried']}")
 
     # Save results in same format as other classification outputs
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,14 +287,16 @@ def propagate_to_index_files(
             "metadata": {
                 "total_index_files": total_all,
                 "matched_to_parent": matched_all,
+                "unmatched": unmatched_all,
                 "with_data_modality": modality_all,
                 "with_reference_assembly": ref_all,
                 "complete": True,
             },
             "classifications": standard_results,
+            "unmatched_files": unmatched,
         }, f, indent=2)
 
-    print(f"\nSaved {len(standard_results):,} index file classifications to {output_path}")
+    print(f"\nSaved {len(standard_results):,} matched + {len(unmatched):,} unmatched index files to {output_path}")
 
 
 def main():

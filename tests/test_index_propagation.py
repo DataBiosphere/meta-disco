@@ -48,6 +48,12 @@ class TestParentCandidateGeneration:
         candidates = get_parent_candidates("movie.subreads.bam.pbi", ".pbi")
         assert "movie.subreads.bam" in candidates
 
+    def test_csi_bed_gz(self):
+        """CSI index for BED.gz should find BED.gz parent."""
+        candidates = get_parent_candidates("HG03652.regions.bed.gz.csi", ".csi")
+        assert "HG03652.regions.bed.gz" in candidates
+        assert len(candidates) == 1
+
     def test_pattern2_replacement(self):
         """Pattern 2: index extension replaces parent (rare case)."""
         # sample.bai -> sample.bam (no .bam in original name)
@@ -99,6 +105,11 @@ class TestIndexToParentMapping:
         """CSI should support VCF."""
         csi_exts = INDEX_TO_PARENT[".csi"]
         assert ".vcf.gz" in csi_exts
+
+    def test_csi_has_bed_gz(self):
+        """CSI should support BED.gz files."""
+        csi_exts = INDEX_TO_PARENT[".csi"]
+        assert ".bed.gz" in csi_exts
 
     def test_no_bare_gz(self):
         """Should not have bare .gz as a parent extension."""
