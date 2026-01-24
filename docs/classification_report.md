@@ -669,12 +669,20 @@ Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs
 2. **Archive reformatting**: Some SRA/ENA files lose original metadata
 3. **Mixed-content files**: Cannot detect if BAM contains both DNA and RNA
 4. **Non-standard contig names**: Some files use custom contig naming that doesn't match standard assemblies
+5. **Confidence uses max() not additive**: When multiple rules converge, confidence is the maximum single-rule score rather than boosted for agreement. Documentation describes "+5% per converging pair" but this is not implemented.
+6. **N/A classifications lack semantic distinction**: Files with `data_modality: null` include both "derived artifacts" (PNG plots, assembly QC BEDs) and "pre-processing data" (FAST5 raw signal). These have different meanings but identical output representation.
 
 ### 6.2 Planned Improvements
 
 1. Implement study-level context propagation
 2. Add support for additional file types (10X, spatial transcriptomics)
 3. Machine learning model for ambiguous cases
+4. **Convergent signal confidence boost**: Implement additive confidence adjustment when multiple independent rules agree on a classification, matching documented behavior
+5. **File category field using EDAM terms**: Add `file_category` to distinguish processing stages:
+   - `edam:data_3914` (Quality control report) for assembly QC BEDs
+   - `edam:data_2884` (Plot) for PNG visualizations
+   - `edam:data_2968` (Image) for histology images
+   - Custom `raw_signal` for FAST5 (no EDAM equivalent exists for pre-basecalled data)
 
 ---
 

@@ -265,4 +265,16 @@ T2T (CHM13) dominates — reflects modern HPRC data
 
 ---
 
+# Known Issues / Future Work
+
+**Confidence scoring**: Currently uses `max()` of matched rules. Could implement additive boost when multiple rules converge.
+
+**N/A file semantics**: Files with `null` modality include both:
+- Derived artifacts (PNG plots, assembly QC) → skip in search
+- Pre-processing data (FAST5 raw signal) → primary data
+
+**Proposed fix**: Add `file_category` field using [EDAM ontology](https://edamontology.org) terms where available (`data_3914` for QC reports, `data_2884` for plots).
+
+---
+
 _meta-disco classification system — January 2026_
