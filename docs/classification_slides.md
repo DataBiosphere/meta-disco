@@ -297,4 +297,4 @@ These are logged in `unmatched_files` array of output JSON.
 
 ---
 
-_meta-disco classification system — January 2026_
+_meta-disco classification system — 2026-01-24_
