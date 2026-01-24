@@ -1321,6 +1321,24 @@ FASTQ_ILLUMINA_RULES = [
         rationale="SRA-reformatted read names starting with @SRR typically indicate Illumina data "
                   "downloaded from NCBI SRA. Lower confidence as original platform info is lost."
     ),
+    FASTQHeaderRule(
+        id="fastq_illumina_ena_hiseq",
+        pattern=r"^@[EDS]RR\d+\.\d+ HS2[05]00",
+        classification="genomic",
+        platform="ILLUMINA",
+        confidence=0.90,
+        rationale="ENA/SRA-reformatted read names with HiSeq 2000/2500 instrument ID "
+                  "(HS2000/HS2500) in the description field. Format: @ERRxxxxxx.n HSxxxx-..."
+    ),
+    FASTQHeaderRule(
+        id="fastq_illumina_hiseq_desc",
+        pattern=r" HS2[05]00[-_]",
+        classification="genomic",
+        platform="ILLUMINA",
+        confidence=0.85,
+        rationale="HiSeq 2000/2500 instrument identifier (HS2000/HS2500) found in read "
+                  "description. Common in ENA/SRA-reformatted files from older Illumina runs."
+    ),
 ]
 
 # PacBio read name patterns

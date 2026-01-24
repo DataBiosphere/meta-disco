@@ -330,6 +330,27 @@ class TestFastqClassification:
         assert result["archive_accession"] == "SRR12345678"
         assert result["archive_source"] == "SRA"
 
+    def test_ena_hiseq_2000(self):
+        """Classify ENA-reformatted FASTQ with HiSeq 2000 instrument."""
+        reads = [
+            "@ERR1395578.1 HS2000-1260_220:1:1101:10000:10158/1",
+            "@ERR1395578.2 HS2000-1260_220:1:1101:10001:10159/1",
+        ]
+        result = classify_from_fastq_header(reads)
+        assert result["platform"] == "ILLUMINA"
+        assert result["data_modality"] == "genomic"
+        assert result["archive_accession"] == "ERR1395578"
+        assert result["confidence"] >= 0.85
+
+    def test_ena_hiseq_2500(self):
+        """Classify ENA-reformatted FASTQ with HiSeq 2500 instrument."""
+        reads = [
+            "@ERR9999999.1 HS2500-1234_100:2:1101:5000:5000/1",
+        ]
+        result = classify_from_fastq_header(reads)
+        assert result["platform"] == "ILLUMINA"
+        assert result["data_modality"] == "genomic"
+
     def test_pacbio_ccs(self):
         """Classify PacBio CCS/HiFi FASTQ."""
         reads = [
