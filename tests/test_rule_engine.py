@@ -211,6 +211,37 @@ class TestSignalTracks:
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
 
+class TestPeakFiles:
+    """Test peak file classification (narrowPeak, broadPeak, etc.)."""
+
+    def test_narrowpeak_chromatin_accessibility(self, engine):
+        """narrowPeak files should be epigenomic.chromatin_accessibility."""
+        result = engine.classify(FileInfo(filename="sample.narrowPeak"))
+        assert result.data_modality == "epigenomic.chromatin_accessibility"
+        assert result.confidence >= 0.85
+
+    def test_broadpeak_chromatin_accessibility(self, engine):
+        """broadPeak files should be epigenomic.chromatin_accessibility."""
+        result = engine.classify(FileInfo(filename="sample.broadPeak"))
+        assert result.data_modality == "epigenomic.chromatin_accessibility"
+
+    def test_peaks_bed_chromatin_accessibility(self, engine):
+        """BED files with 'peaks' should be epigenomic.chromatin_accessibility."""
+        result = engine.classify(FileInfo(filename="atac_peaks.bed"))
+        assert result.data_modality == "epigenomic.chromatin_accessibility"
+
+    def test_chip_peaks_histone_modification(self, engine):
+        """ChIP-seq peak files should be epigenomic.histone_modification."""
+        result = engine.classify(FileInfo(filename="H3K27ac_chip_peaks.bed"))
+        assert result.data_modality == "epigenomic.histone_modification"
+        assert result.confidence >= 0.90
+
+    def test_summit_bed_chromatin_accessibility(self, engine):
+        """Summit files should be epigenomic.chromatin_accessibility."""
+        result = engine.classify(FileInfo(filename="sample_summits.bed"))
+        assert result.data_modality == "epigenomic.chromatin_accessibility"
+
+
 class TestTextFiles:
     """Test text/tabular file classification."""
 

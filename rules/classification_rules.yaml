@@ -35,8 +35,8 @@ extension_map:
   # Genomic intervals/regions
   ".bed": intervals
   ".bed.gz": intervals
-  ".narrowPeak": intervals
-  ".broadPeak": intervals
+  ".narrowpeak": intervals
+  ".broadpeak": intervals
 
   # Signal tracks
   ".bigwig": signal
@@ -671,17 +671,31 @@ file_types:
     description: "Genomic interval files"
     default_modality: null
     chain:
-      # Peak files from ATAC/ChIP
+      # Peak files from ATAC/ChIP - default to chromatin accessibility
       - id: intervals_peaks
         when:
           filename_matches:
             - "(?i)peaks?"
             - "(?i)narrowPeak"
             - "(?i)broadPeak"
+            - "(?i)summit"
         then:
-          data_modality: epigenomic
-        confidence: 0.80
-        reason: "Peak file suggests epigenomic assay"
+          data_modality: epigenomic.chromatin_accessibility
+        confidence: 0.85
+        reason: "Peak file indicates chromatin accessibility (ATAC-seq/ChIP-seq)"
+        terminal: false  # continue to check for ChIP-specific indicators
+
+      # ChIP-seq histone peaks override to histone_modification
+      - id: intervals_chip_peaks
+        when:
+          filename_matches:
+            - "(?i)chip"
+            - "(?i)h3k"
+            - "(?i)histone"
+        then:
+          data_modality: epigenomic.histone_modification
+        confidence: 0.90
+        reason: "ChIP-seq histone modification peaks"
         terminal: true
 
       # Regions/targets
