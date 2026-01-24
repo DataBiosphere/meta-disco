@@ -43,18 +43,19 @@ MODALITY_RULES = [
         "rationale": "BED file contains ChIP-seq or ATAC-seq peak calls.",
     },
     {
+        "id": "bed_assembly_qc",
+        # Must be before bed_regions to catch hap1.regions.bed, etc.
+        "pattern": r"(\.hap[12]\.|\.paternal\.|\.maternal\.|\.dip\.bed|\.switch\.|flagger|\.lowQ\.|unreliable|issues\.bed|_genbank\.)",
+        "data_modality": None,  # Derived QC, not primary data
+        "confidence": 0.85,
+        "rationale": "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data.",
+    },
+    {
         "id": "bed_regions",
         "pattern": r"\.regions\.bed",
         "data_modality": "genomic",
         "confidence": 0.80,
         "rationale": "BED file contains genomic analysis regions (callable, target, etc.).",
-    },
-    {
-        "id": "bed_assembly_qc",
-        "pattern": r"(\.hap[12]\.|\.paternal\.|\\.maternal\.|\.dip\.bed|\.switch\.|flagger|\.lowQ\.|unreliable|issues\.bed|_genbank\.)",
-        "data_modality": None,  # Derived QC, not primary data
-        "confidence": 0.85,
-        "rationale": "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data.",
     },
 ]
 
