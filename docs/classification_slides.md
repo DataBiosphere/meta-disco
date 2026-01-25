@@ -10,13 +10,15 @@ style: |
 
 ## Deterministic Metadata Enrichment
 
+_POC using Open Access data from AWS Open Data Program (ODP)_
+
 ---
 
 <!-- _class: small -->
 
 # The Problem: Initial State
 
-**758,658 files** in AnVIL — almost no semantic metadata
+**758,658 Open Access files** in AnVIL — almost no semantic metadata
 
 | Field                  | Value              |   Files |         % |
 | ---------------------- | ------------------ | ------: | --------: |
@@ -29,7 +31,11 @@ style: |
 
 ---
 
-# Goals
+# POC Goals
+
+**Determine `data_modality`** — genomic, transcriptomic, epigenomic, imaging
+
+**Determine `reference_assembly`** — GRCh38, GRCh37, CHM13
 
 **100% Deterministic** — No LLMs, no ML, no AI
 
@@ -41,9 +47,32 @@ style: |
 
 ---
 
+# Data Modality Taxonomy
+
+Maps [EFO](https://www.ebi.ac.uk/efo/) terms to modalities identifiable in the data.
+
+```
+data_modality
+├── genomic
+│   ├── whole_genome
+│   ├── whole_exome
+│   ├── germline_variants
+│   ├── somatic_variants
+│   └── structural_variants
+├── transcriptomic
+│   ├── bulk
+│   └── single_cell
+├── epigenomic
+│   └── methylation
+└── imaging
+    └── histology
+```
+
+---
+
 <!-- _class: small -->
 
-# Progress So Far
+# File Classifcation Results
 
 ```
 758,658 total files
@@ -180,27 +209,6 @@ sample.cram.crai   →  inherits from sample.cram
 
 ---
 
-# Data Modality Taxonomy
-
-```
-data_modality
-├── genomic
-│   ├── whole_genome         (14,922 BAM/CRAM)
-│   ├── whole_exome
-│   ├── germline_variants    (158,858 VCF)
-│   ├── somatic_variants
-│   └── structural_variants  (45,227 VCF)
-├── transcriptomic           (1,413 BAM/CRAM)
-│   ├── bulk
-│   └── single_cell
-├── epigenomic
-│   └── methylation          (28 BED)
-└── imaging
-    └── histology            (25,708 SVS)
-```
-
----
-
 # Reference Assembly Results
 
 | Assembly |     VCF | BAM/CRAM |   Total |
@@ -260,13 +268,14 @@ T2T (CHM13) dominates — reflects modern HPRC data
 
 Classification surfaced data integrity problems in the source metadata:
 
-| Issue | Count | Description |
-| ----- | ----: | ----------- |
-| Orphaned indexes | 84 | Index files with no matching parent in dataset |
-| Missing parents | 48 | `.csi` indexes for VCFs that don't exist |
-| Cross-dataset refs | 32 | `.pbi` indexes referencing other datasets |
+| Issue              | Count | Description                                    |
+| ------------------ | ----: | ---------------------------------------------- |
+| Orphaned indexes   |    84 | Index files with no matching parent in dataset |
+| Missing parents    |    48 | `.csi` indexes for VCFs that don't exist       |
+| Cross-dataset refs |    32 | `.pbi` indexes referencing other datasets      |
 
 **Example orphaned file:**
+
 ```
 1kgp.chr8...Homo_sapiens_assembly38.liftover.vcf.gz.csi
   → Parent VCF not found in ANVIL_T2T dataset
@@ -280,12 +289,12 @@ These are logged in `unmatched_files` array of output JSON.
 
 Cross-referenced FASTQ classifications against European Nucleotide Archive metadata.
 
-| Metric            | Result              |
-| ----------------- | ------------------- |
-| Files validated   | **6,960**           |
-| Platform accuracy | **100%** (6960/6960)|
-| Modality accuracy | **100%** (6960/6960)|
-| API errors        | 2 (0.03%)           |
+| Metric            | Result               |
+| ----------------- | -------------------- |
+| Files validated   | **6,960**            |
+| Platform accuracy | **100%** (6960/6960) |
+| Modality accuracy | **100%** (6960/6960) |
+| API errors        | 2 (0.03%)            |
 
 **Methodology**: Extract archive accession from read names (`@ERRxxxxxx`), query ENA API for `instrument_platform` and `library_source/strategy`, compare to our classifications.
 
@@ -297,12 +306,12 @@ Cross-referenced FASTQ classifications against European Nucleotide Archive metad
 
 Cross-referenced BAM/CRAM/FASTQ classifications against IGSR metadata.
 
-| Metric            | Result                  |
-| ----------------- | ----------------------- |
-| Samples validated | **3,208**               |
-| Files validated   | **14,780**              |
-| Platform accuracy | **99.95%** (12877/12883)|
-| Modality accuracy | **100%** (14160/14160)  |
+| Metric            | Result                   |
+| ----------------- | ------------------------ |
+| Samples validated | **3,208**                |
+| Files validated   | **14,780**               |
+| Platform accuracy | **99.95%** (12877/12883) |
+| Modality accuracy | **100%** (14160/14160)   |
 
 6 platform mismatches: ONT files for samples IGSR only lists as PacBio/Illumina (incomplete IGSR metadata).
 
@@ -312,11 +321,11 @@ Cross-referenced BAM/CRAM/FASTQ classifications against IGSR metadata.
 
 Validated internal chromosome length mappings against Ensembl REST API.
 
-| Assembly | Status | Chromosomes Checked |
-| -------- | ------ | ------------------- |
-| GRCh38   | ✓ Valid | 5 (chr1,2,3,10,22) |
-| GRCh37   | ✓ Valid | 5 (chr1,2,3,10,22) |
-| CHM13    | ✓ Valid | 5 (chr1,2,3,10,22) |
+| Assembly | Status  | Chromosomes Checked |
+| -------- | ------- | ------------------- |
+| GRCh38   | ✓ Valid | 5 (chr1,2,3,10,22)  |
+| GRCh37   | ✓ Valid | 5 (chr1,2,3,10,22)  |
+| CHM13    | ✓ Valid | 5 (chr1,2,3,10,22)  |
 
 **Files with reference classification:** 213,388 (VCF + BAM)
 
@@ -326,10 +335,10 @@ Validated internal chromosome length mappings against Ensembl REST API.
 
 Cross-referenced platform classifications against HPRC GitHub indexes.
 
-| Metric            | Result                |
-| ----------------- | --------------------- |
-| Raw data files    | **2,538**             |
-| Platform accuracy | **93.10%** (2363/2538)|
+| Metric            | Result                 |
+| ----------------- | ---------------------- |
+| Raw data files    | **2,538**              |
+| Platform accuracy | **93.10%** (2363/2538) |
 
 Mismatches are primarily assembled outputs (`hifiasm_*.bam`) from different data releases than the index covers.
 
@@ -337,12 +346,12 @@ Mismatches are primarily assembled outputs (`hifiasm_*.bam`) from different data
 
 # Validation Summary
 
-| Source       |  Files | Platform   | Modality   | Ref Assembly |
-| ------------ | -----: | ---------- | ---------- | ------------ |
-| ENA          |  6,960 | **100%**   | **100%**   | —            |
-| 1000 Genomes | 14,780 | **99.95%** | **100%**   | —            |
-| HPRC         |  2,538 | **93.10%** | —          | —            |
-| Ensembl      | 213,388| —          | —          | **100%**     |
+| Source       |   Files | Platform   | Modality | Ref Assembly |
+| ------------ | ------: | ---------- | -------- | ------------ |
+| ENA          |   6,960 | **100%**   | **100%** | —            |
+| 1000 Genomes |  14,780 | **99.95%** | **100%** | —            |
+| HPRC         |   2,538 | **93.10%** | —        | —            |
+| Ensembl      | 213,388 | —          | —        | **100%**     |
 
 → Classifications validated against four independent ground-truth sources
 
@@ -362,6 +371,7 @@ Mismatches are primarily assembled outputs (`hifiasm_*.bam`) from different data
 **Confidence scoring**: Currently uses `max()` of matched rules. Could implement additive boost when multiple rules converge.
 
 **N/A file semantics**: Files with `null` modality include both:
+
 - Derived artifacts (PNG plots, assembly QC) → skip in search
 - Pre-processing data (FAST5 raw signal) → primary data
 
