@@ -25,6 +25,20 @@ AUXILIARY_RULES = {
         "confidence": 0.90,
         "rationale": "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5).",
     },
+    ".fast5.tar": {
+        "data_modality": "genomic",
+        "platform": "ONT",
+        "reference_assembly": None,
+        "confidence": 0.90,
+        "rationale": "Tarball of FAST5 files containing raw Oxford Nanopore signal data. Archived to reduce file count.",
+    },
+    ".fast5.tar.gz": {
+        "data_modality": "genomic",
+        "platform": "ONT",
+        "reference_assembly": None,
+        "confidence": 0.90,
+        "rationale": "Compressed tarball of FAST5 files containing raw Oxford Nanopore signal data.",
+    },
     ".pvar": {
         "data_modality": "genomic.germline_variants",
         "reference_assembly": None,  # Set by dataset rule below
