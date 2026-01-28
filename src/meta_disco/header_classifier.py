@@ -198,8 +198,16 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
     """
     name = read_name.lstrip("@")
 
-    # CCS format: m64011_190830_220126/1/ccs
-    ccs_pattern = re.compile(r"^(m\d+[_e]?\d*_\d+_\d+)/(\d+)/ccs$")
+    # PacBio movie ID pattern: m{instrument}_{date}_{time}
+    # Instrument IDs include:
+    #   m64011   - Sequel
+    #   m54329U  - Sequel II (U suffix)
+    #   m54306Ue - Sequel IIe (Ue suffix)
+    #   m84046   - Revio
+    MOVIE_PATTERN = r"m\d+[A-Za-z]*_\d+_\d+"
+
+    # CCS format: m64011_190830_220126/1/ccs or m54329U_220116_013607/102/ccs
+    ccs_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)/ccs$")
     match = ccs_pattern.match(name)
     if match:
         return {
@@ -210,7 +218,7 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
         }
 
     # CLR (subread) format: m64011_190830_220126/1234/0_5000
-    clr_pattern = re.compile(r"^(m\d+[_e]?\d*_\d+_\d+)/(\d+)/(\d+)_(\d+)$")
+    clr_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)/(\d+)_(\d+)$")
     match = clr_pattern.match(name)
     if match:
         return {
@@ -223,7 +231,7 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
         }
 
     # Generic PacBio: m64011_190830_220126/1234
-    generic_pattern = re.compile(r"^(m\d+[_e]?\d*_\d+_\d+)/(\d+)$")
+    generic_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)$")
     match = generic_pattern.match(name)
     if match:
         return {
@@ -1342,10 +1350,15 @@ FASTQ_ILLUMINA_RULES = [
 ]
 
 # PacBio read name patterns
+# Movie ID format: m{instrument}_{date}_{time} where instrument can have letter suffixes:
+#   m64011   - Sequel
+#   m54329U  - Sequel II (U suffix)
+#   m54306Ue - Sequel IIe (Ue suffix)
+#   m84046   - Revio
 FASTQ_PACBIO_RULES = [
     FASTQHeaderRule(
         id="fastq_pacbio_ccs",
-        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+/ccs",
+        pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+/ccs",
         classification="genomic.whole_genome",
         platform="PACBIO",
         confidence=0.95,
@@ -1355,7 +1368,7 @@ FASTQ_PACBIO_RULES = [
     ),
     FASTQHeaderRule(
         id="fastq_pacbio_clr",
-        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+/\d+_\d+",
+        pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+/\d+_\d+",
         classification="genomic.whole_genome",
         platform="PACBIO",
         confidence=0.90,
@@ -1364,7 +1377,7 @@ FASTQ_PACBIO_RULES = [
     ),
     FASTQHeaderRule(
         id="fastq_pacbio_generic",
-        pattern=r"^@m\d+[_e]?\d*_\d+_\d+/\d+",
+        pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+",
         classification="genomic.whole_genome",
         platform="PACBIO",
         confidence=0.85,

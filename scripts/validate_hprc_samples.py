@@ -2,7 +2,10 @@
 """Validate classifications against HPRC metadata.
 
 Cross-references our platform classifications with the official HPRC
-sample metadata from GitHub.
+sequencing data catalog from the hprc-data-explorer repository.
+
+This uses file-level validation (matching by filename) rather than
+sample-level validation, providing accurate ground truth.
 
 Usage:
     python scripts/validate_hprc_samples.py
@@ -12,81 +15,67 @@ Output saved to: output/hprc_validation_results.json
 """
 
 import argparse
-import csv
-import io
 import json
-import re
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import requests
 
-HPRC_BASE_URL = "https://raw.githubusercontent.com/human-pangenomics/hprc_intermediate_assembly/main/data_tables/sequencing_data"
+# HPRC Data Explorer catalog - comprehensive file-level metadata
+HPRC_SEQUENCING_DATA_URL = (
+    "https://raw.githubusercontent.com/human-pangenomics/hprc-data-explorer/"
+    "main/catalog/output/sequencing-data.json"
+)
 
-# Platform-specific index files
-HPRC_PLATFORM_INDEXES = {
-    "PACBIO": f"{HPRC_BASE_URL}/data_hifi_pre_release.index.csv",
-    "ONT": f"{HPRC_BASE_URL}/data_ont_pre_release.index.csv",
-    "ILLUMINA": f"{HPRC_BASE_URL}/data_illumina_pre_release.index.csv",
+# Platform name normalization: HPRC uses different naming conventions
+PLATFORM_MAP = {
+    "PACBIO_SMRT": "PACBIO",
+    "OXFORD_NANOPORE": "ONT",
+    "ILLUMINA": "ILLUMINA",
 }
 
 
-def fetch_hprc_metadata() -> dict[str, set[str]]:
-    """Fetch HPRC sample metadata from GitHub.
+def fetch_hprc_catalog() -> dict[str, dict]:
+    """Fetch HPRC sequencing data catalog from GitHub.
 
-    Returns dict mapping sample_id -> set of available platforms.
+    Returns dict mapping filename -> {platform, instrumentModel, sampleId, ...}
     """
-    print("Fetching HPRC metadata from GitHub...", flush=True)
-    sample_platforms = defaultdict(set)
+    print("Fetching HPRC sequencing data catalog...", flush=True)
 
-    for platform, url in HPRC_PLATFORM_INDEXES.items():
-        try:
-            print(f"  Fetching {platform} index...", end=" ", flush=True)
-            resp = requests.get(url, timeout=30)
-            if resp.status_code != 200:
-                print(f"failed (HTTP {resp.status_code})")
-                continue
+    try:
+        resp = requests.get(HPRC_SEQUENCING_DATA_URL, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        print(f"  Error fetching catalog: {e}")
+        return {}
 
-            # Remove BOM if present
-            text = resp.text.lstrip('\ufeff')
-            reader = csv.DictReader(io.StringIO(text))
+    # Build filename -> metadata lookup
+    catalog = {}
+    for record in data:
+        filename = record.get("filename", "")
+        if not filename:
+            continue
 
-            count = 0
-            for row in reader:
-                # Try different column names for sample ID
-                sample_id = (
-                    row.get("sample_ID") or
-                    row.get("sample_id") or
-                    row.get("sample") or
-                    ""
-                ).strip()
-                if sample_id:
-                    sample_platforms[sample_id].add(platform)
-                    count += 1
+        hprc_platform = record.get("platform", "")
+        normalized_platform = PLATFORM_MAP.get(hprc_platform, hprc_platform)
 
-            print(f"{count} entries")
+        catalog[filename] = {
+            "platform": normalized_platform,
+            "hprc_platform": hprc_platform,
+            "instrumentModel": record.get("instrumentModel"),
+            "sampleId": record.get("sampleId"),
+            "accession": record.get("accession"),
+            "libraryStrategy": record.get("libraryStrategy"),
+        }
 
-        except Exception as e:
-            print(f"error: {e}")
+    # Summary
+    platforms = Counter(v["platform"] for v in catalog.values())
+    print(f"  Loaded {len(catalog):,} files from HPRC catalog")
+    print(f"  Platforms: {dict(platforms)}")
 
-    print(f"  Total: {len(sample_platforms)} unique samples")
-    return dict(sample_platforms)
-
-
-def extract_sample_id(filename: str) -> str | None:
-    """Extract HPRC sample ID from filename."""
-    # Match HG/NA followed by 5 digits, or specific HPRC samples
-    match = re.search(r"\b((?:NA|HG)\d{5})\b", filename)
-    if match:
-        return match.group(1)
-
-    # Also match CHM13, HG002, HG003, etc (shorter IDs)
-    match = re.search(r"\b((?:HG|NA)\d{3})\b", filename)
-    if match:
-        return match.group(1)
-
-    return None
+    return catalog
 
 
 def validate_against_hprc(
@@ -94,18 +83,19 @@ def validate_against_hprc(
     output_path: Path,
     limit: int | None = None,
 ):
-    """Validate classifications against HPRC metadata."""
+    """Validate classifications against HPRC catalog using file-level matching."""
 
-    # Fetch HPRC metadata
-    hprc_metadata = fetch_hprc_metadata()
-    if not hprc_metadata:
-        print("Failed to fetch HPRC metadata, aborting")
+    # Fetch HPRC catalog
+    hprc_catalog = fetch_hprc_catalog()
+    if not hprc_catalog:
+        print("Failed to fetch HPRC catalog, aborting")
         return
 
     # Load our classifications
     all_classifications = []
     for input_path in input_paths:
         if not input_path.exists():
+            print(f"  Skipping {input_path} (not found)")
             continue
         print(f"Loading {input_path}...", flush=True)
         with open(input_path) as f:
@@ -113,93 +103,56 @@ def validate_against_hprc(
         classifications = data.get("classifications", data)
         all_classifications.extend(classifications)
 
-    # Filter to HPRC files (by dataset or sample ID)
-    hprc_files = []
+    print(f"Loaded {len(all_classifications):,} total classifications")
+
+    # Match our files against HPRC catalog by filename
+    matched_files = []
     for c in all_classifications:
-        orig = c.get("original_record", {})
-        dataset = orig.get("dataset_title", "")
         filename = c.get("file_name", "")
+        if filename in hprc_catalog:
+            c["hprc_metadata"] = hprc_catalog[filename]
+            matched_files.append(c)
 
-        # Check if HPRC dataset
-        is_hprc = "HPRC" in dataset.upper() or "T2T" in dataset.upper()
-
-        # Or if sample ID matches HPRC samples
-        sample_id = extract_sample_id(filename)
-        if sample_id and sample_id in hprc_metadata:
-            is_hprc = True
-            c["sample_id"] = sample_id
-
-        if is_hprc and sample_id:
-            hprc_files.append(c)
-
-    print(f"\nFound {len(hprc_files):,} HPRC files with sample IDs")
+    print(f"Matched {len(matched_files):,} files against HPRC catalog")
 
     if limit:
-        hprc_files = hprc_files[:limit]
+        matched_files = matched_files[:limit]
         print(f"Limiting to {limit} files")
 
-    # Separate raw data files from aligned files
-    raw_data_files = []
-    aligned_files = []
-    for c in hprc_files:
-        filename = c.get("file_name", "").lower()
-        # Raw data: HiFi BAM, FASTQ, FAST5
-        if filename.endswith((".fastq.gz", ".fq.gz", ".fast5", ".pod5")):
-            raw_data_files.append(c)
-        elif ".hifi_reads.bam" in filename or ".ccs.bam" in filename:
-            raw_data_files.append(c)
-        elif filename.endswith(".cram"):
-            aligned_files.append(c)
-        else:
-            raw_data_files.append(c)  # Default to raw
-
-    print(f"  Raw data files: {len(raw_data_files):,}")
-    print(f"  Aligned files (CRAM): {len(aligned_files):,}")
-
-    # Validate only raw data files (HPRC index tracks raw data platforms)
-    hprc_files = raw_data_files
-
-    # Validate
+    # Validate platforms
     results = {
         "platform_match": 0,
         "platform_mismatch": 0,
         "platform_unknown": 0,  # We don't have a classification
-        "sample_not_in_hprc": 0,
-        "total_validated": 0,
-        "aligned_files_skipped": len(aligned_files),
+        "total_validated": len(matched_files),
     }
     mismatches = []
-    sample_stats = defaultdict(lambda: {"files": 0, "matched": 0})
+    matches_by_platform = Counter()
 
-    print("\nValidating raw data files only (HPRC index tracks raw data)...", flush=True)
+    print("\nValidating platform classifications...", flush=True)
 
-    for c in hprc_files:
-        sample_id = c.get("sample_id")
-        our_platform = (c.get("platform") or "").upper()
+    for c in matched_files:
         filename = c.get("file_name", "")
-
-        if sample_id not in hprc_metadata:
-            results["sample_not_in_hprc"] += 1
-            continue
-
-        results["total_validated"] += 1
-        expected_platforms = hprc_metadata[sample_id]
-        sample_stats[sample_id]["files"] += 1
+        our_platform = (c.get("platform") or "").upper()
+        hprc_meta = c["hprc_metadata"]
+        expected_platform = hprc_meta["platform"]
 
         if not our_platform:
             results["platform_unknown"] += 1
             continue
 
-        if our_platform in expected_platforms:
+        if our_platform == expected_platform:
             results["platform_match"] += 1
-            sample_stats[sample_id]["matched"] += 1
+            matches_by_platform[expected_platform] += 1
         else:
             results["platform_mismatch"] += 1
             mismatches.append({
-                "sample_id": sample_id,
                 "file": filename,
+                "sampleId": hprc_meta.get("sampleId"),
                 "ours": our_platform,
-                "expected": list(expected_platforms),
+                "expected": expected_platform,
+                "hprc_instrument": hprc_meta.get("instrumentModel"),
+                "our_instrument": c.get("instrument_model"),
             })
 
     # Summary
@@ -207,11 +160,10 @@ def validate_against_hprc(
 
     print()
     print("=" * 60)
-    print("HPRC VALIDATION RESULTS")
+    print("HPRC VALIDATION RESULTS (File-Level)")
     print("=" * 60)
-    print(f"Total HPRC files:         {len(hprc_files):,}")
-    print(f"With sample in HPRC:      {results['total_validated']:,}")
-    print(f"Sample not in HPRC index: {results['sample_not_in_hprc']:,}")
+    print(f"HPRC catalog files:       {len(hprc_catalog):,}")
+    print(f"Our files matched:        {len(matched_files):,}")
     print()
 
     if validated > 0:
@@ -221,16 +173,24 @@ def validate_against_hprc(
     if results["platform_unknown"] > 0:
         print(f"No platform classification: {results['platform_unknown']:,}")
 
+    # Breakdown by platform
+    print("\nMatches by platform:")
+    for plat, count in matches_by_platform.most_common():
+        print(f"  {plat}: {count:,}")
+
     if results["platform_mismatch"] > 0:
         print(f"\nMismatches: {results['platform_mismatch']:,}")
         print("Sample mismatches (first 10):")
         for m in mismatches[:10]:
-            print(f"  {m['sample_id']}: ours={m['ours']} vs expected={m['expected']}")
-            print(f"    File: {m['file'][:60]}...")
+            print(f"  {m['file'][:50]}...")
+            print(f"    ours={m['ours']} vs expected={m['expected']}")
+            print(f"    HPRC instrument: {m['hprc_instrument']}")
+            if m.get("our_instrument"):
+                print(f"    Our instrument:  {m['our_instrument']}")
 
-    # Platform distribution in our data
-    print("\nOur platform distribution for HPRC files:")
-    platform_counts = Counter(c.get("platform") or "null" for c in hprc_files)
+    # Platform distribution in our matched data
+    print("\nOur platform distribution for matched files:")
+    platform_counts = Counter(c.get("platform") or "(none)" for c in matched_files)
     for plat, count in platform_counts.most_common():
         print(f"  {plat}: {count:,}")
 
@@ -241,12 +201,14 @@ def validate_against_hprc(
     with open(output_path, "w") as f:
         json.dump({
             "metadata": {
-                "total_hprc_files": len(hprc_files),
-                "samples_in_index": len(hprc_metadata),
-                "validated": results["total_validated"],
+                "hprc_catalog_files": len(hprc_catalog),
+                "matched_files": len(matched_files),
+                "validated": validated,
+                "source": HPRC_SEQUENCING_DATA_URL,
             },
             "results": results,
-            "mismatches": mismatches[:100],
+            "matches_by_platform": dict(matches_by_platform),
+            "mismatches": mismatches,
         }, f, indent=2)
 
     print(f"\nResults saved to: {output_path}")
@@ -255,7 +217,7 @@ def validate_against_hprc(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate classifications against HPRC metadata"
+        description="Validate classifications against HPRC sequencing data catalog"
     )
     parser.add_argument(
         "--input", "-i",
