@@ -13,9 +13,17 @@ from pathlib import Path
 AUXILIARY_RULES = {
     ".fast5": {
         "data_modality": "genomic",
+        "platform": "ONT",
         "reference_assembly": None,  # Raw signal data, pre-basecalling
         "confidence": 0.90,
-        "rationale": "FAST5 files contain raw ONT electrical signal data. Reference not applicable until basecalling/alignment.",
+        "rationale": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment.",
+    },
+    ".pod5": {
+        "data_modality": "genomic",
+        "platform": "ONT",
+        "reference_assembly": None,  # Raw signal data, pre-basecalling
+        "confidence": 0.90,
+        "rationale": "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5).",
     },
     ".pvar": {
         "data_modality": "genomic.germline_variants",
@@ -74,6 +82,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
 
                 # Start with base rule
                 data_modality = rule["data_modality"]
+                platform = rule.get("platform")
                 reference_assembly = rule["reference_assembly"]
                 confidence = rule["confidence"]
                 evidence = [{
@@ -109,6 +118,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                     "dataset_id": f.get("dataset_id"),
                     "dataset_title": dataset_title,
                     "data_modality": data_modality,
+                    "platform": platform,
                     "reference_assembly": reference_assembly,
                     "confidence": confidence,
                     "matched_rules": [e["rule_id"] for e in evidence],
