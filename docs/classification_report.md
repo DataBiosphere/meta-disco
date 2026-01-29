@@ -605,7 +605,7 @@ Image files are classified by extension using domain-specific rules.
 - **SVS files**: Aperio whole-slide histology images used for pathology analysis. All from GTEx public dataset containing tissue slide images.
 - **PNG files**: Derived visualizations (QC plots, assembly graphs) - not primary experimental data. Excluded from `data_modality` assignment as they are derived artifacts, not primary data files.
 
-**Implementation**: `scripts/classify_images.py`
+**Implementation**: `scripts/classify_images.py` (rules in `rules/unified_rules.yaml`)
 
 ### 5.7 Auxiliary Genomic File Classification Results
 
@@ -627,7 +627,7 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 - **FAST5**: Extension-based. Raw nanopore signal data from ANVIL_NIA_CARD_Coriell_Cell_Lines_Open dataset.
 - **PLINK**: Extension-based modality + dataset-based reference. All from ANVIL_1000G_PRIMED_data_model (1000 Genomes Project uses GRCh38).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py`
+**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `rules/unified_rules.yaml`)
 
 ### 5.8 BED File Classification Results
 
@@ -659,7 +659,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs marked as N/A.
 
-**Implementation**: `scripts/classify_bed_files.py`
+**Implementation**: `scripts/classify_bed_files.py` (rules in `rules/unified_rules.yaml`)
 
 ---
 
@@ -734,22 +734,28 @@ Result: Parent VCF not found in dataset
 
 ## Appendix A: Rule Statistics
 
+All rules are defined in `rules/unified_rules.yaml`.
+
 | Category                 | Rule Count |
 | ------------------------ | ---------- |
-| BAM/CRAM platform rules  | 8          |
-| BAM/CRAM program rules   | 15         |
-| BAM/CRAM reference rules | 6          |
-| VCF reference rules      | 8          |
-| VCF caller rules         | 27         |
-| FASTQ platform rules     | 16         |
-| FASTQ archive rules      | 3          |
-| Consistency rules        | 12         |
-| File size rules          | 8          |
-| Index inheritance rules  | 5          |
-| Image extension rules    | 2          |
-| Auxiliary genomic rules  | 5          |
-| BED pattern rules        | 8          |
-| **Total**                | **123**    |
+| Alignment (BAM/CRAM)     | 18         |
+| VCF variant callers      | 25         |
+| FASTQ platform detection | 15         |
+| Header/program rules     | 15         |
+| Reference detection      | 12         |
+| BED patterns             | 7          |
+| Image files              | 5          |
+| File size heuristics     | 8          |
+| Index/skip rules         | 5          |
+| Single-cell formats      | 4          |
+| Signal tracks (BigWig)   | 4          |
+| Dataset context          | 4          |
+| Intervals (targets)      | 3          |
+| Auxiliary (PLINK/IDAT)   | 4          |
+| Text/log/checksum        | 4          |
+| Archive files            | 2          |
+| Other                    | 12         |
+| **Total**                | **147**    |
 
 ---
 
