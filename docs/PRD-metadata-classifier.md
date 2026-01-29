@@ -1,13 +1,15 @@
 # PRD: AnVIL File Metadata Classifier
 
-**Version:** 0.1 (Draft)
-**Date:** 2025-01-21
+**Version:** 0.2 (Draft)
+**Date:** 2025-01-28
 **Status:** Exploration/Spike
 
 ## 1. Problem Statement
 
 The AnVIL Explorer (explore.anvilproject.org) hosts 2.6M+ biological data files. Many files have incomplete, missing, or potentially incorrect metadata for:
-- **Data modality** (genomic, transcriptomic, epigenomic, proteomic, etc.)
+- **Data modality** (genomic, transcriptomic, epigenomic, etc.)
+- **Data type** (reads, alignments, variant_calls, peaks, etc.)
+- **Platform** (ILLUMINA, PACBIO, ONT)
 - **Reference assembly** (GRCh38, GRCh37, CHM13, etc.)
 
 This limits researchers' ability to discover and filter datasets effectively.
@@ -114,10 +116,10 @@ Many files contain reference hints in filename but have NULL metadata:
 
 Build a hierarchical, primarily deterministic classifier that:
 
-1. **Classifies files** by data modality and reference assembly
-2. **Fills gaps** in missing metadata
+1. **Classifies files** by data modality, data type, platform, and reference assembly
+2. **Fills gaps** in missing metadata (99%+ of files lack these fields)
 3. **Validates/corrects** potentially incorrect existing values
-4. **Expands vocabulary** to support richer modality classifications
+4. **Uses file inspection** (headers, extensions, filenames) to infer metadata
 5. **Provides explainable, traceable rationale** for every classification
 6. **Produces defensible confidence scores** for each call
 
@@ -145,48 +147,86 @@ Build a hierarchical, primarily deterministic classifier that:
 - **Source**: Manually labeled by domain expert
 - **Format**: Ground truth annotations for modality + reference assembly
 
-## 5. Data Modality Ontology
+## 5. Metadata Schema
 
-### 5.1 Ontology Evaluation
+### 5.1 Overview
 
-We evaluated several ontologies for data modality classification:
+We define **6 orthogonal dimensions** for file classification. Each dimension answers a different question:
 
-| Ontology | Pros | Cons | Recommendation |
-|----------|------|------|----------------|
-| **[EFO](https://www.ebi.ac.uk/efo/)** (Experimental Factor Ontology) | Widely adopted (GWAS, Gene Expression Atlas), rich assay types, EBI-maintained | Large, complex hierarchy | **Preferred** - map to subset |
-| **[EDAM](https://edamontology.org/)** | Clean 4-branch structure (Topic, Operation, Data, Format), ~3500 terms | Focused on bioinformatics operations more than experimental modalities | Consider for file format classification |
-| **[OBI](https://obi-ontology.org/)** (Ontology for Biomedical Investigations) | Rigorous assay definitions, BFO-aligned | Academic-focused, steep learning curve | Reference for definitions |
-| **[MODAL](https://github.com/broadinstitute/modal)** | Purpose-built for data modality, Broad-maintained | Very new (Feb 2025), minimal adoption | Monitor for future |
+| Dimension | Question | Multiplicity | Inferability |
+|-----------|----------|--------------|--------------|
+| `data_modality` | What biology is measured? | 1 | Medium |
+| `data_type` | What artifact do I have? | 1 | High |
+| `platform` | What sequencing instrument? | 0..1 | High |
+| `reference_assembly` | What reference genome? | 0..1 | High |
+| `file_format` | How is it stored? | 1 | Trivial |
+| `assay_type` | What method class? (v2) | 0..1 | Low |
 
-### 5.2 Proposed Modality Hierarchy
+**V1 Scope**: We predict `data_modality`, `data_type`, `platform`, `reference_assembly`, and `file_format` from file inspection.
 
-The hierarchy reflects **what was measured** (the biological information captured), not **how it was measured** (the technology/protocol). This keeps the tree relatively shallow.
+**V2 Scope**: `assay_type` and `assay` (specific protocol) require external metadata and are deferred.
 
-Based on established [omics classifications](https://pmc.ncbi.nlm.nih.gov/articles/PMC6018996/):
+### 5.2 Data Modality
+
+**Definition**: The biological signal domain the information is about (independent of protocol and file format).
+
+The hierarchy reflects **what was measured** (the biological information captured), not **how it was measured** (the technology/protocol).
 
 ```
 data_modality
-├── genomic                # DNA sequence/variation
-│   ├── whole_genome       # WGS - complete genome
-│   ├── exome              # WES - coding regions only
-│   └── targeted           # panels, amplicons
-├── transcriptomic         # RNA expression
-│   ├── bulk               # population-level
-│   └── single_cell        # cell-level resolution
-├── epigenomic             # DNA/chromatin modifications
-│   ├── methylation        # DNA methylation state
+├── genomic                      # DNA sequence/variation
+├── transcriptomic               # RNA expression
+├── epigenomic                   # DNA/chromatin modifications
+│   ├── methylation              # DNA methylation state
 │   ├── chromatin_accessibility  # ATAC-seq, DNase-seq
 │   └── histone_modification     # ChIP-seq for histones
-├── proteomic              # protein abundance
-├── metabolomic            # small molecule abundance
-├── imaging                # visual/spatial data
-├── phenotypic             # clinical/phenotype data
-└── unknown                # needs manual classification
+├── proteomic                    # protein abundance
+├── metabolomic                  # small molecule abundance
+├── imaging                      # visual/spatial data
+│   └── histology                # tissue slides
+├── phenotypic                   # clinical/phenotype data
+└── unknown                      # needs manual classification
 ```
 
-Note: Depth is added only where the distinction reflects **different biological information**, not just different technologies. For example, bulk vs single-cell transcriptomics measure fundamentally different things (population average vs cell-level variation).
+### 5.3 Data Type
 
-### 5.3 Reference Assembly Enumeration
+**Definition**: The artifact/content class of the stored object—what you can download/open/analyze (independent of assay).
+
+```
+data_type
+├── reads                        # Raw sequencing reads (FASTQ)
+├── alignments                   # Aligned reads (BAM, CRAM)
+├── variant_calls                # SNV/indel calls (VCF)
+├── structural_variants          # SV calls (VCF)
+├── peaks                        # ChIP/ATAC peaks (BED, narrowPeak)
+├── signal_tracks                # Coverage/signal (bigWig)
+├── expression_matrix            # Gene/transcript counts
+├── methylation_calls            # CpG methylation levels
+├── assemblies                   # Genome assemblies (FASTA)
+├── annotations                  # Genomic annotations (GTF, GFF)
+├── raw_signal                   # Instrument signal (FAST5, POD5)
+├── images                       # Image files (SVS, PNG)
+└── other                        # Auxiliary files
+```
+
+### 5.4 Platform
+
+**Definition**: The sequencing instrument/technology used to generate the data.
+
+```
+platform
+├── ILLUMINA                     # Illumina short-read
+├── PACBIO                       # PacBio long-read (HiFi, CLR)
+├── ONT                          # Oxford Nanopore
+├── BGI                          # MGI/BGISEQ
+├── ION_TORRENT                  # Ion Torrent
+├── ELEMENT                      # Element Biosciences
+└── not_applicable               # Non-sequencing data
+```
+
+### 5.5 Reference Assembly
+
+**Definition**: The reference genome the data is aligned to or called against.
 
 ```
 reference_assembly
@@ -200,8 +240,62 @@ reference_assembly
 │   └── GRCm38 (mm10)
 ├── other_organism
 │   └── [extensible]
-└── not_applicable
+└── not_applicable               # Unaligned reads, raw signal
 ```
+
+### 5.6 Assay Type (V2)
+
+**Definition**: The top-level assay kind / method class used to generate the measurement. Requires external metadata.
+
+```
+assay_type
+├── WGS                          # Whole genome sequencing
+├── WES                          # Whole exome sequencing
+├── RNAseq                       # Bulk RNA sequencing
+├── scRNAseq                     # Single-cell RNA sequencing
+├── ATACseq                      # Bulk ATAC-seq
+├── scATACseq                    # Single-cell ATAC-seq
+├── ChIPseq                      # ChIP sequencing
+├── WGBS                         # Whole genome bisulfite sequencing
+├── HiC                          # Chromatin conformation
+└── [extensible]
+```
+
+### 5.7 Ontology Alignment
+
+We align with established ontologies where possible:
+
+| Ontology | Use Case | Notes |
+|----------|----------|-------|
+| **[EFO](https://www.ebi.ac.uk/efo/)** | Assay types | Map assay_type to EFO terms |
+| **[EDAM](https://edamontology.org/)** | Data/Format | Map data_type and file_format |
+| **[OBI](https://obi-ontology.org/)** | Definitions | Reference for rigorous semantics |
+
+### 5.8 Example Classifications
+
+**10x scATAC peak file**:
+- `data_modality`: epigenomic.chromatin_accessibility
+- `data_type`: peaks
+- `platform`: ILLUMINA
+- `reference_assembly`: GRCh38
+- `file_format`: .narrowPeak
+- `assay_type`: scATACseq *(v2)*
+
+**PacBio HiFi FASTQ**:
+- `data_modality`: genomic
+- `data_type`: reads
+- `platform`: PACBIO
+- `reference_assembly`: not_applicable
+- `file_format`: .fastq.gz
+- `assay_type`: WGS *(v2)*
+
+**Aligned BAM from RNA-seq**:
+- `data_modality`: transcriptomic
+- `data_type`: alignments
+- `platform`: ILLUMINA
+- `reference_assembly`: GRCh38
+- `file_format`: .bam
+- `assay_type`: RNAseq *(v2)*
 
 ## 6. Classification Strategy
 
@@ -425,38 +519,57 @@ Deferred until spike results show where LLM might help. If needed:
 file_classification:
   file_id: "dg.ANV0/abc123"
   file_name: "sample_RNA_hg38.bam"
+  file_format: ".bam"
 
+  # V1 fields (inferrable from file inspection)
   data_modality:
-    value: "transcriptomic.bulk_rna_seq"
+    value: "transcriptomic"
     confidence: 0.92
-    previous_value: "transcriptomic"  # from AnVIL API
-    change_type: "refined"  # new | refined | corrected | validated
+    previous_value: null  # from AnVIL API
+    change_type: "new"  # new | refined | corrected | validated
+
+  data_type:
+    value: "alignments"
+    confidence: 0.99
+    change_type: "new"
+
+  platform:
+    value: "ILLUMINA"
+    confidence: 0.95
+    change_type: "new"
 
   reference_assembly:
     value: "GRCh38"
     confidence: 0.98
-    previous_value: "GRCh38"
-    change_type: "validated"
+    previous_value: null
+    change_type: "new"
+
+  # V2 fields (require external metadata)
+  assay_type:
+    value: null  # Would be "RNAseq" if metadata available
+    confidence: 0.0
 
   evidence_chain:
     - tier: 1
-      timestamp: "2025-01-21T10:00:00Z"
       rule_id: "ext_bam"
       input: {extension: ".bam"}
-      output: {signal: "sequencing_alignment"}
+      output: {data_type: "alignments"}
       confidence_contribution: 0.3
     - tier: 2
-      timestamp: "2025-01-21T10:00:01Z"
       rule_id: "fname_rna"
       input: {filename: "sample_RNA_hg38.bam"}
       output: {modality: "transcriptomic", reference: "GRCh38"}
       confidence_contribution: 0.4
+    - tier: 5
+      rule_id: "bam_header_star"
+      input: {pg_program: "STAR"}
+      output: {modality: "transcriptomic"}
+      confidence_contribution: 0.2
     # ... additional evidence
 
   processing:
-    highest_tier_used: 4
+    highest_tier_used: 5
     llm_used: false
-    llm_cost_usd: 0.0
     processing_time_ms: 150
 
   flags:
