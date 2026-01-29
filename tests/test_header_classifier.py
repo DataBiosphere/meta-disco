@@ -460,7 +460,8 @@ class TestVcfClassification:
 ##source=HaplotypeCaller
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.germline_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "germline"
         assert result["data_type"] == "variant_calls"
         assert "HaplotypeCaller" in result["caller"] or "haplotypecaller" in result["caller"].lower()
 
@@ -470,7 +471,8 @@ class TestVcfClassification:
 ##source=DeepVariant
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.germline_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "germline"
 
     def test_mutect2_somatic(self):
         """Detect Mutect2 as somatic."""
@@ -480,7 +482,8 @@ class TestVcfClassification:
 ##normal_sample=NORMAL
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.somatic_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "somatic"
 
     def test_manta_sv(self):
         """Detect Manta as structural variants."""
@@ -489,7 +492,8 @@ class TestVcfClassification:
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.structural_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "structural"
         assert result["data_type"] == "structural_variants"
 
     def test_sv_info_fields(self):
@@ -500,7 +504,9 @@ class TestVcfClassification:
 ##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.structural_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "structural"
+        assert result["data_type"] == "structural_variants"
 
     def test_cnvkit_cnv(self):
         """Detect CNVkit as copy number variants."""
@@ -508,7 +514,9 @@ class TestVcfClassification:
 ##source=CNVkit
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic.copy_number_variants"
+        assert result["data_modality"] == "genomic"
+        assert result["variant_type"] == "cnv"
+        assert result["data_type"] == "structural_variants"
 
     def test_empty_header(self):
         """Handle minimal VCF header."""

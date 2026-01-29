@@ -1063,7 +1063,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_gatk_haplotypecaller",
         header_type="##source",
         pattern=r"(?i)haplotypecaller",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="GATK HaplotypeCaller is the standard germline SNV/indel caller. It performs "
                   "local de novo assembly to call variants, optimized for diploid germline samples."
@@ -1072,7 +1072,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_deepvariant",
         header_type="##source",
         pattern=r"(?i)deepvariant",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="DeepVariant is Google's deep learning-based germline variant caller. "
                   "It's trained on truth sets and excels at both SNVs and indels."
@@ -1081,7 +1081,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_gatk_genotypegvcfs",
         header_type="##source",
         pattern=r"(?i)genotypegvcfs",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="GATK GenotypeGVCFs performs joint genotyping on gVCF files, "
                   "used in cohort germline variant calling workflows."
@@ -1090,7 +1090,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_glnexus",
         header_type="##source",
         pattern=r"(?i)glnexus",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="GLnexus is a scalable gVCF merging and joint genotyping tool, "
                   "commonly used with DeepVariant for population-scale germline calling."
@@ -1099,7 +1099,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_bcftools_call",
         header_type="##source",
         pattern=r"(?i)bcftools.*call",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.85,
         rationale="bcftools call is a lightweight germline variant caller using "
                   "the multiallelic or consensus caller models."
@@ -1108,7 +1108,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_freebayes",
         header_type="##source",
         pattern=r"(?i)freebayes",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.85,
         rationale="FreeBayes is a Bayesian haplotype-based germline variant caller "
                   "that can handle pooled or mixed samples."
@@ -1117,7 +1117,7 @@ VCF_GERMLINE_CALLER_RULES = [
         id="vcf_strelka2_germline",
         header_type="##source",
         pattern=r"(?i)strelka2.*germline|strelka2(?!.*somatic)",
-        classification="genomic.germline_variants",
+        classification="genomic",
         confidence=0.85,
         rationale="Strelka2 in germline mode calls SNVs and indels from germline samples."
     ),
@@ -1129,7 +1129,7 @@ VCF_SOMATIC_CALLER_RULES = [
         id="vcf_mutect2",
         header_type="##source",
         pattern=r"(?i)mutect2?",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.95,
         rationale="GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal "
                   "or tumor-only analysis. Its presence strongly indicates cancer genomics data."
@@ -1138,7 +1138,7 @@ VCF_SOMATIC_CALLER_RULES = [
         id="vcf_strelka_somatic",
         header_type="##source",
         pattern=r"(?i)strelka.*somatic|strelka(?!.*germline)",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="Strelka/Strelka2 in somatic mode calls somatic variants from tumor-normal pairs."
     ),
@@ -1146,7 +1146,7 @@ VCF_SOMATIC_CALLER_RULES = [
         id="vcf_varscan_somatic",
         header_type="##source",
         pattern=r"(?i)varscan.*somatic",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="VarScan somatic mode calls somatic variants from tumor-normal pairs "
                   "using a heuristic/statistical approach."
@@ -1155,7 +1155,7 @@ VCF_SOMATIC_CALLER_RULES = [
         id="vcf_somaticsniper",
         header_type="##source",
         pattern=r"(?i)somaticsniper",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="SomaticSniper identifies somatic point mutations in tumor-normal pairs."
     ),
@@ -1163,7 +1163,7 @@ VCF_SOMATIC_CALLER_RULES = [
         id="vcf_muse",
         header_type="##source",
         pattern=r"(?i)muse",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="MuSE calls somatic point mutations using a Markov substitution model, "
                   "designed for tumor-normal pairs."
@@ -1176,7 +1176,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_manta",
         header_type="##source",
         pattern=r"(?i)manta",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="Manta calls structural variants (deletions, insertions, inversions, "
                   "translocations) and large indels from short-read data."
@@ -1185,7 +1185,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_delly",
         header_type="##source",
         pattern=r"(?i)delly",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="DELLY discovers structural variants using paired-end and split-read analysis."
     ),
@@ -1193,7 +1193,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_lumpy",
         header_type="##source",
         pattern=r"(?i)lumpy",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="LUMPY is a probabilistic SV caller using multiple alignment signals."
     ),
@@ -1201,7 +1201,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_smoove",
         header_type="##source",
         pattern=r"(?i)smoove",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="Smoove simplifies SV calling by wrapping LUMPY with additional filtering."
     ),
@@ -1209,7 +1209,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_svim",
         header_type="##source",
         pattern=r"(?i)svim",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="SVIM detects structural variants from long-read sequencing data (PacBio/ONT)."
     ),
@@ -1217,7 +1217,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_sniffles",
         header_type="##source",
         pattern=r"(?i)sniffles",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="Sniffles is a long-read SV caller optimized for PacBio and ONT data, "
                   "detecting complex SVs that short reads miss."
@@ -1226,7 +1226,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_pbsv",
         header_type="##source",
         pattern=r"(?i)pbsv",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="PBSV is PacBio's structural variant caller for HiFi and CLR data."
     ),
@@ -1234,7 +1234,7 @@ VCF_SV_CALLER_RULES = [
         id="vcf_cutesv",
         header_type="##source",
         pattern=r"(?i)cutesv",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="CuteSV is a fast long-read SV caller using clustering of signatures."
     ),
@@ -1246,7 +1246,7 @@ VCF_CNV_CALLER_RULES = [
         id="vcf_cnvkit",
         header_type="##source",
         pattern=r"(?i)cnvkit",
-        classification="genomic.copy_number_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="CNVkit detects copy number variants from targeted/exome or WGS data."
     ),
@@ -1254,7 +1254,7 @@ VCF_CNV_CALLER_RULES = [
         id="vcf_gatk_cnv",
         header_type="##source",
         pattern=r"(?i)gatk.*(cnv|copynumber)|modelsegments",
-        classification="genomic.copy_number_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="GATK CNV tools (ModelSegments, etc.) call copy number variants "
                   "from read depth data."
@@ -1263,7 +1263,7 @@ VCF_CNV_CALLER_RULES = [
         id="vcf_canvas",
         header_type="##source",
         pattern=r"(?i)canvas",
-        classification="genomic.copy_number_variants",
+        classification="genomic",
         confidence=0.90,
         rationale="Canvas is Illumina's CNV caller for WGS and tumor-normal analysis."
     ),
@@ -1275,7 +1275,7 @@ VCF_INFO_RULES = [
         id="vcf_info_somatic",
         header_type="##INFO",
         pattern=r"ID=(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)",
-        classification="genomic.somatic_variants",
+        classification="genomic",
         confidence=0.85,
         rationale="INFO fields with SOMATIC, TUMOR_, or NORMAL_ prefixes indicate "
                   "this VCF contains somatic variant calls from tumor-normal analysis."
@@ -1284,7 +1284,7 @@ VCF_INFO_RULES = [
         id="vcf_info_sv",
         header_type="##INFO",
         pattern=r"ID=(SVTYPE|SVLEN|END|CIPOS|CIEND|MATEID|IMPRECISE)",
-        classification="genomic.structural_variants",
+        classification="genomic",
         confidence=0.80,
         rationale="Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate "
                   "this VCF contains structural variant calls."
@@ -1293,7 +1293,7 @@ VCF_INFO_RULES = [
         id="vcf_info_cnv",
         header_type="##INFO",
         pattern=r"ID=(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)",
-        classification="genomic.copy_number_variants",
+        classification="genomic",
         confidence=0.80,
         rationale="CNV-specific INFO fields indicate copy number variant calls."
     ),
@@ -2068,8 +2068,9 @@ def classify_from_vcf_header(
                        (for fallback reference detection)
 
     Returns dict with:
-        - data_modality: str or None (e.g., genomic.germline_variants)
+        - data_modality: str or None (always "genomic" for VCF files)
         - variant_type: str or None (germline, somatic, structural, cnv)
+        - data_type: str or None (variant_calls, structural_variants)
         - reference_assembly: str or None
         - confidence: float
         - matched_rules: list of rule IDs that matched
@@ -2148,6 +2149,12 @@ def classify_from_vcf_header(
             result["matched_rules"].append("vcf_max_positions")
 
     # Check variant caller from ##source
+    # Build mapping from rule to variant type for efficient lookup
+    germline_rule_ids = {r.id for r in VCF_GERMLINE_CALLER_RULES}
+    somatic_rule_ids = {r.id for r in VCF_SOMATIC_CALLER_RULES}
+    sv_rule_ids = {r.id for r in VCF_SV_CALLER_RULES}
+    cnv_rule_ids = {r.id for r in VCF_CNV_CALLER_RULES}
+
     all_caller_rules = (
         VCF_GERMLINE_CALLER_RULES +
         VCF_SOMATIC_CALLER_RULES +
@@ -2176,17 +2183,17 @@ def classify_from_vcf_header(
                     result["data_modality"] = rule.classification
                     result["confidence"] = rule.confidence
 
-                    # Set variant type and data_type based on classification
-                    if "germline" in rule.classification:
+                    # Set variant_type and data_type based on which rule list matched
+                    if rule.id in germline_rule_ids:
                         result["variant_type"] = "germline"
                         result["data_type"] = "variant_calls"
-                    elif "somatic" in rule.classification:
+                    elif rule.id in somatic_rule_ids:
                         result["variant_type"] = "somatic"
                         result["data_type"] = "variant_calls"
-                    elif "structural" in rule.classification:
+                    elif rule.id in sv_rule_ids:
                         result["variant_type"] = "structural"
                         result["data_type"] = "structural_variants"
-                    elif "copy_number" in rule.classification:
+                    elif rule.id in cnv_rule_ids:
                         result["variant_type"] = "cnv"
                         result["data_type"] = "structural_variants"
 
@@ -2203,6 +2210,18 @@ def classify_from_vcf_header(
             })
             result["matched_rules"].append(rule.id)
 
+            # Set variant_type based on INFO rule if not already set
+            if not result["variant_type"]:
+                if rule.id == "vcf_info_somatic":
+                    result["variant_type"] = "somatic"
+                    result["data_type"] = "variant_calls"
+                elif rule.id == "vcf_info_sv":
+                    result["variant_type"] = "structural"
+                    result["data_type"] = "structural_variants"
+                elif rule.id == "vcf_info_cnv":
+                    result["variant_type"] = "cnv"
+                    result["data_type"] = "structural_variants"
+
             # Only use INFO rules if no caller was detected
             if not result["data_modality"] and rule.classification:
                 result["data_modality"] = rule.classification
@@ -2214,15 +2233,13 @@ def classify_from_vcf_header(
         result["data_type"] = "variant_calls"  # Default for VCF files
         result["confidence"] = 0.5
 
-    # Check for conflicting signals
+    # Check for conflicting variant type signals
     variant_types_found = set()
-    for e in result["evidence"]:
-        classification = e.get("classification", "")
-        if classification:
-            if "germline" in classification:
-                variant_types_found.add("germline")
-            elif "somatic" in classification:
-                variant_types_found.add("somatic")
+    for rule_id in result["matched_rules"]:
+        if rule_id in germline_rule_ids:
+            variant_types_found.add("germline")
+        elif rule_id in somatic_rule_ids or rule_id == "vcf_info_somatic":
+            variant_types_found.add("somatic")
 
     if len(variant_types_found) > 1:
         result["warnings"].append(
