@@ -8,34 +8,34 @@ from src.meta_disco.rule_engine import RuleEngine
 
 @pytest.fixture
 def engine():
-    """Create a rule engine with the classification rules."""
-    return RuleEngine("rules/classification_rules.yaml")
+    """Create a rule engine with the unified rules."""
+    return RuleEngine()
 
 
 class TestExtensionExtraction:
     """Test extension extraction logic."""
 
     def test_simple_bam(self, engine):
-        assert engine._extract_extension("sample.bam") == ".bam"
+        assert engine.rules.extract_extension("sample.bam") == ".bam"
 
     def test_compound_vcf_gz(self, engine):
-        assert engine._extract_extension("file.vcf.gz") == ".vcf.gz"
+        assert engine.rules.extract_extension("file.vcf.gz") == ".vcf.gz"
 
     def test_compound_fastq_gz(self, engine):
-        assert engine._extract_extension("sample.fastq.gz") == ".fastq.gz"
+        assert engine.rules.extract_extension("sample.fastq.gz") == ".fastq.gz"
 
     def test_cram_with_dots(self, engine):
-        assert engine._extract_extension("sample.hg38.cram") == ".cram"
+        assert engine.rules.extract_extension("sample.hg38.cram") == ".cram"
 
     def test_case_insensitive(self, engine):
-        assert engine._extract_extension("SAMPLE.BAM") == ".bam"
-        assert engine._extract_extension("File.VCF.GZ") == ".vcf.gz"
+        assert engine.rules.extract_extension("SAMPLE.BAM") == ".bam"
+        assert engine.rules.extract_extension("File.VCF.GZ") == ".vcf.gz"
 
     def test_no_extension(self, engine):
-        assert engine._extract_extension("filename") == ""
+        assert engine.rules.extract_extension("filename") == ""
 
     def test_gvcf_gz(self, engine):
-        assert engine._extract_extension("sample.g.vcf.gz") == ".g.vcf.gz"
+        assert engine.rules.extract_extension("sample.g.vcf.gz") == ".g.vcf.gz"
 
 
 class TestRuleMatching:
@@ -177,9 +177,9 @@ class TestSpecialFileTypes:
         assert result.confidence >= 0.95
 
     def test_histology_svs(self, engine):
-        """SVS files should be imaging."""
+        """SVS files should be imaging.histology."""
         result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
-        assert result.data_modality == "imaging"
+        assert result.data_modality == "imaging.histology"
         assert result.confidence >= 0.95
 
 
@@ -281,7 +281,7 @@ class TestIntegration:
     def test_gtex_histology(self, engine):
         """GTEx histology image."""
         result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
-        assert result.data_modality == "imaging"
+        assert result.data_modality == "imaging.histology"
         assert result.confidence >= 0.95
 
     def test_cram_md5(self, engine):

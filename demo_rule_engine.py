@@ -3,7 +3,7 @@
 
 from src.meta_disco import RuleEngine, FileInfo
 
-engine = RuleEngine("rules/classification_rules.yaml")
+engine = RuleEngine()
 
 # Sample filenames to classify
 test_files = [

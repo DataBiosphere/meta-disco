@@ -221,7 +221,7 @@ def main():
                         help="Input metadata file (JSON or NDJSON)")
     parser.add_argument("--output", "-o", type=str, default="output",
                         help="Output directory")
-    parser.add_argument("--rules", "-r", type=str, default="rules/classification_rules.yaml",
+    parser.add_argument("--rules", "-r", type=str, default="rules/unified_rules.yaml",
                         help="Path to rules file")
     args = parser.parse_args()
 

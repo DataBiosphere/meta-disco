@@ -610,7 +610,7 @@ rules:
       extensions: [".bed", ".bed.gz"]
       filename_pattern: "(?i)(\\.chip\\.|chip[-_]?seq|chipseq|histone|h3k\\d+)"
     then:
-      data_modality: epigenomic.chromatin_accessibility
+      data_modality: epigenomic.histone_modification
       data_type: peaks
       assay_type: ChIP-seq
     confidence: 0.90
@@ -2088,6 +2088,17 @@ rules:
       needs_manual_review: true
     confidence: 0.0
     rationale: "Ambiguous text file - requires manual review"
+    terminal: true
+
+  - id: unknown_extension_fallback
+    tier: 2
+    scope: filename
+    when:
+      modality_not_set: true
+    then:
+      needs_manual_review: true
+    confidence: 0.0
+    rationale: "Unknown file extension - requires manual review"
     terminal: true
 
 ---

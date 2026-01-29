@@ -200,7 +200,7 @@ def main():
     parser.add_argument("--tsv", type=str, help="Path to TSV file (required if source=tsv)")
     parser.add_argument("--limit", type=int, default=100, help="Number of files to fetch from API")
     parser.add_argument("--format", choices=["table", "json"], default="table", help="Output format")
-    parser.add_argument("--rules", type=str, default="rules/classification_rules.yaml", help="Path to rules file")
+    parser.add_argument("--rules", type=str, default="rules/unified_rules.yaml", help="Path to rules file")
     args = parser.parse_args()
 
     # Load rules
