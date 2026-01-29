@@ -10,6 +10,35 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 
+# =============================================================================
+# FILE FORMAT CATEGORY RULES
+# =============================================================================
+
+# Extension -> category mapping (first match wins for extension lookups)
+FORMAT_CATEGORY_RULES = [
+    # Index files
+    {"extensions": [".bai", ".tbi", ".csi", ".crai", ".pbi"], "category": "Index"},
+    # Alignment files
+    {"extensions": [".bam", ".cram"], "category": "BAM/CRAM"},
+    # Variant files
+    {"extensions": [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"], "category": "VCF"},
+    # Sequence files
+    {"extensions": [".fastq", ".fastq.gz", ".fq", ".fq.gz"], "category": "FASTQ"},
+    # BED files
+    {"extensions": [".bed", ".bed.gz"], "category": "BED"},
+    # Image files
+    {"extensions": [".svs", ".png", ".jpg", ".jpeg", ".tiff", ".tif"], "category": "Images"},
+    # Raw signal files (ONT)
+    {"extensions": [".fast5", ".pod5"], "category": "Auxiliary", "name_contains": ".fast5"},
+    # PLINK files
+    {"extensions": [".pvar", ".psam", ".pgen", ".bim", ".fam"], "category": "Auxiliary"},
+    # Skip files (checksums, logs, documentation)
+    {"extensions": [".md5", ".log", ".txt", ".html", ".pdf", ".json", ".csv", ".tsv"], "category": "Skipped"},
+    # Archive files (need extraction to classify)
+    {"extensions": [".tar", ".tar.gz", ".zip"], "category": "Skipped"},
+]
+
+
 def load_source_metadata(path: Path) -> list[dict]:
     """Load source metadata file."""
     with open(path) as f:
@@ -44,49 +73,17 @@ def load_classifications(output_dir: Path) -> dict[str, list[dict]]:
 
 
 def get_file_format_category(fmt: str, name: str = "") -> str:
-    """Categorize file format."""
+    """Categorize file format using FORMAT_CATEGORY_RULES."""
     fmt_lower = fmt.lower() if fmt else ""
     name_lower = name.lower() if name else ""
 
-    # Index files
-    if fmt_lower in [".bai", ".tbi", ".csi", ".crai", ".pbi"]:
-        return "Index"
-
-    # Alignment files
-    if fmt_lower in [".bam", ".cram"]:
-        return "BAM/CRAM"
-
-    # Variant files
-    if fmt_lower in [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]:
-        return "VCF"
-
-    # Sequence files
-    if fmt_lower in [".fastq", ".fastq.gz", ".fq", ".fq.gz"]:
-        return "FASTQ"
-
-    # BED files
-    if fmt_lower in [".bed", ".bed.gz"]:
-        return "BED"
-
-    # Image files
-    if fmt_lower in [".svs", ".png", ".jpg", ".jpeg", ".tiff", ".tif"]:
-        return "Images"
-
-    # Raw signal files
-    if fmt_lower in [".fast5", ".pod5"] or ".fast5" in name_lower:
-        return "Auxiliary"
-
-    # PLINK files
-    if fmt_lower in [".pvar", ".psam", ".pgen", ".bed", ".bim", ".fam"]:
-        return "Auxiliary"
-
-    # Skip files (checksums, logs, etc.)
-    if fmt_lower in [".md5", ".log", ".txt", ".html", ".pdf", ".json", ".csv", ".tsv"]:
-        return "Skipped"
-
-    # Archive files (complex to classify without extraction)
-    if fmt_lower in [".tar", ".tar.gz", ".zip"]:
-        return "Skipped"
+    for rule in FORMAT_CATEGORY_RULES:
+        # Check extension match
+        if fmt_lower in rule["extensions"]:
+            return rule["category"]
+        # Check optional name_contains pattern
+        if "name_contains" in rule and rule["name_contains"] in name_lower:
+            return rule["category"]
 
     return "Other"
 

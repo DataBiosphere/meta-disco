@@ -5,6 +5,98 @@ from dataclasses import dataclass, field
 
 
 # =============================================================================
+# RULE DEFINITIONS (externalized for configurability)
+# =============================================================================
+
+# Illumina instrument ID prefix -> model name mapping
+# Order matters: more specific prefixes (A0, A1, VH) must come before less specific (A, N)
+ILLUMINA_INSTRUMENT_RULES = [
+    {"prefix": "A0", "model": "NovaSeq 6000"},
+    {"prefix": "A1", "model": "NovaSeq 6000"},
+    {"prefix": "A", "model": "NovaSeq"},
+    {"prefix": "M", "model": "MiSeq"},
+    {"prefix": "D", "model": "HiSeq 2500"},
+    {"prefix": "E", "model": "HiSeq X"},
+    {"prefix": "VH", "model": "NextSeq 2000"},
+    {"prefix": "N", "model": "NextSeq"},
+    {"prefix": "K", "model": "HiSeq 4000"},
+    {"prefix": "J", "model": "HiSeq 3000"},
+]
+
+# Assay type inference rules (priority-ordered, first match wins)
+# Conditions supported:
+#   - matched_rules_any: list of rule IDs, any must be in matched_rules
+#   - data_modality: exact match
+#   - data_modality_contains: substring match
+#   - platform: exact match
+#   - platform_in: list of platforms, any must match
+#   - file_size_gb_gt: file size greater than (in GB)
+#   - file_size_gb_lt: file size less than (in GB)
+#   - file_format: exact match (e.g., ".cram")
+ASSAY_TYPE_RULES = [
+    {
+        "id": "rnaseq_program",
+        "priority": 100,
+        "conditions": {
+            "matched_rules_any": [
+                "program_star", "program_hisat2", "program_tophat",
+                "program_salmon", "program_kallisto", "program_isoseq"
+            ]
+        },
+        "assay_type": "RNA-seq",
+    },
+    {
+        "id": "rnaseq_modality",
+        "priority": 95,
+        "conditions": {"data_modality": "transcriptomic"},
+        "assay_type": "RNA-seq",
+    },
+    {
+        "id": "wgs_longread",
+        "priority": 80,
+        "conditions": {"platform_in": ["PACBIO", "ONT"]},
+        "assay_type": "WGS",
+    },
+    {
+        "id": "wgs_modality",
+        "priority": 75,
+        "conditions": {"data_modality_contains": "whole_genome"},
+        "assay_type": "WGS",
+    },
+    {
+        "id": "wes_modality",
+        "priority": 75,
+        "conditions": {"data_modality_contains": "exome"},
+        "assay_type": "WES",
+    },
+    {
+        "id": "wgs_illumina_bam_large",
+        "priority": 50,
+        "conditions": {"platform": "ILLUMINA", "file_format_not": ".cram", "file_size_gb_gt": 50},
+        "assay_type": "WGS",
+    },
+    {
+        "id": "wes_illumina_bam_small",
+        "priority": 50,
+        "conditions": {"platform": "ILLUMINA", "file_format_not": ".cram", "file_size_gb_lt": 20},
+        "assay_type": "WES",
+    },
+    {
+        "id": "wgs_illumina_cram_large",
+        "priority": 50,
+        "conditions": {"platform": "ILLUMINA", "file_format": ".cram", "file_size_gb_gt": 20},
+        "assay_type": "WGS",
+    },
+    {
+        "id": "wes_illumina_cram_small",
+        "priority": 50,
+        "conditions": {"platform": "ILLUMINA", "file_format": ".cram", "file_size_gb_lt": 8},
+        "assay_type": "WES",
+    },
+]
+
+
+# =============================================================================
 # HELPER FUNCTIONS (extracted for testability)
 # =============================================================================
 
@@ -37,14 +129,8 @@ def infer_illumina_instrument_model(instrument_id: str) -> str | None:
     """
     Infer Illumina instrument model from instrument ID prefix.
 
-    Illumina instrument IDs follow predictable patterns:
-    - A00xxx, A01xxx: NovaSeq 6000
-    - Axxxxx (other): NovaSeq (generic)
-    - M0xxxx: MiSeq
-    - D00xxx: HiSeq 2500
-    - E00xxx: HiSeq X
-    - N00xxx: NextSeq 500/550
-    - VH00xxx: NextSeq 2000
+    Uses ILLUMINA_INSTRUMENT_RULES for prefix matching.
+    Order matters: more specific prefixes are checked first.
 
     Args:
         instrument_id: The instrument identifier (e.g., "A00297")
@@ -57,24 +143,9 @@ def infer_illumina_instrument_model(instrument_id: str) -> str | None:
 
     inst = instrument_id.upper()
 
-    if inst.startswith("A0") or inst.startswith("A1"):
-        return "NovaSeq 6000"
-    elif inst.startswith("A"):
-        return "NovaSeq"
-    elif inst.startswith("M"):
-        return "MiSeq"
-    elif inst.startswith("D"):
-        return "HiSeq 2500"
-    elif inst.startswith("E"):
-        return "HiSeq X"
-    elif inst.startswith("VH"):
-        return "NextSeq 2000"
-    elif inst.startswith("N"):
-        return "NextSeq"
-    elif inst.startswith("K"):
-        return "HiSeq 4000"
-    elif inst.startswith("J"):
-        return "HiSeq 3000"
+    for rule in ILLUMINA_INSTRUMENT_RULES:
+        if inst.startswith(rule["prefix"]):
+            return rule["model"]
 
     return None
 
@@ -1925,56 +1996,73 @@ def classify_from_header(
     return result
 
 
+def _evaluate_assay_condition(condition: dict, context: dict) -> bool:
+    """Evaluate a single assay type rule condition against context.
+
+    Args:
+        condition: Dict with condition keys (matched_rules_any, platform, etc.)
+        context: Dict with platform, data_modality, matched_rules, file_size_gb, file_format
+
+    Returns:
+        True if all conditions in the dict are satisfied
+    """
+    for key, value in condition.items():
+        if key == "matched_rules_any":
+            matched = context.get("matched_rules", [])
+            if not any(r in matched for r in value):
+                return False
+        elif key == "data_modality":
+            if context.get("data_modality") != value:
+                return False
+        elif key == "data_modality_contains":
+            modality = context.get("data_modality") or ""
+            if value not in modality:
+                return False
+        elif key == "platform":
+            if context.get("platform") != value:
+                return False
+        elif key == "platform_in":
+            if context.get("platform") not in value:
+                return False
+        elif key == "file_size_gb_gt":
+            file_size_gb = context.get("file_size_gb")
+            if file_size_gb is None or file_size_gb <= value:
+                return False
+        elif key == "file_size_gb_lt":
+            file_size_gb = context.get("file_size_gb")
+            if file_size_gb is None or file_size_gb >= value:
+                return False
+        elif key == "file_format":
+            if context.get("file_format") != value:
+                return False
+        elif key == "file_format_not":
+            if context.get("file_format") == value:
+                return False
+    return True
+
+
 def _infer_assay_type(result: dict, file_size: int | None, file_format: str | None) -> None:
-    """Infer assay_type from classification signals.
+    """Infer assay_type from classification signals using ASSAY_TYPE_RULES.
 
     Modifies result dict in place to set assay_type field.
+    Rules are evaluated in priority order (highest first), first match wins.
     """
-    platform = result.get("platform")
-    modality = result.get("data_modality") or ""
-    matched_rules = result.get("matched_rules", [])
+    # Build context for rule evaluation
+    context = {
+        "platform": result.get("platform"),
+        "data_modality": result.get("data_modality") or "",
+        "matched_rules": result.get("matched_rules", []),
+        "file_format": file_format,
+        "file_size_gb": file_size / (1024 ** 3) if file_size is not None else None,
+    }
 
-    # RNA-seq indicators (highest priority - very specific)
-    rnaseq_programs = ["program_star", "program_hisat2", "program_tophat",
-                       "program_salmon", "program_kallisto"]
-    if any(r in matched_rules for r in rnaseq_programs) or modality == "transcriptomic":
-        result["assay_type"] = "RNA-seq"
-        return
+    # Sort rules by priority (highest first) and evaluate
+    sorted_rules = sorted(ASSAY_TYPE_RULES, key=lambda r: r.get("priority", 0), reverse=True)
 
-    # IsoSeq (PacBio long-read RNA-seq)
-    if "program_isoseq" in matched_rules:
-        result["assay_type"] = "RNA-seq"
-        return
-
-    # Long-read platforms default to WGS
-    if platform in ["PACBIO", "ONT"]:
-        result["assay_type"] = "WGS"
-        return
-
-    # Check modality hints
-    if "whole_genome" in modality:
-        result["assay_type"] = "WGS"
-        return
-    if "exome" in modality:
-        result["assay_type"] = "WES"
-        return
-
-    # File size heuristics for Illumina
-    if platform == "ILLUMINA" and file_size is not None:
-        file_size_gb = file_size / (1024 ** 3)
-        is_cram = file_format == ".cram" if file_format else False
-
-        # Adjust thresholds for CRAM (60-70% smaller than BAM)
-        if is_cram:
-            if file_size_gb > 20:
-                result["assay_type"] = "WGS"
-            elif file_size_gb < 8:
-                result["assay_type"] = "WES"
-        else:
-            if file_size_gb > 50:
-                result["assay_type"] = "WGS"
-            elif file_size_gb < 20:
-                result["assay_type"] = "WES"
+    for rule in sorted_rules:
+        if _evaluate_assay_condition(rule["conditions"], context):
+            result["assay_type"] = rule["assay_type"]
+            return
 
 
 def classify_from_vcf_header(
