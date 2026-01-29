@@ -30,7 +30,8 @@ data_modality
 │   └── histone_modification     # ChIP-seq for histones
 ├── imaging                      # Visual/spatial data
 │   └── histology                # Tissue slides
-└── null                         # Derived artifacts (QC plots, indexes)
+├── not_applicable               # Derived artifacts (QC plots, indexes, checksums)
+└── not_classified               # Could not be determined from available signals
 ```
 
 #### data_type
@@ -64,7 +65,8 @@ platform
 ├── ONT                          # Oxford Nanopore
 ├── MGI                          # MGI/BGISEQ
 ├── ELEMENT                      # Element Biosciences
-└── null                         # Non-sequencing data or unknown
+├── not_applicable               # Non-sequencing data (images, annotations)
+└── not_classified               # Could not be determined from available signals
 ```
 
 #### reference_assembly
@@ -76,7 +78,8 @@ reference_assembly
 ├── GRCh38                       # Human reference (2013), aliases: hg38, hs38
 ├── GRCh37                       # Human reference (2009), aliases: hg19, b37
 ├── CHM13                        # T2T complete genome (2022), aliases: t2t, hs1
-└── null                         # Unaligned reads, raw signal, or unknown
+├── not_applicable               # Unaligned reads, raw signal, non-genomic data
+└── not_classified               # Could not be determined from available signals
 ```
 
 #### assay_type
@@ -91,7 +94,8 @@ assay_type
 ├── scRNAseq                     # Single-cell RNA sequencing
 ├── ATACseq                      # Bulk ATAC-seq
 ├── ChIPseq                      # ChIP sequencing
-└── null                         # Cannot be determined from file alone
+├── not_applicable               # Non-sequencing data (images, annotations)
+└── not_classified               # Could not be determined from file alone
 ```
 
 ### Initial State (Before Classification)
