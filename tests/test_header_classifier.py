@@ -292,6 +292,7 @@ class TestFastqClassification:
         result = classify_from_fastq_header(reads)
         assert result["platform"] == "ILLUMINA"
         assert result["data_modality"] == "genomic"
+        assert result["data_type"] == "reads"
         assert result["confidence"] >= 0.90
 
     def test_illumina_instrument_model(self):
@@ -361,6 +362,7 @@ class TestFastqClassification:
         result = classify_from_fastq_header(reads)
         assert result["platform"] == "PACBIO"
         assert result["data_modality"] == "genomic.whole_genome"
+        assert result["data_type"] == "reads"
         assert result["confidence"] >= 0.95
 
     def test_pacbio_clr(self):
@@ -459,6 +461,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic.germline_variants"
+        assert result["data_type"] == "variant_calls"
         assert "HaplotypeCaller" in result["caller"] or "haplotypecaller" in result["caller"].lower()
 
     def test_deepvariant_germline(self):
@@ -487,6 +490,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic.structural_variants"
+        assert result["data_type"] == "structural_variants"
 
     def test_sv_info_fields(self):
         """Detect SV from INFO fields."""
@@ -565,6 +569,7 @@ class TestBamCramClassification:
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
         assert result["data_modality"] == "transcriptomic"
+        assert result["data_type"] == "alignments"
 
     def test_bwa_aligner_genomic(self):
         """Detect genomic from BWA aligner."""
@@ -572,6 +577,7 @@ class TestBamCramClassification:
 @PG\tID:bwa\tPN:bwa\tVN:0.7.17"""
         result = classify_from_header(header)
         assert result["data_modality"] == "genomic"
+        assert result["data_type"] == "alignments"
 
     def test_pacbio_hifi_readtype(self):
         """Detect PacBio HiFi from READTYPE tag."""

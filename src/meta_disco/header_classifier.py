@@ -1763,6 +1763,7 @@ def classify_from_header(
 
     result = {
         "data_modality": None,
+        "data_type": "alignments",  # BAM/CRAM files contain aligned reads
         "reference_assembly": None,
         "confidence": 0.0,
         "is_aligned": None,
@@ -1947,6 +1948,7 @@ def classify_from_vcf_header(
 
     result = {
         "data_modality": None,
+        "data_type": None,  # Set based on variant_type below
         "variant_type": None,
         "reference_assembly": None,
         "confidence": 0.0,
@@ -2041,15 +2043,19 @@ def classify_from_vcf_header(
                     result["data_modality"] = rule.classification
                     result["confidence"] = rule.confidence
 
-                    # Set variant type based on classification
+                    # Set variant type and data_type based on classification
                     if "germline" in rule.classification:
                         result["variant_type"] = "germline"
+                        result["data_type"] = "variant_calls"
                     elif "somatic" in rule.classification:
                         result["variant_type"] = "somatic"
+                        result["data_type"] = "variant_calls"
                     elif "structural" in rule.classification:
                         result["variant_type"] = "structural"
+                        result["data_type"] = "structural_variants"
                     elif "copy_number" in rule.classification:
                         result["variant_type"] = "cnv"
+                        result["data_type"] = "structural_variants"
 
     # Check INFO fields for variant type hints
     info_text = "\n".join(info_lines)
@@ -2072,6 +2078,7 @@ def classify_from_vcf_header(
     # Default to genomic if no specific modality detected but we have evidence
     if not result["data_modality"] and result["evidence"]:
         result["data_modality"] = "genomic"
+        result["data_type"] = "variant_calls"  # Default for VCF files
         result["confidence"] = 0.5
 
     # Check for conflicting signals
@@ -2118,6 +2125,7 @@ def classify_from_fastq_header(
 
     result = {
         "data_modality": None,
+        "data_type": "reads",  # FASTQ files contain raw reads
         "platform": None,
         "confidence": 0.0,
         "is_paired_end": None,

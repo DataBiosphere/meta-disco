@@ -25,6 +25,7 @@ MODALITY_RULES = [
         "id": "bed_methylation",
         "pattern": r"(modbam2bed|cpg|methylat|bisulfite|wgbs)",
         "data_modality": "epigenomic.methylation",
+        "data_type": "annotations",
         "confidence": 0.90,
         "rationale": "BED file contains CpG methylation calls or bisulfite sequencing regions.",
     },
@@ -32,6 +33,7 @@ MODALITY_RULES = [
         "id": "bed_expression",
         "pattern": r"(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\.TSS\.)",
         "data_modality": "transcriptomic",
+        "data_type": "annotations",
         "confidence": 0.90,
         "rationale": "BED file contains gene expression quantification or splicing data.",
     },
@@ -39,6 +41,7 @@ MODALITY_RULES = [
         "id": "bed_peaks",
         "pattern": r"(peak|summit|narrowPeak|broadPeak|\.chip\.|\.atac\.)",
         "data_modality": "epigenomic.chromatin_accessibility",
+        "data_type": "peaks",
         "confidence": 0.85,
         "rationale": "BED file contains ChIP-seq or ATAC-seq peak calls.",
     },
@@ -47,6 +50,7 @@ MODALITY_RULES = [
         # Must be before bed_regions to catch hap1.regions.bed, etc.
         "pattern": r"(\.hap[12]\.|\.paternal\.|\.maternal\.|\.dip\.bed|\.switch\.|flagger|\.lowQ\.|unreliable|issues\.bed|_genbank\.)",
         "data_modality": None,  # Derived QC, not primary data
+        "data_type": "annotations",
         "confidence": 0.85,
         "rationale": "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data.",
     },
@@ -54,6 +58,7 @@ MODALITY_RULES = [
         "id": "bed_regions",
         "pattern": r"\.regions\.bed",
         "data_modality": "genomic",
+        "data_type": "annotations",
         "confidence": 0.80,
         "rationale": "BED file contains genomic analysis regions (callable, target, etc.).",
     },
@@ -132,12 +137,14 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 
         # Determine modality from filename patterns
         data_modality = None
+        data_type = "annotations"  # Default for BED files
         modality_confidence = 0.70  # Default low confidence
         evidence = []
 
         for rule in MODALITY_RULES:
             if re.search(rule["pattern"], name, re.IGNORECASE):
                 data_modality = rule["data_modality"]
+                data_type = rule.get("data_type", "annotations")
                 modality_confidence = rule["confidence"]
                 evidence.append({
                     "rule_id": rule["id"],
@@ -152,6 +159,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         # If no pattern matched, mark as unclassified genomic intervals
         if not evidence:
             data_modality = "genomic"
+            data_type = "annotations"
             modality_confidence = 0.60
             evidence.append({
                 "rule_id": "bed_default",
@@ -222,6 +230,8 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             "dataset_id": f.get("dataset_id"),
             "dataset_title": dataset_title,
             "data_modality": data_modality,
+            "data_type": data_type,
+            "platform": None,  # BED files don't retain platform info
             "reference_assembly": reference_assembly,
             "confidence": confidence,
             "matched_rules": [e["rule_id"] for e in evidence],

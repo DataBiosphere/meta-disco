@@ -13,12 +13,16 @@ from pathlib import Path
 IMAGE_RULES = {
     ".svs": {
         "data_modality": "imaging.histology",
+        "data_type": "images",
+        "platform": None,
         "reference_assembly": None,
         "confidence": 0.95,
         "rationale": "SVS files are Aperio whole-slide histology images used for pathology analysis.",
     },
     ".png": {
         "data_modality": None,  # QC plots, derived visualizations - not primary data
+        "data_type": "images",
+        "platform": None,
         "reference_assembly": None,
         "confidence": 0.90,
         "rationale": "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data.",
@@ -60,6 +64,8 @@ def classify_images(metadata_path: Path, output_path: Path):
                     "dataset_id": f.get("dataset_id"),
                     "dataset_title": f.get("dataset_title"),
                     "data_modality": rule["data_modality"],
+                    "data_type": rule["data_type"],
+                    "platform": rule["platform"],
                     "reference_assembly": rule["reference_assembly"],
                     "confidence": rule["confidence"],
                     "matched_rules": [f"image_ext_{ext}"],

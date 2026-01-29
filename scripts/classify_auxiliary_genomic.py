@@ -13,6 +13,7 @@ from pathlib import Path
 AUXILIARY_RULES = {
     ".fast5": {
         "data_modality": "genomic",
+        "data_type": "raw_signal",
         "platform": "ONT",
         "reference_assembly": None,  # Raw signal data, pre-basecalling
         "confidence": 0.90,
@@ -20,6 +21,7 @@ AUXILIARY_RULES = {
     },
     ".pod5": {
         "data_modality": "genomic",
+        "data_type": "raw_signal",
         "platform": "ONT",
         "reference_assembly": None,  # Raw signal data, pre-basecalling
         "confidence": 0.90,
@@ -27,6 +29,7 @@ AUXILIARY_RULES = {
     },
     ".fast5.tar": {
         "data_modality": "genomic",
+        "data_type": "raw_signal",
         "platform": "ONT",
         "reference_assembly": None,
         "confidence": 0.90,
@@ -34,25 +37,32 @@ AUXILIARY_RULES = {
     },
     ".fast5.tar.gz": {
         "data_modality": "genomic",
+        "data_type": "raw_signal",
         "platform": "ONT",
         "reference_assembly": None,
         "confidence": 0.90,
         "rationale": "Compressed tarball of FAST5 files containing raw Oxford Nanopore signal data.",
     },
     ".pvar": {
-        "data_modality": "genomic.germline_variants",
+        "data_modality": "genomic",
+        "data_type": "genotypes",
+        "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
         "rationale": "PLINK2 variant information file containing genotype calls.",
     },
     ".psam": {
-        "data_modality": "genomic.germline_variants",
+        "data_modality": "genomic",
+        "data_type": "genotypes",
+        "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
         "rationale": "PLINK2 sample information file for genotype data.",
     },
     ".pgen": {
-        "data_modality": "genomic.germline_variants",
+        "data_modality": "genomic",
+        "data_type": "genotypes",
+        "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
         "rationale": "PLINK2 binary genotype file containing variant calls.",
@@ -96,6 +106,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
 
                 # Start with base rule
                 data_modality = rule["data_modality"]
+                data_type = rule.get("data_type")
                 platform = rule.get("platform")
                 reference_assembly = rule["reference_assembly"]
                 confidence = rule["confidence"]
@@ -132,6 +143,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                     "dataset_id": f.get("dataset_id"),
                     "dataset_title": dataset_title,
                     "data_modality": data_modality,
+                    "data_type": data_type,
                     "platform": platform,
                     "reference_assembly": reference_assembly,
                     "confidence": confidence,
