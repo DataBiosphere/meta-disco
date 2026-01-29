@@ -2,7 +2,97 @@
 
 ## Executive Summary
 
-This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers `data_modality` and `reference_assembly` from file metadata without requiring full file downloads.
+This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers five classification dimensions from file metadata without requiring full file downloads.
+
+### Classification Dimensions
+
+The classifier populates five orthogonal metadata fields:
+
+| Field | Question Answered | Example Values |
+| ----- | ----------------- | -------------- |
+| `data_modality` | What biology is measured? | genomic, transcriptomic, epigenomic |
+| `data_type` | What artifact is this? | alignments, variant_calls, reads |
+| `platform` | What sequencing instrument? | ILLUMINA, PACBIO, ONT |
+| `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 |
+| `assay_type` | What method class? | WGS, WES, RNAseq |
+
+#### data_modality
+
+The biological signal domain—**what was measured** (independent of protocol/file format).
+
+```
+data_modality
+├── genomic                      # DNA sequence/variation
+├── transcriptomic               # RNA expression
+├── epigenomic                   # DNA/chromatin modifications
+│   ├── methylation              # DNA methylation state
+│   ├── chromatin_accessibility  # ATAC-seq, DNase-seq
+│   └── histone_modification     # ChIP-seq for histones
+├── imaging                      # Visual/spatial data
+│   └── histology                # Tissue slides
+└── null                         # Derived artifacts (QC plots, indexes)
+```
+
+#### data_type
+
+The artifact/content class—**what you can download and analyze** (independent of assay).
+
+```
+data_type
+├── reads                        # Raw sequencing reads (FASTQ)
+├── alignments                   # Aligned reads (BAM, CRAM)
+├── variant_calls                # SNV/indel calls (VCF)
+├── structural_variants          # SV calls (VCF)
+├── peaks                        # ChIP/ATAC peaks (BED, narrowPeak)
+├── signal_tracks                # Coverage/signal (bigWig)
+├── expression_matrix            # Gene/transcript counts
+├── methylation_calls            # CpG methylation levels
+├── raw_signal                   # Instrument signal (FAST5, POD5)
+├── images                       # Image files (SVS, PNG)
+├── annotations                  # Genomic intervals (BED)
+└── other                        # Auxiliary files
+```
+
+#### platform
+
+The sequencing instrument/technology used to generate the data.
+
+```
+platform
+├── ILLUMINA                     # Illumina short-read
+├── PACBIO                       # PacBio long-read (HiFi, CLR)
+├── ONT                          # Oxford Nanopore
+├── MGI                          # MGI/BGISEQ
+├── ELEMENT                      # Element Biosciences
+└── null                         # Non-sequencing data or unknown
+```
+
+#### reference_assembly
+
+The reference genome the data is aligned to or called against.
+
+```
+reference_assembly
+├── GRCh38                       # Human reference (2013), aliases: hg38, hs38
+├── GRCh37                       # Human reference (2009), aliases: hg19, b37
+├── CHM13                        # T2T complete genome (2022), aliases: t2t, hs1
+└── null                         # Unaligned reads, raw signal, or unknown
+```
+
+#### assay_type
+
+The top-level assay/method class. Inferred from platform, modality, and file size heuristics.
+
+```
+assay_type
+├── WGS                          # Whole genome sequencing
+├── WES                          # Whole exome sequencing
+├── RNAseq                       # Bulk RNA sequencing
+├── scRNAseq                     # Single-cell RNA sequencing
+├── ATACseq                      # Bulk ATAC-seq
+├── ChIPseq                      # ChIP sequencing
+└── null                         # Cannot be determined from file alone
+```
 
 ### Initial State (Before Classification)
 
@@ -65,15 +155,18 @@ Each JSON file contains:
 
 #### Classification Record Structure
 
-Each record in `classifications` contains:
+Each record in `classifications` contains all five classification dimensions:
 
 ```json
 {
   "file_name": "HG01874.chr17.hc.vcf.gz",
   "md5sum": "e1dca89aef536083f15093c39a0daa8f",
   "file_size": 158571384,
-  "data_modality": "genomic.germline_variants",
+  "data_modality": "genomic",
+  "data_type": "variant_calls",
+  "platform": "ILLUMINA",
   "reference_assembly": "CHM13",
+  "assay_type": "WGS",
   "confidence": 0.90,
   "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller"],
   "evidence": [
