@@ -145,7 +145,7 @@ class TestExpressionPattern:
         rule = match_modality_rule(filename)
         assert rule is not None
         assert rule["id"] == "bed_expression"
-        assert rule["data_modality"] == "transcriptomic"
+        assert rule["data_modality"] == "transcriptomic.bulk"
 
     def test_leafcutter_matches(self):
         """Leafcutter files should match expression rule."""

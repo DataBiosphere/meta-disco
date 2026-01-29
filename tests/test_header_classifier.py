@@ -361,7 +361,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic.whole_genome"
+        assert result["data_modality"] == "genomic"
         assert result["data_type"] == "reads"
         assert result["confidence"] >= 0.95
 
@@ -373,7 +373,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic.whole_genome"
+        assert result["data_modality"] == "genomic"
 
     def test_ont(self):
         """Classify Oxford Nanopore FASTQ."""
@@ -568,7 +568,7 @@ class TestBamCramClassification:
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
-        assert result["data_modality"] == "transcriptomic"
+        assert result["data_modality"] == "transcriptomic.bulk"
         assert result["data_type"] == "alignments"
 
     def test_bwa_aligner_genomic(self):
@@ -585,7 +585,7 @@ class TestBamCramClassification:
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS"""
         result = classify_from_header(header)
         assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic.whole_genome"
+        assert result["data_modality"] == "genomic"
         assert result["assay_type"] == "WGS"
 
     def test_assay_type_rnaseq(self):

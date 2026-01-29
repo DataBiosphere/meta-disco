@@ -48,7 +48,7 @@ ASSAY_TYPE_RULES = [
     {
         "id": "rnaseq_modality",
         "priority": 95,
-        "conditions": {"data_modality": "transcriptomic"},
+        "conditions": {"data_modality_contains": "transcriptomic"},
         "assay_type": "RNA-seq",
     },
     {
@@ -56,18 +56,6 @@ ASSAY_TYPE_RULES = [
         "priority": 80,
         "conditions": {"platform_in": ["PACBIO", "ONT"]},
         "assay_type": "WGS",
-    },
-    {
-        "id": "wgs_modality",
-        "priority": 75,
-        "conditions": {"data_modality_contains": "whole_genome"},
-        "assay_type": "WGS",
-    },
-    {
-        "id": "wes_modality",
-        "priority": 75,
-        "conditions": {"data_modality_contains": "exome"},
-        "assay_type": "WES",
     },
     {
         "id": "wgs_illumina_bam_large",
@@ -467,7 +455,7 @@ PACBIO_READTYPE_RULES = [
         header_section="@RG",
         field="DS",
         pattern="READTYPE=CCS",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.85,
         rationale="READTYPE=CCS indicates PacBio HiFi (High-Fidelity) reads. CCS (Circular "
                   "Consensus Sequencing) generates highly accurate long reads (>Q20, ~99% accuracy) "
@@ -479,7 +467,7 @@ PACBIO_READTYPE_RULES = [
         header_section="@RG",
         field="DS",
         pattern="READTYPE=SUBREAD",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.80,
         rationale="READTYPE=SUBREAD indicates PacBio CLR (Continuous Long Read) data. "
                   "These are raw subreads from a single pass around the circular molecule, "
@@ -495,7 +483,7 @@ RNASEQ_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="STAR",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="STAR (Spliced Transcripts Alignment to a Reference) is the most widely "
                   "used RNA-seq aligner. It performs splice-aware alignment essential for "
@@ -507,7 +495,7 @@ RNASEQ_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="hisat2",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="HISAT2 is a splice-aware aligner optimized for RNA-seq. It uses a graph-based "
                   "index that incorporates known splice sites and SNPs. Like STAR, its presence "
@@ -518,7 +506,7 @@ RNASEQ_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="tophat",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="TopHat was an early splice-aware aligner for RNA-seq (now superseded by "
                   "HISAT2). It identifies splice junctions and aligns reads across them. "
@@ -529,7 +517,7 @@ RNASEQ_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="salmon",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="Salmon is a transcript-level quantification tool for RNA-seq. It uses "
                   "quasi-mapping for fast, accurate abundance estimation. Presence indicates "
@@ -540,7 +528,7 @@ RNASEQ_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="kallisto",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="Kallisto performs rapid transcript quantification using pseudoalignment. "
                   "Like Salmon, it's specifically designed for RNA-seq analysis."
@@ -596,7 +584,7 @@ PACBIO_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="ccs",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.85,
         rationale="The 'ccs' program generates HiFi reads from PacBio subreads. Its presence "
                   "confirms this is PacBio HiFi data, typically used for high-quality genome "
@@ -607,7 +595,7 @@ PACBIO_PROGRAM_RULES = [
         header_section="@PG",
         field="PN",
         pattern="isoseq",
-        classification="transcriptomic",
+        classification="transcriptomic.bulk",
         confidence=0.95,
         rationale="IsoSeq is PacBio's full-length transcript sequencing method. The 'isoseq' "
                   "program in @PG indicates this is long-read RNA-seq data for transcript "
@@ -728,7 +716,7 @@ FILE_SIZE_RULES = [
         max_size_gb=None,
         file_format=".bam",
         platform="ILLUMINA",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.80,
         rationale="Illumina BAM files >50 GB strongly suggest WGS. At 30x coverage, a human "
                   "WGS BAM is typically 80-120 GB. WES files rarely exceed 20 GB even at high coverage."
@@ -739,7 +727,7 @@ FILE_SIZE_RULES = [
         max_size_gb=50.0,
         file_format=".bam",
         platform="ILLUMINA",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.65,
         rationale="Illumina BAM files 30-50 GB likely indicate WGS at lower coverage (15-20x) "
                   "or WES at very high coverage (200x+). WGS is more common in this range."
@@ -750,7 +738,7 @@ FILE_SIZE_RULES = [
         max_size_gb=20.0,
         file_format=".bam",
         platform="ILLUMINA",
-        classification="genomic.exome",
+        classification="genomic",
         confidence=0.60,
         rationale="Illumina BAM files 5-20 GB are typical for WES at 80-150x coverage. "
                   "Could also be low-coverage WGS, but WES is more common in this size range."
@@ -763,7 +751,7 @@ FILE_SIZE_RULES = [
         max_size_gb=None,
         file_format=".cram",
         platform="ILLUMINA",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.80,
         rationale="Illumina CRAM files >20 GB strongly suggest WGS. CRAM compression reduces "
                   "file size by 60-70% vs BAM, so a 20 GB CRAM corresponds to ~50-70 GB BAM."
@@ -774,7 +762,7 @@ FILE_SIZE_RULES = [
         max_size_gb=20.0,
         file_format=".cram",
         platform="ILLUMINA",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.65,
         rationale="Illumina CRAM files 10-20 GB likely indicate WGS at moderate coverage."
     ),
@@ -784,7 +772,7 @@ FILE_SIZE_RULES = [
         max_size_gb=8.0,
         file_format=".cram",
         platform="ILLUMINA",
-        classification="genomic.exome",
+        classification="genomic",
         confidence=0.60,
         rationale="Illumina CRAM files 2-8 GB are typical for WES. This corresponds to "
                   "~5-20 GB BAM, the standard WES size range."
@@ -797,7 +785,7 @@ FILE_SIZE_RULES = [
         max_size_gb=None,
         file_format=None,
         platform="PACBIO",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.75,
         rationale="Large PacBio files (>20 GB) typically indicate WGS. PacBio is rarely used "
                   "for WES due to cost; it's primarily used for WGS and structural variant detection."
@@ -810,7 +798,7 @@ FILE_SIZE_RULES = [
         max_size_gb=None,
         file_format=None,
         platform="ONT",
-        classification="genomic.whole_genome",
+        classification="genomic",
         confidence=0.75,
         rationale="Large ONT files (>20 GB) typically indicate WGS. ONT is rarely used for "
                   "targeted sequencing; its strength is in long-range structural analysis."
@@ -1430,7 +1418,7 @@ FASTQ_PACBIO_RULES = [
     FASTQHeaderRule(
         id="fastq_pacbio_ccs",
         pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+/ccs",
-        classification="genomic.whole_genome",
+        classification="genomic",
         platform="PACBIO",
         confidence=0.95,
         rationale="PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix "
@@ -1440,7 +1428,7 @@ FASTQ_PACBIO_RULES = [
     FASTQHeaderRule(
         id="fastq_pacbio_clr",
         pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+/\d+_\d+",
-        classification="genomic.whole_genome",
+        classification="genomic",
         platform="PACBIO",
         confidence=0.90,
         rationale="PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format. "
@@ -1449,7 +1437,7 @@ FASTQ_PACBIO_RULES = [
     FASTQHeaderRule(
         id="fastq_pacbio_generic",
         pattern=r"^@m\d+[A-Za-z]*_\d+_\d+/\d+",
-        classification="genomic.whole_genome",
+        classification="genomic",
         platform="PACBIO",
         confidence=0.85,
         rationale="Generic PacBio read names follow @movie/zmw format. The movie name encodes "
@@ -1626,7 +1614,7 @@ CONVERGENT_RULES = [
         signal_a="platform_pacbio",
         signal_b="pacbio_hifi",
         relationship="convergent",
-        expected_agreement="genomic.whole_genome",
+        expected_agreement="genomic",
         rationale="PL:PACBIO and READTYPE=CCS both indicate PacBio HiFi sequencing, "
                   "which is used for whole genome sequencing. These signals reinforce each other."
     ),
@@ -1635,7 +1623,7 @@ CONVERGENT_RULES = [
         signal_a="platform_pacbio",
         signal_b="program_ccs",
         relationship="convergent",
-        expected_agreement="genomic.whole_genome",
+        expected_agreement="genomic",
         rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi data generation."
     ),
     ConsistencyRule(
@@ -1643,7 +1631,7 @@ CONVERGENT_RULES = [
         signal_a="pacbio_hifi",
         signal_b="program_ccs",
         relationship="convergent",
-        expected_agreement="genomic.whole_genome",
+        expected_agreement="genomic",
         rationale="READTYPE=CCS and PN:ccs both indicate HiFi consensus calling was performed."
     ),
     ConsistencyRule(
@@ -1660,7 +1648,7 @@ CONVERGENT_RULES = [
         signal_a="platform_illumina",
         signal_b="program_star",
         relationship="convergent",
-        expected_agreement="transcriptomic",
+        expected_agreement="transcriptomic.bulk",
         rationale="Illumina platform with STAR aligner indicates standard RNA-seq workflow."
     ),
     ConsistencyRule(
@@ -1684,7 +1672,7 @@ CONVERGENT_RULES = [
         signal_a="platform_pacbio",
         signal_b="program_isoseq",
         relationship="convergent",
-        expected_agreement="transcriptomic",
+        expected_agreement="transcriptomic.bulk",
         rationale="PacBio platform with IsoSeq program indicates long-read RNA sequencing."
     ),
 ]
@@ -1958,7 +1946,7 @@ def classify_from_header(
             result["matched_rules"].append(rule.id)
 
             # Update modality if this rule has higher confidence and modality is still generic
-            # Only refine from "genomic" to "genomic.whole_genome" or "genomic.exome"
+            # Note: assay_type (WGS/WES) is inferred separately, data_modality stays as "genomic"
             if rule.classification and result["data_modality"] in [None, "genomic"]:
                 if rule.confidence > 0.5:  # Only apply if reasonably confident
                     result["evidence"].append({
@@ -2420,7 +2408,8 @@ def classify_from_fastq_header(
         if "_r1" in file_lower or "_r2" in file_lower or ".r1." in file_lower or ".r2." in file_lower:
             result["is_paired_end"] = True
         if "ccs" in file_lower or "hifi" in file_lower:
-            result["data_modality"] = "genomic.whole_genome"
+            result["data_modality"] = "genomic"
+            result["assay_type"] = "WGS"  # CCS/HiFi are WGS assays
 
     # Infer assay_type from platform
     if result["platform"] in ["PACBIO", "ONT"]:

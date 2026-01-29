@@ -26,21 +26,22 @@ import requests
 IGSR_API = "https://www.internationalgenome.org/api/beta/sample"
 
 # Map IGSR sequence types to our modality classifications
+# Note: assay_type (WGS/WES) is now separate from data_modality
 SEQUENCE_TO_MODALITY = {
-    # Exome
-    "Exome": "genomic.exome",
-    # WGS - various coverage levels
-    "Low coverage WGS": "genomic.whole_genome",
-    "PCR-free high coverage": "genomic.whole_genome",
-    "High coverage WGS": "genomic.whole_genome",
-    "Complete Genomics": "genomic.whole_genome",
-    # Long read WGS
-    "PacBio SMRT genomic": "genomic.whole_genome",
-    "PacBio HiFi": "genomic.whole_genome",
-    "Oxford Nanopore Technologies": "genomic.whole_genome",
-    "Illumina NovaSeq 6000": "genomic.whole_genome",
-    # Transcriptomic
-    "mRNA": "transcriptomic",
+    # Exome - assay_type: WES
+    "Exome": "genomic",
+    # WGS - various coverage levels - assay_type: WGS
+    "Low coverage WGS": "genomic",
+    "PCR-free high coverage": "genomic",
+    "High coverage WGS": "genomic",
+    "Complete Genomics": "genomic",
+    # Long read WGS - assay_type: WGS
+    "PacBio SMRT genomic": "genomic",
+    "PacBio HiFi": "genomic",
+    "Oxford Nanopore Technologies": "genomic",
+    "Illumina NovaSeq 6000": "genomic",
+    # Transcriptomic - assay_type: RNA-seq
+    "mRNA": "transcriptomic.bulk",
 }
 
 # Collections that imply WGS even without explicit sequence type
@@ -93,7 +94,7 @@ def get_expected_modalities(igsr_data: dict) -> set[str]:
         title_lower = title.lower()
         for pattern in WGS_COLLECTION_PATTERNS:
             if pattern.lower() in title_lower:
-                modalities.add("genomic.whole_genome")
+                modalities.add("genomic")  # WGS is now assay_type, not modality
                 break
     return modalities
 

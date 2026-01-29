@@ -112,7 +112,7 @@ file_types:
             - "(?i)transcriptome"
             - "(?i)_RNA\\."
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.80
         reason: "Filename contains RNA-seq indicator"
         terminal: false  # continue to check for single-cell
@@ -165,7 +165,8 @@ file_types:
             - "(?i)_WGS\\."
             - "(?i)whole.?genome"
         then:
-          data_modality: genomic.whole_genome
+          data_modality: genomic
+          assay_type: WGS
         confidence: 0.85
         reason: "Filename contains WGS indicator"
         terminal: false
@@ -178,7 +179,8 @@ file_types:
             - "(?i)exome"
             - "(?i)_WES\\."
         then:
-          data_modality: genomic.exome
+          data_modality: genomic
+          assay_type: WES
         confidence: 0.85
         reason: "Filename contains exome indicator"
         terminal: false
@@ -192,7 +194,8 @@ file_types:
             - "(?i)pacbio"
             - "(?i)_pb_"
         then:
-          data_modality: genomic.whole_genome
+          data_modality: genomic
+          assay_type: WGS
         confidence: 0.70
         reason: "HiFi/PacBio reads typically used for genome assembly"
         terminal: false
@@ -242,7 +245,7 @@ file_types:
             - "(?i)_STAR_"
             - "(?i)\\.star\\."
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.90
         reason: "STAR aligner output indicates RNA-seq"
         terminal: false
@@ -253,7 +256,8 @@ file_types:
           file_size_gt: 50_000_000_000  # 50GB
           modality_not_set: true
         then:
-          data_modality: genomic.whole_genome
+          data_modality: genomic
+          assay_type: WGS
         confidence: 0.60
         reason: "Large alignment file (>50GB) suggests WGS"
         terminal: false
@@ -345,7 +349,7 @@ file_types:
             - "(?i)rnaseq"
             - "(?i)transcriptome"
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.80
         reason: "Filename contains RNA indicator"
         terminal: false
@@ -381,7 +385,8 @@ file_types:
             - "(?i)_wgs_"
             - "(?i)whole.?genome"
         then:
-          data_modality: genomic.whole_genome
+          data_modality: genomic
+          assay_type: WGS
         confidence: 0.80
         reason: "Filename contains WGS indicator"
         terminal: false
@@ -484,7 +489,7 @@ file_types:
             - "(?i)rna"
             - "(?i)direct.?rna"
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.80
         reason: "Nanopore direct RNA sequencing"
         terminal: true
@@ -593,7 +598,7 @@ file_types:
             - "(?i)tpm\\.txt"
             - "(?i)fpkm\\.txt"
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.70
         reason: "Filename suggests expression count data"
         terminal: true
@@ -648,7 +653,7 @@ file_types:
             - "(?i)transcriptome"
             - "(?i)coverage"
         then:
-          data_modality: transcriptomic
+          data_modality: transcriptomic.bulk
         confidence: 0.75
         reason: "Signal track with RNA/coverage indicator"
         terminal: true

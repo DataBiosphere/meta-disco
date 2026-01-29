@@ -33,7 +33,7 @@ MODALITY_RULES = [
     {
         "id": "bed_expression",
         "pattern": r"(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\.TSS\.)",
-        "data_modality": "transcriptomic",
+        "data_modality": "transcriptomic.bulk",
         "data_type": "annotations",
         "assay_type": "RNA-seq",
         "confidence": 0.90,

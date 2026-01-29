@@ -44,14 +44,14 @@ class TestRuleMatching:
     def test_alignment_rnaseq_filename(self, engine):
         """RNA-seq indicators in filename should set transcriptomic modality."""
         result = engine.classify(FileInfo(filename="sample_RNA_aligned.bam"))
-        assert result.data_modality == "transcriptomic"
+        assert result.data_modality == "transcriptomic.bulk"
         assert result.confidence >= 0.80
         assert "alignment_rnaseq_filename" in result.rules_matched
 
     def test_alignment_wgs_filename(self, engine):
-        """WGS indicators should set genomic.whole_genome modality."""
+        """WGS indicators should set genomic modality with WGS assay_type."""
         result = engine.classify(FileInfo(filename="sample_WGS_aligned.bam"))
-        assert result.data_modality == "genomic.whole_genome"
+        assert result.data_modality == "genomic"
         assert result.confidence >= 0.85
 
     def test_alignment_ref_grch38(self, engine):
@@ -75,7 +75,7 @@ class TestRuleMatching:
         result = engine.classify(
             FileInfo(filename="sample.bam", file_size=60_000_000_000)
         )
-        assert result.data_modality == "genomic.whole_genome"
+        assert result.data_modality == "genomic"
         assert result.confidence >= 0.60
         assert "alignment_size_wgs" in result.rules_matched
 
@@ -85,7 +85,7 @@ class TestRuleMatching:
             FileInfo(filename="sample_RNA_aligned.bam", file_size=60_000_000_000)
         )
         # RNA indicator should take precedence
-        assert result.data_modality == "transcriptomic"
+        assert result.data_modality == "transcriptomic.bulk"
 
     def test_alignment_needs_header_inspection(self, engine):
         """BAM without indicators should need header inspection."""
@@ -98,7 +98,7 @@ class TestRuleMatching:
         result = engine.classify(
             FileInfo(filename="sample.Aligned.sortedByCoord.out.bam")
         )
-        assert result.data_modality == "transcriptomic"
+        assert result.data_modality == "transcriptomic.bulk"
         assert result.confidence >= 0.90
 
 
@@ -189,7 +189,7 @@ class TestFastqFiles:
     def test_fastq_rna(self, engine):
         """FASTQ with RNA indicator."""
         result = engine.classify(FileInfo(filename="sample_rnaseq_R1.fastq.gz"))
-        assert result.data_modality == "transcriptomic"
+        assert result.data_modality == "transcriptomic.bulk"
 
     def test_fastq_ambiguous(self, engine):
         """FASTQ without indicators needs study context."""
@@ -253,7 +253,7 @@ class TestTextFiles:
     def test_count_matrix(self, engine):
         """Count matrix files should be transcriptomic."""
         result = engine.classify(FileInfo(filename="gene_counts.txt"))
-        assert result.data_modality == "transcriptomic"
+        assert result.data_modality == "transcriptomic.bulk"
 
     def test_ambiguous_txt(self, engine):
         """Ambiguous text files need manual review."""
@@ -269,7 +269,7 @@ class TestIntegration:
         result = engine.classify(
             FileInfo(filename="m64043_210211_005516.hifi_reads.bam")
         )
-        assert result.data_modality == "genomic.whole_genome"
+        assert result.data_modality == "genomic"
         assert result.confidence >= 0.70
 
     def test_vcf_with_chr(self, engine):
