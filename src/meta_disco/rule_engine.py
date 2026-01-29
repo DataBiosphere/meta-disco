@@ -447,6 +447,87 @@ class RuleEngine:
 
         return None
 
+    def classify_with_bam_header(
+        self,
+        filename: str,
+        bam_header: str,
+        file_size: int | None = None,
+    ) -> ExtendedClassificationResult:
+        """Classify a BAM/CRAM file using its header.
+
+        This is a convenience method that creates ExtendedFileInfo from the
+        provided header text and runs tier 1-3 classification.
+
+        Args:
+            filename: The filename (used for extension and filename pattern rules)
+            bam_header: Raw SAM/BAM header text (lines starting with @)
+            file_size: Optional file size in bytes
+
+        Returns:
+            ExtendedClassificationResult with classification and metadata
+        """
+        file_info = ExtendedFileInfo(
+            filename=filename,
+            file_size=file_size,
+            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            bam_header=bam_header,
+        )
+        return self.classify_extended(file_info, include_tier3=True)
+
+    def classify_with_vcf_header(
+        self,
+        filename: str,
+        vcf_header: str,
+        file_size: int | None = None,
+    ) -> ExtendedClassificationResult:
+        """Classify a VCF file using its header.
+
+        This is a convenience method that creates ExtendedFileInfo from the
+        provided header text and runs tier 1-3 classification.
+
+        Args:
+            filename: The filename (used for extension and filename pattern rules)
+            vcf_header: Raw VCF header text (lines starting with ##)
+            file_size: Optional file size in bytes
+
+        Returns:
+            ExtendedClassificationResult with classification and metadata
+        """
+        file_info = ExtendedFileInfo(
+            filename=filename,
+            file_size=file_size,
+            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            vcf_header=vcf_header,
+        )
+        return self.classify_extended(file_info, include_tier3=True)
+
+    def classify_with_fastq_header(
+        self,
+        filename: str,
+        first_read: str,
+        file_size: int | None = None,
+    ) -> ExtendedClassificationResult:
+        """Classify a FASTQ file using its first read name.
+
+        This is a convenience method that creates ExtendedFileInfo from the
+        provided read name and runs tier 1-3 classification.
+
+        Args:
+            filename: The filename (used for extension and filename pattern rules)
+            first_read: First read name line from FASTQ (starting with @)
+            file_size: Optional file size in bytes
+
+        Returns:
+            ExtendedClassificationResult with classification and metadata
+        """
+        file_info = ExtendedFileInfo(
+            filename=filename,
+            file_size=file_size,
+            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            fastq_first_read=first_read,
+        )
+        return self.classify_extended(file_info, include_tier3=True)
+
 
 # Alias for backward compatibility
 UnifiedRuleEngine = RuleEngine

@@ -1,53 +1,148 @@
 # Meta-Disco Unified Classification Rules
 # ========================================
 #
-# This file consolidates all classification rules from:
+# PURPOSE
+# -------
+# This file contains all rules for classifying biological data files (BAM, CRAM,
+# FASTQ, VCF, BED, etc.) to determine their data_modality (genomic, transcriptomic,
+# epigenomic), reference_assembly (GRCh38, GRCh37, CHM13), and other metadata.
+#
+# The rule engine is used by the AnVIL Explorer and Terra Data Repository to
+# automatically classify files based on filename patterns, file size, and
+# optionally BAM/VCF/FASTQ headers.
+#
+#
+# HOW THE RULE ENGINE WORKS
+# -------------------------
+# 1. EXTENSION EXTRACTION: The engine first extracts the file extension,
+#    handling compound extensions like .vcf.gz, .fastq.gz, .g.vcf.gz
+#
+# 2. RULE FILTERING: Only rules matching the file's extension are considered.
+#    Rules without an 'extensions' constraint apply to ALL files.
+#
+# 3. TIERED EXECUTION: Rules execute in tier order (1 → 2 → 3):
+#    - Tier 1: Extension-only rules (fastest, always available)
+#    - Tier 2: Filename pattern and file size rules
+#    - Tier 3: Header-based rules (requires reading file headers)
+#
+# 4. CONDITION EVALUATION: All conditions in 'when' must match (AND logic).
+#    If any condition fails, the rule is skipped.
+#
+# 5. EFFECT APPLICATION: When a rule matches, all effects in 'then' are applied.
+#    Effects accumulate across rules unless a field is already set.
+#
+# 6. TERMINAL RULES: If terminal=true and the rule matches, processing stops
+#    immediately. Use for definitive classifications.
+#
+# 7. CONFIDENCE & REASONS: Each matching rule adds its rationale to the reasons
+#    list. The highest confidence from matching rules is used.
+#
+#
+# KEY CONCEPTS
+# ------------
+# - data_modality: What biological data type (genomic, transcriptomic.bulk,
+#   epigenomic.methylation, imaging.histology, etc.)
+#
+# - data_type: File content type (alignments, variants, reads, peaks, signal, etc.)
+#
+# - reference_assembly: Reference genome (GRCh38, GRCh37, CHM13, or null for
+#   unaligned/raw data)
+#
+# - assay_type: Experimental method (WGS, WES, RNA-seq, ATAC-seq, ChIP-seq, etc.)
+#
+# - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+#
+# - skip: Files to ignore (indices, checksums, logs)
+#
+# - needs_*: Flags indicating more information needed for classification
+#
+#
+# FILE STRUCTURE (Multi-document YAML)
+# ------------------------------------
+# This file contains multiple YAML documents separated by '---':
+#
+# 1. extension_map: Maps extensions to file type categories
+# 2. rules: The classification rules (main content)
+# 3. validators: Python validator configurations for complex logic
+# 4. assay_type_rules: Rules for inferring WGS/WES/RNA-seq from signals
+# 5. illumina_instruments: Instrument ID prefix to model mapping
+# 6. reference_contig_lengths: Chromosome sizes for reference detection
+#
+#
+# RULE SCHEMA
+# -----------
+# - id: unique rule identifier (required)
+# - tier: 1=extension, 2=filename, 3=header (required)
+# - scope: extension|filename|header|vcf_header|fastq_header|file_size (required)
+# - when: conditions that must all match (required)
+# - then: effects to apply when rule matches (required)
+# - confidence: 0.0-1.0 confidence score (default: 0.0)
+# - rationale: explanation for this classification (recommended)
+# - terminal: if true, stop processing after this rule matches (default: false)
+#
+#
+# CONDITION TYPES (in 'when')
+# ---------------------------
+# Extension/filename conditions:
+# - extensions: list of file extensions to match (e.g., [".bam", ".cram"])
+# - filename_pattern: regex pattern for filename (case-insensitive)
+# - dataset_pattern: regex pattern for dataset title
+# - file_format: required format (.bam, .cram, etc)
+#
+# File size conditions:
+# - file_size_min_gb: minimum file size in GB
+# - file_size_max_gb: maximum file size in GB
+#
+# State conditions (for rule ordering):
+# - modality_not_set: true if data_modality must be unset
+# - reference_not_set: true if reference_assembly must be unset
+# - platform: required platform value (ILLUMINA, PACBIO, ONT)
+#
+# Header conditions (tier 3):
+# - header_section: BAM header section (@HD, @RG, @PG, @SQ)
+# - header_field: field within section (PL, PN, SN, AS, DS)
+# - header_pattern: regex pattern to match in field value
+# - header_absent: true if header section should NOT exist
+# - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
+# - vcf_pattern: regex pattern for VCF header content
+# - fastq_pattern: regex pattern for FASTQ read name
+#
+#
+# EFFECT TYPES (in 'then')
+# ------------------------
+# Classification fields:
+# - data_modality: set data modality (genomic, transcriptomic.bulk, etc.)
+# - data_type: set data type (alignments, variants, reads, peaks, etc.)
+# - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
+# - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
+# - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+# - file_category: set category (qc_stats, reference_intervals, etc.)
+#
+# Control flags:
+# - skip: true to mark file for skipping (indices, checksums)
+# - needs_header_inspection: true to flag for header analysis
+# - needs_study_context: true to flag for study context needed
+# - needs_manual_review: true to flag for human review
+#
+#
+# TIPS FOR REVIEWING/EDITING RULES
+# --------------------------------
+# 1. Check rule order matters within a tier - first match wins for terminal rules
+# 2. More specific patterns should come before general patterns
+# 3. Use terminal=true for definitive classifications to avoid override
+# 4. Use modality_not_set/reference_not_set for fallback rules
+# 5. Confidence should reflect certainty: 0.95 for definitive, 0.60-0.80 for heuristics
+# 6. Always provide a rationale explaining the classification logic
+# 7. Test regex patterns - they're case-insensitive by default
+#
+#
+# CONSOLIDATED FROM
+# -----------------
 # 1. rules/classification_rules.yaml (extension, filename rules)
 # 2. src/meta_disco/header_classifier.py (header rules)
 # 3. scripts/classify_bed_files.py (BED file patterns)
 # 4. scripts/classify_images.py (image extensions)
 # 5. scripts/classify_auxiliary_genomic.py (FAST5/POD5/PLINK)
-#
-# Rule Schema:
-# ------------
-# - id: unique rule identifier
-# - tier: 1=extension, 2=filename, 3=header
-# - scope: extension|filename|header|vcf_header|fastq_header|file_size
-# - when: conditions that must all match
-# - then: effects to apply when rule matches
-# - confidence: 0.0-1.0 confidence score
-# - rationale: explanation for this classification
-# - terminal: if true, stop processing after this rule matches
-#
-# Condition types (in 'when'):
-# - extensions: list of file extensions to match
-# - filename_pattern: regex pattern for filename
-# - dataset_pattern: regex pattern for dataset title
-# - file_size_min_gb: minimum file size in GB
-# - file_size_max_gb: maximum file size in GB
-# - modality_not_set: true if modality must be unset
-# - reference_not_set: true if reference must be unset
-# - always: true to always match
-# - header_section: BAM header section (@HD, @RG, @PG, @SQ)
-# - header_field: field within section (PL, PN, SN, AS, DS)
-# - header_pattern: regex pattern to match in field
-# - vcf_header_type: VCF header line type (##reference, ##source, ##contig, ##INFO, ##FORMAT)
-# - vcf_pattern: regex pattern for VCF header
-# - fastq_pattern: regex pattern for FASTQ read name
-# - platform: required platform (ILLUMINA, PACBIO, ONT)
-# - file_format: required format (.bam, .cram, etc)
-#
-# Effect types (in 'then'):
-# - data_modality: set data modality
-# - data_type: set data type (alignments, variants, etc)
-# - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
-# - assay_type: set assay type (WGS, WES, RNA-seq, etc)
-# - platform: set platform
-# - skip: true to mark file for skipping
-# - needs_header_inspection: true to flag for header analysis
-# - needs_study_context: true to flag for study context
-# - needs_manual_review: true to flag for manual review
-# - file_category: set file category (qc_stats, reference_intervals, etc)
 
 # =============================================================================
 # EXTENSION MAP
@@ -1823,6 +1918,18 @@ rules:
     rationale: "HiSeq 2000/2500 instrument identifier found in read description"
     terminal: false
 
+  - id: fastq_illumina_ena_hiseq
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[EDS]RR\\d+\\.\\d+ HS2[05]00"
+    then:
+      platform: ILLUMINA
+    confidence: 0.90
+    rationale: "ENA/SRA-reformatted read names with HiSeq 2000/2500 instrument ID in description"
+    terminal: false
+
   # ---------------------------------------------------------------------------
   # PacBio read name patterns
   # ---------------------------------------------------------------------------
@@ -1988,6 +2095,36 @@ rules:
     rationale: "DRR accessions indicate data from DDBJ Sequence Read Archive (Japan)"
     terminal: false
 
+  # ---------------------------------------------------------------------------
+  # Paired-end detection (works across platforms)
+  # ---------------------------------------------------------------------------
+  - id: fastq_paired_end
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "[/\\s][12]$|[/\\s][12]:|_R[12]_|\\.R[12]\\.|_r[12]_|\\.r[12]\\."
+    then: {}
+    confidence: 0.80
+    rationale: "Read 1/2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Default genomic modality for FASTQ when platform detected but no modality
+  # ---------------------------------------------------------------------------
+  - id: fastq_genomic_default
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      modality_not_set: true
+    then:
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.60
+    rationale: "Default to genomic for FASTQ files when no modality indicators in filename"
+    terminal: false
+
   # ===========================================================================
   # FALLBACK RULES
   # ===========================================================================
@@ -2002,7 +2139,7 @@ rules:
       needs_header_inspection: true
     confidence: 0.0
     rationale: "No modality indicators found; requires BAM header inspection"
-    terminal: true
+    terminal: false
 
   - id: variant_needs_header
     tier: 2
@@ -2014,7 +2151,7 @@ rules:
       needs_header_inspection: true
     confidence: 0.0
     rationale: "Reference assembly not in filename; check VCF header"
-    terminal: true
+    terminal: false
 
   - id: reads_fallback
     tier: 2
@@ -2026,7 +2163,7 @@ rules:
       needs_study_context: true
     confidence: 0.0
     rationale: "FASTQ modality ambiguous; requires study context"
-    terminal: true
+    terminal: false
 
   - id: signal_fallback
     tier: 2
@@ -2099,7 +2236,7 @@ rules:
       needs_manual_review: true
     confidence: 0.0
     rationale: "Unknown file extension - requires manual review"
-    terminal: true
+    terminal: false  # Allow tier 3 header rules to run
 
 ---
 # =============================================================================
