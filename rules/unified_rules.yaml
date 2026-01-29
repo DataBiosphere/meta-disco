@@ -563,6 +563,31 @@ rules:
     terminal: false
 
   # ---------------------------------------------------------------------------
+  # Dataset-based reference rules (run early to set reference before terminal rules)
+  # ---------------------------------------------------------------------------
+  - id: dataset_t2t_reference
+    tier: 2
+    scope: filename
+    when:
+      dataset_pattern: "ANVIL_T2T"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.90
+    rationale: "T2T consortium data uses CHM13 reference"
+    terminal: false
+
+  - id: dataset_1000g_reference
+    tier: 2
+    scope: filename
+    when:
+      dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
   # FASTQ reads - modality from filename
   # ---------------------------------------------------------------------------
   - id: reads_rna_filename
@@ -730,7 +755,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed", ".bed.gz"]
-      filename_pattern: "(?i)(\\.hap[12]\\.|paternal|maternal|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
+      filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
     then:
       data_modality: null
       data_type: annotations
@@ -899,31 +924,6 @@ rules:
     confidence: 0.75
     rationale: "T2T project genomic region archive"
     terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Dataset-based reference rules
-  # ---------------------------------------------------------------------------
-  - id: dataset_t2t_reference
-    tier: 2
-    scope: filename
-    when:
-      dataset_pattern: "ANVIL_T2T"
-    then:
-      reference_assembly: CHM13
-    confidence: 0.90
-    rationale: "T2T consortium data uses CHM13 reference"
-    terminal: false
-
-  - id: dataset_1000g_reference
-    tier: 2
-    scope: filename
-    when:
-      dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
-    then:
-      reference_assembly: GRCh38
-    confidence: 0.95
-    rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
-    terminal: false
 
   # ===========================================================================
   # TIER 2.5: FILE SIZE HEURISTICS

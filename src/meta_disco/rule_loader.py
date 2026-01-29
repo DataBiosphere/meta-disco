@@ -78,10 +78,10 @@ class UnifiedRules:
         ".fq.gz",
         ".bed.gz",
         ".sam.gz",
+        ".fast5.tar.gz",  # Must come before .tar.gz
+        ".fast5.tar",     # Must come before .tar
         ".tar.gz",
         ".mtx.gz",
-        ".fast5.tar.gz",
-        ".fast5.tar",
     ]
 
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:

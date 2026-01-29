@@ -1,39 +1,25 @@
 #!/usr/bin/env python3
-"""Classify image files by extension.
+"""Classify image files using RuleEngine.
 
-.svs -> imaging.histology (Aperio whole-slide images)
-.png -> N/A (derived visualizations, QC plots)
+Uses rules from rules/unified_rules.yaml for:
+- .svs -> imaging.histology (Aperio whole-slide images)
+- .png -> derived visualizations (QC plots)
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-# Extension-based classification rules for images
-IMAGE_RULES = {
-    ".svs": {
-        "data_modality": "imaging.histology",
-        "data_type": "images",
-        "assay_type": "Histology",
-        "platform": None,
-        "reference_assembly": None,
-        "confidence": 0.95,
-        "rationale": "SVS files are Aperio whole-slide histology images used for pathology analysis.",
-    },
-    ".png": {
-        "data_modality": None,  # QC plots, derived visualizations - not primary data
-        "data_type": "images",
-        "assay_type": None,
-        "platform": None,
-        "reference_assembly": None,
-        "confidence": 0.90,
-        "rationale": "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data.",
-    },
-}
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.meta_disco.rule_engine import RuleEngine
+from src.meta_disco.models import FileInfo
 
 
 def classify_images(metadata_path: Path, output_path: Path):
-    """Classify image files based on extension."""
+    """Classify image files using RuleEngine."""
 
     with open(metadata_path) as f:
         data = json.load(f)
@@ -41,63 +27,64 @@ def classify_images(metadata_path: Path, output_path: Path):
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
     print(f"Loaded {len(files):,} files from metadata")
 
+    engine = RuleEngine()
     results = []
-    stats = {}
-
-    for ext in IMAGE_RULES:
-        stats[ext] = {"total": 0, "classified": 0}
+    stats = {".svs": {"total": 0}, ".png": {"total": 0}, ".jpg": {"total": 0}, ".tiff": {"total": 0}}
 
     for f in files:
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
+        name_lower = name.lower()
 
-        # Check each image extension
-        for ext, rule in IMAGE_RULES.items():
-            if fmt == ext or name.lower().endswith(ext):
-                stats[ext]["total"] += 1
-                stats[ext]["classified"] += 1
+        # Check if this is an image file
+        is_image = False
+        matched_ext = None
+        for ext in stats.keys():
+            if fmt == ext or name_lower.endswith(ext):
+                is_image = True
+                matched_ext = ext
+                stats[ext]["total"] = stats[ext].get("total", 0) + 1
+                break
 
-                results.append({
-                    "file_name": name,
-                    "file_format": fmt,
-                    "md5sum": f.get("file_md5sum"),
-                    "file_size": f.get("file_size"),
-                    "entry_id": f.get("entry_id"),
-                    "dataset_id": f.get("dataset_id"),
-                    "dataset_title": f.get("dataset_title"),
-                    "data_modality": rule["data_modality"],
-                    "data_type": rule["data_type"],
-                    "assay_type": rule["assay_type"],
-                    "platform": rule["platform"],
-                    "reference_assembly": rule["reference_assembly"],
-                    "confidence": rule["confidence"],
-                    "matched_rules": [f"image_ext_{ext}"],
-                    "evidence": [{
-                        "rule_id": f"image_ext_{ext}",
-                        "matched": f"Extension: {ext}",
-                        "classification": rule["data_modality"] or "N/A",
-                        "confidence": rule["confidence"],
-                        "rationale": rule["rationale"],
-                    }],
-                })
-                break  # Only match one rule per file
+        if not is_image:
+            continue
+
+        # Classify using RuleEngine
+        file_info = FileInfo(
+            filename=name,
+            file_size=f.get("file_size"),
+            dataset_title=f.get("dataset_title"),
+        )
+        result = engine.classify_extended(file_info)
+
+        results.append({
+            "file_name": name,
+            "file_format": fmt,
+            "md5sum": f.get("file_md5sum"),
+            "file_size": f.get("file_size"),
+            "entry_id": f.get("entry_id"),
+            "dataset_id": f.get("dataset_id"),
+            "dataset_title": f.get("dataset_title"),
+            "data_modality": result.data_modality,
+            "data_type": result.data_type,
+            "assay_type": result.assay_type,
+            "platform": result.platform,
+            "reference_assembly": result.reference_assembly,
+            "confidence": result.confidence,
+            "matched_rules": result.rules_matched,
+            "reasons": result.reasons,
+        })
 
     # Print summary
     print("\n" + "=" * 70)
     print("IMAGE FILE CLASSIFICATION RESULTS")
     print("=" * 70)
 
-    total_all = 0
-    classified_all = 0
+    total_all = sum(s["total"] for s in stats.values())
 
-    for ext, rule in IMAGE_RULES.items():
-        s = stats[ext]
-        total_all += s["total"]
-        classified_all += s["classified"]
-        mod = rule["data_modality"] or "N/A"
-        print(f"\n{ext}:")
-        print(f"  Total:      {s['total']:>7,}")
-        print(f"  Modality:   {mod}")
+    for ext, s in stats.items():
+        if s["total"] > 0:
+            print(f"\n{ext}: {s['total']:,}")
 
     print(f"\n{'=' * 70}")
     print(f"Total images: {total_all:,}")
@@ -119,7 +106,7 @@ def classify_images(metadata_path: Path, output_path: Path):
         json.dump({
             "metadata": {
                 "total_images": total_all,
-                "by_extension": {ext: stats[ext]["total"] for ext in IMAGE_RULES},
+                "by_extension": {ext: stats[ext]["total"] for ext in stats if stats[ext]["total"] > 0},
                 "complete": True,
             },
             "classifications": results,

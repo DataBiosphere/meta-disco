@@ -1,93 +1,28 @@
 #!/usr/bin/env python3
-"""Classify auxiliary genomic files by extension.
+"""Classify auxiliary genomic files using RuleEngine.
 
-FAST5 -> genomic (ONT raw signal, pre-basecalling, no reference)
-PLINK (.pvar/.psam/.pgen) -> genomic.germline_variants (genotype data)
+Uses rules from rules/unified_rules.yaml for:
+- .fast5, .pod5 -> genomic.raw_signal (ONT raw signal data)
+- .pvar, .psam, .pgen -> genomic.genotypes (PLINK2 genotype data)
 """
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-# Extension-based classification rules
-AUXILIARY_RULES = {
-    ".fast5": {
-        "data_modality": "genomic",
-        "data_type": "raw_signal",
-        "assay_type": "WGS",  # ONT is typically used for WGS
-        "platform": "ONT",
-        "reference_assembly": None,  # Raw signal data, pre-basecalling
-        "confidence": 0.90,
-        "rationale": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment.",
-    },
-    ".pod5": {
-        "data_modality": "genomic",
-        "data_type": "raw_signal",
-        "assay_type": "WGS",  # ONT is typically used for WGS
-        "platform": "ONT",
-        "reference_assembly": None,  # Raw signal data, pre-basecalling
-        "confidence": 0.90,
-        "rationale": "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5).",
-    },
-    ".fast5.tar": {
-        "data_modality": "genomic",
-        "data_type": "raw_signal",
-        "assay_type": "WGS",
-        "platform": "ONT",
-        "reference_assembly": None,
-        "confidence": 0.90,
-        "rationale": "Tarball of FAST5 files containing raw Oxford Nanopore signal data. Archived to reduce file count.",
-    },
-    ".fast5.tar.gz": {
-        "data_modality": "genomic",
-        "data_type": "raw_signal",
-        "assay_type": "WGS",
-        "platform": "ONT",
-        "reference_assembly": None,
-        "confidence": 0.90,
-        "rationale": "Compressed tarball of FAST5 files containing raw Oxford Nanopore signal data.",
-    },
-    ".pvar": {
-        "data_modality": "genomic",
-        "data_type": "genotypes",
-        "assay_type": None,  # Could be array or WGS-derived
-        "platform": None,
-        "reference_assembly": None,  # Set by dataset rule below
-        "confidence": 0.90,
-        "rationale": "PLINK2 variant information file containing genotype calls.",
-    },
-    ".psam": {
-        "data_modality": "genomic",
-        "data_type": "genotypes",
-        "assay_type": None,  # Could be array or WGS-derived
-        "platform": None,
-        "reference_assembly": None,  # Set by dataset rule below
-        "confidence": 0.90,
-        "rationale": "PLINK2 sample information file for genotype data.",
-    },
-    ".pgen": {
-        "data_modality": "genomic",
-        "data_type": "genotypes",
-        "assay_type": None,  # Could be array or WGS-derived
-        "platform": None,
-        "reference_assembly": None,  # Set by dataset rule below
-        "confidence": 0.90,
-        "rationale": "PLINK2 binary genotype file containing variant calls.",
-    },
-}
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Dataset-based reference assembly rules
-DATASET_REFERENCE_RULES = {
-    "ANVIL_1000G_PRIMED_data_model": {
-        "reference_assembly": "GRCh38",
-        "confidence": 0.95,
-        "rationale": "1000 Genomes Project high-coverage data uses GRCh38 reference.",
-    },
-}
+from src.meta_disco.rule_engine import RuleEngine
+from src.meta_disco.models import FileInfo
+
+# Extensions handled by this script
+AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar", ".psam", ".pgen"}
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
-    """Classify auxiliary genomic files based on extension and dataset context."""
+    """Classify auxiliary genomic files using RuleEngine."""
 
     with open(metadata_path) as f:
         data = json.load(f)
@@ -95,71 +30,55 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
     print(f"Loaded {len(files):,} files from metadata")
 
+    engine = RuleEngine()
     results = []
-    stats = {}
-
-    for ext in AUXILIARY_RULES:
-        stats[ext] = {"total": 0, "with_ref": 0}
+    stats = {ext: {"total": 0, "with_ref": 0} for ext in AUXILIARY_EXTENSIONS}
 
     for f in files:
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
+        name_lower = name.lower()
 
-        # Check each extension
-        for ext, rule in AUXILIARY_RULES.items():
-            if fmt == ext or name.lower().endswith(ext):
-                stats[ext]["total"] += 1
+        # Check if this is an auxiliary file
+        matched_ext = None
+        for ext in AUXILIARY_EXTENSIONS:
+            if fmt == ext or name_lower.endswith(ext):
+                matched_ext = ext
+                stats[ext]["total"] = stats[ext].get("total", 0) + 1
+                break
 
-                # Start with base rule
-                data_modality = rule["data_modality"]
-                data_type = rule.get("data_type")
-                assay_type = rule.get("assay_type")
-                platform = rule.get("platform")
-                reference_assembly = rule["reference_assembly"]
-                confidence = rule["confidence"]
-                evidence = [{
-                    "rule_id": f"ext_{ext.lstrip('.')}",
-                    "matched": f"Extension: {ext}",
-                    "classification": data_modality,
-                    "confidence": confidence,
-                    "rationale": rule["rationale"],
-                }]
+        if not matched_ext:
+            continue
 
-                # Apply dataset-based reference rules for PLINK files
-                if ext in [".pvar", ".psam", ".pgen"]:
-                    for ds_pattern, ds_rule in DATASET_REFERENCE_RULES.items():
-                        if ds_pattern in dataset_title:
-                            reference_assembly = ds_rule["reference_assembly"]
-                            confidence = max(confidence, ds_rule["confidence"])
-                            evidence.append({
-                                "rule_id": "dataset_reference",
-                                "matched": f"Dataset: {dataset_title}",
-                                "classification": reference_assembly,
-                                "confidence": ds_rule["confidence"],
-                                "rationale": ds_rule["rationale"],
-                            })
-                            stats[ext]["with_ref"] += 1
-                            break
+        # Classify using RuleEngine
+        file_info = FileInfo(
+            filename=name,
+            file_size=f.get("file_size"),
+            dataset_title=dataset_title,
+        )
+        result = engine.classify_extended(file_info)
 
-                results.append({
-                    "file_name": name,
-                    "file_format": fmt,
-                    "md5sum": f.get("file_md5sum"),
-                    "file_size": f.get("file_size"),
-                    "entry_id": f.get("entry_id"),
-                    "dataset_id": f.get("dataset_id"),
-                    "dataset_title": dataset_title,
-                    "data_modality": data_modality,
-                    "data_type": data_type,
-                    "assay_type": assay_type,
-                    "platform": platform,
-                    "reference_assembly": reference_assembly,
-                    "confidence": confidence,
-                    "matched_rules": [e["rule_id"] for e in evidence],
-                    "evidence": evidence,
-                })
-                break  # Only match one rule per file
+        if result.reference_assembly:
+            stats[matched_ext]["with_ref"] += 1
+
+        results.append({
+            "file_name": name,
+            "file_format": fmt,
+            "md5sum": f.get("file_md5sum"),
+            "file_size": f.get("file_size"),
+            "entry_id": f.get("entry_id"),
+            "dataset_id": f.get("dataset_id"),
+            "dataset_title": dataset_title,
+            "data_modality": result.data_modality,
+            "data_type": result.data_type,
+            "assay_type": result.assay_type,
+            "platform": result.platform,
+            "reference_assembly": result.reference_assembly,
+            "confidence": result.confidence,
+            "matched_rules": result.rules_matched,
+            "reasons": result.reasons,
+        })
 
     # Print summary
     print("\n" + "=" * 70)
@@ -169,7 +88,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     total_all = 0
     ref_all = 0
 
-    for ext, rule in AUXILIARY_RULES.items():
+    for ext in sorted(AUXILIARY_EXTENSIONS):
         s = stats[ext]
         if s["total"] > 0:
             total_all += s["total"]
@@ -177,7 +96,6 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             ref_pct = s["with_ref"] / s["total"] * 100 if s["total"] > 0 else 0
             print(f"\n{ext}:")
             print(f"  Total:      {s['total']:>7,}")
-            print(f"  Modality:   {rule['data_modality']}")
             print(f"  With ref:   {s['with_ref']:>7,} ({ref_pct:.1f}%)")
 
     print(f"\n{'=' * 70}")
@@ -211,7 +129,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         json.dump({
             "metadata": {
                 "total_files": total_all,
-                "by_extension": {ext: stats[ext]["total"] for ext in AUXILIARY_RULES},
+                "by_extension": {ext: stats[ext]["total"] for ext in AUXILIARY_EXTENSIONS if stats[ext]["total"] > 0},
                 "with_reference": ref_all,
                 "complete": True,
             },
