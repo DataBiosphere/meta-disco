@@ -1373,17 +1373,46 @@ rules:
     rationale: "Contig names containing CHM13/T2T/hs1 indicate alignment to T2T-CHM13 reference"
     terminal: false
 
-  - id: header_ref_assembly_tag
+  - id: header_ref_as_grch38
     tier: 3
     scope: header
     when:
       extensions: [".bam", ".cram"]
       header_section: "@SQ"
       header_field: "AS"
-      header_pattern: ".*"
-    then: {}
-    confidence: 0.90
-    rationale: "The AS (Assembly) tag in @SQ lines explicitly names the reference assembly"
+      header_pattern: "(?i)(grch38|hg38|hs38)"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "AS field containing GRCh38/hg38/hs38 explicitly identifies the reference assembly"
+    terminal: false
+
+  - id: header_ref_as_grch37
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "AS"
+      header_pattern: "(?i)(grch37|hg19|hs37|b37)"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.95
+    rationale: "AS field containing GRCh37/hg19/hs37/b37 explicitly identifies the reference assembly"
+    terminal: false
+
+  - id: header_ref_as_chm13
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "AS"
+      header_pattern: "(?i)(chm13|t2t|hs1)"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.95
+    rationale: "AS field containing CHM13/T2T/hs1 explicitly identifies the reference assembly"
     terminal: false
 
   # ---------------------------------------------------------------------------
@@ -1830,7 +1859,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##INFO"
-      vcf_pattern: "ID=(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)"
+      vcf_pattern: "^(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)"
     then:
       data_type: variants.somatic
     confidence: 0.85
@@ -1843,7 +1872,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf"]
       vcf_header_type: "##INFO"
-      vcf_pattern: "ID=(SVTYPE|SVLEN|END|CIPOS|CIEND|MATEID|IMPRECISE)"
+      vcf_pattern: "^(SVTYPE|SVLEN|CIPOS|CIEND|MATEID|IMPRECISE)$"
     then:
       data_type: variants.structural
     confidence: 0.80
@@ -1856,7 +1885,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf"]
       vcf_header_type: "##INFO"
-      vcf_pattern: "ID=(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)"
+      vcf_pattern: "^(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)$"
     then:
       data_type: variants.cnv
     confidence: 0.80

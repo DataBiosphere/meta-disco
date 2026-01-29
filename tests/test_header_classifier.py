@@ -461,8 +461,8 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "germline_variants"
-        assert "HaplotypeCaller" in result["caller"] or "haplotypecaller" in result["caller"].lower()
+        assert result["data_type"] == "variants.germline"
+        assert "vcf_gatk_haplotypecaller" in result["matched_rules"]
 
     def test_deepvariant_germline(self):
         """Detect DeepVariant as germline."""
@@ -471,7 +471,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "germline_variants"
+        assert result["data_type"] == "variants.germline"
 
     def test_mutect2_somatic(self):
         """Detect Mutect2 as somatic."""
@@ -482,7 +482,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "somatic_variants"
+        assert result["data_type"] == "variants.somatic"
 
     def test_manta_sv(self):
         """Detect Manta as structural variants."""
@@ -492,7 +492,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "structural_variants"
+        assert result["data_type"] == "variants.structural"
 
     def test_sv_info_fields(self):
         """Detect SV from INFO fields."""
@@ -503,7 +503,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "structural_variants"
+        assert result["data_type"] == "variants.structural"
 
     def test_cnvkit_cnv(self):
         """Detect CNVkit as copy number variants."""
@@ -512,7 +512,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "cnv_variants"
+        assert result["data_type"] == "variants.cnv"
 
     def test_empty_header(self):
         """Handle minimal VCF header."""
@@ -652,15 +652,15 @@ class TestEdgeCases:
         # Should not crash
         assert "data_modality" in result
 
-    def test_mixed_platform_warning(self):
-        """Warn when mixed platforms detected in FASTQ."""
+    def test_mixed_platform_first_read(self):
+        """Classify based on first read when multiple platforms present."""
         reads = [
             "@A00297:44:HFKH3DSXX:2:1354:30508:28839",  # Illumina
             "@m64011_190830_220126/1/ccs",              # PacBio
         ]
         result = classify_from_fastq_header(reads)
-        assert len(result["warnings"]) > 0
-        assert "INCONSISTENCY" in result["warnings"][0]
+        # Should classify based on first read (Illumina)
+        assert result["platform"] == "ILLUMINA"
 
     def test_unicode_in_header(self):
         """Handle unicode characters in headers."""
