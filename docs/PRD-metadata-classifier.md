@@ -1,8 +1,8 @@
 # PRD: AnVIL File Metadata Classifier
 
-**Version:** 0.2 (Draft)
-**Date:** 2025-01-28
-**Status:** Exploration/Spike
+**Version:** 1.0
+**Date:** 2026-01-28
+**Status:** Implemented
 
 ## 1. Problem Statement
 
@@ -301,6 +301,8 @@ We align with established ontologies where possible:
 
 ### 6.1 Hierarchical Rule Engine
 
+All 147 classification rules are defined in `rules/unified_rules.yaml` and executed by `src/meta_disco/rule_engine.py`.
+
 Process files through tiers of increasing complexity/cost:
 
 ```
@@ -363,7 +365,7 @@ Index files (`.tbi`, `.csi`, `.bai`, `.crai`, `.pbi`) inherit metadata from thei
 | `.bai` | `.bam` | 99.9% | BAM index |
 | `.pbi` | `.bam` | 97.2% | PacBio BAM index |
 
-**Implementation**: `scripts/propagate_index_metadata.py`
+**Implementation**: `scripts/propagate_index_metadata.py` (rules in `rules/unified_rules.yaml`)
 
 **Results** (224,037 index files):
 - 223,953 matched to parent (99.96%)
@@ -381,7 +383,7 @@ Image files are classified by extension using domain-specific rules.
 | `.svs`    | imaging.histology | N/A       | 95%        | Aperio whole-slide histology images |
 | `.png`    | N/A               | N/A       | 90%        | Derived visualizations (QC plots) |
 
-**Implementation**: `scripts/classify_images.py`
+**Implementation**: `scripts/classify_images.py` (rules in `rules/unified_rules.yaml`)
 
 **Results** (33,757 image files):
 - SVS: 25,708 files (GTEx tissue slides) → `imaging.histology`
@@ -402,7 +404,7 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 
 *Reference inferred from dataset context (ANVIL_1000G_PRIMED uses GRCh38).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py`
+**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `rules/unified_rules.yaml`)
 
 **Results** (20,956 files):
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
@@ -422,7 +424,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 Reference inferred from filename patterns (hg38, chm13) or dataset context (T2T → CHM13).
 
-**Implementation**: `scripts/classify_bed_files.py`
+**Implementation**: `scripts/classify_bed_files.py` (rules in `rules/unified_rules.yaml`)
 
 **Results** (13,660 files):
 - 8,560 with data_modality (62.7%)
