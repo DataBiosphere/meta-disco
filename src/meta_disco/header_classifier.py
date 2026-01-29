@@ -2069,8 +2069,7 @@ def classify_from_vcf_header(
 
     Returns dict with:
         - data_modality: str or None (always "genomic" for VCF files)
-        - variant_type: str or None (germline, somatic, structural, cnv)
-        - data_type: str or None (variant_calls, structural_variants)
+        - data_type: str or None (germline_variants, somatic_variants, structural_variants, cnv_variants)
         - reference_assembly: str or None
         - confidence: float
         - matched_rules: list of rule IDs that matched
@@ -2081,9 +2080,8 @@ def classify_from_vcf_header(
 
     result = {
         "data_modality": None,
-        "data_type": None,  # Set based on variant_type below
+        "data_type": None,  # germline_variants, somatic_variants, structural_variants, cnv_variants
         "assay_type": None,  # Usually can't determine for VCF without upstream context
-        "variant_type": None,
         "reference_assembly": None,
         "confidence": 0.0,
         "caller": None,
@@ -2183,19 +2181,15 @@ def classify_from_vcf_header(
                     result["data_modality"] = rule.classification
                     result["confidence"] = rule.confidence
 
-                    # Set variant_type and data_type based on which rule list matched
+                    # Set data_type based on which rule list matched
                     if rule.id in germline_rule_ids:
-                        result["variant_type"] = "germline"
-                        result["data_type"] = "variant_calls"
+                        result["data_type"] = "germline_variants"
                     elif rule.id in somatic_rule_ids:
-                        result["variant_type"] = "somatic"
-                        result["data_type"] = "variant_calls"
+                        result["data_type"] = "somatic_variants"
                     elif rule.id in sv_rule_ids:
-                        result["variant_type"] = "structural"
                         result["data_type"] = "structural_variants"
                     elif rule.id in cnv_rule_ids:
-                        result["variant_type"] = "cnv"
-                        result["data_type"] = "structural_variants"
+                        result["data_type"] = "cnv_variants"
 
     # Check INFO fields for variant type hints
     info_text = "\n".join(info_lines)
@@ -2210,17 +2204,14 @@ def classify_from_vcf_header(
             })
             result["matched_rules"].append(rule.id)
 
-            # Set variant_type based on INFO rule if not already set
-            if not result["variant_type"]:
+            # Set data_type based on INFO rule if not already set
+            if not result["data_type"]:
                 if rule.id == "vcf_info_somatic":
-                    result["variant_type"] = "somatic"
-                    result["data_type"] = "variant_calls"
+                    result["data_type"] = "somatic_variants"
                 elif rule.id == "vcf_info_sv":
-                    result["variant_type"] = "structural"
                     result["data_type"] = "structural_variants"
                 elif rule.id == "vcf_info_cnv":
-                    result["variant_type"] = "cnv"
-                    result["data_type"] = "structural_variants"
+                    result["data_type"] = "cnv_variants"
 
             # Only use INFO rules if no caller was detected
             if not result["data_modality"] and rule.classification:
@@ -2230,20 +2221,21 @@ def classify_from_vcf_header(
     # Default to genomic if no specific modality detected but we have evidence
     if not result["data_modality"] and result["evidence"]:
         result["data_modality"] = "genomic"
-        result["data_type"] = "variant_calls"  # Default for VCF files
+        if not result["data_type"]:
+            result["data_type"] = "germline_variants"  # Default for VCF files
         result["confidence"] = 0.5
 
-    # Check for conflicting variant type signals
-    variant_types_found = set()
+    # Check for conflicting data_type signals (germline vs somatic)
+    data_types_found = set()
     for rule_id in result["matched_rules"]:
         if rule_id in germline_rule_ids:
-            variant_types_found.add("germline")
+            data_types_found.add("germline_variants")
         elif rule_id in somatic_rule_ids or rule_id == "vcf_info_somatic":
-            variant_types_found.add("somatic")
+            data_types_found.add("somatic_variants")
 
-    if len(variant_types_found) > 1:
+    if len(data_types_found) > 1:
         result["warnings"].append(
-            f"VARIANT TYPE CONFLICT: Both {' and '.join(variant_types_found)} signals detected. "
+            f"DATA TYPE CONFLICT: Both {' and '.join(data_types_found)} signals detected. "
             "This may indicate a multi-caller VCF or annotation error."
         )
         result["confidence"] = max(0.3, result["confidence"] - 0.2)
