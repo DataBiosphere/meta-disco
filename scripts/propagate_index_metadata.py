@@ -68,6 +68,7 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
                 classifications[md5] = {
                     "data_modality": c.get("data_modality"),
                     "data_type": c.get("data_type"),
+                    "assay_type": c.get("assay_type"),
                     "platform": c.get("platform"),
                     "reference_assembly": c.get("reference_assembly"),
                     "confidence": c.get("confidence"),
@@ -84,6 +85,7 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
                 classifications[md5] = {
                     "data_modality": c.get("data_modality"),
                     "data_type": c.get("data_type"),
+                    "assay_type": c.get("assay_type"),
                     "platform": c.get("platform"),
                     "reference_assembly": c.get("reference_assembly"),
                     "confidence": c.get("confidence"),
@@ -198,6 +200,7 @@ def propagate_to_index_files(
                 "parent_md5sum": parent_md5,
                 "data_modality": parent_class.get("data_modality"),
                 "data_type": parent_class.get("data_type"),
+                "assay_type": parent_class.get("assay_type"),
                 "platform": parent_class.get("platform"),
                 "reference_assembly": parent_class.get("reference_assembly"),
                 "confidence": parent_class.get("confidence"),
@@ -275,6 +278,7 @@ def propagate_to_index_files(
             "dataset_title": r["dataset_title"],
             "data_modality": r["data_modality"],
             "data_type": r.get("data_type"),
+            "assay_type": r.get("assay_type"),
             "platform": r.get("platform"),
             "reference_assembly": r["reference_assembly"],
             "confidence": r["confidence"],

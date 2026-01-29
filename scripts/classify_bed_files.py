@@ -26,6 +26,7 @@ MODALITY_RULES = [
         "pattern": r"(modbam2bed|cpg|methylat|bisulfite|wgbs)",
         "data_modality": "epigenomic.methylation",
         "data_type": "annotations",
+        "assay_type": "Bisulfite-seq",
         "confidence": 0.90,
         "rationale": "BED file contains CpG methylation calls or bisulfite sequencing regions.",
     },
@@ -34,14 +35,34 @@ MODALITY_RULES = [
         "pattern": r"(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\.TSS\.)",
         "data_modality": "transcriptomic",
         "data_type": "annotations",
+        "assay_type": "RNA-seq",
         "confidence": 0.90,
         "rationale": "BED file contains gene expression quantification or splicing data.",
     },
     {
-        "id": "bed_peaks",
-        "pattern": r"(peak|summit|narrowPeak|broadPeak|\.chip\.|\.atac\.)",
+        "id": "bed_atac_peaks",
+        "pattern": r"(\.atac\.|atac[-_]?seq|atacseq)",
         "data_modality": "epigenomic.chromatin_accessibility",
         "data_type": "peaks",
+        "assay_type": "ATAC-seq",
+        "confidence": 0.90,
+        "rationale": "BED file contains ATAC-seq peak calls for chromatin accessibility.",
+    },
+    {
+        "id": "bed_chip_peaks",
+        "pattern": r"(\.chip\.|chip[-_]?seq|chipseq|histone|h3k\d+)",
+        "data_modality": "epigenomic.chromatin_accessibility",
+        "data_type": "peaks",
+        "assay_type": "ChIP-seq",
+        "confidence": 0.90,
+        "rationale": "BED file contains ChIP-seq peak calls for histone marks or TF binding.",
+    },
+    {
+        "id": "bed_peaks",
+        "pattern": r"(peak|summit|narrowPeak|broadPeak)",
+        "data_modality": "epigenomic.chromatin_accessibility",
+        "data_type": "peaks",
+        "assay_type": None,  # Could be ChIP-seq or ATAC-seq
         "confidence": 0.85,
         "rationale": "BED file contains ChIP-seq or ATAC-seq peak calls.",
     },
@@ -51,6 +72,7 @@ MODALITY_RULES = [
         "pattern": r"(\.hap[12]\.|\.paternal\.|\.maternal\.|\.dip\.bed|\.switch\.|flagger|\.lowQ\.|unreliable|issues\.bed|_genbank\.)",
         "data_modality": None,  # Derived QC, not primary data
         "data_type": "annotations",
+        "assay_type": None,
         "confidence": 0.85,
         "rationale": "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data.",
     },
@@ -59,6 +81,7 @@ MODALITY_RULES = [
         "pattern": r"\.regions\.bed",
         "data_modality": "genomic",
         "data_type": "annotations",
+        "assay_type": None,
         "confidence": 0.80,
         "rationale": "BED file contains genomic analysis regions (callable, target, etc.).",
     },
@@ -138,6 +161,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         # Determine modality from filename patterns
         data_modality = None
         data_type = "annotations"  # Default for BED files
+        assay_type = None
         modality_confidence = 0.70  # Default low confidence
         evidence = []
 
@@ -145,6 +169,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             if re.search(rule["pattern"], name, re.IGNORECASE):
                 data_modality = rule["data_modality"]
                 data_type = rule.get("data_type", "annotations")
+                assay_type = rule.get("assay_type")
                 modality_confidence = rule["confidence"]
                 evidence.append({
                     "rule_id": rule["id"],
@@ -160,6 +185,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         if not evidence:
             data_modality = "genomic"
             data_type = "annotations"
+            assay_type = None
             modality_confidence = 0.60
             evidence.append({
                 "rule_id": "bed_default",
@@ -231,6 +257,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             "dataset_title": dataset_title,
             "data_modality": data_modality,
             "data_type": data_type,
+            "assay_type": assay_type,
             "platform": None,  # BED files don't retain platform info
             "reference_assembly": reference_assembly,
             "confidence": confidence,

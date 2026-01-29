@@ -270,4 +270,5 @@ class TestPatternEdgeCases:
         filename = "chipseq_peak_calls.bed"
         rule = match_modality_rule(filename)
         assert rule is not None
-        assert rule["id"] == "bed_peaks"
+        # Matches ChIP-seq specific rule due to "chipseq" in filename
+        assert rule["id"] == "bed_chip_peaks"

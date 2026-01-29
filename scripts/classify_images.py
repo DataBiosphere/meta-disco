@@ -14,6 +14,7 @@ IMAGE_RULES = {
     ".svs": {
         "data_modality": "imaging.histology",
         "data_type": "images",
+        "assay_type": "Histology",
         "platform": None,
         "reference_assembly": None,
         "confidence": 0.95,
@@ -22,6 +23,7 @@ IMAGE_RULES = {
     ".png": {
         "data_modality": None,  # QC plots, derived visualizations - not primary data
         "data_type": "images",
+        "assay_type": None,
         "platform": None,
         "reference_assembly": None,
         "confidence": 0.90,
@@ -65,6 +67,7 @@ def classify_images(metadata_path: Path, output_path: Path):
                     "dataset_title": f.get("dataset_title"),
                     "data_modality": rule["data_modality"],
                     "data_type": rule["data_type"],
+                    "assay_type": rule["assay_type"],
                     "platform": rule["platform"],
                     "reference_assembly": rule["reference_assembly"],
                     "confidence": rule["confidence"],

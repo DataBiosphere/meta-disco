@@ -586,6 +586,14 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert result["platform"] == "PACBIO"
         assert result["data_modality"] == "genomic.whole_genome"
+        assert result["assay_type"] == "WGS"
+
+    def test_assay_type_rnaseq(self):
+        """Detect RNA-seq assay_type from STAR aligner."""
+        header = """@HD\tVN:1.6
+@PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
+        result = classify_from_header(header)
+        assert result["assay_type"] == "RNA-seq"
 
     def test_minimap2_long_read(self):
         """Detect long-read alignment from minimap2."""

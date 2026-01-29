@@ -14,6 +14,7 @@ AUXILIARY_RULES = {
     ".fast5": {
         "data_modality": "genomic",
         "data_type": "raw_signal",
+        "assay_type": "WGS",  # ONT is typically used for WGS
         "platform": "ONT",
         "reference_assembly": None,  # Raw signal data, pre-basecalling
         "confidence": 0.90,
@@ -22,6 +23,7 @@ AUXILIARY_RULES = {
     ".pod5": {
         "data_modality": "genomic",
         "data_type": "raw_signal",
+        "assay_type": "WGS",  # ONT is typically used for WGS
         "platform": "ONT",
         "reference_assembly": None,  # Raw signal data, pre-basecalling
         "confidence": 0.90,
@@ -30,6 +32,7 @@ AUXILIARY_RULES = {
     ".fast5.tar": {
         "data_modality": "genomic",
         "data_type": "raw_signal",
+        "assay_type": "WGS",
         "platform": "ONT",
         "reference_assembly": None,
         "confidence": 0.90,
@@ -38,6 +41,7 @@ AUXILIARY_RULES = {
     ".fast5.tar.gz": {
         "data_modality": "genomic",
         "data_type": "raw_signal",
+        "assay_type": "WGS",
         "platform": "ONT",
         "reference_assembly": None,
         "confidence": 0.90,
@@ -46,6 +50,7 @@ AUXILIARY_RULES = {
     ".pvar": {
         "data_modality": "genomic",
         "data_type": "genotypes",
+        "assay_type": None,  # Could be array or WGS-derived
         "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
@@ -54,6 +59,7 @@ AUXILIARY_RULES = {
     ".psam": {
         "data_modality": "genomic",
         "data_type": "genotypes",
+        "assay_type": None,  # Could be array or WGS-derived
         "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
@@ -62,6 +68,7 @@ AUXILIARY_RULES = {
     ".pgen": {
         "data_modality": "genomic",
         "data_type": "genotypes",
+        "assay_type": None,  # Could be array or WGS-derived
         "platform": None,
         "reference_assembly": None,  # Set by dataset rule below
         "confidence": 0.90,
@@ -107,6 +114,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                 # Start with base rule
                 data_modality = rule["data_modality"]
                 data_type = rule.get("data_type")
+                assay_type = rule.get("assay_type")
                 platform = rule.get("platform")
                 reference_assembly = rule["reference_assembly"]
                 confidence = rule["confidence"]
@@ -144,6 +152,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                     "dataset_title": dataset_title,
                     "data_modality": data_modality,
                     "data_type": data_type,
+                    "assay_type": assay_type,
                     "platform": platform,
                     "reference_assembly": reference_assembly,
                     "confidence": confidence,

@@ -1764,6 +1764,7 @@ def classify_from_header(
     result = {
         "data_modality": None,
         "data_type": "alignments",  # BAM/CRAM files contain aligned reads
+        "assay_type": None,  # WGS, WES, RNA-seq, etc.
         "reference_assembly": None,
         "confidence": 0.0,
         "is_aligned": None,
@@ -1918,7 +1919,62 @@ def classify_from_header(
     if consistency["conflicting_signals"]:
         result["confidence"] = max(0.1, result["confidence"] - 0.2)
 
+    # Infer assay_type from platform, programs, and modality
+    _infer_assay_type(result, file_size, file_format)
+
     return result
+
+
+def _infer_assay_type(result: dict, file_size: int | None, file_format: str | None) -> None:
+    """Infer assay_type from classification signals.
+
+    Modifies result dict in place to set assay_type field.
+    """
+    platform = result.get("platform")
+    modality = result.get("data_modality") or ""
+    matched_rules = result.get("matched_rules", [])
+
+    # RNA-seq indicators (highest priority - very specific)
+    rnaseq_programs = ["program_star", "program_hisat2", "program_tophat",
+                       "program_salmon", "program_kallisto"]
+    if any(r in matched_rules for r in rnaseq_programs) or modality == "transcriptomic":
+        result["assay_type"] = "RNA-seq"
+        return
+
+    # IsoSeq (PacBio long-read RNA-seq)
+    if "program_isoseq" in matched_rules:
+        result["assay_type"] = "RNA-seq"
+        return
+
+    # Long-read platforms default to WGS
+    if platform in ["PACBIO", "ONT"]:
+        result["assay_type"] = "WGS"
+        return
+
+    # Check modality hints
+    if "whole_genome" in modality:
+        result["assay_type"] = "WGS"
+        return
+    if "exome" in modality:
+        result["assay_type"] = "WES"
+        return
+
+    # File size heuristics for Illumina
+    if platform == "ILLUMINA" and file_size is not None:
+        file_size_gb = file_size / (1024 ** 3)
+        is_cram = file_format == ".cram" if file_format else False
+
+        # Adjust thresholds for CRAM (60-70% smaller than BAM)
+        if is_cram:
+            if file_size_gb > 20:
+                result["assay_type"] = "WGS"
+            elif file_size_gb < 8:
+                result["assay_type"] = "WES"
+        else:
+            if file_size_gb > 50:
+                result["assay_type"] = "WGS"
+            elif file_size_gb < 20:
+                result["assay_type"] = "WES"
 
 
 def classify_from_vcf_header(
@@ -1949,6 +2005,7 @@ def classify_from_vcf_header(
     result = {
         "data_modality": None,
         "data_type": None,  # Set based on variant_type below
+        "assay_type": None,  # Usually can't determine for VCF without upstream context
         "variant_type": None,
         "reference_assembly": None,
         "confidence": 0.0,
@@ -2126,6 +2183,7 @@ def classify_from_fastq_header(
     result = {
         "data_modality": None,
         "data_type": "reads",  # FASTQ files contain raw reads
+        "assay_type": None,  # WGS for long-read, ambiguous for Illumina
         "platform": None,
         "confidence": 0.0,
         "is_paired_end": None,
@@ -2275,6 +2333,25 @@ def classify_from_fastq_header(
             result["is_paired_end"] = True
         if "ccs" in file_lower or "hifi" in file_lower:
             result["data_modality"] = "genomic.whole_genome"
+
+    # Infer assay_type from platform
+    if result["platform"] in ["PACBIO", "ONT"]:
+        result["assay_type"] = "WGS"
+    # Check filename for assay hints
+    if file_name:
+        file_lower = file_name.lower()
+        if "rnaseq" in file_lower or "rna-seq" in file_lower or "rna_seq" in file_lower:
+            result["assay_type"] = "RNA-seq"
+        elif "scrna" in file_lower or "sc_rna" in file_lower or "10x" in file_lower:
+            result["assay_type"] = "scRNA-seq"
+        elif "atac" in file_lower:
+            result["assay_type"] = "ATAC-seq"
+        elif "chip" in file_lower:
+            result["assay_type"] = "ChIP-seq"
+        elif "wgs" in file_lower or "whole_genome" in file_lower or "wholegenome" in file_lower:
+            result["assay_type"] = "WGS"
+        elif "wes" in file_lower or "exome" in file_lower:
+            result["assay_type"] = "WES"
 
     return result
 
