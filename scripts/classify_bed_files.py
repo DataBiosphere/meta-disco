@@ -19,11 +19,58 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo
+from src.meta_disco.models import FileInfo, NOT_CLASSIFIED
+
+EVIDENCE_DIR = Path("data/evidence/bed")
+
+
+def load_bed_reference_evidence() -> dict[str, dict]:
+    """Load cached coordinate-based reference evidence for BED files.
+
+    Returns dict mapping md5sum -> {reference_assembly, confidence, rationale}.
+    Evidence is produced by scripts/fetch_bed_headers.py which reads actual
+    BED file content from S3 and infers reference from chromosome coordinates.
+    """
+    evidence = {}
+    if not EVIDENCE_DIR.exists():
+        return evidence
+
+    for subdir in EVIDENCE_DIR.iterdir():
+        if not subdir.is_dir():
+            continue
+        for evi_file in subdir.iterdir():
+            try:
+                evi = json.load(open(evi_file))
+                md5 = evi.get("md5sum")
+                if md5:
+                    evidence[md5] = evi
+            except (json.JSONDecodeError, IOError):
+                continue
+
+    return evidence
+
+
+def infer_reference_from_evidence(evi: dict) -> tuple[str | None, float, str]:
+    """Infer reference assembly from cached BED coordinate evidence.
+
+    This is a lightweight re-inference from cached signals, avoiding
+    the need to import fetch_bed_headers.py at runtime.
+    """
+    signals = evi.get("signals", {})
+    if not signals or not signals.get("max_coordinates"):
+        return None, 0.0, ""
+
+    # Delegate to the fetch_bed_headers module if available
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from fetch_bed_headers import infer_reference_from_coordinates
+        return infer_reference_from_coordinates(signals)
+    except ImportError:
+        return None, 0.0, "fetch_bed_headers not available"
 
 
 def classify_bed_files(metadata_path: Path, output_path: Path):
-    """Classify BED files using RuleEngine."""
+    """Classify BED files using RuleEngine + coordinate-based reference evidence."""
 
     with open(metadata_path) as f:
         data = json.load(f)
@@ -41,6 +88,10 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 
     print(f"Found {len(bed_files):,} BED files")
 
+    # Load coordinate-based reference evidence
+    ref_evidence = load_bed_reference_evidence()
+    print(f"Loaded {len(ref_evidence):,} BED coordinate evidence files")
+
     engine = RuleEngine()
     results = []
     stats = {
@@ -57,13 +108,31 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         dataset_title = f.get("dataset_title", "")
         stats["total"] += 1
 
-        # Classify using RuleEngine
+        # Classify using RuleEngine (tier 1-2: extension + filename patterns)
         file_info = FileInfo(
             filename=name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
         )
         result = engine.classify_extended(file_info)
+
+        # Overlay coordinate-based reference from cached evidence
+        # This replaces the old dataset_t2t_reference rule with actual
+        # file content inspection (chromosome coordinates)
+        md5 = f.get("file_md5sum")
+        coord_ref = None
+        coord_conf = 0.0
+        coord_rationale = ""
+        if md5 and md5 in ref_evidence:
+            coord_ref, coord_conf, coord_rationale = infer_reference_from_evidence(ref_evidence[md5])
+
+        # Apply coordinate reference if it's better than what rules found
+        if coord_ref and coord_conf > 0:
+            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > result.confidence:
+                result.reference_assembly = coord_ref
+                result.confidence = max(result.confidence, coord_conf)
+                result.rules_matched.append("bed_coordinate_reference")
+                result.reasons.append(coord_rationale)
 
         # Update stats
         data_modality = result.data_modality

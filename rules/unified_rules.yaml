@@ -565,16 +565,10 @@ rules:
   # ---------------------------------------------------------------------------
   # Dataset-based reference rules (run early to set reference before terminal rules)
   # ---------------------------------------------------------------------------
-  - id: dataset_t2t_reference
-    tier: 2
-    scope: filename
-    when:
-      dataset_pattern: "ANVIL_T2T"
-    then:
-      reference_assembly: CHM13
-    confidence: 0.90
-    rationale: "T2T consortium data uses CHM13 reference"
-    terminal: false
+  # dataset_t2t_reference was removed — replaced by coordinate-based detection
+  # in fetch_bed_headers.py which reads actual BED file content from S3.
+  # The blanket dataset rule misclassified GRCh38 liftover/comparison files
+  # in T2T datasets as CHM13.
 
   - id: dataset_1000g_reference
     tier: 2
