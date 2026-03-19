@@ -35,6 +35,9 @@ def extract_file_record(hit: dict) -> dict:
     datasets = hit.get("datasets", [{}])
     dataset = datasets[0] if datasets else {}
 
+    donors = hit.get("donors", [{}])
+    donor = donors[0] if donors else {}
+
     return {
         "entry_id": hit.get("entryId"),
         "file_id": file_data.get("file_id"),
@@ -48,6 +51,8 @@ def extract_file_record(hit: dict) -> dict:
         "drs_uri": file_data.get("drs_uri"),
         "dataset_id": dataset.get("dataset_id", [None])[0] if dataset.get("dataset_id") else None,
         "dataset_title": dataset.get("title", [None])[0] if dataset.get("title") else None,
+        "organism_type": donor.get("organism_type", [None])[0] if donor.get("organism_type") else None,
+        "phenotypic_sex": donor.get("phenotypic_sex", [None])[0] if donor.get("phenotypic_sex") else None,
     }
 
 

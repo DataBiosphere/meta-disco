@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo
+from src.meta_disco.models import FileInfo, NOT_APPLICABLE
 
 
 # Create a shared engine instance
@@ -52,7 +52,7 @@ class TestAssemblyQCPattern:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_assembly_qc"
         result = classify_bed(filename)
-        assert result["data_modality"] is None  # N/A for derived QC
+        assert result["data_modality"] == NOT_APPLICABLE  # Derived QC artifact
 
     def test_paternal_haplotype_matches(self):
         """Paternal haplotype files should match assembly_qc rule."""

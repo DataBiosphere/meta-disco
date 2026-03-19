@@ -3,6 +3,11 @@
 from dataclasses import dataclass, field
 
 
+# Classification value constants
+NOT_APPLICABLE = "not_applicable"
+NOT_CLASSIFIED = "not_classified"
+
+
 @dataclass
 class FileInfo:
     """Input file information for classification."""

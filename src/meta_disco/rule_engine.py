@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .models import ClassificationResult, FileInfo
+from .models import ClassificationResult, FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 from .rule_loader import UnifiedRule, UnifiedRules, get_unified_rules
 
 
@@ -32,7 +32,7 @@ class ExtendedFileInfo:
         """Create ExtendedFileInfo from a FileInfo object."""
         file_size_gb = None
         if file_info.file_size is not None:
-            file_size_gb = file_info.file_size / (1024 ** 3)
+            file_size_gb = file_info.file_size / 1e9  # Use decimal GB, not GiB
 
         return cls(
             filename=file_info.filename,
@@ -165,9 +165,33 @@ class RuleEngine:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
                     if rule.terminal:
+                        self._finalize_result(result)
                         return result
 
+        self._finalize_result(result)
         return result
+
+    # Fields that should be set to not_classified if no rule set them
+    _CLASSIFICATION_FIELDS = (
+        "data_modality", "data_type", "platform", "reference_assembly", "assay_type"
+    )
+
+    def _finalize_result(self, result: ExtendedClassificationResult) -> None:
+        """Set any remaining None values to not_classified.
+
+        This distinguishes between:
+        - not_applicable: Explicitly set by rules when a field doesn't apply
+        - not_classified: No rule determined a value (default for unset fields)
+        """
+        # Don't set not_classified for skipped files (indexes, checksums)
+        # These should have not_applicable set by their rules
+        if result.skip:
+            return
+
+        # For non-skipped files, any None value means we couldn't classify
+        for field in self._CLASSIFICATION_FIELDS:
+            if getattr(result, field) is None:
+                setattr(result, field, NOT_CLASSIFIED)
 
     def _rule_matches(
         self,
@@ -469,7 +493,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size else None,
             bam_header=bam_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -496,7 +520,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size else None,
             vcf_header=vcf_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -523,7 +547,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / (1024 ** 3) if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size else None,
             fastq_first_read=first_read,
         )
         return self.classify_extended(file_info, include_tier3=True)

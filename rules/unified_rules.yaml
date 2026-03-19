@@ -371,7 +371,7 @@ rules:
     when:
       extensions: [".png"]
     then:
-      data_modality: null
+      data_modality: not_applicable
       data_type: images
     confidence: 0.90
     rationale: "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data"
@@ -757,7 +757,7 @@ rules:
       extensions: [".bed", ".bed.gz"]
       filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
     then:
-      data_modality: null
+      data_modality: not_applicable
       data_type: annotations
     confidence: 0.85
     rationale: "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data"
@@ -933,7 +933,7 @@ rules:
     tier: 2
     scope: file_size
     when:
-      extensions: [".bam", ".cram"]
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
       file_size_min_gb: 50
       modality_not_set: true
     then:
@@ -1971,6 +1971,7 @@ rules:
     then:
       platform: PACBIO
       data_modality: genomic
+      data_type: reads
       assay_type: WGS
     confidence: 0.95
     rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
@@ -1985,6 +1986,7 @@ rules:
     then:
       platform: PACBIO
       data_modality: genomic
+      data_type: reads
     confidence: 0.90
     rationale: "PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format"
     terminal: false
@@ -1998,6 +2000,7 @@ rules:
     then:
       platform: PACBIO
       data_modality: genomic
+      data_type: reads
     confidence: 0.85
     rationale: "Generic PacBio read names follow @movie/zmw format"
     terminal: false
@@ -2014,6 +2017,7 @@ rules:
     then:
       platform: ONT
       data_modality: genomic
+      data_type: reads
     confidence: 0.95
     rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
     terminal: false
@@ -2027,6 +2031,7 @@ rules:
     then:
       platform: ONT
       data_modality: genomic
+      data_type: reads
     confidence: 0.95
     rationale: "ONT reads often include 'runid=' metadata in the header line"
     terminal: false

@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.meta_disco.models import NOT_CLASSIFIED
 from src.meta_disco.header_classifier import (
     # Helper functions
     extract_archive_accession,
@@ -643,7 +644,7 @@ class TestEdgeCases:
         """Handle malformed FASTQ read names."""
         reads = ["not_a_valid_read", "another_invalid", ""]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] is None
+        assert result["platform"] == NOT_CLASSIFIED
 
     def test_vcf_minimal(self):
         """Handle minimal VCF with just column header."""

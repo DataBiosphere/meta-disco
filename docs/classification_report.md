@@ -804,9 +804,68 @@ Result: Parent VCF not found in dataset
 
 ---
 
-## 7. Limitations and Future Work
+## 7. Validation Against Existing Metadata
 
-### 7.1 Current Limitations
+### 7.1 Comparison with AnVIL Source Metadata
+
+The AnVIL source metadata includes pre-existing `data_modality` and `reference_assembly` values for a small fraction of files. We compared our classifications against these as a consistency check.
+
+**Available ground truth:**
+
+| Field                | Files with existing values | Source                |
+| -------------------- | -------------------------:| --------------------- |
+| `data_modality`      | 6,755                     | Single dataset (IGVF) |
+| `reference_assembly` | 4,696                     | Single dataset (IGVF) |
+
+**Data modality comparison (3,492 comparable files):**
+
+| Result   | Count | Percentage |
+| -------- | -----:| ----------:|
+| Agree    | 0     | 0%         |
+| Disagree | 3,492 | 100%       |
+
+All disagreements follow the same pattern: AnVIL labels files as `single-nucleus RNA sequencing assay` or `single-nucleus ATAC-seq`, while our classifier returns `genomic`. This 100% disagreement reflects three stacked issues, not classifier error:
+
+1. **Non-human data**: All 6,755 tagged files are from `AnVIL_IGVF_Mouse_R1` (mouse, GRCm39). Our classifier is designed for human data only.
+2. **Assay-level metadata is invisible at file level**: snRNA-seq and WGS FASTQ reads are indistinguishable by read name format, index length, or any other file-level signal. The assay type (`single-nucleus RNA sequencing assay`) can only be determined from study-level metadata.
+3. **Vocabulary mismatch**: AnVIL uses EFO assay terms (`single-nucleus RNA sequencing assay`) while our taxonomy uses modality terms (`transcriptomic`). Even a correct classification would appear as a disagreement without a mapping layer.
+
+**Reference assembly comparison**: No files were comparable. AnVIL's values use composite terms (`GRCh38 + Gencode40`) and include non-human references (`GRCm39`) that don't normalize to our `GRCh38`/`GRCh37`/`CHM13` vocabulary.
+
+### 7.2 Implications for Using the Classifier as a Validator
+
+Despite the poor headline agreement rate, the classifier has validation value in specific scenarios:
+
+**Where file-level validation works:**
+- **Reference assembly for aligned files** (BAM/CRAM/VCF): Contig lengths and header tags provide definitive ground truth independent of study metadata
+- **Platform detection**: Read name formats and `@RG PL:` tags are reliable file-level signals
+- **Data type**: File format to content-type mapping (`.bam` → alignments, `.vcf` → variant calls) is deterministic
+
+**Where study-level context is required:**
+- **Assay type** (WGS vs WES vs snRNA-seq): Cannot be determined from FASTQ reads alone
+- **Data modality for raw reads**: snRNA-seq, snATAC-seq, and WGS FASTQs are indistinguishable at the file level
+- **Organism**: No file-level signal distinguishes human from mouse data
+
+**Recommendations for a validation pipeline:**
+1. **Flag non-human datasets** before running human-specific classification
+2. **Validate reference assembly** on aligned files — this is the highest-confidence, highest-value check
+3. **Cross-reference platform** between `@RG PL:` tags and study metadata
+4. **Accept study-level assay metadata** as authoritative for raw reads — do not attempt to override from file inspection
+
+### 7.3 External Validation: HPRC Catalog
+
+The [HPRC Data Explorer catalog](https://github.com/human-pangenomics/hprc-data-explorer) provides structured metadata for HPRC files including `annotationType`, `referenceCoordinates`, and `pipeline`. Cross-referencing against AnVIL HPRC files:
+
+- **885 BED files** matched by filename between the HPRC catalog and AnVIL
+- All matched files are de novo assembly annotations (CenSat, Flagger, NucFlag, SegDups) using per-sample haplotype contig names — confirming they are not aligned to a standard reference
+- The HPRC catalog `annotationType` field does not encode reference assembly (e.g., `CenSat`, `Flagger_HiFi`), unlike the `referenceCoordinates` field used for alignments
+- Our coordinate-based BED reference detector correctly returns `None` for these files (non-standard chromosome names)
+
+---
+
+## 8. Limitations and Future Work
+
+### 8.1 Current Limitations
 
 1. **Header-only inspection**: Cannot detect modality for files without informative headers
 2. **Archive reformatting**: Some SRA/ENA files lose original metadata
@@ -815,7 +874,7 @@ Result: Parent VCF not found in dataset
 5. **Confidence uses max() not additive**: When multiple rules converge, confidence is the maximum single-rule score rather than boosted for agreement. Documentation describes "+5% per converging pair" but this is not implemented.
 6. **N/A classifications lack semantic distinction**: Files with `data_modality: null` include both "derived artifacts" (PNG plots, assembly QC BEDs) and "pre-processing data" (FAST5 raw signal). These have different meanings but identical output representation.
 
-### 7.2 Planned Improvements
+### 8.2 Planned Improvements
 
 1. Implement study-level context propagation
 2. Add support for additional file types (10X, spatial transcriptomics)

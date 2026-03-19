@@ -10,7 +10,9 @@ by the RuleEngine. This module provides:
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+from .models import NOT_CLASSIFIED
 
 
 # =============================================================================
@@ -635,7 +637,7 @@ def classify_from_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / (1024 ** 3) if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size else None,
         bam_header=header_text,
     )
 
@@ -730,7 +732,7 @@ def classify_from_vcf_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / (1024 ** 3) if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size else None,
         vcf_header=header_text,
     )
 
@@ -822,7 +824,7 @@ def classify_from_fastq_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / (1024 ** 3) if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size else None,
         fastq_first_read=first_read,
     )
 
@@ -832,14 +834,9 @@ def classify_from_fastq_header(
 
     # If no platform detected and this is archive-reformatted, try the stripped version
     # This handles cases like @ERR... A00297:... where the Illumina pattern is after the space
-    if not result.platform and accession and remainder.strip():
+    if (not result.platform or result.platform == NOT_CLASSIFIED) and accession and remainder.strip():
         stripped_read = "@" + remainder.strip()
-        file_info_stripped = ExtendedFileInfo(
-            filename=filename,
-            file_size=file_size,
-            file_size_gb=file_size / (1024 ** 3) if file_size else None,
-            fastq_first_read=stripped_read,
-        )
+        file_info_stripped = replace(file_info, fastq_first_read=stripped_read)
         result_stripped = engine.classify_extended(file_info_stripped, include_tier3=True)
         if result_stripped.platform:
             # Merge results - keep the platform and modality from stripped version
