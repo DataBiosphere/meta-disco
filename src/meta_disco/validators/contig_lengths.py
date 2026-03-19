@@ -85,8 +85,9 @@ def detect_reference_from_contig_lengths(
 
     # Pattern for VCF ##contig=<ID=chr1,length=248387497>
     vcf_pattern = r'##contig=<ID=([^,>]+),length=(\d+)'
-    # Pattern for BAM @SQ\tSN:chr1\tLN:248387497
-    bam_pattern = r'@SQ\tSN:([^\t]+)\tLN:(\d+)'
+    # BAM @SQ tags can appear in any order, so match SN and LN independently
+    bam_sn_pattern = r'SN:([^\t]+)'
+    bam_ln_pattern = r'LN:(\d+)'
 
     for line in contig_lines:
         contig = None
@@ -98,11 +99,12 @@ def detect_reference_from_contig_lengths(
             contig = match.group(1).replace("chr", "")
             length = int(match.group(2))
         else:
-            # Try BAM format
-            match = re.search(bam_pattern, line)
-            if match:
-                contig = match.group(1).replace("chr", "")
-                length = int(match.group(2))
+            # Try BAM format (SN and LN tags can appear in any order)
+            sn_match = re.search(bam_sn_pattern, line)
+            ln_match = re.search(bam_ln_pattern, line)
+            if sn_match and ln_match:
+                contig = sn_match.group(1).replace("chr", "")
+                length = int(ln_match.group(1))
 
         if contig is None or length is None:
             continue

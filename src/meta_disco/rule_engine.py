@@ -187,21 +187,23 @@ class RuleEngine:
     )
 
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
-        """Set any remaining None values to not_classified.
+        """Set any remaining None values to appropriate sentinels.
 
         This distinguishes between:
-        - not_applicable: Explicitly set by rules when a field doesn't apply
-        - not_classified: No rule determined a value (default for unset fields)
+        - not_applicable: Field doesn't apply (skipped files, or explicitly set by rules)
+        - not_classified: No rule determined a value (default for non-skipped files)
         """
-        # Don't set not_classified for skipped files (indexes, checksums)
-        # These should have not_applicable set by their rules
         if result.skip:
+            # Skipped files (indexes, checksums) -> not_applicable for unset fields
+            for fld in self._CLASSIFICATION_FIELDS:
+                if getattr(result, fld) is None:
+                    setattr(result, fld, NOT_APPLICABLE)
             return
 
         # For non-skipped files, any None value means we couldn't classify
-        for field in self._CLASSIFICATION_FIELDS:
-            if getattr(result, field) is None:
-                setattr(result, field, NOT_CLASSIFIED)
+        for fld in self._CLASSIFICATION_FIELDS:
+            if getattr(result, fld) is None:
+                setattr(result, fld, NOT_CLASSIFIED)
 
     def _rule_matches(
         self,

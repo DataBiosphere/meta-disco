@@ -41,7 +41,7 @@ def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, s
         - remainder: The text after the accession (original read name), or full input if no accession
     """
     archive_sources = {"ERR": "ENA", "SRR": "SRA", "DRR": "DDBJ"}
-    pattern = re.compile(r"^@?(ERR|SRR|DRR)(\d+)\.\d+\s*(.*)$")
+    pattern = re.compile(r"^@?(ERR|SRR|DRR)(\d+)(?:\.\d+)?\s*(.*)$")
 
     match = pattern.match(read_name)
     if match:
@@ -126,7 +126,7 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
     # Modern Illumina format: instrument:run:flowcell:lane:tile:x:y [read:filtered:control:index]
     modern_pattern = re.compile(
         r"^([A-Z0-9-]+):(\d+):([A-Z0-9]+):(\d+):(\d+):(\d+):(\d+)"
-        r"(?:\s+(\d):([YN]):(\d+):([ACGTN+]+))?$"
+        r"(?:\s+(\d):([YN]):(\d+):([ACGTN+]+))?"
     )
     match = modern_pattern.match(name)
     if match:

@@ -108,14 +108,18 @@ def compute_stats(results: list[dict]) -> dict:
         if r["needs_manual_review"]:
             stats["needs_manual_review"] += 1
 
-        if r["predicted_modality"]:
+        _sentinel_values = {"not_classified", "not_applicable"}
+
+        mod = r["predicted_modality"]
+        if mod and mod not in _sentinel_values:
             stats["classified_with_modality"] += 1
-            mod = r["predicted_modality"]
+        if mod:
             stats["modality_breakdown"][mod] = stats["modality_breakdown"].get(mod, 0) + 1
 
-        if r["predicted_reference"]:
+        ref = r["predicted_reference"]
+        if ref and ref not in _sentinel_values:
             stats["classified_with_reference"] += 1
-            ref = r["predicted_reference"]
+        if ref:
             stats["reference_breakdown"][ref] = stats["reference_breakdown"].get(ref, 0) + 1
 
         conf = r["confidence"]
@@ -136,10 +140,10 @@ def compute_stats(results: list[dict]) -> dict:
         if r["api_reference_assembly"]:
             stats["api_had_reference"] += 1
 
-        # Count where we filled missing values
-        if r["predicted_modality"] and not r["api_data_modality"]:
+        # Count where we filled missing values (exclude sentinels)
+        if mod and mod not in _sentinel_values and not r["api_data_modality"]:
             stats["filled_missing_modality"] += 1
-        if r["predicted_reference"] and not r["api_reference_assembly"]:
+        if ref and ref not in _sentinel_values and not r["api_reference_assembly"]:
             stats["filled_missing_reference"] += 1
 
     return stats
