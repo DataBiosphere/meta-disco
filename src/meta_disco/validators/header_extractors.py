@@ -324,8 +324,9 @@ def match_vcf_header_pattern(
             if "ID" in flt and compiled.search(flt["ID"]):
                 return True
     elif header.other_meta:
+        # header_type already includes ## prefix (e.g., "##reference")
         for line in header.other_meta:
-            if line.startswith(f"##{header_type}") and compiled.search(line):
+            if line.startswith(header_type) and compiled.search(line):
                 return True
 
     return False

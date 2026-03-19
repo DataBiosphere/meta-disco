@@ -165,8 +165,18 @@ class RuleEngine:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
                     if rule.terminal:
+                        if result.assay_type is None:
+                            inferred = self.infer_assay_type(result, ext_info)
+                            if inferred:
+                                result.assay_type = inferred
                         self._finalize_result(result)
                         return result
+
+        # After all rules, attempt assay_type inference if still unset
+        if result.assay_type is None:
+            inferred = self.infer_assay_type(result, ext_info)
+            if inferred:
+                result.assay_type = inferred
 
         self._finalize_result(result)
         return result
@@ -328,7 +338,7 @@ class RuleEngine:
         if not pattern:
             return False
 
-        return bool(re.search(pattern, file_info.fastq_first_read))
+        return bool(re.search(pattern, file_info.fastq_first_read, re.IGNORECASE))
 
     def _check_header_absent(
         self,

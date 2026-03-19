@@ -173,14 +173,17 @@ def detect_reference_from_max_positions(
         grch37_len, grch38_len, chm13_len = CHROMOSOME_MAX_LENGTHS[chrom]
 
         # Rule out references where position exceeds chromosome length
+        ruled_out_any = False
         if max_pos > chm13_len:
             possible.discard("CHM13")
-            evidence_count += 1
+            ruled_out_any = True
         if max_pos > grch38_len:
             possible.discard("GRCh38")
-            evidence_count += 1
+            ruled_out_any = True
         if max_pos > grch37_len:
             possible.discard("GRCh37")
+            ruled_out_any = True
+        if ruled_out_any:
             evidence_count += 1
 
     # If narrowed to exactly one reference

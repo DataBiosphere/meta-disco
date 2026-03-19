@@ -20,7 +20,7 @@ import requests
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.header_classifier import REFERENCE_CONTIG_LENGTHS
+from src.meta_disco.validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
 ENSEMBL_API = "https://rest.ensembl.org/info/assembly"
 
