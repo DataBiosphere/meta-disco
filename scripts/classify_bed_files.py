@@ -19,7 +19,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo, NOT_CLASSIFIED
+from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
+
+# Import BED reference inference (from sibling script)
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from fetch_bed_headers import infer_reference_from_coordinates
+except ImportError:
+    infer_reference_from_coordinates = None
 
 EVIDENCE_DIR = Path("data/evidence/bed")
 
@@ -40,7 +47,8 @@ def load_bed_reference_evidence() -> dict[str, dict]:
             continue
         for evi_file in subdir.iterdir():
             try:
-                evi = json.load(open(evi_file))
+                with open(evi_file) as fh:
+                    evi = json.load(fh)
                 md5 = evi.get("md5sum")
                 if md5:
                     evidence[md5] = evi
@@ -51,22 +59,15 @@ def load_bed_reference_evidence() -> dict[str, dict]:
 
 
 def infer_reference_from_evidence(evi: dict) -> tuple[str | None, float, str]:
-    """Infer reference assembly from cached BED coordinate evidence.
+    """Infer reference assembly from cached BED coordinate evidence."""
+    if infer_reference_from_coordinates is None:
+        return None, 0.0, "fetch_bed_headers not available"
 
-    This is a lightweight re-inference from cached signals, avoiding
-    the need to import fetch_bed_headers.py at runtime.
-    """
     signals = evi.get("signals", {})
     if not signals or not signals.get("max_coordinates"):
         return None, 0.0, ""
 
-    # Delegate to the fetch_bed_headers module if available
-    try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from fetch_bed_headers import infer_reference_from_coordinates
-        return infer_reference_from_coordinates(signals)
-    except ImportError:
-        return None, 0.0, "fetch_bed_headers not available"
+    return infer_reference_from_coordinates(signals)
 
 
 def classify_bed_files(metadata_path: Path, output_path: Path):
@@ -137,7 +138,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             # Coordinate detection ran but couldn't determine reference
             # (e.g., non-standard contig names from de novo assemblies)
             if "Non-standard chromosome" in coord_rationale:
-                result.reference_assembly = "not_applicable"
+                result.reference_assembly = NOT_APPLICABLE
                 result.rules_matched.append("bed_nonstandard_contigs")
                 result.reasons.append(coord_rationale)
 

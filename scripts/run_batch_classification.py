@@ -12,6 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco import RuleEngine, FileInfo
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
+
+_SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 
 
 def load_metadata(input_path: Path) -> list[dict]:
@@ -108,16 +111,15 @@ def compute_stats(results: list[dict]) -> dict:
         if r["needs_manual_review"]:
             stats["needs_manual_review"] += 1
 
-        _sentinel_values = {"not_classified", "not_applicable"}
 
         mod = r["predicted_modality"]
-        if mod and mod not in _sentinel_values:
+        if mod and mod not in _SENTINEL_VALUES:
             stats["classified_with_modality"] += 1
         if mod:
             stats["modality_breakdown"][mod] = stats["modality_breakdown"].get(mod, 0) + 1
 
         ref = r["predicted_reference"]
-        if ref and ref not in _sentinel_values:
+        if ref and ref not in _SENTINEL_VALUES:
             stats["classified_with_reference"] += 1
         if ref:
             stats["reference_breakdown"][ref] = stats["reference_breakdown"].get(ref, 0) + 1
@@ -141,9 +143,9 @@ def compute_stats(results: list[dict]) -> dict:
             stats["api_had_reference"] += 1
 
         # Count where we filled missing values (exclude sentinels)
-        if mod and mod not in _sentinel_values and not r["api_data_modality"]:
+        if mod and mod not in _SENTINEL_VALUES and not r["api_data_modality"]:
             stats["filled_missing_modality"] += 1
-        if ref and ref not in _sentinel_values and not r["api_reference_assembly"]:
+        if ref and ref not in _SENTINEL_VALUES and not r["api_reference_assembly"]:
             stats["filled_missing_reference"] += 1
 
     return stats

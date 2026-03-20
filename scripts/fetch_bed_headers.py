@@ -12,6 +12,7 @@ Evidence is cached in data/evidence/bed/ for resumability and audit trail.
 
 import argparse
 import json
+import re
 import sys
 import time
 import zlib
@@ -28,6 +29,9 @@ from src.meta_disco.rule_loader import get_unified_rules
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 EVIDENCE_DIR = Path("data/evidence/bed")
+
+# Compiled pattern for standard chromosome names (used in reference detection)
+_STANDARD_CHROM_PATTERN = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
 
 
 def get_evidence_path(md5sum: str) -> Path:
@@ -194,9 +198,7 @@ def infer_reference_from_coordinates(signals: dict) -> tuple[str | None, float, 
         return None, 0.0, "No coordinates found"
 
     # Check if chromosomes use standard naming (chr1-22/X/Y or 1-22/X/Y)
-    import re
-    standard_pattern = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
-    standard_chroms = [c for c in signals.get("chromosomes", []) if standard_pattern.match(c)]
+    standard_chroms = [c for c in signals.get("chromosomes", []) if _STANDARD_CHROM_PATTERN.match(c)]
 
     if not standard_chroms:
         # Non-standard contig names (e.g., GenBank accessions, de novo assembly contigs)
@@ -376,14 +378,14 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
 
     print(f"Found {len(bed_files)} BED files with MD5")
 
-    # Check cache
-    cached_count = sum(1 for f in bed_files if load_cached_evidence(f["file_md5sum"]) is not None)
-    print(f"  Already cached: {cached_count}")
-    print(f"  Remaining to fetch: {len(bed_files) - cached_count}")
-
     if limit:
         bed_files = bed_files[:limit]
         print(f"Processing first {limit} files")
+
+    # Check cache (after limit slice to avoid scanning full list)
+    cached_count = sum(1 for f in bed_files if load_cached_evidence(f["file_md5sum"]) is not None)
+    print(f"  Already cached: {cached_count}")
+    print(f"  Remaining to fetch: {len(bed_files) - cached_count}")
 
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
