@@ -43,7 +43,7 @@ def fetch_ena_metadata(acc: str) -> dict | None:
         headers = lines[0].split("\t")
         values = lines[1].split("\t")
         return dict(zip(headers, values))
-    except:
+    except (requests.RequestException, ValueError):
         return None
 
 

@@ -718,6 +718,7 @@ def classify_from_header(
         "confidence": final_confidence,
         "is_aligned": is_aligned,
         "matched_rules": result.rules_matched,
+        "reasons": result.reasons,
         "evidence": evidence,
         "consistency": consistency,
     }
@@ -805,6 +806,7 @@ def classify_from_vcf_header(
         "reference_assembly": result.reference_assembly,
         "confidence": result.confidence,
         "matched_rules": result.rules_matched,
+        "reasons": result.reasons,
         "evidence": evidence,
     }
 

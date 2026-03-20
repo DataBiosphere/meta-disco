@@ -187,7 +187,8 @@ def classify_single_vcf(
 
     full = classify_from_vcf_header(header_text, file_size=file_size)
 
-    # Lean output — full evidence stays in data/evidence/vcf/ cache
+    # Evidence files (data/evidence/) are immutable raw data — don't write
+    # classification results back into them. Classifications go in output/.
     return {
         "file_name": file_name,
         "md5sum": md5sum,
@@ -197,6 +198,7 @@ def classify_single_vcf(
         "reference_assembly": full.get("reference_assembly"),
         "confidence": full.get("confidence"),
         "matched_rules": full.get("matched_rules", []),
+        "reasons": full.get("reasons", []),
     }
 
 
@@ -498,10 +500,8 @@ def main():
                         help="Limit number of files to process")
     parser.add_argument("--md5", type=str,
                         help="Classify a single file by MD5 hash")
-    parser.add_argument("--gzipped", action="store_true", default=True,
-                        help="File is gzipped (default: True)")
     parser.add_argument("--no-gzip", action="store_true",
-                        help="File is not gzipped")
+                        help="File is not gzipped (default: assume gzipped)")
     parser.add_argument("--no-resume", action="store_true",
                         help="Don't use cached headers, re-fetch all")
     parser.add_argument("--workers", "-w", type=int, default=10,
