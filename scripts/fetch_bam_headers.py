@@ -114,14 +114,49 @@ def classify_single_file(
     if not header_text:
         return None
 
-    classification = classify_from_header(header_text, file_size=file_size, file_format=file_format)
-    classification["file_name"] = file_name
-    classification["md5sum"] = md5sum
-    classification["file_size"] = file_size
-    classification["file_format"] = file_format
-    classification["header_preview"] = header_text[:500] + "..." if len(header_text) > 500 else header_text
+    full = classify_from_header(header_text, file_size=file_size, file_format=file_format)
 
-    return classification
+    # Enrich the evidence file with classification results
+    evi_path = get_evidence_path(md5sum)
+    if evi_path.exists():
+        try:
+            with open(evi_path) as f:
+                evidence = json.load(f)
+            evidence["classification"] = {
+                "data_modality": full.get("data_modality"),
+                "data_type": full.get("data_type"),
+                "assay_type": full.get("assay_type"),
+                "reference_assembly": full.get("reference_assembly"),
+                "platform": full.get("platform"),
+                "confidence": full.get("confidence"),
+                "is_aligned": full.get("is_aligned"),
+                "matched_rules": full.get("matched_rules", []),
+                "evidence": full.get("evidence", []),
+                "consistency": full.get("consistency"),
+            }
+            evidence["classification_timestamp"] = time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+            )
+            with open(evi_path, "w") as f:
+                json.dump(evidence, f, indent=2)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Lean output for the summary file
+    return {
+        "file_name": file_name,
+        "md5sum": md5sum,
+        "file_size": file_size,
+        "file_format": file_format,
+        "data_modality": full.get("data_modality"),
+        "data_type": full.get("data_type"),
+        "assay_type": full.get("assay_type"),
+        "reference_assembly": full.get("reference_assembly"),
+        "platform": full.get("platform"),
+        "confidence": full.get("confidence"),
+        "is_aligned": full.get("is_aligned"),
+        "matched_rules": full.get("matched_rules", []),
+    }
 
 
 def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:

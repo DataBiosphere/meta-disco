@@ -830,7 +830,18 @@ All disagreements follow the same pattern: AnVIL labels files as `single-nucleus
 2. **Assay-level metadata is invisible at file level**: snRNA-seq and WGS FASTQ reads are indistinguishable by read name format, index length, or any other file-level signal. The assay type (`single-nucleus RNA sequencing assay`) can only be determined from study-level metadata.
 3. **Vocabulary mismatch**: AnVIL uses EFO assay terms (`single-nucleus RNA sequencing assay`) while our taxonomy uses modality terms (`transcriptomic`). Even a correct classification would appear as a disagreement without a mapping layer.
 
-**Reference assembly comparison**: No files were comparable. AnVIL's values use composite terms (`GRCh38 + Gencode40`) and include non-human references (`GRCm39`) that don't normalize to our `GRCh38`/`GRCh37`/`CHM13` vocabulary.
+**Reference assembly comparison (634 ENCORE BAM files):**
+
+The ENCORE datasets (`AnVIL_ENCORE_RS293`, `AnVIL_ENCORE_293T`) contain 4,476 files tagged with `reference_assembly: GRCh38 + Gencode40`. Of these, 634 are BAM files with cached headers containing `@SQ` contig lines.
+
+| Result   | Count | Percentage |
+| -------- | -----:| ----------:|
+| Agree (GRCh38) | 634 | **100%** |
+| Disagree | 0     | 0%         |
+
+All 634 ENCORE BAM files are STAR-aligned RNA-seq with 292 `@SQ` lines. Our contig length detection independently confirms GRCh38 (chr1 length 248,956,422) — matching the AnVIL metadata exactly. This is the first positive validation of our classifier against existing AnVIL annotations.
+
+The remaining ENCORE files (3,842) are non-BAM formats (`.tsv`, `.tar`, `Other`) that we don't currently classify.
 
 ### 7.2 Implications for Using the Classifier as a Validator
 

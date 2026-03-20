@@ -651,7 +651,7 @@ def classify_from_header(
     is_aligned = bool(sq_lines) if lines else None
 
     # Try contig length detection if reference not found
-    if not result.reference_assembly and sq_lines:
+    if result.reference_assembly in (None, NOT_CLASSIFIED) and sq_lines:
         ref, matches, conf = detect_reference_from_contig_lengths(sq_lines)
         if ref and conf > 0.7:
             result.reference_assembly = ref
