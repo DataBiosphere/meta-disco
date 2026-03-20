@@ -188,7 +188,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load VCF classifications
     print("\nLoading VCF classifications...", flush=True)
     try:
-        with open("output/vcf_headers.json") as f:
+        with open("output/vcf_classifications.json") as f:
             data = json.load(f)
         vcf_files = data.get("classifications", data)
         results["vcf"]["total"] = len(vcf_files)
@@ -204,7 +204,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load BAM classifications
     print("Loading BAM classifications...", flush=True)
     try:
-        with open("output/bam_headers.json") as f:
+        with open("output/bam_classifications.json") as f:
             data = json.load(f)
         bam_files = data.get("classifications", data)
         results["bam"]["total"] = len(bam_files)

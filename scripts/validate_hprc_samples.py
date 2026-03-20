@@ -224,8 +224,8 @@ def main():
         type=Path,
         nargs="+",
         default=[
-            Path("output/bam_headers.json"),
-            Path("output/fastq_headers.json"),
+            Path("output/bam_classifications.json"),
+            Path("output/fastq_classifications.json"),
         ],
         help="Input classification files",
     )

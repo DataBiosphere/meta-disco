@@ -51,13 +51,13 @@ def load_classifications(output_dir: Path) -> dict[str, list[dict]]:
     classifications = {}
 
     files_to_load = {
-        "BAM/CRAM": "bam_headers.json",
-        "VCF": "vcf_headers.json",
-        "FASTQ": "fastq_headers.json",
+        "BAM/CRAM": "bam_classifications.json",
+        "VCF": "vcf_classifications.json",
+        "FASTQ": "fastq_classifications.json",
         "BED": "bed_classifications.json",
         "Images": "image_classifications.json",
-        "Auxiliary": "auxiliary_genomic_classifications.json",
-        "Index": "index_file_classifications.json",
+        "Auxiliary": "auxiliary_classifications.json",
+        "Index": "index_classifications.json",
     }
 
     for name, filename in files_to_load.items():

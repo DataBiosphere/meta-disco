@@ -421,10 +421,8 @@ def main():
                         help="Limit number of files to process")
     parser.add_argument("--md5", type=str,
                         help="Classify a single file by MD5 hash")
-    parser.add_argument("--gzipped", action="store_true", default=True,
-                        help="File is gzipped (default: True)")
     parser.add_argument("--no-gzip", action="store_true",
-                        help="File is not gzipped")
+                        help="File is not gzipped (default: assume gzipped)")
     parser.add_argument("--no-resume", action="store_true",
                         help="Don't use cached headers, re-fetch all")
     parser.add_argument("--workers", "-w", type=int, default=10,

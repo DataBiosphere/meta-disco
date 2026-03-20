@@ -265,7 +265,7 @@ def propagate_to_index_files(
     # Save results in same format as other classification outputs
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert to standard classification format (matching bam_headers.json / vcf_headers.json)
+    # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
     standard_results = []
     for r in results:
         standard_results.append({

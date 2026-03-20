@@ -276,7 +276,7 @@ def main():
     parser.add_argument(
         "--input", "-i",
         type=Path,
-        default=Path("output/fastq_headers.json"),
+        default=Path("output/fastq_classifications.json"),
         help="Input FASTQ classifications file",
     )
     parser.add_argument(
