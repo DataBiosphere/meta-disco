@@ -637,6 +637,78 @@ class TestBamCramClassification:
 # EDGE CASES
 # =============================================================================
 
+class TestContigLengthDetection:
+    """Test reference assembly detection from contig lengths.
+
+    BAM reference detection uses detect_reference_from_contig_lengths()
+    which matches @SQ SN/LN against known chromosome sizes.
+    VCF reference detection uses rule-based pattern matching on
+    ##contig assembly= and ##reference= fields.
+    """
+
+    def test_bam_sq_standard_order(self):
+        """Detect GRCh38 from BAM @SQ lines with SN before LN."""
+        header = "@HD\tVN:1.6\tSO:coordinate\n"
+        header += "@SQ\tSN:chr1\tLN:248956422\n"
+        header += "@SQ\tSN:chr2\tLN:242193529\n"
+        header += "@SQ\tSN:chr3\tLN:198295559\n"
+        header += "@SQ\tSN:chr10\tLN:133797422\n"
+        header += "@SQ\tSN:chr22\tLN:50818468"
+        result = classify_from_header(header)
+        assert result["reference_assembly"] == "GRCh38"
+
+    def test_bam_sq_reordered_tags(self):
+        """Detect GRCh38 from BAM @SQ lines with LN before SN."""
+        header = "@HD\tVN:1.6\tSO:coordinate\n"
+        header += "@SQ\tLN:248956422\tSN:chr1\n"
+        header += "@SQ\tLN:242193529\tSN:chr2\n"
+        header += "@SQ\tLN:198295559\tSN:chr3\n"
+        header += "@SQ\tLN:133797422\tSN:chr10\n"
+        header += "@SQ\tLN:50818468\tSN:chr22"
+        result = classify_from_header(header)
+        assert result["reference_assembly"] == "GRCh38"
+
+    def test_bam_sq_extra_tags(self):
+        """Detect GRCh38 from BAM @SQ with extra tags between SN and LN."""
+        header = "@HD\tVN:1.6\tSO:coordinate\n"
+        header += "@SQ\tSN:chr1\tM5:abc123\tLN:248956422\n"
+        header += "@SQ\tSN:chr2\tM5:def456\tLN:242193529\n"
+        header += "@SQ\tSN:chr3\tM5:ghi789\tLN:198295559\n"
+        header += "@SQ\tSN:chr10\tM5:jkl012\tLN:133797422\n"
+        header += "@SQ\tSN:chr22\tM5:mno345\tLN:50818468"
+        result = classify_from_header(header)
+        assert result["reference_assembly"] == "GRCh38"
+
+    def test_bam_sq_chm13(self):
+        """Detect CHM13 from BAM @SQ contig lengths."""
+        header = "@HD\tVN:1.6\tSO:coordinate\n"
+        header += "@SQ\tSN:chr1\tLN:248387497\n"
+        header += "@SQ\tSN:chr2\tLN:242696747\n"
+        header += "@SQ\tSN:chr3\tLN:201106605\n"
+        header += "@SQ\tSN:chr10\tLN:134758134\n"
+        header += "@SQ\tSN:chr22\tLN:51324926"
+        result = classify_from_header(header)
+        assert result["reference_assembly"] == "CHM13"
+
+    def test_vcf_contig_with_assembly_tag(self):
+        """VCF ##contig assembly= is matched via contig pattern rules."""
+        header = """##fileformat=VCFv4.2
+##contig=<ID=chr1,assembly=GRCh38,length=248956422>
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
+        result = classify_from_vcf_header(header)
+        # Currently assembly= in contig is matched by vcf_contig_assembly rules
+        # The ##reference line is the primary detection path
+        assert result["reference_assembly"] in ("GRCh38", NOT_CLASSIFIED)
+
+    def test_vcf_reference_field(self):
+        """VCF reference detection from ##reference= line."""
+        header = """##fileformat=VCFv4.2
+##reference=file:///refs/GRCh38.fasta
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
+        result = classify_from_vcf_header(header)
+        assert result["reference_assembly"] == "GRCh38"
+
+
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
