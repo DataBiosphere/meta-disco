@@ -389,7 +389,16 @@ def detect_reference_from_contig_lengths(
         return None, 0, 0.0
 
     best_assembly = tied[0]
-    best_confidence = min(0.95, 0.5 + (best_matches / len(reference_lengths[best_assembly])) * 0.45)
+    # Confidence based on number of matching contigs (not fraction of reference)
+    # 1 match = 0.80, 2 = 0.85, 3+ = 0.90, 5+ = 0.95
+    if best_matches >= 5:
+        best_confidence = 0.95
+    elif best_matches >= 3:
+        best_confidence = 0.90
+    elif best_matches >= 2:
+        best_confidence = 0.85
+    else:
+        best_confidence = 0.80
     return best_assembly, best_matches, best_confidence
 
 
