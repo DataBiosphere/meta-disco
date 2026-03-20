@@ -370,3 +370,125 @@ class TestRuleEngineEval:
         assert result.data_modality == NOT_APPLICABLE
         assert result.platform == NOT_APPLICABLE
         assert result.reference_assembly == NOT_APPLICABLE
+
+
+# =============================================================================
+# CORNER CASES
+# =============================================================================
+
+class TestCornerCases:
+    """Edge cases and tricky inputs that have caused bugs."""
+
+    def test_vcf_single_chromosome_identifies_assembly(self):
+        """A VCF with only one chromosome contig should still identify assembly."""
+        header = "\n".join([
+            "##fileformat=VCFv4.2",
+            "##contig=<ID=chr17,length=83257441>",
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+        ])
+        result = classify_from_vcf_header(header)
+        assert_valid_classification(result, {
+            "reference_assembly": "GRCh38",
+        })
+
+    def test_vcf_contig_with_extra_fields(self):
+        """VCF contig line with assembly= between ID= and length=."""
+        header = "\n".join([
+            "##fileformat=VCFv4.2",
+            "##contig=<ID=chr1,assembly=GRCh38,md5=abc,length=248956422>",
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+        ])
+        result = classify_from_vcf_header(header)
+        assert_valid_classification(result, {
+            "reference_assembly": "GRCh38",
+        })
+
+    def test_bam_grch37_bare_contig_names(self):
+        """GRCh37 BAM uses bare chromosome names (no chr prefix)."""
+        header = "\n".join([
+            "@HD\tVN:1.6\tSO:coordinate",
+            "@SQ\tSN:1\tLN:249250621",
+            "@SQ\tSN:2\tLN:243199373",
+            "@SQ\tSN:3\tLN:198022430",
+        ])
+        result = classify_from_header(header)
+        assert_valid_classification(result, {
+            "reference_assembly": "GRCh37",
+        })
+
+    def test_conflicting_platform_and_program(self):
+        """Illumina platform with PacBio CCS program — should warn."""
+        header = "\n".join([
+            "@HD\tVN:1.6",
+            "@RG\tID:sample1\tPL:ILLUMINA",
+            "@PG\tID:ccs\tPN:ccs\tVN:6.4.0",
+        ])
+        result = classify_from_header(header)
+        assert "consistency" in result
+        assert len(result["consistency"]["warnings"]) > 0
+
+    def test_ena_accession_without_dot_suffix(self):
+        """ENA accession without .1 suffix should still detect platform."""
+        reads = ["@ERR3242571 A00297:44:HFKH3DSXX:2:1354:30508:28839/1"]
+        result = classify_from_fastq_header(reads)
+        assert_valid_classification(result, {
+            "platform": "ILLUMINA",
+        })
+        assert result["archive_accession"] == "ERR3242571"
+
+    def test_fastq_with_trailing_tokens(self):
+        """Illumina read name with extra trailing content."""
+        reads = ["@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG extra_stuff"]
+        result = classify_from_fastq_header(reads)
+        assert_valid_classification(result, {
+            "platform": "ILLUMINA",
+        })
+
+    def test_hifi_bam_with_size(self):
+        """PacBio HiFi BAM with file size should get WGS assay type."""
+        header = "\n".join([
+            "@HD\tVN:1.6",
+            "@RG\tID:movie1\tPL:PACBIO\tDS:READTYPE=CCS",
+        ])
+        result = classify_from_header(header, file_size=100_000_000_000)
+        assert_valid_classification(result, {
+            "platform": "PACBIO",
+            "data_modality": "genomic",
+            "assay_type": "WGS",
+        })
+
+    def test_all_index_types_skipped(self):
+        """All index types should be skipped."""
+        for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
+            result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
+            assert result.skip is True, f"{ext} should be skipped"
+            assert result.data_modality == NOT_APPLICABLE
+
+    def test_log_and_checksum_skipped(self):
+        """Non-data files should be skipped."""
+        for name in ["run.log", "sample.md5"]:
+            result = engine.classify_extended(FileInfo(filename=name))
+            assert result.skip is True, f"{name} should be skipped"
+
+    def test_narrowpeak_is_chromatin(self):
+        """narrowPeak BED files should be chromatin accessibility."""
+        result = engine.classify_extended(FileInfo(filename="sample.narrowPeak"))
+        assert result.data_modality == "epigenomic.chromatin_accessibility"
+
+    def test_bigwig_with_chip_keyword(self):
+        """BigWig with ChIP in filename should be histone modification."""
+        result = engine.classify_extended(FileInfo(filename="H3K27ac_ChIP.bw"))
+        assert result.data_modality == "epigenomic.histone_modification"
+
+    def test_dataset_context_1000g(self):
+        """1000G PRIMED dataset should set GRCh38 reference for PLINK files."""
+        result = engine.classify_extended(
+            FileInfo(filename="EUR.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
+        )
+        assert result.reference_assembly == "GRCh38"
+
+    def test_no_crash_on_unknown_extension(self):
+        """Completely unknown file types shouldn't crash."""
+        for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
+            result = engine.classify_extended(FileInfo(filename=name))
+            assert result.data_modality is not None
