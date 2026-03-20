@@ -972,7 +972,8 @@ def classify_from_fasta_header(
     other_contigs = []
 
     assembler_pattern = re.compile(
-        r'^(h[12]tg|ptg|utg|ctg|tig|scaffold[_.]|contig[_.]|utig|asm)',
+        r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
+        r'|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)',
         re.IGNORECASE
     )
     transcript_pattern = re.compile(
@@ -987,7 +988,7 @@ def classify_from_fasta_header(
     for name in contig_names:
         if name in ref_chrom_names:
             ref_matches.append(name)
-        elif assembler_pattern.match(name):
+        elif assembler_pattern.search(name):
             assembler_contigs.append(name)
         elif transcript_pattern.match(name):
             transcript_contigs.append(name)
@@ -1019,25 +1020,40 @@ def classify_from_fasta_header(
 
     # 2. Contigs match a known reference set → reference genome
     if ref_matches:
-        # Check which reference assembly best matches
-        best_ref = None
-        best_count = 0
+        # Count matches per assembly
+        assembly_counts = {}
         for assembly, ref_contigs in REFERENCE_CONTIG_LENGTHS.items():
             count = sum(1 for name in ref_matches if name in ref_contigs)
-            if count > best_count:
-                best_count = count
-                best_ref = assembly
+            if count > 0:
+                assembly_counts[assembly] = count
+
+        best_count = max(assembly_counts.values()) if assembly_counts else 0
 
         # Need a substantial fraction of expected chromosomes to call it a reference
         if best_count >= 20:
+            # If multiple assemblies tied (all use same chr names), use filename to disambiguate
+            tied = [a for a, c in assembly_counts.items() if c == best_count]
+            if len(tied) == 1:
+                best_ref = tied[0]
+            elif result.reference_assembly and result.reference_assembly not in (NOT_CLASSIFIED, NOT_APPLICABLE):
+                # Rule engine already detected reference from filename (e.g., "chm13" in name)
+                best_ref = result.reference_assembly
+            else:
+                # Can't distinguish — contigs match multiple references equally
+                best_ref = None
+
             result.data_modality = "genomic"
             result.data_type = "reference_genome"
-            result.reference_assembly = best_ref
-            result.confidence = 0.95
+            if best_ref:
+                result.reference_assembly = best_ref
+                result.confidence = 0.95
+            else:
+                result.confidence = 0.80
             result.field_evidence["reference_assembly"] = [{
                 "rule_id": "fasta_reference_contigs",
-                "reason": f"Matched {best_count} contigs to {best_ref} reference chromosomes",
-                "confidence": 0.95,
+                "reason": f"Matched {best_count} contigs to reference chromosomes"
+                          + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
+                "confidence": 0.95 if best_ref else 0.50,
             }]
             result.field_evidence["data_modality"] = [{
                 "rule_id": "fasta_reference_contigs",
@@ -1098,20 +1114,23 @@ def classify_from_fasta_header(
         }]
         return result.to_output_dict()
 
-    # 5. Default: genomic sequence, can't determine more
-    result.data_modality = "genomic"
-    result.data_type = "sequence"
-    result.confidence = 0.50
-    result.field_evidence["data_modality"] = [{
-        "rule_id": "fasta_default_genomic",
-        "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
-        "confidence": 0.50,
-    }]
-    result.field_evidence["data_type"] = [{
-        "rule_id": "fasta_default_genomic",
-        "reason": "Unable to determine specific FASTA type from headers",
-        "confidence": 0.50,
-    }]
+    # 5. Default: preserve rule engine results if they set modality/type,
+    #    otherwise fall back to genomic/sequence
+    if result.data_modality in (None, NOT_CLASSIFIED):
+        result.data_modality = "genomic"
+        result.field_evidence["data_modality"].append({
+            "rule_id": "fasta_default_genomic",
+            "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
+            "confidence": 0.50,
+        })
+    if result.data_type in (None, NOT_CLASSIFIED):
+        result.data_type = "sequence"
+        result.field_evidence["data_type"].append({
+            "rule_id": "fasta_default_genomic",
+            "reason": "Unable to determine specific FASTA type from headers",
+            "confidence": 0.50,
+        })
+    result.confidence = max(result.confidence, 0.50)
     return result.to_output_dict()
 
 
