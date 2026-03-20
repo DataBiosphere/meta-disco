@@ -83,8 +83,10 @@ def detect_reference_from_contig_lengths(
     votes: dict[str, int] = {}
     exact_matches = 0
 
-    # Pattern for VCF ##contig=<ID=chr1,length=248387497>
-    vcf_pattern = r'##contig=<ID=([^,>]+),length=(\d+)'
+    # VCF contig fields can appear in any order: ##contig=<ID=chr1,length=248387497>
+    # or ##contig=<ID=chr1,assembly=GRCh38,length=248387497>
+    vcf_id_pattern = r'ID=([^,>]+)'
+    vcf_len_pattern = r'length=(\d+)'
     # BAM @SQ tags can appear in any order, so match SN and LN independently
     bam_sn_pattern = r'SN:([^\t]+)'
     bam_ln_pattern = r'LN:(\d+)'
@@ -93,11 +95,13 @@ def detect_reference_from_contig_lengths(
         contig = None
         length = None
 
-        # Try VCF format first
-        match = re.search(vcf_pattern, line)
-        if match:
-            contig = match.group(1).replace("chr", "")
-            length = int(match.group(2))
+        # Try VCF format first (ID and length fields matched independently)
+        if line.startswith("##contig"):
+            id_match = re.search(vcf_id_pattern, line)
+            len_match = re.search(vcf_len_pattern, line)
+            if id_match and len_match:
+                contig = id_match.group(1).replace("chr", "")
+                length = int(len_match.group(1))
         else:
             # Try BAM format (SN and LN tags can appear in any order)
             sn_match = re.search(bam_sn_pattern, line)

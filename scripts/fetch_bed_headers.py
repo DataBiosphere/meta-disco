@@ -88,10 +88,11 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True,
         Signals dict or None on failure
     """
     # Adaptive fetch size: small files get fetched whole, large ones get 10MB
+    # HTTP Range end offset is inclusive, so bytes=0-N fetches N+1 bytes
     if file_size and file_size <= 10_000_000:
-        fetch_bytes = file_size
+        fetch_bytes = file_size - 1
     else:
-        fetch_bytes = 10_485_760  # 10MB for large files
+        fetch_bytes = 10_485_759  # 10MB (inclusive end)
 
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
 
