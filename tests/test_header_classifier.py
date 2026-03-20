@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.meta_disco.models import NOT_CLASSIFIED
+from src.meta_disco.models import NOT_CLASSIFIED, NOT_APPLICABLE
 
 
 def val(result: dict, field: str):
@@ -659,9 +659,9 @@ class TestBamCramClassification:
         assert len(result["consistency"]["warnings"]) > 0
 
     def test_empty_header(self):
-        """Handle empty header."""
+        """Handle empty header — treated as unaligned."""
         result = classify_from_header("")
-        assert val(result, "confidence") == 0.0
+        assert val(result, "reference_assembly") == NOT_APPLICABLE
 
 
 # =============================================================================

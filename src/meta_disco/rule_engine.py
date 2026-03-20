@@ -335,8 +335,8 @@ class RuleEngine:
         if when.get("reference_not_set") and current.reference_assembly not in (None, NOT_CLASSIFIED):
             return False
 
-        # Check header section (tier 3)
-        if rule.scope == "header" and when.get("header_section"):
+        # Check header section (tier 3) — skip if checking for absence
+        if rule.scope == "header" and when.get("header_section") and not when.get("header_absent"):
             if not self._match_bam_header(when, file_info):
                 return False
 
