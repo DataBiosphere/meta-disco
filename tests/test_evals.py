@@ -307,6 +307,31 @@ class TestFastqEval:
         assert result["archive_accession"] == "ERR3242571"
         assert result["archive_source"] == "ENA"
 
+    def test_output_format_has_per_field_structure(self):
+        """FASTQ output should have per-field dicts with value/confidence/evidence."""
+        reads = ["@A00297:44:HFKH3DSXX:2:1101:1904:1000 1:N:0:ATCACG"]
+        result = classify_from_fastq_header(reads)
+        # Each classification field should be a dict with value/evidence
+        for field in ["data_modality", "data_type", "platform", "reference_assembly"]:
+            assert field in result, f"Missing field: {field}"
+            entry = result[field]
+            assert isinstance(entry, dict), f"{field} should be dict, got {type(entry)}"
+            assert "value" in entry, f"{field} missing 'value'"
+            assert "evidence" in entry, f"{field} missing 'evidence'"
+            assert "confidence" in entry, f"{field} missing 'confidence'"
+
+    def test_fastq_reference_always_not_applicable(self):
+        """All FASTQ files should have reference_assembly: not_applicable."""
+        for reads in [
+            ["@A00297:44:HFKH3DSXX:2:1101:1904:1000 1:N:0:ATCACG"],
+            ["@m64011_190830_220126/1/ccs"],
+            ["@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123"],
+        ]:
+            result = classify_from_fastq_header(reads)
+            assert_valid_classification(result, {
+                "reference_assembly": NOT_APPLICABLE,
+            })
+
 
 # =============================================================================
 # RULE ENGINE (extension/filename based)

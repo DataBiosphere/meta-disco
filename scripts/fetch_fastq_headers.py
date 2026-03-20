@@ -141,14 +141,14 @@ def classify_single_fastq(
     if not read_names:
         return None
 
-    classification = classify_from_fastq_header(read_names, file_name)
-    classification["file_name"] = file_name
-    classification["md5sum"] = md5sum
-    classification["file_size"] = file_size
-    classification["reads_sampled"] = len(read_names)
-    classification["sample_reads"] = read_names[:3]  # First 3 for preview
+    full = classify_from_fastq_header(read_names, file_name)
 
-    return classification
+    return {
+        "file_name": file_name,
+        "md5sum": md5sum,
+        "file_size": file_size,
+        "classifications": full,
+    }
 
 
 def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:
@@ -247,7 +247,8 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
     # Ensure evidence directory exists
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
-    classifications = []
+    writer = NdjsonWriter(output_path)
+
     successful = 0
     failed = 0
     from_cache = 0
@@ -263,7 +264,7 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
         with lock:
             processed += 1
             if result:
-                classifications.append(result)
+                writer.write(result)
                 successful += 1
                 if was_cached:
                     from_cache += 1
@@ -272,10 +273,6 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
 
             cache_indicator = "[cached] " if was_cached else ""
             print(f"\r[{processed}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
-
-            # Save incremental progress every 500 files
-            if processed % 500 == 0:
-                save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
 
     if workers == 1:
         # Sequential processing
@@ -308,19 +305,49 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
     print(f"  New fetches: {successful - from_cache}")
     print(f"Failed to fetch header: {failed}")
 
-    # Save final results
-    save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache, final=True)
+    # Close writer and write final JSON
+    writer.close()
+    save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
-    # Print summary
-    print_fastq_classification_summary(classifications)
+    # Read back for summary
+    with open(output_path) as f:
+        final_data = json.load(f)
+    print_fastq_classification_summary(final_data.get("classifications", []))
 
 
-def save_progress(output_path: Path, classifications: list, total: int,
-                  successful: int, failed: int, from_cache: int, final: bool = False):
-    """Save current progress to output file."""
+def _ndjson_path(output_path: Path) -> Path:
+    return output_path.with_suffix(".ndjson")
+
+
+class NdjsonWriter:
+    def __init__(self, output_path: Path):
+        self.path = _ndjson_path(output_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "w")
+        self._count = 0
+
+    def write(self, record: dict):
+        self._fh.write(json.dumps(record) + "\n")
+        self._count += 1
+        if self._count % 500 == 0:
+            self._fh.flush()
+
+    def close(self):
+        self._fh.flush()
+        self._fh.close()
+
+
+def save_final(output_path: Path, total: int, successful: int, failed: int, from_cache: int):
+    ndjson = _ndjson_path(output_path)
+    classifications = []
+    if ndjson.exists():
+        with open(ndjson) as f:
+            for line in f:
+                if line.strip():
+                    classifications.append(json.loads(line))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({
@@ -330,10 +357,12 @@ def save_progress(output_path: Path, classifications: list, total: int,
                 "successful": successful,
                 "failed": failed,
                 "from_cache": from_cache,
-                "complete": final,
+                "complete": True,
             },
             "classifications": classifications,
         }, f, indent=2)
+    if ndjson.exists():
+        ndjson.unlink()
 
 
 def print_fastq_classification_summary(classifications: list[dict]):
