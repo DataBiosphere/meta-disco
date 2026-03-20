@@ -690,19 +690,13 @@ class TestContigLengthDetection:
         result = classify_from_header(header)
         assert result["reference_assembly"] == "CHM13"
 
-    def test_bam_sq_tied_votes_returns_none(self):
-        """When contig lengths match multiple assemblies equally, return None."""
-        # Only chr22 — matches all three references within tolerance
-        # (all are ~50-51M, so a single contig can't distinguish)
+    def test_bam_sq_single_contig_identifies_assembly(self):
+        """A single contig with exact length match definitively identifies assembly."""
+        # chr22 length 50818468 is unique to GRCh38 (CHM13=51324926, GRCh37=51304566)
         header = "@HD\tVN:1.6\tSO:coordinate\n"
         header += "@SQ\tSN:chr22\tLN:50818468"
         result = classify_from_header(header)
-        # With only one contig that doesn't uniquely identify an assembly,
-        # should not pick arbitrarily
-        assert result["reference_assembly"] in (None, NOT_CLASSIFIED, "GRCh38")
-        # If it does match, confidence should be low
-        if result["reference_assembly"] not in (None, NOT_CLASSIFIED):
-            assert result["confidence"] < 0.9
+        assert result["reference_assembly"] == "GRCh38"
 
     def test_bam_sq_clear_winner(self):
         """When one assembly clearly wins by vote count, return it."""

@@ -15,6 +15,14 @@ from dataclasses import dataclass, replace
 from .models import NOT_CLASSIFIED
 
 
+def _get_engine():
+    """Get a cached RuleEngine instance (avoids re-parsing YAML on every call)."""
+    if not hasattr(_get_engine, "_instance"):
+        from .rule_engine import RuleEngine
+        _get_engine._instance = RuleEngine()
+    return _get_engine._instance
+
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
@@ -639,7 +647,7 @@ def classify_from_header(
             - matched_rules: list of rule IDs that matched
             - evidence: list of dicts with rule details
     """
-    from .rule_engine import RuleEngine, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Determine filename for extension-based rules
     filename = "sample.bam"
@@ -654,24 +662,30 @@ def classify_from_header(
         bam_header=header_text,
     )
 
-    # Run classification with tier 3 (header rules)
-    engine = RuleEngine()
-    result = engine.classify_extended(file_info, include_tier3=True)
-
-    # Check if aligned (has @SQ lines)
+    # Detect reference from contig lengths first — definitive signal
     lines = header_text.strip().split("\n") if header_text else []
     sq_lines = [l for l in lines if l.startswith("@SQ")]
     is_aligned = bool(sq_lines) if lines else None
 
-    # Try contig length detection if reference not found
-    if result.reference_assembly in (None, NOT_CLASSIFIED) and sq_lines:
-        ref, matches, conf = detect_reference_from_contig_lengths(sq_lines)
-        if ref and conf > 0.7:
-            result.reference_assembly = ref
-            result.rules_matched.append("contig_length_detection")
-            result.reasons.append(f"Reference {ref} detected from {matches} matching contig lengths")
-            if conf > result.confidence:
-                result.confidence = conf
+    from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
+    contig_ref = None
+    contig_conf = 0.0
+    contig_matches = 0
+    if sq_lines:
+        contig_ref, contig_matches, contig_conf = detect_from_contigs(sq_lines)
+
+    # Run classification with tier 3 (header rules)
+    engine = _get_engine()
+    result = engine.classify_extended(file_info, include_tier3=True)
+
+    # Apply contig-based reference (overrides rule-based detection if available)
+    if contig_ref:
+        result.reference_assembly = contig_ref
+        result.confidence = max(result.confidence, contig_conf)
+        result.rules_matched.append("contig_length_detection")
+        result.reasons.append(
+            f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
+        )
 
     # Infer assay type
     assay_type = engine.infer_assay_type(result, file_info)
@@ -734,7 +748,7 @@ def classify_from_vcf_header(
             - matched_rules: list of rule IDs
             - evidence: list of dicts
     """
-    from .rule_engine import RuleEngine, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Determine filename for extension-based rules
     filename = "sample.vcf.gz"
@@ -749,9 +763,29 @@ def classify_from_vcf_header(
         vcf_header=header_text,
     )
 
+    # Detect reference from contig lengths — definitive signal, no guessing.
+    from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
+
+    contig_ref = None
+    contig_conf = 0.0
+    contig_matches = 0
+    if header_text:
+        contig_lines = [l for l in header_text.split("\n") if l.startswith("##contig")]
+        if contig_lines:
+            contig_ref, contig_matches, contig_conf = detect_from_contigs(contig_lines)
+
     # Run classification with tier 3 (header rules)
-    engine = RuleEngine()
+    engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
+
+    # Apply contig-based reference (overrides any rule-based guess)
+    if contig_ref:
+        result.reference_assembly = contig_ref
+        result.confidence = max(result.confidence, contig_conf)
+        result.rules_matched.append("vcf_contig_length")
+        result.reasons.append(
+            f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
+        )
 
     # Build evidence list
     evidence = []
@@ -805,7 +839,7 @@ def classify_from_fastq_header(
             - matched_rules: list of rule IDs
             - evidence: list of dicts
     """
-    from .rule_engine import RuleEngine, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Use provided filename or generate one
     filename = file_name or "sample.fastq.gz"
@@ -842,7 +876,7 @@ def classify_from_fastq_header(
     )
 
     # Run classification with tier 3 (header rules)
-    engine = RuleEngine()
+    engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
     # If no platform detected and this is archive-reformatted, try the stripped version

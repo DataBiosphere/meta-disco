@@ -300,11 +300,12 @@ class RuleEngine:
         if not section:
             return False
 
-        # Import header extractors
+        # Parse BAM header once and cache on the file_info object
         from .validators.header_extractors import parse_sam_header, match_sam_header_pattern
 
-        header = parse_sam_header(file_info.bam_header)
-        return match_sam_header_pattern(header, section, field_name, pattern)
+        if not hasattr(file_info, '_parsed_bam_header'):
+            file_info._parsed_bam_header = parse_sam_header(file_info.bam_header)
+        return match_sam_header_pattern(file_info._parsed_bam_header, section, field_name, pattern)
 
     def _match_vcf_header(
         self,
@@ -321,11 +322,12 @@ class RuleEngine:
         if not header_type or not pattern:
             return False
 
-        # Import header extractors
+        # Parse VCF header once and cache on the file_info object
         from .validators.header_extractors import parse_vcf_header, match_vcf_header_pattern
 
-        header = parse_vcf_header(file_info.vcf_header)
-        return match_vcf_header_pattern(header, header_type, pattern)
+        if not hasattr(file_info, '_parsed_vcf_header'):
+            file_info._parsed_vcf_header = parse_vcf_header(file_info.vcf_header)
+        return match_vcf_header_pattern(file_info._parsed_vcf_header, header_type, pattern)
 
     def _match_fastq_header(
         self,
