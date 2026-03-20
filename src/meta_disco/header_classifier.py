@@ -682,10 +682,10 @@ def classify_from_header(
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
+        reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.rules_matched.append("contig_length_detection")
-        result.reasons.append(
-            f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        )
+        result.reasons.append(reason)
+        result.rule_evidence.append({"rule_id": "contig_length_detection", "reason": reason, "confidence": contig_conf})
 
     # Infer assay type
     assay_type = engine.infer_assay_type(result, file_info)
@@ -783,10 +783,10 @@ def classify_from_vcf_header(
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
+        reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.rules_matched.append("vcf_contig_length")
-        result.reasons.append(
-            f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        )
+        result.reasons.append(reason)
+        result.rule_evidence.append({"rule_id": "vcf_contig_length", "reason": reason, "confidence": contig_conf})
 
     # Build evidence list
     evidence = []

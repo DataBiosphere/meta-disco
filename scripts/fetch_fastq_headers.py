@@ -415,7 +415,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch FASTQ headers and classify")
     parser.add_argument("--input", "-i", type=str,
                         help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/fastq_headers.json",
+    parser.add_argument("--output", "-o", type=str, default="output/fastq_classifications.json",
                         help="Output file for classifications")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files to process")

@@ -57,17 +57,17 @@ def main():
 
     # Phase 1: Run 6 independent classifiers in parallel
     parallel_jobs = [
-        ("fetch_bam_headers.py", output_dir / "bam_headers.json",
+        ("fetch_bam_headers.py", output_dir / "bam_classifications.json",
          ["--input", str(args.metadata)]),
-        ("fetch_vcf_headers.py", output_dir / "vcf_headers.json",
+        ("fetch_vcf_headers.py", output_dir / "vcf_classifications.json",
          ["--input", str(args.metadata)]),
-        ("fetch_fastq_headers.py", output_dir / "fastq_headers.json",
+        ("fetch_fastq_headers.py", output_dir / "fastq_classifications.json",
          ["--input", str(args.metadata)]),
         ("classify_bed_files.py", output_dir / "bed_classifications.json",
          ["--metadata", str(args.metadata)]),
         ("classify_images.py", output_dir / "image_classifications.json",
          ["--metadata", str(args.metadata)]),
-        ("classify_auxiliary_genomic.py", output_dir / "auxiliary_genomic_classifications.json",
+        ("classify_auxiliary_genomic.py", output_dir / "auxiliary_classifications.json",
          ["--metadata", str(args.metadata)]),
     ]
 
@@ -86,11 +86,11 @@ def main():
     print(f"\nPhase 2: Propagating index metadata...")
     _, ok = run_script(
         "propagate_index_metadata.py",
-        output_dir / "index_file_classifications.json",
+        output_dir / "index_classifications.json",
         [
             "--metadata", str(args.metadata),
-            "--bam", str(output_dir / "bam_headers.json"),
-            "--vcf", str(output_dir / "vcf_headers.json"),
+            "--bam", str(output_dir / "bam_classifications.json"),
+            "--vcf", str(output_dir / "vcf_classifications.json"),
         ]
     )
     success &= ok

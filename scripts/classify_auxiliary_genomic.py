@@ -152,7 +152,7 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/auxiliary_genomic_classifications.json"),
+        default=Path("output/auxiliary_classifications.json"),
         help="Output path for classifications",
     )
     args = parser.parse_args()

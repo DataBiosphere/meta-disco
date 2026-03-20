@@ -55,6 +55,7 @@ class ExtendedClassificationResult:
     confidence: float = 0.0
     reasons: list[str] = field(default_factory=list)
     rules_matched: list[str] = field(default_factory=list)
+    rule_evidence: list[dict] = field(default_factory=list)
     skip: bool = False
     needs_header_inspection: bool = False
     needs_study_context: bool = False
@@ -422,8 +423,12 @@ class RuleEngine:
 
         # Track matched rules and reasons
         result.rules_matched.append(rule.id)
-        if rule.rationale:
-            result.reasons.append(rule.rationale)
+        result.reasons.append(rule.rationale or "")
+        result.rule_evidence.append({
+            "rule_id": rule.id,
+            "reason": rule.rationale or "",
+            "confidence": rule.confidence,
+        })
 
     def infer_assay_type(
         self,

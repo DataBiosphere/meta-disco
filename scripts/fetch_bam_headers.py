@@ -130,8 +130,10 @@ def classify_single_file(
         "platform": full.get("platform"),
         "confidence": full.get("confidence"),
         "is_aligned": full.get("is_aligned"),
-        "matched_rules": full.get("matched_rules", []),
-        "reasons": full.get("reasons", []),
+        "rule_evidence": [
+            {"rule_id": r, "reason": rsn}
+            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
+        ],
     }
 
 
@@ -423,7 +425,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch BAM/CRAM headers and classify")
     parser.add_argument("--input", "-i", type=str,
                         help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/bam_headers.json",
+    parser.add_argument("--output", "-o", type=str, default="output/bam_classifications.json",
                         help="Output file for classifications")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files to process")

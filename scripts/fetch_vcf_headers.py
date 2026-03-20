@@ -197,8 +197,10 @@ def classify_single_vcf(
         "data_type": full.get("data_type"),
         "reference_assembly": full.get("reference_assembly"),
         "confidence": full.get("confidence"),
-        "matched_rules": full.get("matched_rules", []),
-        "reasons": full.get("reasons", []),
+        "rule_evidence": [
+            {"rule_id": r, "reason": rsn}
+            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
+        ],
     }
 
 
@@ -494,7 +496,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch VCF headers and classify")
     parser.add_argument("--input", "-i", type=str,
                         help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/vcf_headers.json",
+    parser.add_argument("--output", "-o", type=str, default="output/vcf_classifications.json",
                         help="Output file for classifications")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files to process")

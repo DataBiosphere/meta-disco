@@ -322,19 +322,19 @@ def main():
     parser.add_argument(
         "--bam", "-b",
         type=Path,
-        default=Path("output/bam_headers.json"),
+        default=Path("output/bam_classifications.json"),
         help="Path to BAM/CRAM classifications",
     )
     parser.add_argument(
         "--vcf", "-v",
         type=Path,
-        default=Path("output/vcf_headers.json"),
+        default=Path("output/vcf_classifications.json"),
         help="Path to VCF classifications",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/index_file_classifications.json"),
+        default=Path("output/index_classifications.json"),
         help="Output path for index classifications",
     )
     args = parser.parse_args()
