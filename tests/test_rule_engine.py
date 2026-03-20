@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.meta_disco.models import FileInfo, ClassificationResult
-from src.meta_disco.rule_engine import RuleEngine
+from src.meta_disco.models import FileInfo, ClassificationResult, NOT_APPLICABLE, NOT_CLASSIFIED
+from src.meta_disco.rule_engine import RuleEngine, ExtendedFileInfo
 
 
 @pytest.fixture
@@ -308,3 +308,61 @@ class TestReasonChain:
         """Reasons should explain why classification was made."""
         result = engine.classify(FileInfo(filename="sample.svs"))
         assert any("histology" in r.lower() or "svs" in r.lower() for r in result.reasons)
+
+
+class TestSentinelValues:
+    """Test that not_applicable/not_classified sentinels are used correctly."""
+
+    def test_skipped_files_get_not_applicable(self, engine):
+        """Skipped files (indexes, checksums) should get not_applicable for all fields."""
+        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        assert result.skip is True
+        assert result.data_modality == NOT_APPLICABLE
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.platform == NOT_APPLICABLE
+        assert result.assay_type == NOT_APPLICABLE
+
+    def test_unclassified_fields_get_not_classified(self, engine):
+        """Non-skipped files with unset fields should get not_classified."""
+        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        assert result.skip is False
+        assert result.data_modality == NOT_CLASSIFIED
+        assert result.reference_assembly == NOT_CLASSIFIED
+
+    def test_images_get_not_applicable_for_genomic_fields(self, engine):
+        """Image files should get not_applicable for platform and reference."""
+        result = engine.classify_extended(FileInfo(filename="sample.svs"))
+        assert result.data_modality == "imaging.histology"
+        assert result.platform == NOT_APPLICABLE
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fastq_gets_not_applicable_reference(self, engine):
+        """FASTQ files should get not_applicable for reference (unaligned reads)."""
+        result = engine.classify_extended(FileInfo(filename="sample.fastq.gz"))
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fast5_gets_not_applicable_reference(self, engine):
+        """FAST5 files should get not_applicable for reference (raw signal)."""
+        result = engine.classify_extended(FileInfo(filename="sample.fast5"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.platform == "ONT"
+
+    def test_modality_not_set_ignores_sentinel(self, engine):
+        """modality_not_set guard should treat NOT_CLASSIFIED as 'not set',
+        allowing rules to fire on files where no earlier rule set modality."""
+        # An unknown file type gets not_classified for modality from finalization.
+        # If we then re-run with additional info, modality_not_set rules should still fire.
+        result = engine.classify_extended(
+            ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)
+        )
+        # BAM gets 'genomic' from a fallback rule, and size heuristic confirms WGS
+        assert result.data_modality in ("genomic", "genomic.whole_genome")
+        assert "alignment_size_wgs" in result.rules_matched
+
+    def test_png_all_fields_not_applicable(self, engine):
+        """PNG files should get not_applicable for all non-applicable fields."""
+        result = engine.classify_extended(FileInfo(filename="plot.png"))
+        assert result.data_modality == NOT_APPLICABLE
+        assert result.platform == NOT_APPLICABLE
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.assay_type == NOT_APPLICABLE

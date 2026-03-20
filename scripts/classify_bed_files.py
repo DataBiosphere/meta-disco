@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.meta_disco.rule_engine import RuleEngine
 from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 
+_SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
+
 # Import BED reference inference (from sibling script)
 sys.path.insert(0, str(Path(__file__).parent))
 try:
@@ -146,17 +148,13 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         data_modality = result.data_modality
         reference_assembly = result.reference_assembly
 
-        if data_modality:
+        if data_modality and data_modality not in _SENTINEL_VALUES:
             stats["with_modality"] += 1
-            stats["by_modality"][data_modality] = stats["by_modality"].get(data_modality, 0) + 1
-        else:
-            stats["by_modality"]["N/A"] = stats["by_modality"].get("N/A", 0) + 1
+        stats["by_modality"][data_modality or "N/A"] = stats["by_modality"].get(data_modality or "N/A", 0) + 1
 
-        if reference_assembly:
+        if reference_assembly and reference_assembly not in _SENTINEL_VALUES:
             stats["with_reference"] += 1
-            stats["by_reference"][reference_assembly] = stats["by_reference"].get(reference_assembly, 0) + 1
-        else:
-            stats["by_reference"]["N/A"] = stats["by_reference"].get("N/A", 0) + 1
+        stats["by_reference"][reference_assembly or "N/A"] = stats["by_reference"].get(reference_assembly or "N/A", 0) + 1
 
         for rule_id in result.rules_matched:
             stats["by_rule"][rule_id] = stats["by_rule"].get(rule_id, 0) + 1

@@ -185,20 +185,19 @@ def classify_single_vcf(
     if not header_text:
         return None
 
-    # Load max_positions from cache for fallback reference detection
-    cached = load_cached_header(md5sum)
-    max_positions = cached.get("max_positions") if cached else None
+    full = classify_from_vcf_header(header_text, file_size=file_size)
 
-    classification = classify_from_vcf_header(
-        header_text, file_size=file_size, max_positions=max_positions
-    )
-    classification["file_name"] = file_name
-    classification["md5sum"] = md5sum
-    classification["file_size"] = file_size
-    classification["header_line_count"] = len(header_text.split('\n'))
-    classification["header_preview"] = header_text[:1000] + "..." if len(header_text) > 1000 else header_text
-
-    return classification
+    # Lean output — full evidence stays in data/evidence/vcf/ cache
+    return {
+        "file_name": file_name,
+        "md5sum": md5sum,
+        "file_size": file_size,
+        "data_modality": full.get("data_modality"),
+        "data_type": full.get("data_type"),
+        "reference_assembly": full.get("reference_assembly"),
+        "confidence": full.get("confidence"),
+        "matched_rules": full.get("matched_rules", []),
+    }
 
 
 def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:

@@ -254,12 +254,12 @@ class RuleEngine:
             if file_info.file_format != file_format:
                 return False
 
-        # Check modality_not_set
-        if when.get("modality_not_set") and current.data_modality is not None:
+        # Check modality_not_set (treat sentinels as "not set")
+        if when.get("modality_not_set") and current.data_modality not in (None, NOT_CLASSIFIED):
             return False
 
-        # Check reference_not_set
-        if when.get("reference_not_set") and current.reference_assembly is not None:
+        # Check reference_not_set (treat sentinels as "not set")
+        if when.get("reference_not_set") and current.reference_assembly not in (None, NOT_CLASSIFIED):
             return False
 
         # Check header section (tier 3)

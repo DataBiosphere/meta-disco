@@ -15,7 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo
+from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
+
+_SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 
 # Extensions handled by this script
 AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar", ".psam", ".pgen"}
@@ -59,7 +61,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         )
         result = engine.classify_extended(file_info)
 
-        if result.reference_assembly:
+        if result.reference_assembly and result.reference_assembly not in _SENTINEL_VALUES:
             stats[matched_ext]["with_ref"] += 1
 
         results.append({

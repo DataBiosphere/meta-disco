@@ -679,7 +679,7 @@ def classify_from_header(
 
     # Default to genomic if platform detected but no modality
     data_modality = result.data_modality
-    if not data_modality and result.platform:
+    if data_modality in (None, NOT_CLASSIFIED) and result.platform not in (None, NOT_CLASSIFIED):
         data_modality = "genomic"
 
     return {
