@@ -185,20 +185,11 @@ def classify_single_vcf(
 
     full = classify_from_vcf_header(header_text, file_size=file_size)
 
-    # Evidence files (data/evidence/) are immutable raw data — don't write
-    # classification results back into them. Classifications go in output/.
     return {
         "file_name": file_name,
         "md5sum": md5sum,
         "file_size": file_size,
-        "data_modality": full.get("data_modality"),
-        "data_type": full.get("data_type"),
-        "reference_assembly": full.get("reference_assembly"),
-        "confidence": full.get("confidence"),
-        "rule_evidence": [
-            {"rule_id": r, "reason": rsn}
-            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
-        ],
+        "classifications": full,
     }
 
 

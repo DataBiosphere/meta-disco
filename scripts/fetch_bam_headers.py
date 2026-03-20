@@ -116,24 +116,13 @@ def classify_single_file(
 
     full = classify_from_header(header_text, file_size=file_size, file_format=file_format)
 
-    # Evidence files (data/evidence/) are immutable raw data — don't write
-    # classification results back into them. Classifications go in output/.
+    # full is already per-field format from to_output_dict()
     return {
         "file_name": file_name,
         "md5sum": md5sum,
         "file_size": file_size,
         "file_format": file_format,
-        "data_modality": full.get("data_modality"),
-        "data_type": full.get("data_type"),
-        "assay_type": full.get("assay_type"),
-        "reference_assembly": full.get("reference_assembly"),
-        "platform": full.get("platform"),
-        "confidence": full.get("confidence"),
-        "is_aligned": full.get("is_aligned"),
-        "rule_evidence": [
-            {"rule_id": r, "reason": rsn}
-            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
-        ],
+        "classifications": full,
     }
 
 

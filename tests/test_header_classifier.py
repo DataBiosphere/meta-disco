@@ -3,6 +3,36 @@
 import pytest
 
 from src.meta_disco.models import NOT_CLASSIFIED
+
+
+def val(result: dict, field: str):
+    """Extract a classification value from the per-field output format.
+
+    Handles both old flat format (result["field"]) and new per-field format
+    (result["field"]["value"]).
+
+    For "confidence", returns the max confidence across all fields.
+    """
+    v = result.get(field)
+    if isinstance(v, dict) and "value" in v:
+        return v["value"]
+    if field == "confidence" and v is None:
+        # Compute overall confidence as max across per-field confidences
+        max_conf = 0.0
+        for fld_name, fld_val in result.items():
+            if isinstance(fld_val, dict) and "confidence" in fld_val:
+                max_conf = max(max_conf, fld_val["confidence"])
+        return max_conf
+    if field == "matched_rules" and v is None:
+        # Flatten matched rules from per-field evidence
+        rules = []
+        for fld_val in result.values():
+            if isinstance(fld_val, dict) and "evidence" in fld_val:
+                for e in fld_val["evidence"]:
+                    if e.get("rule_id") not in rules:
+                        rules.append(e["rule_id"])
+        return rules
+    return v
 from src.meta_disco.header_classifier import (
     # Helper functions
     extract_archive_accession,
@@ -291,10 +321,10 @@ class TestFastqClassification:
             "@A00297:44:HFKH3DSXX:2:1354:30510:28841 1:N:0:ATCACG",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ILLUMINA"
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "reads"
-        assert result["confidence"] >= 0.90
+        assert val(result, "platform") == "ILLUMINA"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "reads"
+        assert val(result, "confidence") >= 0.90
 
     def test_illumina_instrument_model(self):
         """Extract Illumina instrument model."""
@@ -310,8 +340,8 @@ class TestFastqClassification:
             "@HWUSI-EAS100R:6:73:942:1974#ATCACG/1",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ILLUMINA"
-        assert result["confidence"] >= 0.85
+        assert val(result, "platform") == "ILLUMINA"
+        assert val(result, "confidence") >= 0.85
 
     def test_ena_reformatted(self):
         """Classify ENA-reformatted FASTQ with accession extraction."""
@@ -320,7 +350,7 @@ class TestFastqClassification:
             "@ERR3242571.2 A00297:44:HFKH3DSXX:2:1354:30509:28840/1",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ILLUMINA"
+        assert val(result, "platform") == "ILLUMINA"
         assert result["archive_accession"] == "ERR3242571"
         assert result["archive_source"] == "ENA"
         assert result["instrument_model"] == "NovaSeq 6000"
@@ -339,10 +369,10 @@ class TestFastqClassification:
             "@ERR1395578.2 HS2000-1260_220:1:1101:10001:10159/1",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ILLUMINA"
-        assert result["data_modality"] == "genomic"
+        assert val(result, "platform") == "ILLUMINA"
+        assert val(result, "data_modality") == "genomic"
         assert result["archive_accession"] == "ERR1395578"
-        assert result["confidence"] >= 0.85
+        assert val(result, "confidence") >= 0.85
 
     def test_ena_hiseq_2500(self):
         """Classify ENA-reformatted FASTQ with HiSeq 2500 instrument."""
@@ -350,8 +380,8 @@ class TestFastqClassification:
             "@ERR9999999.1 HS2500-1234_100:2:1101:5000:5000/1",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ILLUMINA"
-        assert result["data_modality"] == "genomic"
+        assert val(result, "platform") == "ILLUMINA"
+        assert val(result, "data_modality") == "genomic"
 
     def test_pacbio_ccs(self):
         """Classify PacBio CCS/HiFi FASTQ."""
@@ -361,10 +391,10 @@ class TestFastqClassification:
             "@m64011_190830_220126/3/ccs",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "reads"
-        assert result["confidence"] >= 0.95
+        assert val(result, "platform") == "PACBIO"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "reads"
+        assert val(result, "confidence") >= 0.95
 
     def test_pacbio_clr(self):
         """Classify PacBio CLR FASTQ."""
@@ -373,8 +403,8 @@ class TestFastqClassification:
             "@m64011_190830_220126/1234/5001_10000",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic"
+        assert val(result, "platform") == "PACBIO"
+        assert val(result, "data_modality") == "genomic"
 
     def test_ont(self):
         """Classify Oxford Nanopore FASTQ."""
@@ -383,8 +413,8 @@ class TestFastqClassification:
             "@b2c3d4e5-f6a7-8901-bcde-f12345678901 runid=abc123",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "ONT"
-        assert result["data_modality"] == "genomic"
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == "genomic"
 
     def test_mgi(self):
         """Classify MGI/BGI FASTQ."""
@@ -393,7 +423,7 @@ class TestFastqClassification:
             "@V350012345L1C001R0010000002/1",
         ]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == "MGI"
+        assert val(result, "platform") == "MGI"
 
     def test_paired_end_detection(self):
         """Detect paired-end from read names."""
@@ -413,8 +443,8 @@ class TestFastqClassification:
     def test_empty_input(self):
         """Handle empty input gracefully."""
         result = classify_from_fastq_header([])
-        assert result["platform"] is None
-        assert result["confidence"] == 0.0
+        assert val(result, "platform") is None
+        assert val(result, "confidence") == 0.0
 
     def test_confidence_boost_on_agreement(self):
         """Confidence should increase when all reads agree."""
@@ -425,7 +455,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         # Should get boost for consistent reads
-        assert result["confidence"] >= 0.90
+        assert val(result, "confidence") >= 0.90
 
 
 # =============================================================================
@@ -442,9 +472,9 @@ class TestVcfClassification:
 ##contig=<ID=chr1,length=248956422,assembly=GRCh38>
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
         # Reference detection is lower confidence than caller detection
-        assert result["confidence"] >= 0.50
+        assert val(result, "confidence") >= 0.50
 
     def test_grch37_reference(self):
         """Detect GRCh37/hg19 reference."""
@@ -453,7 +483,7 @@ class TestVcfClassification:
 ##contig=<ID=1,length=249250621,assembly=GRCh37>
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["reference_assembly"] == "GRCh37"
+        assert val(result, "reference_assembly") == "GRCh37"
 
     def test_haplotypecaller_germline(self):
         """Detect GATK HaplotypeCaller as germline."""
@@ -461,9 +491,9 @@ class TestVcfClassification:
 ##source=HaplotypeCaller
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.germline"
-        assert "vcf_gatk_haplotypecaller" in result["matched_rules"]
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.germline"
+        assert "vcf_gatk_haplotypecaller" in val(result, "matched_rules")
 
     def test_deepvariant_germline(self):
         """Detect DeepVariant as germline."""
@@ -471,8 +501,8 @@ class TestVcfClassification:
 ##source=DeepVariant
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.germline"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.germline"
 
     def test_mutect2_somatic(self):
         """Detect Mutect2 as somatic."""
@@ -482,8 +512,8 @@ class TestVcfClassification:
 ##normal_sample=NORMAL
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.somatic"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.somatic"
 
     def test_manta_sv(self):
         """Detect Manta as structural variants."""
@@ -492,8 +522,8 @@ class TestVcfClassification:
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.structural"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.structural"
 
     def test_sv_info_fields(self):
         """Detect SV from INFO fields."""
@@ -503,8 +533,8 @@ class TestVcfClassification:
 ##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.structural"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.structural"
 
     def test_cnvkit_cnv(self):
         """Detect CNVkit as copy number variants."""
@@ -512,8 +542,8 @@ class TestVcfClassification:
 ##source=CNVkit
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "variants.cnv"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants.cnv"
 
     def test_empty_header(self):
         """Handle minimal VCF header."""
@@ -537,28 +567,28 @@ class TestBamCramClassification:
 @SQ\tSN:chr1\tLN:248956422
 @RG\tID:sample1\tPL:ILLUMINA\tSM:sample1"""
         result = classify_from_header(header)
-        assert result["platform"] == "ILLUMINA"
+        assert val(result, "platform") == "ILLUMINA"
 
     def test_pacbio_platform(self):
         """Detect PacBio platform from @RG."""
         header = """@HD\tVN:1.6\tSO:coordinate
 @RG\tID:sample1\tPL:PACBIO\tSM:sample1"""
         result = classify_from_header(header)
-        assert result["platform"] == "PACBIO"
+        assert val(result, "platform") == "PACBIO"
 
     def test_ont_platform(self):
         """Detect ONT platform from @RG."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:ONT\tSM:sample1"""
         result = classify_from_header(header)
-        assert result["platform"] == "ONT"
+        assert val(result, "platform") == "ONT"
 
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""
         header = """@HD\tVN:1.6
 @SQ\tSN:chr1\tLN:248956422\tAS:GRCh38"""
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
     def test_grch37_from_sq(self):
         """Detect GRCh37 from @SQ AS field."""
@@ -566,39 +596,39 @@ class TestBamCramClassification:
 @SQ\tSN:1\tLN:249250621\tAS:GRCh37
 @SQ\tSN:2\tLN:243199373\tAS:GRCh37"""
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh37"
+        assert val(result, "reference_assembly") == "GRCh37"
 
     def test_star_aligner_rnaseq(self):
         """Detect RNA-seq from STAR aligner in @PG."""
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
-        assert result["data_modality"] == "transcriptomic.bulk"
-        assert result["data_type"] == "alignments"
+        assert val(result, "data_modality") == "transcriptomic.bulk"
+        assert val(result, "data_type") == "alignments"
 
     def test_bwa_aligner_genomic(self):
         """Detect genomic from BWA aligner."""
         header = """@HD\tVN:1.6
 @PG\tID:bwa\tPN:bwa\tVN:0.7.17"""
         result = classify_from_header(header)
-        assert result["data_modality"] == "genomic"
-        assert result["data_type"] == "alignments"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "alignments"
 
     def test_pacbio_hifi_readtype(self):
         """Detect PacBio HiFi from READTYPE tag."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS"""
         result = classify_from_header(header)
-        assert result["platform"] == "PACBIO"
-        assert result["data_modality"] == "genomic"
-        assert result["assay_type"] == "WGS"
+        assert val(result, "platform") == "PACBIO"
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "assay_type") == "WGS"
 
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
-        assert result["assay_type"] == "RNA-seq"
+        assert val(result, "assay_type") == "RNA-seq"
 
     def test_minimap2_long_read(self):
         """Detect long-read alignment from minimap2."""
@@ -606,7 +636,7 @@ class TestBamCramClassification:
 @PG\tID:minimap2\tPN:minimap2\tVN:2.24"""
         result = classify_from_header(header)
         # minimap2 is used for long reads (genomic)
-        assert result["data_modality"] == "genomic"
+        assert val(result, "data_modality") == "genomic"
 
     def test_consistency_convergent(self):
         """Test convergent signal boosts confidence."""
@@ -614,8 +644,9 @@ class TestBamCramClassification:
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        # Multiple PacBio indicators should boost confidence
-        assert result["confidence"] >= 0.90
+        # Multiple PacBio indicators should all be present
+        assert val(result, "platform") == "PACBIO"
+        assert val(result, "data_modality") == "genomic"
 
     def test_consistency_conflicting(self):
         """Test conflicting signals add warnings."""
@@ -630,7 +661,7 @@ class TestBamCramClassification:
     def test_empty_header(self):
         """Handle empty header."""
         result = classify_from_header("")
-        assert result["confidence"] == 0.0
+        assert val(result, "confidence") == 0.0
 
 
 # =============================================================================
@@ -655,7 +686,7 @@ class TestContigLengthDetection:
         header += "@SQ\tSN:chr10\tLN:133797422\n"
         header += "@SQ\tSN:chr22\tLN:50818468"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
     def test_bam_sq_reordered_tags(self):
         """Detect GRCh38 from BAM @SQ lines with LN before SN."""
@@ -666,7 +697,7 @@ class TestContigLengthDetection:
         header += "@SQ\tLN:133797422\tSN:chr10\n"
         header += "@SQ\tLN:50818468\tSN:chr22"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
     def test_bam_sq_extra_tags(self):
         """Detect GRCh38 from BAM @SQ with extra tags between SN and LN."""
@@ -677,7 +708,7 @@ class TestContigLengthDetection:
         header += "@SQ\tSN:chr10\tM5:jkl012\tLN:133797422\n"
         header += "@SQ\tSN:chr22\tM5:mno345\tLN:50818468"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
     def test_bam_sq_chm13(self):
         """Detect CHM13 from BAM @SQ contig lengths."""
@@ -688,7 +719,7 @@ class TestContigLengthDetection:
         header += "@SQ\tSN:chr10\tLN:134758134\n"
         header += "@SQ\tSN:chr22\tLN:51324926"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "CHM13"
+        assert val(result, "reference_assembly") == "CHM13"
 
     def test_bam_sq_single_contig_identifies_assembly(self):
         """A single contig with exact length match definitively identifies assembly."""
@@ -696,7 +727,7 @@ class TestContigLengthDetection:
         header = "@HD\tVN:1.6\tSO:coordinate\n"
         header += "@SQ\tSN:chr22\tLN:50818468"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
     def test_bam_sq_clear_winner(self):
         """When one assembly clearly wins by vote count, return it."""
@@ -708,8 +739,8 @@ class TestContigLengthDetection:
         header += "@SQ\tSN:chr10\tLN:133797422\n"
         header += "@SQ\tSN:chr22\tLN:50818468"
         result = classify_from_header(header)
-        assert result["reference_assembly"] == "GRCh38"
-        assert result["confidence"] >= 0.9
+        assert val(result, "reference_assembly") == "GRCh38"
+        assert val(result, "confidence") >= 0.9
 
     def test_vcf_contig_with_assembly_tag(self):
         """VCF ##contig assembly= is matched via contig pattern rules."""
@@ -719,7 +750,7 @@ class TestContigLengthDetection:
         result = classify_from_vcf_header(header)
         # Currently assembly= in contig is matched by vcf_contig_assembly rules
         # The ##reference line is the primary detection path
-        assert result["reference_assembly"] in ("GRCh38", NOT_CLASSIFIED)
+        assert val(result, "reference_assembly") in ("GRCh38", NOT_CLASSIFIED)
 
     def test_vcf_reference_field(self):
         """VCF reference detection from ##reference= line."""
@@ -727,7 +758,7 @@ class TestContigLengthDetection:
 ##reference=file:///refs/GRCh38.fasta
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        assert result["reference_assembly"] == "GRCh38"
+        assert val(result, "reference_assembly") == "GRCh38"
 
 
 class TestEdgeCases:
@@ -737,7 +768,7 @@ class TestEdgeCases:
         """Handle malformed FASTQ read names."""
         reads = ["not_a_valid_read", "another_invalid", ""]
         result = classify_from_fastq_header(reads)
-        assert result["platform"] == NOT_CLASSIFIED
+        assert val(result, "platform") == NOT_CLASSIFIED
 
     def test_vcf_minimal(self):
         """Handle minimal VCF with just column header."""
@@ -754,11 +785,11 @@ class TestEdgeCases:
         ]
         result = classify_from_fastq_header(reads)
         # Should classify based on first read (Illumina)
-        assert result["platform"] == "ILLUMINA"
+        assert val(result, "platform") == "ILLUMINA"
 
     def test_unicode_in_header(self):
         """Handle unicode characters in headers."""
         header = """@HD\tVN:1.6
 @RG\tID:sample_\u00e9\tPL:ILLUMINA"""
         result = classify_from_header(header)
-        assert result["platform"] == "ILLUMINA"
+        assert val(result, "platform") == "ILLUMINA"

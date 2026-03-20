@@ -44,7 +44,12 @@ class ExtendedFileInfo:
 
 @dataclass
 class ExtendedClassificationResult:
-    """Extended classification result with additional fields."""
+    """Extended classification result with additional fields.
+
+    Each classification field (data_modality, data_type, etc.) has its own
+    evidence list in field_evidence, linking each value to the rules that
+    determined it.
+    """
 
     data_modality: str | None = None
     data_type: str | None = None
@@ -53,27 +58,91 @@ class ExtendedClassificationResult:
     platform: str | None = None
     file_category: str | None = None
     confidence: float = 0.0
-    reasons: list[str] = field(default_factory=list)
-    rules_matched: list[str] = field(default_factory=list)
-    rule_evidence: list[dict] = field(default_factory=list)
+    field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {
+        "data_modality": [],
+        "data_type": [],
+        "reference_assembly": [],
+        "assay_type": [],
+        "platform": [],
+        "_general": [],  # Rules that don't set a specific classification field
+    })
     skip: bool = False
     needs_header_inspection: bool = False
     needs_study_context: bool = False
     needs_manual_review: bool = False
 
+    @property
+    def rules_matched(self) -> list[str]:
+        """Flatten field_evidence into a deduplicated list of rule IDs."""
+        seen = set()
+        result = []
+        for entries in self.field_evidence.values():
+            for e in entries:
+                rid = e["rule_id"]
+                if rid not in seen:
+                    seen.add(rid)
+                    result.append(rid)
+        return result
+
+    @property
+    def reasons(self) -> list[str]:
+        """Flatten field_evidence into a deduplicated list of reasons."""
+        seen = set()
+        result = []
+        for entries in self.field_evidence.values():
+            for e in entries:
+                rid = e["rule_id"]
+                if rid not in seen:
+                    seen.add(rid)
+                    result.append(e.get("reason", ""))
+        return result
+
     def to_classification_result(self) -> ClassificationResult:
         """Convert to a basic ClassificationResult for backward compatibility."""
+        # Flatten field_evidence into rules_matched/reasons for old format
+        rules = []
+        reasons = []
+        for entries in self.field_evidence.values():
+            for e in entries:
+                if e["rule_id"] not in rules:
+                    rules.append(e["rule_id"])
+                    reasons.append(e.get("reason", ""))
         return ClassificationResult(
             data_modality=self.data_modality,
             reference_assembly=self.reference_assembly,
             confidence=self.confidence,
-            reasons=self.reasons.copy(),
-            rules_matched=self.rules_matched.copy(),
+            reasons=reasons,
+            rules_matched=rules,
             skip=self.skip,
             needs_header_inspection=self.needs_header_inspection,
             needs_study_context=self.needs_study_context,
             needs_manual_review=self.needs_manual_review,
         )
+
+    def to_output_dict(self) -> dict:
+        """Convert to the per-field output format."""
+        classifications = {}
+        for fld in self._CLASSIFICATION_FIELDS:
+            value = getattr(self, fld)
+            evidence = self.field_evidence.get(fld, [])
+            fld_conf = max((e.get("confidence", 0) for e in evidence), default=0.0)
+            classifications[fld] = {
+                "value": value,
+                "confidence": fld_conf,
+                "evidence": evidence,
+            }
+        # Include general evidence (skip rules, etc.) if any
+        general = self.field_evidence.get("_general", [])
+        if general:
+            classifications["_general"] = {
+                "evidence": general,
+            }
+        return classifications
+
+    # Classification field names (shared with _finalize_result)
+    _CLASSIFICATION_FIELDS = (
+        "data_modality", "data_type", "platform", "reference_assembly", "assay_type"
+    )
 
 
 class RuleEngine:
@@ -182,29 +251,32 @@ class RuleEngine:
         self._finalize_result(result)
         return result
 
-    # Fields that should be set to not_classified if no rule set them
-    _CLASSIFICATION_FIELDS = (
-        "data_modality", "data_type", "platform", "reference_assembly", "assay_type"
-    )
-
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
-        """Set any remaining None values to appropriate sentinels.
+        """Set any remaining None values to appropriate sentinels with evidence.
 
         This distinguishes between:
         - not_applicable: Field doesn't apply (skipped files, or explicitly set by rules)
         - not_classified: No rule determined a value (default for non-skipped files)
         """
         if result.skip:
-            # Skipped files (indexes, checksums) -> not_applicable for unset fields
-            for fld in self._CLASSIFICATION_FIELDS:
+            for fld in result._CLASSIFICATION_FIELDS:
                 if getattr(result, fld) is None:
                     setattr(result, fld, NOT_APPLICABLE)
+                    result.field_evidence[fld].append({
+                        "rule_id": "skip",
+                        "reason": "File type is skipped (index, checksum, etc.)",
+                        "confidence": 1.0,
+                    })
             return
 
-        # For non-skipped files, any None value means we couldn't classify
-        for fld in self._CLASSIFICATION_FIELDS:
+        for fld in result._CLASSIFICATION_FIELDS:
             if getattr(result, fld) is None:
                 setattr(result, fld, NOT_CLASSIFIED)
+                result.field_evidence[fld].append({
+                    "rule_id": "not_classified",
+                    "reason": "No rule determined a value for this field",
+                    "confidence": 0.0,
+                })
 
     def _rule_matches(
         self,
@@ -368,42 +440,27 @@ class RuleEngine:
     ) -> None:
         """Apply a rule's effects to the result."""
         then = rule.then
+        evidence_entry = {
+            "rule_id": rule.id,
+            "reason": rule.rationale or "",
+            "confidence": rule.confidence,
+        }
 
-        # Set data modality
-        if "data_modality" in then:
-            modality = then["data_modality"]
-            if modality is not None:
-                result.data_modality = modality
+        # Set classification fields and record per-field evidence
+        set_any_field = False
+        for fld in result._CLASSIFICATION_FIELDS:
+            if fld in then and then[fld] is not None:
+                setattr(result, fld, then[fld])
+                result.field_evidence[fld].append(evidence_entry)
+                set_any_field = True
 
-        # Set data type
-        if "data_type" in then:
-            data_type = then["data_type"]
-            if data_type is not None:
-                result.data_type = data_type
+        # Rules that don't set classification fields (skip, needs_*, etc.)
+        if not set_any_field:
+            result.field_evidence["_general"].append(evidence_entry)
 
-        # Set reference assembly
-        if "reference_assembly" in then:
-            ref = then["reference_assembly"]
-            if ref is not None:
-                result.reference_assembly = ref
-
-        # Set assay type
-        if "assay_type" in then:
-            assay = then["assay_type"]
-            if assay is not None:
-                result.assay_type = assay
-
-        # Set platform
-        if "platform" in then:
-            platform = then["platform"]
-            if platform is not None:
-                result.platform = platform
-
-        # Set file category
-        if "file_category" in then:
-            category = then["file_category"]
-            if category is not None:
-                result.file_category = category
+        # Set file category (not a classification field)
+        if "file_category" in then and then["file_category"] is not None:
+            result.file_category = then["file_category"]
 
         # Set skip flag
         if then.get("skip"):
@@ -417,18 +474,9 @@ class RuleEngine:
         if then.get("needs_manual_review"):
             result.needs_manual_review = True
 
-        # Update confidence (take highest confidence from matching rules)
+        # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
             result.confidence = rule.confidence
-
-        # Track matched rules and reasons
-        result.rules_matched.append(rule.id)
-        result.reasons.append(rule.rationale or "")
-        result.rule_evidence.append({
-            "rule_id": rule.id,
-            "reason": rule.rationale or "",
-            "confidence": rule.confidence,
-        })
 
     def infer_assay_type(
         self,
