@@ -76,6 +76,8 @@ class UnifiedRules:
         ".vcf.gz",
         ".fastq.gz",
         ".fq.gz",
+        ".fasta.gz",
+        ".fa.gz",
         ".bed.gz",
         ".sam.gz",
         ".fast5.tar.gz",  # Must come before .tar.gz

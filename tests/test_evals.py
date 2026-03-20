@@ -24,12 +24,14 @@ from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 from fetch_bam_headers import classify_single_file as classify_bam
 from fetch_vcf_headers import classify_single_vcf as classify_vcf
 from fetch_fastq_headers import classify_single_fastq as classify_fastq
+from fetch_fasta_headers import classify_single_fasta as classify_fasta
 
 engine = RuleEngine()
 
 EVIDENCE_BAM = Path("data/evidence/bam")
 EVIDENCE_VCF = Path("data/evidence/vcf")
 EVIDENCE_FASTQ = Path("data/evidence/fastq")
+EVIDENCE_FASTA = Path("data/evidence/fasta")
 
 
 def get_val(record, field):
@@ -289,3 +291,71 @@ class TestRuleEngineE2E:
         for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
             result = engine.classify_extended(FileInfo(filename=name))
             assert result.data_modality is not None
+
+    def test_fasta_base_rule(self):
+        """FASTA files should get base rule classification."""
+        for ext in [".fa", ".fasta", ".fa.gz", ".fasta.gz"]:
+            result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
+            assert result.data_type == "sequence", f"{ext} should be sequence"
+            assert result.platform == NOT_APPLICABLE
+            assert result.assay_type == NOT_APPLICABLE
+
+    def test_fasta_assembly_filename(self):
+        """FASTA with assembly keyword in filename."""
+        result = engine.classify_extended(FileInfo(filename="HG00673.paternal.f1_assembly_v1.fa.gz"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fasta_haplotype_filename(self):
+        """FASTA with haplotype keyword in filename."""
+        result = engine.classify_extended(FileInfo(filename="hapdup_contigs_2.fasta"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fasta_verkko_filename(self):
+        """FASTA with verkko assembler keyword."""
+        result = engine.classify_extended(FileInfo(filename="HG02300_verkko_gfase_diploid.fasta.gz"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+
+# =============================================================================
+# FASTA — end-to-end through fetch_fasta_headers.classify_single_fasta
+# =============================================================================
+
+@pytest.mark.skipif(not EVIDENCE_FASTA.exists(), reason="No FASTA evidence cache")
+class TestFastaE2E:
+    """End-to-end FASTA classification from cached contig names."""
+
+    def test_hprc_paternal_assembly(self):
+        """HG00673.paternal.f1_assembly_v1.fa.gz — HPRC de novo assembly."""
+        result = classify_fasta("7ace6a53c63fdc2b99fba3f5f6be383d",
+                                "HG00673.paternal.f1_assembly_v1.fa.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_verkko_diploid_assembly(self):
+        """HG02300_verkko_gfase_diploid.fasta.gz — verkko assembler output."""
+        result = classify_fasta("0fb14e01d1f886f8ebb6d5ea0f5a7853",
+                                "HG02300_verkko_gfase_diploid.fasta.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_hapdup_contigs(self):
+        """hapdup_contigs_2.fasta — hapdup haplotype assembly."""
+        result = classify_fasta("1eff1ed22b7b2d794b9e4d2edc9b4bfa",
+                                "hapdup_contigs_2.fasta")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE

@@ -53,6 +53,11 @@ The LinkML schema (`anvil_file.yaml`) defines:
 - **data_modality_enum**: genomic, transcriptomic
 - Both fields are required on the `File` class
 
+## Design Principles
+
+- **Accuracy over efficiency**: Always prefer reading actual file content (headers, indices, range requests) over guessing from filenames. If there is an exact method to determine a classification — even if it requires downloading headers or running compute — use it.
+- **Accuracy over coverage**: It is better to leave a file as `not_classified` than to guess wrong. Only classify when evidence supports it.
+
 ## Environment
 
 - LLM component: Conda (`environment.yaml`) with Python 3.8, pandas, requests
