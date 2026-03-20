@@ -709,8 +709,8 @@ def classify_from_header(
             "confidence": 0.5,
         })
 
-    # Apply inferred assay type with evidence
-    if assay_type:
+    # Apply inferred assay type only if not already set by a rule
+    if assay_type and result.assay_type in (None, NOT_CLASSIFIED):
         result.assay_type = assay_type
         result.field_evidence["assay_type"] = [{
             "rule_id": "infer_assay_type",
@@ -829,20 +829,20 @@ def classify_from_fastq_header(
     # Use provided filename or generate one
     filename = file_name or "sample.fastq.gz"
 
-    # Handle empty input
+    # Handle empty input — return per-field format with empty evidence
     if not reads or not reads[0]:
+        empty_field = lambda v: {"value": v, "confidence": 0.0, "evidence": []}
         return {
-            "data_modality": None,
-            "data_type": "reads",
-            "platform": None,
-            "confidence": 0.0,
+            "data_modality": empty_field(None),
+            "data_type": empty_field("reads"),
+            "platform": empty_field(None),
+            "reference_assembly": empty_field(None),
+            "assay_type": empty_field(None),
             "is_paired_end": None,
             "instrument_model": None,
             "instrument_hint": None,
             "archive_accession": None,
             "archive_source": None,
-            "matched_rules": [],
-            "evidence": [],
         }
 
     # Get first read for classification

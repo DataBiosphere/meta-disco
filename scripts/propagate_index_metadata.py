@@ -323,11 +323,10 @@ def propagate_to_index_files(
             "parent_file": parent,
             "parent_md5sum": r["parent_md5sum"],
             "classifications": {
-                "data_modality": {"value": r["data_modality"], "confidence": r["confidence"], "evidence": inherited_evidence(r["data_modality"], parent)},
-                "data_type": {"value": r.get("data_type"), "confidence": r["confidence"], "evidence": inherited_evidence(r.get("data_type"), parent)},
-                "platform": {"value": r.get("platform"), "confidence": r["confidence"], "evidence": inherited_evidence(r.get("platform"), parent)},
-                "reference_assembly": {"value": r["reference_assembly"], "confidence": r["confidence"], "evidence": inherited_evidence(r["reference_assembly"], parent)},
-                "assay_type": {"value": r.get("assay_type"), "confidence": r["confidence"], "evidence": inherited_evidence(r.get("assay_type"), parent)},
+                fld: (lambda evi: {"value": r.get(fld), "confidence": evi[0]["confidence"], "evidence": evi})(
+                    inherited_evidence(r.get(fld), parent)
+                )
+                for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
             },
         })
 
