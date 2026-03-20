@@ -364,7 +364,10 @@ def print_classification_summary(classifications: list[dict]):
         if isinstance(cls, dict) and field in cls:
             v = cls[field]
             return v["value"] if isinstance(v, dict) and "value" in v else v
-        return rec.get(field)
+        v = rec.get(field)
+        if isinstance(v, dict) and "value" in v:
+            return v["value"]
+        return v
 
     for c in classifications:
         mod = _val(c, "data_modality") or "unknown"

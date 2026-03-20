@@ -355,11 +355,16 @@ def print_fastq_classification_summary(classifications: list[dict]):
 
     def _val(rec, field):
         """Extract value from per-field or flat format."""
+        # Check nested under "classifications" key
         cls = rec.get("classifications", {})
         if isinstance(cls, dict) and field in cls:
             v = cls[field]
             return v["value"] if isinstance(v, dict) and "value" in v else v
-        return rec.get(field)
+        # Check top-level (direct from to_output_dict)
+        v = rec.get(field)
+        if isinstance(v, dict) and "value" in v:
+            return v["value"]
+        return v
 
     for c in classifications:
         plat = _val(c, "platform") or "unknown"
