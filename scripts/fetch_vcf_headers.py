@@ -430,18 +430,24 @@ def print_vcf_classification_summary(classifications: list[dict]):
     references = {}
     callers = {}
 
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        return rec.get(field)
+
     for c in classifications:
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        vtype = c.get("variant_type") or "unknown"
+        vtype = _val(c, "variant_type") or "unknown"
         variant_types[vtype] = variant_types.get(vtype, 0) + 1
 
-        ref = c.get("reference_assembly") or "unknown"
+        ref = _val(c, "reference_assembly") or "unknown"
         references[ref] = references.get(ref, 0) + 1
 
-        caller = c.get("caller") or "unknown"
-        # Truncate long caller names
+        caller = _val(c, "caller") or "unknown"
         caller = caller[:40] + "..." if len(caller) > 40 else caller
         callers[caller] = callers.get(caller, 0) + 1
 

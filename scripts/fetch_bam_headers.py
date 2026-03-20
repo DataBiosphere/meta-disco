@@ -359,17 +359,24 @@ def print_classification_summary(classifications: list[dict]):
     aligned_count = 0
     unaligned_count = 0
 
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        return rec.get(field)
+
     for c in classifications:
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        ref = c.get("reference_assembly") or "unknown"
+        ref = _val(c, "reference_assembly") or "unknown"
         references[ref] = references.get(ref, 0) + 1
 
-        plat = c.get("platform") or "unknown"
+        plat = _val(c, "platform") or "unknown"
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        if c.get("is_aligned"):
+        if _val(c, "is_aligned"):
             aligned_count += 1
         else:
             unaligned_count += 1

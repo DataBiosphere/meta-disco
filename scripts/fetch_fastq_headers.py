@@ -353,11 +353,19 @@ def print_fastq_classification_summary(classifications: list[dict]):
     instrument_models = {}
     archive_sources = {}
 
+    def _val(rec, field):
+        """Extract value from per-field or flat format."""
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        return rec.get(field)
+
     for c in classifications:
-        plat = c.get("platform") or "unknown"
+        plat = _val(c, "platform") or "unknown"
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
         if c.get("is_paired_end"):
