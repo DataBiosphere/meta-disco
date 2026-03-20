@@ -10,6 +10,18 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 
+def _val(rec, field):
+    """Extract value from per-field or flat format."""
+    cls = rec.get("classifications", {})
+    if isinstance(cls, dict) and field in cls:
+        v = cls[field]
+        return v["value"] if isinstance(v, dict) and "value" in v else v
+    v = rec.get(field)
+    if isinstance(v, dict) and "value" in v:
+        return v["value"]
+    return v
+
+
 # =============================================================================
 # FILE FORMAT CATEGORY RULES
 # =============================================================================
@@ -200,7 +212,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     modality_counts = Counter()
     for item in all_classified:
-        mod = item.get("data_modality") or "N/A"
+        mod = _val(item, "data_modality") or "N/A"
         modality_counts[mod] += 1
 
     # Sort by count
@@ -225,7 +237,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     ref_counts = Counter()
     for item in all_classified:
-        ref = item.get("reference_assembly") or "N/A"
+        ref = _val(item, "reference_assembly") or "N/A"
         ref_counts[ref] += 1
 
     ref_sorted = sorted(ref_counts.items(), key=lambda x: x[1], reverse=True)
@@ -248,7 +260,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     platform_counts = Counter()
     for item in all_classified:
-        plat = item.get("platform") or "N/A"
+        plat = _val(item, "platform") or "N/A"
         platform_counts[plat] += 1
 
     plat_sorted = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
@@ -272,7 +284,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     # For data_type, infer from source if not present
     dtype_counts = Counter()
     for item in all_classified:
-        dtype = item.get("data_type")
+        dtype = _val(item, "data_type")
         if not dtype:
             # Infer from source
             source = item.get("_source", "")
@@ -315,12 +327,12 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     # For assay_type, infer from source/platform if not present
     assay_counts = Counter()
     for item in all_classified:
-        assay = item.get("assay_type")
+        assay = _val(item, "assay_type")
         if not assay:
             # Infer from source and platform
             source = item.get("_source", "")
-            platform = item.get("platform")
-            modality = item.get("data_modality") or ""
+            platform = _val(item, "platform")
+            modality = _val(item, "data_modality") or ""
 
             if platform in ["PACBIO", "ONT"]:
                 assay = "WGS"
@@ -368,11 +380,11 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     print("\n--- Coverage by Axis ---")
 
-    with_modality = sum(1 for item in all_classified if item.get("data_modality"))
-    with_ref = sum(1 for item in all_classified if item.get("reference_assembly"))
-    with_platform = sum(1 for item in all_classified if item.get("platform"))
-    with_dtype = sum(1 for item in all_classified if item.get("data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
-    with_assay = sum(1 for item in all_classified if item.get("assay_type"))
+    with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
+    with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
+    with_platform = sum(1 for item in all_classified if _val(item, "platform"))
+    with_dtype = sum(1 for item in all_classified if _val(item, "data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
+    with_assay = sum(1 for item in all_classified if _val(item, "assay_type"))
 
     print(f"data_modality:      {with_modality:,} / {total_classified:,} ({with_modality/total_classified*100:.1f}%)")
     print(f"reference_assembly: {with_ref:,} / {total_classified:,} ({with_ref/total_classified*100:.1f}%)")

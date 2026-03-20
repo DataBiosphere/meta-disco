@@ -315,6 +315,7 @@ def propagate_to_index_files(
             "file_name": r["file_name"],
             "file_format": r["file_format"],
             "md5sum": r.get("file_md5sum"),
+            "file_size": r.get("file_size"),
             "entry_id": r["entry_id"],
             "dataset_id": r["dataset_id"],
             "dataset_title": r["dataset_title"],

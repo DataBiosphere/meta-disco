@@ -426,9 +426,8 @@ def print_vcf_classification_summary(classifications: list[dict]):
 
     # Aggregate stats
     modalities = {}
-    variant_types = {}
+    data_types = {}
     references = {}
-    callers = {}
 
     def _val(rec, field):
         cls = rec.get("classifications", {})
@@ -444,15 +443,11 @@ def print_vcf_classification_summary(classifications: list[dict]):
         mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        vtype = _val(c, "variant_type") or "unknown"
-        variant_types[vtype] = variant_types.get(vtype, 0) + 1
+        dtype = _val(c, "data_type") or "unknown"
+        data_types[dtype] = data_types.get(dtype, 0) + 1
 
         ref = _val(c, "reference_assembly") or "unknown"
         references[ref] = references.get(ref, 0) + 1
-
-        caller = _val(c, "caller") or "unknown"
-        caller = caller[:40] + "..." if len(caller) > 40 else caller
-        callers[caller] = callers.get(caller, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
 
@@ -460,17 +455,13 @@ def print_vcf_classification_summary(classifications: list[dict]):
     for mod, count in sorted(modalities.items(), key=lambda x: -x[1]):
         print(f"  {mod:<40} {count:>5}")
 
-    print("\nVariant Types:")
-    for vtype, count in sorted(variant_types.items(), key=lambda x: -x[1]):
-        print(f"  {vtype:<40} {count:>5}")
+    print("\nData Types:")
+    for dtype, count in sorted(data_types.items(), key=lambda x: -x[1]):
+        print(f"  {dtype:<40} {count:>5}")
 
     print("\nReference Assemblies:")
     for ref, count in sorted(references.items(), key=lambda x: -x[1]):
         print(f"  {ref:<40} {count:>5}")
-
-    print("\nVariant Callers:")
-    for caller, count in sorted(callers.items(), key=lambda x: -x[1])[:15]:
-        print(f"  {caller:<40} {count:>5}")
 
     # Show sample evidence
     print("\n" + "-" * 70)

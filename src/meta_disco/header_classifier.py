@@ -709,9 +709,14 @@ def classify_from_header(
             "confidence": 0.5,
         })
 
-    # Apply assay type
+    # Apply inferred assay type with evidence
     if assay_type:
         result.assay_type = assay_type
+        result.field_evidence["assay_type"] = [{
+            "rule_id": "infer_assay_type",
+            "reason": f"Inferred {assay_type} from platform/modality/file size signals",
+            "confidence": 0.70,
+        }]
 
     result.confidence = final_confidence
     classifications = result.to_output_dict()
