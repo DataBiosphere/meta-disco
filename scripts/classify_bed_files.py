@@ -133,6 +133,13 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
                 result.confidence = max(result.confidence, coord_conf)
                 result.rules_matched.append("bed_coordinate_reference")
                 result.reasons.append(coord_rationale)
+        elif md5 and md5 in ref_evidence and coord_ref is None and coord_conf == 0:
+            # Coordinate detection ran but couldn't determine reference
+            # (e.g., non-standard contig names from de novo assemblies)
+            if "Non-standard chromosome" in coord_rationale:
+                result.reference_assembly = "not_applicable"
+                result.rules_matched.append("bed_nonstandard_contigs")
+                result.reasons.append(coord_rationale)
 
         # Update stats
         data_modality = result.data_modality
