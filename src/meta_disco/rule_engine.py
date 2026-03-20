@@ -99,20 +99,12 @@ class ExtendedClassificationResult:
 
     def to_classification_result(self) -> ClassificationResult:
         """Convert to a basic ClassificationResult for backward compatibility."""
-        # Flatten field_evidence into rules_matched/reasons for old format
-        rules = []
-        reasons = []
-        for entries in self.field_evidence.values():
-            for e in entries:
-                if e["rule_id"] not in rules:
-                    rules.append(e["rule_id"])
-                    reasons.append(e.get("reason", ""))
         return ClassificationResult(
             data_modality=self.data_modality,
             reference_assembly=self.reference_assembly,
             confidence=self.confidence,
-            reasons=reasons,
-            rules_matched=rules,
+            reasons=self.reasons,
+            rules_matched=self.rules_matched,
             skip=self.skip,
             needs_header_inspection=self.needs_header_inspection,
             needs_study_context=self.needs_study_context,
@@ -451,7 +443,7 @@ class RuleEngine:
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
                 setattr(result, fld, then[fld])
-                result.field_evidence[fld].append(evidence_entry)
+                result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 
         # Rules that don't set classification fields (skip, needs_*, etc.)

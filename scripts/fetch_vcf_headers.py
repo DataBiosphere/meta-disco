@@ -349,15 +349,13 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
 
     # Close writer and write final JSON from NDJSON progress
     writer.close()
-    save_final(output_path, len(needs_inspection), successful, failed, from_cache)
+    classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
     # Read back for summary
-    with open(output_path) as f:
-        final_data = json.load(f)
-    print_vcf_classification_summary(final_data.get("classifications", []))
+    print_vcf_classification_summary(classifications)
 
 
 def _ndjson_path(output_path: Path) -> Path:
@@ -412,6 +410,7 @@ def save_final(output_path: Path, total: int, successful: int, failed: int, from
     # Clean up NDJSON progress file
     if ndjson.exists():
         ndjson.unlink()
+    return classifications
 
 
 def print_vcf_classification_summary(classifications: list[dict]):

@@ -298,15 +298,16 @@ def propagate_to_index_files(
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
     _sentinels = {"not_classified", "not_applicable", None}
-    inherited_evidence = lambda field_val, parent: [{
-        "rule_id": "inherited_from_parent",
-        "reason": f"Inherited from parent file: {parent}",
-        "confidence": 0.95,
-    }] if field_val and field_val not in _sentinels else [{
-        "rule_id": "inherited_from_parent",
-        "reason": f"Parent file {parent} had no value for this field",
-        "confidence": 0.0,
-    }]
+
+    def inherited_evidence(field_val, parent):
+        """Build evidence entry for an inherited classification field."""
+        if field_val and field_val not in _sentinels:
+            return [{"rule_id": "inherited_from_parent",
+                     "reason": f"Inherited from parent file: {parent}",
+                     "confidence": 0.95}]
+        return [{"rule_id": "inherited_from_parent",
+                 "reason": f"Parent file {parent} had no value for this field",
+                 "confidence": 0.0}]
 
     standard_results = []
     for r in results:

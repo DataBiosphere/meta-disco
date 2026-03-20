@@ -307,15 +307,13 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
 
     # Close writer and write final JSON
     writer.close()
-    save_final(output_path, len(needs_inspection), successful, failed, from_cache)
+    classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
     # Read back for summary
-    with open(output_path) as f:
-        final_data = json.load(f)
-    print_fastq_classification_summary(final_data.get("classifications", []))
+    print_fastq_classification_summary(classifications)
 
 
 def _ndjson_path(output_path: Path) -> Path:
@@ -363,6 +361,7 @@ def save_final(output_path: Path, total: int, successful: int, failed: int, from
         }, f, indent=2)
     if ndjson.exists():
         ndjson.unlink()
+    return classifications
 
 
 def print_fastq_classification_summary(classifications: list[dict]):

@@ -57,10 +57,6 @@ def assert_output_format(record):
         assert len(entry["evidence"]) > 0, f"{field} has empty evidence"
 
 
-def has_evidence(record):
-    """Check that evidence file exists for this md5."""
-    return True  # All tests use known cached files
-
 
 # =============================================================================
 # BAM/CRAM — end-to-end through fetch_bam_headers.classify_single_file
