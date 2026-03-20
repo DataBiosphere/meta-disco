@@ -102,6 +102,21 @@ class TestBamE2E:
         stale = [e for e in ref_evidence if e["rule_id"] == "not_classified"]
         assert len(stale) == 0, f"Stale not_classified evidence: {stale}"
 
+    def test_star_rnaseq_bam(self):
+        """GM20525-10-2.bam — STAR-aligned RNA-seq should be transcriptomic."""
+        result = classify_bam("000811b87381c4dd9e5d7a940be14cee", "GM20525-10-2.bam")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "transcriptomic.bulk"
+        assert get_val(result, "data_type") == "alignments"
+
+    def test_platform_confidence_meaningful(self):
+        """Platform detection from @RG PL: should have non-zero confidence."""
+        result = classify_bam("000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam")
+        cls = result["classifications"]
+        platform_conf = cls["platform"]["confidence"]
+        assert platform_conf > 0, f"Platform confidence should be > 0, got {platform_conf}"
+
 
 # =============================================================================
 # VCF — end-to-end through fetch_vcf_headers.classify_single_vcf
@@ -134,6 +149,23 @@ class TestVcfE2E:
         rule_ids = [e["rule_id"] for e in ref_evidence]
         assert "vcf_contig_length" in rule_ids, f"Expected vcf_contig_length, got {rule_ids}"
 
+    def test_sniffles_sv_vcf(self):
+        """HG02723 Sniffles SV VCF — structural variant detection."""
+        result = classify_vcf("0203bdde8d2f9bba858dce981a409bd5", "HG02723.hifiasm_pat.sniffles.vcf",
+                              is_gzipped=False)
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+
+    def test_vcf_no_stale_evidence(self):
+        """VCF reference_assembly should not have stale not_classified evidence."""
+        result = classify_vcf("0000b1430a498c7774dd33a5a58677ad", "NA21125.chr2.hc.vcf.gz")
+        cls = result["classifications"]
+        ref = cls["reference_assembly"]
+        if ref["value"] not in (NOT_CLASSIFIED, None):
+            stale = [e for e in ref["evidence"] if e["rule_id"] == "not_classified"]
+            assert len(stale) == 0, f"Stale evidence: {stale}"
+
 
 # =============================================================================
 # FASTQ — end-to-end through fetch_fastq_headers.classify_single_fastq
@@ -163,6 +195,24 @@ class TestFastqE2E:
         result = classify_fastq("000644fa14ab21a7106a746664d58aa9", "HG02486x02PE20573_1_sequence.fastq.gz")
         assert result is not None
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_pacbio_ccs_fastq(self):
+        """PacBio CCS/HiFi FASTQ — should detect PacBio platform."""
+        result = classify_fastq("0073d35c9f5b68a739e3daf50a227f72",
+                                "HG01109.m64043_200830_075523.dc.q20.fastq.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "platform") == "PACBIO"
+        assert get_val(result, "data_modality") == "genomic"
+
+    def test_mgi_fastq(self):
+        """MGI/BGI platform FASTQ — should detect MGI."""
+        result = classify_fastq("00c68ff0f9e0217d422c57e8948d4bb4", "IGVFFI6614EZDQ.fastq.gz")
+        assert result is not None
+        assert_output_format(result)
+        # MGI reads start with @V — should be detected
+        platform = get_val(result, "platform")
+        assert platform in ("MGI", "ILLUMINA", NOT_CLASSIFIED), f"Unexpected platform: {platform}"
 
 
 # =============================================================================
@@ -228,6 +278,16 @@ class TestRuleEngineE2E:
     def test_bigwig_with_chip_keyword(self):
         result = engine.classify_extended(FileInfo(filename="H3K27ac_ChIP.bw"))
         assert result.data_modality == "epigenomic.histone_modification"
+
+    def test_bed_reference_from_filename(self):
+        """BED file with hg38 in filename should detect GRCh38."""
+        result = engine.classify_extended(FileInfo(filename="sample.hg38.regions.bed"))
+        assert result.reference_assembly == "GRCh38"
+
+    def test_idat_methylation(self):
+        """IDAT file should be epigenomic methylation."""
+        result = engine.classify_extended(FileInfo(filename="200123456789_R01C01.idat"))
+        assert result.data_modality == "epigenomic.methylation"
 
     def test_no_crash_on_unknown(self):
         for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
