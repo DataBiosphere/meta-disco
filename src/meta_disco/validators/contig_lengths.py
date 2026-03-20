@@ -138,9 +138,13 @@ def detect_reference_from_contig_lengths(
     if votes:
         # Return assembly with most votes
         winner = max(votes.keys(), key=lambda k: votes[k])
+        top_count = votes[winner]
+        # If multiple assemblies are tied, evidence is ambiguous — don't guess
+        if sum(1 for v in votes.values() if v == top_count) > 1:
+            return None, 0, 0.0
         # Lower confidence if no exact matches (fuzzy only)
         confidence = 0.98 if exact_matches > 0 else 0.95
-        return winner, votes[winner], confidence
+        return winner, top_count, confidence
 
     return None, 0, 0.0
 
