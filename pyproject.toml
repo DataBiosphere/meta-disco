@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "meta-disco"
+version = "0.1.0"
+description = "Rule engine for classifying biological data files"
+authors = ["AnVIL Team"]
+readme = "README.md"
+packages = [{include = "meta_disco", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pyyaml = "^6.0"
+requests = "^2.31"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"

@@ -1,0 +1,2512 @@
+# Meta-Disco Unified Classification Rules
+# ========================================
+#
+# PURPOSE
+# -------
+# This file contains all rules for classifying biological data files (BAM, CRAM,
+# FASTQ, VCF, BED, etc.) to determine their data_modality (genomic, transcriptomic,
+# epigenomic), reference_assembly (GRCh38, GRCh37, CHM13), and other metadata.
+#
+# The rule engine is used by the AnVIL Explorer and Terra Data Repository to
+# automatically classify files based on filename patterns, file size, and
+# optionally BAM/VCF/FASTQ headers.
+#
+#
+# HOW THE RULE ENGINE WORKS
+# -------------------------
+# 1. EXTENSION EXTRACTION: The engine first extracts the file extension,
+#    handling compound extensions like .vcf.gz, .fastq.gz, .g.vcf.gz
+#
+# 2. RULE FILTERING: Only rules matching the file's extension are considered.
+#    Rules without an 'extensions' constraint apply to ALL files.
+#
+# 3. TIERED EXECUTION: Rules execute in tier order (1 → 2 → 3):
+#    - Tier 1: Extension-only rules (fastest, always available)
+#    - Tier 2: Filename pattern and file size rules
+#    - Tier 3: Header-based rules (requires reading file headers)
+#
+# 4. CONDITION EVALUATION: All conditions in 'when' must match (AND logic).
+#    If any condition fails, the rule is skipped.
+#
+# 5. EFFECT APPLICATION: When a rule matches, all effects in 'then' are applied.
+#    Effects accumulate across rules unless a field is already set.
+#
+# 6. TERMINAL RULES: If terminal=true and the rule matches, processing stops
+#    immediately. Use for definitive classifications.
+#
+# 7. CONFIDENCE & REASONS: Each matching rule adds its rationale to the reasons
+#    list. The highest confidence from matching rules is used.
+#
+#
+# KEY CONCEPTS
+# ------------
+# - data_modality: What biological data type (genomic, transcriptomic.bulk,
+#   epigenomic.methylation, imaging.histology, etc.)
+#
+# - data_type: File content type (alignments, variants, reads, peaks, signal, etc.)
+#
+# - reference_assembly: Reference genome (GRCh38, GRCh37, CHM13, or null for
+#   unaligned/raw data)
+#
+# - assay_type: Experimental method (WGS, WES, RNA-seq, ATAC-seq, ChIP-seq, etc.)
+#
+# - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+#
+# - skip: Files to ignore (indices, checksums, logs)
+#
+# - needs_*: Flags indicating more information needed for classification
+#
+#
+# FILE STRUCTURE (Multi-document YAML)
+# ------------------------------------
+# This file contains multiple YAML documents separated by '---':
+#
+# 1. extension_map: Maps extensions to file type categories
+# 2. rules: The classification rules (main content)
+# 3. validators: Python validator configurations for complex logic
+# 4. assay_type_rules: Rules for inferring WGS/WES/RNA-seq from signals
+# 5. illumina_instruments: Instrument ID prefix to model mapping
+# 6. reference_contig_lengths: Chromosome sizes for reference detection
+#
+#
+# RULE SCHEMA
+# -----------
+# - id: unique rule identifier (required)
+# - tier: 1=extension, 2=filename, 3=header (required)
+# - scope: extension|filename|header|vcf_header|fastq_header|file_size (required)
+# - when: conditions that must all match (required)
+# - then: effects to apply when rule matches (required)
+# - confidence: 0.0-1.0 confidence score (default: 0.0)
+# - rationale: explanation for this classification (recommended)
+# - terminal: if true, stop processing after this rule matches (default: false)
+#
+#
+# CONDITION TYPES (in 'when')
+# ---------------------------
+# Extension/filename conditions:
+# - extensions: list of file extensions to match (e.g., [".bam", ".cram"])
+# - filename_pattern: regex pattern for filename (case-insensitive)
+# - dataset_pattern: regex pattern for dataset title
+# - file_format: required format (.bam, .cram, etc)
+#
+# File size conditions:
+# - file_size_min_gb: minimum file size in GB
+# - file_size_max_gb: maximum file size in GB
+#
+# State conditions (for rule ordering):
+# - modality_not_set: true if data_modality must be unset
+# - reference_not_set: true if reference_assembly must be unset
+# - platform: required platform value (ILLUMINA, PACBIO, ONT)
+#
+# Header conditions (tier 3):
+# - header_section: BAM header section (@HD, @RG, @PG, @SQ)
+# - header_field: field within section (PL, PN, SN, AS, DS)
+# - header_pattern: regex pattern to match in field value
+# - header_absent: true if header section should NOT exist
+# - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
+# - vcf_pattern: regex pattern for VCF header content
+# - fastq_pattern: regex pattern for FASTQ read name
+#
+#
+# EFFECT TYPES (in 'then')
+# ------------------------
+# Classification fields:
+# - data_modality: set data modality (genomic, transcriptomic.bulk, etc.)
+# - data_type: set data type (alignments, variants, reads, peaks, etc.)
+# - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
+# - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
+# - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+# - file_category: set category (qc_stats, reference_intervals, etc.)
+#
+# Control flags:
+# - skip: true to mark file for skipping (indices, checksums)
+# - needs_header_inspection: true to flag for header analysis
+# - needs_study_context: true to flag for study context needed
+# - needs_manual_review: true to flag for human review
+#
+#
+# TIPS FOR REVIEWING/EDITING RULES
+# --------------------------------
+# 1. Check rule order matters within a tier - first match wins for terminal rules
+# 2. More specific patterns should come before general patterns
+# 3. Use terminal=true for definitive classifications to avoid override
+# 4. Use modality_not_set/reference_not_set for fallback rules
+# 5. Confidence should reflect certainty: 0.95 for definitive, 0.60-0.80 for heuristics
+# 6. Always provide a rationale explaining the classification logic
+# 7. Test regex patterns - they're case-insensitive by default
+#
+#
+# CONSOLIDATED FROM
+# -----------------
+# 1. rules/classification_rules.yaml (extension, filename rules)
+# 2. src/meta_disco/header_classifier.py (header rules)
+# 3. scripts/classify_bed_files.py (BED file patterns)
+# 4. scripts/classify_images.py (image extensions)
+# 5. scripts/classify_auxiliary_genomic.py (FAST5/POD5/PLINK)
+
+# =============================================================================
+# EXTENSION MAP
+# =============================================================================
+# Maps file extensions to file type categories for rule chain selection
+
+extension_map:
+  # Alignments
+  ".bam": alignment
+  ".cram": alignment
+  ".sam": alignment
+  ".sam.gz": alignment
+
+  # Variants
+  ".vcf": variant
+  ".vcf.gz": variant
+  ".bcf": variant
+  ".gvcf": variant
+  ".gvcf.gz": variant
+  ".g.vcf.gz": variant
+
+  # Sequencing reads
+  ".fastq": reads
+  ".fq": reads
+  ".fastq.gz": reads
+  ".fq.gz": reads
+
+  # Genomic intervals/regions
+  ".bed": intervals
+  ".bed.gz": intervals
+  ".narrowpeak": intervals
+  ".broadpeak": intervals
+
+  # Signal tracks
+  ".bigwig": signal
+  ".bw": signal
+  ".bigWig": signal
+  ".bedGraph": signal
+
+  # Indices (skip - inherit from parent)
+  ".bai": index
+  ".crai": index
+  ".tbi": index
+  ".csi": index
+  ".fai": index
+  ".idx": index
+  ".pbi": index
+
+  # Checksums (skip)
+  ".md5": checksum
+
+  # Genotyping (PLINK)
+  ".pgen": genotype_plink
+  ".pvar": genotype_plink
+  ".psam": genotype_plink
+
+  # Single-cell matrices
+  ".h5ad": single_cell_matrix
+  ".loom": single_cell_matrix
+  ".mtx": single_cell_matrix
+  ".mtx.gz": single_cell_matrix
+
+  # Methylation arrays
+  ".idat": methylation_array
+
+  # Nanopore raw signal
+  ".fast5": nanopore
+  ".pod5": nanopore
+  ".fast5.tar": nanopore
+  ".fast5.tar.gz": nanopore
+
+  # Images
+  ".svs": histology_image
+  ".tiff": image
+  ".tif": image
+  ".png": image
+  ".jpg": image
+
+  # Archives (need special handling)
+  ".tar": archive
+  ".tar.gz": archive
+  ".zip": archive
+
+  # Text/tabular (ambiguous)
+  ".txt": text_ambiguous
+  ".tsv": text_ambiguous
+  ".csv": text_ambiguous
+  ".log": log_file
+
+---
+# =============================================================================
+# UNIFIED RULES
+# =============================================================================
+
+rules:
+
+  # ===========================================================================
+  # TIER 1: EXTENSION-BASED RULES
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Index files - skip classification
+  # ---------------------------------------------------------------------------
+  - id: index_skip
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
+    then:
+      skip: true
+    confidence: 1.0
+    rationale: "Index file - inherits classification from parent data file"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Checksum files - skip classification
+  # ---------------------------------------------------------------------------
+  - id: checksum_skip
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".md5"]
+    then:
+      skip: true
+    confidence: 1.0
+    rationale: "Checksum file - not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Log files - skip classification
+  # ---------------------------------------------------------------------------
+  - id: log_skip
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".log"]
+    then:
+      skip: true
+    confidence: 1.0
+    rationale: "Log file - not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # VCF files - genomic by default
+  # ---------------------------------------------------------------------------
+  - id: variant_default_genomic
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+    then:
+      data_modality: genomic
+      data_type: variants
+    confidence: 0.85
+    rationale: "VCF files contain variant calls (genomic data)"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # PLINK genotype files
+  # ---------------------------------------------------------------------------
+  - id: plink_genomic
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".pgen", ".pvar", ".psam"]
+    then:
+      data_modality: genomic
+      data_type: genotypes
+    confidence: 0.95
+    rationale: "PLINK files contain genotype data (genomic)"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Methylation array files
+  # ---------------------------------------------------------------------------
+  - id: idat_methylation
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".idat"]
+    then:
+      data_modality: epigenomic.methylation
+      data_type: array_signal
+      assay_type: Methylation array
+    confidence: 0.95
+    rationale: "IDAT files are Illumina methylation array data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Single-cell matrix files
+  # ---------------------------------------------------------------------------
+  - id: sc_matrix_default
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".h5ad", ".loom", ".mtx", ".mtx.gz"]
+    then:
+      data_modality: transcriptomic.single_cell
+      data_type: expression_matrix
+    confidence: 0.90
+    rationale: "Single-cell matrix format indicates scRNA-seq"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Histology images (SVS)
+  # ---------------------------------------------------------------------------
+  - id: image_svs_histology
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".svs"]
+    then:
+      data_modality: imaging.histology
+      data_type: images
+      assay_type: Histology
+      platform: not_applicable
+      reference_assembly: not_applicable
+    confidence: 0.95
+    rationale: "SVS files are Aperio whole-slide histology images used for pathology analysis"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # PNG images - derived/QC plots
+  # ---------------------------------------------------------------------------
+  - id: image_png_derived
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".png"]
+    then:
+      data_modality: not_applicable
+      data_type: images
+      platform: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+    confidence: 0.90
+    rationale: "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Nanopore raw signal files
+  # ---------------------------------------------------------------------------
+  - id: nanopore_fast5
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".fast5", ".fast5.tar", ".fast5.tar.gz"]
+    then:
+      data_modality: genomic
+      data_type: raw_signal
+      platform: ONT
+      assay_type: WGS
+      reference_assembly: not_applicable
+    confidence: 0.90
+    rationale: "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment"
+    terminal: false
+
+  - id: nanopore_pod5
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".pod5"]
+    then:
+      data_modality: genomic
+      data_type: raw_signal
+      platform: ONT
+      assay_type: WGS
+      reference_assembly: not_applicable
+    confidence: 0.90
+    rationale: "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5)"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # FASTQ/FQ - raw sequencing reads (unaligned, no reference)
+  # ---------------------------------------------------------------------------
+  - id: reads_base
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+    then:
+      data_type: reads
+      reference_assembly: not_applicable
+    confidence: 0.50
+    rationale: "FASTQ files contain raw sequencing reads. Reference not applicable until alignment"
+    terminal: false
+
+  # ===========================================================================
+  # TIER 2: FILENAME-BASED RULES
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Alignment files - RNA-seq indicators
+  # ---------------------------------------------------------------------------
+  - id: alignment_rnaseq_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)_rna_|rnaseq|rna-seq|transcriptome|_RNA\\."
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: alignments
+    confidence: 0.80
+    rationale: "Filename contains RNA-seq indicator"
+    terminal: false
+
+  - id: alignment_scrna_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)scrna|sc_rna|single.?cell|10x|chromium"
+    then:
+      data_modality: transcriptomic.single_cell
+      data_type: alignments
+    confidence: 0.85
+    rationale: "Filename contains single-cell RNA indicator"
+    terminal: false
+
+  - id: alignment_atac_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)atac|_ATAC_"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: alignments
+      assay_type: ATAC-seq
+    confidence: 0.85
+    rationale: "Filename contains ATAC-seq indicator"
+    terminal: false
+
+  - id: alignment_chip_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)chip|_ChIP_|chipseq"
+    then:
+      data_modality: epigenomic.histone_modification
+      data_type: alignments
+      assay_type: ChIP-seq
+    confidence: 0.80
+    rationale: "Filename contains ChIP-seq indicator"
+    terminal: false
+
+  - id: alignment_wgs_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)_wgs_|_WGS\\.|whole.?genome"
+    then:
+      data_modality: genomic
+      data_type: alignments
+      assay_type: WGS
+    confidence: 0.85
+    rationale: "Filename contains WGS indicator"
+    terminal: false
+
+  - id: alignment_wes_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)_wes_|exome|_WES\\."
+    then:
+      data_modality: genomic
+      data_type: alignments
+      assay_type: WES
+    confidence: 0.85
+    rationale: "Filename contains exome indicator"
+    terminal: false
+
+  - id: alignment_hifi_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)hifi|\\.hifi_reads\\.|pacbio|_pb_"
+    then:
+      data_modality: genomic
+      data_type: alignments
+      assay_type: WGS
+      platform: PACBIO
+    confidence: 0.70
+    rationale: "HiFi/PacBio reads typically used for genome assembly"
+    terminal: false
+
+  - id: alignment_star_aligner
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      filename_pattern: "(?i)Aligned\\.sortedByCoord|_STAR_|\\.star\\."
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: alignments
+      assay_type: RNA-seq
+    confidence: 0.90
+    rationale: "STAR aligner output indicates RNA-seq"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Reference assembly in filename
+  # ---------------------------------------------------------------------------
+  - id: filename_ref_grch38
+    tier: 2
+    scope: filename
+    when:
+      filename_pattern: "(?i)hg38|grch38|hs38"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.90
+    rationale: "Filename contains GRCh38/hg38 reference indicator"
+    terminal: false
+
+  - id: filename_ref_grch37
+    tier: 2
+    scope: filename
+    when:
+      filename_pattern: "(?i)hg19|grch37|hs37|b37"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.90
+    rationale: "Filename contains GRCh37/hg19 reference indicator"
+    terminal: false
+
+  - id: filename_ref_chm13
+    tier: 2
+    scope: filename
+    when:
+      filename_pattern: "(?i)chm13|t2t|CHM13v2|hs1"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.90
+    rationale: "Filename contains CHM13/T2T reference indicator"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Dataset-based reference rules (run early to set reference before terminal rules)
+  # ---------------------------------------------------------------------------
+  # dataset_t2t_reference was removed — replaced by coordinate-based detection
+  # in fetch_bed_headers.py which reads actual BED file content from S3.
+  # The blanket dataset rule misclassified GRCh38 liftover/comparison files
+  # in T2T datasets as CHM13.
+
+  - id: dataset_1000g_reference
+    tier: 2
+    scope: filename
+    when:
+      dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # FASTQ reads - modality from filename
+  # ---------------------------------------------------------------------------
+  - id: reads_rna_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      filename_pattern: "(?i)_rna_|rnaseq|transcriptome"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: reads
+    confidence: 0.80
+    rationale: "Filename contains RNA indicator"
+    terminal: false
+
+  - id: reads_scrna_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      filename_pattern: "(?i)scrna|single.?cell|10x"
+    then:
+      data_modality: transcriptomic.single_cell
+      data_type: reads
+    confidence: 0.85
+    rationale: "Filename contains single-cell indicator"
+    terminal: false
+
+  - id: reads_atac_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      filename_pattern: "(?i)atac"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: reads
+      assay_type: ATAC-seq
+    confidence: 0.85
+    rationale: "Filename contains ATAC indicator"
+    terminal: false
+
+  - id: reads_wgs_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      filename_pattern: "(?i)_wgs_|whole.?genome"
+    then:
+      data_modality: genomic
+      data_type: reads
+      assay_type: WGS
+    confidence: 0.80
+    rationale: "Filename contains WGS indicator"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Single-cell matrix - ATAC variant
+  # ---------------------------------------------------------------------------
+  - id: sc_matrix_atac
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".h5ad", ".loom", ".mtx", ".mtx.gz"]
+      filename_pattern: "(?i)atac|peaks"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: expression_matrix
+      assay_type: ATAC-seq
+    confidence: 0.85
+    rationale: "Single-cell matrix with ATAC indicator"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Nanopore - direct RNA
+  # ---------------------------------------------------------------------------
+  - id: nanopore_rna_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz"]
+      filename_pattern: "(?i)rna|direct.?rna"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: raw_signal
+      platform: ONT
+    confidence: 0.80
+    rationale: "Nanopore direct RNA sequencing"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # BED file classification rules (from classify_bed_files.py)
+  # ---------------------------------------------------------------------------
+  - id: bed_methylation
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)(modbam2bed|cpg|methylat|bisulfite|wgbs)"
+    then:
+      data_modality: epigenomic.methylation
+      data_type: annotations
+      assay_type: Bisulfite-seq
+    confidence: 0.90
+    rationale: "BED file contains CpG methylation calls or bisulfite sequencing regions"
+    terminal: true
+
+  - id: bed_expression
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\\.TSS\\.)"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: annotations
+      assay_type: RNA-seq
+    confidence: 0.90
+    rationale: "BED file contains gene expression quantification or splicing data"
+    terminal: true
+
+  - id: bed_atac_peaks
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)(\\.atac\\.|atac[-_]?seq|atacseq)"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: peaks
+      assay_type: ATAC-seq
+    confidence: 0.90
+    rationale: "BED file contains ATAC-seq peak calls for chromatin accessibility"
+    terminal: true
+
+  - id: bed_chip_peaks
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)(\\.chip\\.|chip[-_]?seq|chipseq|histone|h3k\\d+)"
+    then:
+      data_modality: epigenomic.histone_modification
+      data_type: peaks
+      assay_type: ChIP-seq
+    confidence: 0.90
+    rationale: "BED file contains ChIP-seq peak calls for histone marks or TF binding"
+    terminal: true
+
+  - id: bed_peaks_generic
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      filename_pattern: "(?i)(peak|summit|narrowPeak|broadPeak)"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: peaks
+    confidence: 0.85
+    rationale: "BED file contains ChIP-seq or ATAC-seq peak calls"
+    terminal: false
+
+  - id: bed_assembly_qc
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
+    then:
+      data_modality: not_applicable
+      data_type: annotations
+    confidence: 0.85
+    rationale: "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data"
+    terminal: true
+
+  - id: bed_regions
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "\\.regions\\.bed"
+    then:
+      data_modality: genomic
+      data_type: annotations
+    confidence: 0.80
+    rationale: "BED file contains genomic analysis regions (callable, target, etc.)"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Signal track classification
+  # ---------------------------------------------------------------------------
+  - id: signal_chip
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
+      filename_pattern: "(?i)chip|h3k|histone"
+    then:
+      data_modality: epigenomic.histone_modification
+      data_type: signal
+      assay_type: ChIP-seq
+    confidence: 0.85
+    rationale: "Signal track with ChIP/histone indicator"
+    terminal: true
+
+  - id: signal_atac
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
+      filename_pattern: "(?i)atac"
+    then:
+      data_modality: epigenomic.chromatin_accessibility
+      data_type: signal
+      assay_type: ATAC-seq
+    confidence: 0.85
+    rationale: "Signal track with ATAC indicator"
+    terminal: true
+
+  - id: signal_rnaseq
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
+      filename_pattern: "(?i)rna|transcriptome|coverage"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: signal
+    confidence: 0.75
+    rationale: "Signal track with RNA/coverage indicator"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Intervals - target regions
+  # ---------------------------------------------------------------------------
+  - id: intervals_chip_peaks
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      filename_pattern: "(?i)chip|h3k|histone"
+    then:
+      data_modality: epigenomic.histone_modification
+      data_type: peaks
+      assay_type: ChIP-seq
+    confidence: 0.90
+    rationale: "ChIP-seq histone modification peaks"
+    terminal: true
+
+  - id: intervals_targets
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)targets?|regions?|capture|exome"
+    then:
+      file_category: reference_intervals
+      skip: true
+    confidence: 0.85
+    rationale: "Target/capture region file - reference data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Text files - QC stats
+  # ---------------------------------------------------------------------------
+  - id: text_stats
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".txt", ".tsv"]
+      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|mosdepth|flagstat"
+    then:
+      skip: true
+      file_category: qc_stats
+    confidence: 0.90
+    rationale: "QC/stats file - supplementary data"
+    terminal: true
+
+  - id: text_counts
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".txt", ".tsv", ".csv"]
+      filename_pattern: "(?i)counts?\\.txt|expression|tpm\\.txt|fpkm\\.txt"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: expression_matrix
+    confidence: 0.70
+    rationale: "Filename suggests expression count data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Images - QC plots
+  # ---------------------------------------------------------------------------
+  - id: image_qc_plot
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".png", ".jpg", ".tiff", ".tif"]
+      filename_pattern: "(?i)plot|qc|fastqc|multiqc"
+    then:
+      skip: true
+      file_category: qc_plot
+    confidence: 0.85
+    rationale: "QC plot - supplementary visualization"
+    terminal: true
+
+  - id: image_assembly_plot
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".png", ".jpg", ".tiff", ".tif"]
+      filename_pattern: "(?i)merqury|assembly|kmer"
+    then:
+      skip: true
+      file_category: assembly_plot
+    confidence: 0.80
+    rationale: "Assembly QC plot - supplementary visualization"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Archive files - T2T specific
+  # ---------------------------------------------------------------------------
+  - id: archive_t2t_genomic
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".tar", ".tar.gz"]
+      filename_pattern: "^chr[0-9XY]+\\.[0-9]+_[0-9]+\\.tar$"
+      dataset_pattern: "(?i)t2t"
+    then:
+      data_modality: genomic
+      data_type: archive
+    confidence: 0.75
+    rationale: "T2T project genomic region archive"
+    terminal: true
+
+  # ===========================================================================
+  # TIER 2.5: FILE SIZE HEURISTICS
+  # ===========================================================================
+
+  - id: alignment_size_wgs
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      file_size_min_gb: 50
+      modality_not_set: true
+    then:
+      data_modality: genomic
+      data_type: alignments
+      assay_type: WGS
+    confidence: 0.60
+    rationale: "Large alignment file (>50GB) suggests WGS"
+    terminal: false
+
+  - id: illumina_bam_wgs_large
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam"]
+      platform: ILLUMINA
+      file_size_min_gb: 50
+    then:
+      assay_type: WGS
+    confidence: 0.80
+    rationale: "Illumina BAM files >50 GB strongly suggest WGS. At 30x coverage, a human WGS BAM is typically 80-120 GB"
+    terminal: false
+
+  - id: illumina_bam_wgs_medium
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam"]
+      platform: ILLUMINA
+      file_size_min_gb: 30
+      file_size_max_gb: 50
+    then:
+      assay_type: WGS
+    confidence: 0.65
+    rationale: "Illumina BAM files 30-50 GB likely indicate WGS at lower coverage (15-20x)"
+    terminal: false
+
+  - id: illumina_bam_wes_likely
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam"]
+      platform: ILLUMINA
+      file_size_min_gb: 5
+      file_size_max_gb: 20
+    then:
+      assay_type: WES
+    confidence: 0.60
+    rationale: "Illumina BAM files 5-20 GB are typical for WES at 80-150x coverage"
+    terminal: false
+
+  - id: illumina_cram_wgs_large
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".cram"]
+      platform: ILLUMINA
+      file_size_min_gb: 20
+    then:
+      assay_type: WGS
+    confidence: 0.80
+    rationale: "Illumina CRAM files >20 GB strongly suggest WGS. CRAM compression reduces file size by 60-70% vs BAM"
+    terminal: false
+
+  - id: illumina_cram_wgs_medium
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".cram"]
+      platform: ILLUMINA
+      file_size_min_gb: 10
+      file_size_max_gb: 20
+    then:
+      assay_type: WGS
+    confidence: 0.65
+    rationale: "Illumina CRAM files 10-20 GB likely indicate WGS at moderate coverage"
+    terminal: false
+
+  - id: illumina_cram_wes_likely
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".cram"]
+      platform: ILLUMINA
+      file_size_min_gb: 2
+      file_size_max_gb: 8
+    then:
+      assay_type: WES
+    confidence: 0.60
+    rationale: "Illumina CRAM files 2-8 GB are typical for WES"
+    terminal: false
+
+  - id: pacbio_large_wgs
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam", ".cram"]
+      platform: PACBIO
+      file_size_min_gb: 20
+    then:
+      assay_type: WGS
+    confidence: 0.75
+    rationale: "Large PacBio files (>20 GB) typically indicate WGS. PacBio is rarely used for WES due to cost"
+    terminal: false
+
+  - id: ont_large_wgs
+    tier: 2
+    scope: file_size
+    when:
+      extensions: [".bam", ".cram"]
+      platform: ONT
+      file_size_min_gb: 20
+    then:
+      assay_type: WGS
+    confidence: 0.75
+    rationale: "Large ONT files (>20 GB) typically indicate WGS. ONT is rarely used for targeted sequencing"
+    terminal: false
+
+  # ===========================================================================
+  # TIER 3: HEADER-BASED RULES (BAM/CRAM @RG, @PG, @SQ)
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Platform detection from @RG PL field
+  # ---------------------------------------------------------------------------
+  - id: platform_pacbio
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PL"
+      header_pattern: "PACBIO"
+    then:
+      platform: PACBIO
+      data_modality: genomic
+    confidence: 0.70
+    rationale: "PL:PACBIO indicates PacBio long-read sequencing. PacBio is primarily used for whole genome sequencing, structural variant detection, and de novo assembly due to its long read lengths (10-25kb average for HiFi)"
+    terminal: false
+
+  - id: platform_illumina
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PL"
+      header_pattern: "ILLUMINA"
+    then:
+      platform: ILLUMINA
+    confidence: 0.0
+    rationale: "PL:ILLUMINA indicates Illumina short-read sequencing. Platform alone is insufficient to determine modality - requires program info or study context"
+    terminal: false
+
+  - id: platform_ont
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PL"
+      header_pattern: "ONT"
+    then:
+      platform: ONT
+      data_modality: genomic
+    confidence: 0.70
+    rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing. ONT is primarily used for whole genome sequencing, structural variants, and direct RNA sequencing"
+    terminal: false
+
+  - id: platform_ont_alt
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PL"
+      header_pattern: "NANOPORE"
+    then:
+      platform: ONT
+      data_modality: genomic
+    confidence: 0.70
+    rationale: "Alternative platform identifier for Oxford Nanopore Technology"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # PacBio read type from @RG DS field
+  # ---------------------------------------------------------------------------
+  - id: pacbio_hifi
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "DS"
+      header_pattern: "READTYPE=CCS"
+    then:
+      data_modality: genomic
+      assay_type: WGS
+    confidence: 0.85
+    rationale: "READTYPE=CCS indicates PacBio HiFi (High-Fidelity) reads. CCS generates highly accurate long reads (>Q20, ~99% accuracy)"
+    terminal: false
+
+  - id: pacbio_clr
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "DS"
+      header_pattern: "READTYPE=SUBREAD"
+    then:
+      data_modality: genomic
+    confidence: 0.80
+    rationale: "READTYPE=SUBREAD indicates PacBio CLR (Continuous Long Read) data. Longer but less accurate than HiFi"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # RNA-seq aligner programs from @PG PN field
+  # ---------------------------------------------------------------------------
+  - id: program_star
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "STAR"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: alignments
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
+    terminal: false
+
+  - id: program_hisat2
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "hisat2"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: alignments
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "HISAT2 is a splice-aware aligner optimized for RNA-seq"
+    terminal: false
+
+  - id: program_tophat
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "tophat"
+    then:
+      data_modality: transcriptomic.bulk
+      data_type: alignments
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "TopHat was an early splice-aware aligner for RNA-seq (now superseded by HISAT2)"
+    terminal: false
+
+  - id: program_salmon
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "salmon"
+    then:
+      data_modality: transcriptomic.bulk
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "Salmon is a transcript-level quantification tool for RNA-seq"
+    terminal: false
+
+  - id: program_kallisto
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "kallisto"
+    then:
+      data_modality: transcriptomic.bulk
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "Kallisto performs rapid transcript quantification using pseudoalignment"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # DNA aligner programs from @PG PN field
+  # ---------------------------------------------------------------------------
+  - id: program_bwa
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "bwa"
+    then:
+      data_modality: genomic
+      data_type: alignments
+    confidence: 0.80
+    rationale: "BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. Commonly used for WGS, WES, and ChIP-seq"
+    terminal: false
+
+  - id: program_minimap2
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "minimap2"
+    then:
+      data_modality: genomic
+      data_type: alignments
+    confidence: 0.75
+    rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset"
+    terminal: false
+
+  - id: program_bowtie2
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "bowtie2"
+    then:
+      data_modality: genomic
+      data_type: alignments
+    confidence: 0.75
+    rationale: "Bowtie2 is a fast short-read aligner commonly used for ChIP-seq, ATAC-seq, and WGS"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # PacBio-specific programs
+  # ---------------------------------------------------------------------------
+  - id: program_ccs
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "ccs"
+    then:
+      data_modality: genomic
+      platform: PACBIO
+      assay_type: WGS
+    confidence: 0.85
+    rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio HiFi data"
+    terminal: false
+
+  - id: program_isoseq
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "isoseq"
+    then:
+      data_modality: transcriptomic.bulk
+      platform: PACBIO
+      assay_type: RNA-seq
+    confidence: 0.95
+    rationale: "IsoSeq is PacBio's full-length transcript sequencing method for isoform characterization"
+    terminal: false
+
+  - id: program_lima
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "PN"
+      header_pattern: "lima"
+    then:
+      platform: PACBIO
+    confidence: 0.0
+    rationale: "Lima is PacBio's barcode demultiplexer. Doesn't indicate modality"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Reference assembly from @SQ
+  # ---------------------------------------------------------------------------
+  - id: header_ref_grch38
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "SN"
+      header_pattern: "(?i)(grch38|hg38|hs38)"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "Contig names containing GRCh38/hg38/hs38 indicate alignment to GRCh38 reference"
+    terminal: false
+
+  - id: header_ref_grch37
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "SN"
+      header_pattern: "(?i)(grch37|hg19|hs37)"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.95
+    rationale: "Contig names containing GRCh37/hg19/hs37 indicate alignment to GRCh37 reference"
+    terminal: false
+
+  - id: header_ref_chm13
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "SN"
+      header_pattern: "(?i)(chm13|t2t|hs1)"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.95
+    rationale: "Contig names containing CHM13/T2T/hs1 indicate alignment to T2T-CHM13 reference"
+    terminal: false
+
+  - id: header_ref_as_grch38
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "AS"
+      header_pattern: "(?i)(grch38|hg38|hs38)"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "AS field containing GRCh38/hg38/hs38 explicitly identifies the reference assembly"
+    terminal: false
+
+  - id: header_ref_as_grch37
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "AS"
+      header_pattern: "(?i)(grch37|hg19|hs37|b37)"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.95
+    rationale: "AS field containing GRCh37/hg19/hs37/b37 explicitly identifies the reference assembly"
+    terminal: false
+
+  - id: header_ref_as_chm13
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "AS"
+      header_pattern: "(?i)(chm13|t2t|hs1)"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.95
+    rationale: "AS field containing CHM13/T2T/hs1 explicitly identifies the reference assembly"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Unaligned indicator
+  # ---------------------------------------------------------------------------
+  - id: unaligned_no_sq
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_absent: true
+    then:
+      reference_assembly: not_applicable
+    confidence: 0.90
+    rationale: "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment"
+    terminal: false
+
+  # ===========================================================================
+  # TIER 3: VCF HEADER RULES
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # VCF reference detection
+  # ---------------------------------------------------------------------------
+  - id: vcf_ref_grch38
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##reference"
+      vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.15)"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession indicates variants called against GRCh38"
+    terminal: false
+
+  - id: vcf_ref_grch37
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##reference"
+      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.[^5]|b37)"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.95
+    rationale: "##reference line containing GRCh37, hg19, b37, or earlier accessions indicates variants called against GRCh37"
+    terminal: false
+
+  - id: vcf_ref_chm13
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##reference"
+      vcf_pattern: "(?i)(chm13|t2t|hs1)"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.95
+    rationale: "##reference line containing CHM13 or T2T indicates variants called against T2T-CHM13"
+    terminal: false
+
+  - id: vcf_contig_grch38
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##contig"
+      vcf_pattern: "(?i)assembly=(grch38|hg38|GCA_000001405\\.15)"
+    then:
+      reference_assembly: GRCh38
+    confidence: 0.95
+    rationale: "##contig lines with assembly=GRCh38 explicitly declare the reference genome"
+    terminal: false
+
+  - id: vcf_contig_grch37
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##contig"
+      vcf_pattern: "(?i)assembly=(grch37|hg19|b37)"
+    then:
+      reference_assembly: GRCh37
+    confidence: 0.95
+    rationale: "##contig lines with assembly=GRCh37 explicitly declare the reference genome"
+    terminal: false
+
+  - id: vcf_contig_chm13
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##contig"
+      vcf_pattern: "(?i)assembly=(chm13|t2t|hs1)"
+    then:
+      reference_assembly: CHM13
+    confidence: 0.95
+    rationale: "##contig lines with assembly=CHM13 explicitly declare the reference genome"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # VCF germline variant callers
+  # ---------------------------------------------------------------------------
+  - id: vcf_gatk_haplotypecaller
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)haplotypecaller"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.90
+    rationale: "GATK HaplotypeCaller is the standard germline SNV/indel caller"
+    terminal: false
+
+  - id: vcf_deepvariant
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)deepvariant"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.90
+    rationale: "DeepVariant is Google's deep learning-based germline variant caller"
+    terminal: false
+
+  - id: vcf_gatk_genotypegvcfs
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)genotypegvcfs"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.90
+    rationale: "GATK GenotypeGVCFs performs joint genotyping on gVCF files"
+    terminal: false
+
+  - id: vcf_glnexus
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)glnexus"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.90
+    rationale: "GLnexus is a scalable gVCF merging and joint genotyping tool"
+    terminal: false
+
+  - id: vcf_bcftools_call
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)bcftools.*call"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.85
+    rationale: "bcftools call is a lightweight germline variant caller"
+    terminal: false
+
+  - id: vcf_freebayes
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)freebayes"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.85
+    rationale: "FreeBayes is a Bayesian haplotype-based germline variant caller"
+    terminal: false
+
+  - id: vcf_strelka2_germline
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)strelka2.*germline|strelka2(?!.*somatic)"
+    then:
+      data_modality: genomic
+      data_type: variants.germline
+    confidence: 0.85
+    rationale: "Strelka2 in germline mode calls SNVs and indels from germline samples"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # VCF somatic variant callers
+  # ---------------------------------------------------------------------------
+  - id: vcf_mutect2
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)mutect2?"
+    then:
+      data_modality: genomic
+      data_type: variants.somatic
+    confidence: 0.95
+    rationale: "GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal analysis"
+    terminal: false
+
+  - id: vcf_strelka_somatic
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)strelka.*somatic|strelka(?!.*germline)"
+    then:
+      data_modality: genomic
+      data_type: variants.somatic
+    confidence: 0.90
+    rationale: "Strelka in somatic mode calls somatic variants from tumor-normal pairs"
+    terminal: false
+
+  - id: vcf_varscan_somatic
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)varscan.*somatic"
+    then:
+      data_modality: genomic
+      data_type: variants.somatic
+    confidence: 0.90
+    rationale: "VarScan somatic mode calls somatic variants from tumor-normal pairs"
+    terminal: false
+
+  - id: vcf_somaticsniper
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)somaticsniper"
+    then:
+      data_modality: genomic
+      data_type: variants.somatic
+    confidence: 0.90
+    rationale: "SomaticSniper identifies somatic point mutations in tumor-normal pairs"
+    terminal: false
+
+  - id: vcf_muse
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)muse"
+    then:
+      data_modality: genomic
+      data_type: variants.somatic
+    confidence: 0.90
+    rationale: "MuSE calls somatic point mutations using a Markov substitution model"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # VCF structural variant callers
+  # ---------------------------------------------------------------------------
+  - id: vcf_manta
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)manta"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "Manta calls structural variants (deletions, insertions, inversions, translocations)"
+    terminal: false
+
+  - id: vcf_delly
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)delly"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "DELLY discovers structural variants using paired-end and split-read analysis"
+    terminal: false
+
+  - id: vcf_lumpy
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)lumpy"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "LUMPY is a probabilistic SV caller using multiple alignment signals"
+    terminal: false
+
+  - id: vcf_smoove
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)smoove"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "Smoove simplifies SV calling by wrapping LUMPY with additional filtering"
+    terminal: false
+
+  - id: vcf_svim
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)svim"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "SVIM detects structural variants from long-read sequencing data (PacBio/ONT)"
+    terminal: false
+
+  - id: vcf_sniffles
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)sniffles"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "Sniffles is a long-read SV caller optimized for PacBio and ONT data"
+    terminal: false
+
+  - id: vcf_pbsv
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)pbsv"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "PBSV is PacBio's structural variant caller for HiFi and CLR data"
+    terminal: false
+
+  - id: vcf_cutesv
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)cutesv"
+    then:
+      data_modality: genomic
+      data_type: variants.structural
+    confidence: 0.90
+    rationale: "CuteSV is a fast long-read SV caller using clustering of signatures"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # VCF copy number variant callers
+  # ---------------------------------------------------------------------------
+  - id: vcf_cnvkit
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)cnvkit"
+    then:
+      data_modality: genomic
+      data_type: variants.cnv
+    confidence: 0.90
+    rationale: "CNVkit detects copy number variants from targeted/exome or WGS data"
+    terminal: false
+
+  - id: vcf_gatk_cnv
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)gatk.*(cnv|copynumber)|modelsegments"
+    then:
+      data_modality: genomic
+      data_type: variants.cnv
+    confidence: 0.90
+    rationale: "GATK CNV tools (ModelSegments, etc.) call copy number variants from read depth data"
+    terminal: false
+
+  - id: vcf_canvas
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##source"
+      vcf_pattern: "(?i)canvas"
+    then:
+      data_modality: genomic
+      data_type: variants.cnv
+    confidence: 0.90
+    rationale: "Canvas is Illumina's CNV caller for WGS and tumor-normal analysis"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # VCF INFO field indicators
+  # ---------------------------------------------------------------------------
+  - id: vcf_info_somatic
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      vcf_header_type: "##INFO"
+      vcf_pattern: "^(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)"
+    then:
+      data_type: variants.somatic
+    confidence: 0.85
+    rationale: "INFO fields with SOMATIC, TUMOR_, or NORMAL_ prefixes indicate somatic variant calls"
+    terminal: false
+
+  - id: vcf_info_sv
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##INFO"
+      vcf_pattern: "^(SVTYPE|SVLEN|CIPOS|CIEND|MATEID|IMPRECISE)$"
+    then:
+      data_type: variants.structural
+    confidence: 0.80
+    rationale: "Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate structural variant calls"
+    terminal: false
+
+  - id: vcf_info_cnv
+    tier: 3
+    scope: vcf_header
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      vcf_header_type: "##INFO"
+      vcf_pattern: "^(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)$"
+    then:
+      data_type: variants.cnv
+    confidence: 0.80
+    rationale: "CNV-specific INFO fields indicate copy number variant calls"
+    terminal: false
+
+  # ===========================================================================
+  # TIER 3: FASTQ HEADER RULES
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # Illumina read name patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_illumina_modern
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z0-9-]+:\\d+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+"
+    then:
+      platform: ILLUMINA
+    confidence: 0.90
+    rationale: "Modern Illumina read names (Casava 1.8+) follow the format @instrument:run:flowcell:lane:tile:x:y"
+    terminal: false
+
+  - id: fastq_illumina_legacy
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z0-9-]+:\\d+:\\d+:\\d+:\\d+#"
+    then:
+      platform: ILLUMINA
+    confidence: 0.85
+    rationale: "Legacy Illumina read names follow @instrument:lane:tile:x:y#index format"
+    terminal: false
+
+  - id: fastq_illumina_srr
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@SRR\\d+\\.\\d+"
+    then:
+      platform: ILLUMINA
+    confidence: 0.70
+    rationale: "SRA-reformatted read names starting with @SRR typically indicate Illumina data from NCBI SRA"
+    terminal: false
+
+  - id: fastq_illumina_hiseq_desc
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: " HS2[05]00[-_]"
+    then:
+      platform: ILLUMINA
+    confidence: 0.85
+    rationale: "HiSeq 2000/2500 instrument identifier found in read description"
+    terminal: false
+
+  - id: fastq_illumina_ena_hiseq
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[EDS]RR\\d+\\.\\d+ HS2[05]00"
+    then:
+      platform: ILLUMINA
+    confidence: 0.90
+    rationale: "ENA/SRA-reformatted read names with HiSeq 2000/2500 instrument ID in description"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # PacBio read name patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_pacbio_ccs
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/ccs"
+    then:
+      platform: PACBIO
+      data_modality: genomic
+      data_type: reads
+      assay_type: WGS
+    confidence: 0.95
+    rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
+    terminal: false
+
+  - id: fastq_pacbio_clr
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/\\d+_\\d+"
+    then:
+      platform: PACBIO
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.90
+    rationale: "PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format"
+    terminal: false
+
+  - id: fastq_pacbio_generic
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+"
+    then:
+      platform: PACBIO
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.85
+    rationale: "Generic PacBio read names follow @movie/zmw format"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # ONT read name patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_ont_uuid
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+    then:
+      platform: ONT
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.95
+    rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
+    terminal: false
+
+  - id: fastq_ont_metadata
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "runid=[a-f0-9]+"
+    then:
+      platform: ONT
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.95
+    rationale: "ONT reads often include 'runid=' metadata in the header line"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # MGI/BGI read name patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_mgi
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z]\\d{9}L\\dC\\d{3}R\\d{3}\\d+"
+    then:
+      platform: MGI
+    confidence: 0.90
+    rationale: "MGI/BGI-SEQ read names follow @flowcellLaneCcolumnRrow format"
+    terminal: false
+
+  - id: fastq_mgi_alt
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z]\\d+L\\d+C\\d+R\\d+"
+    then:
+      platform: MGI
+    confidence: 0.85
+    rationale: "Alternative MGI/BGI read name format with varying digit lengths"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Element Biosciences patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_element
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z0-9]+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+:\\d+"
+    then:
+      platform: ELEMENT
+    confidence: 0.80
+    rationale: "Element Biosciences AVITI read names follow a similar format to Illumina"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Ultima Genomics patterns
+  # ---------------------------------------------------------------------------
+  - id: fastq_ultima
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@[A-Z0-9]+_\\d+_\\d+_\\d+_[ACGT]+"
+    then:
+      platform: ULTIMA
+    confidence: 0.80
+    rationale: "Ultima Genomics read names include flow-space encoded sequences"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Archive accession patterns (ENA/SRA)
+  # ---------------------------------------------------------------------------
+  - id: fastq_ena_err
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@ERR\\d+\\.\\d+"
+    then: {}
+    confidence: 0.60
+    rationale: "ERR accessions indicate data from the European Nucleotide Archive (ENA)"
+    terminal: false
+
+  - id: fastq_sra_srr
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@SRR\\d+\\.\\d+"
+    then: {}
+    confidence: 0.60
+    rationale: "SRR accessions indicate data from NCBI Sequence Read Archive (SRA)"
+    terminal: false
+
+  - id: fastq_ddbj_drr
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "^@DRR\\d+\\.\\d+"
+    then: {}
+    confidence: 0.60
+    rationale: "DRR accessions indicate data from DDBJ Sequence Read Archive (Japan)"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Paired-end detection (works across platforms)
+  # ---------------------------------------------------------------------------
+  - id: fastq_paired_end
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      fastq_pattern: "[/\\s][12]$|[/\\s][12]:|_R[12]_|\\.R[12]\\.|_r[12]_|\\.r[12]\\."
+    then: {}
+    confidence: 0.80
+    rationale: "Read 1/2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # Default genomic modality for FASTQ when platform detected but no modality
+  # ---------------------------------------------------------------------------
+  - id: fastq_genomic_default
+    tier: 3
+    scope: fastq_header
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      modality_not_set: true
+    then:
+      data_modality: genomic
+      data_type: reads
+    confidence: 0.60
+    rationale: "Default to genomic for FASTQ files when no modality indicators in filename"
+    terminal: false
+
+  # ===========================================================================
+  # FALLBACK RULES
+  # ===========================================================================
+
+  - id: alignment_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      modality_not_set: true
+    then:
+      needs_header_inspection: true
+    confidence: 0.0
+    rationale: "No modality indicators found; requires BAM header inspection"
+    terminal: false
+
+  - id: variant_needs_header
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      reference_not_set: true
+    then:
+      needs_header_inspection: true
+    confidence: 0.0
+    rationale: "Reference assembly not in filename; check VCF header"
+    terminal: false
+
+  - id: reads_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      modality_not_set: true
+    then:
+      needs_study_context: true
+    confidence: 0.0
+    rationale: "FASTQ modality ambiguous; requires study context"
+    terminal: false
+
+  - id: signal_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
+      modality_not_set: true
+    then:
+      needs_study_context: true
+    confidence: 0.0
+    rationale: "Signal track modality unclear - needs study context"
+    terminal: true
+
+  - id: intervals_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      modality_not_set: true
+    then:
+      data_modality: genomic
+      data_type: annotations
+      needs_study_context: true
+    confidence: 0.60
+    rationale: "BED file with no specific pattern - defaulting to genomic intervals"
+    terminal: true
+
+  - id: archive_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".tar", ".tar.gz", ".zip"]
+      modality_not_set: true
+    then:
+      needs_manual_review: true
+    confidence: 0.0
+    rationale: "Archive contents unknown - needs inspection"
+    terminal: true
+
+  - id: image_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".png", ".jpg", ".tiff", ".tif"]
+      modality_not_set: true
+    then:
+      needs_manual_review: true
+    confidence: 0.0
+    rationale: "Image purpose unclear"
+    terminal: true
+
+  - id: text_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".txt", ".tsv", ".csv"]
+      modality_not_set: true
+    then:
+      needs_manual_review: true
+    confidence: 0.0
+    rationale: "Ambiguous text file - requires manual review"
+    terminal: true
+
+  - id: unknown_extension_fallback
+    tier: 2
+    scope: filename
+    when:
+      modality_not_set: true
+    then:
+      needs_manual_review: true
+    confidence: 0.0
+    rationale: "Unknown file extension - requires manual review"
+    terminal: false  # Allow tier 3 header rules to run
+
+---
+# =============================================================================
+# VALIDATOR CONFIGURATIONS
+# =============================================================================
+# Complex matching logic that requires Python code
+
+validators:
+  contig_length_detector:
+    description: "Detect reference assembly from chromosome lengths in @SQ or ##contig lines"
+    module: "meta_disco.validators.contig_lengths"
+    function: "detect_reference_from_contig_lengths"
+    applies_to: ["header", "vcf_header"]
+    confidence: 0.98
+
+  max_position_detector:
+    description: "Detect reference assembly by ruling out references where variant positions exceed chromosome lengths"
+    module: "meta_disco.validators.contig_lengths"
+    function: "detect_reference_from_max_positions"
+    applies_to: ["vcf_header"]
+    confidence: 0.90
+
+  illumina_read_parser:
+    description: "Parse Illumina read names to extract instrument, flowcell, lane"
+    module: "meta_disco.validators.read_name_parsers"
+    function: "parse_illumina_read_name"
+    applies_to: ["fastq_header"]
+
+  pacbio_read_parser:
+    description: "Parse PacBio read names to extract movie, ZMW, read type"
+    module: "meta_disco.validators.read_name_parsers"
+    function: "parse_pacbio_read_name"
+    applies_to: ["fastq_header"]
+
+  ont_read_parser:
+    description: "Parse ONT read names to extract UUID and metadata"
+    module: "meta_disco.validators.read_name_parsers"
+    function: "parse_ont_read_name"
+    applies_to: ["fastq_header"]
+
+  illumina_instrument_model:
+    description: "Infer Illumina instrument model from instrument ID prefix"
+    module: "meta_disco.validators.read_name_parsers"
+    function: "infer_illumina_instrument_model"
+    applies_to: ["header", "fastq_header"]
+
+---
+# =============================================================================
+# ASSAY TYPE INFERENCE RULES
+# =============================================================================
+# Priority-ordered rules for inferring assay type from other signals
+
+assay_type_rules:
+  - id: rnaseq_program
+    priority: 100
+    conditions:
+      matched_rules_any:
+        - program_star
+        - program_hisat2
+        - program_tophat
+        - program_salmon
+        - program_kallisto
+        - program_isoseq
+    assay_type: RNA-seq
+
+  - id: rnaseq_modality
+    priority: 95
+    conditions:
+      data_modality_contains: transcriptomic
+    assay_type: RNA-seq
+
+  - id: wgs_longread
+    priority: 80
+    conditions:
+      platform_in: [PACBIO, ONT]
+    assay_type: WGS
+
+  - id: wgs_illumina_bam_large
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format_not: ".cram"
+      file_size_gb_gt: 50
+    assay_type: WGS
+
+  - id: wes_illumina_bam_small
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format_not: ".cram"
+      file_size_gb_lt: 20
+    assay_type: WES
+
+  - id: wgs_illumina_cram_large
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format: ".cram"
+      file_size_gb_gt: 20
+    assay_type: WGS
+
+  - id: wes_illumina_cram_small
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format: ".cram"
+      file_size_gb_lt: 8
+    assay_type: WES
+
+---
+# =============================================================================
+# ILLUMINA INSTRUMENT ID PREFIX MAPPING
+# =============================================================================
+
+illumina_instruments:
+  - prefix: "A0"
+    model: "NovaSeq 6000"
+  - prefix: "A1"
+    model: "NovaSeq 6000"
+  - prefix: "A"
+    model: "NovaSeq"
+  - prefix: "M"
+    model: "MiSeq"
+  - prefix: "D"
+    model: "HiSeq 2500"
+  - prefix: "E"
+    model: "HiSeq X"
+  - prefix: "VH"
+    model: "NextSeq 2000"
+  - prefix: "N"
+    model: "NextSeq"
+  - prefix: "K"
+    model: "HiSeq 4000"
+  - prefix: "J"
+    model: "HiSeq 3000"
+
+---
+# =============================================================================
+# REFERENCE CONTIG LENGTHS
+# =============================================================================
+# Chromosome lengths for definitive reference detection
+
+reference_contig_lengths:
+  # All 22 autosomes + X + Y for each assembly.
+  # Every chromosome has a unique length per assembly (min diff 41Kbp),
+  # so even a single-contig VCF can be definitively classified.
+  GRCh38:
+    chr1: 248956422
+    chr2: 242193529
+    chr3: 198295559
+    chr4: 190214555
+    chr5: 181538259
+    chr6: 170805979
+    chr7: 159345973
+    chr8: 145138636
+    chr9: 138394717
+    chr10: 133797422
+    chr11: 135086622
+    chr12: 133275309
+    chr13: 114364328
+    chr14: 107043718
+    chr15: 101991189
+    chr16: 90338345
+    chr17: 83257441
+    chr18: 80373285
+    chr19: 58617616
+    chr20: 64444167
+    chr21: 46709983
+    chr22: 50818468
+    chrX: 156040895
+    chrY: 57227415
+
+  GRCh37:
+    chr1: 249250621
+    chr2: 243199373
+    chr3: 198022430
+    chr4: 191154276
+    chr5: 180915260
+    chr6: 171115067
+    chr7: 159138663
+    chr8: 146364022
+    chr9: 141213431
+    chr10: 135534747
+    chr11: 135006516
+    chr12: 133851895
+    chr13: 115169878
+    chr14: 107349540
+    chr15: 102531392
+    chr16: 90354753
+    chr17: 81195210
+    chr18: 78077248
+    chr19: 59128983
+    chr20: 63025520
+    chr21: 48129895
+    chr22: 51304566
+    chrX: 155270560
+    chrY: 59373566
+
+  CHM13:
+    chr1: 248387497
+    chr2: 242696747
+    chr3: 201106605
+    chr4: 193574945
+    chr5: 182045439
+    chr6: 172126628
+    chr7: 160567428
+    chr8: 146259331
+    chr9: 150617247
+    chr10: 134758134
+    chr11: 135127769
+    chr12: 133324548
+    chr13: 113566686
+    chr14: 101161492
+    chr15: 99753195
+    chr16: 96330374
+    chr17: 84276897
+    chr18: 80542538
+    chr19: 61707364
+    chr20: 66210255
+    chr21: 45090682
+    chr22: 51324926
+    chrX: 154259566
+    chrY: 62460029

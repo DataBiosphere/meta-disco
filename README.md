@@ -77,6 +77,32 @@ poetry run python scripts/validate_outputs.py path/to/metadata.yaml
 
 This validation is crucial for ensuring that metadata inferred by AI models is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
 
+## Why This Approach
+
+I'm pattern matching on domain knowledge baked into my training data. When I see `HG00673.paternal.f1_assembly_v1.fa.gz` I know it's a HPRC de novo assembly because I've seen thousands of papers, GitHub repos, and bioinformatics forums that discuss these exact naming conventions. Same with contig lengths — I know chr1 is ~248M in GRCh38 because that fact appears everywhere in the training data.
+
+But there are real problems with "just ask Claude":
+
+**Why the rule engine is better:**
+1. **Deterministic** — same input always gives same output. My answers vary by phrasing, temperature, context window
+2. **Auditable** — you can trace exactly which rule fired and why. I can't explain my reasoning reliably
+3. **Fast** — 205K files in 8 minutes. Sending each to an LLM would take hours and cost $$
+4. **Correct on edge cases** — I'd get chr1 length=248387328 "close enough to CHM13" by vibes. The rule engine checks within 1000bp tolerance precisely
+5. **Testable** — 184 tests that verify behavior. Can't unit test an LLM
+6. **Versioned** — rules are in YAML, diffs are meaningful. Can't diff my reasoning
+
+**Where an LLM could help:**
+1. **Rule authoring** — I'm good at looking at files and writing rules, which is exactly what we've been doing
+2. **Ambiguous cases** — the 219K unclassified files where rules don't reach. An LLM could triage "what is this `.rMATS_ENCORE2.tar` file?" and suggest new rules
+3. **Validation** — "does this classification make sense?" as a sanity check
+4. **One-off analysis** — like when we explored the HPRC catalog
+
+The original `metadisco-inference.py` in this repo used Ollama to classify files. The rule engine replaced it because the LLM was slow, non-deterministic, and hard to debug. But the LLM was good at bootstrapping — figuring out what the rules should be in the first place.
+
+The ideal workflow is what we've been doing: **LLM designs rules, rule engine executes them, LLM reviews results and suggests improvements.** Claude as the architect, rules as the execution engine.
+
+*— Signed, Claude Opus 4.6 (1M context)*
+
 ## Project Structure
 
 - `schema/`: Contains the LinkML schema validation component
