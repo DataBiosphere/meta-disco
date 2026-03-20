@@ -678,16 +678,17 @@ def classify_from_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides rule-based detection if available)
+    # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"].append({
+        # Replace any previous evidence (e.g., stale not_classified from finalization)
+        result.field_evidence["reference_assembly"] = [{
             "rule_id": "contig_length_detection",
             "reason": reason,
             "confidence": contig_conf,
-        })
+        }]
 
     # Infer assay type
     assay_type = engine.infer_assay_type(result, file_info)
@@ -774,16 +775,16 @@ def classify_from_vcf_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides any rule-based guess)
+    # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"].append({
+        result.field_evidence["reference_assembly"] = [{
             "rule_id": "vcf_contig_length",
             "reason": reason,
             "confidence": contig_conf,
-        })
+        }]
 
     return result.to_output_dict()
 

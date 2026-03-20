@@ -131,6 +131,58 @@ class TestBamEval:
         for field in ["data_modality", "reference_assembly", "platform"]:
             assert field in result
 
+    def test_platform_confidence_not_zero(self):
+        """Platform detection from @RG PL: should have meaningful confidence."""
+        header = "\n".join([
+            "@HD\tVN:1.6\tSO:coordinate",
+            "@SQ\tSN:chr1\tLN:248956422",
+            "@RG\tID:sample1\tPL:ILLUMINA\tSM:sample1",
+        ])
+        result = classify_from_header(header)
+        platform = result["platform"]
+        assert platform["value"] == "ILLUMINA"
+        # We're certain it's Illumina — confidence should reflect that
+        assert platform["confidence"] > 0, (
+            f"Platform ILLUMINA detected but confidence is {platform['confidence']} — "
+            f"should be > 0 since PL:ILLUMINA is a definitive signal"
+        )
+
+    def test_no_stale_not_classified_evidence(self):
+        """When a field gets a real value, it shouldn't also have a stale
+        not_classified evidence entry from finalization."""
+        header = "\n".join([
+            "@HD\tVN:1.6\tSO:coordinate",
+            "@SQ\tSN:chr1\tLN:248956422",
+            "@SQ\tSN:chr2\tLN:242193529",
+            "@RG\tID:sample1\tPL:ILLUMINA",
+            "@PG\tID:bwa\tPN:bwa",
+        ])
+        result = classify_from_header(header)
+        ref = result["reference_assembly"]
+        assert ref["value"] == "GRCh38"
+        # Should NOT have a not_classified evidence entry alongside the real one
+        stale = [e for e in ref["evidence"] if e["rule_id"] == "not_classified"]
+        assert len(stale) == 0, (
+            f"reference_assembly has value GRCh38 but also has stale "
+            f"not_classified evidence: {stale}"
+        )
+
+    def test_assay_type_inferred_for_illumina_wgs(self):
+        """Illumina + BWA + large CRAM should get assay_type WGS."""
+        header = "\n".join([
+            "@HD\tVN:1.6\tSO:coordinate",
+            "@SQ\tSN:chr1\tLN:248956422",
+            "@SQ\tSN:chr2\tLN:242193529",
+            "@RG\tID:sample1\tPL:ILLUMINA",
+            "@PG\tID:bwa\tPN:bwa",
+        ])
+        result = classify_from_header(header, file_size=50_000_000_000)  # 50GB
+        assay = result["assay_type"]
+        assert assay["value"] != NOT_CLASSIFIED, (
+            f"assay_type should be inferred for Illumina/BWA/50GB but got "
+            f"not_classified. Evidence: {assay['evidence']}"
+        )
+
 
 # =============================================================================
 # VCF CLASSIFICATION
