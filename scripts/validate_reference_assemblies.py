@@ -218,14 +218,18 @@ def validate_classified_files(sample_size: int = 0) -> dict:
         print(f"  Error loading BAM: {e}")
 
     # Summary
-    print(f"\nVCF files: {results['vcf']['total']:,}")
-    print(f"  With reference: {results['vcf']['with_ref']:,} ({100*results['vcf']['with_ref']/results['vcf']['total']:.1f}%)")
+    vcf_total = results['vcf']['total']
+    print(f"\nVCF files: {vcf_total:,}")
+    if vcf_total > 0:
+        print(f"  With reference: {results['vcf']['with_ref']:,} ({100*results['vcf']['with_ref']/vcf_total:.1f}%)")
     for ref, count in sorted(results["vcf"]["by_assembly"].items(), key=lambda x: -x[1]):
         pct = 100 * count / results["vcf"]["with_ref"] if results["vcf"]["with_ref"] else 0
         print(f"    {ref}: {count:,} ({pct:.1f}%)")
 
-    print(f"\nBAM/CRAM files: {results['bam']['total']:,}")
-    print(f"  With reference: {results['bam']['with_ref']:,} ({100*results['bam']['with_ref']/results['bam']['total']:.1f}%)")
+    bam_total = results['bam']['total']
+    print(f"\nBAM/CRAM files: {bam_total:,}")
+    if bam_total > 0:
+        print(f"  With reference: {results['bam']['with_ref']:,} ({100*results['bam']['with_ref']/bam_total:.1f}%)")
     for ref, count in sorted(results["bam"]["by_assembly"].items(), key=lambda x: -x[1]):
         pct = 100 * count / results["bam"]["with_ref"] if results["bam"]["with_ref"] else 0
         print(f"    {ref}: {count:,} ({pct:.1f}%)")

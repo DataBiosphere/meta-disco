@@ -248,10 +248,13 @@ def propagate_to_index_files(
     print(f"\n{'=' * 70}")
     print(f"TOTAL:")
     print(f"  Index files:        {total_all:>7,}")
-    print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
-    print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all/total_all*100:.1f}%)")
-    print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
-    print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
+    if total_all > 0:
+        print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
+        print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all/total_all*100:.1f}%)")
+        print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
+        print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
+    else:
+        print(f"  No index files found")
     print("=" * 70)
 
     # Print sample of unmatched files for diagnostics

@@ -144,13 +144,11 @@ def get_vcf_header(md5sum: str, file_name: str = "", is_gzipped: bool = True,
         # Extract header lines and variant lines
         header_lines = []
         variant_lines = []
-        in_header = True
 
         for line in text.split('\n'):
             if line.startswith('#'):
                 header_lines.append(line)
             elif line.strip():
-                in_header = False
                 # Collect variant lines for position-based reference detection
                 if len(variant_lines) < 100:
                     variant_lines.append(line)
