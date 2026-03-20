@@ -367,10 +367,7 @@ def detect_reference_from_contig_lengths(
         return None, 0, 0.0
 
     # Score each reference
-    best_assembly = None
-    best_matches = 0
-    best_confidence = 0.0
-
+    scores = {}
     for assembly, ref_lengths in reference_lengths.items():
         matches = 0
         for chrom, expected_len in ref_lengths.items():
@@ -379,13 +376,20 @@ def detect_reference_from_contig_lengths(
             actual_len = contig_lengths.get(chrom) or contig_lengths.get(normalized)
             if actual_len and abs(actual_len - expected_len) <= tolerance:
                 matches += 1
+        if matches > 0:
+            scores[assembly] = matches
 
-        if matches > best_matches:
-            best_matches = matches
-            best_assembly = assembly
-            # Confidence based on fraction of reference chroms matched
-            best_confidence = min(0.95, 0.5 + (matches / len(ref_lengths)) * 0.45)
+    if not scores:
+        return None, 0, 0.0
 
+    best_matches = max(scores.values())
+    # If multiple assemblies tied for best, evidence is ambiguous
+    tied = [a for a, m in scores.items() if m == best_matches]
+    if len(tied) > 1:
+        return None, 0, 0.0
+
+    best_assembly = tied[0]
+    best_confidence = min(0.95, 0.5 + (best_matches / len(reference_lengths[best_assembly])) * 0.45)
     return best_assembly, best_matches, best_confidence
 
 

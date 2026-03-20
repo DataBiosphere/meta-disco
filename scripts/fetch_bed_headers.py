@@ -269,9 +269,7 @@ def _pick_closest_reference(
     coordinates come closest to (but don't exceed) the chromosome lengths. Files
     covering the full chromosome will have max coordinates near the chromosome length.
     """
-    best_assembly = None
-    best_score = -1
-
+    scores = {}
     for assembly in candidates:
         chrom_lengths = ref_lengths[assembly]
         score = 0
@@ -291,12 +289,16 @@ def _pick_closest_reference(
                 matched += 1
 
         if matched > 0:
-            avg_score = score / matched
-            if avg_score > best_score:
-                best_score = avg_score
-                best_assembly = assembly
+            scores[assembly] = score / matched
 
-    return best_assembly
+    if not scores:
+        return None
+
+    best_score = max(scores.values())
+    tied = [a for a, s in scores.items() if abs(s - best_score) < 0.001]
+    if len(tied) > 1:
+        return None  # Ambiguous — don't guess
+    return tied[0]
 
 
 def classify_bed_file(md5sum: str, file_name: str, file_size: int | None = None,
