@@ -65,14 +65,7 @@ def classify_images(metadata_path: Path, output_path: Path):
             "entry_id": f.get("entry_id"),
             "dataset_id": f.get("dataset_id"),
             "dataset_title": f.get("dataset_title"),
-            "data_modality": result.data_modality,
-            "data_type": result.data_type,
-            "assay_type": result.assay_type,
-            "platform": result.platform,
-            "reference_assembly": result.reference_assembly,
-            "confidence": result.confidence,
-            "matched_rules": result.rules_matched,
-            "reasons": result.reasons,
+            "classifications": result.to_output_dict(),
         })
 
     # Print summary
