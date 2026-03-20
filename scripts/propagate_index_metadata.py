@@ -20,7 +20,23 @@ def _get_field(record: dict, field: str):
         if isinstance(entry, dict) and "value" in entry:
             return entry["value"]
     # Flat format: {"field": value}
-    return record.get(field)
+    v = record.get(field)
+    if isinstance(v, dict) and "value" in v:
+        return v["value"]
+    return v
+
+
+def _get_max_confidence(record: dict) -> float:
+    """Extract max confidence from either format."""
+    cls = record.get("classifications", {})
+    if isinstance(cls, dict):
+        confs = []
+        for v in cls.values():
+            if isinstance(v, dict) and "confidence" in v:
+                confs.append(v["confidence"])
+        if confs:
+            return max(confs)
+    return record.get("confidence", 0.0) or 0.0
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -83,6 +99,7 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
                     "assay_type": _get_field(c, "assay_type"),
                     "platform": _get_field(c, "platform"),
                     "reference_assembly": _get_field(c, "reference_assembly"),
+                    "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }
 
@@ -99,6 +116,7 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
                     "assay_type": _get_field(c, "assay_type"),
                     "platform": _get_field(c, "platform"),
                     "reference_assembly": _get_field(c, "reference_assembly"),
+                    "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }
 
@@ -279,11 +297,12 @@ def propagate_to_index_files(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
+    _sentinels = {"not_classified", "not_applicable", None}
     inherited_evidence = lambda field_val, parent: [{
         "rule_id": "inherited_from_parent",
         "reason": f"Inherited from parent file: {parent}",
         "confidence": 0.95,
-    }] if field_val else [{
+    }] if field_val and field_val not in _sentinels else [{
         "rule_id": "inherited_from_parent",
         "reason": f"Parent file {parent} had no value for this field",
         "confidence": 0.0,

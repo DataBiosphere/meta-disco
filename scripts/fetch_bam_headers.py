@@ -407,15 +407,11 @@ def print_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Reference: {c.get('reference_assembly')}")
-        print(f"  Platform: {c.get('platform')}")
-        print(f"  Aligned: {c.get('is_aligned')}")
-        print(f"  Rules matched: {', '.join(c.get('matched_rules', []))}")
-        if c.get("evidence"):
-            print("  Evidence:")
-            for e in c["evidence"][:3]:
-                print(f"    - {e['rule_id']}: {e['matched']}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Reference: {_val(c, 'reference_assembly')}")
+        print(f"  Platform: {_val(c, 'platform')}")
+        print(f"  Aligned: {_val(c, 'is_aligned')}")
+        # Evidence is in per-field format under classifications
 
     print("=" * 70)
 

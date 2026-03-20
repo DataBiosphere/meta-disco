@@ -100,8 +100,15 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
 
     # Count by modality
     modalities = {}
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        return rec.get(field)
+
     for r in results:
-        mod = r.get("data_modality") or "N/A"
+        mod = _val(r, "data_modality") or "N/A"
         modalities[mod] = modalities.get(mod, 0) + 1
 
     print("\nBy modality:")
@@ -111,7 +118,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     # Count by reference
     refs = {}
     for r in results:
-        ref = r.get("reference_assembly") or "N/A"
+        ref = _val(r, "reference_assembly") or "N/A"
         refs[ref] = refs.get(ref, 0) + 1
 
     print("\nBy reference_assembly:")

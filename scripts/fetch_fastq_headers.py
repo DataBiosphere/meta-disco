@@ -402,14 +402,14 @@ def print_fastq_classification_summary(classifications: list[dict]):
         mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        if c.get("is_paired_end"):
+        if _val(c, "is_paired_end"):
             paired_count += 1
 
-        model = c.get("instrument_model")
+        model = _val(c, "instrument_model")
         if model:
             instrument_models[model] = instrument_models.get(model, 0) + 1
 
-        source = c.get("archive_source")
+        source = _val(c, "archive_source")
         if source:
             archive_sources[source] = archive_sources.get(source, 0) + 1
 
@@ -441,14 +441,15 @@ def print_fastq_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Platform: {c.get('platform')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Paired-end: {c.get('is_paired_end')}")
-        if c.get("instrument_model"):
-            print(f"  Instrument: {c.get('instrument_model')}")
-        if c.get("archive_accession"):
-            print(f"  Archive: {c.get('archive_source')} - {c.get('archive_accession')}")
-        print(f"  Sample read: {c.get('sample_reads', [''])[0][:70]}...")
+        print(f"  Platform: {_val(c, 'platform')}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Paired-end: {_val(c, 'is_paired_end')}")
+        inst = _val(c, 'instrument_model')
+        if inst:
+            print(f"  Instrument: {inst}")
+        acc = _val(c, 'archive_accession')
+        if acc:
+            print(f"  Archive: {_val(c, 'archive_source')} - {acc}")
 
     print("=" * 70)
 

@@ -134,15 +134,19 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > result.confidence:
                 result.reference_assembly = coord_ref
                 result.confidence = max(result.confidence, coord_conf)
-                result.rules_matched.append("bed_coordinate_reference")
-                result.reasons.append(coord_rationale)
+                result.field_evidence["reference_assembly"] = [{
+                    "rule_id": "bed_coordinate_reference",
+                    "reason": coord_rationale,
+                    "confidence": coord_conf,
+                }]
         elif md5 and md5 in ref_evidence and coord_ref is None and coord_conf == 0:
-            # Coordinate detection ran but couldn't determine reference
-            # (e.g., non-standard contig names from de novo assemblies)
             if "Non-standard chromosome" in coord_rationale:
                 result.reference_assembly = NOT_APPLICABLE
-                result.rules_matched.append("bed_nonstandard_contigs")
-                result.reasons.append(coord_rationale)
+                result.field_evidence["reference_assembly"] = [{
+                    "rule_id": "bed_nonstandard_contigs",
+                    "reason": coord_rationale,
+                    "confidence": 0.0,
+                }]
 
         # Update stats
         data_modality = result.data_modality
@@ -156,7 +160,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             stats["with_reference"] += 1
         stats["by_reference"][reference_assembly or "N/A"] = stats["by_reference"].get(reference_assembly or "N/A", 0) + 1
 
-        for rule_id in result.rules_matched:
+        for rule_id in result.rules_matched:  # computed property, read-only
             stats["by_rule"][rule_id] = stats["by_rule"].get(rule_id, 0) + 1
 
         results.append({

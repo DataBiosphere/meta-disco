@@ -479,13 +479,9 @@ def print_vcf_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Variant Type: {c.get('variant_type')}")
-        print(f"  Reference: {c.get('reference_assembly')}")
-        print(f"  Caller: {c.get('caller')}")
-        print(f"  Rules matched: {', '.join(c.get('matched_rules', [])[:5])}")
-        if c.get("warnings"):
-            print(f"  Warnings: {c['warnings']}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Data Type: {_val(c, 'data_type')}")
+        print(f"  Reference: {_val(c, 'reference_assembly')}")
 
     print("=" * 70)
 
