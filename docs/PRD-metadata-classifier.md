@@ -365,7 +365,7 @@ Index files (`.tbi`, `.csi`, `.bai`, `.crai`, `.pbi`) inherit metadata from thei
 | `.bai` | `.bam` | 99.9% | BAM index |
 | `.pbi` | `.bam` | 97.2% | PacBio BAM index |
 
-**Implementation**: `scripts/classify_index_files.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_index_files.py` (index inheritance logic implemented directly in Python)
 
 **Results** (224,037 index files):
 - 223,953 matched to parent (99.96%)
