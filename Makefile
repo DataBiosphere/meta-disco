@@ -1,19 +1,19 @@
-.PHONY: test classify download fetch-bam fetch-vcf fetch-fastq fetch-fasta fetch-bed clean help
+.PHONY: test classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
 	@echo ""
-	@echo "  make test         Run all tests"
-	@echo "  make classify     Run full classification pipeline (all file types, parallel)"
-	@echo "  make download     Download fresh AnVIL metadata from API"
+	@echo "  make test            Run all tests"
+	@echo "  make classify        Run full classification pipeline (all file types, parallel)"
+	@echo "  make download        Download fresh AnVIL metadata from API"
 	@echo ""
-	@echo "  make fetch-bam    Fetch BAM/CRAM headers from S3 (network required)"
-	@echo "  make fetch-vcf    Fetch VCF headers from S3 (network required)"
-	@echo "  make fetch-fastq  Fetch FASTQ headers from S3 (network required)"
-	@echo "  make fetch-fasta  Fetch FASTA headers from S3 (network required)"
-	@echo "  make fetch-bed    Fetch BED file data from S3 (network required)"
+	@echo "  make classify-bam    Classify BAM/CRAM files (network required)"
+	@echo "  make classify-vcf    Classify VCF files (network required)"
+	@echo "  make classify-fastq  Classify FASTQ files (network required)"
+	@echo "  make classify-fasta  Classify FASTA files (network required)"
+	@echo "  make classify-bed    Classify BED files (network required)"
 	@echo ""
-	@echo "  make clean        Remove cached .pyc files"
+	@echo "  make clean           Remove cached .pyc files"
 
 test:
 	python -m pytest tests/ -v
@@ -24,20 +24,20 @@ classify:
 download:
 	python scripts/download_anvil_metadata.py
 
-fetch-bam:
-	python scripts/fetch_bam_headers.py -i data/anvil_files_metadata.json -w 4
+classify-bam:
+	python scripts/classify_bam_files.py -i data/anvil_files_metadata.json -w 4
 
-fetch-vcf:
-	python scripts/fetch_vcf_headers.py -i data/anvil_files_metadata.json -w 4
+classify-vcf:
+	python scripts/classify_vcf_files.py -i data/anvil_files_metadata.json -w 4
 
-fetch-fastq:
-	python scripts/fetch_fastq_headers.py -i data/anvil_files_metadata.json -w 4
+classify-fastq:
+	python scripts/classify_fastq_files.py -i data/anvil_files_metadata.json -w 4
 
-fetch-fasta:
-	python scripts/fetch_fasta_headers.py -i data/anvil_files_metadata.json -w 4
+classify-fasta:
+	python scripts/classify_fasta_files.py -i data/anvil_files_metadata.json -w 4
 
-fetch-bed:
-	python scripts/fetch_bed_headers.py -i data/anvil_files_metadata.json -w 4
+classify-bed:
+	python scripts/classify_bed_files.py -i data/anvil_files_metadata.json -w 4
 
 clean:
 	find . -name '*.pyc' -delete

@@ -21,10 +21,10 @@ from src.meta_disco.rule_engine import RuleEngine
 from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 
 # Import the actual script functions
-from fetch_bam_headers import classify_single_file as classify_bam
-from fetch_vcf_headers import classify_single_vcf as classify_vcf
-from fetch_fastq_headers import classify_single_fastq as classify_fastq
-from fetch_fasta_headers import classify_single_fasta as classify_fasta
+from classify_bam_files import classify_single_file as classify_bam
+from classify_vcf_files import classify_single_vcf as classify_vcf
+from classify_fastq_files import classify_single_fastq as classify_fastq
+from classify_fasta_files import classify_single_fasta as classify_fasta
 
 engine = RuleEngine()
 
@@ -61,7 +61,7 @@ def assert_output_format(record):
 
 
 # =============================================================================
-# BAM/CRAM — end-to-end through fetch_bam_headers.classify_single_file
+# BAM/CRAM — end-to-end through classify_bam_files.classify_single_file
 # =============================================================================
 
 @pytest.mark.skipif(not EVIDENCE_BAM.exists(), reason="No BAM evidence cache")
@@ -117,7 +117,7 @@ class TestBamE2E:
 
 
 # =============================================================================
-# VCF — end-to-end through fetch_vcf_headers.classify_single_vcf
+# VCF — end-to-end through classify_vcf_files.classify_single_vcf
 # =============================================================================
 
 @pytest.mark.skipif(not EVIDENCE_VCF.exists(), reason="No VCF evidence cache")
@@ -166,7 +166,7 @@ class TestVcfE2E:
 
 
 # =============================================================================
-# FASTQ — end-to-end through fetch_fastq_headers.classify_single_fastq
+# FASTQ — end-to-end through classify_fastq_files.classify_single_fastq
 # =============================================================================
 
 @pytest.mark.skipif(not EVIDENCE_FASTQ.exists(), reason="No FASTQ evidence cache")
@@ -323,7 +323,7 @@ class TestRuleEngineE2E:
 
 
 # =============================================================================
-# FASTA — end-to-end through fetch_fasta_headers.classify_single_fasta
+# FASTA — end-to-end through classify_fasta_files.classify_single_fasta
 # =============================================================================
 
 @pytest.mark.skipif(not EVIDENCE_FASTA.exists(), reason="No FASTA evidence cache")
