@@ -322,9 +322,8 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
-        assert val(result, "confidence") >= 0.90
 
     def test_illumina_instrument_model(self):
         """Extract Illumina instrument model."""
@@ -370,9 +369,8 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
         assert result["archive_accession"] == "ERR1395578"
-        assert val(result, "confidence") >= 0.85
 
     def test_ena_hiseq_2500(self):
         """Classify ENA-reformatted FASTQ with HiSeq 2500 instrument."""
@@ -381,7 +379,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
 
     def test_pacbio_ccs(self):
         """Classify PacBio CCS/HiFi FASTQ."""

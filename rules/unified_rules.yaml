@@ -2214,19 +2214,18 @@ rules:
     terminal: false
 
   # ---------------------------------------------------------------------------
-  # Default genomic modality for FASTQ when platform detected but no modality
+  # Default for FASTQ when platform detected but no modality
   # ---------------------------------------------------------------------------
-  - id: fastq_genomic_default
+  - id: fastq_modality_unknown
     tier: 3
     scope: fastq_header
     when:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       modality_not_set: true
     then:
-      data_modality: genomic
       data_type: reads
-    confidence: 0.60
-    rationale: "Default to genomic for FASTQ files when no modality indicators in filename"
+    confidence: 0.0
+    rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
     terminal: false
 
   # ===========================================================================
