@@ -10,6 +10,34 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+
+def _get_field(record: dict, field: str):
+    """Extract a classification field from either per-field or flat format."""
+    # Per-field format: {"classifications": {"field": {"value": ...}}}
+    cls = record.get("classifications", {})
+    if isinstance(cls, dict) and field in cls:
+        entry = cls[field]
+        if isinstance(entry, dict) and "value" in entry:
+            return entry["value"]
+    # Flat format: {"field": value}
+    v = record.get(field)
+    if isinstance(v, dict) and "value" in v:
+        return v["value"]
+    return v
+
+
+def _get_max_confidence(record: dict) -> float:
+    """Extract max confidence from either format."""
+    cls = record.get("classifications", {})
+    if isinstance(cls, dict):
+        confs = []
+        for v in cls.values():
+            if isinstance(v, dict) and "confidence" in v:
+                confs.append(v["confidence"])
+        if confs:
+            return max(confs)
+    return record.get("confidence", 0.0) or 0.0
+
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
 INDEX_TO_PARENT = {
@@ -66,12 +94,12 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
             md5 = c.get("md5sum")
             if md5:
                 classifications[md5] = {
-                    "data_modality": c.get("data_modality"),
-                    "data_type": c.get("data_type"),
-                    "assay_type": c.get("assay_type"),
-                    "platform": c.get("platform"),
-                    "reference_assembly": c.get("reference_assembly"),
-                    "confidence": c.get("confidence"),
+                    "data_modality": _get_field(c, "data_modality"),
+                    "data_type": _get_field(c, "data_type"),
+                    "assay_type": _get_field(c, "assay_type"),
+                    "platform": _get_field(c, "platform"),
+                    "reference_assembly": _get_field(c, "reference_assembly"),
+                    "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }
 
@@ -83,12 +111,12 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
             md5 = c.get("md5sum")
             if md5:
                 classifications[md5] = {
-                    "data_modality": c.get("data_modality"),
-                    "data_type": c.get("data_type"),
-                    "assay_type": c.get("assay_type"),
-                    "platform": c.get("platform"),
-                    "reference_assembly": c.get("reference_assembly"),
-                    "confidence": c.get("confidence"),
+                    "data_modality": _get_field(c, "data_modality"),
+                    "data_type": _get_field(c, "data_type"),
+                    "assay_type": _get_field(c, "assay_type"),
+                    "platform": _get_field(c, "platform"),
+                    "reference_assembly": _get_field(c, "reference_assembly"),
+                    "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }
 
@@ -269,32 +297,37 @@ def propagate_to_index_files(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
+    _sentinels = {"not_classified", "not_applicable", None}
+
+    def inherited_evidence(field_val, parent):
+        """Build evidence entry for an inherited classification field."""
+        if field_val and field_val not in _sentinels:
+            return [{"rule_id": "inherited_from_parent",
+                     "reason": f"Inherited from parent file: {parent}",
+                     "confidence": 0.95}]
+        return [{"rule_id": "inherited_from_parent",
+                 "reason": f"Parent file {parent} had no value for this field",
+                 "confidence": 0.0}]
+
     standard_results = []
     for r in results:
+        parent = r["parent_file"]
         standard_results.append({
             "file_name": r["file_name"],
             "file_format": r["file_format"],
             "md5sum": r.get("file_md5sum"),
-            "file_size": None,  # Not tracked for index files
+            "file_size": r.get("file_size"),
             "entry_id": r["entry_id"],
             "dataset_id": r["dataset_id"],
             "dataset_title": r["dataset_title"],
-            "data_modality": r["data_modality"],
-            "data_type": r.get("data_type"),
-            "assay_type": r.get("assay_type"),
-            "platform": r.get("platform"),
-            "reference_assembly": r["reference_assembly"],
-            "confidence": r["confidence"],
-            "matched_rules": ["inherited_from_parent"],
-            "evidence": [{
-                "rule_id": "inherited_from_parent",
-                "matched": f"Parent file: {r['parent_file']}",
-                "classification": r["data_modality"],
-                "confidence": r["confidence"],
-                "rationale": "Index files inherit metadata from their parent data files.",
-            }],
-            "parent_file": r["parent_file"],
+            "parent_file": parent,
             "parent_md5sum": r["parent_md5sum"],
+            "classifications": {
+                fld: (lambda evi: {"value": r.get(fld), "confidence": evi[0]["confidence"], "evidence": evi})(
+                    inherited_evidence(r.get(fld), parent)
+                )
+                for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
+            },
         })
 
     with open(output_path, "w") as f:

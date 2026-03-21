@@ -116,24 +116,13 @@ def classify_single_file(
 
     full = classify_from_header(header_text, file_size=file_size, file_format=file_format)
 
-    # Evidence files (data/evidence/) are immutable raw data — don't write
-    # classification results back into them. Classifications go in output/.
+    # full is already per-field format from to_output_dict()
     return {
         "file_name": file_name,
         "md5sum": md5sum,
         "file_size": file_size,
         "file_format": file_format,
-        "data_modality": full.get("data_modality"),
-        "data_type": full.get("data_type"),
-        "assay_type": full.get("assay_type"),
-        "reference_assembly": full.get("reference_assembly"),
-        "platform": full.get("platform"),
-        "confidence": full.get("confidence"),
-        "is_aligned": full.get("is_aligned"),
-        "rule_evidence": [
-            {"rule_id": r, "reason": rsn}
-            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
-        ],
+        "classifications": full,
     }
 
 
@@ -289,15 +278,13 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
 
     # Close writer and write final JSON
     writer.close()
-    save_final(output_path, len(needs_inspection), successful, failed, from_cache)
+    classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
     # Read back for summary
-    with open(output_path) as f:
-        final_data = json.load(f)
-    print_classification_summary(final_data.get("classifications", []))
+    print_classification_summary(classifications)
 
 
 def _ndjson_path(output_path: Path) -> Path:
@@ -351,6 +338,7 @@ def save_final(output_path: Path, total: int, successful: int, failed: int, from
 
     if ndjson.exists():
         ndjson.unlink()
+    return classifications
 
 
 def print_classification_summary(classifications: list[dict]):
@@ -370,17 +358,27 @@ def print_classification_summary(classifications: list[dict]):
     aligned_count = 0
     unaligned_count = 0
 
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        v = rec.get(field)
+        if isinstance(v, dict) and "value" in v:
+            return v["value"]
+        return v
+
     for c in classifications:
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        ref = c.get("reference_assembly") or "unknown"
+        ref = _val(c, "reference_assembly") or "unknown"
         references[ref] = references.get(ref, 0) + 1
 
-        plat = c.get("platform") or "unknown"
+        plat = _val(c, "platform") or "unknown"
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        if c.get("is_aligned"):
+        if _val(c, "is_aligned"):
             aligned_count += 1
         else:
             unaligned_count += 1
@@ -408,15 +406,11 @@ def print_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Reference: {c.get('reference_assembly')}")
-        print(f"  Platform: {c.get('platform')}")
-        print(f"  Aligned: {c.get('is_aligned')}")
-        print(f"  Rules matched: {', '.join(c.get('matched_rules', []))}")
-        if c.get("evidence"):
-            print("  Evidence:")
-            for e in c["evidence"][:3]:
-                print(f"    - {e['rule_id']}: {e['matched']}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Reference: {_val(c, 'reference_assembly')}")
+        print(f"  Platform: {_val(c, 'platform')}")
+        print(f"  Aligned: {_val(c, 'is_aligned')}")
+        # Evidence is in per-field format under classifications
 
     print("=" * 70)
 

@@ -65,14 +65,7 @@ def classify_images(metadata_path: Path, output_path: Path):
             "entry_id": f.get("entry_id"),
             "dataset_id": f.get("dataset_id"),
             "dataset_title": f.get("dataset_title"),
-            "data_modality": result.data_modality,
-            "data_type": result.data_type,
-            "assay_type": result.assay_type,
-            "platform": result.platform,
-            "reference_assembly": result.reference_assembly,
-            "confidence": result.confidence,
-            "matched_rules": result.rules_matched,
-            "reasons": result.reasons,
+            "classifications": result.to_output_dict(),
         })
 
     # Print summary
@@ -90,10 +83,17 @@ def classify_images(metadata_path: Path, output_path: Path):
     print(f"Total images: {total_all:,}")
     print("=" * 70)
 
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        return rec.get(field)
+
     # Count by modality
     modalities = {}
     for r in results:
-        mod = r.get("data_modality") or "N/A"
+        mod = _val(r, "data_modality") or "N/A"
         modalities[mod] = modalities.get(mod, 0) + 1
 
     print("\nBy modality:")

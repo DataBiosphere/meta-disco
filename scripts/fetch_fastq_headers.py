@@ -141,14 +141,14 @@ def classify_single_fastq(
     if not read_names:
         return None
 
-    classification = classify_from_fastq_header(read_names, file_name)
-    classification["file_name"] = file_name
-    classification["md5sum"] = md5sum
-    classification["file_size"] = file_size
-    classification["reads_sampled"] = len(read_names)
-    classification["sample_reads"] = read_names[:3]  # First 3 for preview
+    full = classify_from_fastq_header(read_names, file_name)
 
-    return classification
+    return {
+        "file_name": file_name,
+        "md5sum": md5sum,
+        "file_size": file_size,
+        "classifications": full,
+    }
 
 
 def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:
@@ -247,7 +247,8 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
     # Ensure evidence directory exists
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
-    classifications = []
+    writer = NdjsonWriter(output_path)
+
     successful = 0
     failed = 0
     from_cache = 0
@@ -263,7 +264,7 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
         with lock:
             processed += 1
             if result:
-                classifications.append(result)
+                writer.write(result)
                 successful += 1
                 if was_cached:
                     from_cache += 1
@@ -272,10 +273,6 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
 
             cache_indicator = "[cached] " if was_cached else ""
             print(f"\r[{processed}/{len(needs_inspection)}] {cache_indicator}{file_name[:45]:<52}", end="", flush=True)
-
-            # Save incremental progress every 500 files
-            if processed % 500 == 0:
-                save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache)
 
     if workers == 1:
         # Sequential processing
@@ -308,19 +305,47 @@ def process_fastq_files(input_path: Path, output_path: Path, limit: int | None =
     print(f"  New fetches: {successful - from_cache}")
     print(f"Failed to fetch header: {failed}")
 
-    # Save final results
-    save_progress(output_path, classifications, len(needs_inspection), successful, failed, from_cache, final=True)
+    # Close writer and write final JSON
+    writer.close()
+    classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
-    # Print summary
+    # Read back for summary
     print_fastq_classification_summary(classifications)
 
 
-def save_progress(output_path: Path, classifications: list, total: int,
-                  successful: int, failed: int, from_cache: int, final: bool = False):
-    """Save current progress to output file."""
+def _ndjson_path(output_path: Path) -> Path:
+    return output_path.with_suffix(".ndjson")
+
+
+class NdjsonWriter:
+    def __init__(self, output_path: Path):
+        self.path = _ndjson_path(output_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "w")
+        self._count = 0
+
+    def write(self, record: dict):
+        self._fh.write(json.dumps(record) + "\n")
+        self._count += 1
+        if self._count % 500 == 0:
+            self._fh.flush()
+
+    def close(self):
+        self._fh.flush()
+        self._fh.close()
+
+
+def save_final(output_path: Path, total: int, successful: int, failed: int, from_cache: int):
+    ndjson = _ndjson_path(output_path)
+    classifications = []
+    if ndjson.exists():
+        with open(ndjson) as f:
+            for line in f:
+                if line.strip():
+                    classifications.append(json.loads(line))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({
@@ -330,10 +355,13 @@ def save_progress(output_path: Path, classifications: list, total: int,
                 "successful": successful,
                 "failed": failed,
                 "from_cache": from_cache,
-                "complete": final,
+                "complete": True,
             },
             "classifications": classifications,
         }, f, indent=2)
+    if ndjson.exists():
+        ndjson.unlink()
+    return classifications
 
 
 def print_fastq_classification_summary(classifications: list[dict]):
@@ -353,21 +381,34 @@ def print_fastq_classification_summary(classifications: list[dict]):
     instrument_models = {}
     archive_sources = {}
 
+    def _val(rec, field):
+        """Extract value from per-field or flat format."""
+        # Check nested under "classifications" key
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        # Check top-level (direct from to_output_dict)
+        v = rec.get(field)
+        if isinstance(v, dict) and "value" in v:
+            return v["value"]
+        return v
+
     for c in classifications:
-        plat = c.get("platform") or "unknown"
+        plat = _val(c, "platform") or "unknown"
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        if c.get("is_paired_end"):
+        if _val(c, "is_paired_end"):
             paired_count += 1
 
-        model = c.get("instrument_model")
+        model = _val(c, "instrument_model")
         if model:
             instrument_models[model] = instrument_models.get(model, 0) + 1
 
-        source = c.get("archive_source")
+        source = _val(c, "archive_source")
         if source:
             archive_sources[source] = archive_sources.get(source, 0) + 1
 
@@ -399,14 +440,15 @@ def print_fastq_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Platform: {c.get('platform')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Paired-end: {c.get('is_paired_end')}")
-        if c.get("instrument_model"):
-            print(f"  Instrument: {c.get('instrument_model')}")
-        if c.get("archive_accession"):
-            print(f"  Archive: {c.get('archive_source')} - {c.get('archive_accession')}")
-        print(f"  Sample read: {c.get('sample_reads', [''])[0][:70]}...")
+        print(f"  Platform: {_val(c, 'platform')}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Paired-end: {_val(c, 'is_paired_end')}")
+        inst = _val(c, 'instrument_model')
+        if inst:
+            print(f"  Instrument: {inst}")
+        acc = _val(c, 'archive_accession')
+        if acc:
+            print(f"  Archive: {_val(c, 'archive_source')} - {acc}")
 
     print("=" * 70)
 

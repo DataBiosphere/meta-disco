@@ -1100,8 +1100,8 @@ rules:
       header_pattern: "ILLUMINA"
     then:
       platform: ILLUMINA
-    confidence: 0.0
-    rationale: "PL:ILLUMINA indicates Illumina short-read sequencing. Platform alone is insufficient to determine modality - requires program info or study context"
+    confidence: 0.95
+    rationale: "PL:ILLUMINA in @RG header — definitive Illumina platform tag"
     terminal: false
 
   - id: platform_ont

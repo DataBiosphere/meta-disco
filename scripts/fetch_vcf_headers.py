@@ -185,20 +185,11 @@ def classify_single_vcf(
 
     full = classify_from_vcf_header(header_text, file_size=file_size)
 
-    # Evidence files (data/evidence/) are immutable raw data — don't write
-    # classification results back into them. Classifications go in output/.
     return {
         "file_name": file_name,
         "md5sum": md5sum,
         "file_size": file_size,
-        "data_modality": full.get("data_modality"),
-        "data_type": full.get("data_type"),
-        "reference_assembly": full.get("reference_assembly"),
-        "confidence": full.get("confidence"),
-        "rule_evidence": [
-            {"rule_id": r, "reason": rsn}
-            for r, rsn in zip(full.get("matched_rules", []), full.get("reasons", []))
-        ],
+        "classifications": full,
     }
 
 
@@ -358,15 +349,13 @@ def process_vcf_files(input_path: Path, output_path: Path, limit: int | None = N
 
     # Close writer and write final JSON from NDJSON progress
     writer.close()
-    save_final(output_path, len(needs_inspection), successful, failed, from_cache)
+    classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
     print(f"Evidence cached in: {EVIDENCE_DIR}/")
 
     # Read back for summary
-    with open(output_path) as f:
-        final_data = json.load(f)
-    print_vcf_classification_summary(final_data.get("classifications", []))
+    print_vcf_classification_summary(classifications)
 
 
 def _ndjson_path(output_path: Path) -> Path:
@@ -421,6 +410,7 @@ def save_final(output_path: Path, total: int, successful: int, failed: int, from
     # Clean up NDJSON progress file
     if ndjson.exists():
         ndjson.unlink()
+    return classifications
 
 
 def print_vcf_classification_summary(classifications: list[dict]):
@@ -435,24 +425,28 @@ def print_vcf_classification_summary(classifications: list[dict]):
 
     # Aggregate stats
     modalities = {}
-    variant_types = {}
+    data_types = {}
     references = {}
-    callers = {}
+
+    def _val(rec, field):
+        cls = rec.get("classifications", {})
+        if isinstance(cls, dict) and field in cls:
+            v = cls[field]
+            return v["value"] if isinstance(v, dict) and "value" in v else v
+        v = rec.get(field)
+        if isinstance(v, dict) and "value" in v:
+            return v["value"]
+        return v
 
     for c in classifications:
-        mod = c.get("data_modality") or "unknown"
+        mod = _val(c, "data_modality") or "unknown"
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        vtype = c.get("variant_type") or "unknown"
-        variant_types[vtype] = variant_types.get(vtype, 0) + 1
+        dtype = _val(c, "data_type") or "unknown"
+        data_types[dtype] = data_types.get(dtype, 0) + 1
 
-        ref = c.get("reference_assembly") or "unknown"
+        ref = _val(c, "reference_assembly") or "unknown"
         references[ref] = references.get(ref, 0) + 1
-
-        caller = c.get("caller") or "unknown"
-        # Truncate long caller names
-        caller = caller[:40] + "..." if len(caller) > 40 else caller
-        callers[caller] = callers.get(caller, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
 
@@ -460,17 +454,13 @@ def print_vcf_classification_summary(classifications: list[dict]):
     for mod, count in sorted(modalities.items(), key=lambda x: -x[1]):
         print(f"  {mod:<40} {count:>5}")
 
-    print("\nVariant Types:")
-    for vtype, count in sorted(variant_types.items(), key=lambda x: -x[1]):
-        print(f"  {vtype:<40} {count:>5}")
+    print("\nData Types:")
+    for dtype, count in sorted(data_types.items(), key=lambda x: -x[1]):
+        print(f"  {dtype:<40} {count:>5}")
 
     print("\nReference Assemblies:")
     for ref, count in sorted(references.items(), key=lambda x: -x[1]):
         print(f"  {ref:<40} {count:>5}")
-
-    print("\nVariant Callers:")
-    for caller, count in sorted(callers.items(), key=lambda x: -x[1])[:15]:
-        print(f"  {caller:<40} {count:>5}")
 
     # Show sample evidence
     print("\n" + "-" * 70)
@@ -479,13 +469,9 @@ def print_vcf_classification_summary(classifications: list[dict]):
 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
-        print(f"  Modality: {c.get('data_modality')} (confidence: {c.get('confidence', 0):.0%})")
-        print(f"  Variant Type: {c.get('variant_type')}")
-        print(f"  Reference: {c.get('reference_assembly')}")
-        print(f"  Caller: {c.get('caller')}")
-        print(f"  Rules matched: {', '.join(c.get('matched_rules', [])[:5])}")
-        if c.get("warnings"):
-            print(f"  Warnings: {c['warnings']}")
+        print(f"  Modality: {_val(c, 'data_modality')}")
+        print(f"  Data Type: {_val(c, 'data_type')}")
+        print(f"  Reference: {_val(c, 'reference_assembly')}")
 
     print("=" * 70)
 

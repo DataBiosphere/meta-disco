@@ -678,50 +678,51 @@ def classify_from_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides rule-based detection if available)
+    # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.rules_matched.append("contig_length_detection")
-        result.reasons.append(reason)
-        result.rule_evidence.append({"rule_id": "contig_length_detection", "reason": reason, "confidence": contig_conf})
+        # Replace any previous evidence (e.g., stale not_classified from finalization)
+        result.field_evidence["reference_assembly"] = [{
+            "rule_id": "contig_length_detection",
+            "reason": reason,
+            "confidence": contig_conf,
+        }]
 
     # Infer assay type
     assay_type = engine.infer_assay_type(result, file_info)
 
-    # Build evidence list from matched rules
-    evidence = []
-    for rule_id in result.rules_matched:
-        evidence.append({
-            "rule_id": rule_id,
-            "matched": True,
-        })
-
-    # Check consistency
-    consistency = check_consistency(result.rules_matched, evidence)
+    # Check consistency using flattened rule list
+    flat_rules = [e["rule_id"] for entries in result.field_evidence.values() for e in entries]
+    consistency = check_consistency(flat_rules, [])
 
     # Apply confidence boost/penalty from consistency
     final_confidence = min(1.0, max(0.0, result.confidence + consistency["confidence_boost"]))
 
     # Default to genomic if platform detected but no modality
-    data_modality = result.data_modality
-    if data_modality in (None, NOT_CLASSIFIED) and result.platform not in (None, NOT_CLASSIFIED):
-        data_modality = "genomic"
+    if result.data_modality in (None, NOT_CLASSIFIED) and result.platform not in (None, NOT_CLASSIFIED):
+        result.data_modality = "genomic"
+        result.field_evidence["data_modality"].append({
+            "rule_id": "platform_default_genomic",
+            "reason": "Platform detected but no modality — defaulting to genomic",
+            "confidence": 0.5,
+        })
 
-    return {
-        "data_modality": data_modality,
-        "data_type": result.data_type or "alignments",
-        "assay_type": assay_type or result.assay_type,
-        "reference_assembly": result.reference_assembly,
-        "platform": result.platform,
-        "confidence": final_confidence,
-        "is_aligned": is_aligned,
-        "matched_rules": result.rules_matched,
-        "reasons": result.reasons,
-        "evidence": evidence,
-        "consistency": consistency,
-    }
+    # Apply inferred assay type only if not already set by a rule
+    if assay_type and result.assay_type in (None, NOT_CLASSIFIED):
+        result.assay_type = assay_type
+        result.field_evidence["assay_type"] = [{
+            "rule_id": "infer_assay_type",
+            "reason": f"Inferred {assay_type} from platform/modality/file size signals",
+            "confidence": 0.70,
+        }]
+
+    result.confidence = final_confidence
+    classifications = result.to_output_dict()
+    classifications["is_aligned"] = is_aligned
+    classifications["consistency"] = consistency
+    return classifications
 
 
 def classify_from_vcf_header(
@@ -779,36 +780,18 @@ def classify_from_vcf_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides any rule-based guess)
+    # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.rules_matched.append("vcf_contig_length")
-        result.reasons.append(reason)
-        result.rule_evidence.append({"rule_id": "vcf_contig_length", "reason": reason, "confidence": contig_conf})
+        result.field_evidence["reference_assembly"] = [{
+            "rule_id": "vcf_contig_length",
+            "reason": reason,
+            "confidence": contig_conf,
+        }]
 
-    # Build evidence list
-    evidence = []
-    for rule_id in result.rules_matched:
-        evidence.append({
-            "rule_id": rule_id,
-            "matched": True,
-        })
-
-    # Default to genomic for VCF files
-    data_modality = result.data_modality or "genomic"
-    data_type = result.data_type or "germline_variants"
-
-    return {
-        "data_modality": data_modality,
-        "data_type": data_type,
-        "reference_assembly": result.reference_assembly,
-        "confidence": result.confidence,
-        "matched_rules": result.rules_matched,
-        "reasons": result.reasons,
-        "evidence": evidence,
-    }
+    return result.to_output_dict()
 
 
 def classify_from_fastq_header(
@@ -846,20 +829,20 @@ def classify_from_fastq_header(
     # Use provided filename or generate one
     filename = file_name or "sample.fastq.gz"
 
-    # Handle empty input
+    # Handle empty input — return per-field format with empty evidence
     if not reads or not reads[0]:
+        empty_field = lambda v: {"value": v, "confidence": 0.0, "evidence": []}
         return {
-            "data_modality": None,
-            "data_type": "reads",
-            "platform": None,
-            "confidence": 0.0,
+            "data_modality": empty_field(None),
+            "data_type": empty_field("reads"),
+            "platform": empty_field(None),
+            "reference_assembly": empty_field(None),
+            "assay_type": empty_field(None),
             "is_paired_end": None,
             "instrument_model": None,
             "instrument_hint": None,
             "archive_accession": None,
             "archive_source": None,
-            "matched_rules": [],
-            "evidence": [],
         }
 
     # Get first read for classification
@@ -892,15 +875,9 @@ def classify_from_fastq_header(
             result.platform = result_stripped.platform
             result.data_modality = result_stripped.data_modality or result.data_modality
             result.confidence = max(result.confidence, result_stripped.confidence)
-            result.rules_matched.extend(result_stripped.rules_matched)
-
-    # Build evidence list
-    evidence = []
-    for rule_id in result.rules_matched:
-        evidence.append({
-            "rule_id": rule_id,
-            "matched": True,
-        })
+            # Merge per-field evidence
+            for fld, entries in result_stripped.field_evidence.items():
+                result.field_evidence[fld].extend(entries)
 
     # Detect paired-end from read names or filename
     is_paired_end = None
@@ -940,19 +917,13 @@ def classify_from_fastq_header(
             instrument_model = parsed.get("instrument_model")
             break
 
-    return {
-        "data_modality": result.data_modality,
-        "data_type": result.data_type or "reads",
-        "platform": result.platform,
-        "confidence": result.confidence,
-        "is_paired_end": is_paired_end,
-        "instrument_model": instrument_model,
-        "instrument_hint": instrument_hint,
-        "archive_accession": archive_accession,
-        "archive_source": archive_source,
-        "matched_rules": result.rules_matched,
-        "evidence": evidence,
-    }
+    classifications = result.to_output_dict()
+    classifications["is_paired_end"] = is_paired_end
+    classifications["instrument_model"] = instrument_model
+    classifications["instrument_hint"] = instrument_hint
+    classifications["archive_accession"] = archive_accession
+    classifications["archive_source"] = archive_source
+    return classifications
 
 
 def get_rules_documentation() -> str:
