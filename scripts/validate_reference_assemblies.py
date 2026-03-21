@@ -134,7 +134,7 @@ def validate_internal_mappings() -> dict:
     # CHM13 - validate against known T2T values
     # Source: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
     print("\nValidating CHM13 against T2T consortium values...", flush=True)
-    chm13_official = {
+    _chm13_official = {  # noqa: F841
         "1": 248387328,   # Note: slight difference from our value
         "2": 242696752,
         "3": 201105948,

@@ -6,7 +6,6 @@ for use in classification rules.
 
 import re
 from dataclasses import dataclass
-from typing import Iterator
 
 
 @dataclass

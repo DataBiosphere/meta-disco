@@ -664,7 +664,7 @@ def classify_from_header(
 
     # Detect reference from contig lengths first — definitive signal
     lines = header_text.strip().split("\n") if header_text else []
-    sq_lines = [l for l in lines if l.startswith("@SQ")]
+    sq_lines = [line for line in lines if line.startswith("@SQ")]
     is_aligned = bool(sq_lines) if lines else None
 
     from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
@@ -772,7 +772,7 @@ def classify_from_vcf_header(
     contig_conf = 0.0
     contig_matches = 0
     if header_text:
-        contig_lines = [l for l in header_text.split("\n") if l.startswith("##contig")]
+        contig_lines = [line for line in header_text.split("\n") if line.startswith("##contig")]
         if contig_lines:
             contig_ref, contig_matches, contig_conf = detect_from_contigs(contig_lines)
 
@@ -831,7 +831,8 @@ def classify_from_fastq_header(
 
     # Handle empty input — return per-field format with empty evidence
     if not reads or not reads[0]:
-        empty_field = lambda v: {"value": v, "confidence": 0.0, "evidence": []}
+        def empty_field(v):
+            return {"value": v, "confidence": 0.0, "evidence": []}
         return {
             "data_modality": empty_field(None),
             "data_type": empty_field("reads"),

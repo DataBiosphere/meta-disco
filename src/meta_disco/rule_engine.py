@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .models import ClassificationResult, FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
-from .rule_loader import UnifiedRule, UnifiedRules, get_unified_rules
+from .models import NOT_APPLICABLE, NOT_CLASSIFIED, ClassificationResult, FileInfo
+from .rule_loader import UnifiedRule, get_unified_rules
 
 
 @dataclass
@@ -366,7 +366,7 @@ class RuleEngine:
             return False
 
         # Parse BAM header once and cache on the file_info object
-        from .validators.header_extractors import parse_sam_header, match_sam_header_pattern
+        from .validators.header_extractors import match_sam_header_pattern, parse_sam_header
 
         if not hasattr(file_info, '_parsed_bam_header'):
             file_info._parsed_bam_header = parse_sam_header(file_info.bam_header)
@@ -388,7 +388,7 @@ class RuleEngine:
             return False
 
         # Parse VCF header once and cache on the file_info object
-        from .validators.header_extractors import parse_vcf_header, match_vcf_header_pattern
+        from .validators.header_extractors import match_vcf_header_pattern, parse_vcf_header
 
         if not hasattr(file_info, '_parsed_vcf_header'):
             file_info._parsed_vcf_header = parse_vcf_header(file_info.vcf_header)
@@ -419,7 +419,7 @@ class RuleEngine:
 
         if section == "@SQ" and file_info.bam_header is not None:
             # Check if @SQ section is missing
-            from .validators.header_extractors import parse_sam_header, has_sam_section
+            from .validators.header_extractors import has_sam_section, parse_sam_header
             header = parse_sam_header(file_info.bam_header)
             return not has_sam_section(header, section)
 

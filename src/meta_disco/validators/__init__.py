@@ -15,23 +15,23 @@ from .contig_lengths import (
 from .header_extractors import (
     SAMHeader,
     VCFHeader,
-    parse_sam_header,
-    parse_vcf_header,
     extract_sam_field,
+    get_contig_lines,
+    has_sam_section,
     match_sam_header_pattern,
     match_vcf_header_pattern,
-    has_sam_section,
-    get_contig_lines,
+    parse_sam_header,
+    parse_vcf_header,
 )
 from .read_name_parsers import (
+    detect_paired_end_indicators,
+    detect_platform_from_read_name,
     extract_archive_accession,
     infer_illumina_instrument_model,
     parse_illumina_read_name,
+    parse_mgi_read_name,
     parse_ont_read_name,
     parse_pacbio_read_name,
-    parse_mgi_read_name,
-    detect_paired_end_indicators,
-    detect_platform_from_read_name,
 )
 
 __all__ = [

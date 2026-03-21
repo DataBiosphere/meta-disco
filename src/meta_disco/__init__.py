@@ -1,7 +1,7 @@
 """Meta-disco rule engine for biological file classification."""
 
-from .models import FileInfo, ClassificationResult
-from .rule_engine import RuleEngine, ExtendedFileInfo, ExtendedClassificationResult
+from .models import ClassificationResult, FileInfo
+from .rule_engine import ExtendedClassificationResult, ExtendedFileInfo, RuleEngine
 
 __all__ = [
     "FileInfo",

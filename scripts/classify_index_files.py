@@ -274,7 +274,7 @@ def propagate_to_index_files(
             ref_all += s["with_ref"]
 
     print(f"\n{'=' * 70}")
-    print(f"TOTAL:")
+    print("TOTAL:")
     print(f"  Index files:        {total_all:>7,}")
     if total_all > 0:
         print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
@@ -282,12 +282,12 @@ def propagate_to_index_files(
         print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
         print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
     else:
-        print(f"  No index files found")
+        print("  No index files found")
     print("=" * 70)
 
     # Print sample of unmatched files for diagnostics
     if unmatched:
-        print(f"\nSample unmatched index files (showing up to 10):")
+        print("\nSample unmatched index files (showing up to 10):")
         for u in unmatched[:10]:
             print(f"  {u['file_name']}")
             print(f"    Dataset: {u['dataset_id']}")

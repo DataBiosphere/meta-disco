@@ -85,7 +85,7 @@ def main():
             success &= ok
 
     # Phase 2: Index propagation (depends on BAM + VCF from phase 1)
-    print(f"\nPhase 2: Classifying index files...")
+    print("\nPhase 2: Classifying index files...")
     _, ok = run_script(
         "classify_index_files.py",
         output_dir / "index_classifications.json",
@@ -99,7 +99,7 @@ def main():
 
     print(f"\n{'='*70}")
     if success:
-        print(f"All classifications complete!")
+        print("All classifications complete!")
         print(f"Results saved to: {output_dir}/")
     else:
         print("Some classifications failed - check output above")

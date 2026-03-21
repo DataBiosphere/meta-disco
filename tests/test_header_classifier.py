@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.meta_disco.models import NOT_CLASSIFIED, NOT_APPLICABLE
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 
 def val(result: dict, field: str):
@@ -34,19 +34,18 @@ def val(result: dict, field: str):
         return rules
     return v
 from src.meta_disco.header_classifier import (
+    # Classification functions
+    classify_from_fastq_header,
+    classify_from_header,
+    classify_from_vcf_header,
+    detect_paired_end_indicators,
     # Helper functions
     extract_archive_accession,
     infer_illumina_instrument_model,
-    detect_paired_end_indicators,
     parse_illumina_read_name,
-    parse_pacbio_read_name,
     parse_ont_read_name,
-    # Classification functions
-    classify_from_fastq_header,
-    classify_from_vcf_header,
-    classify_from_header,
+    parse_pacbio_read_name,
 )
-
 
 # =============================================================================
 # HELPER FUNCTION TESTS

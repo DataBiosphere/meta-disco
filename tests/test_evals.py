@@ -10,21 +10,22 @@ is a FileInfo and the output is an ExtendedClassificationResult.
 """
 
 import json
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
-
 # Import the actual script functions
 from classify_bam_files import classify_single_file as classify_bam
-from classify_vcf_files import classify_single_vcf as classify_vcf
-from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_fasta_files import classify_single_fasta as classify_fasta
+from classify_fastq_files import classify_single_fastq as classify_fastq
+from classify_vcf_files import classify_single_vcf as classify_vcf
+
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
+from src.meta_disco.rule_engine import RuleEngine
 
 engine = RuleEngine()
 
