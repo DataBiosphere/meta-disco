@@ -37,7 +37,7 @@ classify-fasta:
 	python scripts/classify_fasta_files.py -i data/anvil_files_metadata.json -w 4
 
 classify-bed:
-	python scripts/classify_bed_files.py -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_bed_files.py --metadata data/anvil_files_metadata.json
 
 clean:
 	find . -name '*.pyc' -delete

@@ -55,7 +55,7 @@ def main():
     print(f"Re-running classifications with timestamp: {timestamp}")
     print(f"Output directory: {output_dir}")
 
-    # Phase 1: Run 6 independent classifiers in parallel
+    # Phase 1: Run independent classifiers in parallel
     parallel_jobs = [
         ("classify_bam_files.py", output_dir / "bam_classifications.json",
          ["--input", str(args.metadata)]),
