@@ -11,7 +11,7 @@ help:
 	@echo "  make classify-vcf    Classify VCF files (network required)"
 	@echo "  make classify-fastq  Classify FASTQ files (network required)"
 	@echo "  make classify-fasta  Classify FASTA files (network required)"
-	@echo "  make classify-bed    Classify BED files (network required)"
+	@echo "  make classify-bed    Classify BED files"
 	@echo ""
 	@echo "  make clean           Remove cached .pyc files"
 
