@@ -8,7 +8,6 @@ Headers are cached in data/evidence/fasta/ for:
 
 import argparse
 import json
-import re
 import sys
 import time
 import zlib
@@ -96,7 +95,7 @@ def get_fasta_headers(md5sum: str, file_name: str = "", is_gzipped: bool = True,
                 decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
                 content = decompressor.decompress(content)
             except zlib.error:
-                pass
+                return None
 
         # Decode
         try:

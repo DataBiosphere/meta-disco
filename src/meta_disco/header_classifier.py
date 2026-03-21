@@ -968,8 +968,6 @@ def classify_from_fasta_header(
     ref_matches = []  # contigs matching known reference chromosomes
     assembler_contigs = []  # contigs from assemblers (h1tg*, ptg*, scaffold_*, contig_*)
     transcript_contigs = []  # transcript IDs (ENST*, NM_*)
-    haplotype_contigs = []  # haplotype indicators (hap1, hap2, mat, pat)
-    other_contigs = []
 
     assembler_pattern = re.compile(
         r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
@@ -980,10 +978,6 @@ def classify_from_fasta_header(
         r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
         re.IGNORECASE
     )
-    haplotype_pattern = re.compile(
-        r'(hap[12]|haplotype[12]|maternal|paternal|\.mat\.|\.pat\.)',
-        re.IGNORECASE
-    )
 
     for name in contig_names:
         if name in ref_chrom_names:
@@ -992,11 +986,6 @@ def classify_from_fasta_header(
             assembler_contigs.append(name)
         elif transcript_pattern.match(name):
             transcript_contigs.append(name)
-        else:
-            other_contigs.append(name)
-
-        if haplotype_pattern.search(name):
-            haplotype_contigs.append(name)
 
     # Classification logic
 
@@ -1118,25 +1107,25 @@ def classify_from_fasta_header(
     #    otherwise fall back to genomic/sequence
     if result.data_modality in (None, NOT_CLASSIFIED):
         result.data_modality = "genomic"
-        result.field_evidence["data_modality"].append({
+        result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
             "confidence": 0.50,
-        })
+        }]
     if result.data_type in (None, NOT_CLASSIFIED):
         result.data_type = "sequence"
-        result.field_evidence["data_type"].append({
+        result.field_evidence["data_type"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": "Unable to determine specific FASTA type from headers",
             "confidence": 0.50,
-        })
+        }]
     result.confidence = max(result.confidence, 0.50)
     return result.to_output_dict()
 
 
 def get_rules_documentation() -> str:
     """Generate documentation pointing to the unified rules file."""
-    return """# BAM/CRAM, VCF, and FASTQ Header Classification Rules
+    return """# BAM/CRAM, VCF, FASTQ, and FASTA Header Classification Rules
 
 ## Overview
 
@@ -1146,6 +1135,7 @@ This file contains all rules organized by:
 - **Tier 1**: Extension-based rules (fastest)
 - **Tier 2**: Filename pattern and file size rules
 - **Tier 3**: Header-based rules (BAM @RG/@PG/@SQ, VCF ##, FASTQ read names)
+- **FASTA**: Contig name analysis (heuristic, not YAML rules) for assembly/reference/transcriptome detection
 
 ## Rule Schema
 
