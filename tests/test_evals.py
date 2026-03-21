@@ -417,6 +417,18 @@ class TestFastaE2E:
         assert get_val(result, "data_type") == "assembly"
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
 
+    def test_empty_gzip_fasta(self):
+        """HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz — valid gzip, zero content (20 bytes).
+        Real evidence: decompresses to empty. Should still produce a classification
+        (not be skipped as a failure). Filename "hifiasm" triggers assembly rule."""
+        result = classify_fasta("7029066c27ac6f5ef18d660d5741979a",
+                                "HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
     def test_genbank_single_region(self):
         """hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa — single GenBank region extract.
         Real evidence: 1 contig "HG002#2#JAHKSD010000055.1:35747728-38058658" (full file, 2.3MB).
