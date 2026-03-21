@@ -69,6 +69,8 @@ def main():
          ["--metadata", str(args.metadata)]),
         ("classify_auxiliary_genomic.py", output_dir / "auxiliary_classifications.json",
          ["--metadata", str(args.metadata)]),
+        ("fetch_fasta_headers.py", output_dir / "fasta_classifications.json",
+         ["--input", str(args.metadata)]),
     ]
 
     print(f"\nPhase 1: Running {len(parallel_jobs)} classifiers in parallel...")

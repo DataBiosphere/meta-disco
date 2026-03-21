@@ -1,4 +1,4 @@
-.PHONY: test classify download fetch-bam fetch-vcf fetch-fastq fetch-bed clean help
+.PHONY: test classify download fetch-bam fetch-vcf fetch-fastq fetch-fasta fetch-bed clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -10,6 +10,7 @@ help:
 	@echo "  make fetch-bam    Fetch BAM/CRAM headers from S3 (network required)"
 	@echo "  make fetch-vcf    Fetch VCF headers from S3 (network required)"
 	@echo "  make fetch-fastq  Fetch FASTQ headers from S3 (network required)"
+	@echo "  make fetch-fasta  Fetch FASTA headers from S3 (network required)"
 	@echo "  make fetch-bed    Fetch BED file data from S3 (network required)"
 	@echo ""
 	@echo "  make clean        Remove cached .pyc files"
@@ -31,6 +32,9 @@ fetch-vcf:
 
 fetch-fastq:
 	python scripts/fetch_fastq_headers.py -i data/anvil_files_metadata.json -w 4
+
+fetch-fasta:
+	python scripts/fetch_fasta_headers.py -i data/anvil_files_metadata.json -w 4
 
 fetch-bed:
 	python scripts/fetch_bed_headers.py -i data/anvil_files_metadata.json -w 4
