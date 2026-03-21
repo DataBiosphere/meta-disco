@@ -12,7 +12,7 @@ by the RuleEngine. This module provides:
 import re
 from dataclasses import dataclass, replace
 
-from .models import NOT_CLASSIFIED
+from .models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 
 def _get_engine():
@@ -926,9 +926,215 @@ def classify_from_fastq_header(
     return classifications
 
 
+# Pre-compiled patterns for FASTA contig classification
+_ASSEMBLER_PATTERN = re.compile(
+    r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
+    r'|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)',
+    re.IGNORECASE
+)
+_TRANSCRIPT_PATTERN = re.compile(
+    r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
+    re.IGNORECASE
+)
+
+
+def _get_ref_chrom_names() -> set[str]:
+    """Get cached set of all known reference chromosome names."""
+    if not hasattr(_get_ref_chrom_names, "_cache"):
+        from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+        names = set()
+        for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
+            names.update(ref_contigs.keys())
+        _get_ref_chrom_names._cache = names
+    return _get_ref_chrom_names._cache
+
+
+def classify_from_fasta_header(
+    contig_names: list[str],
+    file_name: str | None = None,
+) -> dict:
+    """
+    Classify FASTA file based on contig/sequence names from > header lines.
+
+    Determines whether the file is a de novo assembly, reference genome extract,
+    or transcriptome FASTA by analyzing contig naming patterns and counts.
+
+    Args:
+        contig_names: List of contig/sequence names (without > prefix)
+        file_name: Optional filename for pattern matching
+
+    Returns:
+        Per-field classification dict (same format as classify_from_fastq_header)
+    """
+    from .rule_engine import ExtendedFileInfo
+    from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+
+    filename = file_name or "sample.fa.gz"
+
+    # Run rule engine for extension/filename-based rules
+    file_info = ExtendedFileInfo(filename=filename)
+    engine = _get_engine()
+    result = engine.classify_extended(file_info, include_tier3=False)
+
+    if not contig_names:
+        return result.to_output_dict()
+
+    num_contigs = len(contig_names)
+    ref_chrom_names = _get_ref_chrom_names()
+
+    # Categorize contigs
+    ref_matches = []
+    assembler_contigs = []
+    transcript_contigs = []
+
+    for name in contig_names:
+        if name in ref_chrom_names:
+            ref_matches.append(name)
+        elif _ASSEMBLER_PATTERN.search(name):
+            assembler_contigs.append(name)
+        elif _TRANSCRIPT_PATTERN.match(name):
+            transcript_contigs.append(name)
+
+    # Classification logic
+
+    # 1. Transcript IDs → transcriptomic
+    if transcript_contigs and len(transcript_contigs) > len(ref_matches):
+        result.data_modality = "transcriptomic.bulk"
+        result.data_type = "sequence"
+        if result.reference_assembly in (None, NOT_CLASSIFIED):
+            result.reference_assembly = NOT_CLASSIFIED
+        result.field_evidence["data_modality"] = [{
+            "rule_id": "fasta_transcript_contigs",
+            "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
+            "confidence": 0.90,
+        }]
+        result.field_evidence["data_type"] = [{
+            "rule_id": "fasta_transcript_contigs",
+            "reason": "Transcript sequences in FASTA",
+            "confidence": 0.90,
+        }]
+        result.confidence = 0.90
+        return result.to_output_dict()
+
+    # 2. Contigs match a known reference set → reference genome
+    if ref_matches:
+        # Count matches per assembly
+        assembly_counts = {}
+        for assembly, ref_contigs in REFERENCE_CONTIG_LENGTHS.items():
+            count = sum(1 for name in ref_matches if name in ref_contigs)
+            if count > 0:
+                assembly_counts[assembly] = count
+
+        best_count = max(assembly_counts.values()) if assembly_counts else 0
+
+        # Need a substantial fraction of expected chromosomes to call it a reference
+        if best_count >= 20:
+            # If multiple assemblies tied (all use same chr names), use filename to disambiguate
+            tied = [a for a, c in assembly_counts.items() if c == best_count]
+            if len(tied) == 1:
+                best_ref = tied[0]
+            elif result.reference_assembly and result.reference_assembly not in (NOT_CLASSIFIED, NOT_APPLICABLE):
+                # Rule engine already detected reference from filename (e.g., "chm13" in name)
+                best_ref = result.reference_assembly
+            else:
+                # Can't distinguish — contigs match multiple references equally
+                best_ref = None
+
+            result.data_modality = "genomic"
+            result.data_type = "reference_genome"
+            if best_ref:
+                result.reference_assembly = best_ref
+                result.confidence = 0.95
+            else:
+                result.confidence = 0.80
+            result.field_evidence["reference_assembly"] = [{
+                "rule_id": "fasta_reference_contigs",
+                "reason": f"Matched {best_count} contigs to reference chromosomes"
+                          + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
+                "confidence": 0.95 if best_ref else 0.50,
+            }]
+            result.field_evidence["data_modality"] = [{
+                "rule_id": "fasta_reference_contigs",
+                "reason": "Contig names match known reference genome",
+                "confidence": 0.95,
+            }]
+            result.field_evidence["data_type"] = [{
+                "rule_id": "fasta_reference_contigs",
+                "reason": "FASTA contains reference genome sequences",
+                "confidence": 0.95,
+            }]
+            return result.to_output_dict()
+
+    # 3. Assembler output contigs → de novo assembly
+    if assembler_contigs:
+        result.data_modality = "genomic"
+        result.data_type = "assembly"
+        result.reference_assembly = NOT_APPLICABLE
+        result.confidence = 0.90
+        sample = assembler_contigs[0]
+        result.field_evidence["data_modality"] = [{
+            "rule_id": "fasta_assembler_contigs",
+            "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
+            "confidence": 0.90,
+        }]
+        result.field_evidence["data_type"] = [{
+            "rule_id": "fasta_assembler_contigs",
+            "reason": "Contig names indicate assembler output",
+            "confidence": 0.90,
+        }]
+        result.field_evidence["reference_assembly"] = [{
+            "rule_id": "fasta_assembler_contigs",
+            "reason": "De novo assembly — no reference genome applicable",
+            "confidence": 0.90,
+        }]
+        return result.to_output_dict()
+
+    # 4. Many non-standard contigs → likely de novo assembly
+    if num_contigs > 50 and not ref_matches:
+        result.data_modality = "genomic"
+        result.data_type = "assembly"
+        result.reference_assembly = NOT_APPLICABLE
+        result.confidence = 0.75
+        result.field_evidence["data_modality"] = [{
+            "rule_id": "fasta_many_contigs",
+            "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
+            "confidence": 0.75,
+        }]
+        result.field_evidence["data_type"] = [{
+            "rule_id": "fasta_many_contigs",
+            "reason": "High contig count suggests assembly",
+            "confidence": 0.75,
+        }]
+        result.field_evidence["reference_assembly"] = [{
+            "rule_id": "fasta_many_contigs",
+            "reason": "De novo assembly — no reference genome applicable",
+            "confidence": 0.75,
+        }]
+        return result.to_output_dict()
+
+    # 5. Default: preserve rule engine results if they set modality/type,
+    #    otherwise fall back to genomic/sequence
+    if result.data_modality in (None, NOT_CLASSIFIED):
+        result.data_modality = "genomic"
+        result.field_evidence["data_modality"] = [{
+            "rule_id": "fasta_default_genomic",
+            "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
+            "confidence": 0.50,
+        }]
+    if result.data_type in (None, NOT_CLASSIFIED):
+        result.data_type = "sequence"
+        result.field_evidence["data_type"] = [{
+            "rule_id": "fasta_default_genomic",
+            "reason": "Unable to determine specific FASTA type from headers",
+            "confidence": 0.50,
+        }]
+    result.confidence = max(result.confidence, 0.50)
+    return result.to_output_dict()
+
+
 def get_rules_documentation() -> str:
     """Generate documentation pointing to the unified rules file."""
-    return """# BAM/CRAM, VCF, and FASTQ Header Classification Rules
+    return """# BAM/CRAM, VCF, FASTQ, and FASTA Header Classification Rules
 
 ## Overview
 
@@ -938,6 +1144,7 @@ This file contains all rules organized by:
 - **Tier 1**: Extension-based rules (fastest)
 - **Tier 2**: Filename pattern and file size rules
 - **Tier 3**: Header-based rules (BAM @RG/@PG/@SQ, VCF ##, FASTQ read names)
+- **FASTA**: Contig name analysis (heuristic, not YAML rules) for assembly/reference/transcriptome detection
 
 ## Rule Schema
 

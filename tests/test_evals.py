@@ -24,12 +24,14 @@ from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 from fetch_bam_headers import classify_single_file as classify_bam
 from fetch_vcf_headers import classify_single_vcf as classify_vcf
 from fetch_fastq_headers import classify_single_fastq as classify_fastq
+from fetch_fasta_headers import classify_single_fasta as classify_fasta
 
 engine = RuleEngine()
 
 EVIDENCE_BAM = Path("data/evidence/bam")
 EVIDENCE_VCF = Path("data/evidence/vcf")
 EVIDENCE_FASTQ = Path("data/evidence/fastq")
+EVIDENCE_FASTA = Path("data/evidence/fasta")
 
 
 def get_val(record, field):
@@ -289,3 +291,138 @@ class TestRuleEngineE2E:
         for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
             result = engine.classify_extended(FileInfo(filename=name))
             assert result.data_modality is not None
+
+    def test_fasta_base_rule(self):
+        """FASTA files should get base rule classification."""
+        for ext in [".fa", ".fasta", ".fa.gz", ".fasta.gz"]:
+            result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
+            assert result.data_type == "sequence", f"{ext} should be sequence"
+            assert result.platform == NOT_APPLICABLE
+            assert result.assay_type == NOT_APPLICABLE
+
+    def test_fasta_assembly_filename(self):
+        """FASTA with assembly keyword in filename."""
+        result = engine.classify_extended(FileInfo(filename="HG00673.paternal.f1_assembly_v1.fa.gz"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fasta_haplotype_filename(self):
+        """FASTA with haplotype keyword in filename."""
+        result = engine.classify_extended(FileInfo(filename="hapdup_contigs_2.fasta"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_fasta_verkko_filename(self):
+        """FASTA with verkko assembler keyword."""
+        result = engine.classify_extended(FileInfo(filename="HG02300_verkko_gfase_diploid.fasta.gz"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+        assert result.reference_assembly == NOT_APPLICABLE
+
+
+# =============================================================================
+# FASTA — end-to-end through fetch_fasta_headers.classify_single_fasta
+# =============================================================================
+
+@pytest.mark.skipif(not EVIDENCE_FASTA.exists(), reason="No FASTA evidence cache")
+class TestFastaE2E:
+    """End-to-end FASTA classification from cached contig names."""
+
+    def test_hprc_paternal_assembly(self):
+        """HG00673.paternal.f1_assembly_v1.fa.gz — HPRC de novo assembly."""
+        result = classify_fasta("7ace6a53c63fdc2b99fba3f5f6be383d",
+                                "HG00673.paternal.f1_assembly_v1.fa.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_verkko_diploid_assembly(self):
+        """HG02300_verkko_gfase_diploid.fasta.gz — verkko assembler output."""
+        result = classify_fasta("0fb14e01d1f886f8ebb6d5ea0f5a7853",
+                                "HG02300_verkko_gfase_diploid.fasta.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_hapdup_contigs(self):
+        """hapdup_contigs_2.fasta — hapdup output, contig name is just "0".
+        Real evidence: single contig "0" from S3 range request.
+        Classification relies on filename "hapdup" keyword (tier 2 rule)."""
+        result = classify_fasta("1eff1ed22b7b2d794b9e4d2edc9b4bfa",
+                                "hapdup_contigs_2.fasta")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_grch38_reference_genome(self):
+        """grch38.XX.fasta — GRCh38 reference genome with 3,366 contigs (chr1-chrY + alts + HLA).
+        Real evidence: contig names from grch38.XX.fasta.fai (md5: e1b81a677b7376233dd4fef3be1659a4)."""
+        result = classify_fasta("c20f4108273910a8eac78b6f2d5cb2b3",
+                                "grch38.XX.fasta")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "reference_genome"
+        assert get_val(result, "reference_assembly") == "GRCh38"
+
+    def test_chm13_reference_genome(self):
+        """chm13v2.0.fasta — CHM13 T2T reference with 25 contigs (chr1-chrY + chrM).
+        Real evidence: contig names from chm13v2.0.fasta.fai (md5: 8f4b1a252a1da1473c0a707c551b9ac4)."""
+        result = classify_fasta("597207bc60de08a8535b0fcc23466ebc",
+                                "chm13v2.0.fasta")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "reference_genome"
+        assert get_val(result, "reference_assembly") == "CHM13"
+
+    def test_hifiasm_mito_contigs(self):
+        """HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz — 7 mitochondrial contigs from hifiasm.
+        Real evidence: h1tg/h2tg contig names from S3 range request (full file, 26KB)."""
+        result = classify_fasta("e3518b0e9056278b3e3e77fca0d20739",
+                                "HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_verkko_mito_contigs(self):
+        """HG002_verkko_gfase_mito.fasta.gz — 12 verkko contigs (haplotype + unassigned).
+        Real evidence: contig names from S3 range request (full file, 38KB)."""
+        result = classify_fasta("77918ce8d61e250943bd2b363caee845",
+                                "HG002_verkko_gfase_mito.fasta.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_verkko_mito_single_contig(self):
+        """HG02809_verkko_asm_mito_exemplar.fasta.gz — single "mat-0000222" contig.
+        Real evidence: single contig from S3 (full file, 3.5KB exemplar)."""
+        result = classify_fasta("dbfd70b99346b4897a2d6f27dee309c9",
+                                "HG02809_verkko_asm_mito_exemplar.fasta.gz")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"
+        assert get_val(result, "data_type") == "assembly"
+        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_genbank_single_region(self):
+        """hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa — single GenBank region extract.
+        Real evidence: 1 contig "HG002#2#JAHKSD010000055.1:35747728-38058658" (full file, 2.3MB).
+        Single non-standard contig → genomic default."""
+        result = classify_fasta("5255a14542a8931eb6b393af8486a2b9",
+                                "hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa")
+        assert result is not None
+        assert_output_format(result)
+        assert get_val(result, "data_modality") == "genomic"

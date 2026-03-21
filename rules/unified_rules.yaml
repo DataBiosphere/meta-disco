@@ -221,6 +221,12 @@ extension_map:
   ".png": image
   ".jpg": image
 
+  # Sequences (FASTA)
+  ".fasta": sequence
+  ".fa": sequence
+  ".fasta.gz": sequence
+  ".fa.gz": sequence
+
   # Archives (need special handling)
   ".tar": archive
   ".tar.gz": archive
@@ -428,6 +434,23 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.50
     rationale: "FASTQ files contain raw sequencing reads. Reference not applicable until alignment"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # FASTA files - sequence data (assembly, reference, or transcriptome)
+  # ---------------------------------------------------------------------------
+  - id: fasta_base
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+    then:
+      data_type: sequence
+      platform: not_applicable
+      assay_type: not_applicable
+      needs_header_inspection: true
+    confidence: 0.30
+    rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
     terminal: false
 
   # ===========================================================================
@@ -658,6 +681,37 @@ rules:
       assay_type: WGS
     confidence: 0.80
     rationale: "Filename contains WGS indicator"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
+  # FASTA assembly indicators
+  # ---------------------------------------------------------------------------
+  - id: fasta_assembly_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      filename_pattern: "(?i)(assembly|hifiasm|verkko|flye|canu|wtdbg|hap[12]|diploid|[._](pat|mat)(ernal)?[._])"
+    then:
+      data_modality: genomic
+      data_type: assembly
+      reference_assembly: not_applicable
+    confidence: 0.80
+    rationale: "Filename contains assembly/assembler indicator — de novo assembly"
+    terminal: false
+
+  - id: fasta_haplotype_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      filename_pattern: "(?i)(haplotype|phased|hapdup|purge_dups)"
+    then:
+      data_modality: genomic
+      data_type: assembly
+      reference_assembly: not_applicable
+    confidence: 0.80
+    rationale: "Filename contains haplotype/phasing indicator — de novo assembly"
     terminal: false
 
   # ---------------------------------------------------------------------------
@@ -2240,6 +2294,18 @@ rules:
     confidence: 0.60
     rationale: "BED file with no specific pattern - defaulting to genomic intervals"
     terminal: true
+
+  - id: fasta_fallback
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      modality_not_set: true
+    then:
+      needs_header_inspection: true
+    confidence: 0.0
+    rationale: "FASTA modality ambiguous; requires header inspection"
+    terminal: false
 
   - id: archive_fallback
     tier: 2
