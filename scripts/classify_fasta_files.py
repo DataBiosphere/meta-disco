@@ -73,7 +73,7 @@ def get_fasta_headers(md5sum: str, file_name: str = "", is_gzipped: bool = True,
     # Check cache first
     if use_cache:
         cached = load_cached_header(md5sum)
-        if cached and cached.get("contig_names"):
+        if cached and "contig_names" in cached:
             return cached["contig_names"]
 
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
@@ -113,11 +113,10 @@ def get_fasta_headers(md5sum: str, file_name: str = "", is_gzipped: bool = True,
                 if name:
                     contig_names.append(name)
 
-        # Save to cache for resumability
-        if contig_names:
-            save_header_evidence(md5sum, file_name, contig_names, raw_bytes)
+        # Save to cache (including empty results — valid file with no contigs)
+        save_header_evidence(md5sum, file_name, contig_names, raw_bytes)
 
-        return contig_names if contig_names else None
+        return contig_names
 
     except requests.Timeout:
         print(f"Timeout reading FASTA for {md5sum}")
@@ -136,7 +135,7 @@ def classify_single_fasta(
 ) -> dict | None:
     """Fetch headers and classify a single FASTA file by MD5."""
     contig_names = get_fasta_headers(md5sum, file_name, is_gzipped, use_cache=use_cache)
-    if not contig_names:
+    if contig_names is None:
         return None
 
     full = classify_from_fasta_header(contig_names, file_name)
