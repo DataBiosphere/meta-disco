@@ -1001,7 +1001,8 @@ def classify_from_fasta_header(
     if transcript_contigs and len(transcript_contigs) > len(ref_matches):
         result.data_modality = "transcriptomic.bulk"
         result.data_type = "sequence"
-        result.reference_assembly = NOT_CLASSIFIED
+        if result.reference_assembly in (None, NOT_CLASSIFIED):
+            result.reference_assembly = NOT_CLASSIFIED
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_transcript_contigs",
             "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
