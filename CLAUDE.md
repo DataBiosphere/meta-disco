@@ -59,6 +59,18 @@ The LinkML schema (`anvil_file.yaml`) defines:
 - **Accuracy over coverage**: It is better to leave a file as `not_classified` than to guess wrong. Only classify when evidence supports it.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
 
+## Workflow
+
+1. Create a GitHub issue for every change
+2. Create a feature branch `noopdog/{issue#}-short-description`
+3. Implement with tests, run `make test` before committing
+4. Push and create a PR
+5. Check Copilot review feedback via GraphQL
+6. **Scan for same class of error** — for each CP comment, search the codebase for other instances of the same pattern in files not in the diff
+7. **Summarize CP feedback for the user first** — present each comment with analysis, recommendation, and any additional instances found. Do not fix automatically.
+8. After approval, fix issues (including same-class instances), push, and resolve threads via GraphQL
+9. Repeat until Copilot passes clean
+
 ## Environment
 
 - LLM component: Conda (`environment.yaml`) with Python 3.8, pandas, requests
