@@ -2222,7 +2222,8 @@ rules:
     when:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       modality_not_set: true
-    then: {}
+    then:
+      data_modality: not_classified
     confidence: 0.0
     rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
     terminal: false

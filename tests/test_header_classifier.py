@@ -324,7 +324,7 @@ class TestFastqClassification:
         assert val(result, "platform") == "ILLUMINA"
         assert val(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
-        assert val(result, "confidence") >= 0.85
+        assert val(result, "confidence") >= 0.90
 
     def test_illumina_instrument_model(self):
         """Extract Illumina instrument model."""
