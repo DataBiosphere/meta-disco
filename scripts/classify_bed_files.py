@@ -18,8 +18,8 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
 from src.meta_disco.rule_engine import RuleEngine
-from src.meta_disco.models import FileInfo, NOT_APPLICABLE, NOT_CLASSIFIED
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 

@@ -20,7 +20,6 @@ from threading import Lock
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import requests
 from src.meta_disco.header_classifier import classify_from_header, get_rules_documentation
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"

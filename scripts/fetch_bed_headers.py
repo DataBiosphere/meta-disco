@@ -25,6 +25,7 @@ from threading import Lock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import requests
+
 from src.meta_disco.rule_loader import get_unified_rules
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -498,7 +499,7 @@ def print_summary(classifications: list[dict]):
         confidences.append(c.get("confidence", 0))
 
     print(f"\nTotal: {len(classifications)}")
-    print(f"\nReference assemblies:")
+    print("\nReference assemblies:")
     for ref, count in sorted(refs.items(), key=lambda x: -x[1]):
         print(f"  {ref:<20} {count:>6} ({100*count/len(classifications):.1f}%)")
 
@@ -506,14 +507,14 @@ def print_summary(classifications: list[dict]):
     med = sum(1 for c in confidences if 0.7 <= c < 0.85)
     low = sum(1 for c in confidences if 0 < c < 0.7)
     none = sum(1 for c in confidences if c == 0)
-    print(f"\nConfidence:")
+    print("\nConfidence:")
     print(f"  High (>=85%):  {high}")
     print(f"  Medium (70-84%): {med}")
     print(f"  Low (<70%):    {low}")
     print(f"  None:          {none}")
 
     # Show samples
-    print(f"\nSample classifications (first 5):")
+    print("\nSample classifications (first 5):")
     for c in classifications[:5]:
         print(f"  {c['file_name']}")
         print(f"    ref={c.get('reference_assembly')}  conf={c.get('confidence', 0):.0%}")

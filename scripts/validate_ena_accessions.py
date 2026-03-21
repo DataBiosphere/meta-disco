@@ -238,12 +238,12 @@ def validate_against_ena(
     modality_mismatches = [m for m in mismatches if m["type"] == "modality"]
 
     if platform_mismatches:
-        print(f"\nSample platform mismatches (first 10):")
+        print("\nSample platform mismatches (first 10):")
         for m in platform_mismatches[:10]:
             print(f"  {m['accession']}: ours={m['ours']} vs ENA={m['ena']}")
 
     if modality_mismatches:
-        print(f"\nSample modality mismatches (first 10):")
+        print("\nSample modality mismatches (first 10):")
         for m in modality_mismatches[:10]:
             print(f"  {m['accession']}: ours={m['ours']} vs ENA={m['ena_source']}/{m['ena_strategy']}")
 

@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.meta_disco.models import FileInfo, ClassificationResult, NOT_APPLICABLE, NOT_CLASSIFIED
-from src.meta_disco.rule_engine import RuleEngine, ExtendedFileInfo
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, ClassificationResult, FileInfo
+from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine
 
 
 @pytest.fixture

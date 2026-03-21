@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from classify_index_files import get_parent_candidates, INDEX_TO_PARENT
+from classify_index_files import INDEX_TO_PARENT, get_parent_candidates
 
 
 class TestParentCandidateGeneration:

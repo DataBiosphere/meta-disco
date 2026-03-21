@@ -6,7 +6,6 @@ information like instrument ID, run number, flowcell, ZMW, etc.
 
 import re
 
-
 # Illumina instrument ID prefix -> model name mapping
 # Order matters: more specific prefixes (A0, A1, VH) must come before less specific (A, N)
 ILLUMINA_INSTRUMENT_RULES = [

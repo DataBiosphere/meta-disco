@@ -1,9 +1,10 @@
-.PHONY: test classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed clean help
+.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
 	@echo ""
 	@echo "  make test            Run all tests"
+	@echo "  make lint            Run ruff linter"
 	@echo "  make classify        Run full classification pipeline (all file types, parallel)"
 	@echo "  make download        Download fresh AnVIL metadata from API"
 	@echo ""
@@ -17,6 +18,9 @@ help:
 
 test:
 	python -m pytest tests/ -v
+
+lint:
+	ruff check src/ scripts/ tests/
 
 classify:
 	python scripts/rerun_all_classifications.py

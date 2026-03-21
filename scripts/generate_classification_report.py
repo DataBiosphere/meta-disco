@@ -6,7 +6,6 @@ from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 
 
@@ -165,7 +164,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax1.set_title(f"Input Files by Category\n(Total: {total_files:,})", fontweight="bold")
 
     # Add legend
-    legend_labels = [f"{l}: {s:,}" for l, s in zip(labels, sizes)]
+    legend_labels = [f"{label}: {s:,}" for label, s in zip(labels, sizes)]
     ax1.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), fontsize=8)
 
     # === Panel 2: Classification Coverage (horizontal bar) ===
@@ -192,8 +191,8 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     classified_counts_list = [d["classified"] for d in coverage_data]
     categories_list = [d["category"] for d in coverage_data]
 
-    bars1 = ax2.barh(y_pos, source_counts, alpha=0.3, color="steelblue", label="Total in source")
-    bars2 = ax2.barh(y_pos, classified_counts_list, color="steelblue", label="Classified")
+    ax2.barh(y_pos, source_counts, alpha=0.3, color="steelblue", label="Total in source")
+    ax2.barh(y_pos, classified_counts_list, color="steelblue", label="Classified")
 
     ax2.set_yticks(y_pos)
     ax2.set_yticklabels(categories_list)
@@ -221,7 +220,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     mod_values = [m[1] for m in modality_sorted]
 
     y_pos = np.arange(len(mod_labels))
-    bars = ax3.barh(y_pos, mod_values, color=colors[:len(mod_labels)])
+    ax3.barh(y_pos, mod_values, color=colors[:len(mod_labels)])
     ax3.set_yticks(y_pos)
     ax3.set_yticklabels(mod_labels, fontsize=9)
     ax3.set_xlabel("Number of Files")
@@ -245,7 +244,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ref_values = [r[1] for r in ref_sorted]
 
     y_pos = np.arange(len(ref_labels))
-    bars = ax4.barh(y_pos, ref_values, color=["#2ecc71", "#e74c3c", "#3498db", "#95a5a6", "#9b59b6"][:len(ref_labels)])
+    ax4.barh(y_pos, ref_values, color=["#2ecc71", "#e74c3c", "#3498db", "#95a5a6", "#9b59b6"][:len(ref_labels)])
     ax4.set_yticks(y_pos)
     ax4.set_yticklabels(ref_labels)
     ax4.set_xlabel("Number of Files")
@@ -268,7 +267,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     plat_values = [p[1] for p in plat_sorted]
 
     y_pos = np.arange(len(plat_labels))
-    bars = ax5.barh(y_pos, plat_values, color=colors[:len(plat_labels)])
+    ax5.barh(y_pos, plat_values, color=colors[:len(plat_labels)])
     ax5.set_yticks(y_pos)
     ax5.set_yticklabels(plat_labels)
     ax5.set_xlabel("Number of Files")
@@ -311,7 +310,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     dtype_values = [d[1] for d in dtype_sorted]
 
     y_pos = np.arange(len(dtype_labels))
-    bars = ax6.barh(y_pos, dtype_values, color=colors[:len(dtype_labels)])
+    ax6.barh(y_pos, dtype_values, color=colors[:len(dtype_labels)])
     ax6.set_yticks(y_pos)
     ax6.set_yticklabels(dtype_labels)
     ax6.set_xlabel("Number of Files")
@@ -349,7 +348,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     assay_values = [a[1] for a in assay_sorted]
 
     y_pos = np.arange(len(assay_labels))
-    bars = ax7.barh(y_pos, assay_values, color=colors[:len(assay_labels)])
+    ax7.barh(y_pos, assay_values, color=colors[:len(assay_labels)])
     ax7.set_yticks(y_pos)
     ax7.set_yticklabels(assay_labels)
     ax7.set_xlabel("Number of Files")

@@ -15,7 +15,6 @@ Output saved to: output/1000g_validation_results.json
 import argparse
 import json
 import re
-import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -326,12 +325,12 @@ def validate_against_igsr(
     modality_mismatches = [m for m in mismatches if m["type"] == "modality"]
 
     if platform_mismatches:
-        print(f"\nSample platform mismatches (first 10):")
+        print("\nSample platform mismatches (first 10):")
         for m in platform_mismatches[:10]:
             print(f"  {m['sample_id']}: ours={m['ours']} vs expected={m['expected']}")
 
     if modality_mismatches:
-        print(f"\nSample modality mismatches (first 10):")
+        print("\nSample modality mismatches (first 10):")
         for m in modality_mismatches[:10]:
             print(f"  {m['sample_id']}: ours={m['ours']} vs expected={m['expected']}")
 

@@ -14,8 +14,8 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.rule_engine import RuleEngine
 from src.meta_disco.models import FileInfo
+from src.meta_disco.rule_engine import RuleEngine
 
 
 def classify_images(metadata_path: Path, output_path: Path):
@@ -38,11 +38,9 @@ def classify_images(metadata_path: Path, output_path: Path):
 
         # Check if this is an image file
         is_image = False
-        matched_ext = None
         for ext in stats.keys():
             if fmt == ext or name_lower.endswith(ext):
                 is_image = True
-                matched_ext = ext
                 stats[ext]["total"] = stats[ext].get("total", 0) + 1
                 break
 

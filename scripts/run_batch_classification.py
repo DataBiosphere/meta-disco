@@ -2,8 +2,8 @@
 """Run rule engine classification on downloaded AnVIL metadata."""
 
 import argparse
-import json
 import csv
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +11,7 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco import RuleEngine, FileInfo
+from src.meta_disco import FileInfo, RuleEngine
 from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
@@ -246,10 +246,10 @@ def main():
     print(f"\nLoading rules from {args.rules}...")
     engine = RuleEngine(args.rules)
 
-    print(f"\nRunning classification...")
+    print("\nRunning classification...")
     results = run_classification(files, engine)
 
-    print(f"\nComputing statistics...")
+    print("\nComputing statistics...")
     stats = compute_stats(results)
 
     save_results(results, stats, output_dir)
