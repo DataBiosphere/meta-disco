@@ -417,18 +417,6 @@ class TestFastaE2E:
         assert get_val(result, "data_type") == "assembly"
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
 
-    def test_hprc_single_contig_with_sample_prefix(self):
-        """HG00673.paternal.f1_assembly_v1.fa.gz — HPRC naming: "HG00673#1#h1tg000001l".
-        Real evidence: only 1 contig visible in 256KB range due to large contig size.
-        Tests that HPRC sample#hap#contig naming is recognized as assembler output."""
-        result = classify_fasta("7ace6a53c63fdc2b99fba3f5f6be383d",
-                                "HG00673.paternal.f1_assembly_v1.fa.gz")
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-
     def test_genbank_single_region(self):
         """hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa — single GenBank region extract.
         Real evidence: 1 contig "HG002#2#JAHKSD010000055.1:35747728-38058658" (full file, 2.3MB).

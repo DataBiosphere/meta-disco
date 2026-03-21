@@ -926,6 +926,29 @@ def classify_from_fastq_header(
     return classifications
 
 
+# Pre-compiled patterns for FASTA contig classification
+_ASSEMBLER_PATTERN = re.compile(
+    r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
+    r'|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)',
+    re.IGNORECASE
+)
+_TRANSCRIPT_PATTERN = re.compile(
+    r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
+    re.IGNORECASE
+)
+
+
+def _get_ref_chrom_names() -> set[str]:
+    """Get cached set of all known reference chromosome names."""
+    if not hasattr(_get_ref_chrom_names, "_cache"):
+        from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+        names = set()
+        for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
+            names.update(ref_contigs.keys())
+        _get_ref_chrom_names._cache = names
+    return _get_ref_chrom_names._cache
+
+
 def classify_from_fasta_header(
     contig_names: list[str],
     file_name: str | None = None,
@@ -956,35 +979,20 @@ def classify_from_fasta_header(
     if not contig_names:
         return result.to_output_dict()
 
-    # Analyze contig names
     num_contigs = len(contig_names)
-
-    # Build sets of known reference chromosome names (chr-prefixed and bare)
-    ref_chrom_names = set()
-    for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
-        ref_chrom_names.update(ref_contigs.keys())
+    ref_chrom_names = _get_ref_chrom_names()
 
     # Categorize contigs
-    ref_matches = []  # contigs matching known reference chromosomes
-    assembler_contigs = []  # contigs from assemblers (h1tg*, ptg*, scaffold_*, contig_*)
-    transcript_contigs = []  # transcript IDs (ENST*, NM_*)
-
-    assembler_pattern = re.compile(
-        r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
-        r'|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)',
-        re.IGNORECASE
-    )
-    transcript_pattern = re.compile(
-        r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
-        re.IGNORECASE
-    )
+    ref_matches = []
+    assembler_contigs = []
+    transcript_contigs = []
 
     for name in contig_names:
         if name in ref_chrom_names:
             ref_matches.append(name)
-        elif assembler_pattern.search(name):
+        elif _ASSEMBLER_PATTERN.search(name):
             assembler_contigs.append(name)
-        elif transcript_pattern.match(name):
+        elif _TRANSCRIPT_PATTERN.match(name):
             transcript_contigs.append(name)
 
     # Classification logic
