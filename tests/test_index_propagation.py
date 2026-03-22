@@ -348,7 +348,6 @@ class TestLoadClassifications:
         # Parent filename matched but md5 not in classifications → not_classified
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        assert cls["data_modality"]["value"] == "not_classified"
-        assert cls["platform"]["value"] == "not_classified"
-        assert cls["reference_assembly"]["value"] == "not_classified"
+        for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+            assert cls[fld]["value"] == "not_classified", f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")

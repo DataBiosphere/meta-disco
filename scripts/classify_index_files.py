@@ -201,6 +201,7 @@ def propagate_to_index_files(
             parent_class = classifications.get(parent_md5, {})
 
             nc = "not_classified"
+            _sentinels = {"not_classified", "not_applicable"}
             result = {
                 "entry_id": f.get("entry_id"),
                 "file_name": name,
@@ -210,18 +211,18 @@ def propagate_to_index_files(
                 "dataset_title": f.get("dataset_title"),
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
-                "data_modality": parent_class.get("data_modality", nc),
-                "data_type": parent_class.get("data_type", nc),
-                "assay_type": parent_class.get("assay_type", nc),
-                "platform": parent_class.get("platform", nc),
-                "reference_assembly": parent_class.get("reference_assembly", nc),
-                "confidence": parent_class.get("confidence", 0.0),
+                "data_modality": parent_class.get("data_modality") or nc,
+                "data_type": parent_class.get("data_type") or nc,
+                "assay_type": parent_class.get("assay_type") or nc,
+                "platform": parent_class.get("platform") or nc,
+                "reference_assembly": parent_class.get("reference_assembly") or nc,
+                "confidence": parent_class.get("confidence") or 0.0,
                 "inheritance_source": "parent_file",
             }
 
-            if result["data_modality"]:
+            if result["data_modality"] not in _sentinels:
                 stats[index_ext]["with_modality"] += 1
-            if result["reference_assembly"]:
+            if result["reference_assembly"] not in _sentinels:
                 stats[index_ext]["with_ref"] += 1
 
             results.append(result)
