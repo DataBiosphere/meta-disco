@@ -28,8 +28,8 @@ Classification run: **2026-03-22 00:55:26**
 |---|---:|---|
 | .fastq.gz | 20,621 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
 | .bam | 357 | No rule determined a value for this field |
-| .tbi | 60 | Parent file 20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr21.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz had no value for this field |
-| .bai | 19 | Parent file HG01175.diploid.f1_assembly_v2_genbank.hifi.winnowmap_v2.03.bam had no value for this field |
+| .tbi | 60 | Parent file had no value for this field |
+| .bai | 19 | Parent file had no value for this field |
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
@@ -57,9 +57,9 @@ Classification run: **2026-03-22 00:55:26**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .bam | 2,065 | No rule determined a value for this field |
-| .pbi | 677 | Parent file m84091_230905_192642_s1.fail_reads.bc1018.bam had no value for this field |
-| .tbi | 60 | Parent file 20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr21.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz had no value for this field |
-| .bai | 47 | Parent file m64011_190419_154025.ccs.bam had no value for this field |
+| .pbi | 677 | Parent file had no value for this field |
+| .tbi | 60 | Parent file had no value for this field |
+| .bai | 47 | Parent file had no value for this field |
 
 | Data Type | count | % | extensions |
 |---|---:|---:|---|
@@ -92,10 +92,10 @@ Classification run: **2026-03-22 00:55:26**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 2,197 | No rule determined a value for this field |
-| .csi | 1,968 | Parent file 1kgp.chr12.recalibrated.snp_indel.vcf.gz had no value for this field |
+| .csi | 1,968 | Parent file had no value for this field |
 | .bam | 277 | No rule determined a value for this field |
-| .bai | 274 | Parent file HG01109.maternal.ont.bam had no value for this field |
-| .tbi | 266 | Parent file chrY.recalibrated.snp_indel.vcf.gz had no value for this field |
+| .bai | 274 | Parent file had no value for this field |
+| .tbi | 266 | Parent file had no value for this field |
 | .vcf | 252 | No rule determined a value for this field |
 | .bed.gz | 31 | No rule determined a value for this field |
 | .fasta | 3 | No rule determined a value for this field |
@@ -124,8 +124,8 @@ Classification run: **2026-03-22 00:55:26**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 201,860 | No rule determined a value for this field |
-| .tbi | 169,535 | Parent file chr2.genotyped.vcf.gz had no value for this field |
-| .csi | 41,138 | Parent file HG01501.regions.bed.gz had no value for this field |
+| .tbi | 169,535 | Parent file had no value for this field |
+| .csi | 41,138 | Parent file had no value for this field |
 | .bed.gz | 7,231 | No rule determined a value for this field |
 | .bed | 6,429 | No rule determined a value for this field |
 | .bam | 2,960 | No rule determined a value for this field |
@@ -133,7 +133,7 @@ Classification run: **2026-03-22 00:55:26**
 | .pvar | 2,854 | No rule determined a value for this field |
 | .psam | 2,854 | No rule determined a value for this field |
 | .g.vcf.gz | 2,504 | No rule determined a value for this field |
-| .bai | 1,499 | Parent file NA18906.maternal.CHM13Y_EBV.bam had no value for this field |
+| .bai | 1,499 | Parent file had no value for this field |
 | .vcf | 646 | No rule determined a value for this field |
 
 | Platform | count | % | extensions |
@@ -161,8 +161,8 @@ Classification run: **2026-03-22 00:55:26**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 201,860 | No rule determined a value for this field |
-| .tbi | 169,523 | Parent file chr2.genotyped.vcf.gz had no value for this field |
-| .csi | 41,138 | Parent file HG01501.regions.bed.gz had no value for this field |
+| .tbi | 169,523 | Parent file had no value for this field |
+| .csi | 41,138 | Parent file had no value for this field |
 | .fastq.gz | 20,621 | No rule determined a value for this field |
 | .bed.gz | 7,191 | No rule determined a value for this field |
 | .bed | 6,429 | No rule determined a value for this field |
@@ -172,7 +172,7 @@ Classification run: **2026-03-22 00:55:26**
 | .g.vcf.gz | 2,504 | No rule determined a value for this field |
 | .bam | 1,215 | No rule determined a value for this field |
 | .vcf | 646 | No rule determined a value for this field |
-| .bai | 397 | Parent file NA18906.maternal.CHM13Y_EBV.bam had no value for this field |
+| .bai | 397 | Parent file had no value for this field |
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|

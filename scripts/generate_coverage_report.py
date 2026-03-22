@@ -93,6 +93,26 @@ def load_records(run_dir: Path) -> list[dict]:
     return records
 
 
+def _normalize_reason(reason: str) -> str:
+    """Normalize evidence reasons so they aggregate well.
+
+    Strips specific filenames from inherited-from-parent reasons so they
+    don't create thousands of unique reasons that each count as 1.
+    """
+    import re
+    reason = re.sub(
+        r"Parent file .+ had no value for this field",
+        "Parent file had no value for this field",
+        reason,
+    )
+    reason = re.sub(
+        r"Inherited from parent file: .+",
+        "Inherited from parent file",
+        reason,
+    )
+    return reason
+
+
 def get_nc_reasons(records: list[dict], field_name: str) -> dict[str, Counter]:
     """Aggregate actual evidence reasons for not-classified files, grouped by extension."""
     reasons_by_ext = defaultdict(Counter)
@@ -100,7 +120,7 @@ def get_nc_reasons(records: list[dict], field_name: str) -> dict[str, Counter]:
         val = r.get(field_name)
         if val in (None, "not_classified"):
             ext = r["ext"]
-            reason = r.get(f"{field_name}_reason", "No reason recorded")
+            reason = _normalize_reason(r.get(f"{field_name}_reason", "No reason recorded"))
             reasons_by_ext[ext][reason] += 1
     return reasons_by_ext
 
