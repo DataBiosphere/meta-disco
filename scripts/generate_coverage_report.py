@@ -99,8 +99,8 @@ def _normalize_reason(reason: str) -> str:
     """
     import re
     reason = re.sub(
-        r"Parent file .+ had no value for this field",
-        "Parent file had no value for this field",
+        r"Parent file .+ had no value for (this field|\w+)",
+        r"Parent file had no value for \1",
         reason,
     )
     reason = re.sub(
