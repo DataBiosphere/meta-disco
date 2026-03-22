@@ -84,15 +84,20 @@ def main():
             script_name, ok = future.result()
             success &= ok
 
-    # Phase 2: Index propagation (depends on BAM + VCF from phase 1)
+    # Phase 2: Index classification (depends on all phase 1 outputs)
     print("\nPhase 2: Classifying index files...")
     _, ok = run_script(
         "classify_index_files.py",
         output_dir / "index_classifications.json",
         [
             "--metadata", str(args.metadata),
-            "--bam", str(output_dir / "bam_classifications.json"),
-            "--vcf", str(output_dir / "vcf_classifications.json"),
+            "--classifications",
+            str(output_dir / "bam_classifications.json"),
+            str(output_dir / "vcf_classifications.json"),
+            str(output_dir / "bed_classifications.json"),
+            str(output_dir / "fastq_classifications.json"),
+            str(output_dir / "fasta_classifications.json"),
+            str(output_dir / "auxiliary_classifications.json"),
         ]
     )
     success &= ok

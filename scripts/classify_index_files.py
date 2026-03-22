@@ -82,30 +82,14 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     return candidates
 
 
-def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
-    """Load classifications keyed by md5sum."""
+def load_classifications(*paths: Path) -> dict[str, dict]:
+    """Load classifications from one or more classification JSON files, keyed by md5sum."""
     classifications = {}
 
-    # Load BAM/CRAM classifications
-    if bam_path.exists():
-        with open(bam_path) as f:
-            data = json.load(f)
-        for c in data.get("classifications", []):
-            md5 = c.get("md5sum")
-            if md5:
-                classifications[md5] = {
-                    "data_modality": _get_field(c, "data_modality"),
-                    "data_type": _get_field(c, "data_type"),
-                    "assay_type": _get_field(c, "assay_type"),
-                    "platform": _get_field(c, "platform"),
-                    "reference_assembly": _get_field(c, "reference_assembly"),
-                    "confidence": _get_max_confidence(c),
-                    "source_file": c.get("file_name"),
-                }
-
-    # Load VCF classifications
-    if vcf_path.exists():
-        with open(vcf_path) as f:
+    for path in paths:
+        if not path.exists():
+            continue
+        with open(path) as f:
             data = json.load(f)
         for c in data.get("classifications", []):
             md5 = c.get("md5sum")
@@ -125,8 +109,7 @@ def load_classifications(bam_path: Path, vcf_path: Path) -> dict[str, dict]:
 
 def propagate_to_index_files(
     metadata_path: Path,
-    bam_classifications_path: Path,
-    vcf_classifications_path: Path,
+    classification_paths: list[Path],
     output_path: Path,
 ):
     """Propagate metadata from parent files to index files."""
@@ -139,7 +122,7 @@ def propagate_to_index_files(
     print(f"Loaded {len(files):,} files from metadata")
 
     # Load classifications
-    classifications = load_classifications(bam_classifications_path, vcf_classifications_path)
+    classifications = load_classifications(*classification_paths)
     print(f"Loaded {len(classifications):,} parent classifications")
 
     # Group files by dataset for matching
@@ -356,17 +339,14 @@ def main():
         help="Path to source metadata JSON",
     )
     parser.add_argument(
-        "--bam", "-b",
+        "--classifications", "-c",
         type=Path,
-        default=Path("output/bam_classifications.json"),
-        help="Path to BAM/CRAM classifications",
+        nargs="+",
+        help="Paths to classification JSON files (BAM, VCF, BED, FASTQ, FASTA, etc.)",
     )
-    parser.add_argument(
-        "--vcf", "-v",
-        type=Path,
-        default=Path("output/vcf_classifications.json"),
-        help="Path to VCF classifications",
-    )
+    # Backwards-compatible args
+    parser.add_argument("--bam", "-b", type=Path, help="(deprecated) Path to BAM classifications")
+    parser.add_argument("--vcf", "-v", type=Path, help="(deprecated) Path to VCF classifications")
     parser.add_argument(
         "--output", "-o",
         type=Path,
@@ -375,10 +355,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # Build list of classification paths
+    cls_paths = list(args.classifications or [])
+    if args.bam:
+        cls_paths.append(args.bam)
+    if args.vcf:
+        cls_paths.append(args.vcf)
+    if not cls_paths:
+        parser.error("Provide classification files via --classifications or --bam/--vcf")
+
     propagate_to_index_files(
         args.metadata,
-        args.bam,
-        args.vcf,
+        cls_paths,
         args.output,
     )
 
