@@ -328,7 +328,7 @@ class TestLoadClassifications:
         assert output["unmatched_files"][0]["reason"] == "no_matching_parent_in_dataset"
 
     def test_parent_found_but_not_classified(self, tmp_path):
-        """Parent exists in metadata but has no classification — index inherits None values."""
+        """Parent exists in metadata but has no classification — index gets not_classified."""
         metadata_file = tmp_path / "metadata.json"
         metadata_file.write_text(json.dumps([
             {"file_name": "sample.bam", "file_format": ".bam",
@@ -345,8 +345,9 @@ class TestLoadClassifications:
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
         with open(output_file) as f:
             output = json.load(f)
-        # Parent filename matched but md5 not in classifications → inherits None
+        # Parent filename matched but md5 not in classifications → not_classified
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        assert cls["data_modality"]["value"] is None
+        for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+            assert cls[fld]["value"] == "not_classified", f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")

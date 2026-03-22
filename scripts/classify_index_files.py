@@ -149,6 +149,8 @@ def propagate_to_index_files(
     results = []
     unmatched = []  # Track failed lookups
     stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "with_modality": 0, "with_ref": 0})
+    nc = "not_classified"
+    _sentinels = {"not_classified", "not_applicable"}
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -209,18 +211,18 @@ def propagate_to_index_files(
                 "dataset_title": f.get("dataset_title"),
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
-                "data_modality": parent_class.get("data_modality"),
-                "data_type": parent_class.get("data_type"),
-                "assay_type": parent_class.get("assay_type"),
-                "platform": parent_class.get("platform"),
-                "reference_assembly": parent_class.get("reference_assembly"),
-                "confidence": parent_class.get("confidence"),
+                "data_modality": parent_class.get("data_modality") or nc,
+                "data_type": parent_class.get("data_type") or nc,
+                "assay_type": parent_class.get("assay_type") or nc,
+                "platform": parent_class.get("platform") or nc,
+                "reference_assembly": parent_class.get("reference_assembly") or nc,
+                "confidence": parent_class.get("confidence") or 0.0,
                 "inheritance_source": "parent_file",
             }
 
-            if result["data_modality"]:
+            if result["data_modality"] not in _sentinels:
                 stats[index_ext]["with_modality"] += 1
-            if result["reference_assembly"]:
+            if result["reference_assembly"] not in _sentinels:
                 stats[index_ext]["with_ref"] += 1
 
             results.append(result)
@@ -280,7 +282,6 @@ def propagate_to_index_files(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
-    _sentinels = {"not_classified", "not_applicable", None}
 
     def inherited_evidence(field_name, field_val, parent):
         """Build evidence entry for an inherited classification field."""
