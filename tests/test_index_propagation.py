@@ -242,3 +242,111 @@ class TestLoadClassifications:
         assert cls["data_type"]["value"] == "annotations"
         assert cls["reference_assembly"]["value"] == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
+
+    def test_tbi_inherits_from_vcf_parent(self, tmp_path):
+        """End-to-end: a .tbi index inherits from its .vcf.gz parent."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps([
+            {"file_name": "sample.vcf.gz", "file_format": ".vcf.gz",
+             "file_md5sum": "vcf_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e1"},
+            {"file_name": "sample.vcf.gz.tbi", "file_format": ".tbi",
+             "file_md5sum": "tbi_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e2"},
+        ]))
+        vcf_cls = tmp_path / "vcf.json"
+        vcf_cls.write_text(json.dumps({"classifications": [{
+            "md5sum": "vcf_md5", "file_name": "sample.vcf.gz",
+            "classifications": {
+                "data_modality": {"value": "genomic", "confidence": 0.85, "evidence": []},
+                "data_type": {"value": "variants.germline", "confidence": 0.9, "evidence": []},
+                "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                "reference_assembly": {"value": "GRCh38", "confidence": 0.98, "evidence": []},
+                "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+            },
+        }]}))
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [vcf_cls], output_file)
+        with open(output_file) as f:
+            output = json.load(f)
+        assert len(output["classifications"]) == 1
+        cls = output["classifications"][0]["classifications"]
+        assert cls["data_modality"]["value"] == "genomic"
+        assert cls["data_type"]["value"] == "variants.germline"
+        assert cls["reference_assembly"]["value"] == "GRCh38"
+
+    def test_bai_inherits_from_bam_parent(self, tmp_path):
+        """End-to-end: a .bai index inherits from its .bam parent."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps([
+            {"file_name": "sample.bam", "file_format": ".bam",
+             "file_md5sum": "bam_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e1"},
+            {"file_name": "sample.bam.bai", "file_format": ".bai",
+             "file_md5sum": "bai_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e2"},
+        ]))
+        bam_cls = tmp_path / "bam.json"
+        bam_cls.write_text(json.dumps({"classifications": [{
+            "md5sum": "bam_md5", "file_name": "sample.bam",
+            "classifications": {
+                "data_modality": {"value": "transcriptomic.bulk", "confidence": 0.95, "evidence": []},
+                "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
+                "platform": {"value": "ILLUMINA", "confidence": 0.95, "evidence": []},
+                "reference_assembly": {"value": "GRCh38", "confidence": 0.98, "evidence": []},
+                "assay_type": {"value": "RNA-seq", "confidence": 0.95, "evidence": []},
+            },
+        }]}))
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [bam_cls], output_file)
+        with open(output_file) as f:
+            output = json.load(f)
+        assert len(output["classifications"]) == 1
+        cls = output["classifications"][0]["classifications"]
+        assert cls["data_modality"]["value"] == "transcriptomic.bulk"
+        assert cls["platform"]["value"] == "ILLUMINA"
+        assert cls["assay_type"]["value"] == "RNA-seq"
+
+    def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
+        """Index file with no parent in metadata goes to unmatched_files, not classifications."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps([
+            {"file_name": "orphan.bam.bai", "file_format": ".bai",
+             "file_md5sum": "orphan_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e1"},
+        ]))
+        # No classifications to load — empty file
+        empty_cls = tmp_path / "empty.json"
+        empty_cls.write_text(json.dumps({"classifications": []}))
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [empty_cls], output_file)
+        with open(output_file) as f:
+            output = json.load(f)
+        assert len(output["classifications"]) == 0
+        assert len(output["unmatched_files"]) == 1
+        assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
+        assert output["unmatched_files"][0]["reason"] == "no_matching_parent_in_dataset"
+
+    def test_parent_found_but_not_classified(self, tmp_path):
+        """Parent exists in metadata but has no classification — index inherits None values."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps([
+            {"file_name": "sample.bam", "file_format": ".bam",
+             "file_md5sum": "bam_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e1"},
+            {"file_name": "sample.bam.bai", "file_format": ".bai",
+             "file_md5sum": "bai_md5", "dataset_id": "ds1",
+             "dataset_title": "test", "entry_id": "e2"},
+        ]))
+        # Parent exists in metadata but not in classifications
+        empty_cls = tmp_path / "empty.json"
+        empty_cls.write_text(json.dumps({"classifications": []}))
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [empty_cls], output_file)
+        with open(output_file) as f:
+            output = json.load(f)
+        # Parent filename matched but md5 not in classifications → inherits None
+        assert len(output["classifications"]) == 1
+        cls = output["classifications"][0]["classifications"]
+        assert cls["data_modality"]["value"] is None
+        assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
