@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AnVIL Classification Coverage</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #fff; color: #24292f; }
+    h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+    h2 { margin-top: 40px; border-bottom: 1px solid #d0d7de; padding-bottom: 6px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+    .summary-card { border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; text-align: center; }
+    .summary-card .label { font-size: 14px; color: #656d76; }
+    .summary-card .value { font-size: 28px; font-weight: 600; }
+    .summary-card .pct { font-size: 14px; color: #656d76; }
+    .chart-container { margin: 20px 0; }
+    .bar-chart { width: 100%; }
+    .bar-row { display: flex; align-items: center; margin: 4px 0; position: relative; }
+    .bar-label { width: 220px; font-size: 13px; text-align: right; padding-right: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; height: 24px; background: #f6f8fa; border-radius: 3px; overflow: hidden; position: relative; cursor: pointer; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .bar-value { position: absolute; right: 6px; top: 3px; font-size: 12px; color: #24292f; }
+    .tooltip { display: none; position: absolute; left: 230px; top: 28px; z-index: 10; background: #24292f; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .tooltip table { border-collapse: collapse; }
+    .tooltip td { padding: 1px 8px 1px 0; }
+    .tooltip td:last-child { text-align: right; }
+    .bar-row:hover .tooltip { display: block; }
+    .nc-table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    .nc-table th, .nc-table td { border: 1px solid #d0d7de; padding: 6px 10px; text-align: left; font-size: 13px; }
+    .nc-table th { background: #f6f8fa; }
+    .nc-table td:nth-child(2) { text-align: right; }
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid #d0d7de; margin-bottom: 20px; }
+    .tab { padding: 8px 16px; cursor: pointer; border: 1px solid transparent; border-bottom: none; margin-bottom: -1px; font-size: 14px; color: #656d76; }
+    .tab.active { color: #24292f; background: #fff; border-color: #d0d7de; border-radius: 6px 6px 0 0; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .donut-container { display: flex; align-items: center; gap: 40px; margin: 20px 0; }
+    .donut-legend { font-size: 13px; }
+    .donut-legend div { margin: 4px 0; display: flex; align-items: center; gap: 6px; }
+    .legend-swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>AnVIL Classification Coverage Dashboard</h1>
+  <p id="subtitle"></p>
+
+  <div class="summary-grid" id="summary-cards"></div>
+
+  <div class="tab-bar" id="tab-bar"></div>
+  <div id="tab-contents"></div>
+
+  <script type="module">
+    // Data injected by generate script
+    const DATA = {"total": 541169, "run_time": "2026-03-22 00:55:26", "dimensions": [{"field": "data_modality", "label": "Data Modality", "classified": 520112, "not_classified": 21057, "values": [{"name": "genomic", "count": 478734, "extensions": [{"ext": ".vcf.gz", "count": 201860}, {"ext": ".tbi", "count": 169463}, {"ext": ".csi", "count": 41138}, {"ext": ".fast5", "count": 12394}, {"ext": ".cram", "count": 10829}, {"ext": ".crai", "count": 10319}, {"ext": ".bed.gz", "count": 7191}, {"ext": ".bam", "count": 6063}, {"ext": ".pgen", "count": 2854}, {"ext": ".pvar", "count": 2854}, {"ext": ".psam", "count": 2854}, {"ext": ".g.vcf.gz", "count": 2504}, {"ext": ".fastq.gz", "count": 2412}, {"ext": ".fa.gz", "count": 1633}, {"ext": ".pbi", "count": 1102}, {"ext": ".bai", "count": 1061}, {"ext": ".bed", "count": 1059}, {"ext": ".vcf", "count": 646}, {"ext": ".fast5.tar", "count": 273}, {"ext": ".fasta.gz", "count": 93}, {"ext": ".fastq", "count": 56}, {"ext": ".fasta", "count": 37}, {"ext": ".fast5.tar.gz", "count": 26}, {"ext": ".pod5", "count": 11}, {"ext": ".fa", "count": 2}]}, {"name": "imaging.histology", "count": 25708, "extensions": [{"ext": ".svs", "count": 25708}]}, {"name": "not_classified", "count": 20997, "extensions": [{"ext": ".fastq.gz", "count": 20621}, {"ext": ".bam", "count": 357}, {"ext": ".bai", "count": 19}]}, {"name": "not_applicable", "count": 13419, "extensions": [{"ext": ".png", "count": 8049}, {"ext": ".bed", "count": 5370}]}, {"name": "transcriptomic.bulk", "count": 2216, "extensions": [{"ext": ".bam", "count": 1413}, {"ext": ".bai", "count": 779}, {"ext": ".bed.gz", "count": 12}, {"ext": ".tbi", "count": 12}]}, {"name": "None", "count": 60, "extensions": [{"ext": ".tbi", "count": 60}]}, {"name": "epigenomic.methylation", "count": 28, "extensions": [{"ext": ".bed.gz", "count": 28}]}, {"name": "epigenomic.chromatin_accessibility", "count": 6, "extensions": [{"ext": ".fastq.gz", "count": 6}]}, {"name": "transcriptomic.single_cell", "count": 1, "extensions": [{"ext": ".fastq.gz", "count": 1}]}], "not_classified_breakdown": [{"ext": ".fastq.gz", "count": 20621, "why": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay"}, {"ext": ".bam", "count": 357, "why": "No rule determined a value for this field"}, {"ext": ".tbi", "count": 60, "why": "Parent file had no value for this field"}, {"ext": ".bai", "count": 19, "why": "Parent file had no value for this field"}], "notes": ""}, {"field": "data_type", "label": "Data Type", "classified": 538320, "not_classified": 2849, "values": [{"name": "variants.germline", "count": 317745, "extensions": [{"ext": ".tbi", "count": 158887}, {"ext": ".vcf.gz", "count": 158858}]}, {"name": "variants", "count": 90143, "extensions": [{"ext": ".vcf.gz", "count": 42947}, {"ext": ".csi", "count": 34141}, {"ext": ".tbi", "count": 10546}, {"ext": ".g.vcf.gz", "count": 2504}, {"ext": ".vcf", "count": 5}]}, {"name": "images", "count": 33757, "extensions": [{"ext": ".svs", "count": 25708}, {"ext": ".png", "count": 8049}]}, {"name": "alignments", "count": 29153, "extensions": [{"ext": ".cram", "count": 10829}, {"ext": ".crai", "count": 10319}, {"ext": ".bam", "count": 5768}, {"ext": ".bai", "count": 1812}, {"ext": ".pbi", "count": 425}]}, {"name": "reads", "count": 23096, "extensions": [{"ext": ".fastq.gz", "count": 23040}, {"ext": ".fastq", "count": 56}]}, {"name": "annotations", "count": 20673, "extensions": [{"ext": ".bed.gz", "count": 7231}, {"ext": ".csi", "count": 6997}, {"ext": ".bed", "count": 6429}, {"ext": ".tbi", "count": 16}]}, {"name": "raw_signal", "count": 12704, "extensions": [{"ext": ".fast5", "count": 12394}, {"ext": ".fast5.tar", "count": 273}, {"ext": ".fast5.tar.gz", "count": 26}, {"ext": ".pod5", "count": 11}]}, {"name": "genotypes", "count": 8562, "extensions": [{"ext": ".pgen", "count": 2854}, {"ext": ".pvar", "count": 2854}, {"ext": ".psam", "count": 2854}]}, {"name": "not_classified", "count": 2789, "extensions": [{"ext": ".bam", "count": 2065}, {"ext": ".pbi", "count": 677}, {"ext": ".bai", "count": 47}]}, {"name": "assembly", "count": 1747, "extensions": [{"ext": ".fa.gz", "count": 1631}, {"ext": ".fasta.gz", "count": 90}, {"ext": ".fasta", "count": 25}, {"ext": ".fa", "count": 1}]}, {"name": "variants.structural", "count": 722, "extensions": [{"ext": ".vcf", "count": 641}, {"ext": ".vcf.gz", "count": 55}, {"ext": ".tbi", "count": 26}]}, {"name": "None", "count": 60, "extensions": [{"ext": ".tbi", "count": 60}]}, {"name": "sequence", "count": 16, "extensions": [{"ext": ".fasta", "count": 10}, {"ext": ".fasta.gz", "count": 3}, {"ext": ".fa.gz", "count": 2}, {"ext": ".fa", "count": 1}]}, {"name": "reference_genome", "count": 2, "extensions": [{"ext": ".fasta", "count": 2}]}], "not_classified_breakdown": [{"ext": ".bam", "count": 2065, "why": "No rule determined a value for this field"}, {"ext": ".pbi", "count": 677, "why": "Parent file had no value for this field"}, {"ext": ".tbi", "count": 60, "why": "Parent file had no value for this field"}, {"ext": ".bai", "count": 47, "why": "Parent file had no value for this field"}], "notes": ""}, {"field": "reference_assembly", "label": "Reference Assembly", "classified": 535900, "not_classified": 5269, "values": [{"name": "CHM13", "count": 408814, "extensions": [{"ext": ".vcf.gz", "count": 190224}, {"ext": ".tbi", "count": 159059}, {"ext": ".csi", "count": 37922}, {"ext": ".bed.gz", "count": 6723}, {"ext": ".cram", "count": 6718}, {"ext": ".crai", "count": 6715}, {"ext": ".bam", "count": 427}, {"ext": ".bed", "count": 413}, {"ext": ".bai", "count": 393}, {"ext": ".vcf", "count": 208}, {"ext": ".fasta", "count": 6}, {"ext": ".fasta.gz", "count": 3}, {"ext": ".fa.gz", "count": 2}, {"ext": ".fa", "count": 1}]}, {"name": "not_applicable", "count": 82099, "extensions": [{"ext": ".svs", "count": 25708}, {"ext": ".fastq.gz", "count": 23040}, {"ext": ".fast5", "count": 12394}, {"ext": ".png", "count": 8049}, {"ext": ".bed", "count": 4830}, {"ext": ".bam", "count": 4653}, {"ext": ".fa.gz", "count": 1631}, {"ext": ".pbi", "count": 1102}, {"ext": ".fast5.tar", "count": 273}, {"ext": ".bed.gz", "count": 188}, {"ext": ".fasta.gz", "count": 90}, {"ext": ".fastq", "count": 56}, {"ext": ".fast5.tar.gz", "count": 26}, {"ext": ".fasta", "count": 25}, {"ext": ".bai", "count": 22}, {"ext": ".pod5", "count": 11}, {"ext": ".fa", "count": 1}]}, {"name": "GRCh38", "count": 44971, "extensions": [{"ext": ".tbi", "count": 10210}, {"ext": ".vcf.gz", "count": 9431}, {"ext": ".cram", "count": 4111}, {"ext": ".crai", "count": 3604}, {"ext": ".pgen", "count": 2854}, {"ext": ".pvar", "count": 2854}, {"ext": ".psam", "count": 2854}, {"ext": ".g.vcf.gz", "count": 2504}, {"ext": ".bam", "count": 2476}, {"ext": ".csi", "count": 1248}, {"ext": ".bed", "count": 1180}, {"ext": ".bai", "count": 1170}, {"ext": ".bed.gz", "count": 289}, {"ext": ".vcf", "count": 183}, {"ext": ".fasta", "count": 3}]}, {"name": "not_classified", "count": 5209, "extensions": [{"ext": ".vcf.gz", "count": 2197}, {"ext": ".csi", "count": 1968}, {"ext": ".bam", "count": 277}, {"ext": ".bai", "count": 274}, {"ext": ".vcf", "count": 252}, {"ext": ".tbi", "count": 206}, {"ext": ".bed.gz", "count": 31}, {"ext": ".fasta", "count": 3}, {"ext": ".bed", "count": 1}]}, {"name": "None", "count": 60, "extensions": [{"ext": ".tbi", "count": 60}]}, {"name": "GRCh37", "count": 16, "extensions": [{"ext": ".vcf.gz", "count": 8}, {"ext": ".bed", "count": 5}, {"ext": ".vcf", "count": 3}]}], "not_classified_breakdown": [{"ext": ".vcf.gz", "count": 2197, "why": "No rule determined a value for this field"}, {"ext": ".csi", "count": 1968, "why": "Parent file had no value for this field"}, {"ext": ".bam", "count": 277, "why": "No rule determined a value for this field"}, {"ext": ".bai", "count": 274, "why": "Parent file had no value for this field"}, {"ext": ".tbi", "count": 266, "why": "Parent file had no value for this field"}, {"ext": ".vcf", "count": 252, "why": "No rule determined a value for this field"}, {"ext": ".bed.gz", "count": 31, "why": "No rule determined a value for this field"}, {"ext": ".fasta", "count": 3, "why": "No rule determined a value for this field"}, {"ext": ".bed", "count": 1, "why": "No rule determined a value for this field"}], "notes": ""}, {"field": "platform", "label": "Platform", "classified": 98805, "not_classified": 442364, "values": [{"name": "not_classified", "count": 442304, "extensions": [{"ext": ".vcf.gz", "count": 201860}, {"ext": ".tbi", "count": 169475}, {"ext": ".csi", "count": 41138}, {"ext": ".bed.gz", "count": 7231}, {"ext": ".bed", "count": 6429}, {"ext": ".bam", "count": 2960}, {"ext": ".pgen", "count": 2854}, {"ext": ".pvar", "count": 2854}, {"ext": ".psam", "count": 2854}, {"ext": ".g.vcf.gz", "count": 2504}, {"ext": ".bai", "count": 1499}, {"ext": ".vcf", "count": 646}]}, {"name": "ILLUMINA", "count": 41776, "extensions": [{"ext": ".fastq.gz", "count": 20628}, {"ext": ".cram", "count": 10829}, {"ext": ".crai", "count": 10319}]}, {"name": "not_applicable", "count": 35522, "extensions": [{"ext": ".svs", "count": 25708}, {"ext": ".png", "count": 8049}, {"ext": ".fa.gz", "count": 1633}, {"ext": ".fasta.gz", "count": 93}, {"ext": ".fasta", "count": 37}, {"ext": ".fa", "count": 2}]}, {"name": "ONT", "count": 15556, "extensions": [{"ext": ".fast5", "count": 12394}, {"ext": ".bam", "count": 1509}, {"ext": ".fastq.gz", "count": 1278}, {"ext": ".fast5.tar", "count": 273}, {"ext": ".bai", "count": 65}, {"ext": ".fast5.tar.gz", "count": 26}, {"ext": ".pod5", "count": 11}]}, {"name": "PACBIO", "count": 5951, "extensions": [{"ext": ".bam", "count": 3364}, {"ext": ".fastq.gz", "count": 1134}, {"ext": ".pbi", "count": 1102}, {"ext": ".bai", "count": 295}, {"ext": ".fastq", "count": 56}]}, {"name": "None", "count": 60, "extensions": [{"ext": ".tbi", "count": 60}]}], "not_classified_breakdown": [{"ext": ".vcf.gz", "count": 201860, "why": "No rule determined a value for this field"}, {"ext": ".tbi", "count": 169535, "why": "Parent file had no value for this field"}, {"ext": ".csi", "count": 41138, "why": "Parent file had no value for this field"}, {"ext": ".bed.gz", "count": 7231, "why": "No rule determined a value for this field"}, {"ext": ".bed", "count": 6429, "why": "No rule determined a value for this field"}, {"ext": ".bam", "count": 2960, "why": "No rule determined a value for this field"}, {"ext": ".pgen", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".pvar", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".psam", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".g.vcf.gz", "count": 2504, "why": "No rule determined a value for this field"}, {"ext": ".bai", "count": 1499, "why": "Parent file had no value for this field"}, {"ext": ".vcf", "count": 646, "why": "No rule determined a value for this field"}], "notes": "**Note**: Platform is inherently unknowable for most derived formats (VCF, BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ (via read name patterns) can encode platform. The high not-classified rate is expected."}, {"field": "assay_type", "label": "Assay Type", "classified": 81083, "not_classified": 460086, "values": [{"name": "not_classified", "count": 460026, "extensions": [{"ext": ".vcf.gz", "count": 201860}, {"ext": ".tbi", "count": 169463}, {"ext": ".csi", "count": 41138}, {"ext": ".fastq.gz", "count": 20621}, {"ext": ".bed.gz", "count": 7191}, {"ext": ".bed", "count": 6429}, {"ext": ".pgen", "count": 2854}, {"ext": ".pvar", "count": 2854}, {"ext": ".psam", "count": 2854}, {"ext": ".g.vcf.gz", "count": 2504}, {"ext": ".bam", "count": 1215}, {"ext": ".vcf", "count": 646}, {"ext": ".bai", "count": 397}]}, {"name": "WGS", "count": 43305, "extensions": [{"ext": ".fast5", "count": 12394}, {"ext": ".cram", "count": 10824}, {"ext": ".crai", "count": 10319}, {"ext": ".bam", "count": 5205}, {"ext": ".fastq.gz", "count": 2412}, {"ext": ".pbi", "count": 1102}, {"ext": ".bai", "count": 683}, {"ext": ".fast5.tar", "count": 273}, {"ext": ".fastq", "count": 56}, {"ext": ".fast5.tar.gz", "count": 26}, {"ext": ".pod5", "count": 11}]}, {"name": "Histology", "count": 25708, "extensions": [{"ext": ".svs", "count": 25708}]}, {"name": "not_applicable", "count": 9814, "extensions": [{"ext": ".png", "count": 8049}, {"ext": ".fa.gz", "count": 1633}, {"ext": ".fasta.gz", "count": 93}, {"ext": ".fasta", "count": 37}, {"ext": ".fa", "count": 2}]}, {"name": "RNA-seq", "count": 2217, "extensions": [{"ext": ".bam", "count": 1413}, {"ext": ".bai", "count": 779}, {"ext": ".bed.gz", "count": 12}, {"ext": ".tbi", "count": 12}, {"ext": ".fastq.gz", "count": 1}]}, {"name": "None", "count": 60, "extensions": [{"ext": ".tbi", "count": 60}]}, {"name": "Bisulfite-seq", "count": 28, "extensions": [{"ext": ".bed.gz", "count": 28}]}, {"name": "ATAC-seq", "count": 6, "extensions": [{"ext": ".fastq.gz", "count": 6}]}, {"name": "WES", "count": 5, "extensions": [{"ext": ".cram", "count": 5}]}], "not_classified_breakdown": [{"ext": ".vcf.gz", "count": 201860, "why": "No rule determined a value for this field"}, {"ext": ".tbi", "count": 169523, "why": "Parent file had no value for this field"}, {"ext": ".csi", "count": 41138, "why": "Parent file had no value for this field"}, {"ext": ".fastq.gz", "count": 20621, "why": "No rule determined a value for this field"}, {"ext": ".bed.gz", "count": 7191, "why": "No rule determined a value for this field"}, {"ext": ".bed", "count": 6429, "why": "No rule determined a value for this field"}, {"ext": ".pgen", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".pvar", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".psam", "count": 2854, "why": "No rule determined a value for this field"}, {"ext": ".g.vcf.gz", "count": 2504, "why": "No rule determined a value for this field"}, {"ext": ".bam", "count": 1215, "why": "No rule determined a value for this field"}, {"ext": ".vcf", "count": 646, "why": "No rule determined a value for this field"}, {"ext": ".bai", "count": 397, "why": "Parent file had no value for this field"}], "notes": "**Note**: Like platform, assay type is inherently unknowable for most derived formats. Only BAM/CRAM (via `@PG` programs and file size heuristics) and filename patterns can determine assay. The high not-classified rate is expected."}]};
+
+    document.getElementById('subtitle').textContent =
+      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions. Classification run: ${DATA.run_time}`;
+
+    // Colors
+    const COLORS = [
+      '#2da44e', '#0969da', '#8250df', '#bf8700', '#cf222e',
+      '#1a7f37', '#0550ae', '#6639ba', '#9a6700', '#a40e26',
+      '#218bff', '#a475f9', '#d4a72c', '#ff8c00', '#6e7781',
+    ];
+    const NC_COLOR = '#d0d7de';
+
+    // Summary cards
+    const cardsEl = document.getElementById('summary-cards');
+    for (const dim of DATA.dimensions) {
+      const card = document.createElement('div');
+      card.className = 'summary-card';
+      card.innerHTML = `
+        <div class="label">${dim.label}</div>
+        <div class="value" style="color: ${dim.classified / DATA.total > 0.5 ? '#2da44e' : '#cf222e'}">${(100 * dim.classified / DATA.total).toFixed(1)}%</div>
+        <div class="pct">${dim.classified.toLocaleString()} / ${DATA.total.toLocaleString()}</div>
+      `;
+      cardsEl.appendChild(card);
+    }
+
+    // Tabs
+    const tabBar = document.getElementById('tab-bar');
+    const tabContents = document.getElementById('tab-contents');
+
+    DATA.dimensions.forEach((dim, i) => {
+      // Tab button
+      const tab = document.createElement('div');
+      tab.className = 'tab' + (i === 0 ? ' active' : '');
+      tab.textContent = dim.label;
+      tab.onclick = () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + i).classList.add('active');
+      };
+      tabBar.appendChild(tab);
+
+      // Tab content
+      const content = document.createElement('div');
+      content.id = 'tab-' + i;
+      content.className = 'tab-content' + (i === 0 ? ' active' : '');
+
+      // Summary table
+      let html = `
+        <table class="nc-table" style="width: auto; margin-bottom: 20px;">
+          <tr><td><strong>Classified</strong></td><td>${dim.classified.toLocaleString()}</td><td>${(100 * dim.classified / DATA.total).toFixed(1)}%</td></tr>
+          <tr><td><strong>Not classified</strong></td><td>${dim.not_classified.toLocaleString()}</td><td>${(100 * dim.not_classified / DATA.total).toFixed(1)}%</td></tr>
+        </table>
+      `;
+
+      // Horizontal bar chart
+      const maxCount = Math.max(...dim.values.map(v => v.count));
+      html += '<div class="chart-container"><div class="bar-chart">';
+      dim.values.forEach((v, vi) => {
+        const width = (v.count / maxCount * 100).toFixed(1);
+        const color = v.name === 'not_classified' || v.name === 'None' ? NC_COLOR : COLORS[vi % COLORS.length];
+        const extRows = (v.extensions || [])
+          .map(e => `<tr><td>${e.ext}</td><td>${e.count.toLocaleString()}</td></tr>`)
+          .join('');
+        html += `
+          <div class="bar-row">
+            <div class="bar-label" title="${v.name}">${v.name}</div>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: ${width}%; background: ${color};"></div>
+              <div class="bar-value">${v.count.toLocaleString()} (${(100 * v.count / DATA.total).toFixed(1)}%)</div>
+            </div>
+            <div class="tooltip"><table>${extRows}</table></div>
+          </div>
+        `;
+      });
+      html += '</div></div>';
+
+      // Not classified breakdown
+      if (dim.not_classified_breakdown && dim.not_classified_breakdown.length > 0) {
+        html += '<h3>What\'s not classified?</h3>';
+        html += '<table class="nc-table"><tr><th>Extension</th><th>Count</th><th>Root cause</th></tr>';
+        for (const nc of dim.not_classified_breakdown) {
+          html += `<tr><td>${nc.ext}</td><td>${nc.count.toLocaleString()}</td><td>${nc.why}</td></tr>`;
+        }
+        html += '</table>';
+      }
+
+      if (dim.notes) {
+        html += `<p style="font-size: 13px; color: #656d76; margin-top: 16px;">${dim.notes}</p>`;
+      }
+
+      content.innerHTML = html;
+      tabContents.appendChild(content);
+    });
+  </script>
+</body>
+</html>
