@@ -1,7 +1,7 @@
 # AnVIL Classification Coverage Report
 
 Coverage of 541,169 classified file records across 5 dimensions.
-Classification run: **2026-03-22 10:16:42**
+Classification run: **2026-03-22 10:30:19**
 
 **Classified** includes all files with a determined value, including `not_applicable` (e.g., FASTQ files have no reference assembly). **Not classified** means no rule or signal could determine a value.
 
@@ -28,8 +28,8 @@ Classification run: **2026-03-22 10:16:42**
 |---|---:|---|
 | .fastq.gz | 20,621 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
 | .bam | 357 | No rule determined a value for data_modality |
-| .tbi | 60 | Parent file had no value for this field |
-| .bai | 19 | Parent file had no value for this field |
+| .tbi | 60 | Parent file had no value for data_modality |
+| .bai | 19 | Parent file had no value for data_modality |
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
@@ -57,9 +57,9 @@ Classification run: **2026-03-22 10:16:42**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .bam | 2,065 | No rule determined a value for data_type |
-| .pbi | 677 | Parent file had no value for this field |
-| .tbi | 60 | Parent file had no value for this field |
-| .bai | 47 | Parent file had no value for this field |
+| .pbi | 677 | Parent file had no value for data_type |
+| .tbi | 60 | Parent file had no value for data_type |
+| .bai | 47 | Parent file had no value for data_type |
 
 | Data Type | count | % | extensions |
 |---|---:|---:|---|
@@ -92,10 +92,10 @@ Classification run: **2026-03-22 10:16:42**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 2,197 | No rule determined a value for reference_assembly |
-| .csi | 1,968 | Parent file had no value for this field |
+| .csi | 1,968 | Parent file had no value for reference_assembly |
 | .bam | 277 | No rule determined a value for reference_assembly |
-| .bai | 274 | Parent file had no value for this field |
-| .tbi | 266 | Parent file had no value for this field |
+| .bai | 274 | Parent file had no value for reference_assembly |
+| .tbi | 266 | Parent file had no value for reference_assembly |
 | .vcf | 252 | No rule determined a value for reference_assembly |
 | .bed.gz | 31 | No rule determined a value for reference_assembly |
 | .fasta | 3 | No rule determined a value for reference_assembly |
@@ -124,8 +124,8 @@ Classification run: **2026-03-22 10:16:42**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 201,860 | No rule determined a value for platform |
-| .tbi | 169,535 | Parent file had no value for this field |
-| .csi | 41,138 | Parent file had no value for this field |
+| .tbi | 169,535 | Parent file had no value for platform |
+| .csi | 41,138 | Parent file had no value for platform |
 | .bed.gz | 7,231 | No rule determined a value for platform |
 | .bed | 6,429 | No rule determined a value for platform |
 | .bam | 2,960 | No rule determined a value for platform |
@@ -133,7 +133,7 @@ Classification run: **2026-03-22 10:16:42**
 | .pvar | 2,854 | No rule determined a value for platform |
 | .psam | 2,854 | No rule determined a value for platform |
 | .g.vcf.gz | 2,504 | No rule determined a value for platform |
-| .bai | 1,499 | Parent file had no value for this field |
+| .bai | 1,499 | Parent file had no value for platform |
 | .vcf | 646 | No rule determined a value for platform |
 
 | Platform | count | % | extensions |
@@ -161,8 +161,8 @@ Classification run: **2026-03-22 10:16:42**
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf.gz | 201,860 | No rule determined a value for assay_type |
-| .tbi | 169,523 | Parent file had no value for this field |
-| .csi | 41,138 | Parent file had no value for this field |
+| .tbi | 169,523 | Parent file had no value for assay_type |
+| .csi | 41,138 | Parent file had no value for assay_type |
 | .fastq.gz | 20,621 | No rule determined a value for assay_type |
 | .bed.gz | 7,191 | No rule determined a value for assay_type |
 | .bed | 6,429 | No rule determined a value for assay_type |
@@ -172,7 +172,7 @@ Classification run: **2026-03-22 10:16:42**
 | .g.vcf.gz | 2,504 | No rule determined a value for assay_type |
 | .bam | 1,215 | No rule determined a value for assay_type |
 | .vcf | 646 | No rule determined a value for assay_type |
-| .bai | 397 | Parent file had no value for this field |
+| .bai | 397 | Parent file had no value for assay_type |
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
