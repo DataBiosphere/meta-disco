@@ -149,6 +149,8 @@ def propagate_to_index_files(
     results = []
     unmatched = []  # Track failed lookups
     stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "with_modality": 0, "with_ref": 0})
+    nc = "not_classified"
+    _sentinels = {"not_classified", "not_applicable"}
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -200,8 +202,6 @@ def propagate_to_index_files(
             # Get parent classification
             parent_class = classifications.get(parent_md5, {})
 
-            nc = "not_classified"
-            _sentinels = {"not_classified", "not_applicable"}
             result = {
                 "entry_id": f.get("entry_id"),
                 "file_name": name,
@@ -282,7 +282,6 @@ def propagate_to_index_files(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
-    _sentinels = {"not_classified", "not_applicable", None}
 
     def inherited_evidence(field_name, field_val, parent):
         """Build evidence entry for an inherited classification field."""
