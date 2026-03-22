@@ -296,7 +296,8 @@ def generate_html_dashboard(records: list[dict],
             "notes": notes,
         })
 
-    template_path = Path("docs/coverage-dashboard-template.html")
+    project_root = Path(__file__).parent.parent
+    template_path = project_root / "docs" / "coverage-dashboard-template.html"
     if template_path.is_file():
         template = template_path.read_text()
     else:
