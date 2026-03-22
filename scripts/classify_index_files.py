@@ -289,7 +289,7 @@ def propagate_to_index_files(
                      "reason": f"Inherited from parent file: {parent}",
                      "confidence": 0.95}]
         return [{"rule_id": "inherited_from_parent",
-                 "reason": f"Parent file had no value for {field_name}",
+                 "reason": f"Parent file {parent} had no value for {field_name}",
                  "confidence": 0.0}]
 
     standard_results = []
