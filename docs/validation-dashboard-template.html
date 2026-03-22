@@ -57,6 +57,12 @@
   <script type="module">
     const DATA = VALIDATION_DATA_PLACEHOLDER;
 
+    const escapeHtml = (value) => {
+      const div = document.createElement('div');
+      div.textContent = value == null ? '' : String(value);
+      return div.innerHTML;
+    };
+
     const COLORS = {
       agree: '#2da44e',
       discrepancy: '#cf222e',
@@ -171,13 +177,13 @@
         if (sortedCats.length > 0) {
           html += `<h4>Discrepancies</h4>`;
           html += `<table class="disc-table">
-            <tr><th>Count</th><th>Inferred</th><th>${sourceLabel}</th><th>Example</th></tr>`;
+            <tr><th>Count</th><th>Inferred</th><th>${escapeHtml(sourceLabel)}</th><th>Example</th></tr>`;
           for (const cat of sortedCats) {
             html += `<tr>
               <td style="text-align: right;">${cat.count.toLocaleString()}</td>
-              <td>${cat.ours}</td>
-              <td>${cat.truth_mapped}</td>
-              <td title="${cat.example}">${cat.example}</td>
+              <td>${escapeHtml(cat.ours)}</td>
+              <td>${escapeHtml(cat.truth_mapped)}</td>
+              <td title="${escapeHtml(cat.example)}">${escapeHtml(cat.example)}</td>
             </tr>`;
           }
           html += '</table>';
