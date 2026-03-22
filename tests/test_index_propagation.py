@@ -1,5 +1,6 @@
 """Tests for index file metadata propagation."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from classify_index_files import INDEX_TO_PARENT, get_parent_candidates
+from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications
 
 
 class TestParentCandidateGeneration:
@@ -115,3 +116,91 @@ class TestIndexToParentMapping:
         """Should not have bare .gz as a parent extension."""
         for index_ext, parent_exts in INDEX_TO_PARENT.items():
             assert ".gz" not in parent_exts, f"{index_ext} has bare .gz"
+
+
+class TestLoadClassifications:
+    """Test that load_classifications loads from multiple sources."""
+
+    def test_loads_from_single_file(self, tmp_path):
+        """Load classifications from one JSON file."""
+        cls_file = tmp_path / "bam.json"
+        cls_file.write_text(json.dumps({
+            "classifications": [{
+                "md5sum": "abc123",
+                "file_name": "sample.bam",
+                "classifications": {
+                    "data_modality": {"value": "genomic", "confidence": 0.9, "evidence": []},
+                    "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
+                    "platform": {"value": "ILLUMINA", "confidence": 0.9, "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "confidence": 0.9, "evidence": []},
+                    "assay_type": {"value": "WGS", "confidence": 0.9, "evidence": []},
+                },
+            }],
+        }))
+        result = load_classifications(cls_file)
+        assert "abc123" in result
+        assert result["abc123"]["data_modality"] == "genomic"
+        assert result["abc123"]["platform"] == "ILLUMINA"
+
+    def test_loads_from_multiple_files(self, tmp_path):
+        """Load classifications from BAM + BED files."""
+        bam_file = tmp_path / "bam.json"
+        bam_file.write_text(json.dumps({
+            "classifications": [{
+                "md5sum": "bam_md5",
+                "file_name": "sample.bam",
+                "classifications": {
+                    "data_modality": {"value": "genomic", "confidence": 0.9, "evidence": []},
+                    "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
+                    "platform": {"value": "ILLUMINA", "confidence": 0.9, "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "confidence": 0.9, "evidence": []},
+                    "assay_type": {"value": "WGS", "confidence": 0.9, "evidence": []},
+                },
+            }],
+        }))
+        bed_file = tmp_path / "bed.json"
+        bed_file.write_text(json.dumps({
+            "classifications": [{
+                "md5sum": "bed_md5",
+                "file_name": "sample.regions.bed.gz",
+                "classifications": {
+                    "data_modality": {"value": "genomic", "confidence": 0.8, "evidence": []},
+                    "data_type": {"value": "annotations", "confidence": 0.8, "evidence": []},
+                    "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "confidence": 0.8, "evidence": []},
+                    "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                },
+            }],
+        }))
+        result = load_classifications(bam_file, bed_file)
+        assert "bam_md5" in result
+        assert "bed_md5" in result
+        assert result["bed_md5"]["data_modality"] == "genomic"
+        assert result["bed_md5"]["data_type"] == "annotations"
+
+    def test_skips_missing_files(self, tmp_path):
+        """Missing files are silently skipped."""
+        result = load_classifications(tmp_path / "nonexistent.json")
+        assert result == {}
+
+    def test_bed_parent_available_for_csi(self, tmp_path):
+        """A .csi index can find its .bed.gz parent when BED classifications are loaded."""
+        bed_file = tmp_path / "bed.json"
+        bed_file.write_text(json.dumps({
+            "classifications": [{
+                "md5sum": "bed_parent_md5",
+                "file_name": "HG03652.regions.bed.gz",
+                "classifications": {
+                    "data_modality": {"value": "genomic", "confidence": 0.8, "evidence": []},
+                    "data_type": {"value": "annotations", "confidence": 0.8, "evidence": []},
+                    "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                    "reference_assembly": {"value": "CHM13", "confidence": 0.9, "evidence": []},
+                    "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                },
+            }],
+        }))
+        result = load_classifications(bed_file)
+        # Verify the parent is loadable
+        assert "bed_parent_md5" in result
+        assert result["bed_parent_md5"]["data_modality"] == "genomic"
+        assert result["bed_parent_md5"]["reference_assembly"] == "CHM13"
