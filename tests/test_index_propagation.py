@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications
+from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
 
 class TestParentCandidateGeneration:
@@ -183,10 +183,35 @@ class TestLoadClassifications:
         result = load_classifications(tmp_path / "nonexistent.json")
         assert result == {}
 
-    def test_bed_parent_available_for_csi(self, tmp_path):
-        """A .csi index can find its .bed.gz parent when BED classifications are loaded."""
-        bed_file = tmp_path / "bed.json"
-        bed_file.write_text(json.dumps({
+    def test_csi_inherits_from_bed_parent(self, tmp_path):
+        """End-to-end: a .csi index file inherits classification from its .bed.gz parent.
+
+        This is the regression that #41 fixes — previously BED classifications were
+        not loaded, so .csi files for .bed.gz parents got None for all fields."""
+        # Create metadata with a BED parent and its CSI index in the same dataset
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps([
+            {
+                "file_name": "HG03652.regions.bed.gz",
+                "file_format": ".bed.gz",
+                "file_md5sum": "bed_parent_md5",
+                "dataset_id": "ds1",
+                "dataset_title": "test_dataset",
+                "entry_id": "entry_bed",
+            },
+            {
+                "file_name": "HG03652.regions.bed.gz.csi",
+                "file_format": ".csi",
+                "file_md5sum": "csi_child_md5",
+                "dataset_id": "ds1",
+                "dataset_title": "test_dataset",
+                "entry_id": "entry_csi",
+            },
+        ]))
+
+        # Create BED classification output
+        bed_cls_file = tmp_path / "bed_classifications.json"
+        bed_cls_file.write_text(json.dumps({
             "classifications": [{
                 "md5sum": "bed_parent_md5",
                 "file_name": "HG03652.regions.bed.gz",
@@ -199,8 +224,21 @@ class TestLoadClassifications:
                 },
             }],
         }))
-        result = load_classifications(bed_file)
-        # Verify the parent is loadable
-        assert "bed_parent_md5" in result
-        assert result["bed_parent_md5"]["data_modality"] == "genomic"
-        assert result["bed_parent_md5"]["reference_assembly"] == "CHM13"
+
+        # Run propagation with BED as a source
+        output_file = tmp_path / "index_output.json"
+        propagate_to_index_files(metadata_file, [bed_cls_file], output_file)
+
+        # Verify the CSI index inherited from the BED parent
+        with open(output_file) as f:
+            output = json.load(f)
+        index_cls = output["classifications"]
+        assert len(index_cls) == 1
+        csi = index_cls[0]
+        assert csi["file_name"] == "HG03652.regions.bed.gz.csi"
+        assert csi["parent_file"] == "HG03652.regions.bed.gz"
+        cls = csi["classifications"]
+        assert cls["data_modality"]["value"] == "genomic"
+        assert cls["data_type"]["value"] == "annotations"
+        assert cls["reference_assembly"]["value"] == "CHM13"
+        assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
