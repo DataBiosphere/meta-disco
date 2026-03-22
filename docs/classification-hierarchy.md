@@ -29,8 +29,8 @@ file_format (extension)
 - `epigenomic.histone_modification` ← filename (ChIP)
 
 **assay_type**:
-- `WGS` ← filename, file size (>50GB BAM, >20GB CRAM), PacBio HiFi header, CCS program
-- `WES` ← filename (exome), file size (5-20GB BAM, 2-8GB CRAM)
+- `WGS` ← filename, file size (Illumina BAM >20GB, CRAM >8GB), PacBio HiFi header, CCS program
+- `WES` ← filename (exome), file size (Illumina BAM <20GB, CRAM <8GB)
 - `RNA-seq` ← STAR/HISAT2/TopHat/Salmon/Kallisto in @PG, IsoSeq
 - `ATAC-seq` ← filename
 - `ChIP-seq` ← filename

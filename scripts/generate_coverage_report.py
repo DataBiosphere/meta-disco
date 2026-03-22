@@ -50,8 +50,6 @@ DIMENSIONS = [
 ]
 
 
-
-
 def escape_md_cell(text: str) -> str:
     """Escape characters that break markdown table cells."""
     return text.replace("|", "\\|").replace("\n", " ")
