@@ -282,14 +282,14 @@ def propagate_to_index_files(
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
     _sentinels = {"not_classified", "not_applicable", None}
 
-    def inherited_evidence(field_val, parent):
+    def inherited_evidence(field_name, field_val, parent):
         """Build evidence entry for an inherited classification field."""
         if field_val and field_val not in _sentinels:
             return [{"rule_id": "inherited_from_parent",
                      "reason": f"Inherited from parent file: {parent}",
                      "confidence": 0.95}]
         return [{"rule_id": "inherited_from_parent",
-                 "reason": f"Parent file {parent} had no value for this field",
+                 "reason": f"Parent file {parent} had no value for {field_name}",
                  "confidence": 0.0}]
 
     standard_results = []
@@ -307,7 +307,7 @@ def propagate_to_index_files(
             "parent_md5sum": r["parent_md5sum"],
             "classifications": {
                 fld: (lambda evi: {"value": r.get(fld), "confidence": evi[0]["confidence"], "evidence": evi})(
-                    inherited_evidence(r.get(fld), parent)
+                    inherited_evidence(fld, r.get(fld), parent)
                 )
                 for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
             },

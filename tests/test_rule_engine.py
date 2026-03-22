@@ -329,6 +329,19 @@ class TestSentinelValues:
         assert result.data_modality == NOT_CLASSIFIED
         assert result.reference_assembly == NOT_CLASSIFIED
 
+    def test_not_classified_evidence_includes_field_name(self, engine):
+        """Evidence reason for not_classified should name the specific field."""
+        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        checked = 0
+        for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+            evidence = result.field_evidence[fld]
+            nc_evidence = [e for e in evidence if e["rule_id"] == "not_classified"]
+            assert nc_evidence, f"Expected not_classified evidence for {fld}"
+            assert fld in nc_evidence[0]["reason"], \
+                f"Expected '{fld}' in reason, got: {nc_evidence[0]['reason']}"
+            checked += 1
+        assert checked == 5
+
     def test_images_get_not_applicable_for_genomic_fields(self, engine):
         """Image files should get not_applicable for platform and reference."""
         result = engine.classify_extended(FileInfo(filename="sample.svs"))

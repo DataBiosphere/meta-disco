@@ -266,7 +266,7 @@ class RuleEngine:
                 setattr(result, fld, NOT_CLASSIFIED)
                 result.field_evidence[fld].append({
                     "rule_id": "not_classified",
-                    "reason": "No rule determined a value for this field",
+                    "reason": f"No rule determined a value for {fld}",
                     "confidence": 0.0,
                 })
 
