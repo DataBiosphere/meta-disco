@@ -53,7 +53,7 @@
     const DATA = COVERAGE_DATA_PLACEHOLDER;
 
     document.getElementById('subtitle').textContent =
-      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions.`;
+      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions. Classification run: ${DATA.run_time}`;
 
     // Colors
     const COLORS = [

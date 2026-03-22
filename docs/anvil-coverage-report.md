@@ -1,7 +1,7 @@
 # AnVIL Classification Coverage Report
 
 Coverage of 541,169 classified file records across 5 dimensions.
-Generated from run `20260322_005526`.
+Classification run: **2026-03-22 00:55:26**
 
 **Classified** includes all files with a determined value, including `not_applicable` (e.g., FASTQ files have no reference assembly). **Not classified** means no rule or signal could determine a value.
 

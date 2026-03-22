@@ -13,6 +13,7 @@ import argparse
 import json
 import sys
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -191,6 +192,12 @@ def main():
     total = len(records)
     print(f"Loaded {total:,} records")
 
+    # Parse run timestamp from directory name (e.g., 20260322_005526)
+    try:
+        run_time = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        run_time = run_dir.name
+
     sections = []
     summary_rows = []
 
@@ -206,7 +213,7 @@ def main():
     with open(args.output, "w") as out:
         out.write("# AnVIL Classification Coverage Report\n\n")
         out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n")
-        out.write(f"Generated from run `{run_dir.name}`.\n\n")
+        out.write(f"Classification run: **{run_time}**\n\n")
         out.write("**Classified** includes all files with a determined value, including `not_applicable` ")
         out.write("(e.g., FASTQ files have no reference assembly). ")
         out.write("**Not classified** means no rule or signal could determine a value.\n\n")
@@ -224,15 +231,15 @@ def main():
 
     # Generate HTML dashboard
     html_output = args.output.with_name("coverage-dashboard.html")
-    generate_html_dashboard(records, run_dir, html_output)
+    generate_html_dashboard(records, run_time, html_output)
     print(f"Written to {html_output}")
 
 
 def generate_html_dashboard(records: list[dict],
-                            run_dir: Path, output_path: Path):
+                            run_time: str, output_path: Path):
     """Generate HTML dashboard with embedded chart data."""
     total = len(records)
-    dashboard_data = {"total": total, "dimensions": []}
+    dashboard_data = {"total": total, "run_time": run_time, "dimensions": []}
 
     for field, label, notes in DIMENSIONS:
         by_ext = defaultdict(Counter)
