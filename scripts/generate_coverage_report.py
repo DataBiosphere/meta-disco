@@ -82,7 +82,7 @@ def load_records(run_dir: Path) -> list[dict]:
                 v = cls.get(field)
                 if isinstance(v, dict) and "value" in v:
                     rec[field] = v["value"]
-                    # Store the evidence reason for not_classified values
+                    # Store the first evidence reason (used for not_classified aggregation)
                     evidence = v.get("evidence", [])
                     if evidence:
                         rec[f"{field}_reason"] = evidence[0].get("reason", "")
