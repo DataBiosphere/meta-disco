@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.output_utils import find_latest_run
 from src.meta_disco.rule_loader import UnifiedRules
 
 CLASSIFICATION_FILES = [
@@ -173,23 +174,6 @@ def build_section(records: list[dict], field_name: str,
         lines.append(extra_notes)
 
     return "\n".join(lines), classified, nc
-
-
-def find_latest_run(output_dir: Path) -> Path:
-    if not output_dir.is_dir():
-        print(f"Output directory not found: {output_dir}", file=sys.stderr)
-        print("Run 'make classify' first to generate classification outputs.", file=sys.stderr)
-        sys.exit(1)
-    runs = sorted(
-        [d for d in output_dir.iterdir() if d.is_dir() and d.name[0].isdigit()],
-        key=lambda d: d.name,
-        reverse=True,
-    )
-    if not runs:
-        print(f"No run directories found in {output_dir}", file=sys.stderr)
-        print("Run 'make classify' first to generate classification outputs.", file=sys.stderr)
-        sys.exit(1)
-    return runs[0]
 
 
 def main():
