@@ -344,9 +344,13 @@ def main():
         nargs="+",
         help="Paths to classification JSON files (BAM, VCF, BED, FASTQ, FASTA, etc.)",
     )
-    # Backwards-compatible args
-    parser.add_argument("--bam", "-b", type=Path, help="(deprecated) Path to BAM classifications")
-    parser.add_argument("--vcf", "-v", type=Path, help="(deprecated) Path to VCF classifications")
+    # Backwards-compatible args (default to standard output paths)
+    parser.add_argument("--bam", "-b", type=Path,
+                        default=Path("output/bam_classifications.json"),
+                        help="Path to BAM classifications (used when --classifications not provided)")
+    parser.add_argument("--vcf", "-v", type=Path,
+                        default=Path("output/vcf_classifications.json"),
+                        help="Path to VCF classifications (used when --classifications not provided)")
     parser.add_argument(
         "--output", "-o",
         type=Path,
@@ -355,14 +359,11 @@ def main():
     )
     args = parser.parse_args()
 
-    # Build list of classification paths
-    cls_paths = list(args.classifications or [])
-    if args.bam:
-        cls_paths.append(args.bam)
-    if args.vcf:
-        cls_paths.append(args.vcf)
-    if not cls_paths:
-        parser.error("Provide classification files via --classifications or --bam/--vcf")
+    # Build list of classification paths (deduplicated)
+    if args.classifications:
+        cls_paths = list(dict.fromkeys(args.classifications))
+    else:
+        cls_paths = [args.bam, args.vcf]
 
     propagate_to_index_files(
         args.metadata,

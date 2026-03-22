@@ -84,7 +84,7 @@ def main():
             script_name, ok = future.result()
             success &= ok
 
-    # Phase 2: Index classification (depends on all phase 1 outputs)
+    # Phase 2: Index classification (inherits from parent file classifications)
     print("\nPhase 2: Classifying index files...")
     _, ok = run_script(
         "classify_index_files.py",
