@@ -24,6 +24,7 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.meta_disco.output_utils import find_latest_run
 from src.meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
     HPRC_CATALOG_NAMES,
@@ -338,6 +339,15 @@ def validate_against_hprc(
     return dim_results
 
 
+INPUT_FILENAMES = [
+    "bam_classifications.json",
+    "fastq_classifications.json",
+    "bed_classifications.json",
+    "auxiliary_classifications.json",
+    "fasta_classifications.json",
+]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate classifications against HPRC catalogs"
@@ -347,14 +357,14 @@ def main():
         "-i",
         type=Path,
         nargs="+",
-        default=[
-            Path("output/bam_classifications.json"),
-            Path("output/fastq_classifications.json"),
-            Path("output/bed_classifications.json"),
-            Path("output/auxiliary_classifications.json"),
-            Path("output/fasta_classifications.json"),
-        ],
-        help="Input classification files",
+        default=None,
+        help="Input classification files (default: auto-detect from latest run)",
+    )
+    parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help="Classification run directory (default: latest timestamped dir)",
     )
     parser.add_argument(
         "--output",
@@ -383,8 +393,19 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.input:
+        input_paths = args.input
+    else:
+        try:
+            run_dir = args.run_dir or find_latest_run(Path("output"))
+        except FileNotFoundError as exc:
+            print(exc, file=sys.stderr)
+            raise SystemExit(1)
+        print(f"Using run directory: {run_dir}")
+        input_paths = [run_dir / f for f in INPUT_FILENAMES]
+
     validate_against_hprc(
-        args.input, args.output, args.catalog_dir, args.fetch, args.limit
+        input_paths, args.output, args.catalog_dir, args.fetch, args.limit
     )
 
 

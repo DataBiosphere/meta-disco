@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.output_utils import find_latest_run
 from src.meta_disco.rule_loader import UnifiedRules
 
 CLASSIFICATION_FILES = [
@@ -175,23 +176,6 @@ def build_section(records: list[dict], field_name: str,
     return "\n".join(lines), classified, nc
 
 
-def find_latest_run(output_dir: Path) -> Path:
-    if not output_dir.is_dir():
-        print(f"Output directory not found: {output_dir}", file=sys.stderr)
-        print("Run 'make classify' first to generate classification outputs.", file=sys.stderr)
-        sys.exit(1)
-    runs = sorted(
-        [d for d in output_dir.iterdir() if d.is_dir() and d.name[0].isdigit()],
-        key=lambda d: d.name,
-        reverse=True,
-    )
-    if not runs:
-        print(f"No run directories found in {output_dir}", file=sys.stderr)
-        print("Run 'make classify' first to generate classification outputs.", file=sys.stderr)
-        sys.exit(1)
-    return runs[0]
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate classification coverage report")
     parser.add_argument("--run-dir", type=Path, help="Path to classification run directory")
@@ -199,7 +183,11 @@ def main():
                         help="Output markdown file")
     args = parser.parse_args()
 
-    run_dir = args.run_dir or find_latest_run(Path("output"))
+    try:
+        run_dir = args.run_dir or find_latest_run(Path("output"))
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1)
     print(f"Loading from: {run_dir}")
 
     records = load_records(run_dir)
