@@ -1014,113 +1014,9 @@ rules:
     rationale: "Large alignment file (>50GB) suggests WGS"
     terminal: false
 
-  - id: illumina_bam_wgs_large
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam"]
-      platform: ILLUMINA
-      file_size_min_gb: 50
-    then:
-      assay_type: WGS
-    confidence: 0.80
-    rationale: "Illumina BAM files >50 GB strongly suggest WGS. At 30x coverage, a human WGS BAM is typically 80-120 GB"
-    terminal: false
-
-  - id: illumina_bam_wgs_medium
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam"]
-      platform: ILLUMINA
-      file_size_min_gb: 30
-      file_size_max_gb: 50
-    then:
-      assay_type: WGS
-    confidence: 0.65
-    rationale: "Illumina BAM files 30-50 GB likely indicate WGS at lower coverage (15-20x)"
-    terminal: false
-
-  - id: illumina_bam_wes_likely
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam"]
-      platform: ILLUMINA
-      file_size_min_gb: 5
-      file_size_max_gb: 20
-    then:
-      assay_type: WES
-    confidence: 0.60
-    rationale: "Illumina BAM files 5-20 GB are typical for WES at 80-150x coverage"
-    terminal: false
-
-  - id: illumina_cram_wgs_large
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".cram"]
-      platform: ILLUMINA
-      file_size_min_gb: 20
-    then:
-      assay_type: WGS
-    confidence: 0.80
-    rationale: "Illumina CRAM files >20 GB strongly suggest WGS. CRAM compression reduces file size by 60-70% vs BAM"
-    terminal: false
-
-  - id: illumina_cram_wgs_medium
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".cram"]
-      platform: ILLUMINA
-      file_size_min_gb: 10
-      file_size_max_gb: 20
-    then:
-      assay_type: WGS
-    confidence: 0.65
-    rationale: "Illumina CRAM files 10-20 GB likely indicate WGS at moderate coverage"
-    terminal: false
-
-  - id: illumina_cram_wes_likely
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".cram"]
-      platform: ILLUMINA
-      file_size_min_gb: 2
-      file_size_max_gb: 8
-    then:
-      assay_type: WES
-    confidence: 0.60
-    rationale: "Illumina CRAM files 2-8 GB are typical for WES"
-    terminal: false
-
-  - id: pacbio_large_wgs
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam", ".cram"]
-      platform: PACBIO
-      file_size_min_gb: 20
-    then:
-      assay_type: WGS
-    confidence: 0.75
-    rationale: "Large PacBio files (>20 GB) typically indicate WGS. PacBio is rarely used for WES due to cost"
-    terminal: false
-
-  - id: ont_large_wgs
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam", ".cram"]
-      platform: ONT
-      file_size_min_gb: 20
-    then:
-      assay_type: WGS
-    confidence: 0.75
-    rationale: "Large ONT files (>20 GB) typically indicate WGS. ONT is rarely used for targeted sequencing"
-    terminal: false
+  # NOTE: Platform-dependent assay_type size rules live in assay_type_rules
+  # (post-hoc inference), not here. Platform is set by tier 3 header rules,
+  # so tier 2 rules that check platform can never fire for BAM/CRAM files.
 
   # ===========================================================================
   # TIER 3: HEADER-BASED RULES (BAM/CRAM @RG, @PG, @SQ)
@@ -2437,6 +2333,15 @@ assay_type_rules:
       file_size_gb_gt: 50
     assay_type: WGS
 
+  - id: wgs_illumina_bam_medium
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format_not: ".cram"
+      file_size_gb_gt: 20
+      file_size_gb_lt: 50
+    assay_type: WGS
+
   - id: wes_illumina_bam_small
     priority: 50
     conditions:
@@ -2451,6 +2356,15 @@ assay_type_rules:
       platform: ILLUMINA
       file_format: ".cram"
       file_size_gb_gt: 20
+    assay_type: WGS
+
+  - id: wgs_illumina_cram_medium
+    priority: 50
+    conditions:
+      platform: ILLUMINA
+      file_format: ".cram"
+      file_size_gb_gt: 8
+      file_size_gb_lt: 20
     assay_type: WGS
 
   - id: wes_illumina_cram_small
