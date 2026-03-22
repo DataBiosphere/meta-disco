@@ -75,7 +75,7 @@ Matched **4,608** files (6,623 in source but not in our classifications).
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
 
-Matched **5,852** files (9,584 in source but not in our classifications).
+Matched **5,852** files (0 in source but not in our classifications).
 
 ### Data Modality
 

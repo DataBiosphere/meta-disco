@@ -303,14 +303,9 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
             "discrepancy_categories": {},
         }
 
-    catalog_total = sum(
-        v for v in data.get("metadata", {}).get("catalogs_loaded", {}).values()
-        if isinstance(v, int)
-    )
-
     return {
         "matched": total_matched,
-        "unmatched": max(0, catalog_total - total_matched),
+        "unmatched": 0,  # not meaningful across multiple HPRC catalogs
         "dimensions": dimensions,
     }
 
@@ -448,7 +443,11 @@ def main():
                         help="Output markdown file")
     args = parser.parse_args()
 
-    run_dir = args.run_dir or find_latest_run(Path("output"))
+    try:
+        run_dir = args.run_dir or find_latest_run(Path("output"))
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1)
     print(f"Loading classifications from: {run_dir}")
 
     our_by_md5, _ = load_our_classifications(run_dir)

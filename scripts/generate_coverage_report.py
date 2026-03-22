@@ -183,7 +183,11 @@ def main():
                         help="Output markdown file")
     args = parser.parse_args()
 
-    run_dir = args.run_dir or find_latest_run(Path("output"))
+    try:
+        run_dir = args.run_dir or find_latest_run(Path("output"))
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1)
     print(f"Loading from: {run_dir}")
 
     records = load_records(run_dir)

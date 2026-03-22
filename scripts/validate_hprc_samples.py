@@ -396,7 +396,11 @@ def main():
     if args.input:
         input_paths = args.input
     else:
-        run_dir = args.run_dir or find_latest_run(Path("output"))
+        try:
+            run_dir = args.run_dir or find_latest_run(Path("output"))
+        except FileNotFoundError as exc:
+            print(exc, file=sys.stderr)
+            raise SystemExit(1)
         print(f"Using run directory: {run_dir}")
         input_paths = [run_dir / f for f in INPUT_FILENAMES]
 
