@@ -85,22 +85,25 @@ def main():
             success &= ok
 
     # Phase 2: Index classification (inherits from parent file classifications)
-    print("\nPhase 2: Classifying index files...")
-    _, ok = run_script(
-        "classify_index_files.py",
-        output_dir / "index_classifications.json",
-        [
-            "--metadata", str(args.metadata),
-            "--classifications",
-            str(output_dir / "bam_classifications.json"),
-            str(output_dir / "vcf_classifications.json"),
-            str(output_dir / "bed_classifications.json"),
-            str(output_dir / "fastq_classifications.json"),
-            str(output_dir / "fasta_classifications.json"),
-            str(output_dir / "auxiliary_classifications.json"),
-        ]
-    )
-    success &= ok
+    if not success:
+        print("\nPhase 2: SKIPPED — one or more Phase 1 classifiers failed")
+    else:
+        print("\nPhase 2: Classifying index files...")
+        _, ok = run_script(
+            "classify_index_files.py",
+            output_dir / "index_classifications.json",
+            [
+                "--metadata", str(args.metadata),
+                "--classifications",
+                str(output_dir / "bam_classifications.json"),
+                str(output_dir / "vcf_classifications.json"),
+                str(output_dir / "bed_classifications.json"),
+                str(output_dir / "fastq_classifications.json"),
+                str(output_dir / "fasta_classifications.json"),
+                str(output_dir / "auxiliary_classifications.json"),
+            ]
+        )
+        success &= ok
 
     print(f"\n{'='*70}")
     if success:

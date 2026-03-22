@@ -87,7 +87,7 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
     classifications = {}
 
     for path in paths:
-        if not path.exists():
+        if not path.is_file():
             continue
         with open(path) as f:
             data = json.load(f)
