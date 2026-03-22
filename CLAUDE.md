@@ -72,6 +72,11 @@ The LinkML schema (`anvil_file.yaml`) defines:
 9. After approval, fix issues (including same-class instances), push, and resolve threads via GraphQL
 10. Repeat until Copilot passes clean
 
+## Git Discipline
+
+- **Never amend commits** — use separate commits for each fix round. Amending rewrites history and requires force pushes, which loses review context.
+- **Never force push** — each push should add commits, not rewrite them.
+
 ## Code Change Discipline
 
 - **After any rename/move**: grep the entire codebase for all references to the old name — imports, comments, docs, Makefile targets, YAML, tests. Do not assume you found them all by hand.
