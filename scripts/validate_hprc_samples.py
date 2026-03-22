@@ -141,7 +141,8 @@ def validate_dimension(
     if not expected_value:
         return None  # HPRC has no ground truth for this dimension
 
-    if not our_value:
+    _SENTINELS = {"not_classified", "not_applicable", ""}
+    if not our_value or our_value.lower() in _SENTINELS:
         counters[f"{dim_name}_unknown"] += 1
         return None
 
