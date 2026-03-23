@@ -34,8 +34,7 @@ classify:
 download:
 	python scripts/download_anvil_metadata.py
 
-classify-headers:
-	python scripts/classify_headers.py --type all -i data/anvil_files_metadata.json
+classify-headers: classify-bam classify-vcf classify-fastq classify-fasta
 
 classify-bam:
 	python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -o output/bam_classifications.json -w 4

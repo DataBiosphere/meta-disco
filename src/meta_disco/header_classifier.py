@@ -244,6 +244,8 @@ def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
 
 def classify_from_header(
     header_text: str,
+    *,
+    file_name: str | None = None,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -350,6 +352,8 @@ def classify_from_header(
 
 def classify_from_vcf_header(
     header_text: str,
+    *,
+    file_name: str | None = None,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -419,8 +423,10 @@ def classify_from_vcf_header(
 
 def classify_from_fastq_header(
     reads: list[str],
+    *,
     file_name: str | None = None,
     file_size: int | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """
     Classify FASTQ file based on read names.
@@ -575,7 +581,10 @@ def _get_ref_chrom_names() -> set[str]:
 
 def classify_from_fasta_header(
     contig_names: list[str],
+    *,
     file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """
     Classify FASTA file based on contig/sequence names from > header lines.

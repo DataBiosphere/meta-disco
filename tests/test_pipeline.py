@@ -14,13 +14,8 @@ def _make_config(**overrides):
     defaults = {
         "name": "test",
         "extensions": (".test",),
-        "evidence_subdir": "test",
-        "default_output": "test_classifications.json",
-        "default_workers": 1,
         "fetcher": lambda evidence_dir, md5, **kw: f"header_for_{md5}",
         "classifier": lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
-        "summary_printer": None,
-        "detect_gzip": False,
     }
     defaults.update(overrides)
     return FileTypeConfig(**defaults)
@@ -182,13 +177,16 @@ class TestPipelineRun:
         assert "classifications" in result
 
     def test_gzip_detection(self, tmp_path):
-        """When detect_gzip=True, is_gzipped is inferred from filename."""
+        """When extensions include .gz variants, is_gzipped is inferred from filename."""
         calls = []
         def tracking_fetcher(evidence_dir, md5, is_gzipped=True, **kw):
             calls.append(is_gzipped)
             return "header"
 
-        config = _make_config(fetcher=tracking_fetcher, detect_gzip=True)
+        config = _make_config(
+            fetcher=tracking_fetcher,
+            extensions=(".test", ".test.gz"),
+        )
         records = [
             {"file_md5sum": "a", "file_name": "x.test.gz", "file_format": ".test"},
             {"file_md5sum": "b", "file_name": "y.test", "file_format": ".test"},
@@ -216,7 +214,5 @@ class TestFileTypeConfigs:
         for name, config in FILE_TYPE_REGISTRY.items():
             assert config.name == name
             assert len(config.extensions) > 0
-            assert config.evidence_subdir
-            assert config.default_output.endswith(".json")
             assert callable(config.fetcher)
             assert callable(config.classifier)

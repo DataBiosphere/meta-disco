@@ -98,7 +98,7 @@ def validate_against_ena(
 
         # Re-classify with current rules
         if sample_reads:
-            new_class = classify_from_fastq_header(sample_reads, file_name)
+            new_class = classify_from_fastq_header(sample_reads, file_name=file_name)
             our_platform = (new_class.get("platform") or "").upper()
             our_modality = new_class.get("data_modality") or ""
         else:

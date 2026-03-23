@@ -41,7 +41,7 @@ def main():
         "--output", "-o",
         type=Path,
         default=None,
-        help="Output classification file (default: {type}_classifications.json)",
+        help="Output classification file (required in batch mode)",
     )
     parser.add_argument(
         "--limit", "-l",
@@ -105,12 +105,14 @@ def main():
         return
 
     # Batch mode
+    if not args.output:
+        parser.error("--output is required in batch mode")
     if args.output and len(type_names) > 1:
         parser.error("--output cannot be used with multiple types (each type writes its own output file)")
 
     for name in type_names:
         config = FILE_TYPE_REGISTRY[name]
-        output = args.output or Path(config.default_output)
+        output = args.output
 
         pipeline = ClassifyPipeline(
             config,

@@ -19,25 +19,13 @@ class FileTypeConfig:
 
     name: str
     extensions: tuple[str, ...]
-    evidence_subdir: str
-    default_output: str
-    default_workers: int
-
-    # (evidence_dir, md5, file_name, is_gzipped, use_cache, **kw) -> raw_data | None
     fetcher: Callable
-
-    # (raw_data, file_name, file_size, file_format, **kw) -> classification dict
     classifier: Callable
-
-    # (classifications_list) -> None  (prints summary)
     summary_printer: Callable | None = None
-
-    # Whether to detect gzip from filename (BAM doesn't need this)
-    detect_gzip: bool = False
 
 
 class NdjsonWriter:
-    """Append-only NDJSON writer with periodic flush for crash recovery."""
+    """Append-only NDJSON writer for real-time progress monitoring."""
 
     def __init__(self, output_path: Path):
         self.path = output_path.with_suffix(".ndjson")
@@ -80,10 +68,10 @@ class ClassifyPipeline:
         self.config = config
         self.input_path = input_path
         self.output_path = output_path
-        self.evidence_dir = evidence_base / config.evidence_subdir
+        self.evidence_dir = evidence_base / config.name
         self.limit = limit
         self.resume = resume
-        self.workers = workers or config.default_workers
+        self.workers = workers or 10
         self.skip_complete = skip_complete
         self.skip_cached = skip_cached
 
@@ -134,7 +122,7 @@ class ClassifyPipeline:
         evidence_base: Path = Path("data/evidence"),
     ) -> dict | None:
         """Classify a single file by MD5. Does not require a full pipeline instance."""
-        evidence_dir = evidence_base / config.evidence_subdir
+        evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
         raw_data = config.fetcher(
@@ -164,6 +152,10 @@ class ClassifyPipeline:
             if self.input_path.suffix == ".ndjson":
                 return [json.loads(line) for line in f if line.strip()]
             data = json.load(f)
+            if not isinstance(data, dict):
+                raise TypeError(
+                    f"Expected JSON object with 'results' key, got {type(data).__name__}"
+                )
             return data.get("results", data.get("files", data))
 
     def _filter_records(self, records: list[dict]) -> list[dict]:
@@ -220,11 +212,13 @@ class ClassifyPipeline:
         file_format = record.get("file_format") or ""
         entry_id = record.get("entry_id")
 
-        is_gzipped = True
-        if self.config.detect_gzip:
+        has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
+        if has_gz_ext:
             is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
+        else:
+            is_gzipped = True
 
-        was_cached = self._is_cached(md5)
+        was_cached = self.resume and self._is_cached(md5)
 
         raw_data = self.config.fetcher(
             self.evidence_dir, md5, file_name=file_name,
