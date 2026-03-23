@@ -19,19 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.output_utils import find_latest_run
-
-CLASSIFICATION_FILES = [
-    "bam_classifications.json",
-    "vcf_classifications.json",
-    "fastq_classifications.json",
-    "bed_classifications.json",
-    "image_classifications.json",
-    "auxiliary_classifications.json",
-    "index_classifications.json",
-    "fasta_classifications.json",
-    "remaining_classifications.json",
-]
+from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
 
@@ -210,13 +198,17 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     """Compare against AnVIL Azul metadata."""
     total_files = 0
     dataset_counts = Counter()
-    metadata_coverage = {}
+    metadata_coverage = Counter()
     truth_records = []
     with open(metadata_path) as f:
         for line in f:
             r = json.loads(line)
             total_files += 1
             dataset_counts[r.get("dataset_title", "unknown")] += 1
+            # Count metadata coverage from raw source records
+            for dim in DIMENSIONS:
+                if r.get(dim):
+                    metadata_coverage[dim] += 1
             if r.get("data_modality") or r.get("reference_assembly"):
                 truth_records.append({
                     "md5": r.get("file_md5sum"),
@@ -224,11 +216,6 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
                     "data_modality": r.get("data_modality"),
                     "reference_assembly": r.get("reference_assembly"),
                 })
-
-    # Count how many files have each dimension populated in AnVIL metadata
-    for dim in DIMENSIONS:
-        count = sum(1 for r in truth_records if r.get(dim))
-        metadata_coverage[dim] = count
 
     field_mappings = {
         "data_modality": {

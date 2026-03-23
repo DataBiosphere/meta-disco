@@ -18,20 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.output_utils import find_latest_run
+from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 from src.meta_disco.rule_loader import UnifiedRules
-
-CLASSIFICATION_FILES = [
-    "bam_classifications.json",
-    "vcf_classifications.json",
-    "fastq_classifications.json",
-    "bed_classifications.json",
-    "image_classifications.json",
-    "auxiliary_classifications.json",
-    "index_classifications.json",
-    "fasta_classifications.json",
-    "remaining_classifications.json",
-]
 
 COMPOUND_EXTENSIONS = UnifiedRules.COMPOUND_EXTENSIONS
 

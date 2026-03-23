@@ -73,6 +73,9 @@ def main():
          ["--input", str(args.metadata)]),
     ]
 
+    # Track all classification output paths for Phase 3
+    all_classification_files = [path for _, path, _ in parallel_jobs]
+
     print(f"\nPhase 1: Running {len(parallel_jobs)} classifiers in parallel...")
     success = True
     with ThreadPoolExecutor(max_workers=len(parallel_jobs)) as executor:
@@ -85,41 +88,28 @@ def main():
             success &= ok
 
     # Phase 2: Index classification (inherits from parent file classifications)
+    index_output = output_dir / "index_classifications.json"
     if not success:
         print("\nPhase 2: SKIPPED — one or more Phase 1 classifiers failed")
     else:
         print("\nPhase 2: Classifying index files...")
         _, ok = run_script(
             "classify_index_files.py",
-            output_dir / "index_classifications.json",
+            index_output,
             [
                 "--metadata", str(args.metadata),
                 "--classifications",
-                str(output_dir / "bam_classifications.json"),
-                str(output_dir / "vcf_classifications.json"),
-                str(output_dir / "bed_classifications.json"),
-                str(output_dir / "fastq_classifications.json"),
-                str(output_dir / "fasta_classifications.json"),
-                str(output_dir / "auxiliary_classifications.json"),
+                *[str(p) for p in all_classification_files],
             ]
         )
         success &= ok
+        all_classification_files.append(index_output)
 
     # Phase 3: Catch-all for files not handled by any other classifier
     if not success:
         print("\nPhase 3: SKIPPED — one or more earlier classifiers failed")
     else:
         print("\nPhase 3: Classifying remaining files...")
-        all_classification_files = [
-            output_dir / "bam_classifications.json",
-            output_dir / "vcf_classifications.json",
-            output_dir / "fastq_classifications.json",
-            output_dir / "bed_classifications.json",
-            output_dir / "image_classifications.json",
-            output_dir / "auxiliary_classifications.json",
-            output_dir / "index_classifications.json",
-            output_dir / "fasta_classifications.json",
-        ]
         _, ok = run_script(
             "classify_remaining_files.py",
             output_dir / "remaining_classifications.json",

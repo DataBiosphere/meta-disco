@@ -54,15 +54,15 @@ def classify_remaining(metadata_path: Path, output_path: Path,
     results = []
     ext_counts = Counter()
 
-    for f in files:
-        name = f.get("file_name", "")
+    for rec in files:
+        name = rec.get("file_name", "")
         if not name or name in already:
             continue
 
         file_info = FileInfo(
             filename=name,
-            file_size=f.get("file_size"),
-            dataset_title=f.get("dataset_title", ""),
+            file_size=rec.get("file_size"),
+            dataset_title=rec.get("dataset_title", ""),
         )
         result = engine.classify_extended(file_info)
 
@@ -71,12 +71,12 @@ def classify_remaining(metadata_path: Path, output_path: Path,
 
         results.append({
             "file_name": name,
-            "file_format": f.get("file_format", ""),
-            "md5sum": f.get("file_md5sum"),
-            "file_size": f.get("file_size"),
-            "entry_id": f.get("entry_id"),
-            "dataset_id": f.get("dataset_id"),
-            "dataset_title": f.get("dataset_title", ""),
+            "file_format": rec.get("file_format", ""),
+            "md5sum": rec.get("file_md5sum"),
+            "file_size": rec.get("file_size"),
+            "entry_id": rec.get("entry_id"),
+            "dataset_id": rec.get("dataset_id"),
+            "dataset_title": rec.get("dataset_title", ""),
             "classifications": result.to_output_dict(),
         })
 
