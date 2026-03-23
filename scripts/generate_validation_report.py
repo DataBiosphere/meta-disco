@@ -385,10 +385,6 @@ def build_source_section(name: str, results: dict) -> str:
             lines.append(f"| {label} | {count:,} |")
         lines.append("")
 
-    lines.append(f"Matched **{results['matched']:,}** files "
-                 f"({results['unmatched']:,} in source but not in our classifications).")
-    lines.append("")
-
     if not results.get("dimensions"):
         lines.append("No dimensions to compare.")
         return "\n".join(lines)

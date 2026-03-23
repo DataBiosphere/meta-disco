@@ -24,8 +24,6 @@ The source currently has **758,658** open-access files. The following shows how 
 | Reference Assembly | 4,696 |
 | Assay Type | 0 |
 
-Matched **11,231** files (0 in source but not in our classifications).
-
 ### Data Modality
 
 - **6,755** values available from source
@@ -84,8 +82,6 @@ Matched **11,231** files (0 in source but not in our classifications).
 ## HPRC (sequencing catalog)
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
-
-Matched **5,852** files (0 in source but not in our classifications).
 
 ### Data Modality
 
