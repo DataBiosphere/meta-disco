@@ -12,9 +12,7 @@ Classification run: **2026-03-22 19:57:03**
 
 ## AnVIL (Azul metadata)
 
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
-
-Classifying **758,658** files across **11** open-access datasets on the [AnVIL Explorer](https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D):
+Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **758,658** files across **11** datasets:
 
 - ANVIL_T2T_CHRY (309,979 files)
 - ANVIL_T2T (289,204 files)

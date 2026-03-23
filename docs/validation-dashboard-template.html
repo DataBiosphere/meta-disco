@@ -128,16 +128,15 @@
       const sourceLabel = sourceName.includes('(') ? sourceName.split('(')[0].trim() : sourceName;
       const sourceDesc = (DATA.source_descriptions || {})[sourceName] || '';
       let html = '';
-      if (sourceDesc) {
-        html += `<p>${sourceDesc}</p>`;
-      }
 
-      // Dataset listing (AnVIL)
+      // Source description with dataset listing
       const datasets = results.datasets || [];
-      if (datasets.length > 0) {
-        const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
+      if (sourceDesc && datasets.length > 0) {
         const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
-        html += `<p>Classifying <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: ${datasets.map(d => escapeHtml(d.name) + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
+        const sourceInfo = sourceDesc.replace(/\.$/, '');
+        html += `<p>${sourceInfo}'s open-access projects with <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> datasets: ${datasets.map(d => escapeHtml(d.name) + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
+      } else if (sourceDesc) {
+        html += `<p>${sourceDesc}</p>`;
       }
 
       // Metadata coverage table

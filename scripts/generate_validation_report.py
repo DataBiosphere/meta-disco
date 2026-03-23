@@ -385,24 +385,23 @@ def build_source_section(name: str, results: dict) -> str:
     lines = []
     lines.append(f"## {name}")
     lines.append("")
-    desc = source_desc_md(name)
-    if desc:
-        lines.append(desc)
-        lines.append("")
 
-    # Show dataset listing if available
+    # Show source description with dataset listing if available
     datasets = results.get("datasets", [])
-    if datasets:
+    info = SOURCE_INFO.get(name)
+    if info and datasets:
         total_files = sum(d["count"] for d in datasets)
-        anvil_url = ("https://explore.anvilproject.org/datasets?"
-                     "filter=%5B%7B%22categoryKey%22%3A%22accessible%22"
-                     "%2C%22value%22%3A%5B%22true%22%5D%7D%5D")
-        lines.append(f"Classifying **{total_files:,}** files across "
-                     f"**{len(datasets)}** open-access datasets on the "
-                     f"[AnVIL Explorer]({anvil_url}):")
+        lines.append(
+            f"Validated against file-level metadata from the "
+            f"[{info['link_label']}]({info['url']})'s open-access projects "
+            f"with **{total_files:,}** files across **{len(datasets)}** datasets:"
+        )
         lines.append("")
         for d in datasets:
             lines.append(f"- {d['name']} ({d['count']:,} files)")
+        lines.append("")
+    elif info:
+        lines.append(source_desc_md(name))
         lines.append("")
 
     # Show metadata coverage
