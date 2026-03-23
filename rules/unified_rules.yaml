@@ -292,6 +292,20 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
+  # Bare timestamp filenames - skip classification
+  # ---------------------------------------------------------------------------
+  - id: timestamp_filename_skip
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
+    then:
+      skip: true
+    confidence: 1.0
+    rationale: "Bare ISO timestamp filename - metadata artifact, not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
   # Log files - skip classification
   # ---------------------------------------------------------------------------
   - id: log_skip

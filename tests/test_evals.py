@@ -317,6 +317,13 @@ class TestRuleEngineE2E:
         assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 
+    def test_timestamp_filename_skipped(self):
+        result = engine.classify_extended(FileInfo(
+            filename="2020-11-20T212208.245537Z"
+        ))
+        assert result.skip is True
+        assert result.data_modality == NOT_APPLICABLE
+
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo(filename="assembly_plot.png"))
         assert result.data_modality == NOT_APPLICABLE
