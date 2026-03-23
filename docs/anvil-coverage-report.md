@@ -1,13 +1,13 @@
 # AnVIL Classification Coverage Report
 
 Coverage of 541,169 classified file records across 5 dimensions.
-Classification run: **2026-03-22 11:23:36**
+Classification run: **2026-03-22 19:57:03**
 
 **Classified** includes all files with a determined value, including `not_applicable` (e.g., FASTQ files have no reference assembly). **Not classified** means no rule or signal could determine a value.
 
 | Dimension | Classified | Not Classified |
 |---|---:|---:|
-| **Data Modality** | 520,112 (96.1%) | 21,057 (3.9%) |
+| **Data Modality** | 504,940 (93.3%) | 36,229 (6.7%) |
 | **Data Type** | 538,320 (99.5%) | 2,849 (0.5%) |
 | **Reference Assembly** | 535,900 (99.0%) | 5,269 (1.0%) |
 | **Platform** | 98,805 (18.3%) | 442,364 (81.7%) |
@@ -19,23 +19,28 @@ Classification run: **2026-03-22 11:23:36**
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 520,112 | 96.1% |
-| **Not classified** | 21,057 | 3.9% |
+| **Classified** | 504,940 | 93.3% |
+| **Not classified** | 36,229 | 6.7% |
 
 ### What's not classified?
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .fastq.gz | 20,621 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
+| .fastq.gz | 23,033 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
+| .fast5 | 12,394 | No rule determined a value for data_modality |
 | .bam | 357 | No rule determined a value for data_modality |
+| .fast5.tar | 273 | No rule determined a value for data_modality |
 | .tbi | 60 | Parent file had no value for data_modality |
+| .fastq | 56 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
+| .fast5.tar.gz | 26 | No rule determined a value for data_modality |
 | .bai | 19 | Parent file had no value for data_modality |
+| .pod5 | 11 | No rule determined a value for data_modality |
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
-| `genomic` | 478,734 | 88.5% | .vcf.gz (201,860)<br>.tbi (169,463)<br>.csi (41,138)<br>.fast5 (12,394)<br>.cram (10,829)<br>.crai (10,319)<br>.bed.gz (7,191)<br>.bam (6,063)<br>.pgen (2,854)<br>.pvar (2,854)<br>.psam (2,854)<br>.g.vcf.gz (2,504)<br>.fastq.gz (2,412)<br>.fa.gz (1,633)<br>.pbi (1,102)<br>.bai (1,061)<br>.bed (1,059)<br>.vcf (646)<br>.fast5.tar (273)<br>.fasta.gz (93)<br>.fastq (56)<br>.fasta (37)<br>.fast5.tar.gz (26)<br>.pod5 (11)<br>.fa (2) |
+| `genomic` | 463,562 | 85.7% | .vcf.gz (201,860)<br>.tbi (169,463)<br>.csi (41,138)<br>.cram (10,829)<br>.crai (10,319)<br>.bed.gz (7,191)<br>.bam (6,063)<br>.pgen (2,854)<br>.pvar (2,854)<br>.psam (2,854)<br>.g.vcf.gz (2,504)<br>.fa.gz (1,633)<br>.pbi (1,102)<br>.bai (1,061)<br>.bed (1,059)<br>.vcf (646)<br>.fasta.gz (93)<br>.fasta (37)<br>.fa (2) |
+| `not_classified` | 36,229 | 6.7% | .fastq.gz (23,033)<br>.fast5 (12,394)<br>.bam (357)<br>.fast5.tar (273)<br>.tbi (60)<br>.fastq (56)<br>.fast5.tar.gz (26)<br>.bai (19)<br>.pod5 (11) |
 | `imaging.histology` | 25,708 | 4.8% | .svs (25,708) |
-| `not_classified` | 21,057 | 3.9% | .fastq.gz (20,621)<br>.bam (357)<br>.tbi (60)<br>.bai (19) |
 | `not_applicable` | 13,419 | 2.5% | .png (8,049)<br>.bed (5,370) |
 | `transcriptomic.bulk` | 2,216 | 0.4% | .bam (1,413)<br>.bai (779)<br>.bed.gz (12)<br>.tbi (12) |
 | `epigenomic.methylation` | 28 | 0.0% | .bed.gz (28) |
