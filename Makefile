@@ -53,10 +53,9 @@ report:
 	python scripts/generate_coverage_report.py
 
 validate-report:
-	python scripts/validate_against_hprc.py
 	python scripts/generate_validation_report.py
 
-reports: report validate-report
+reports: validate-hprc report validate-report
 
 download-hprc:
 	python scripts/download_hprc_catalogs.py
