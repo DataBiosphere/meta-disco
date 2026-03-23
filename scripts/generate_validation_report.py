@@ -440,19 +440,47 @@ def build_source_section(name: str, results: dict) -> str:
     for dim in DIMENSIONS:
         stats = results["dimensions"].get(dim, EMPTY_DIM)
         label = DIMENSION_LABELS.get(dim, dim)
+        label_lower = label.lower()
         comparable = stats["agree"] + stats["discrepancy"]
         available = comparable + stats["not_classified"]
+
         accuracy = f"{100 * stats['agree'] / comparable:.1f}%" if comparable else "-"
+        agree_pct = f"{100 * stats['agree'] / comparable:.1f}" if comparable else "0"
+        disc_pct = f"{100 * stats['discrepancy'] / comparable:.1f}" if comparable else "0"
 
         lines.append(f"### {label}")
         lines.append("")
-        lines.append(f"- **{available:,}** files available from {source_label} with ground truth {label}")
+        lines.append(f"- **{available:,}** files available from {source_label} "
+                     f"with ground truth {label}")
         lines.append(f"- **{comparable:,}** files classified by rule engine")
         lines.append(f"- **{stats['not_classified']:,}** files not classified by rule engine")
-        lines.append(f"- **{stats['agree']:,}** inferred {label.lower()} values match {source_label}")
+        lines.append(f"- **{stats['agree']:,}** inferred {label_lower} values "
+                     f"match {source_label}")
         lines.append(f"- **{stats['discrepancy']:,}** discrepancies")
         lines.append(f"- **{accuracy}** accuracy")
         lines.append("")
+
+        # Summary paragraph (only when source has ground truth)
+        if available > 0:
+            lines.append(
+                f"Of the {available:,} files on {source_label} with ground truth "
+                f"{label_lower}, we were able to infer a {label_lower} for "
+                f"{comparable:,} files. {stats['not_classified']:,} files remain "
+                f"unclassifiable by the rule engine."
+            )
+            if comparable > 0:
+                lines.append(
+                    f"Of the {comparable:,} inferred {label_lower} values, "
+                    f"{stats['agree']:,} ({agree_pct}%) matched {source_label}. "
+                    f"There were {stats['discrepancy']:,} discrepancies "
+                    f"({disc_pct}%) in {label_lower} between meta-disco and "
+                    f"{source_label}."
+                )
+            lines.append("")
+        else:
+            lines.append(f"{source_label} does not currently provide ground truth "
+                         f"for {label_lower}.")
+            lines.append("")
 
         # Discrepancy categories ordered by count
         cats = stats.get("discrepancy_categories", {})

@@ -47,6 +47,9 @@ The source currently populates the following metadata dimensions:
 - **4** discrepancies
 - **98.9%** accuracy
 
+Of the 6,755 files on AnVIL with ground truth data modality, we were able to infer a data modality for 353 files. 6,402 files remain unclassifiable by the rule engine.
+Of the 353 inferred data modality values, 349 (98.9%) matched AnVIL. There were 4 discrepancies (1.1%) in data modality between meta-disco and AnVIL.
+
 #### Discrepancies
 
 | Count | Inferred | AnVIL | Example |
@@ -63,6 +66,8 @@ The source currently populates the following metadata dimensions:
 - **0** discrepancies
 - **-** accuracy
 
+AnVIL does not currently provide ground truth for data type.
+
 ### Platform
 
 - **0** files available from AnVIL with ground truth Platform
@@ -71,6 +76,8 @@ The source currently populates the following metadata dimensions:
 - **0** inferred platform values match AnVIL
 - **0** discrepancies
 - **-** accuracy
+
+AnVIL does not currently provide ground truth for platform.
 
 ### Reference Assembly
 
@@ -81,6 +88,9 @@ The source currently populates the following metadata dimensions:
 - **0** discrepancies
 - **100.0%** accuracy
 
+Of the 4,696 files on AnVIL with ground truth reference assembly, we were able to infer a reference assembly for 634 files. 4,062 files remain unclassifiable by the rule engine.
+Of the 634 inferred reference assembly values, 634 (100.0%) matched AnVIL. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and AnVIL.
+
 ### Assay Type
 
 - **0** files available from AnVIL with ground truth Assay Type
@@ -89,6 +99,8 @@ The source currently populates the following metadata dimensions:
 - **0** inferred assay type values match AnVIL
 - **0** discrepancies
 - **-** accuracy
+
+AnVIL does not currently provide ground truth for assay type.
 
 
 ---
@@ -115,6 +127,9 @@ Comparing against the following catalogs:
 - **0** discrepancies
 - **100.0%** accuracy
 
+Of the 5,491 files on HPRC with ground truth data modality, we were able to infer a data modality for 2,012 files. 3,479 files remain unclassifiable by the rule engine.
+Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
+
 ### Data Type
 
 - **0** files available from HPRC with ground truth Data Type
@@ -123,6 +138,8 @@ Comparing against the following catalogs:
 - **0** inferred data type values match HPRC
 - **0** discrepancies
 - **-** accuracy
+
+HPRC does not currently provide ground truth for data type.
 
 ### Platform
 
@@ -133,6 +150,9 @@ Comparing against the following catalogs:
 - **0** discrepancies
 - **100.0%** accuracy
 
+Of the 5,852 files on HPRC with ground truth platform, we were able to infer a platform for 5,852 files. 0 files remain unclassifiable by the rule engine.
+Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
+
 ### Reference Assembly
 
 - **4** files available from HPRC with ground truth Reference Assembly
@@ -142,6 +162,9 @@ Comparing against the following catalogs:
 - **0** discrepancies
 - **100.0%** accuracy
 
+Of the 4 files on HPRC with ground truth reference assembly, we were able to infer a reference assembly for 4 files. 0 files remain unclassifiable by the rule engine.
+Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and HPRC.
+
 ### Assay Type
 
 - **5,852** files available from HPRC with ground truth Assay Type
@@ -150,5 +173,8 @@ Comparing against the following catalogs:
 - **3,269** inferred assay type values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
+
+Of the 5,852 files on HPRC with ground truth assay type, we were able to infer a assay type for 3,269 files. 2,583 files remain unclassifiable by the rule engine.
+Of the 3,269 inferred assay type values, 3,269 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
 
 

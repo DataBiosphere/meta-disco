@@ -177,6 +177,8 @@
         const classified = stats.agree + stats.discrepancy + stats.we_inferred;
         const bothHave = stats.agree + stats.discrepancy;
         const accuracy = bothHave > 0 ? `${(100 * stats.agree / bothHave).toFixed(1)}%` : '-';
+        const agree_pct = bothHave > 0 ? (100 * stats.agree / bothHave).toFixed(1) : '0';
+        const disc_pct = bothHave > 0 ? (100 * stats.discrepancy / bothHave).toFixed(1) : '0';
 
         html += `<h3>${label}</h3>`;
         html += `<ul style="font-size: 14px; line-height: 1.8;">
@@ -187,6 +189,18 @@
           <li><strong>${stats.discrepancy.toLocaleString()}</strong> discrepancies</li>
           <li><strong>${accuracy}</strong> accuracy</li>
         </ul>`;
+
+        // Summary paragraph
+        const ll = label.toLowerCase();
+        if (available > 0) {
+          let summary = `Of the ${available.toLocaleString()} files on ${sourceLabel} with ground truth ${ll}, we were able to infer a ${ll} for ${bothHave.toLocaleString()} files. ${stats.not_classified.toLocaleString()} files remain unclassifiable by the rule engine.`;
+          if (bothHave > 0) {
+            summary += ` Of the ${bothHave.toLocaleString()} inferred ${ll} values, ${stats.agree.toLocaleString()} (${agree_pct}%) matched ${sourceLabel}. There were ${stats.discrepancy.toLocaleString()} discrepancies (${disc_pct}%) in ${ll} between meta-disco and ${sourceLabel}.`;
+          }
+          html += `<p style="font-size: 14px; color: #656d76;">${summary}</p>`;
+        } else {
+          html += `<p style="font-size: 14px; color: #656d76;">${sourceLabel} does not currently provide ground truth for ${ll}.</p>`;
+        }
 
         // Stacked bar
         const total = available + stats.we_inferred;
