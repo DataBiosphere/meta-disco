@@ -455,7 +455,7 @@ def build_source_section(name: str, results: dict) -> str:
         if available > 0:
             lines.append(
                 f"Of the {available:,} files on {source_label} with ground truth "
-                f"{label_lower}, we were able to infer a {label_lower} for "
+                f"{label_lower}, we inferred {label_lower} values for "
                 f"{comparable:,} files. {stats['not_classified']:,} files remain "
                 f"unclassifiable by the rule engine."
             )

@@ -137,7 +137,7 @@
       if (datasets.length > 0) {
         const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
         const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
-        html += `<p>Classifying <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: ${datasets.map(d => d.name + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
+        html += `<p>Classifying <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: ${datasets.map(d => escapeHtml(d.name) + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
       }
 
       // Metadata coverage table
@@ -182,7 +182,7 @@
         // Summary paragraph
         const ll = label.toLowerCase();
         if (available > 0) {
-          let summary = `Of the ${available.toLocaleString()} files on ${sourceLabel} with ground truth ${ll}, we were able to infer a ${ll} for ${bothHave.toLocaleString()} files. ${stats.not_classified.toLocaleString()} files remain unclassifiable by the rule engine.`;
+          let summary = `Of the ${available.toLocaleString()} files on ${sourceLabel} with ground truth ${ll}, we inferred ${ll} values for ${bothHave.toLocaleString()} files. ${stats.not_classified.toLocaleString()} files remain unclassifiable by the rule engine.`;
           if (bothHave > 0) {
             summary += ` Of the ${bothHave.toLocaleString()} inferred ${ll} values, ${stats.agree.toLocaleString()} (${agree_pct}%) matched ${sourceLabel}. There were ${stats.discrepancy.toLocaleString()} discrepancies (${disc_pct}%) in ${ll} between meta-disco and ${sourceLabel}.`;
           }
