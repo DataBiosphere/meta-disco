@@ -40,10 +40,10 @@ The source currently populates the following metadata dimensions:
 
 ### Data Modality
 
-- **6,755** values available from source
-- **353** also classified by rule engine
-- **6,402** not classified by rule engine (no rule applies)
-- **349** agreed
+- **6,755** files available from AnVIL with ground truth Data Modality
+- **353** files classified by rule engine
+- **6,402** files not classified by rule engine
+- **349** inferred data modality values match AnVIL
 - **4** discrepancies
 - **98.9%** accuracy
 
@@ -56,37 +56,37 @@ The source currently populates the following metadata dimensions:
 
 ### Data Type
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+- **0** files available from AnVIL with ground truth Data Type
+- **0** files classified by rule engine
+- **0** files not classified by rule engine
+- **0** inferred data type values match AnVIL
 - **0** discrepancies
 - **-** accuracy
 
 ### Platform
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+- **0** files available from AnVIL with ground truth Platform
+- **0** files classified by rule engine
+- **0** files not classified by rule engine
+- **0** inferred platform values match AnVIL
 - **0** discrepancies
 - **-** accuracy
 
 ### Reference Assembly
 
-- **4,696** values available from source
-- **634** also classified by rule engine
-- **4,062** not classified by rule engine (no rule applies)
-- **634** agreed
+- **4,696** files available from AnVIL with ground truth Reference Assembly
+- **634** files classified by rule engine
+- **4,062** files not classified by rule engine
+- **634** inferred reference assembly values match AnVIL
 - **0** discrepancies
 - **100.0%** accuracy
 
 ### Assay Type
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+- **0** files available from AnVIL with ground truth Assay Type
+- **0** files classified by rule engine
+- **0** files not classified by rule engine
+- **0** inferred assay type values match AnVIL
 - **0** discrepancies
 - **-** accuracy
 
@@ -108,46 +108,46 @@ Comparing against the following catalogs:
 
 ### Data Modality
 
-- **5,491** values available from source
-- **2,012** also classified by rule engine
-- **3,479** not classified by rule engine (no rule applies)
-- **2,012** agreed
+- **5,491** files available from HPRC with ground truth Data Modality
+- **2,012** files classified by rule engine
+- **3,479** files not classified by rule engine
+- **2,012** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
 ### Data Type
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+- **0** files available from HPRC with ground truth Data Type
+- **0** files classified by rule engine
+- **0** files not classified by rule engine
+- **0** inferred data type values match HPRC
 - **0** discrepancies
 - **-** accuracy
 
 ### Platform
 
-- **5,852** values available from source
-- **5,852** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **5,852** agreed
+- **5,852** files available from HPRC with ground truth Platform
+- **5,852** files classified by rule engine
+- **0** files not classified by rule engine
+- **5,852** inferred platform values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
 ### Reference Assembly
 
-- **4** values available from source
-- **4** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **4** agreed
+- **4** files available from HPRC with ground truth Reference Assembly
+- **4** files classified by rule engine
+- **0** files not classified by rule engine
+- **4** inferred reference assembly values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
 ### Assay Type
 
-- **5,852** values available from source
-- **3,269** also classified by rule engine
-- **2,583** not classified by rule engine (no rule applies)
-- **3,269** agreed
+- **5,852** files available from HPRC with ground truth Assay Type
+- **3,269** files classified by rule engine
+- **2,583** files not classified by rule engine
+- **3,269** inferred assay type values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
