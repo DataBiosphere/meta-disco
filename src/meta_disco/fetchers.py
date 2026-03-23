@@ -54,10 +54,10 @@ def _timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _fetch_range(md5sum: str, byte_range: int, timeout: int = 60) -> bytes | None:
-    """Fetch a byte range from S3 mirror. Returns raw bytes or None."""
+def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60) -> bytes | None:
+    """Fetch bytes 0 through end_byte (inclusive) from S3 mirror. Returns raw bytes or None."""
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
-    headers = {"Range": f"bytes=0-{byte_range}"}
+    headers = {"Range": f"bytes=0-{end_byte}"}
     resp = requests.get(url, headers=headers, timeout=timeout)
     if resp.status_code not in [200, 206]:
         return None

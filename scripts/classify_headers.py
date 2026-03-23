@@ -105,6 +105,9 @@ def main():
         return
 
     # Batch mode
+    if args.output and len(type_names) > 1:
+        parser.error("--output cannot be used with multiple types (each type writes its own output file)")
+
     for name in type_names:
         config = FILE_TYPE_REGISTRY[name]
         output = args.output or Path(config.default_output)

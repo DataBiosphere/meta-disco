@@ -46,7 +46,7 @@ BAM_CONFIG = FileTypeConfig(
     default_workers=4,
     fetcher=fetch_bam_header,
     classifier=_classify_bam,
-    evidence_extractor=lambda c: c.get("header_text") or None,
+
     summary_printer=print_bam_summary,
     detect_gzip=False,
 )
@@ -59,7 +59,7 @@ VCF_CONFIG = FileTypeConfig(
     default_workers=10,
     fetcher=fetch_vcf_header,
     classifier=_classify_vcf,
-    evidence_extractor=lambda c: c.get("header_text") or None,
+
     summary_printer=print_vcf_summary,
     detect_gzip=True,
 )
@@ -72,7 +72,7 @@ FASTQ_CONFIG = FileTypeConfig(
     default_workers=10,
     fetcher=fetch_fastq_reads,
     classifier=_classify_fastq,
-    evidence_extractor=lambda c: c.get("read_names") or None,
+
     summary_printer=print_fastq_summary,
     detect_gzip=True,
 )
@@ -85,7 +85,7 @@ FASTA_CONFIG = FileTypeConfig(
     default_workers=10,
     fetcher=fetch_fasta_headers,
     classifier=_classify_fasta,
-    evidence_extractor=lambda c: c.get("contig_names"),  # can be empty list []
+
     summary_printer=None,
     detect_gzip=True,
 )

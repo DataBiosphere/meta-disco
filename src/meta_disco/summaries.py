@@ -150,10 +150,10 @@ def print_fastq_summary(classifications: list[dict]):
     _print_field_table("Data Modalities", modalities, width=30)
 
     if instrument_models:
-        _print_field_table("Instrument Models (Illumina)", instrument_models, width=30)
+        _print_field_table("Instrument Models", instrument_models, width=30)
 
     if archive_sources:
-        _print_field_table("Archive Accessions", archive_sources, width=30)
+        _print_field_table("Archive Sources", archive_sources, width=30)
 
     _print_sample_evidence(classifications, [
         ("Platform", "platform"),

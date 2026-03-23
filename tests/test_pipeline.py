@@ -3,7 +3,6 @@
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import patch
 
 from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 
@@ -20,7 +19,6 @@ def _make_config(**overrides):
         "default_workers": 1,
         "fetcher": lambda evidence_dir, md5, **kw: f"header_for_{md5}",
         "classifier": lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
-        "evidence_extractor": lambda c: c.get("header_text"),
         "summary_printer": None,
         "detect_gzip": False,
     }
@@ -222,4 +220,4 @@ class TestFileTypeConfigs:
             assert config.default_output.endswith(".json")
             assert callable(config.fetcher)
             assert callable(config.classifier)
-            assert callable(config.evidence_extractor)
+            assert callable(config.fetcher)

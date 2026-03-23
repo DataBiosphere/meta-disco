@@ -29,9 +29,6 @@ class FileTypeConfig:
     # (raw_data, file_name, file_size, file_format, **kw) -> classification dict
     classifier: Callable
 
-    # (cached_evidence_dict) -> raw_data | None
-    evidence_extractor: Callable
-
     # (classifications_list) -> None  (prints summary)
     summary_printer: Callable | None = None
 
@@ -178,8 +175,8 @@ class ClassifyPipeline:
                 return False
             if r.get("skip"):
                 return False
-            fmt = r.get("file_format", "")
-            name = r.get("file_name", "")
+            fmt = r.get("file_format") or ""
+            name = r.get("file_name") or ""
             return (any(fmt.endswith(ext) for ext in exts)
                     or any(name.endswith(ext) for ext in exts))
 
@@ -218,9 +215,9 @@ class ClassifyPipeline:
     def _process_single_record(self, record: dict) -> tuple[dict | None, bool]:
         """Fetch, classify, and build output for one record."""
         md5 = record.get("file_md5sum")
-        file_name = record.get("file_name", "")
+        file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
-        file_format = record.get("file_format", "")
+        file_format = record.get("file_format") or ""
         entry_id = record.get("entry_id")
 
         is_gzipped = True
