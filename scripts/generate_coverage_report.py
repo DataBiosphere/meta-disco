@@ -200,7 +200,7 @@ def main():
         with open(metadata_path) as f:
             for line in f:
                 r = json.loads(line)
-                dataset_counts[r.get("dataset_title", "unknown")] += 1
+                dataset_counts[r.get("dataset_title") or "unknown"] += 1
 
     sections = []
     summary_rows = []

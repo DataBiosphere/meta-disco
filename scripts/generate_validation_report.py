@@ -204,7 +204,7 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
         for line in f:
             r = json.loads(line)
             total_files += 1
-            dataset_counts[r.get("dataset_title", "unknown")] += 1
+            dataset_counts[r.get("dataset_title") or "unknown"] += 1
             # Count metadata coverage from raw source records
             for dim in DIMENSIONS:
                 if r.get(dim):
