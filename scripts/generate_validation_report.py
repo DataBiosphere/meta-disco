@@ -326,10 +326,17 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
         "assemblies": [],
     }
 
+    # Build metadata coverage from dimension stats
+    # (match + mismatch + unknown = files where HPRC has ground truth)
+    metadata_coverage = {}
+    for dim, stats in dimensions.items():
+        metadata_coverage[dim] = stats["agree"] + stats["discrepancy"] + stats["not_classified"]
+
     return {
         "matched": total_matched,
         "unmatched": 0,
         "dimensions": dimensions,
+        "metadata_coverage": metadata_coverage,
         "catalog_summary": catalog_summary,
         "catalog_dimensions": catalog_dimensions,
     }
@@ -398,14 +405,14 @@ def build_source_section(name: str, results: dict) -> str:
             lines.append(f"- {d['name']} ({d['count']:,} files)")
         lines.append("")
 
-    # Show metadata coverage if available (AnVIL)
+    # Show metadata coverage
     metadata_coverage = results.get("metadata_coverage", {})
     if metadata_coverage:
         lines.append("### Metadata Overview")
         lines.append("")
         lines.append(f"{source_label} currently populates the following metadata dimensions:")
         lines.append("")
-        lines.append("| Dimension | Files with metadata |")
+        lines.append(f"| Dimension | Files with dimension in {source_label} |")
         lines.append("|---|---:|")
         for dim in DIMENSIONS:
             label = DIMENSION_LABELS.get(dim, dim)

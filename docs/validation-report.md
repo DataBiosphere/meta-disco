@@ -32,7 +32,7 @@ Classifying **758,658** files across **11** open-access datasets on the [AnVIL E
 
 AnVIL currently populates the following metadata dimensions:
 
-| Dimension | Files with metadata |
+| Dimension | Files with dimension in AnVIL |
 |---|---:|
 | Data Modality | 6,755 |
 | Data Type | 0 |
@@ -110,6 +110,18 @@ AnVIL does not currently provide ground truth for assay type.
 ## HPRC (sequencing catalog)
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
+
+### Metadata Overview
+
+HPRC currently populates the following metadata dimensions:
+
+| Dimension | Files with dimension in HPRC |
+|---|---:|
+| Data Modality | 5,491 |
+| Data Type | 0 |
+| Platform | 5,852 |
+| Reference Assembly | 4 |
+| Assay Type | 5,852 |
 
 Comparing against the following catalogs:
 
