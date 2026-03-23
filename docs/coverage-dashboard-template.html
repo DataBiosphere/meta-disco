@@ -125,6 +125,7 @@
 
       // Horizontal bar chart
       const maxCount = Math.max(...dim.values.map(v => v.count));
+      html += `<h2>Inferred ${dim.label}</h2>`;
       html += '<div class="chart-container"><div class="bar-chart">';
       dim.values.forEach((v, vi) => {
         const width = (v.count / maxCount * 100).toFixed(1);
