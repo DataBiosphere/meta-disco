@@ -30,6 +30,7 @@ CLASSIFICATION_FILES = [
     "auxiliary_classifications.json",
     "index_classifications.json",
     "fasta_classifications.json",
+    "remaining_classifications.json",
 ]
 
 COMPOUND_EXTENSIONS = UnifiedRules.COMPOUND_EXTENSIONS
@@ -204,6 +205,15 @@ def main():
     except ValueError:
         run_time = run_dir.name
 
+    # Load dataset stats from source metadata
+    metadata_path = Path("data/anvil_files_metadata.ndjson")
+    dataset_counts = Counter()
+    if metadata_path.is_file():
+        with open(metadata_path) as f:
+            for line in f:
+                r = json.loads(line)
+                dataset_counts[r.get("dataset_title", "unknown")] += 1
+
     sections = []
     summary_rows = []
 
@@ -218,8 +228,24 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as out:
         out.write("# AnVIL Classification Coverage Report\n\n")
-        out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n")
         out.write(f"Classification run: **{run_time}**\n\n")
+
+        if dataset_counts:
+            n_datasets = len(dataset_counts)
+            n_files = sum(dataset_counts.values())
+            unprocessed = n_files - total
+            out.write(f"Source: **{n_files:,}** files across **{n_datasets}** open-access datasets "
+                      f"on [explore.anvilproject.org](https://explore.anvilproject.org/).\n")
+            out.write(f"Processed **{total:,}** files")
+            if unprocessed > 0:
+                out.write(f" ({unprocessed:,} not yet handled by any classifier)")
+            out.write(".\n\n")
+            for title, count in dataset_counts.most_common():
+                out.write(f"- {title} ({count:,} files)\n")
+            out.write("\n")
+        else:
+            out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n\n")
+
         out.write("**Classified** includes all files with a determined value, including `not_applicable` ")
         out.write("(e.g., FASTQ files have no reference assembly). ")
         out.write("**Not classified** means no rule or signal could determine a value.\n\n")

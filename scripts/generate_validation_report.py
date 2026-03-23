@@ -29,6 +29,7 @@ CLASSIFICATION_FILES = [
     "auxiliary_classifications.json",
     "index_classifications.json",
     "fasta_classifications.json",
+    "remaining_classifications.json",
 ]
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]

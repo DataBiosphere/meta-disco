@@ -105,6 +105,32 @@ def main():
         )
         success &= ok
 
+    # Phase 3: Catch-all for files not handled by any other classifier
+    if not success:
+        print("\nPhase 3: SKIPPED — one or more earlier classifiers failed")
+    else:
+        print("\nPhase 3: Classifying remaining files...")
+        all_classification_files = [
+            output_dir / "bam_classifications.json",
+            output_dir / "vcf_classifications.json",
+            output_dir / "fastq_classifications.json",
+            output_dir / "bed_classifications.json",
+            output_dir / "image_classifications.json",
+            output_dir / "auxiliary_classifications.json",
+            output_dir / "index_classifications.json",
+            output_dir / "fasta_classifications.json",
+        ]
+        _, ok = run_script(
+            "classify_remaining_files.py",
+            output_dir / "remaining_classifications.json",
+            [
+                "--metadata", str(args.metadata),
+                "--classifications",
+                *[str(p) for p in all_classification_files],
+            ]
+        )
+        success &= ok
+
     print(f"\n{'='*70}")
     if success:
         print("All classifications complete!")
