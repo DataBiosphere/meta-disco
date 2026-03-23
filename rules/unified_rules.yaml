@@ -278,6 +278,20 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
+  # Chunked upload artifacts - skip classification
+  # ---------------------------------------------------------------------------
+  - id: chunked_upload_skip
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "gs-chunked-io-part\\.\\d+"
+    then:
+      skip: true
+    confidence: 1.0
+    rationale: "Incomplete chunked upload artifact from Google Cloud Storage - not usable data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
   # Log files - skip classification
   # ---------------------------------------------------------------------------
   - id: log_skip

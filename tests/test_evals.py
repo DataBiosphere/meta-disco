@@ -310,6 +310,13 @@ class TestRuleEngineE2E:
         assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 
+    def test_chunked_upload_skipped(self):
+        result = engine.classify_extended(FileInfo(
+            filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"
+        ))
+        assert result.skip is True
+        assert result.data_modality == NOT_APPLICABLE
+
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo(filename="assembly_plot.png"))
         assert result.data_modality == NOT_APPLICABLE

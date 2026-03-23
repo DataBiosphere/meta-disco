@@ -5,7 +5,7 @@ Classification run: **2026-03-22 19:57:03**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| AnVIL (Azul metadata) | 4,608 | 2 | 635 | 2 |
+| AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
 | HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
 
 ---
@@ -14,21 +14,22 @@ Classification run: **2026-03-22 19:57:03**
 
 Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
 
-Matched **4,608** files (6,623 in source but not in our classifications).
+Matched **11,231** files (0 in source but not in our classifications).
 
 ### Data Modality
 
-- **3,974** values available from source
-- **3** also classified by rule engine
-- **3,971** not classified by rule engine (no rule applies)
-- **1** agreed
-- **2** discrepancies
-- **33.3%** accuracy
+- **6,755** values available from source
+- **353** also classified by rule engine
+- **6,402** not classified by rule engine (no rule applies)
+- **349** agreed
+- **4** discrepancies
+- **98.9%** accuracy
 
 #### Discrepancies
 
 | Count | Inferred | AnVIL | Example |
 |---:|---|---|---|
+| 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
 | 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
 
 ### Data Type
@@ -51,9 +52,9 @@ Matched **4,608** files (6,623 in source but not in our classifications).
 
 ### Reference Assembly
 
-- **638** values available from source
+- **4,696** values available from source
 - **634** also classified by rule engine
-- **4** not classified by rule engine (no rule applies)
+- **4,062** not classified by rule engine (no rule applies)
 - **634** agreed
 - **0** discrepancies
 - **100.0%** accuracy
