@@ -3,7 +3,18 @@
 Comparing meta-disco rule engine classifications against external ground truth.
 Classification run: **2026-03-22 19:57:03**
 
-Validating classifications of **758,658** files across **11** open-access datasets on the [AnVIL Explorer](https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D):
+| Source | Files Matched | Dimensions | Agree | Discrepancies |
+|---|---:|---:|---:|---:|
+| AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
+| HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
+
+---
+
+## AnVIL (Azul metadata)
+
+Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
+
+Classifying **758,658** files across **11** open-access datasets on the [AnVIL Explorer](https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D):
 
 - ANVIL_T2T_CHRY (309,979 files)
 - ANVIL_T2T (289,204 files)
@@ -17,18 +28,7 @@ Validating classifications of **758,658** files across **11** open-access datase
 - AnVIL_MAGE (3,285 files)
 - AnVIL_ENCORE_293T (1,992 files)
 
-| Source | Files Matched | Dimensions | Agree | Discrepancies |
-|---|---:|---:|---:|---:|
-| AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
-| HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
-
----
-
-## AnVIL (Azul metadata)
-
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
-
-The source currently has **758,658** open-access files. The following shows how many files have each metadata dimension populated:
+The source currently populates the following metadata dimensions:
 
 | Dimension | Files with metadata |
 |---|---:|
@@ -96,6 +96,15 @@ The source currently has **758,658** open-access files. The following shows how 
 ## HPRC (sequencing catalog)
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
+
+Comparing against the following catalogs:
+
+| Catalog | Records | Files Matched | Dimensions Validated |
+|---|---:|---:|---|
+| sequencing-data | 6,048 | 5,852 | Platform, Data Modality, Assay Type |
+| alignments | 89 | 4 | Reference Assembly |
+| annotations | 8,739 | 0 | Reference Assembly |
+| assemblies | 560 | 188 | presence only |
 
 ### Data Modality
 

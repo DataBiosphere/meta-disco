@@ -319,10 +319,32 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
             "discrepancy_categories": {},
         }
 
+    # Build catalog summary for display
+    catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
+    by_catalog = data.get("by_catalog", {})
+    catalog_summary = []
+    for cat_name, cat_total in catalogs_loaded.items():
+        matched = by_catalog.get(cat_name, {}).get("matched", 0)
+        catalog_summary.append({
+            "name": cat_name,
+            "total": cat_total,
+            "matched": matched,
+        })
+
+    # Which dimensions each catalog provides
+    catalog_dimensions = {
+        "sequencing-data": ["platform", "data_modality", "assay_type"],
+        "alignments": ["reference_assembly"],
+        "annotations": ["reference_assembly"],
+        "assemblies": [],
+    }
+
     return {
         "matched": total_matched,
-        "unmatched": 0,  # not meaningful across multiple HPRC catalogs
+        "unmatched": 0,
         "dimensions": dimensions,
+        "catalog_summary": catalog_summary,
+        "catalog_dimensions": catalog_dimensions,
     }
 
 
@@ -374,12 +396,25 @@ def build_source_section(name: str, results: dict) -> str:
         lines.append(desc)
         lines.append("")
 
-    # Show metadata coverage if available
-    total_source = results.get("total_source_files", 0)
+    # Show dataset listing if available
+    datasets = results.get("datasets", [])
+    if datasets:
+        total_files = sum(d["count"] for d in datasets)
+        anvil_url = ("https://explore.anvilproject.org/datasets?"
+                     "filter=%5B%7B%22categoryKey%22%3A%22accessible%22"
+                     "%2C%22value%22%3A%5B%22true%22%5D%7D%5D")
+        lines.append(f"Classifying **{total_files:,}** files across "
+                     f"**{len(datasets)}** open-access datasets on the "
+                     f"[AnVIL Explorer]({anvil_url}):")
+        lines.append("")
+        for d in datasets:
+            lines.append(f"- {d['name']} ({d['count']:,} files)")
+        lines.append("")
+
+    # Show metadata coverage if available (AnVIL)
     metadata_coverage = results.get("metadata_coverage", {})
-    if total_source and metadata_coverage:
-        lines.append(f"The source currently has **{total_source:,}** open-access files. "
-                     f"The following shows how many files have each metadata dimension populated:")
+    if metadata_coverage:
+        lines.append("The source currently populates the following metadata dimensions:")
         lines.append("")
         lines.append("| Dimension | Files with metadata |")
         lines.append("|---|---:|")
@@ -387,6 +422,24 @@ def build_source_section(name: str, results: dict) -> str:
             label = DIMENSION_LABELS.get(dim, dim)
             count = metadata_coverage.get(dim, 0)
             lines.append(f"| {label} | {count:,} |")
+        lines.append("")
+
+    # Show catalog summary if available (HPRC)
+    catalog_summary = results.get("catalog_summary", [])
+    catalog_dimensions = results.get("catalog_dimensions", {})
+    if catalog_summary:
+        lines.append("Comparing against the following catalogs:")
+        lines.append("")
+        lines.append("| Catalog | Records | Files Matched | Dimensions Validated |")
+        lines.append("|---|---:|---:|---|")
+        for cat in catalog_summary:
+            dims = catalog_dimensions.get(cat["name"], [])
+            dim_labels = ", ".join(DIMENSION_LABELS.get(d, d) for d in dims) if dims else "presence only"
+            lines.append(
+                f"| {cat['name']} | {cat['total']:,} "
+                f"| {cat['matched']:,} "
+                f"| {dim_labels} |"
+            )
         lines.append("")
 
     if not results.get("dimensions"):
@@ -513,21 +566,6 @@ def main():
         out.write("# Validation Report\n\n")
         out.write("Comparing meta-disco rule engine classifications against external ground truth.\n")
         out.write(f"Classification run: **{run_time}**\n\n")
-
-        # Show dataset context from AnVIL if available
-        anvil = all_results.get("AnVIL (Azul metadata)", {})
-        datasets = anvil.get("datasets", [])
-        if datasets:
-            anvil_url = ("https://explore.anvilproject.org/datasets?"
-                         "filter=%5B%7B%22categoryKey%22%3A%22accessible%22"
-                         "%2C%22value%22%3A%5B%22true%22%5D%7D%5D")
-            total_files = sum(d["count"] for d in datasets)
-            out.write(f"Validating classifications of **{total_files:,}** files "
-                      f"across **{len(datasets)}** open-access datasets on the "
-                      f"[AnVIL Explorer]({anvil_url}):\n\n")
-            for d in datasets:
-                out.write(f"- {d['name']} ({d['count']:,} files)\n")
-            out.write("\n")
 
         # Overall summary
         out.write("| Source | Files Matched | Dimensions | Agree | Discrepancies |\n")

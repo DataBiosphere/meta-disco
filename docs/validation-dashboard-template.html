@@ -80,19 +80,8 @@
 
     document.getElementById('run-time').textContent = DATA.run_time;
 
-    const anvilData = (DATA.sources || {})['AnVIL (Azul metadata)'] || {};
-    const datasets = anvilData.datasets || [];
-    const subtitleEl = document.getElementById('subtitle');
-    const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
-
-    if (datasets.length > 0) {
-      const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
-      let html = `Validating classifications of ${totalFiles.toLocaleString()} files across ${datasets.length} open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: `;
-      html += datasets.map(d => `${d.name} (${d.count.toLocaleString()})`).join(', ');
-      subtitleEl.innerHTML = html;
-    } else {
-      subtitleEl.textContent = 'Comparing meta-disco rule engine classifications against external ground truth.';
-    }
+    document.getElementById('subtitle').textContent =
+      'Comparing meta-disco rule engine classifications against external ground truth.';
 
     // Summary cards — one per source
     const cardsEl = document.getElementById('summary-cards');
@@ -143,11 +132,18 @@
         html += `<p>${sourceDesc}</p>`;
       }
 
-      // Metadata coverage table
-      const totalSource = results.total_source_files || 0;
+      // Dataset listing (AnVIL)
+      const datasets = results.datasets || [];
+      if (datasets.length > 0) {
+        const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
+        const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
+        html += `<p>Classifying <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: ${datasets.map(d => d.name + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
+      }
+
+      // Metadata coverage table (AnVIL)
       const metaCov = results.metadata_coverage || {};
-      if (totalSource > 0 && Object.keys(metaCov).length > 0) {
-        html += `<p>The source currently has <strong>${totalSource.toLocaleString()}</strong> open-access files. The following shows how many files have each metadata dimension populated:</p>`;
+      if (Object.keys(metaCov).length > 0) {
+        html += '<p>The source currently populates the following metadata dimensions:</p>';
         html += '<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Dimension</th><th>Files with metadata</th></tr>';
         for (const dim of ALL_DIMS) {
           const label = DIM_LABELS[dim] || dim;
@@ -157,6 +153,18 @@
         html += '</table>';
       }
 
+      // Catalog summary (HPRC)
+      const CATALOG_DIMS = {'sequencing-data': ['Platform','Data Modality','Assay Type'], 'alignments': ['Reference Assembly'], 'annotations': ['Reference Assembly'], 'assemblies': []};
+      const catalogs = results.catalog_summary || [];
+      if (catalogs.length > 0) {
+        html += '<p>Comparing against the following catalogs:</p>';
+        html += '<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Catalog</th><th>Records</th><th>Files Matched</th><th>Dimensions Validated</th></tr>';
+        for (const cat of catalogs) {
+          const dims_validated = (CATALOG_DIMS[cat.name] || []).join(', ') || 'presence only';
+          html += `<tr><td>${escapeHtml(cat.name)}</td><td style="text-align: right;">${cat.total.toLocaleString()}</td><td style="text-align: right;">${cat.matched.toLocaleString()}</td><td>${dims_validated}</td></tr>`;
+        }
+        html += '</table>';
+      }
 
       const dims = results.dimensions || {};
 
