@@ -58,8 +58,19 @@
     const DATA = COVERAGE_DATA_PLACEHOLDER;
 
     document.getElementById('run-time').textContent = DATA.run_time;
-    document.getElementById('subtitle').textContent =
-      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions.`;
+
+    const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
+    const datasets = DATA.datasets || [];
+    const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
+    const subtitleEl = document.getElementById('subtitle');
+
+    if (datasets.length > 0) {
+      let html = `${DATA.total.toLocaleString()} files from ${datasets.length} open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: `;
+      html += datasets.map(d => `${d.name} (${d.count.toLocaleString()})`).join(', ');
+      subtitleEl.innerHTML = html;
+    } else {
+      subtitleEl.textContent = `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions.`;
+    }
 
     // Colors
     const COLORS = [

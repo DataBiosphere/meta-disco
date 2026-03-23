@@ -263,15 +263,23 @@ def main():
 
     # Generate HTML dashboard
     html_output = args.output.with_name("coverage-dashboard.html")
-    generate_html_dashboard(records, run_time, html_output)
+    generate_html_dashboard(records, run_time, dataset_counts, html_output)
     print(f"Written to {html_output}")
 
 
 def generate_html_dashboard(records: list[dict],
-                            run_time: str, output_path: Path):
+                            run_time: str, dataset_counts: Counter,
+                            output_path: Path):
     """Generate HTML dashboard with embedded chart data."""
     total = len(records)
-    dashboard_data = {"total": total, "run_time": run_time, "dimensions": []}
+    datasets = [{"name": name, "count": count}
+                for name, count in dataset_counts.most_common()] if dataset_counts else []
+    dashboard_data = {
+        "total": total,
+        "run_time": run_time,
+        "datasets": datasets,
+        "dimensions": [],
+    }
 
     for field, label, notes in DIMENSIONS:
         by_ext = defaultdict(Counter)
