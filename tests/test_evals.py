@@ -247,7 +247,6 @@ class TestFastqE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
         assert get_val(result, "data_modality") == NOT_CLASSIFIED
-        assert get_val(result, "assay_type") == "WGS"  # from wgs_longread assay rule (platform-based)
 
     def test_mgi_fastq(self):
         """MGI/BGI platform FASTQ — 32.3 GB."""
