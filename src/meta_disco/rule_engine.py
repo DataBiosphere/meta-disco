@@ -23,6 +23,7 @@ class ExtendedFileInfo:
     bam_header: str | None = None
     vcf_header: str | None = None
     fastq_first_read: str | None = None
+    fasta_contig_names: list[str] | None = None
 
     # Derived/cached fields
     platform: str | None = None
@@ -610,6 +611,35 @@ class RuleEngine:
             fastq_first_read=first_read,
         )
         return self.classify_extended(file_info, include_tier3=True)
+
+    def classify_with_fasta_header(
+        self,
+        filename: str,
+        contig_names: list[str],
+        file_size: int | None = None,
+    ) -> ExtendedClassificationResult:
+        """Classify a FASTA file using its contig names.
+
+        This is a convenience method that creates ExtendedFileInfo from the
+        provided contig names and runs tier 1-2 classification. FASTA does
+        not yet have tier 3 rules; contig analysis is handled in
+        header_classifier.classify_from_fasta_header.
+
+        Args:
+            filename: The filename (used for extension and filename pattern rules)
+            contig_names: List of contig/sequence names from > header lines
+            file_size: Optional file size in bytes
+
+        Returns:
+            ExtendedClassificationResult with classification and metadata
+        """
+        file_info = ExtendedFileInfo(
+            filename=filename,
+            file_size=file_size,
+            file_size_gb=file_size / 1e9 if file_size else None,
+            fasta_contig_names=contig_names,
+        )
+        return self.classify_extended(file_info, include_tier3=False)
 
 
 # Alias for backward compatibility
