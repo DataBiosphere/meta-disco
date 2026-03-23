@@ -457,7 +457,7 @@ def build_source_section(name: str, results: dict) -> str:
         agree_pct = f"{100 * stats['agree'] / comparable:.1f}" if comparable else "0"
         disc_pct = f"{100 * stats['discrepancy'] / comparable:.1f}" if comparable else "0"
 
-        lines.append(f"### {label}")
+        lines.append(f"### {label} Validation")
         lines.append("")
         lines.append(f"- **{available:,}** files available from {source_label} "
                      f"with ground truth {label}")

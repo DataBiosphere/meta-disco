@@ -40,7 +40,7 @@ AnVIL currently populates the following metadata dimensions:
 | Reference Assembly | 4,696 |
 | Assay Type | 0 |
 
-### Data Modality
+### Data Modality Validation
 
 - **6,755** files available from AnVIL with ground truth Data Modality
 - **353** files classified by rule engine
@@ -59,7 +59,7 @@ Of the 353 inferred data modality values, 349 (98.9%) matched AnVIL. There were 
 | 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
 | 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
 
-### Data Type
+### Data Type Validation
 
 - **0** files available from AnVIL with ground truth Data Type
 - **0** files classified by rule engine
@@ -70,7 +70,7 @@ Of the 353 inferred data modality values, 349 (98.9%) matched AnVIL. There were 
 
 AnVIL does not currently provide ground truth for data type.
 
-### Platform
+### Platform Validation
 
 - **0** files available from AnVIL with ground truth Platform
 - **0** files classified by rule engine
@@ -81,7 +81,7 @@ AnVIL does not currently provide ground truth for data type.
 
 AnVIL does not currently provide ground truth for platform.
 
-### Reference Assembly
+### Reference Assembly Validation
 
 - **4,696** files available from AnVIL with ground truth Reference Assembly
 - **634** files classified by rule engine
@@ -93,7 +93,7 @@ AnVIL does not currently provide ground truth for platform.
 Of the 4,696 files on AnVIL with ground truth reference assembly, we were able to infer a reference assembly for 634 files. 4,062 files remain unclassifiable by the rule engine.
 Of the 634 inferred reference assembly values, 634 (100.0%) matched AnVIL. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and AnVIL.
 
-### Assay Type
+### Assay Type Validation
 
 - **0** files available from AnVIL with ground truth Assay Type
 - **0** files classified by rule engine
@@ -132,7 +132,7 @@ Comparing against the following catalogs:
 | annotations | 8,739 | 0 | Reference Assembly |
 | assemblies | 560 | 188 | presence only |
 
-### Data Modality
+### Data Modality Validation
 
 - **5,491** files available from HPRC with ground truth Data Modality
 - **2,012** files classified by rule engine
@@ -144,7 +144,7 @@ Comparing against the following catalogs:
 Of the 5,491 files on HPRC with ground truth data modality, we were able to infer a data modality for 2,012 files. 3,479 files remain unclassifiable by the rule engine.
 Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
-### Data Type
+### Data Type Validation
 
 - **0** files available from HPRC with ground truth Data Type
 - **0** files classified by rule engine
@@ -155,7 +155,7 @@ Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There w
 
 HPRC does not currently provide ground truth for data type.
 
-### Platform
+### Platform Validation
 
 - **5,852** files available from HPRC with ground truth Platform
 - **5,852** files classified by rule engine
@@ -167,7 +167,7 @@ HPRC does not currently provide ground truth for data type.
 Of the 5,852 files on HPRC with ground truth platform, we were able to infer a platform for 5,852 files. 0 files remain unclassifiable by the rule engine.
 Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
 
-### Reference Assembly
+### Reference Assembly Validation
 
 - **4** files available from HPRC with ground truth Reference Assembly
 - **4** files classified by rule engine
@@ -179,7 +179,7 @@ Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0
 Of the 4 files on HPRC with ground truth reference assembly, we were able to infer a reference assembly for 4 files. 0 files remain unclassifiable by the rule engine.
 Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and HPRC.
 
-### Assay Type
+### Assay Type Validation
 
 - **5,852** files available from HPRC with ground truth Assay Type
 - **3,269** files classified by rule engine

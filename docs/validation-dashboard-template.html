@@ -181,7 +181,7 @@
         const agree_pct = bothHave > 0 ? (100 * stats.agree / bothHave).toFixed(1) : '0';
         const disc_pct = bothHave > 0 ? (100 * stats.discrepancy / bothHave).toFixed(1) : '0';
 
-        html += `<h3>${label}</h3>`;
+        html += `<h3>${label} Validation</h3>`;
         html += `<ul style="font-size: 14px; line-height: 1.8;">
           <li><strong>${available.toLocaleString()}</strong> files available from ${sourceLabel} with ground truth ${label}</li>
           <li><strong>${bothHave.toLocaleString()}</strong> files classified by rule engine</li>
