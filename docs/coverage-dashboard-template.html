@@ -115,13 +115,16 @@
       content.id = 'tab-' + i;
       content.className = 'tab-content' + (i === 0 ? ' active' : '');
 
-      // Summary table
-      let html = `
-        <table class="nc-table" style="width: auto; margin-bottom: 20px;">
+      // Summary
+      const naCount = (dim.values.find(v => v.name === 'not_applicable') || {count: 0}).count;
+      let html = `<h2>Inferred ${dim.label} Summary</h2>`;
+      html += `
+        <table class="nc-table" style="width: auto; margin-bottom: 12px;">
           <tr><td><strong>Files classified</strong></td><td>${dim.classified.toLocaleString()}</td><td>${(100 * dim.classified / DATA.total).toFixed(1)}%</td></tr>
           <tr><td><strong>Not classified</strong></td><td>${dim.not_classified.toLocaleString()}</td><td>${(100 * dim.not_classified / DATA.total).toFixed(1)}%</td></tr>
         </table>
       `;
+      html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 20px;">Of the ${DATA.total.toLocaleString()} files, we were able to assign a ${dim.label} to ${dim.classified.toLocaleString()} files, including ${naCount.toLocaleString()} files assigned "not_applicable". There were ${dim.not_classified.toLocaleString()} files we were not able to determine a ${dim.label} for.</p>`;
 
       // Horizontal bar chart
       const maxCount = Math.max(...dim.values.map(v => v.count));
