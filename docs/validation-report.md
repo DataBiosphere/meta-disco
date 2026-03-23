@@ -43,7 +43,7 @@ AnVIL currently populates the following metadata dimensions:
 ### Data Modality Validation
 
 - **6,755** files available from AnVIL with ground truth Data Modality
-- **353** files classified by rule engine
+- **353** files comparable (both source and rule engine have values)
 - **6,402** files not classified by rule engine
 - **349** inferred data modality values match AnVIL
 - **4** discrepancies
@@ -62,7 +62,7 @@ Of the 353 inferred data modality values, 349 (98.9%) matched AnVIL. There were 
 ### Data Type Validation
 
 - **0** files available from AnVIL with ground truth Data Type
-- **0** files classified by rule engine
+- **0** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **0** inferred data type values match AnVIL
 - **0** discrepancies
@@ -73,7 +73,7 @@ AnVIL does not currently provide ground truth for data type.
 ### Platform Validation
 
 - **0** files available from AnVIL with ground truth Platform
-- **0** files classified by rule engine
+- **0** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **0** inferred platform values match AnVIL
 - **0** discrepancies
@@ -84,7 +84,7 @@ AnVIL does not currently provide ground truth for platform.
 ### Reference Assembly Validation
 
 - **4,696** files available from AnVIL with ground truth Reference Assembly
-- **634** files classified by rule engine
+- **634** files comparable (both source and rule engine have values)
 - **4,062** files not classified by rule engine
 - **634** inferred reference assembly values match AnVIL
 - **0** discrepancies
@@ -96,7 +96,7 @@ Of the 634 inferred reference assembly values, 634 (100.0%) matched AnVIL. There
 ### Assay Type Validation
 
 - **0** files available from AnVIL with ground truth Assay Type
-- **0** files classified by rule engine
+- **0** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **0** inferred assay type values match AnVIL
 - **0** discrepancies
@@ -126,7 +126,7 @@ HPRC currently populates the following metadata dimensions:
 ### Data Modality Validation
 
 - **5,491** files available from HPRC with ground truth Data Modality
-- **2,012** files classified by rule engine
+- **2,012** files comparable (both source and rule engine have values)
 - **3,479** files not classified by rule engine
 - **2,012** inferred data modality values match HPRC
 - **0** discrepancies
@@ -138,7 +138,7 @@ Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There w
 ### Data Type Validation
 
 - **0** files available from HPRC with ground truth Data Type
-- **0** files classified by rule engine
+- **0** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **0** inferred data type values match HPRC
 - **0** discrepancies
@@ -149,7 +149,7 @@ HPRC does not currently provide ground truth for data type.
 ### Platform Validation
 
 - **5,852** files available from HPRC with ground truth Platform
-- **5,852** files classified by rule engine
+- **5,852** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **5,852** inferred platform values match HPRC
 - **0** discrepancies
@@ -161,7 +161,7 @@ Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0
 ### Reference Assembly Validation
 
 - **4** files available from HPRC with ground truth Reference Assembly
-- **4** files classified by rule engine
+- **4** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
 - **4** inferred reference assembly values match HPRC
 - **0** discrepancies
@@ -173,7 +173,7 @@ Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were
 ### Assay Type Validation
 
 - **5,852** files available from HPRC with ground truth Assay Type
-- **3,269** files classified by rule engine
+- **3,269** files comparable (both source and rule engine have values)
 - **2,583** files not classified by rule engine
 - **3,269** inferred assay type values match HPRC
 - **0** discrepancies

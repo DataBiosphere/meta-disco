@@ -172,7 +172,7 @@
         html += `<h3>${label} Validation</h3>`;
         html += `<ul style="font-size: 14px; line-height: 1.8;">
           <li><strong>${available.toLocaleString()}</strong> files available from ${sourceLabel} with ground truth ${label}</li>
-          <li><strong>${bothHave.toLocaleString()}</strong> files classified by rule engine</li>
+          <li><strong>${bothHave.toLocaleString()}</strong> files comparable (both source and rule engine have values)</li>
           <li><strong>${stats.not_classified.toLocaleString()}</strong> files not classified by rule engine</li>
           <li><strong>${stats.agree.toLocaleString()}</strong> inferred ${label.toLowerCase()} values match ${sourceLabel}</li>
           <li><strong>${stats.discrepancy.toLocaleString()}</strong> discrepancies</li>

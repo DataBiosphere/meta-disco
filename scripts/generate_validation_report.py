@@ -443,7 +443,7 @@ def build_source_section(name: str, results: dict) -> str:
         lines.append("")
         lines.append(f"- **{available:,}** files available from {source_label} "
                      f"with ground truth {label}")
-        lines.append(f"- **{comparable:,}** files classified by rule engine")
+        lines.append(f"- **{comparable:,}** files comparable (both source and rule engine have values)")
         lines.append(f"- **{stats['not_classified']:,}** files not classified by rule engine")
         lines.append(f"- **{stats['agree']:,}** inferred {label_lower} values "
                      f"match {source_label}")
