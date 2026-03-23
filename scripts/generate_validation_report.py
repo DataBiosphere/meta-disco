@@ -420,24 +420,6 @@ def build_source_section(name: str, results: dict) -> str:
             lines.append(f"| {label} | {count:,} |")
         lines.append("")
 
-    # Show catalog summary if available (HPRC)
-    catalog_summary = results.get("catalog_summary", [])
-    catalog_dimensions = results.get("catalog_dimensions", {})
-    if catalog_summary:
-        lines.append("Comparing against the following catalogs:")
-        lines.append("")
-        lines.append("| Catalog | Records | Files Matched | Dimensions Validated |")
-        lines.append("|---|---:|---:|---|")
-        for cat in catalog_summary:
-            dims = catalog_dimensions.get(cat["name"], [])
-            dim_labels = ", ".join(DIMENSION_LABELS.get(d, d) for d in dims) if dims else "presence only"
-            lines.append(
-                f"| {cat['name']} | {cat['total']:,} "
-                f"| {cat['matched']:,} "
-                f"| {dim_labels} |"
-            )
-        lines.append("")
-
     if not results.get("dimensions"):
         lines.append("No dimensions to compare.")
         return "\n".join(lines)

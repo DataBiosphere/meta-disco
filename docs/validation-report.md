@@ -123,15 +123,6 @@ HPRC currently populates the following metadata dimensions:
 | Reference Assembly | 4 |
 | Assay Type | 5,852 |
 
-Comparing against the following catalogs:
-
-| Catalog | Records | Files Matched | Dimensions Validated |
-|---|---:|---:|---|
-| sequencing-data | 6,048 | 5,852 | Platform, Data Modality, Assay Type |
-| alignments | 89 | 4 | Reference Assembly |
-| annotations | 8,739 | 0 | Reference Assembly |
-| assemblies | 560 | 188 | presence only |
-
 ### Data Modality Validation
 
 - **5,491** files available from HPRC with ground truth Data Modality

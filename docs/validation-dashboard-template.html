@@ -154,19 +154,7 @@
         html += '</table>';
       }
 
-      // Catalog summary (HPRC)
-      const catalogDims = results.catalog_dimensions || {};
-      const catalogs = results.catalog_summary || [];
-      if (catalogs.length > 0) {
-        html += '<p>Comparing against the following catalogs:</p>';
-        html += '<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Catalog</th><th>Records</th><th>Files Matched</th><th>Dimensions Validated</th></tr>';
-        for (const cat of catalogs) {
-          const catDimKeys = catalogDims[cat.name] || [];
-          const dims_validated = catDimKeys.map(d => DIM_LABELS[d] || d).join(', ') || 'presence only';
-          html += `<tr><td>${escapeHtml(cat.name)}</td><td style="text-align: right;">${cat.total.toLocaleString()}</td><td style="text-align: right;">${cat.matched.toLocaleString()}</td><td>${dims_validated}</td></tr>`;
-        }
-        html += '</table>';
-      }
+
 
       const dims = results.dimensions || {};
 
