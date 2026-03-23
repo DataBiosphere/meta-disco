@@ -143,7 +143,7 @@
       const metaCov = results.metadata_coverage || {};
       if (Object.keys(metaCov).length > 0) {
         html += `<h3>Metadata Overview</h3>`;
-        html += `<p>${sourceLabel} currently populates the following metadata dimensions:</p>`;
+        html += `<p>${sourceLabel}'s open-access datasets currently populate the following genomic metadata dimensions:</p>`;
         html += `<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Dimension</th><th>Files with dimension in ${escapeHtml(sourceLabel)}</th></tr>`;
         for (const dim of ALL_DIMS) {
           const label = DIM_LABELS[dim] || dim;

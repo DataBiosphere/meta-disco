@@ -409,7 +409,7 @@ def build_source_section(name: str, results: dict) -> str:
     if metadata_coverage:
         lines.append("### Metadata Overview")
         lines.append("")
-        lines.append(f"{source_label} currently populates the following metadata dimensions:")
+        lines.append(f"{source_label}'s open-access datasets currently populate the following genomic metadata dimensions:")
         lines.append("")
         lines.append(f"| Dimension | Files with dimension in {source_label} |")
         lines.append("|---|---:|")

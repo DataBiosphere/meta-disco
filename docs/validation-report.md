@@ -28,7 +28,7 @@ Validated against file-level metadata from the [AnVIL Data Explorer](https://exp
 
 ### Metadata Overview
 
-AnVIL currently populates the following metadata dimensions:
+AnVIL's open-access datasets currently populate the following genomic metadata dimensions:
 
 | Dimension | Files with dimension in AnVIL |
 |---|---:|
@@ -111,7 +111,7 @@ Validated against sequencing, alignment, and annotation catalogs from the [HPRC 
 
 ### Metadata Overview
 
-HPRC currently populates the following metadata dimensions:
+HPRC's open-access datasets currently populate the following genomic metadata dimensions:
 
 | Dimension | Files with dimension in HPRC |
 |---|---:|
