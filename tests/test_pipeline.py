@@ -175,11 +175,10 @@ class TestPipelineRun:
 
     def test_classify_single(self, tmp_path):
         config = _make_config()
-        pipeline = ClassifyPipeline(
-            config, tmp_path / "unused.json", tmp_path / "out.json",
+        result = ClassifyPipeline.classify_single(
+            config, "test_md5", file_name="sample.test",
             evidence_base=tmp_path / "evidence",
         )
-        result = pipeline.classify_single("test_md5", file_name="sample.test")
         assert result is not None
         assert result["md5sum"] == "test_md5"
         assert "classifications" in result

@@ -24,9 +24,8 @@ def classify_single_file(
     use_cache: bool = True,
 ) -> dict | None:
     """Backward-compat: classify a single BAM/CRAM file by MD5."""
-    pipeline = ClassifyPipeline(BAM_CONFIG, Path("unused"), Path("unused"))
-    return pipeline.classify_single(
-        md5sum, file_name=file_name, file_size=file_size,
+    return ClassifyPipeline.classify_single(
+        BAM_CONFIG, md5sum, file_name=file_name, file_size=file_size,
         file_format=file_format, use_cache=use_cache,
     )
 
@@ -59,8 +58,9 @@ def main():
         return
 
     if args.md5:
-        pipeline = ClassifyPipeline(BAM_CONFIG, Path("unused"), Path(args.output))
-        result = pipeline.classify_single(args.md5, use_cache=not args.no_resume)
+        result = ClassifyPipeline.classify_single(
+            BAM_CONFIG, args.md5, use_cache=not args.no_resume,
+        )
         if result:
             print(json.dumps(result, indent=2))
         else:

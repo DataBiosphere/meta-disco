@@ -24,9 +24,8 @@ def classify_single_fasta(
     use_cache: bool = True,
 ) -> dict | None:
     """Backward-compat: classify a single FASTA file by MD5."""
-    pipeline = ClassifyPipeline(FASTA_CONFIG, Path("unused"), Path("unused"))
-    return pipeline.classify_single(
-        md5sum, file_name=file_name, file_size=file_size,
+    return ClassifyPipeline.classify_single(
+        FASTA_CONFIG, md5sum, file_name=file_name, file_size=file_size,
         is_gzipped=is_gzipped, use_cache=use_cache,
     )
 
@@ -54,9 +53,9 @@ def main():
     args = parser.parse_args()
 
     if args.md5:
-        pipeline = ClassifyPipeline(FASTA_CONFIG, Path("unused"), Path(args.output))
-        result = pipeline.classify_single(
-            args.md5, file_name=args.filename or "", use_cache=not args.no_resume,
+        result = ClassifyPipeline.classify_single(
+            FASTA_CONFIG, args.md5, file_name=args.filename or "",
+            use_cache=not args.no_resume,
         )
         if result:
             print(json.dumps(result, indent=2))

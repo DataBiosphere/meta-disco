@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable
+from typing import Callable
 
 
 @dataclass(frozen=True)
@@ -102,11 +102,11 @@ class ClassifyPipeline:
         if self._should_skip_complete(records):
             return []
 
-        self._print_cache_stats(records)
+        cached_md5s = self._print_cache_stats(records)
 
-        if self.skip_cached:
+        if self.skip_cached and cached_md5s:
             records = [r for r in records
-                       if self._load_cached(r.get("file_md5sum")) is None]
+                       if r.get("file_md5sum") not in cached_md5s]
             print(f"  Skipping cached files, processing only {len(records)} new files")
 
         if self.limit:
@@ -124,26 +124,30 @@ class ClassifyPipeline:
 
         return classifications
 
+    @classmethod
     def classify_single(
-        self,
+        cls,
+        config: "FileTypeConfig",
         md5sum: str,
         file_name: str = "",
         file_size: int | None = None,
         file_format: str | None = None,
         is_gzipped: bool = True,
         use_cache: bool = True,
+        evidence_base: Path = Path("data/evidence"),
     ) -> dict | None:
-        """Classify a single file by MD5. Used by --md5 CLI mode."""
-        self.evidence_dir.mkdir(parents=True, exist_ok=True)
+        """Classify a single file by MD5. Does not require a full pipeline instance."""
+        evidence_dir = evidence_base / config.evidence_subdir
+        evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        raw_data = self.config.fetcher(
-            self.evidence_dir, md5sum, file_name=file_name,
+        raw_data = config.fetcher(
+            evidence_dir, md5sum, file_name=file_name,
             is_gzipped=is_gzipped, use_cache=use_cache,
         )
         if raw_data is None:
             return None
 
-        classifications = self.config.classifier(
+        classifications = config.classifier(
             raw_data, file_name=file_name, file_size=file_size,
             file_format=file_format,
         )
@@ -181,13 +185,10 @@ class ClassifyPipeline:
 
         return [r for r in records if matches(r)]
 
-    def _load_cached(self, md5sum: str) -> Any | None:
-        """Load cached evidence and extract raw data."""
-        from .fetchers import load_cached_evidence
-        cached = load_cached_evidence(self.evidence_dir, md5sum)
-        if cached:
-            return self.config.evidence_extractor(cached)
-        return None
+    def _is_cached(self, md5sum: str) -> bool:
+        """Check if evidence is cached (cheap file-existence check, no JSON parse)."""
+        from .fetchers import get_evidence_path
+        return get_evidence_path(self.evidence_dir, md5sum).exists()
 
     def _should_skip_complete(self, records: list[dict]) -> bool:
         """Check if output already has all files classified."""
@@ -204,14 +205,15 @@ class ClassifyPipeline:
             pass
         return False
 
-    def _print_cache_stats(self, records: list[dict]):
-        """Print how many files are already cached."""
+    def _print_cache_stats(self, records: list[dict]) -> set[str]:
+        """Print how many files are already cached. Returns set of cached MD5s."""
         name = self.config.name.upper()
         print(f"Found {len(records)} {name} files with MD5 for header inspection")
-        cached_count = sum(1 for r in records
-                          if self._load_cached(r.get("file_md5sum")) is not None)
-        print(f"  Already cached: {cached_count}")
-        print(f"  Remaining to fetch: {len(records) - cached_count}")
+        cached_md5s = {r.get("file_md5sum") for r in records
+                       if self._is_cached(r.get("file_md5sum"))}
+        print(f"  Already cached: {len(cached_md5s)}")
+        print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
+        return cached_md5s
 
     def _process_single_record(self, record: dict) -> tuple[dict | None, bool]:
         """Fetch, classify, and build output for one record."""
@@ -225,7 +227,7 @@ class ClassifyPipeline:
         if self.config.detect_gzip:
             is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
 
-        was_cached = self._load_cached(md5) is not None
+        was_cached = self._is_cached(md5)
 
         raw_data = self.config.fetcher(
             self.evidence_dir, md5, file_name=file_name,

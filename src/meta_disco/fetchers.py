@@ -322,9 +322,6 @@ def fetch_fasta_headers(
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
-        if content[:2] == b'\x1f\x8b':
-            # Still gzipped after decompression attempt — corrupt or not gzipped
-            return None
         text = _decode_bytes(content)
 
         contig_names = []

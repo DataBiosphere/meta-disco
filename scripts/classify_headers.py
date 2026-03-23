@@ -94,10 +94,9 @@ def main():
         if len(type_names) != 1:
             parser.error("--md5 requires exactly one --type")
         config = FILE_TYPE_REGISTRY[type_names[0]]
-        pipeline = ClassifyPipeline(
-            config, args.input, args.output or Path(config.default_output),
+        result = ClassifyPipeline.classify_single(
+            config, args.md5, use_cache=not args.no_resume,
         )
-        result = pipeline.classify_single(args.md5, use_cache=not args.no_resume)
         if result:
             print(json.dumps(result, indent=2))
         else:

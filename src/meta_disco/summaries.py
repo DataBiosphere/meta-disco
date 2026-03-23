@@ -1,16 +1,6 @@
 """Summary printers for classification results."""
 
-
-def _val(rec: dict, field: str):
-    """Extract value from per-field or flat classification format."""
-    cls = rec.get("classifications", {})
-    if isinstance(cls, dict) and field in cls:
-        v = cls[field]
-        return v["value"] if isinstance(v, dict) and "value" in v else v
-    v = rec.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    return v
+from .validation_maps import get_classification_value as _val
 
 
 def _print_field_table(title: str, counts: dict, width: int = 35):
