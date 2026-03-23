@@ -401,7 +401,9 @@ def build_source_section(name: str, results: dict) -> str:
     # Show metadata coverage if available (AnVIL)
     metadata_coverage = results.get("metadata_coverage", {})
     if metadata_coverage:
-        lines.append("The source currently populates the following metadata dimensions:")
+        lines.append("### Metadata Overview")
+        lines.append("")
+        lines.append(f"{source_label} currently populates the following metadata dimensions:")
         lines.append("")
         lines.append("| Dimension | Files with metadata |")
         lines.append("|---|---:|")

@@ -28,7 +28,9 @@ Classifying **758,658** files across **11** open-access datasets on the [AnVIL E
 - AnVIL_MAGE (3,285 files)
 - AnVIL_ENCORE_293T (1,992 files)
 
-The source currently populates the following metadata dimensions:
+### Metadata Overview
+
+AnVIL currently populates the following metadata dimensions:
 
 | Dimension | Files with metadata |
 |---|---:|

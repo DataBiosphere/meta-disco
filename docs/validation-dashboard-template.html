@@ -143,7 +143,8 @@
       // Metadata coverage table (AnVIL)
       const metaCov = results.metadata_coverage || {};
       if (Object.keys(metaCov).length > 0) {
-        html += '<p>The source currently populates the following metadata dimensions:</p>';
+        html += `<h3>Metadata Overview</h3>`;
+        html += `<p>${sourceLabel} currently populates the following metadata dimensions:</p>`;
         html += '<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Dimension</th><th>Files with metadata</th></tr>';
         for (const dim of ALL_DIMS) {
           const label = DIM_LABELS[dim] || dim;
