@@ -53,7 +53,7 @@ report:
 	python scripts/generate_coverage_report.py
 
 validate-report:
-	python scripts/validate_hprc_samples.py
+	python scripts/validate_against_hprc.py
 	python scripts/generate_validation_report.py
 
 reports: report validate-report
@@ -62,7 +62,7 @@ download-hprc:
 	python scripts/download_hprc_catalogs.py
 
 validate-hprc:
-	python scripts/validate_hprc_samples.py
+	python scripts/validate_against_hprc.py
 
 clean:
 	find . -name '*.pyc' -delete

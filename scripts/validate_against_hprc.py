@@ -8,9 +8,9 @@ Validates platform, data_modality, assay_type, and reference_assembly
 using file-level matching by filename.
 
 Usage:
-    python scripts/validate_hprc_samples.py
-    python scripts/validate_hprc_samples.py --catalog-dir data/hprc
-    python scripts/validate_hprc_samples.py --fetch --limit 100
+    python scripts/validate_against_hprc.py
+    python scripts/validate_against_hprc.py --catalog-dir data/hprc
+    python scripts/validate_against_hprc.py --fetch --limit 100
 
 Output saved to: output/hprc_validation_results.json
 """

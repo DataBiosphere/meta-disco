@@ -2,7 +2,7 @@
 """Download HPRC Data Explorer catalogs for validation.
 
 Fetches the four catalog files from the hprc-data-explorer GitHub repository
-and saves them locally for use by validate_hprc_samples.py.
+and saves them locally for use by validate_against_hprc.py.
 
 Usage:
     python scripts/download_hprc_catalogs.py
