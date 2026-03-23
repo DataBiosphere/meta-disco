@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fetch BAM/CRAM headers from S3 mirror for files needing header inspection.
+"""Fetch BAM/CRAM headers and classify using header inspection.
 
-Headers are cached in data/evidence/bam/ for:
+Headers are cached in data/{repo}/evidence/bam/ for:
 - Resumability after interruption
 - Audit trail of classification evidence
 
@@ -21,20 +21,24 @@ from threading import Lock
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.header_classifier import classify_from_header, get_rules_documentation
+from src.meta_disco.repository import ANVIL, RepoConfig, get_repo
 
-S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
-EVIDENCE_DIR = Path("data/evidence/bam")
+# Module-level repo config — set by main(), used by evidence helpers
+_repo: RepoConfig = ANVIL
 
 
-def get_evidence_path(md5sum: str) -> Path:
+def _evidence_dir() -> Path:
+    return _repo.evidence_dir("bam")
+
+
+def get_evidence_path(key: str) -> Path:
     """Get path for cached header evidence file."""
-    # Use first 2 chars of MD5 as subdirectory to avoid too many files in one dir
-    return EVIDENCE_DIR / md5sum[:2] / f"{md5sum}.json"
+    return _evidence_dir() / key[:2] / f"{key}.json"
 
 
-def load_cached_header(md5sum: str) -> dict | None:
+def load_cached_header(key: str) -> dict | None:
     """Load cached header if it exists."""
-    path = get_evidence_path(md5sum)
+    path = get_evidence_path(key)
     if path.exists():
         try:
             with open(path) as f:
@@ -44,13 +48,13 @@ def load_cached_header(md5sum: str) -> dict | None:
     return None
 
 
-def save_header_evidence(md5sum: str, file_name: str, header_text: str):
+def save_header_evidence(key: str, file_name: str, header_text: str):
     """Save fetched header as evidence for audit trail."""
-    path = get_evidence_path(md5sum)
+    path = get_evidence_path(key)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     evidence = {
-        "md5sum": md5sum,
+        "key": key,
         "file_name": file_name,
         "header_text": header_text,
         "header_line_count": len(header_text.split('\n')),
@@ -61,19 +65,17 @@ def save_header_evidence(md5sum: str, file_name: str, header_text: str):
         json.dump(evidence, f, indent=2)
 
 
-def get_bam_header(md5sum: str, file_name: str = "", use_cache: bool = True) -> str | None:
-    """
-    Read BAM/CRAM header from S3 mirror using samtools.
+def get_bam_header(key: str, url: str, file_name: str = "", use_cache: bool = True) -> str | None:
+    """Read BAM/CRAM header using samtools from a URL.
 
-    Headers are cached in data/evidence/bam/ for resumability.
+    Headers are cached for resumability.
     """
     # Check cache first
     if use_cache:
-        cached = load_cached_header(md5sum)
+        cached = load_cached_header(key)
         if cached and cached.get("header_text"):
             return cached["header_text"]
 
-    url = f"{S3_MIRROR_URL}/{md5sum}.md5"
     try:
         result = subprocess.run(
             ["samtools", "view", "-H", url],
@@ -86,39 +88,38 @@ def get_bam_header(md5sum: str, file_name: str = "", use_cache: bool = True) -> 
 
         header_text = result.stdout
         if header_text:
-            # Save to cache for resumability
-            save_header_evidence(md5sum, file_name, header_text)
+            save_header_evidence(key, file_name, header_text)
 
         return header_text
     except subprocess.TimeoutExpired:
-        print(f"Timeout reading header for {md5sum}")
+        print(f"Timeout reading header for {file_name}")
         return None
     except FileNotFoundError:
         print("Error: samtools not found. Please install samtools.")
         return None
     except Exception as e:
-        print(f"Error reading header for {md5sum}: {e}")
+        print(f"Error reading header for {file_name}: {e}")
         return None
 
 
 def classify_single_file(
-    md5sum: str,
+    key: str,
+    url: str,
     file_name: str = "",
     file_size: int | None = None,
     file_format: str | None = None,
     use_cache: bool = True,
 ) -> dict | None:
-    """Fetch header and classify a single file by MD5."""
-    header_text = get_bam_header(md5sum, file_name, use_cache=use_cache)
+    """Fetch header and classify a single BAM/CRAM file."""
+    header_text = get_bam_header(key, url, file_name, use_cache=use_cache)
     if not header_text:
         return None
 
     full = classify_from_header(header_text, file_size=file_size, file_format=file_format)
 
-    # full is already per-field format from to_output_dict()
     return {
         "file_name": file_name,
-        "md5sum": md5sum,
+        "key": key,
         "file_size": file_size,
         "file_format": file_format,
         "classifications": full,
@@ -127,16 +128,19 @@ def classify_single_file(
 
 def process_single_record(record: dict, resume: bool) -> tuple[dict | None, bool]:
     """Process a single BAM/CRAM record. Returns (classification, was_cached)."""
-    md5 = record.get("file_md5sum")
-    file_name = record.get("file_name", "")
-    file_size = record.get("file_size")
-    file_format = record.get("file_format")
+    key = _repo.get_key(record)
+    url = _repo.get_url(record)
+    file_name = _repo.get_filename(record)
+    file_size = _repo.get_file_size(record)
+    file_format = _repo.get_file_format(record)
     entry_id = record.get("entry_id")
 
-    # Check cache first
-    was_cached = load_cached_header(md5) is not None
+    was_cached = load_cached_header(key) is not None if key else False
 
-    result = classify_single_file(md5, file_name, file_size=file_size,
+    if not key or not url:
+        return None, False
+
+    result = classify_single_file(key, url, file_name, file_size=file_size,
                                   file_format=file_format, use_cache=resume)
 
     if result:
@@ -173,14 +177,14 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
             results = [json.loads(line) for line in f if line.strip()]
         else:
             data = json.load(f)
-            results = data.get("results", data.get("files", data))
+            results = data if isinstance(data, list) else data.get("results", data.get("files", data))
 
-    # Filter to BAM/CRAM files with MD5
+    # Filter to BAM/CRAM files with a valid key
     needs_inspection = [
         r for r in results
-        if r.get("file_md5sum")  # Must have MD5
-        and (r.get("file_format") in [".bam", ".cram"]
-             or r.get("file_name", "").endswith((".bam", ".cram")))
+        if _repo.get_key(r)
+        and (_repo.get_file_format(r) in [".bam", ".cram", "bam", "cram"]
+             or _repo.get_filename(r).endswith((".bam", ".cram")))
         and not r.get("skip")
     ]
 
@@ -196,18 +200,18 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
         except (json.JSONDecodeError, IOError):
             pass
 
-    print(f"Found {len(needs_inspection)} BAM/CRAM files with MD5 for header inspection")
+    print(f"Found {len(needs_inspection)} BAM/CRAM files for header inspection")
 
     # Check how many are already cached
     cached_count = sum(1 for r in needs_inspection
-                       if load_cached_header(r.get("file_md5sum")) is not None)
+                       if load_cached_header(_repo.get_key(r)) is not None)
     print(f"  Already cached: {cached_count}")
     print(f"  Remaining to fetch: {len(needs_inspection) - cached_count}")
 
     # Skip cached files entirely if requested (no re-analysis)
     if skip_cached and cached_count > 0:
         needs_inspection = [r for r in needs_inspection
-                          if load_cached_header(r.get("file_md5sum")) is None]
+                          if load_cached_header(_repo.get_key(r)) is None]
         print(f"  Skipping cached files, processing only {len(needs_inspection)} new files")
 
     if limit:
@@ -215,7 +219,7 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
         print(f"Processing first {limit} files")
 
     # Ensure evidence directory exists
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    _evidence_dir().mkdir(parents=True, exist_ok=True)
 
     writer = NdjsonWriter(output_path)
 
@@ -248,7 +252,7 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
         # Sequential processing
         for record in needs_inspection:
             result, was_cached = process_single_record(record, resume)
-            update_progress(result, was_cached, record.get("file_name", ""))
+            update_progress(result, was_cached, _repo.get_filename(record))
     else:
         # Parallel processing
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -263,9 +267,9 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
                 record = future_to_record[future]
                 try:
                     result, was_cached = future.result()
-                    update_progress(result, was_cached, record.get("file_name", ""))
+                    update_progress(result, was_cached, _repo.get_filename(record))
                 except Exception as e:
-                    print(f"\nError processing {record.get('file_name')}: {e}")
+                    print(f"\nError processing {_repo.get_filename(record)}: {e}")
                     with lock:
                         processed += 1
                         failed += 1
@@ -280,7 +284,7 @@ def process_files_needing_inspection(input_path: Path, output_path: Path, limit:
     classifications = save_final(output_path, len(needs_inspection), successful, failed, from_cache)
 
     print(f"\nSaved to {output_path}")
-    print(f"Evidence cached in: {EVIDENCE_DIR}/")
+    print(f"Evidence cached in: {_evidence_dir()}/")
 
     # Read back for summary
     print_classification_summary(classifications)
@@ -415,6 +419,7 @@ def print_classification_summary(classifications: list[dict]):
 
 
 def main():
+    global _repo
     parser = argparse.ArgumentParser(description="Fetch BAM/CRAM headers and classify")
     parser.add_argument("--input", "-i", type=str,
                         help="Input file (classification JSON or metadata NDJSON)")
@@ -422,8 +427,10 @@ def main():
                         help="Output file for classifications")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files to process")
+    parser.add_argument("--repository", "-r", type=str, default="anvil",
+                        help="Repository config: anvil, hprc (default: anvil)")
     parser.add_argument("--md5", type=str,
-                        help="Classify a single file by MD5 hash")
+                        help="Classify a single file by MD5 hash (anvil only)")
     parser.add_argument("--no-resume", action="store_true",
                         help="Don't use cached headers, re-fetch all")
     parser.add_argument("--workers", "-w", type=int, default=4,
@@ -436,13 +443,16 @@ def main():
                         help="Print rules documentation and exit")
     args = parser.parse_args()
 
+    _repo = get_repo(args.repository)
+
     if args.docs:
         print(get_rules_documentation())
         return
 
     if args.md5:
+        url = f"{ANVIL.S3_MIRROR_URL}/{args.md5}.md5"
         print(f"Classifying file with MD5: {args.md5}")
-        result = classify_single_file(args.md5)
+        result = classify_single_file(args.md5, url)
         if result:
             print(json.dumps(result, indent=2))
             print("\nEvidence:")

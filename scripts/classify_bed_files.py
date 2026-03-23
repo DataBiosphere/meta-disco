@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
+from src.meta_disco.repository import ANVIL
 from src.meta_disco.rule_engine import RuleEngine
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
@@ -30,7 +31,7 @@ try:
 except ImportError:
     infer_reference_from_coordinates = None
 
-EVIDENCE_DIR = Path("data/evidence/bed")
+EVIDENCE_DIR = ANVIL.evidence_dir("bed")
 
 
 def load_bed_reference_evidence() -> dict[str, dict]:

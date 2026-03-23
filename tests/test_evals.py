@@ -19,20 +19,44 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 # Import the actual script functions
-from classify_bam_files import classify_single_file as classify_bam
-from classify_fasta_files import classify_single_fasta as classify_fasta
-from classify_fastq_files import classify_single_fastq as classify_fastq
-from classify_vcf_files import classify_single_vcf as classify_vcf
+from classify_bam_files import classify_single_file as _classify_bam_raw
+from classify_fasta_files import classify_single_fasta as _classify_fasta_raw
+from classify_fastq_files import classify_single_fastq as _classify_fastq_raw
+from classify_vcf_files import classify_single_vcf as _classify_vcf_raw
 
 from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
 from src.meta_disco.rule_engine import RuleEngine
 
 engine = RuleEngine()
 
-EVIDENCE_BAM = Path("data/evidence/bam")
-EVIDENCE_VCF = Path("data/evidence/vcf")
-EVIDENCE_FASTQ = Path("data/evidence/fastq")
-EVIDENCE_FASTA = Path("data/evidence/fasta")
+from src.meta_disco.repository import ANVIL
+
+EVIDENCE_BAM = ANVIL.evidence_dir("bam")
+EVIDENCE_VCF = ANVIL.evidence_dir("vcf")
+EVIDENCE_FASTQ = ANVIL.evidence_dir("fastq")
+EVIDENCE_FASTA = ANVIL.evidence_dir("fasta")
+
+_ANVIL_URL = ANVIL.S3_MIRROR_URL
+
+
+def _anvil_url(md5: str) -> str:
+    return f"{_ANVIL_URL}/{md5}.md5"
+
+
+def classify_bam(md5, file_name="", **kwargs):
+    return _classify_bam_raw(md5, _anvil_url(md5), file_name, **kwargs)
+
+
+def classify_vcf(md5, file_name="", **kwargs):
+    return _classify_vcf_raw(md5, _anvil_url(md5), file_name, **kwargs)
+
+
+def classify_fastq(md5, file_name="", **kwargs):
+    return _classify_fastq_raw(md5, _anvil_url(md5), file_name, **kwargs)
+
+
+def classify_fasta(md5, file_name="", **kwargs):
+    return _classify_fasta_raw(md5, _anvil_url(md5), file_name, **kwargs)
 
 
 def get_val(record, field):
@@ -47,7 +71,7 @@ def get_val(record, field):
 def assert_output_format(record):
     """Assert the record has correct top-level + per-field structure."""
     assert "file_name" in record, "Missing file_name"
-    assert "md5sum" in record, "Missing md5sum"
+    assert "key" in record, "Missing key"
     assert "classifications" in record, "Missing classifications wrapper"
     cls = record["classifications"]
     for field in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:

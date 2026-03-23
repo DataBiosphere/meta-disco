@@ -7,7 +7,7 @@ from chromosome names and max coordinates in the first N lines:
 - Max coordinates: each reference has unique chromosome lengths, so a
   coordinate exceeding a reference's chromosome length rules it out.
 
-Evidence is cached in data/evidence/bed/ for resumability and audit trail.
+Evidence is cached in data/anvil/evidence/bed/ for resumability and audit trail.
 """
 
 import argparse
@@ -26,10 +26,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import requests
 
+from src.meta_disco.repository import ANVIL
 from src.meta_disco.rule_loader import get_unified_rules
 
-S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
-EVIDENCE_DIR = Path("data/evidence/bed")
+S3_MIRROR_URL = ANVIL.S3_MIRROR_URL
+EVIDENCE_DIR = ANVIL.evidence_dir("bed")
 
 # Compiled pattern for standard chromosome names (used in reference detection)
 _STANDARD_CHROM_PATTERN = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
