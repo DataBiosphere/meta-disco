@@ -397,10 +397,8 @@ rules:
     when:
       extensions: [".fast5", ".fast5.tar", ".fast5.tar.gz"]
     then:
-      data_modality: genomic
       data_type: raw_signal
       platform: ONT
-      assay_type: WGS
       reference_assembly: not_applicable
     confidence: 0.90
     rationale: "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment"
@@ -412,10 +410,8 @@ rules:
     when:
       extensions: [".pod5"]
     then:
-      data_modality: genomic
       data_type: raw_signal
       platform: ONT
-      assay_type: WGS
       reference_assembly: not_applicable
     confidence: 0.90
     rationale: "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5)"
@@ -1936,9 +1932,7 @@ rules:
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/ccs"
     then:
       platform: PACBIO
-      data_modality: genomic
       data_type: reads
-      assay_type: WGS
     confidence: 0.95
     rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
     terminal: false
@@ -1951,7 +1945,6 @@ rules:
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/\\d+_\\d+"
     then:
       platform: PACBIO
-      data_modality: genomic
       data_type: reads
     confidence: 0.90
     rationale: "PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format"
@@ -1965,7 +1958,6 @@ rules:
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+"
     then:
       platform: PACBIO
-      data_modality: genomic
       data_type: reads
     confidence: 0.85
     rationale: "Generic PacBio read names follow @movie/zmw format"
@@ -1982,7 +1974,6 @@ rules:
       fastq_pattern: "^@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
     then:
       platform: ONT
-      data_modality: genomic
       data_type: reads
     confidence: 0.95
     rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
@@ -1996,7 +1987,6 @@ rules:
       fastq_pattern: "runid=[a-f0-9]+"
     then:
       platform: ONT
-      data_modality: genomic
       data_type: reads
     confidence: 0.95
     rationale: "ONT reads often include 'runid=' metadata in the header line"

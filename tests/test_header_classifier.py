@@ -392,7 +392,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
         assert val(result, "confidence") >= 0.95
 
@@ -404,7 +404,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
 
     def test_ont(self):
         """Classify Oxford Nanopore FASTQ."""
@@ -414,7 +414,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
 
     def test_mgi(self):
         """Classify MGI/BGI FASTQ."""

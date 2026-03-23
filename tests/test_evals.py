@@ -239,15 +239,15 @@ class TestFastqE2E:
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_pacbio_ccs_fastq(self):
-        """PacBio CCS/HiFi FASTQ — 28.6 GB, should detect PacBio platform and WGS."""
+        """PacBio CCS/HiFi FASTQ — 28.6 GB, should detect PacBio platform."""
         result = classify_fastq("0073d35c9f5b68a739e3daf50a227f72",
                                 "HG01109.m64043_200830_075523.dc.q20.fastq.gz",
                                 file_size=28614484832)
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "assay_type") == "WGS"
+        assert get_val(result, "data_modality") == NOT_CLASSIFIED
+        assert get_val(result, "assay_type") == "WGS"  # from wgs_longread assay rule (platform-based)
 
     def test_mgi_fastq(self):
         """MGI/BGI platform FASTQ — 32.3 GB."""
@@ -274,7 +274,7 @@ class TestRuleEngineE2E:
 
     def test_fast5_raw_signal(self):
         result = engine.classify_extended(FileInfo(filename="PAK57726.fast5"))
-        assert result.data_modality == "genomic"
+        assert result.data_modality == NOT_CLASSIFIED
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
         assert result.reference_assembly == NOT_APPLICABLE
