@@ -79,8 +79,20 @@
     };
 
     document.getElementById('run-time').textContent = DATA.run_time;
-    document.getElementById('subtitle').textContent =
-      `Comparing meta-disco rule engine classifications against external ground truth.`;
+
+    const anvilData = (DATA.sources || {})['AnVIL (Azul metadata)'] || {};
+    const datasets = anvilData.datasets || [];
+    const subtitleEl = document.getElementById('subtitle');
+    const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
+
+    if (datasets.length > 0) {
+      const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
+      let html = `Validating classifications of ${totalFiles.toLocaleString()} files across ${datasets.length} open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: `;
+      html += datasets.map(d => `${d.name} (${d.count.toLocaleString()})`).join(', ');
+      subtitleEl.innerHTML = html;
+    } else {
+      subtitleEl.textContent = 'Comparing meta-disco rule engine classifications against external ground truth.';
+    }
 
     // Summary cards — one per source
     const cardsEl = document.getElementById('summary-cards');

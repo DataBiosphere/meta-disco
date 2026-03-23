@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -208,12 +209,14 @@ def compare_source(our_by_key: dict, truth_records: list[dict],
 def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     """Compare against AnVIL Azul metadata."""
     total_files = 0
+    dataset_counts = Counter()
     metadata_coverage = {}
     truth_records = []
     with open(metadata_path) as f:
         for line in f:
             r = json.loads(line)
             total_files += 1
+            dataset_counts[r.get("dataset_title", "unknown")] += 1
             if r.get("data_modality") or r.get("reference_assembly"):
                 truth_records.append({
                     "md5": r.get("file_md5sum"),
@@ -244,6 +247,7 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     )
     result["total_source_files"] = total_files
     result["metadata_coverage"] = metadata_coverage
+    result["datasets"] = [{"name": n, "count": c} for n, c in dataset_counts.most_common()]
     return result
 
 
@@ -509,6 +513,21 @@ def main():
         out.write("# Validation Report\n\n")
         out.write("Comparing meta-disco rule engine classifications against external ground truth.\n")
         out.write(f"Classification run: **{run_time}**\n\n")
+
+        # Show dataset context from AnVIL if available
+        anvil = all_results.get("AnVIL (Azul metadata)", {})
+        datasets = anvil.get("datasets", [])
+        if datasets:
+            anvil_url = ("https://explore.anvilproject.org/datasets?"
+                         "filter=%5B%7B%22categoryKey%22%3A%22accessible%22"
+                         "%2C%22value%22%3A%5B%22true%22%5D%7D%5D")
+            total_files = sum(d["count"] for d in datasets)
+            out.write(f"Validating classifications of **{total_files:,}** files "
+                      f"across **{len(datasets)}** open-access datasets on the "
+                      f"[AnVIL Explorer]({anvil_url}):\n\n")
+            for d in datasets:
+                out.write(f"- {d['name']} ({d['count']:,} files)\n")
+            out.write("\n")
 
         # Overall summary
         out.write("| Source | Files Matched | Dimensions | Agree | Discrepancies |\n")
