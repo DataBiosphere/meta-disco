@@ -38,16 +38,16 @@ classify-headers:
 	python scripts/classify_headers.py --type all -i data/anvil_files_metadata.json
 
 classify-bam:
-	python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -o output/bam_classifications.json -w 4
 
 classify-vcf:
-	python scripts/classify_headers.py --type vcf -i data/anvil_files_metadata.json -w 10
+	python scripts/classify_headers.py --type vcf -i data/anvil_files_metadata.json -o output/vcf_classifications.json -w 10
 
 classify-fastq:
-	python scripts/classify_headers.py --type fastq -i data/anvil_files_metadata.json -w 10
+	python scripts/classify_headers.py --type fastq -i data/anvil_files_metadata.json -o output/fastq_classifications.json -w 10
 
 classify-fasta:
-	python scripts/classify_headers.py --type fasta -i data/anvil_files_metadata.json -w 10
+	python scripts/classify_headers.py --type fasta -i data/anvil_files_metadata.json -o output/fasta_classifications.json -w 10
 
 classify-bed:
 	python scripts/classify_bed_files.py --metadata data/anvil_files_metadata.json

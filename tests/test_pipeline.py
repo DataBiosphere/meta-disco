@@ -220,4 +220,3 @@ class TestFileTypeConfigs:
             assert config.default_output.endswith(".json")
             assert callable(config.fetcher)
             assert callable(config.classifier)
-            assert callable(config.fetcher)
