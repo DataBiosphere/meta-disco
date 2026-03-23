@@ -41,11 +41,11 @@
 </head>
 <body>
   <nav style="font-size: 14px; margin-bottom: 12px; color: #656d76;">
-    <strong style="color: #24292f;">Coverage</strong>
+    <strong style="color: #24292f;">Coverage Report</strong>
     &middot;
-    <a href="validation-dashboard.html" style="color: #0969da; text-decoration: none;">Validation</a>
+    <a href="validation-dashboard.html" style="color: #0969da; text-decoration: none;">Validation Report</a>
   </nav>
-  <h1>AnVIL Classification Coverage Dashboard</h1>
+  <h1>AnVIL Classification Coverage Dashboard <span id="run-time" style="font-size: 16px; font-weight: normal; color: #656d76;"></span></h1>
   <p id="subtitle"></p>
 
   <div class="summary-grid" id="summary-cards"></div>
@@ -57,8 +57,25 @@
     // Data injected by generate script
     const DATA = COVERAGE_DATA_PLACEHOLDER;
 
-    document.getElementById('subtitle').textContent =
-      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions. Classification run: ${DATA.run_time}`;
+    document.getElementById('run-time').textContent = DATA.run_time;
+
+    const escapeHtml = (value) => {
+      const div = document.createElement('div');
+      div.textContent = value == null ? '' : String(value);
+      return div.innerHTML;
+    };
+
+    const anvilUrl = 'https://explore.anvilproject.org/datasets?filter=%5B%7B%22categoryKey%22%3A%22accessible%22%2C%22value%22%3A%5B%22true%22%5D%7D%5D';
+    const datasets = DATA.datasets || [];
+    const subtitleEl = document.getElementById('subtitle');
+
+    if (datasets.length > 0) {
+      let html = `${DATA.total.toLocaleString()} files from ${datasets.length} open-access datasets on the <a href="${anvilUrl}">AnVIL Explorer</a>: `;
+      html += datasets.map(d => `${escapeHtml(d.name)} (${d.count.toLocaleString()})`).join(', ');
+      subtitleEl.innerHTML = html;
+    } else {
+      subtitleEl.textContent = `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions.`;
+    }
 
     // Colors
     const COLORS = [
@@ -103,16 +120,20 @@
       content.id = 'tab-' + i;
       content.className = 'tab-content' + (i === 0 ? ' active' : '');
 
-      // Summary table
-      let html = `
-        <table class="nc-table" style="width: auto; margin-bottom: 20px;">
-          <tr><td><strong>Classified</strong></td><td>${dim.classified.toLocaleString()}</td><td>${(100 * dim.classified / DATA.total).toFixed(1)}%</td></tr>
+      // Summary
+      const naCount = (dim.values.find(v => v.name === 'not_applicable') || {count: 0}).count;
+      let html = `<h2>Inferred ${dim.label} Summary</h2>`;
+      html += `
+        <table class="nc-table" style="width: auto; margin-bottom: 12px;">
+          <tr><td><strong>Files classified</strong></td><td>${dim.classified.toLocaleString()}</td><td>${(100 * dim.classified / DATA.total).toFixed(1)}%</td></tr>
           <tr><td><strong>Not classified</strong></td><td>${dim.not_classified.toLocaleString()}</td><td>${(100 * dim.not_classified / DATA.total).toFixed(1)}%</td></tr>
         </table>
       `;
+      html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 20px;">Of the ${DATA.total.toLocaleString()} files, we were able to assign a ${dim.label} to ${dim.classified.toLocaleString()} files, including ${naCount.toLocaleString()} files assigned "not_applicable". There were ${dim.not_classified.toLocaleString()} files we were not able to determine a ${dim.label} for.</p>`;
 
       // Horizontal bar chart
       const maxCount = Math.max(...dim.values.map(v => v.count));
+      html += `<h2>Inferred ${dim.label}</h2>`;
       html += '<div class="chart-container"><div class="bar-chart">';
       dim.values.forEach((v, vi) => {
         const width = (v.count / maxCount * 100).toFixed(1);
@@ -136,6 +157,7 @@
       // Not classified breakdown
       if (dim.not_classified_breakdown && dim.not_classified_breakdown.length > 0) {
         html += '<h3>What\'s not classified?</h3>';
+        html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 12px;">We were not able to determine a ${dim.label} (or if ${dim.label} is applicable) for the following file types:</p>`;
         html += '<table class="nc-table"><tr><th>Extension</th><th>Count</th><th>Root cause</th></tr>';
         for (const nc of dim.not_classified_breakdown) {
           html += `<tr><td>${nc.ext}</td><td>${nc.count.toLocaleString()}</td><td>${nc.why}</td></tr>`;

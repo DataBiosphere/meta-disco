@@ -298,7 +298,7 @@ class TestRuleEngineE2E:
 
     def test_bed_assembly_qc(self):
         result = engine.classify_extended(FileInfo(filename="HG01928.paternal.f1_assembly.hap1.bed"))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.data_modality == "genomic"
 
     def test_fastq_rna_filename(self):
         result = engine.classify_extended(FileInfo(filename="sample_RNA_001.fastq.gz"))
@@ -307,6 +307,20 @@ class TestRuleEngineE2E:
 
     def test_checksum_skipped(self):
         result = engine.classify_extended(FileInfo(filename="sample.md5"))
+        assert result.skip is True
+        assert result.data_modality == NOT_APPLICABLE
+
+    def test_chunked_upload_skipped(self):
+        result = engine.classify_extended(FileInfo(
+            filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"
+        ))
+        assert result.skip is True
+        assert result.data_modality == NOT_APPLICABLE
+
+    def test_timestamp_filename_skipped(self):
+        result = engine.classify_extended(FileInfo(
+            filename="2020-11-20T212208.245537Z"
+        ))
         assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 

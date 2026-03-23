@@ -13,23 +13,13 @@ Usage:
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.output_utils import find_latest_run
-
-CLASSIFICATION_FILES = [
-    "bam_classifications.json",
-    "vcf_classifications.json",
-    "fastq_classifications.json",
-    "bed_classifications.json",
-    "image_classifications.json",
-    "auxiliary_classifications.json",
-    "index_classifications.json",
-    "fasta_classifications.json",
-]
+from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
 
@@ -206,10 +196,19 @@ def compare_source(our_by_key: dict, truth_records: list[dict],
 
 def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     """Compare against AnVIL Azul metadata."""
+    total_files = 0
+    dataset_counts = Counter()
+    metadata_coverage = Counter()
     truth_records = []
     with open(metadata_path) as f:
         for line in f:
             r = json.loads(line)
+            total_files += 1
+            dataset_counts[r.get("dataset_title") or "unknown"] += 1
+            # Count metadata coverage from raw source records
+            for dim in DIMENSIONS:
+                if r.get(dim):
+                    metadata_coverage[dim] += 1
             if r.get("data_modality") or r.get("reference_assembly"):
                 truth_records.append({
                     "md5": r.get("file_md5sum"),
@@ -229,10 +228,14 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
         },
     }
 
-    return compare_source(
+    result = compare_source(
         our_by_md5, truth_records, "md5",
         field_mappings, ["data_modality", "reference_assembly"],
     )
+    result["total_source_files"] = total_files
+    result["metadata_coverage"] = metadata_coverage
+    result["datasets"] = [{"name": n, "count": c} for n, c in dataset_counts.most_common()]
+    return result
 
 
 # =============================================================================
@@ -303,10 +306,39 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
             "discrepancy_categories": {},
         }
 
+    # Build catalog summary for display
+    catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
+    by_catalog = data.get("by_catalog", {})
+    catalog_summary = []
+    for cat_name, cat_total in catalogs_loaded.items():
+        matched = by_catalog.get(cat_name, {}).get("matched", 0)
+        catalog_summary.append({
+            "name": cat_name,
+            "total": cat_total,
+            "matched": matched,
+        })
+
+    # Which dimensions each catalog provides
+    catalog_dimensions = {
+        "sequencing-data": ["platform", "data_modality", "assay_type"],
+        "alignments": ["reference_assembly"],
+        "annotations": ["reference_assembly"],
+        "assemblies": [],
+    }
+
+    # Build metadata coverage from dimension stats
+    # (match + mismatch + unknown = files where HPRC has ground truth)
+    metadata_coverage = {}
+    for dim, stats in dimensions.items():
+        metadata_coverage[dim] = stats["agree"] + stats["discrepancy"] + stats["not_classified"]
+
     return {
         "matched": total_matched,
-        "unmatched": 0,  # not meaningful across multiple HPRC catalogs
+        "unmatched": 0,
         "dimensions": dimensions,
+        "metadata_coverage": metadata_coverage,
+        "catalog_summary": catalog_summary,
+        "catalog_dimensions": catalog_dimensions,
     }
 
 
@@ -353,13 +385,39 @@ def build_source_section(name: str, results: dict) -> str:
     lines = []
     lines.append(f"## {name}")
     lines.append("")
-    desc = source_desc_md(name)
-    if desc:
-        lines.append(desc)
+
+    # Show source description with dataset listing if available
+    datasets = results.get("datasets", [])
+    info = SOURCE_INFO.get(name)
+    if info and datasets:
+        total_files = sum(d["count"] for d in datasets)
+        lines.append(
+            f"Validated against file-level metadata from the "
+            f"[{info['link_label']}]({info['url']})'s open-access projects "
+            f"with **{total_files:,}** files across **{len(datasets)}** datasets:"
+        )
         lines.append("")
-    lines.append(f"Matched **{results['matched']:,}** files "
-                 f"({results['unmatched']:,} in source but not in our classifications).")
-    lines.append("")
+        for d in datasets:
+            lines.append(f"- {d['name']} ({d['count']:,} files)")
+        lines.append("")
+    elif info:
+        lines.append(source_desc_md(name))
+        lines.append("")
+
+    # Show metadata coverage
+    metadata_coverage = results.get("metadata_coverage", {})
+    if metadata_coverage:
+        lines.append("### Metadata Overview")
+        lines.append("")
+        lines.append(f"{source_label}'s open-access datasets currently populate the following genomic metadata dimensions:")
+        lines.append("")
+        lines.append(f"| Dimension | Files with dimension in {source_label} |")
+        lines.append("|---|---:|")
+        for dim in DIMENSIONS:
+            label = DIMENSION_LABELS.get(dim, dim)
+            count = metadata_coverage.get(dim, 0)
+            lines.append(f"| {label} | {count:,} |")
+        lines.append("")
 
     if not results.get("dimensions"):
         lines.append("No dimensions to compare.")
@@ -372,19 +430,47 @@ def build_source_section(name: str, results: dict) -> str:
     for dim in DIMENSIONS:
         stats = results["dimensions"].get(dim, EMPTY_DIM)
         label = DIMENSION_LABELS.get(dim, dim)
+        label_lower = label.lower()
         comparable = stats["agree"] + stats["discrepancy"]
         available = comparable + stats["not_classified"]
-        accuracy = f"{100 * stats['agree'] / comparable:.1f}%" if comparable else "-"
 
-        lines.append(f"### {label}")
+        accuracy = f"{100 * stats['agree'] / comparable:.1f}%" if comparable else "-"
+        agree_pct = f"{100 * stats['agree'] / comparable:.1f}" if comparable else "0"
+        disc_pct = f"{100 * stats['discrepancy'] / comparable:.1f}" if comparable else "0"
+
+        lines.append(f"### {label} Validation")
         lines.append("")
-        lines.append(f"- **{available:,}** values available from source")
-        lines.append(f"- **{comparable:,}** also classified by rule engine")
-        lines.append(f"- **{stats['not_classified']:,}** not classified by rule engine (no rule applies)")
-        lines.append(f"- **{stats['agree']:,}** agreed")
+        lines.append(f"- **{available:,}** files available from {source_label} "
+                     f"with ground truth {label}")
+        lines.append(f"- **{comparable:,}** files comparable (both source and rule engine have values)")
+        lines.append(f"- **{stats['not_classified']:,}** files not classified by rule engine")
+        lines.append(f"- **{stats['agree']:,}** inferred {label_lower} values "
+                     f"match {source_label}")
         lines.append(f"- **{stats['discrepancy']:,}** discrepancies")
         lines.append(f"- **{accuracy}** accuracy")
         lines.append("")
+
+        # Summary paragraph (only when source has ground truth)
+        if available > 0:
+            lines.append(
+                f"Of the {available:,} files on {source_label} with ground truth "
+                f"{label_lower}, we inferred {label_lower} values for "
+                f"{comparable:,} files. {stats['not_classified']:,} files remain "
+                f"unclassifiable by the rule engine."
+            )
+            if comparable > 0:
+                lines.append(
+                    f"Of the {comparable:,} inferred {label_lower} values, "
+                    f"{stats['agree']:,} ({agree_pct}%) matched {source_label}. "
+                    f"There were {stats['discrepancy']:,} discrepancies "
+                    f"({disc_pct}%) in {label_lower} between meta-disco and "
+                    f"{source_label}."
+                )
+            lines.append("")
+        else:
+            lines.append(f"{source_label} does not currently provide ground truth "
+                         f"for {label_lower}.")
+            lines.append("")
 
         # Discrepancy categories ordered by count
         cats = stats.get("discrepancy_categories", {})

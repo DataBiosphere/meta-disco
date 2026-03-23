@@ -5,67 +5,102 @@ Classification run: **2026-03-22 19:57:03**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| AnVIL (Azul metadata) | 4,608 | 2 | 635 | 2 |
+| AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
 | HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
 
 ---
 
 ## AnVIL (Azul metadata)
 
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
+Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **758,658** files across **11** datasets:
 
-Matched **4,608** files (6,623 in source but not in our classifications).
+- ANVIL_T2T_CHRY (309,979 files)
+- ANVIL_T2T (289,204 files)
+- ANVIL_HPRC (67,830 files)
+- ANVIL_1000G_high_coverage_2019 (26,016 files)
+- ANVIL_GTEx_public_data (25,789 files)
+- ANVIL_NIA_CARD_Coriell_Cell_Lines_Open (12,534 files)
+- ANVIL_1000G_PRIMED_data_model (11,493 files)
+- AnVIL_IGVF_Mouse_R1 (6,784 files)
+- AnVIL_ENCORE_RS293 (3,752 files)
+- AnVIL_MAGE (3,285 files)
+- AnVIL_ENCORE_293T (1,992 files)
 
-### Data Modality
+### Metadata Overview
 
-- **3,974** values available from source
-- **3** also classified by rule engine
-- **3,971** not classified by rule engine (no rule applies)
-- **1** agreed
-- **2** discrepancies
-- **33.3%** accuracy
+AnVIL's open-access datasets currently populate the following genomic metadata dimensions:
+
+| Dimension | Files with dimension in AnVIL |
+|---|---:|
+| Data Modality | 6,755 |
+| Data Type | 0 |
+| Platform | 0 |
+| Reference Assembly | 4,696 |
+| Assay Type | 0 |
+
+### Data Modality Validation
+
+- **6,755** files available from AnVIL with ground truth Data Modality
+- **353** files comparable (both source and rule engine have values)
+- **6,402** files not classified by rule engine
+- **349** inferred data modality values match AnVIL
+- **4** discrepancies
+- **98.9%** accuracy
+
+Of the 6,755 files on AnVIL with ground truth data modality, we inferred data modality values for 353 files. 6,402 files remain unclassifiable by the rule engine.
+Of the 353 inferred data modality values, 349 (98.9%) matched AnVIL. There were 4 discrepancies (1.1%) in data modality between meta-disco and AnVIL.
 
 #### Discrepancies
 
 | Count | Inferred | AnVIL | Example |
 |---:|---|---|---|
+| 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
 | 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
 
-### Data Type
+### Data Type Validation
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+- **0** files available from AnVIL with ground truth Data Type
+- **0** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **0** inferred data type values match AnVIL
 - **0** discrepancies
 - **-** accuracy
 
-### Platform
+AnVIL does not currently provide ground truth for data type.
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+### Platform Validation
+
+- **0** files available from AnVIL with ground truth Platform
+- **0** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **0** inferred platform values match AnVIL
 - **0** discrepancies
 - **-** accuracy
 
-### Reference Assembly
+AnVIL does not currently provide ground truth for platform.
 
-- **638** values available from source
-- **634** also classified by rule engine
-- **4** not classified by rule engine (no rule applies)
-- **634** agreed
+### Reference Assembly Validation
+
+- **4,696** files available from AnVIL with ground truth Reference Assembly
+- **634** files comparable (both source and rule engine have values)
+- **4,062** files not classified by rule engine
+- **634** inferred reference assembly values match AnVIL
 - **0** discrepancies
 - **100.0%** accuracy
 
-### Assay Type
+Of the 4,696 files on AnVIL with ground truth reference assembly, we inferred reference assembly values for 634 files. 4,062 files remain unclassifiable by the rule engine.
+Of the 634 inferred reference assembly values, 634 (100.0%) matched AnVIL. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and AnVIL.
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+### Assay Type Validation
+
+- **0** files available from AnVIL with ground truth Assay Type
+- **0** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **0** inferred assay type values match AnVIL
 - **0** discrepancies
 - **-** accuracy
+
+AnVIL does not currently provide ground truth for assay type.
 
 
 ---
@@ -74,51 +109,75 @@ Matched **4,608** files (6,623 in source but not in our classifications).
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
 
-Matched **5,852** files (0 in source but not in our classifications).
+### Metadata Overview
 
-### Data Modality
+HPRC's open-access datasets currently populate the following genomic metadata dimensions:
 
-- **5,491** values available from source
-- **2,012** also classified by rule engine
-- **3,479** not classified by rule engine (no rule applies)
-- **2,012** agreed
+| Dimension | Files with dimension in HPRC |
+|---|---:|
+| Data Modality | 5,491 |
+| Data Type | 0 |
+| Platform | 5,852 |
+| Reference Assembly | 4 |
+| Assay Type | 5,852 |
+
+### Data Modality Validation
+
+- **5,491** files available from HPRC with ground truth Data Modality
+- **2,012** files comparable (both source and rule engine have values)
+- **3,479** files not classified by rule engine
+- **2,012** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-### Data Type
+Of the 5,491 files on HPRC with ground truth data modality, we inferred data modality values for 2,012 files. 3,479 files remain unclassifiable by the rule engine.
+Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
-- **0** values available from source
-- **0** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **0** agreed
+### Data Type Validation
+
+- **0** files available from HPRC with ground truth Data Type
+- **0** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **0** inferred data type values match HPRC
 - **0** discrepancies
 - **-** accuracy
 
-### Platform
+HPRC does not currently provide ground truth for data type.
 
-- **5,852** values available from source
-- **5,852** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **5,852** agreed
+### Platform Validation
+
+- **5,852** files available from HPRC with ground truth Platform
+- **5,852** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **5,852** inferred platform values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-### Reference Assembly
+Of the 5,852 files on HPRC with ground truth platform, we inferred platform values for 5,852 files. 0 files remain unclassifiable by the rule engine.
+Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
 
-- **4** values available from source
-- **4** also classified by rule engine
-- **0** not classified by rule engine (no rule applies)
-- **4** agreed
+### Reference Assembly Validation
+
+- **4** files available from HPRC with ground truth Reference Assembly
+- **4** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **4** inferred reference assembly values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-### Assay Type
+Of the 4 files on HPRC with ground truth reference assembly, we inferred reference assembly values for 4 files. 0 files remain unclassifiable by the rule engine.
+Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and HPRC.
 
-- **5,852** values available from source
-- **3,269** also classified by rule engine
-- **2,583** not classified by rule engine (no rule applies)
-- **3,269** agreed
+### Assay Type Validation
+
+- **5,852** files available from HPRC with ground truth Assay Type
+- **3,269** files comparable (both source and rule engine have values)
+- **2,583** files not classified by rule engine
+- **3,269** inferred assay type values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
+
+Of the 5,852 files on HPRC with ground truth assay type, we inferred assay type values for 3,269 files. 2,583 files remain unclassifiable by the rule engine.
+Of the 3,269 inferred assay type values, 3,269 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
 
 

@@ -18,19 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.output_utils import find_latest_run
+from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 from src.meta_disco.rule_loader import UnifiedRules
-
-CLASSIFICATION_FILES = [
-    "bam_classifications.json",
-    "vcf_classifications.json",
-    "fastq_classifications.json",
-    "bed_classifications.json",
-    "image_classifications.json",
-    "auxiliary_classifications.json",
-    "index_classifications.json",
-    "fasta_classifications.json",
-]
 
 COMPOUND_EXTENSIONS = UnifiedRules.COMPOUND_EXTENSIONS
 
@@ -204,6 +193,15 @@ def main():
     except ValueError:
         run_time = run_dir.name
 
+    # Load dataset stats from source metadata
+    metadata_path = Path("data/anvil_files_metadata.ndjson")
+    dataset_counts = Counter()
+    if metadata_path.is_file():
+        with open(metadata_path) as f:
+            for line in f:
+                r = json.loads(line)
+                dataset_counts[r.get("dataset_title") or "unknown"] += 1
+
     sections = []
     summary_rows = []
 
@@ -218,8 +216,24 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as out:
         out.write("# AnVIL Classification Coverage Report\n\n")
-        out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n")
         out.write(f"Classification run: **{run_time}**\n\n")
+
+        if dataset_counts:
+            n_datasets = len(dataset_counts)
+            n_files = sum(dataset_counts.values())
+            unprocessed = n_files - total
+            out.write(f"Source: **{n_files:,}** files across **{n_datasets}** open-access datasets "
+                      f"on [explore.anvilproject.org](https://explore.anvilproject.org/).\n")
+            out.write(f"Processed **{total:,}** files")
+            if unprocessed > 0:
+                out.write(f" ({unprocessed:,} not yet handled by any classifier)")
+            out.write(".\n\n")
+            for title, count in dataset_counts.most_common():
+                out.write(f"- {title} ({count:,} files)\n")
+            out.write("\n")
+        else:
+            out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n\n")
+
         out.write("**Classified** includes all files with a determined value, including `not_applicable` ")
         out.write("(e.g., FASTQ files have no reference assembly). ")
         out.write("**Not classified** means no rule or signal could determine a value.\n\n")
@@ -237,15 +251,23 @@ def main():
 
     # Generate HTML dashboard
     html_output = args.output.with_name("coverage-dashboard.html")
-    generate_html_dashboard(records, run_time, html_output)
+    generate_html_dashboard(records, run_time, dataset_counts, html_output)
     print(f"Written to {html_output}")
 
 
 def generate_html_dashboard(records: list[dict],
-                            run_time: str, output_path: Path):
+                            run_time: str, dataset_counts: Counter,
+                            output_path: Path):
     """Generate HTML dashboard with embedded chart data."""
     total = len(records)
-    dashboard_data = {"total": total, "run_time": run_time, "dimensions": []}
+    datasets = [{"name": name, "count": count}
+                for name, count in dataset_counts.most_common()] if dataset_counts else []
+    dashboard_data = {
+        "total": total,
+        "run_time": run_time,
+        "datasets": datasets,
+        "dimensions": [],
+    }
 
     for field, label, notes in DIMENSIONS:
         by_ext = defaultdict(Counter)

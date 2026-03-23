@@ -2,6 +2,18 @@
 
 from pathlib import Path
 
+CLASSIFICATION_FILES = [
+    "bam_classifications.json",
+    "vcf_classifications.json",
+    "fastq_classifications.json",
+    "bed_classifications.json",
+    "image_classifications.json",
+    "auxiliary_classifications.json",
+    "index_classifications.json",
+    "fasta_classifications.json",
+    "remaining_classifications.json",
+]
+
 
 def find_latest_run(output_dir: Path) -> Path:
     """Find the most recent timestamped run directory.

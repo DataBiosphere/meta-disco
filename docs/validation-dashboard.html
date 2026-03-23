@@ -35,11 +35,11 @@
 </head>
 <body>
   <nav style="font-size: 14px; margin-bottom: 12px; color: #656d76;">
-    <a href="coverage-dashboard.html" style="color: #0969da; text-decoration: none;">Coverage</a>
+    <a href="coverage-dashboard.html" style="color: #0969da; text-decoration: none;">Coverage Report</a>
     &middot;
-    <strong style="color: #24292f;">Validation</strong>
+    <strong style="color: #24292f;">Validation Report</strong>
   </nav>
-  <h1>Validation Report Dashboard</h1>
+  <h1>Validation Report Dashboard <span id="run-time" style="font-size: 16px; font-weight: normal; color: #656d76;"></span></h1>
   <p id="subtitle"></p>
 
   <div class="summary-grid" id="summary-cards"></div>
@@ -55,7 +55,7 @@
   <div id="tab-contents"></div>
 
   <script type="module">
-    const DATA = {"run_time": "2026-03-22 19:57:03", "sources": {"AnVIL (Azul metadata)": {"matched": 4608, "unmatched": 6623, "dimensions": {"data_modality": {"agree": 1, "discrepancy": 2, "we_inferred": 634, "not_classified": 3971, "no_truth": 0, "discrepancy_categories": {"genomic vs epigenomic.chromatin_accessibility": {"ours": "genomic", "truth_mapped": "epigenomic.chromatin_accessibility", "count": 2, "example": "9a2afd8bc8423535f42201ba189540fb"}}}, "reference_assembly": {"agree": 634, "discrepancy": 0, "we_inferred": 0, "not_classified": 4, "no_truth": 3970, "discrepancy_categories": {}}}}, "HPRC (sequencing catalog)": {"matched": 5852, "unmatched": 0, "dimensions": {"platform": {"agree": 5852, "discrepancy": 0, "we_inferred": 0, "not_classified": 0, "no_truth": 0, "discrepancy_categories": {}}, "data_modality": {"agree": 2012, "discrepancy": 0, "we_inferred": 0, "not_classified": 3479, "no_truth": 0, "discrepancy_categories": {}}, "assay_type": {"agree": 3269, "discrepancy": 0, "we_inferred": 0, "not_classified": 2583, "no_truth": 0, "discrepancy_categories": {}}, "reference_assembly": {"agree": 4, "discrepancy": 0, "we_inferred": 0, "not_classified": 0, "no_truth": 0, "discrepancy_categories": {}}}}}, "source_descriptions": {"AnVIL (Azul metadata)": "Validated against file-level metadata from the <a href=\"https://explore.anvilproject.org/\">AnVIL Data Explorer<\/a>.", "HPRC (sequencing catalog)": "Validated against sequencing, alignment, and annotation catalogs from the <a href=\"https://data.humanpangenome.org/\">HPRC Data Explorer<\/a>."}};
+    const DATA = {"run_time": "2026-03-22 19:57:03", "sources": {"AnVIL (Azul metadata)": {"matched": 11231, "unmatched": 0, "dimensions": {"data_modality": {"agree": 349, "discrepancy": 4, "we_inferred": 650, "not_classified": 6402, "no_truth": 3826, "discrepancy_categories": {"transcriptomic.single_cell vs epigenomic.chromatin_accessibility": {"ours": "transcriptomic.single_cell", "truth_mapped": "epigenomic.chromatin_accessibility", "count": 2, "example": "f92b42c30ff64edb444dfece410630d2"}, "genomic vs epigenomic.chromatin_accessibility": {"ours": "genomic", "truth_mapped": "epigenomic.chromatin_accessibility", "count": 2, "example": "9a2afd8bc8423535f42201ba189540fb"}}}, "reference_assembly": {"agree": 634, "discrepancy": 0, "we_inferred": 0, "not_classified": 4062, "no_truth": 6535, "discrepancy_categories": {}}}, "total_source_files": 758658, "metadata_coverage": {"reference_assembly": 4696, "data_modality": 6755}, "datasets": [{"name": "ANVIL_T2T_CHRY", "count": 309979}, {"name": "ANVIL_T2T", "count": 289204}, {"name": "ANVIL_HPRC", "count": 67830}, {"name": "ANVIL_1000G_high_coverage_2019", "count": 26016}, {"name": "ANVIL_GTEx_public_data", "count": 25789}, {"name": "ANVIL_NIA_CARD_Coriell_Cell_Lines_Open", "count": 12534}, {"name": "ANVIL_1000G_PRIMED_data_model", "count": 11493}, {"name": "AnVIL_IGVF_Mouse_R1", "count": 6784}, {"name": "AnVIL_ENCORE_RS293", "count": 3752}, {"name": "AnVIL_MAGE", "count": 3285}, {"name": "AnVIL_ENCORE_293T", "count": 1992}]}, "HPRC (sequencing catalog)": {"matched": 5852, "unmatched": 0, "dimensions": {"platform": {"agree": 5852, "discrepancy": 0, "we_inferred": 0, "not_classified": 0, "no_truth": 0, "discrepancy_categories": {}}, "data_modality": {"agree": 2012, "discrepancy": 0, "we_inferred": 0, "not_classified": 3479, "no_truth": 0, "discrepancy_categories": {}}, "assay_type": {"agree": 3269, "discrepancy": 0, "we_inferred": 0, "not_classified": 2583, "no_truth": 0, "discrepancy_categories": {}}, "reference_assembly": {"agree": 4, "discrepancy": 0, "we_inferred": 0, "not_classified": 0, "no_truth": 0, "discrepancy_categories": {}}}, "metadata_coverage": {"platform": 5852, "data_modality": 5491, "assay_type": 5852, "reference_assembly": 4}, "catalog_summary": [{"name": "sequencing-data", "total": 6048, "matched": 5852}, {"name": "alignments", "total": 89, "matched": 4}, {"name": "annotations", "total": 8739, "matched": 0}, {"name": "assemblies", "total": 560, "matched": 188}], "catalog_dimensions": {"sequencing-data": ["platform", "data_modality", "assay_type"], "alignments": ["reference_assembly"], "annotations": ["reference_assembly"], "assemblies": []}}}, "source_descriptions": {"AnVIL (Azul metadata)": "Validated against file-level metadata from the <a href=\"https://explore.anvilproject.org/\">AnVIL Data Explorer<\/a>.", "HPRC (sequencing catalog)": "Validated against sequencing, alignment, and annotation catalogs from the <a href=\"https://data.humanpangenome.org/\">HPRC Data Explorer<\/a>."}};
 
     const escapeHtml = (value) => {
       const div = document.createElement('div');
@@ -78,8 +78,10 @@
       assay_type: 'Assay Type',
     };
 
+    document.getElementById('run-time').textContent = DATA.run_time;
+
     document.getElementById('subtitle').textContent =
-      `Comparing meta-disco rule engine classifications against external ground truth. Run: ${DATA.run_time}`;
+      'Comparing meta-disco rule engine classifications against external ground truth.';
 
     // Summary cards — one per source
     const cardsEl = document.getElementById('summary-cards');
@@ -126,10 +128,32 @@
       const sourceLabel = sourceName.includes('(') ? sourceName.split('(')[0].trim() : sourceName;
       const sourceDesc = (DATA.source_descriptions || {})[sourceName] || '';
       let html = '';
-      if (sourceDesc) {
+
+      // Source description with dataset listing
+      const datasets = results.datasets || [];
+      if (sourceDesc && datasets.length > 0) {
+        const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
+        const sourceInfo = sourceDesc.replace(/\.$/, '');
+        html += `<p>${sourceInfo}'s open-access projects with <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> datasets: ${datasets.map(d => escapeHtml(d.name) + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
+      } else if (sourceDesc) {
         html += `<p>${sourceDesc}</p>`;
       }
-      html += `<p>Matched <strong>${results.matched.toLocaleString()}</strong> files (${results.unmatched.toLocaleString()} in source but not in our classifications).</p>`;
+
+      // Metadata coverage table
+      const metaCov = results.metadata_coverage || {};
+      if (Object.keys(metaCov).length > 0) {
+        html += `<h3>Metadata Overview</h3>`;
+        html += `<p>${sourceLabel}'s open-access datasets currently populate the following genomic metadata dimensions:</p>`;
+        html += `<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Dimension</th><th>Files with dimension in ${escapeHtml(sourceLabel)}</th></tr>`;
+        for (const dim of ALL_DIMS) {
+          const label = DIM_LABELS[dim] || dim;
+          const count = metaCov[dim] || 0;
+          html += `<tr><td>${label}</td><td style="text-align: right;">${count.toLocaleString()}</td></tr>`;
+        }
+        html += '</table>';
+      }
+
+
 
       const dims = results.dimensions || {};
 
@@ -138,37 +162,63 @@
         const stats = dims[dim] || EMPTY;
         const label = DIM_LABELS[dim] || dim;
         const available = stats.agree + stats.discrepancy + stats.not_classified;
-        const classified = stats.agree + stats.discrepancy + stats.we_inferred;
         const bothHave = stats.agree + stats.discrepancy;
         const accuracy = bothHave > 0 ? `${(100 * stats.agree / bothHave).toFixed(1)}%` : '-';
+        const agree_pct = bothHave > 0 ? (100 * stats.agree / bothHave).toFixed(1) : '0';
+        const disc_pct = bothHave > 0 ? (100 * stats.discrepancy / bothHave).toFixed(1) : '0';
 
-        html += `<h3>${label}</h3>`;
+        html += `<h3>${label} Validation</h3>`;
         html += `<ul style="font-size: 14px; line-height: 1.8;">
-          <li><strong>${available.toLocaleString()}</strong> values available from source</li>
-          <li><strong>${bothHave.toLocaleString()}</strong> also classified by rule engine</li>
-          <li><strong>${stats.not_classified.toLocaleString()}</strong> not classified by rule engine (no rule applies)</li>
-          <li><strong>${stats.agree.toLocaleString()}</strong> agreed</li>
+          <li><strong>${available.toLocaleString()}</strong> files available from ${sourceLabel} with ground truth ${label}</li>
+          <li><strong>${bothHave.toLocaleString()}</strong> files comparable (both source and rule engine have values)</li>
+          <li><strong>${stats.not_classified.toLocaleString()}</strong> files not classified by rule engine</li>
+          <li><strong>${stats.agree.toLocaleString()}</strong> inferred ${label.toLowerCase()} values match ${sourceLabel}</li>
           <li><strong>${stats.discrepancy.toLocaleString()}</strong> discrepancies</li>
           <li><strong>${accuracy}</strong> accuracy</li>
         </ul>`;
 
-        // Stacked bar
-        const total = available + stats.we_inferred;
-        if (total > 0) {
+        // Summary paragraph
+        const ll = label.toLowerCase();
+        if (available > 0) {
+          let summary = `Of the ${available.toLocaleString()} files on ${sourceLabel} with ground truth ${ll}, we inferred ${ll} values for ${bothHave.toLocaleString()} files. ${stats.not_classified.toLocaleString()} files remain unclassifiable by the rule engine.`;
+          if (bothHave > 0) {
+            summary += ` Of the ${bothHave.toLocaleString()} inferred ${ll} values, ${stats.agree.toLocaleString()} (${agree_pct}%) matched ${sourceLabel}. There were ${stats.discrepancy.toLocaleString()} discrepancies (${disc_pct}%) in ${ll} between meta-disco and ${sourceLabel}.`;
+          }
+          html += `<p style="font-size: 14px; color: #656d76;">${summary}</p>`;
+        } else {
+          html += `<p style="font-size: 14px; color: #656d76;">${sourceLabel} does not currently provide ground truth for ${ll}.</p>`;
+        }
+
+        // Stacked bar with labels (only files where source has ground truth)
+        if (available > 0) {
+          const SEG_LABELS = {agree: 'Agree', discrepancy: 'Discrepancy', not_classified: 'Not classified'};
           const segments = [
             { key: 'agree', count: stats.agree },
             { key: 'discrepancy', count: stats.discrepancy },
-            { key: 'we_inferred', count: stats.we_inferred },
             { key: 'not_classified', count: stats.not_classified },
           ];
           html += '<div style="margin: 12px 0;"><div class="bar-row"><div class="bar-track">';
           for (const seg of segments) {
             if (seg.count > 0) {
-              const w = (100 * seg.count / total).toFixed(1);
-              html += `<div class="bar-segment" style="width: ${w}%; background: ${COLORS[seg.key]};" title="${seg.key}: ${seg.count.toLocaleString()}"></div>`;
+              const w = (100 * seg.count / available).toFixed(1);
+              const segLabel = `${SEG_LABELS[seg.key]}: ${seg.count.toLocaleString()}`;
+              const showLabel = parseFloat(w) > 8;
+              html += `<div class="bar-segment" style="width: ${w}%; background: ${COLORS[seg.key]}; position: relative;" title="${segLabel}">`;
+              if (showLabel) {
+                html += `<span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); white-space: nowrap; overflow: hidden;">${seg.count.toLocaleString()}</span>`;
+              }
+              html += '</div>';
             }
           }
-          html += '</div></div></div>';
+          html += '</div></div>';
+          // Legend below bar
+          html += '<div style="display: flex; gap: 16px; margin-top: 4px; font-size: 12px; color: #656d76;">';
+          for (const seg of segments) {
+            if (seg.count > 0) {
+              html += `<span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${COLORS[seg.key]}; margin-right: 4px;"></span>${SEG_LABELS[seg.key]}: ${seg.count.toLocaleString()}</span>`;
+            }
+          }
+          html += '</div></div>';
         }
 
         // Discrepancy categories
