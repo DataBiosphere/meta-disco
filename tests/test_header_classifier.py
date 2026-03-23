@@ -392,7 +392,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
         assert val(result, "confidence") >= 0.95
 
@@ -404,17 +404,38 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
 
-    def test_ont(self):
-        """Classify Oxford Nanopore FASTQ."""
+    def test_pacbio_generic(self):
+        """Classify generic PacBio FASTQ (movie/zmw without CCS or CLR suffix)."""
         reads = [
-            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123",
-            "@b2c3d4e5-f6a7-8901-bcde-f12345678901 runid=abc123",
+            "@m64011_190830_220126/1234",
+            "@m64011_190830_220126/5678",
+        ]
+        result = classify_from_fastq_header(reads)
+        assert val(result, "platform") == "PACBIO"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert val(result, "data_type") == "reads"
+
+    def test_ont_uuid(self):
+        """Classify ONT FASTQ by UUID read names only."""
+        reads = [
+            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "@b2c3d4e5-f6a7-8901-bcde-f12345678901",
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
+
+    def test_ont_runid(self):
+        """Classify ONT FASTQ by runid metadata only."""
+        reads = [
+            "@somereadname runid=abcdef1234567890abcdef1234567890",
+            "@anotherread runid=abcdef1234567890abcdef1234567890",
+        ]
+        result = classify_from_fastq_header(reads)
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
 
     def test_mgi(self):
         """Classify MGI/BGI FASTQ."""

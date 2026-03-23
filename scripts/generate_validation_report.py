@@ -236,13 +236,13 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
 
 
 # =============================================================================
-# HPRC comparison — load pre-computed results from validate_hprc_samples.py
+# HPRC comparison — load pre-computed results from validate_against_hprc.py
 # =============================================================================
 
 def load_hprc_results(hprc_results_path: Path) -> dict:
     """Load pre-computed HPRC validation results and convert to report format.
 
-    Reads from output/hprc_validation_results.json (produced by validate_hprc_samples.py)
+    Reads from output/hprc_validation_results.json (produced by validate_against_hprc.py)
     and converts to the same format used by compare_source().
     """
     if not hprc_results_path.is_file():

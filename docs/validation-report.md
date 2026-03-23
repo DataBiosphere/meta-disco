@@ -1,12 +1,12 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-03-22 11:23:36**
+Classification run: **2026-03-22 19:57:03**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| AnVIL (Azul metadata) | 4,608 | 2 | 635 | 24 |
-| HPRC (sequencing catalog) | 5,852 | 4 | 12,033 | 0 |
+| AnVIL (Azul metadata) | 4,608 | 2 | 635 | 2 |
+| HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
 
 ---
 
@@ -19,17 +19,16 @@ Matched **4,608** files (6,623 in source but not in our classifications).
 ### Data Modality
 
 - **3,974** values available from source
-- **25** also classified by rule engine
-- **3,949** not classified by rule engine (no rule applies)
+- **3** also classified by rule engine
+- **3,971** not classified by rule engine (no rule applies)
 - **1** agreed
-- **24** discrepancies
-- **4.0%** accuracy
+- **2** discrepancies
+- **33.3%** accuracy
 
 #### Discrepancies
 
 | Count | Inferred | AnVIL | Example |
 |---:|---|---|---|
-| 22 | genomic | transcriptomic.single_cell | f87d31aeb3cf7963a733fef1779b1c5e |
 | 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
 
 ### Data Type
@@ -80,9 +79,9 @@ Matched **5,852** files (0 in source but not in our classifications).
 ### Data Modality
 
 - **5,491** values available from source
-- **2,908** also classified by rule engine
-- **2,583** not classified by rule engine (no rule applies)
-- **2,908** agreed
+- **2,012** also classified by rule engine
+- **3,479** not classified by rule engine (no rule applies)
+- **2,012** agreed
 - **0** discrepancies
 - **100.0%** accuracy
 
