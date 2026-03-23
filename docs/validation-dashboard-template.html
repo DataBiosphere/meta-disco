@@ -191,9 +191,10 @@
           html += `<p style="font-size: 14px; color: #656d76;">${sourceLabel} does not currently provide ground truth for ${ll}.</p>`;
         }
 
-        // Stacked bar
+        // Stacked bar with labels
         const total = available + stats.we_inferred;
         if (total > 0) {
+          const SEG_LABELS = {agree: 'Agree', discrepancy: 'Discrepancy', we_inferred: 'No ground truth', not_classified: 'Not classified'};
           const segments = [
             { key: 'agree', count: stats.agree },
             { key: 'discrepancy', count: stats.discrepancy },
@@ -204,10 +205,24 @@
           for (const seg of segments) {
             if (seg.count > 0) {
               const w = (100 * seg.count / total).toFixed(1);
-              html += `<div class="bar-segment" style="width: ${w}%; background: ${COLORS[seg.key]};" title="${seg.key}: ${seg.count.toLocaleString()}"></div>`;
+              const segLabel = `${SEG_LABELS[seg.key]}: ${seg.count.toLocaleString()}`;
+              const showLabel = parseFloat(w) > 8;
+              html += `<div class="bar-segment" style="width: ${w}%; background: ${COLORS[seg.key]}; position: relative;" title="${segLabel}">`;
+              if (showLabel) {
+                html += `<span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.3); white-space: nowrap; overflow: hidden;">${seg.count.toLocaleString()}</span>`;
+              }
+              html += '</div>';
             }
           }
-          html += '</div></div></div>';
+          html += '</div></div>';
+          // Legend below bar
+          html += '<div style="display: flex; gap: 16px; margin-top: 4px; font-size: 12px; color: #656d76;">';
+          for (const seg of segments) {
+            if (seg.count > 0) {
+              html += `<span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${COLORS[seg.key]}; margin-right: 4px;"></span>${SEG_LABELS[seg.key]}: ${seg.count.toLocaleString()}</span>`;
+            }
+          }
+          html += '</div></div>';
         }
 
         // Discrepancy categories
