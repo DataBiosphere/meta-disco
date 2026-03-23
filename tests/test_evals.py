@@ -278,6 +278,13 @@ class TestRuleEngineE2E:
         assert result.platform == "ONT"
         assert result.reference_assembly == NOT_APPLICABLE
 
+    def test_pod5_raw_signal(self):
+        result = engine.classify_extended(FileInfo(filename="sample_run.pod5"))
+        assert result.data_modality == NOT_CLASSIFIED
+        assert result.data_type == "raw_signal"
+        assert result.platform == "ONT"
+        assert result.reference_assembly == NOT_APPLICABLE
+
     def test_plink_1000g(self):
         result = engine.classify_extended(
             FileInfo(filename="IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
