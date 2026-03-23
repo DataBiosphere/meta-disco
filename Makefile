@@ -1,4 +1,4 @@
-.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed report validate-report download-hprc validate-hprc clean help
+.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed report validate-report reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -15,6 +15,7 @@ help:
 	@echo "  make classify-bed    Classify BED files"
 	@echo "  make report          Generate coverage report from latest run"
 	@echo "  make validate-report Generate validation report against ground truth"
+	@echo "  make reports         Generate all reports (coverage + validation)"
 	@echo ""
 	@echo "  make download-hprc   Download HPRC catalogs for validation"
 	@echo "  make validate-hprc   Validate classifications against HPRC catalogs"
@@ -52,7 +53,10 @@ report:
 	python scripts/generate_coverage_report.py
 
 validate-report:
+	python scripts/validate_hprc_samples.py
 	python scripts/generate_validation_report.py
+
+reports: report validate-report
 
 download-hprc:
 	python scripts/download_hprc_catalogs.py
