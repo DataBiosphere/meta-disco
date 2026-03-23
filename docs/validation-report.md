@@ -14,6 +14,16 @@ Classification run: **2026-03-22 19:57:03**
 
 Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/).
 
+The source currently has **758,658** open-access files. The following shows how many files have each metadata dimension populated:
+
+| Dimension | Files with metadata |
+|---|---:|
+| Data Modality | 6,755 |
+| Data Type | 0 |
+| Platform | 0 |
+| Reference Assembly | 4,696 |
+| Assay Type | 0 |
+
 Matched **11,231** files (0 in source but not in our classifications).
 
 ### Data Modality

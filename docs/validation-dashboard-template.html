@@ -130,6 +130,21 @@
       if (sourceDesc) {
         html += `<p>${sourceDesc}</p>`;
       }
+
+      // Metadata coverage table
+      const totalSource = results.total_source_files || 0;
+      const metaCov = results.metadata_coverage || {};
+      if (totalSource > 0 && Object.keys(metaCov).length > 0) {
+        html += `<p>The source currently has <strong>${totalSource.toLocaleString()}</strong> open-access files. The following shows how many files have each metadata dimension populated:</p>`;
+        html += '<table class="disc-table" style="width: auto; margin-bottom: 16px;"><tr><th>Dimension</th><th>Files with metadata</th></tr>';
+        for (const dim of ALL_DIMS) {
+          const label = DIM_LABELS[dim] || dim;
+          const count = metaCov[dim] || 0;
+          html += `<tr><td>${label}</td><td style="text-align: right;">${count.toLocaleString()}</td></tr>`;
+        }
+        html += '</table>';
+      }
+
       html += `<p>Matched <strong>${results.matched.toLocaleString()}</strong> files (${results.unmatched.toLocaleString()} in source but not in our classifications).</p>`;
 
       const dims = results.dimensions || {};

@@ -207,10 +207,13 @@ def compare_source(our_by_key: dict, truth_records: list[dict],
 
 def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     """Compare against AnVIL Azul metadata."""
+    total_files = 0
+    metadata_coverage = {}
     truth_records = []
     with open(metadata_path) as f:
         for line in f:
             r = json.loads(line)
+            total_files += 1
             if r.get("data_modality") or r.get("reference_assembly"):
                 truth_records.append({
                     "md5": r.get("file_md5sum"),
@@ -218,6 +221,11 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
                     "data_modality": r.get("data_modality"),
                     "reference_assembly": r.get("reference_assembly"),
                 })
+
+    # Count how many files have each dimension populated in AnVIL metadata
+    for dim in DIMENSIONS:
+        count = sum(1 for r in truth_records if r.get(dim))
+        metadata_coverage[dim] = count
 
     field_mappings = {
         "data_modality": {
@@ -230,10 +238,13 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
         },
     }
 
-    return compare_source(
+    result = compare_source(
         our_by_md5, truth_records, "md5",
         field_mappings, ["data_modality", "reference_assembly"],
     )
+    result["total_source_files"] = total_files
+    result["metadata_coverage"] = metadata_coverage
+    return result
 
 
 # =============================================================================
@@ -358,6 +369,22 @@ def build_source_section(name: str, results: dict) -> str:
     if desc:
         lines.append(desc)
         lines.append("")
+
+    # Show metadata coverage if available
+    total_source = results.get("total_source_files", 0)
+    metadata_coverage = results.get("metadata_coverage", {})
+    if total_source and metadata_coverage:
+        lines.append(f"The source currently has **{total_source:,}** open-access files. "
+                     f"The following shows how many files have each metadata dimension populated:")
+        lines.append("")
+        lines.append("| Dimension | Files with metadata |")
+        lines.append("|---|---:|")
+        for dim in DIMENSIONS:
+            label = DIMENSION_LABELS.get(dim, dim)
+            count = metadata_coverage.get(dim, 0)
+            lines.append(f"| {label} | {count:,} |")
+        lines.append("")
+
     lines.append(f"Matched **{results['matched']:,}** files "
                  f"({results['unmatched']:,} in source but not in our classifications).")
     lines.append("")
