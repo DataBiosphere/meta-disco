@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meta-disco Reports</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 720px; margin: 0 auto; padding: 40px 20px; background: #fff; color: #24292f; }
+    h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+    p.subtitle { color: #656d76; margin-top: -8px; }
+    .cards { display: grid; gap: 16px; margin-top: 24px; }
+    a.card { display: block; border: 1px solid #d0d7de; border-radius: 6px; padding: 20px; text-decoration: none; color: inherit; transition: border-color 0.15s, box-shadow 0.15s; }
+    a.card:hover { border-color: #0969da; box-shadow: 0 1px 4px rgba(9,105,218,0.15); }
+    .card h2 { margin: 0 0 6px; font-size: 18px; color: #0969da; }
+    .card p { margin: 0; font-size: 14px; color: #656d76; }
+  </style>
+</head>
+<body>
+  <h1>meta-disco Reports</h1>
+  <p class="subtitle">Classification dashboards for AnVIL biological data files</p>
+  <div class="cards">
+    <a class="card" href="coverage-dashboard.html">
+      <h2>Coverage Dashboard</h2>
+      <p>Classification coverage across workspaces, file types, and metadata fields</p>
+    </a>
+    <a class="card" href="validation-dashboard.html">
+      <h2>Validation Report</h2>
+      <p>Classification accuracy compared against ground-truth reference datasets</p>
+    </a>
+  </div>
+</body>
+</html>
