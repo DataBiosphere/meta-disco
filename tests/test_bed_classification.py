@@ -51,7 +51,7 @@ class TestAssemblyQCPattern:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_assembly_qc"
         result = classify_bed(filename)
-        assert result["data_modality"] == NOT_APPLICABLE  # Derived QC artifact
+        assert result["data_modality"] == "genomic"
 
     def test_paternal_haplotype_matches(self):
         """Paternal haplotype files should match assembly_qc rule."""

@@ -298,7 +298,7 @@ class TestRuleEngineE2E:
 
     def test_bed_assembly_qc(self):
         result = engine.classify_extended(FileInfo(filename="HG01928.paternal.f1_assembly.hap1.bed"))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.data_modality == "genomic"
 
     def test_fastq_rna_filename(self):
         result = engine.classify_extended(FileInfo(filename="sample_RNA_001.fastq.gz"))

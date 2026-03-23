@@ -45,7 +45,7 @@
     &middot;
     <a href="validation-dashboard.html" style="color: #0969da; text-decoration: none;">Validation</a>
   </nav>
-  <h1>AnVIL Classification Coverage Dashboard</h1>
+  <h1>AnVIL Classification Coverage Dashboard <span id="run-time" style="font-size: 16px; font-weight: normal; color: #656d76;"></span></h1>
   <p id="subtitle"></p>
 
   <div class="summary-grid" id="summary-cards"></div>
@@ -57,8 +57,9 @@
     // Data injected by generate script
     const DATA = COVERAGE_DATA_PLACEHOLDER;
 
+    document.getElementById('run-time').textContent = DATA.run_time;
     document.getElementById('subtitle').textContent =
-      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions. Classification run: ${DATA.run_time}`;
+      `Coverage of ${DATA.total.toLocaleString()} classified file records across ${DATA.dimensions.length} dimensions.`;
 
     // Colors
     const COLORS = [

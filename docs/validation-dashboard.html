@@ -39,7 +39,7 @@
     &middot;
     <strong style="color: #24292f;">Validation</strong>
   </nav>
-  <h1>Validation Report Dashboard</h1>
+  <h1>Validation Report Dashboard <span id="run-time" style="font-size: 16px; font-weight: normal; color: #656d76;"></span></h1>
   <p id="subtitle"></p>
 
   <div class="summary-grid" id="summary-cards"></div>
@@ -78,8 +78,9 @@
       assay_type: 'Assay Type',
     };
 
+    document.getElementById('run-time').textContent = DATA.run_time;
     document.getElementById('subtitle').textContent =
-      `Comparing meta-disco rule engine classifications against external ground truth. Run: ${DATA.run_time}`;
+      `Comparing meta-disco rule engine classifications against external ground truth.`;
 
     // Summary cards — one per source
     const cardsEl = document.getElementById('summary-cards');

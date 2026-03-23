@@ -851,10 +851,10 @@ rules:
       extensions: [".bed", ".bed.gz"]
       filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
     then:
-      data_modality: not_applicable
+      data_modality: genomic
       data_type: annotations
     confidence: 0.85
-    rationale: "BED file is assembly QC output (haplotype regions, error flags) - derived artifact, not primary data"
+    rationale: "BED file is assembly QC output (haplotype regions, error flags) on de novo genomic assemblies"
     terminal: true
 
   - id: bed_regions
