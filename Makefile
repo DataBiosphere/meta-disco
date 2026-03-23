@@ -1,4 +1,4 @@
-.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-bed report validate-report reports download-hprc validate-hprc clean help
+.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-headers classify-bed report validate-report reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -34,17 +34,20 @@ classify:
 download:
 	python scripts/download_anvil_metadata.py
 
+classify-headers:
+	python scripts/classify_headers.py --type all -i data/anvil_files_metadata.json
+
 classify-bam:
-	python scripts/classify_bam_files.py -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -w 4
 
 classify-vcf:
-	python scripts/classify_vcf_files.py -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_headers.py --type vcf -i data/anvil_files_metadata.json -w 10
 
 classify-fastq:
-	python scripts/classify_fastq_files.py -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_headers.py --type fastq -i data/anvil_files_metadata.json -w 10
 
 classify-fasta:
-	python scripts/classify_fasta_files.py -i data/anvil_files_metadata.json -w 4
+	python scripts/classify_headers.py --type fasta -i data/anvil_files_metadata.json -w 10
 
 classify-bed:
 	python scripts/classify_bed_files.py --metadata data/anvil_files_metadata.json
