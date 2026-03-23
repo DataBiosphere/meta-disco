@@ -162,7 +162,6 @@
         const stats = dims[dim] || EMPTY;
         const label = DIM_LABELS[dim] || dim;
         const available = stats.agree + stats.discrepancy + stats.not_classified;
-        const classified = stats.agree + stats.discrepancy + stats.we_inferred;
         const bothHave = stats.agree + stats.discrepancy;
         const accuracy = bothHave > 0 ? `${(100 * stats.agree / bothHave).toFixed(1)}%` : '-';
         const agree_pct = bothHave > 0 ? (100 * stats.agree / bothHave).toFixed(1) : '0';
