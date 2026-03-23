@@ -149,6 +149,7 @@
       // Not classified breakdown
       if (dim.not_classified_breakdown && dim.not_classified_breakdown.length > 0) {
         html += '<h3>What\'s not classified?</h3>';
+        html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 12px;">We were not able to determine a ${dim.label} (or if ${dim.label} is applicable) for the following file types:</p>`;
         html += '<table class="nc-table"><tr><th>Extension</th><th>Count</th><th>Root cause</th></tr>';
         for (const nc of dim.not_classified_breakdown) {
           html += `<tr><td>${nc.ext}</td><td>${nc.count.toLocaleString()}</td><td>${nc.why}</td></tr>`;
