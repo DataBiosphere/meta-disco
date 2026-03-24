@@ -7,7 +7,7 @@ for all dimensions, making them visible in coverage reports.
 
 Usage:
     python scripts/classify_remaining_files.py
-    python scripts/classify_remaining_files.py --metadata data/anvil_files_metadata.json
+    python scripts/classify_remaining_files.py --metadata data/anvil/anvil_files_metadata.json
 """
 
 import argparse
@@ -106,13 +106,13 @@ def main():
     parser.add_argument(
         "--metadata", "-m",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/remaining_classifications.json"),
+        default=Path("output/anvil/remaining_classifications.json"),
         help="Output path for classifications",
     )
     parser.add_argument(

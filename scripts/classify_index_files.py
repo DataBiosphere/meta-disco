@@ -336,7 +336,7 @@ def main():
     parser.add_argument(
         "--metadata", "-m",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
@@ -347,15 +347,15 @@ def main():
     )
     # Backwards-compatible args (default to standard output paths)
     parser.add_argument("--bam", "-b", type=Path,
-                        default=Path("output/bam_classifications.json"),
+                        default=Path("output/anvil/bam_classifications.json"),
                         help="Path to BAM classifications (used when --classifications not provided)")
     parser.add_argument("--vcf", "-v", type=Path,
-                        default=Path("output/vcf_classifications.json"),
+                        default=Path("output/anvil/vcf_classifications.json"),
                         help="Path to VCF classifications (used when --classifications not provided)")
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/index_classifications.json"),
+        default=Path("output/anvil/index_classifications.json"),
         help="Output path for index classifications",
     )
     args = parser.parse_args()

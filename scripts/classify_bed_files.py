@@ -24,7 +24,7 @@ from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 
-EVIDENCE_DIR = Path("data/evidence/bed")
+EVIDENCE_DIR = Path("data/evidence/anvil/bed")
 
 
 def load_bed_reference_evidence() -> dict[str, dict]:
@@ -167,13 +167,13 @@ def main():
     parser.add_argument(
         "--metadata", "-m",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/bed_classifications.json"),
+        default=Path("output/anvil/bed_classifications.json"),
         help="Output path for classifications",
     )
     args = parser.parse_args()

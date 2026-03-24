@@ -29,11 +29,6 @@ from src.meta_disco.rule_engine import RuleEngine
 
 engine = RuleEngine()
 
-EVIDENCE_BAM = Path("data/evidence/bam")
-EVIDENCE_VCF = Path("data/evidence/vcf")
-EVIDENCE_FASTQ = Path("data/evidence/fastq")
-EVIDENCE_FASTA = Path("data/evidence/fasta")
-
 
 def get_val(record, field):
     """Extract classification value from per-field output."""

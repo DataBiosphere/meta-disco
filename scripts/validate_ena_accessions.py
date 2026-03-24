@@ -7,7 +7,7 @@ authoritative ENA (European Nucleotide Archive) metadata.
 Usage:
     python scripts/validate_ena_accessions.py
 
-Output saved to: output/ena_validation_results.json
+Output saved to: output/anvil/ena_validation_results.json
 """
 
 import argparse
@@ -276,13 +276,13 @@ def main():
     parser.add_argument(
         "--input", "-i",
         type=Path,
-        default=Path("output/fastq_classifications.json"),
+        default=Path("output/anvil/fastq_classifications.json"),
         help="Input FASTQ classifications file",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/ena_validation_results.json"),
+        default=Path("output/anvil/ena_validation_results.json"),
         help="Output validation results file",
     )
     parser.add_argument(

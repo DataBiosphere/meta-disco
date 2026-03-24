@@ -40,19 +40,19 @@ download:
 classify-headers: classify-bam classify-vcf classify-fastq classify-fasta
 
 classify-bam:
-	python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -o output/bam_classifications.json -w 4
+	python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
 
 classify-vcf:
-	python scripts/classify_headers.py --type vcf -i data/anvil_files_metadata.json -o output/vcf_classifications.json -w 10
+	python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json -o output/anvil/vcf_classifications.json -w 10
 
 classify-fastq:
-	python scripts/classify_headers.py --type fastq -i data/anvil_files_metadata.json -o output/fastq_classifications.json -w 10
+	python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json -o output/anvil/fastq_classifications.json -w 10
 
 classify-fasta:
-	python scripts/classify_headers.py --type fasta -i data/anvil_files_metadata.json -o output/fasta_classifications.json -w 10
+	python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json -o output/anvil/fasta_classifications.json -w 10
 
 classify-bed:
-	python scripts/classify_bed_files.py --metadata data/anvil_files_metadata.json
+	python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json
 
 coverage-report:
 	python scripts/generate_coverage_report.py

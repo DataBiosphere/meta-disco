@@ -173,7 +173,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        run_dir = args.run_dir or find_latest_run(Path("output"))
+        run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1)
@@ -194,7 +194,7 @@ def main():
         run_time = run_dir.name
 
     # Load dataset stats from source metadata
-    metadata_path = Path("data/anvil_files_metadata.ndjson")
+    metadata_path = Path("data/anvil/anvil_files_metadata.ndjson")
     dataset_counts = Counter()
     if metadata_path.is_file():
         with open(metadata_path) as f:

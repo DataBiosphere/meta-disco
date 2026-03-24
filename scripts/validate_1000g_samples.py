@@ -6,10 +6,10 @@ authoritative IGSR (International Genome Sample Resource) metadata.
 
 Usage:
     python scripts/validate_1000g_samples.py
-    python scripts/validate_1000g_samples.py --input output/bam_classifications.json
+    python scripts/validate_1000g_samples.py --input output/anvil/bam_classifications.json
     python scripts/validate_1000g_samples.py --limit 100 --workers 5
 
-Output saved to: output/1000g_validation_results.json
+Output saved to: output/anvil/1000g_validation_results.json
 """
 
 import argparse
@@ -366,15 +366,15 @@ def main():
         type=Path,
         nargs="+",
         default=[
-            Path("output/bam_classifications.json"),
-            Path("output/fastq_classifications.json"),
+            Path("output/anvil/bam_classifications.json"),
+            Path("output/anvil/fastq_classifications.json"),
         ],
         help="Input classification files",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/1000g_validation_results.json"),
+        default=Path("output/anvil/1000g_validation_results.json"),
         help="Output validation results file",
     )
     parser.add_argument(
