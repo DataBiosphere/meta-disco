@@ -443,7 +443,23 @@ class RuleEngine:
         set_any_field = False
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
-                setattr(result, fld, then[fld])
+                current = getattr(result, fld)
+                new_val = then[fld]
+                # Detect conflicting reference_assembly values (e.g., filename
+                # contains both "hg38" and "chm13" — ambiguous liftover/comparison)
+                if (fld == "reference_assembly"
+                        and current is not None
+                        and current != NOT_CLASSIFIED
+                        and current != new_val):
+                    setattr(result, fld, NOT_CLASSIFIED)
+                    result.field_evidence[fld].append({
+                        "rule_id": "conflicting_reference_rules",
+                        "reason": (f"Conflicting references: '{current}' vs '{new_val}' "
+                                   f"(from {rule.id}) — ambiguous"),
+                        "confidence": 0.0,
+                    })
+                else:
+                    setattr(result, fld, new_val)
                 result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 
