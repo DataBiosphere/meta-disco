@@ -2,12 +2,10 @@
 """Unified header classification for BAM, VCF, FASTQ, and FASTA files.
 
 Replaces the 4 separate classify_*_files.py scripts with a single entry point.
-File types are selected with --type (comma-separated or "all").
 
 Examples:
-    python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json
-    python scripts/classify_headers.py --type bam,vcf,fastq,fasta -i data/metadata.json
-    python scripts/classify_headers.py --type all -i data/metadata.json
+    python scripts/classify_headers.py --type bam -i data/anvil_files_metadata.json -o output/bam.json
+    python scripts/classify_headers.py --type bam --md5 abc123
 """
 
 import argparse
@@ -29,7 +27,8 @@ def main():
     parser.add_argument(
         "--type", "-t",
         required=True,
-        help="File type(s) to classify: bam, vcf, fastq, fasta, or all (comma-separated)",
+        choices=list(FILE_TYPE_REGISTRY.keys()),
+        help="File type to classify",
     )
     parser.add_argument(
         "--input", "-i",
@@ -78,22 +77,10 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # Parse file types
-    if args.type.lower() == "all":
-        type_names = list(FILE_TYPE_REGISTRY.keys())
-    else:
-        type_names = [t.strip().lower() for t in args.type.split(",")]
-
-    for name in type_names:
-        if name not in FILE_TYPE_REGISTRY:
-            parser.error(f"Unknown file type: {name}. Choose from: {', '.join(FILE_TYPE_REGISTRY)}")
+    config = FILE_TYPE_REGISTRY[args.type]
 
     # Single-file mode
     if args.md5:
-        if len(type_names) != 1:
-            parser.error("--md5 requires exactly one --type")
-        config = FILE_TYPE_REGISTRY[type_names[0]]
         result = ClassifyPipeline.classify_single(
             config, args.md5, use_cache=not args.no_resume,
         )
@@ -107,24 +94,18 @@ def main():
     # Batch mode
     if not args.output:
         parser.error("--output is required in batch mode")
-    if args.output and len(type_names) > 1:
-        parser.error("--output cannot be used with multiple types (each type writes its own output file)")
 
-    for name in type_names:
-        config = FILE_TYPE_REGISTRY[name]
-        output = args.output
-
-        pipeline = ClassifyPipeline(
-            config,
-            args.input,
-            output,
-            limit=args.limit,
-            resume=not args.no_resume,
-            workers=args.workers,
-            skip_complete=args.skip_complete,
-            skip_cached=args.skip_cached,
-        )
-        pipeline.run()
+    pipeline = ClassifyPipeline(
+        config,
+        args.input,
+        args.output,
+        limit=args.limit,
+        resume=not args.no_resume,
+        workers=args.workers,
+        skip_complete=args.skip_complete,
+        skip_cached=args.skip_cached,
+    )
+    pipeline.run()
 
 
 if __name__ == "__main__":

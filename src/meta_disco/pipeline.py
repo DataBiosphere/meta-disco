@@ -43,6 +43,12 @@ class NdjsonWriter:
         self._fh.flush()
         self._fh.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
 
 class ClassifyPipeline:
     """Unified pipeline for fetching headers, classifying, and writing output.
@@ -255,7 +261,6 @@ class ClassifyPipeline:
 
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
-        writer = NdjsonWriter(self.output_path)
         successful = 0
         failed = 0
         from_cache = 0
@@ -265,48 +270,47 @@ class ClassifyPipeline:
 
         print(f"Using {self.workers} parallel workers")
 
-        def update_progress(result, was_cached, file_name):
-            nonlocal successful, failed, from_cache, processed
-            with lock:
-                processed += 1
-                if result:
-                    writer.write(result)
-                    successful += 1
-                    if was_cached:
-                        from_cache += 1
-                else:
-                    failed += 1
-                cache_indicator = "[cached] " if was_cached else ""
-                print(f"\r[{processed}/{total}] {cache_indicator}{file_name[:45]:<52}",
-                      end="", flush=True)
+        with NdjsonWriter(self.output_path) as writer:
+            def update_progress(result, was_cached, file_name):
+                nonlocal successful, failed, from_cache, processed
+                with lock:
+                    processed += 1
+                    if result:
+                        writer.write(result)
+                        successful += 1
+                        if was_cached:
+                            from_cache += 1
+                    else:
+                        failed += 1
+                    cache_indicator = "[cached] " if was_cached else ""
+                    print(f"\r[{processed}/{total}] {cache_indicator}{file_name[:45]:<52}",
+                          end="", flush=True)
 
-        if self.workers == 1:
-            for record in records:
-                result, was_cached = self._process_single_record(record)
-                update_progress(result, was_cached, record.get("file_name", ""))
-        else:
-            with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                future_to_record = {
-                    executor.submit(self._process_single_record, record): record
-                    for record in records
-                }
-                for future in as_completed(future_to_record):
-                    record = future_to_record[future]
-                    try:
-                        result, was_cached = future.result()
-                        update_progress(result, was_cached, record.get("file_name", ""))
-                    except Exception as e:
-                        print(f"\nError processing {record.get('file_name')}: {e}")
-                        with lock:
-                            processed += 1
-                            failed += 1
+            if self.workers == 1:
+                for record in records:
+                    result, was_cached = self._process_single_record(record)
+                    update_progress(result, was_cached, record.get("file_name", ""))
+            else:
+                with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                    future_to_record = {
+                        executor.submit(self._process_single_record, record): record
+                        for record in records
+                    }
+                    for future in as_completed(future_to_record):
+                        record = future_to_record[future]
+                        try:
+                            result, was_cached = future.result()
+                            update_progress(result, was_cached, record.get("file_name", ""))
+                        except Exception as e:
+                            print(f"\nError processing {record.get('file_name')}: {e}")
+                            with lock:
+                                processed += 1
+                                failed += 1
 
         print(f"\n\nSuccessfully classified: {successful}")
         print(f"  From cache: {from_cache}")
         print(f"  New fetches: {successful - from_cache}")
         print(f"Failed to fetch header: {failed}")
-
-        writer.close()
         classifications = self._save_final(total, successful, failed, from_cache)
 
         print(f"\nSaved to {self.output_path}")
