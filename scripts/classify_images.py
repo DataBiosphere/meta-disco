@@ -118,13 +118,13 @@ def main():
     parser.add_argument(
         "--metadata", "-m",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/image_classifications.json"),
+        default=Path("output/anvil/image_classifications.json"),
         help="Output path for image classifications",
     )
     args = parser.parse_args()

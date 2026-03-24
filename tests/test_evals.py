@@ -29,10 +29,10 @@ from src.meta_disco.rule_engine import RuleEngine
 
 engine = RuleEngine()
 
-EVIDENCE_BAM = Path("data/evidence/bam")
-EVIDENCE_VCF = Path("data/evidence/vcf")
-EVIDENCE_FASTQ = Path("data/evidence/fastq")
-EVIDENCE_FASTA = Path("data/evidence/fasta")
+EVIDENCE_BAM = Path("data/evidence/anvil/bam")
+EVIDENCE_VCF = Path("data/evidence/anvil/vcf")
+EVIDENCE_FASTQ = Path("data/evidence/anvil/fastq")
+EVIDENCE_FASTA = Path("data/evidence/anvil/fasta")
 
 
 def get_val(record, field):

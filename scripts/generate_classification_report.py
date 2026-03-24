@@ -401,19 +401,19 @@ def main():
     parser.add_argument(
         "--source", "-s",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Source metadata file",
     )
     parser.add_argument(
         "--output-dir", "-d",
         type=Path,
-        default=Path("output"),
+        default=Path("output/anvil"),
         help="Directory containing classification outputs",
     )
     parser.add_argument(
         "--report", "-r",
         type=Path,
-        default=Path("output/classification_report.png"),
+        default=Path("output/anvil/classification_report.png"),
         help="Output report path",
     )
     args = parser.parse_args()

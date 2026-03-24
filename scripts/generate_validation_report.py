@@ -245,7 +245,7 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
 def load_hprc_results(hprc_results_path: Path) -> dict:
     """Load pre-computed HPRC validation results and convert to report format.
 
-    Reads from output/hprc_validation_results.json (produced by validate_against_hprc.py)
+    Reads from output/anvil/hprc_validation_results.json (produced by validate_against_hprc.py)
     and converts to the same format used by compare_source().
     """
     if not hprc_results_path.is_file():
@@ -519,10 +519,10 @@ def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
     parser.add_argument("--run-dir", type=Path, help="Classification run directory")
     parser.add_argument("--metadata", type=Path,
-                        default=Path("data/anvil_files_metadata.ndjson"),
+                        default=Path("data/anvil/anvil_files_metadata.ndjson"),
                         help="AnVIL metadata NDJSON")
     parser.add_argument("--hprc-results", type=Path,
-                        default=Path("output/hprc_validation_results.json"),
+                        default=Path("output/anvil/hprc_validation_results.json"),
                         help="Pre-computed HPRC validation results")
     parser.add_argument("--output", type=Path,
                         default=Path("docs/validation-report.md"),
@@ -530,7 +530,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        run_dir = args.run_dir or find_latest_run(Path("output"))
+        run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1)

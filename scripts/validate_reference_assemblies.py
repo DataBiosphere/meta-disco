@@ -8,7 +8,7 @@ Usage:
     python scripts/validate_reference_assemblies.py
     python scripts/validate_reference_assemblies.py --sample 100
 
-Output saved to: output/reference_validation_results.json
+Output saved to: output/anvil/reference_validation_results.json
 """
 
 import argparse
@@ -188,7 +188,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load VCF classifications
     print("\nLoading VCF classifications...", flush=True)
     try:
-        with open("output/vcf_classifications.json") as f:
+        with open("output/anvil/vcf_classifications.json") as f:
             data = json.load(f)
         vcf_files = data.get("classifications", data)
         results["vcf"]["total"] = len(vcf_files)
@@ -204,7 +204,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load BAM classifications
     print("Loading BAM classifications...", flush=True)
     try:
-        with open("output/bam_classifications.json") as f:
+        with open("output/anvil/bam_classifications.json") as f:
             data = json.load(f)
         bam_files = data.get("classifications", data)
         results["bam"]["total"] = len(bam_files)
@@ -244,7 +244,7 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/reference_validation_results.json"),
+        default=Path("output/anvil/reference_validation_results.json"),
         help="Output file",
     )
     parser.add_argument(

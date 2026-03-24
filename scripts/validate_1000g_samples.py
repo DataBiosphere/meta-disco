@@ -6,7 +6,7 @@ authoritative IGSR (International Genome Sample Resource) metadata.
 
 Usage:
     python scripts/validate_1000g_samples.py
-    python scripts/validate_1000g_samples.py --input output/bam_classifications.json
+    python scripts/validate_1000g_samples.py --input output/anvil/bam_classifications.json
     python scripts/validate_1000g_samples.py --limit 100 --workers 5
 
 Output saved to: output/1000g_validation_results.json
@@ -366,8 +366,8 @@ def main():
         type=Path,
         nargs="+",
         default=[
-            Path("output/bam_classifications.json"),
-            Path("output/fastq_classifications.json"),
+            Path("output/anvil/bam_classifications.json"),
+            Path("output/anvil/fastq_classifications.json"),
         ],
         help="Input classification files",
     )

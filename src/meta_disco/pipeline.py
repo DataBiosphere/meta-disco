@@ -64,7 +64,7 @@ class ClassifyPipeline:
         input_path: Path,
         output_path: Path,
         *,
-        evidence_base: Path = Path("data/evidence"),
+        evidence_base: Path = Path("data/evidence/anvil"),
         limit: int | None = None,
         resume: bool = True,
         workers: int | None = None,
@@ -125,7 +125,7 @@ class ClassifyPipeline:
         file_format: str | None = None,
         is_gzipped: bool = True,
         use_cache: bool = True,
-        evidence_base: Path = Path("data/evidence"),
+        evidence_base: Path = Path("data/evidence/anvil"),
     ) -> dict | None:
         """Classify a single file by MD5. Does not require a full pipeline instance."""
         evidence_dir = evidence_base / config.name

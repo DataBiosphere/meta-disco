@@ -12,7 +12,7 @@ Usage:
     python scripts/validate_against_hprc.py --catalog-dir data/hprc
     python scripts/validate_against_hprc.py --fetch --limit 100
 
-Output saved to: output/hprc_validation_results.json
+Output saved to: output/anvil/hprc_validation_results.json
 """
 
 import argparse
@@ -370,7 +370,7 @@ def main():
         "--output",
         "-o",
         type=Path,
-        default=Path("output/hprc_validation_results.json"),
+        default=Path("output/anvil/hprc_validation_results.json"),
         help="Output file",
     )
     parser.add_argument(
@@ -397,7 +397,7 @@ def main():
         input_paths = args.input
     else:
         try:
-            run_dir = args.run_dir or find_latest_run(Path("output"))
+            run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
         except FileNotFoundError as exc:
             print(exc, file=sys.stderr)
             raise SystemExit(1)

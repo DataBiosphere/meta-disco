@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch VCF headers and classify")
     parser.add_argument("--input", "-i", type=str,
                         help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/vcf_classifications.json",
+    parser.add_argument("--output", "-o", type=str, default="output/anvil/vcf_classifications.json",
                         help="Output file for classifications")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files to process")

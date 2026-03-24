@@ -37,13 +37,13 @@ def main():
     parser.add_argument(
         "--output-dir", "-o",
         type=Path,
-        default=Path("output"),
+        default=Path("output/anvil"),
         help="Output directory for results",
     )
     parser.add_argument(
         "--metadata", "-m",
         type=Path,
-        default=Path("data/anvil_files_metadata.json"),
+        default=Path("data/anvil/anvil_files_metadata.json"),
         help="Source metadata file (JSON format)",
     )
     args = parser.parse_args()

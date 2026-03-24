@@ -7,7 +7,7 @@ from chromosome names and max coordinates in the first N lines:
 - Max coordinates: each reference has unique chromosome lengths, so a
   coordinate exceeding a reference's chromosome length rules it out.
 
-Evidence is cached in data/evidence/bed/ for resumability and audit trail.
+Evidence is cached in data/evidence/anvil/bed/ for resumability and audit trail.
 """
 
 import argparse
@@ -28,7 +28,7 @@ import requests
 from src.meta_disco.header_classifier import classify_from_bed_signals
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
-EVIDENCE_DIR = Path("data/evidence/bed")
+EVIDENCE_DIR = Path("data/evidence/anvil/bed")
 
 
 def get_evidence_path(md5sum: str) -> Path:
@@ -378,9 +378,9 @@ def print_summary(classifications: list[dict]):
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch BED file headers for reference detection")
-    parser.add_argument("--input", "-i", type=str, default="data/anvil_files_metadata.json",
+    parser.add_argument("--input", "-i", type=str, default="data/anvil/anvil_files_metadata.json",
                         help="Input metadata file")
-    parser.add_argument("--output", "-o", type=str, default="output/bed_reference_detection.json",
+    parser.add_argument("--output", "-o", type=str, default="output/anvil/bed_reference_detection.json",
                         help="Output file for results")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Limit number of files")
