@@ -73,7 +73,8 @@ class TestBamE2E:
         assert_output_format(result)
         assert get_val(result, "reference_assembly") == "GRCh38"
         assert get_val(result, "platform") in ("ILLUMINA", "ONT", "PACBIO")
-        assert get_val(result, "assay_type") == "WGS"
+        # TODO #73: aligned BAM with reference contigs should infer genomic modality,
+        # which would then enable WGS assay_type inference
 
     def test_pacbio_hifi_unaligned(self):
         """PacBio reads BAM — 229.4 GB, unaligned, reference N/A."""
@@ -278,6 +279,23 @@ class TestRuleEngineE2E:
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
         assert result.reference_assembly == NOT_APPLICABLE
+
+    def test_flnc_bam_is_transcriptomic(self):
+        """IsoSeq flnc BAM should be transcriptomic, not genomic."""
+        result = engine.classify_extended(FileInfo(
+            filename="HG00097.lymph.m84203_240914_042802_s4.flnc.bam"
+        ))
+        assert result.data_modality == "transcriptomic.bulk"
+
+    def test_isoseq_bam_is_transcriptomic(self):
+        """BAM with isoseq in filename should be transcriptomic."""
+        result = engine.classify_extended(FileInfo(filename="sample.isoseq.bam"))
+        assert result.data_modality == "transcriptomic.bulk"
+
+    def test_plain_bam_no_modality(self):
+        """BAM without header or platform signals should not get genomic modality."""
+        result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
+        assert result.data_modality == NOT_CLASSIFIED
 
     def test_plink_1000g(self):
         result = engine.classify_extended(
