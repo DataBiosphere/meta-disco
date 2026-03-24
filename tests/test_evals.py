@@ -67,7 +67,6 @@ def assert_output_format(record):
 # BAM/CRAM — end-to-end through classify_bam_files.classify_single_file
 # =============================================================================
 
-@pytest.mark.skipif(not EVIDENCE_BAM.exists(), reason="No BAM evidence cache")
 class TestBamE2E:
     """End-to-end BAM classification from cached headers."""
 
@@ -155,7 +154,6 @@ class TestBamE2E:
 # VCF — end-to-end through classify_vcf_files.classify_single_vcf
 # =============================================================================
 
-@pytest.mark.skipif(not EVIDENCE_VCF.exists(), reason="No VCF evidence cache")
 class TestVcfE2E:
     """End-to-end VCF classification from cached headers."""
 
@@ -209,7 +207,6 @@ class TestVcfE2E:
 # FASTQ — end-to-end through classify_fastq_files.classify_single_fastq
 # =============================================================================
 
-@pytest.mark.skipif(not EVIDENCE_FASTQ.exists(), reason="No FASTQ evidence cache")
 class TestFastqE2E:
     """End-to-end FASTQ classification from cached read names."""
 
@@ -221,7 +218,7 @@ class TestFastqE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "ILLUMINA"
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == NOT_CLASSIFIED
+        assert get_val(result, "assay_type") == "WES"
 
     def test_ena_reformatted_fastq(self):
         """ERR3989178_1.fastq.gz — 13.5 GB ENA-reformatted with accession."""
@@ -392,7 +389,6 @@ class TestRuleEngineE2E:
 # FASTA — end-to-end through classify_fasta_files.classify_single_fasta
 # =============================================================================
 
-@pytest.mark.skipif(not EVIDENCE_FASTA.exists(), reason="No FASTA evidence cache")
 class TestFastaE2E:
     """End-to-end FASTA classification from cached contig names."""
 

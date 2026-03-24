@@ -39,8 +39,12 @@ def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, s
         - source: "ENA", "SRA", or "DDBJ" or None if not found
         - remainder: The text after the accession (original read name), or full input if no accession
     """
-    archive_sources = {"ERR": "ENA", "SRR": "SRA", "DRR": "DDBJ"}
-    pattern = re.compile(r"^@?(ERR|SRR|DRR)(\d+)(?:\.\d+)?\s*(.*)$")
+    archive_sources = {
+        "ERR": "ENA", "ERS": "ENA",
+        "SRR": "SRA", "SRS": "SRA",
+        "DRR": "DDBJ", "DRS": "DDBJ",
+    }
+    pattern = re.compile(r"^@?(ERR|ERS|SRR|SRS|DRR|DRS)(\d+)(?:\.\d+)?\s*(.*)$")
 
     match = pattern.match(read_name)
     if match:
@@ -90,12 +94,11 @@ def detect_paired_end_indicators(text: str) -> bool:
         r"[/\s][12]$",       # /1 or /2 at end
         r"[/\s][12]:",       # /1: or /2:
         r"_R[12]_",          # _R1_ or _R2_
+        r"_R[12]\.",         # _R1. or _R2.
         r"\.R[12]\.",        # .R1. or .R2.
-        r"_r[12]_",          # _r1_ or _r2_
-        r"\.r[12]\.",        # .r1. or .r2.
         r"_[12]\.fastq",     # _1.fastq or _2.fastq
     ]
-    return any(re.search(p, text) for p in patterns)
+    return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
 
 def parse_illumina_read_name(read_name: str) -> dict | None:
@@ -130,15 +133,17 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
     match = modern_pattern.match(name)
     if match:
         groups = match.groups()
+        instrument_id = groups[0]
         result = {
             "format": "modern",
-            "instrument": groups[0],
+            "instrument": instrument_id,
             "run_number": int(groups[1]),
             "flowcell": groups[2],
             "lane": int(groups[3]),
             "tile": int(groups[4]),
             "x": int(groups[5]),
             "y": int(groups[6]),
+            "instrument_model": infer_illumina_instrument_model(instrument_id),
         }
         if groups[7]:  # Optional second part
             result.update({
@@ -159,21 +164,35 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
     match = legacy_pattern.match(name)
     if match:
         groups = match.groups()
+        instrument_id = groups[0]
         result = {
             "format": "legacy",
-            "instrument": groups[0],
+            "instrument": instrument_id,
             "lane": int(groups[1]),
             "tile": int(groups[2]),
             "x": int(groups[3]),
             "y": int(groups[4]),
             "index": groups[5],
             "read": int(groups[6]),
+            "instrument_model": infer_illumina_instrument_model(instrument_id),
         }
         if accession:
             result["archive_accession"] = accession
             result["archive_source"] = source
         return result
 
+    return None
+
+
+def _infer_pacbio_instrument_model(movie: str) -> str | None:
+    """Infer PacBio instrument model from movie name prefix."""
+    prefix = movie.split("_")[0] if "_" in movie else movie
+    if prefix.startswith("m84"):
+        return "Revio"
+    if prefix.startswith("m64"):
+        return "Sequel II/IIe"
+    if prefix.startswith("m54"):
+        return "Sequel"
     return None
 
 
@@ -207,34 +226,40 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
     ccs_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)/ccs$")
     match = ccs_pattern.match(name)
     if match:
+        movie = match.group(1)
         return {
             "format": "ccs",
-            "movie": match.group(1),
+            "movie": movie,
             "zmw": int(match.group(2)),
             "read_type": "CCS",
+            "instrument_model": _infer_pacbio_instrument_model(movie),
         }
 
     # CLR (subread) format: m64011_190830_220126/1234/0_5000
     clr_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)/(\d+)_(\d+)$")
     match = clr_pattern.match(name)
     if match:
+        movie = match.group(1)
         return {
             "format": "clr",
-            "movie": match.group(1),
+            "movie": movie,
             "zmw": int(match.group(2)),
             "start": int(match.group(3)),
             "end": int(match.group(4)),
             "read_type": "CLR",
+            "instrument_model": _infer_pacbio_instrument_model(movie),
         }
 
     # Generic PacBio: m64011_190830_220126/1234
     generic_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)$")
     match = generic_pattern.match(name)
     if match:
+        movie = match.group(1)
         return {
             "format": "generic",
-            "movie": match.group(1),
+            "movie": movie,
             "zmw": int(match.group(2)),
+            "instrument_model": _infer_pacbio_instrument_model(movie),
         }
 
     return None

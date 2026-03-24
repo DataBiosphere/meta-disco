@@ -57,20 +57,20 @@ def main():
 
     # Phase 1: Run independent classifiers in parallel
     parallel_jobs = [
-        ("classify_bam_files.py", output_dir / "bam_classifications.json",
-         ["--input", str(args.metadata)]),
-        ("classify_vcf_files.py", output_dir / "vcf_classifications.json",
-         ["--input", str(args.metadata)]),
-        ("classify_fastq_files.py", output_dir / "fastq_classifications.json",
-         ["--input", str(args.metadata)]),
+        ("classify_headers.py", output_dir / "bam_classifications.json",
+         ["--type", "bam", "--input", str(args.metadata)]),
+        ("classify_headers.py", output_dir / "vcf_classifications.json",
+         ["--type", "vcf", "--input", str(args.metadata)]),
+        ("classify_headers.py", output_dir / "fastq_classifications.json",
+         ["--type", "fastq", "--input", str(args.metadata)]),
         ("classify_bed_files.py", output_dir / "bed_classifications.json",
          ["--metadata", str(args.metadata)]),
         ("classify_images.py", output_dir / "image_classifications.json",
          ["--metadata", str(args.metadata)]),
         ("classify_auxiliary_genomic.py", output_dir / "auxiliary_classifications.json",
          ["--metadata", str(args.metadata)]),
-        ("classify_fasta_files.py", output_dir / "fasta_classifications.json",
-         ["--input", str(args.metadata)]),
+        ("classify_headers.py", output_dir / "fasta_classifications.json",
+         ["--type", "fasta", "--input", str(args.metadata)]),
     ]
 
     # Track all classification output paths for Phase 3

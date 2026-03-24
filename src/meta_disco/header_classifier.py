@@ -1,18 +1,26 @@
-"""BAM/CRAM, VCF, and FASTQ header-based classification.
+"""BAM/CRAM, VCF, FASTQ, and FASTA header-based classification.
 
 This module provides functions to classify sequencing files based on their headers.
 The actual classification rules are defined in rules/unified_rules.yaml and executed
 by the RuleEngine. This module provides:
 
-1. Public API functions (classify_from_header, classify_from_vcf_header, classify_from_fastq_header)
-2. Helper functions for parsing read names and detecting references
-3. Consistency checking for detecting convergent/conflicting signals
+1. Public API functions (classify_from_header, classify_from_vcf_header, etc.)
+2. Consistency checking for detecting convergent/conflicting signals
+3. Re-exports of read name parsers from validators.read_name_parsers
 """
 
 import re
 from dataclasses import dataclass, replace
 
 from .models import NOT_APPLICABLE, NOT_CLASSIFIED
+from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
+    detect_paired_end_indicators,
+    extract_archive_accession,
+    infer_illumina_instrument_model,
+    parse_illumina_read_name,
+    parse_ont_read_name,
+    parse_pacbio_read_name,
+)
 
 
 def _get_engine():
@@ -23,391 +31,6 @@ def _get_engine():
     return _get_engine._instance
 
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-
-def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, str]:
-    """
-    Extract ENA/SRA/DDBJ accession from a FASTQ read name.
-
-    Args:
-        read_name: A FASTQ read name line (with or without @ prefix)
-
-    Returns:
-        Tuple of (accession, source, remainder) where:
-        - accession: e.g., "ERR3242571" or None if not found
-        - source: "ENA", "SRA", or "DDBJ" or None
-        - remainder: the rest of the read name after accession
-    """
-    # Remove @ prefix if present
-    if read_name.startswith("@"):
-        read_name = read_name[1:]
-
-    # ENA format: ERR/ERS followed by numbers
-    match = re.match(r"^(ERR\d+|ERS\d+)\.?\d*\s*(.*)", read_name)
-    if match:
-        return match.group(1), "ENA", match.group(2)
-
-    # SRA format: SRR/SRS followed by numbers
-    match = re.match(r"^(SRR\d+|SRS\d+)\.?\d*\s*(.*)", read_name)
-    if match:
-        return match.group(1), "SRA", match.group(2)
-
-    # DDBJ format: DRR/DRS followed by numbers
-    match = re.match(r"^(DRR\d+|DRS\d+)\.?\d*\s*(.*)", read_name)
-    if match:
-        return match.group(1), "DDBJ", match.group(2)
-
-    return None, None, read_name
-
-
-def infer_illumina_instrument_model(instrument_id: str) -> str | None:
-    """
-    Infer Illumina instrument model from instrument ID prefix.
-
-    Args:
-        instrument_id: The instrument ID from a read name (e.g., "A00297")
-
-    Returns:
-        Model name (e.g., "NovaSeq 6000") or None if unknown
-    """
-    from .rule_loader import get_unified_rules
-
-    rules = get_unified_rules()
-    instrument_id_upper = instrument_id.upper()
-    for instrument in rules.illumina_instruments:
-        if instrument_id_upper.startswith(instrument.prefix.upper()):
-            return instrument.model
-    return None
-
-
-def detect_paired_end_indicators(text: str) -> bool:
-    """
-    Check if text contains paired-end read indicators.
-
-    Args:
-        text: Filename or read name to check
-
-    Returns:
-        True if paired-end indicators found
-    """
-    patterns = [
-        r"_R[12]_",       # _R1_, _R2_
-        r"_R[12]\.",      # _R1., _R2.
-        r"\.R[12]\.",     # .R1., .R2.
-        r"_[12]\.",       # _1., _2.
-        r"[/\s][12]$",    # /1, /2 at end
-        r"[/\s][12]:",    # /1:, /2: in Illumina format
-    ]
-    return any(re.search(p, text, re.IGNORECASE) for p in patterns)
-
-
-def parse_illumina_read_name(read_name: str) -> dict | None:
-    """
-    Parse an Illumina read name into its components.
-
-    Modern format (Casava 1.8+):
-        @<instrument>:<run>:<flowcell>:<lane>:<tile>:<x>:<y> <read>:<filtered>:<control>:<index>
-
-    Legacy format (pre-Casava 1.8):
-        @<instrument>:<lane>:<tile>:<x>:<y>#<index>/<read>
-
-    Args:
-        read_name: A FASTQ read name line (with or without @ prefix)
-
-    Returns:
-        Dict with parsed components or None if not Illumina format
-    """
-    if read_name.startswith("@"):
-        read_name = read_name[1:]
-
-    # Check for archive-reformatted reads first (e.g., @ERR123.1 A00297:...)
-    archive_accession = None
-    archive_source = None
-    accession, source, remainder = extract_archive_accession(read_name)
-    if accession:
-        archive_accession = accession
-        archive_source = source
-        read_name = remainder.strip()
-
-    # Try modern format first (Casava 1.8+)
-    modern_pattern = r"^([A-Z0-9-]+):(\d+):([A-Z0-9]+):(\d+):(\d+):(\d+):(\d+)"
-    match = re.match(modern_pattern, read_name)
-    if match:
-        instrument_id = match.group(1)
-        result = {
-            "format": "modern",
-            "instrument": instrument_id,
-            "run_number": int(match.group(2)),
-            "flowcell": match.group(3),
-            "lane": int(match.group(4)),
-            "tile": int(match.group(5)),
-            "x_pos": int(match.group(6)),
-            "y_pos": int(match.group(7)),
-            "instrument_model": infer_illumina_instrument_model(instrument_id),
-        }
-
-        # Add archive info if present
-        if archive_accession:
-            result["archive_accession"] = archive_accession
-            result["archive_source"] = archive_source
-
-        # Parse the second part if present (after space)
-        space_idx = read_name.find(" ")
-        if space_idx > 0:
-            second_part = read_name[space_idx + 1:]
-            second_pattern = r"^([12]):([YN]):(\d+):([ACGTN+]+)?"
-            second_match = re.match(second_pattern, second_part)
-            if second_match:
-                result["read"] = int(second_match.group(1))
-                result["filtered"] = second_match.group(2) == "Y"
-                result["control"] = int(second_match.group(3))
-                result["index"] = second_match.group(4)
-
-        return result
-
-    # Try legacy format
-    legacy_pattern = r"^([A-Z0-9-]+):(\d+):(\d+):(\d+):(\d+)#([ACGTN0]+)/([12])"
-    match = re.match(legacy_pattern, read_name)
-    if match:
-        instrument_id = match.group(1)
-        result = {
-            "format": "legacy",
-            "instrument": instrument_id,
-            "lane": int(match.group(2)),
-            "tile": int(match.group(3)),
-            "x_pos": int(match.group(4)),
-            "y_pos": int(match.group(5)),
-            "index": match.group(6),
-            "read": int(match.group(7)),
-            "instrument_model": infer_illumina_instrument_model(instrument_id),
-        }
-
-        # Add archive info if present
-        if archive_accession:
-            result["archive_accession"] = archive_accession
-            result["archive_source"] = archive_source
-
-        return result
-
-    return None
-
-
-def parse_pacbio_read_name(read_name: str) -> dict | None:
-    """
-    Parse a PacBio read name into its components.
-
-    CCS/HiFi format:
-        @<movie>/<zmw>/ccs
-
-    CLR format:
-        @<movie>/<zmw>/<start>_<end>
-
-    Movie name format: m{instrument}_{date}_{time}
-        - Sequel: m54XXX_YYMMDD_HHMMSS
-        - Sequel II: m64XXX_YYMMDD_HHMMSS
-        - Revio: m84XXX_YYMMDD_HHMMSS
-
-    Args:
-        read_name: A FASTQ read name line (with or without @ prefix)
-
-    Returns:
-        Dict with parsed components or None if not PacBio format
-    """
-    if read_name.startswith("@"):
-        read_name = read_name[1:]
-
-    # CCS/HiFi format: movie/zmw/ccs
-    ccs_pattern = r"^(m\d+[A-Za-z]*_\d+_\d+)/(\d+)/ccs"
-    match = re.match(ccs_pattern, read_name)
-    if match:
-        movie = match.group(1)
-        instrument_prefix = movie.split("_")[0] if "_" in movie else movie
-
-        # Infer instrument model from prefix
-        model = None
-        if instrument_prefix.startswith("m84"):
-            model = "Revio"
-        elif instrument_prefix.startswith("m64"):
-            model = "Sequel II/IIe"
-        elif instrument_prefix.startswith("m54"):
-            model = "Sequel"
-
-        return {
-            "format": "ccs",
-            "read_type": "CCS",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-            "instrument_model": model,
-        }
-
-    # CLR format: movie/zmw/start_end
-    clr_pattern = r"^(m\d+[A-Za-z]*_\d+_\d+)/(\d+)/(\d+)_(\d+)"
-    match = re.match(clr_pattern, read_name)
-    if match:
-        movie = match.group(1)
-        instrument_prefix = movie.split("_")[0] if "_" in movie else movie
-
-        model = None
-        if instrument_prefix.startswith("m84"):
-            model = "Revio"
-        elif instrument_prefix.startswith("m64"):
-            model = "Sequel II/IIe"
-        elif instrument_prefix.startswith("m54"):
-            model = "Sequel"
-
-        return {
-            "format": "clr",
-            "read_type": "CLR",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-            "start": int(match.group(3)),
-            "end": int(match.group(4)),
-            "instrument_model": model,
-        }
-
-    # Generic PacBio movie pattern (without /ccs or /start_end)
-    generic_pattern = r"^(m\d+[A-Za-z]*_\d+_\d+)/(\d+)"
-    match = re.match(generic_pattern, read_name)
-    if match:
-        movie = match.group(1)
-        return {
-            "format": "generic",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-        }
-
-    return None
-
-
-def parse_ont_read_name(read_name: str) -> dict | None:
-    """
-    Parse an Oxford Nanopore read name into its components.
-
-    UUID format:
-        @<uuid> runid=<runid> ...
-
-    Args:
-        read_name: A FASTQ read name line (with or without @ prefix)
-
-    Returns:
-        Dict with parsed components or None if not ONT format
-    """
-    if read_name.startswith("@"):
-        read_name = read_name[1:]
-
-    # UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    uuid_pattern = r"^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"
-    match = re.match(uuid_pattern, read_name)
-    if match:
-        result = {
-            "format": "ont",
-            "uuid": match.group(1),
-        }
-
-        # Parse optional metadata fields
-        if "runid=" in read_name:
-            runid_match = re.search(r"runid=([a-f0-9]+)", read_name)
-            if runid_match:
-                result["runid"] = runid_match.group(1)
-
-        if "sampleid=" in read_name:
-            sample_match = re.search(r"sampleid=([^\s]+)", read_name)
-            if sample_match:
-                result["sampleid"] = sample_match.group(1)
-
-        if "ch=" in read_name:
-            ch_match = re.search(r"ch=(\d+)", read_name)
-            if ch_match:
-                result["ch"] = ch_match.group(1)
-
-        if "read=" in read_name:
-            read_match = re.search(r"read=(\d+)", read_name)
-            if read_match:
-                result["read"] = read_match.group(1)
-
-        return result
-
-    return None
-
-
-def detect_reference_from_contig_lengths(
-    contig_lines: list[str],
-    tolerance: int = 1000
-) -> tuple[str | None, int, float]:
-    """
-    Detect reference genome assembly from @SQ contig lengths.
-
-    Each reference genome has characteristic chromosome lengths. By comparing
-    the lengths in the BAM header to known reference lengths, we can identify
-    the genome assembly with high confidence.
-
-    Args:
-        contig_lines: List of @SQ lines from BAM header
-        tolerance: Allowed difference in length (bases) for matching
-
-    Returns:
-        Tuple of (assembly_name, matches_found, confidence) where:
-        - assembly_name: "GRCh38", "GRCh37", "CHM13", or None
-        - matches_found: Number of chromosomes matched
-        - confidence: 0.0-1.0 based on match quality
-    """
-    from .rule_loader import get_unified_rules
-
-    rules = get_unified_rules()
-    reference_lengths = rules.reference_contig_lengths
-
-    # Parse contig lengths from @SQ lines
-    contig_lengths = {}
-    for line in contig_lines:
-        sn_match = re.search(r"SN:(\S+)", line)
-        ln_match = re.search(r"LN:(\d+)", line)
-        if sn_match and ln_match:
-            contig_name = sn_match.group(1)
-            length = int(ln_match.group(1))
-            # Normalize contig names (remove chr prefix if present for comparison)
-            normalized = contig_name.lower().replace("chr", "")
-            contig_lengths[normalized] = length
-            contig_lengths[contig_name] = length
-
-    if not contig_lengths:
-        return None, 0, 0.0
-
-    # Score each reference
-    scores = {}
-    for assembly, ref_lengths in reference_lengths.items():
-        matches = 0
-        for chrom, expected_len in ref_lengths.items():
-            # Try both with and without chr prefix
-            normalized = chrom.lower().replace("chr", "")
-            actual_len = contig_lengths.get(chrom) or contig_lengths.get(normalized)
-            if actual_len and abs(actual_len - expected_len) <= tolerance:
-                matches += 1
-        if matches > 0:
-            scores[assembly] = matches
-
-    if not scores:
-        return None, 0, 0.0
-
-    best_matches = max(scores.values())
-    # If multiple assemblies tied for best, evidence is ambiguous
-    tied = [a for a, m in scores.items() if m == best_matches]
-    if len(tied) > 1:
-        return None, 0, 0.0
-
-    best_assembly = tied[0]
-    # Confidence based on number of matching contigs (not fraction of reference)
-    # 1 match = 0.80, 2 = 0.85, 3+ = 0.90, 5+ = 0.95
-    if best_matches >= 5:
-        best_confidence = 0.95
-    elif best_matches >= 3:
-        best_confidence = 0.90
-    elif best_matches >= 2:
-        best_confidence = 0.85
-    else:
-        best_confidence = 0.80
-    return best_assembly, best_matches, best_confidence
 
 
 # =============================================================================
@@ -621,6 +244,8 @@ def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
 
 def classify_from_header(
     header_text: str,
+    *,
+    file_name: str | None = None,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -727,6 +352,8 @@ def classify_from_header(
 
 def classify_from_vcf_header(
     header_text: str,
+    *,
+    file_name: str | None = None,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -796,8 +423,10 @@ def classify_from_vcf_header(
 
 def classify_from_fastq_header(
     reads: list[str],
+    *,
     file_name: str | None = None,
     file_size: int | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """
     Classify FASTQ file based on read names.
@@ -952,7 +581,10 @@ def _get_ref_chrom_names() -> set[str]:
 
 def classify_from_fasta_header(
     contig_names: list[str],
+    *,
     file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """
     Classify FASTA file based on contig/sequence names from > header lines.
