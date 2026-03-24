@@ -70,12 +70,11 @@ class TestRuleMatching:
         result = engine.classify(FileInfo(filename="sample.chm13.cram"))
         assert result.reference_assembly == "CHM13"
 
-    def test_size_heuristic_not_triggered_when_modality_set(self, engine):
-        """Size heuristic should not override explicit modality."""
+    def test_rna_filename_sets_modality_regardless_of_size(self, engine):
+        """RNA filename indicator should set transcriptomic modality."""
         result = engine.classify(
             FileInfo(filename="sample_RNA_aligned.bam", file_size=60_000_000_000)
         )
-        # RNA indicator should take precedence
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_alignment_needs_header_inspection(self, engine):

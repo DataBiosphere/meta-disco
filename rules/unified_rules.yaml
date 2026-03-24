@@ -502,9 +502,10 @@ rules:
     scope: filename
     when:
       extensions: [".bam", ".cram"]
-      filename_pattern: "(?i)\\.flnc\\.|isoseq|iso.seq"
+      filename_pattern: "(?i)\\.flnc\\.|isoseq|iso-seq"
     then:
       data_modality: transcriptomic.bulk
+      data_type: alignments
     confidence: 0.85
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
     terminal: false

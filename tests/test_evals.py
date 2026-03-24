@@ -292,12 +292,10 @@ class TestRuleEngineE2E:
         result = engine.classify_extended(FileInfo(filename="sample.isoseq.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
-    def test_pacbio_platform_no_modality(self):
-        """PacBio platform alone should not set data_modality."""
-        # Simulate a plain PacBio BAM with no other signals
+    def test_plain_bam_no_modality(self):
+        """BAM without header or platform signals should not get genomic modality."""
         result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
-        # Without header, no platform detected, so modality stays unset
-        assert result.data_modality != "genomic" or result.data_modality is None
+        assert result.data_modality == NOT_CLASSIFIED
 
     def test_plink_1000g(self):
         result = engine.classify_extended(
