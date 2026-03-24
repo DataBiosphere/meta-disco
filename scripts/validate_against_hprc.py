@@ -401,8 +401,17 @@ def main():
         except FileNotFoundError as exc:
             print(exc, file=sys.stderr)
             raise SystemExit(1)
-        print(f"Using run directory: {run_dir}")
+        print(f"Using AnVIL run directory: {run_dir}")
         input_paths = [run_dir / f for f in INPUT_FILENAMES]
+
+        # Also load HPRC-classified files if available
+        try:
+            hprc_run_dir = find_latest_run(Path("output/hprc"))
+            print(f"Using HPRC run directory: {hprc_run_dir}")
+            for f in sorted(hprc_run_dir.glob("*_classifications.json")):
+                input_paths.append(f)
+        except FileNotFoundError:
+            pass  # No HPRC classifications yet
 
     validate_against_hprc(
         input_paths, args.output, args.catalog_dir, args.fetch, args.limit

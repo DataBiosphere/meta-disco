@@ -356,7 +356,7 @@ SOURCE_INFO = {
         "link_label": "AnVIL Data Explorer",
         "url": "https://explore.anvilproject.org/",
     },
-    "HPRC (sequencing catalog)": {
+    "HPRC": {
         "text": "Validated against sequencing, alignment, and annotation catalogs from the",
         "link_label": "HPRC Data Explorer",
         "url": "https://data.humanpangenome.org/",
@@ -557,7 +557,7 @@ def main():
     if args.hprc_results.is_file():
         print("Loading HPRC validation results...")
         hprc_results = load_hprc_results(args.hprc_results)
-        all_results["HPRC (sequencing catalog)"] = hprc_results
+        all_results["HPRC"] = hprc_results
         print(f"  Matched: {hprc_results['matched']:,}, "
               f"Unmatched: {hprc_results['unmatched']:,}")
 

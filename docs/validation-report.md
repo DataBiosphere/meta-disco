@@ -6,7 +6,7 @@ Classification run: **2026-03-24 00:41:06**
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
 | AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
-| HPRC (sequencing catalog) | 5,852 | 4 | 10,241 | 0 |
+| HPRC | 5,872 | 4 | 11,928 | 5 |
 
 ---
 
@@ -105,7 +105,7 @@ AnVIL does not currently provide ground truth for assay type.
 
 ---
 
-## HPRC (sequencing catalog)
+## HPRC
 
 Validated against sequencing, alignment, and annotation catalogs from the [HPRC Data Explorer](https://data.humanpangenome.org/).
 
@@ -115,23 +115,23 @@ HPRC's open-access datasets currently populate the following genomic metadata di
 
 | Dimension | Files with dimension in HPRC |
 |---|---:|
-| Data Modality | 5,491 |
+| Data Modality | 5,511 |
 | Data Type | 0 |
-| Platform | 5,852 |
-| Reference Assembly | 4 |
-| Assay Type | 5,852 |
+| Platform | 5,872 |
+| Reference Assembly | 2,578 |
+| Assay Type | 5,872 |
 
 ### Data Modality Validation
 
-- **5,491** files available from HPRC with ground truth Data Modality
-- **2,012** files comparable (both source and rule engine have values)
+- **5,511** files available from HPRC with ground truth Data Modality
+- **2,032** files comparable (both source and rule engine have values)
 - **3,479** files not classified by rule engine
-- **2,012** inferred data modality values match HPRC
+- **2,032** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,491 files on HPRC with ground truth data modality, we inferred data modality values for 2,012 files. 3,479 files remain unclassifiable by the rule engine.
-Of the 2,012 inferred data modality values, 2,012 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
+Of the 5,511 files on HPRC with ground truth data modality, we inferred data modality values for 2,032 files. 3,479 files remain unclassifiable by the rule engine.
+Of the 2,032 inferred data modality values, 2,032 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
 ### Data Type Validation
 
@@ -146,38 +146,45 @@ HPRC does not currently provide ground truth for data type.
 
 ### Platform Validation
 
-- **5,852** files available from HPRC with ground truth Platform
-- **5,852** files comparable (both source and rule engine have values)
+- **5,872** files available from HPRC with ground truth Platform
+- **5,872** files comparable (both source and rule engine have values)
 - **0** files not classified by rule engine
-- **5,852** inferred platform values match HPRC
+- **5,872** inferred platform values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,852 files on HPRC with ground truth platform, we inferred platform values for 5,852 files. 0 files remain unclassifiable by the rule engine.
-Of the 5,852 inferred platform values, 5,852 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
+Of the 5,872 files on HPRC with ground truth platform, we inferred platform values for 5,872 files. 0 files remain unclassifiable by the rule engine.
+Of the 5,872 inferred platform values, 5,872 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
 
 ### Reference Assembly Validation
 
-- **4** files available from HPRC with ground truth Reference Assembly
-- **4** files comparable (both source and rule engine have values)
-- **0** files not classified by rule engine
-- **4** inferred reference assembly values match HPRC
-- **0** discrepancies
-- **100.0%** accuracy
+- **2,578** files available from HPRC with ground truth Reference Assembly
+- **1,636** files comparable (both source and rule engine have values)
+- **942** files not classified by rule engine
+- **1,631** inferred reference assembly values match HPRC
+- **5** discrepancies
+- **99.7%** accuracy
 
-Of the 4 files on HPRC with ground truth reference assembly, we inferred reference assembly values for 4 files. 0 files remain unclassifiable by the rule engine.
-Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and HPRC.
+Of the 2,578 files on HPRC with ground truth reference assembly, we inferred reference assembly values for 1,636 files. 942 files remain unclassifiable by the rule engine.
+Of the 1,636 inferred reference assembly values, 1,631 (99.7%) matched HPRC. There were 5 discrepancies (0.3%) in reference assembly between meta-disco and HPRC.
+
+#### Discrepancies
+
+| Count | Inferred | HPRC | Example |
+|---:|---|---|---|
+| 3 | GRCh38 | CHM13 | hprc-v1.0-mc-grch38-minaf.0.1.dist.old |
+| 2 | CHM13 | GRCh38 | hprc-v1.0-mc-chm13-minaf.0.1.min.old |
 
 ### Assay Type Validation
 
-- **5,852** files available from HPRC with ground truth Assay Type
-- **2,373** files comparable (both source and rule engine have values)
+- **5,872** files available from HPRC with ground truth Assay Type
+- **2,393** files comparable (both source and rule engine have values)
 - **3,479** files not classified by rule engine
-- **2,373** inferred assay type values match HPRC
+- **2,393** inferred assay type values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,852 files on HPRC with ground truth assay type, we inferred assay type values for 2,373 files. 3,479 files remain unclassifiable by the rule engine.
-Of the 2,373 inferred assay type values, 2,373 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
+Of the 5,872 files on HPRC with ground truth assay type, we inferred assay type values for 2,393 files. 3,479 files remain unclassifiable by the rule engine.
+Of the 2,393 inferred assay type values, 2,393 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
 
 
