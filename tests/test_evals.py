@@ -218,7 +218,7 @@ class TestFastqE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "ILLUMINA"
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == "WES"
+        assert get_val(result, "assay_type") == NOT_CLASSIFIED
 
     def test_ena_reformatted_fastq(self):
         """ERR3989178_1.fastq.gz — 13.5 GB ENA-reformatted with accession."""

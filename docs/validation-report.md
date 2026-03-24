@@ -1,12 +1,12 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-03-22 19:57:03**
+Classification run: **2026-03-23 20:19:32**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
 | AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
-| HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 0 |
+| HPRC (sequencing catalog) | 5,852 | 4 | 11,137 | 2,583 |
 
 ---
 
@@ -171,13 +171,20 @@ Of the 4 inferred reference assembly values, 4 (100.0%) matched HPRC. There were
 ### Assay Type Validation
 
 - **5,852** files available from HPRC with ground truth Assay Type
-- **3,269** files comparable (both source and rule engine have values)
-- **2,583** files not classified by rule engine
+- **5,852** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
 - **3,269** inferred assay type values match HPRC
-- **0** discrepancies
-- **100.0%** accuracy
+- **2,583** discrepancies
+- **55.9%** accuracy
 
-Of the 5,852 files on HPRC with ground truth assay type, we inferred assay type values for 3,269 files. 2,583 files remain unclassifiable by the rule engine.
-Of the 3,269 inferred assay type values, 3,269 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
+Of the 5,852 files on HPRC with ground truth assay type, we inferred assay type values for 5,852 files. 0 files remain unclassifiable by the rule engine.
+Of the 5,852 inferred assay type values, 3,269 (55.9%) matched HPRC. There were 2,583 discrepancies (44.1%) in assay type between meta-disco and HPRC.
+
+#### Discrepancies
+
+| Count | Inferred | HPRC | Example |
+|---:|---|---|---|
+| 2,447 | WES | Hi-C | NWM194a-1_S1_L004_R1_001.fastq.gz |
+| 136 | WGS | Hi-C | NA19043-2_S10i_L002_R2_001.fastq.gz |
 
 
