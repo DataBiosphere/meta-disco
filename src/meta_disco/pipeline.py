@@ -156,7 +156,12 @@ class ClassifyPipeline:
                 raise TypeError(
                     f"Expected JSON object with 'results' key, got {type(data).__name__}"
                 )
-            return data.get("results", data.get("files", data))
+            records = data.get("results") or data.get("files")
+            if records is None:
+                raise ValueError(
+                    "JSON object must contain a 'results' or 'files' key"
+                )
+            return records
 
     def _filter_records(self, records: list[dict]) -> list[dict]:
         """Filter to records matching file_type.extensions with valid MD5."""
