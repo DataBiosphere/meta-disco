@@ -59,7 +59,7 @@ def classify_sequencing_data(
     fastq_evidence.mkdir(parents=True, exist_ok=True)
 
     engine = RuleEngine()
-    records = catalog[:limit] if limit else catalog
+    records = catalog[:limit] if limit is not None else catalog
     results = []
     success = 0
     skipped = 0
@@ -82,7 +82,7 @@ def classify_sequencing_data(
             raw_data = fetch_bam_header(
                 bam_evidence, key, file_name=fn, use_cache=True, url=url,
             )
-            if raw_data:
+            if raw_data is not None:
                 classifications = classify_from_header(
                     raw_data, file_name=fn, file_size=file_size,
                     file_format=".cram" if fn.endswith(".cram") else ".bam",
@@ -92,7 +92,7 @@ def classify_sequencing_data(
                 fastq_evidence, key, file_name=fn,
                 is_gzipped=fn.endswith(".gz"), use_cache=True, url=url,
             )
-            if raw_data:
+            if raw_data is not None:
                 classifications = classify_from_fastq_header(
                     raw_data, file_name=fn, file_size=file_size,
                 )
@@ -125,7 +125,7 @@ def classify_assemblies(
     fasta_evidence = evidence_base / "fasta"
     fasta_evidence.mkdir(parents=True, exist_ok=True)
 
-    records = catalog[:limit] if limit else catalog
+    records = catalog[:limit] if limit is not None else catalog
     results = []
     success = 0
 
@@ -146,7 +146,7 @@ def classify_assemblies(
             is_gzipped=fn.endswith(".gz"), use_cache=True, url=url,
         )
 
-        if raw_data:
+        if raw_data is not None:
             classifications = classify_from_fasta_header(
                 raw_data, file_name=fn, file_size=file_size,
             )
