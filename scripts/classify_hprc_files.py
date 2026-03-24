@@ -51,7 +51,6 @@ def classify_sequencing_data(
     catalog: list[dict],
     evidence_base: Path,
     limit: int | None = None,
-    workers: int = 10,
 ) -> list[dict]:
     """Classify sequencing-data catalog files (BAM/FASTQ) by fetching headers."""
     bam_evidence = evidence_base / "bam"
@@ -59,6 +58,7 @@ def classify_sequencing_data(
     bam_evidence.mkdir(parents=True, exist_ok=True)
     fastq_evidence.mkdir(parents=True, exist_ok=True)
 
+    engine = RuleEngine()
     records = catalog[:limit] if limit else catalog
     results = []
     success = 0
@@ -99,7 +99,6 @@ def classify_sequencing_data(
         else:
             # FAST5, POD5, etc. — classify from filename only
             skipped += 1
-            engine = RuleEngine()
             result = engine.classify_extended(FileInfo(filename=fn, file_size=file_size))
             classifications = result.to_output_dict()
 
