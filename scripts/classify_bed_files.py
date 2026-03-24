@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Classify BED files using RuleEngine.
+"""Classify BED files using RuleEngine + coordinate-based reference detection.
 
 Uses rules from rules/unified_rules.yaml for:
 - modbam2bed/cpg/methylation -> epigenomic.methylation
@@ -8,6 +8,7 @@ Uses rules from rules/unified_rules.yaml for:
 - .regions.bed -> genomic
 - Assembly QC (hap1/2, flagger, switch, dip) -> N/A (derived)
 - Reference detection from filename patterns and dataset context
+- Reference detection from BED coordinate signals (coordinate elimination)
 """
 
 import argparse
@@ -18,17 +19,10 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
-from src.meta_disco.rule_engine import RuleEngine
+from src.meta_disco.header_classifier import classify_from_bed_signals
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
-
-# Import BED reference inference (from sibling script)
-sys.path.insert(0, str(Path(__file__).parent))
-try:
-    from fetch_bed_headers import infer_reference_from_coordinates
-except ImportError:
-    infer_reference_from_coordinates = None
 
 EVIDENCE_DIR = Path("data/evidence/bed")
 
@@ -36,7 +30,7 @@ EVIDENCE_DIR = Path("data/evidence/bed")
 def load_bed_reference_evidence() -> dict[str, dict]:
     """Load cached coordinate-based reference evidence for BED files.
 
-    Returns dict mapping md5sum -> {reference_assembly, confidence, rationale}.
+    Returns dict mapping md5sum -> evidence dict (with 'signals' key).
     Evidence is produced by scripts/fetch_bed_headers.py which reads actual
     BED file content from S3 and infers reference from chromosome coordinates.
     """
@@ -58,18 +52,6 @@ def load_bed_reference_evidence() -> dict[str, dict]:
                 continue
 
     return evidence
-
-
-def infer_reference_from_evidence(evi: dict) -> tuple[str | None, float, str]:
-    """Infer reference assembly from cached BED coordinate evidence."""
-    if infer_reference_from_coordinates is None:
-        return None, 0.0, "fetch_bed_headers not available"
-
-    signals = evi.get("signals", {})
-    if not signals or not signals.get("max_coordinates"):
-        return None, 0.0, ""
-
-    return infer_reference_from_coordinates(signals)
 
 
 def classify_bed_files(metadata_path: Path, output_path: Path):
@@ -95,7 +77,6 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     ref_evidence = load_bed_reference_evidence()
     print(f"Loaded {len(ref_evidence):,} BED coordinate evidence files")
 
-    engine = RuleEngine()
     results = []
     stats = {
         "total": 0,
@@ -103,54 +84,28 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         "with_reference": 0,
         "by_modality": {},
         "by_reference": {},
-        "by_rule": {},
     }
 
     for f in bed_files:
         name = f.get("file_name", "")
         dataset_title = f.get("dataset_title", "")
+        md5 = f.get("file_md5sum")
         stats["total"] += 1
 
-        # Classify using RuleEngine (tier 1-2: extension + filename patterns)
-        file_info = FileInfo(
-            filename=name,
+        # Get coordinate signals from cached evidence
+        signals = ref_evidence.get(md5, {}).get("signals", {}) if md5 else {}
+
+        # Classify using unified classifier (rule engine + coordinate detection)
+        classifications = classify_from_bed_signals(
+            signals,
+            file_name=name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
         )
-        result = engine.classify_extended(file_info)
-
-        # Overlay coordinate-based reference from cached evidence
-        # This replaces the old dataset_t2t_reference rule with actual
-        # file content inspection (chromosome coordinates)
-        md5 = f.get("file_md5sum")
-        coord_ref = None
-        coord_conf = 0.0
-        coord_rationale = ""
-        if md5 and md5 in ref_evidence:
-            coord_ref, coord_conf, coord_rationale = infer_reference_from_evidence(ref_evidence[md5])
-
-        # Apply coordinate reference if it's better than what rules found
-        if coord_ref and coord_conf > 0:
-            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > result.confidence:
-                result.reference_assembly = coord_ref
-                result.confidence = max(result.confidence, coord_conf)
-                result.field_evidence["reference_assembly"] = [{
-                    "rule_id": "bed_coordinate_reference",
-                    "reason": coord_rationale,
-                    "confidence": coord_conf,
-                }]
-        elif md5 and md5 in ref_evidence and coord_ref is None and coord_conf == 0:
-            if "Non-standard chromosome" in coord_rationale:
-                result.reference_assembly = NOT_APPLICABLE
-                result.field_evidence["reference_assembly"] = [{
-                    "rule_id": "bed_nonstandard_contigs",
-                    "reason": coord_rationale,
-                    "confidence": 0.0,
-                }]
 
         # Update stats
-        data_modality = result.data_modality
-        reference_assembly = result.reference_assembly
+        data_modality = classifications.get("data_modality", {}).get("value")
+        reference_assembly = classifications.get("reference_assembly", {}).get("value")
 
         if data_modality and data_modality not in _SENTINEL_VALUES:
             stats["with_modality"] += 1
@@ -160,18 +115,15 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             stats["with_reference"] += 1
         stats["by_reference"][reference_assembly or "N/A"] = stats["by_reference"].get(reference_assembly or "N/A", 0) + 1
 
-        for rule_id in result.rules_matched:  # computed property, read-only
-            stats["by_rule"][rule_id] = stats["by_rule"].get(rule_id, 0) + 1
-
         results.append({
             "file_name": name,
             "file_format": f.get("file_format"),
-            "md5sum": f.get("file_md5sum"),
+            "md5sum": md5,
             "file_size": f.get("file_size"),
             "entry_id": f.get("entry_id"),
             "dataset_id": f.get("dataset_id"),
             "dataset_title": dataset_title,
-            "classifications": result.to_output_dict(),
+            "classifications": classifications,
         })
 
     # Print summary
@@ -191,10 +143,6 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     print("\nBy reference:")
     for ref, count in sorted(stats["by_reference"].items(), key=lambda x: -x[1]):
         print(f"  {ref}: {count:,}")
-
-    print("\nBy rule matched:")
-    for rule, count in sorted(stats["by_rule"].items(), key=lambda x: -x[1]):
-        print(f"  {rule}: {count:,}")
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
