@@ -70,15 +70,6 @@ class TestRuleMatching:
         result = engine.classify(FileInfo(filename="sample.chm13.cram"))
         assert result.reference_assembly == "CHM13"
 
-    def test_size_heuristic_wgs(self, engine):
-        """Large BAM file should suggest WGS."""
-        result = engine.classify(
-            FileInfo(filename="sample.bam", file_size=60_000_000_000)
-        )
-        assert result.data_modality == "genomic"
-        assert result.confidence >= 0.60
-        assert "alignment_size_wgs" in result.rules_matched
-
     def test_size_heuristic_not_triggered_when_modality_set(self, engine):
         """Size heuristic should not override explicit modality."""
         result = engine.classify(
@@ -386,17 +377,13 @@ class TestSentinelValues:
         assert result.reference_assembly == NOT_APPLICABLE
         assert result.platform == "ONT"
 
-    def test_modality_not_set_ignores_sentinel(self, engine):
-        """modality_not_set guard should treat NOT_CLASSIFIED as 'not set',
-        allowing rules to fire on files where no earlier rule set modality."""
-        # An unknown file type gets not_classified for modality from finalization.
-        # If we then re-run with additional info, modality_not_set rules should still fire.
+    def test_bam_without_header_not_classified(self, engine):
+        """BAM without header should leave modality as not_classified."""
         result = engine.classify_extended(
             ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)
         )
-        # BAM gets 'genomic' from a fallback rule, and size heuristic confirms WGS
-        assert result.data_modality in ("genomic", "genomic.whole_genome")
-        assert "alignment_size_wgs" in result.rules_matched
+        # No header = no modality evidence, even for large files
+        assert result.data_modality == NOT_CLASSIFIED
 
     def test_png_all_fields_not_applicable(self, engine):
         """PNG files should get not_applicable for all non-applicable fields."""

@@ -497,6 +497,18 @@ rules:
     rationale: "Filename contains RNA-seq indicator"
     terminal: false
 
+  - id: alignment_isoseq_filename
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bam", ".cram"]
+      filename_pattern: "(?i)\\.flnc\\.|isoseq|iso.seq"
+    then:
+      data_modality: transcriptomic.bulk
+    confidence: 0.85
+    rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
+    terminal: false
+
   - id: alignment_scrna_filename
     tier: 2
     scope: filename
@@ -1023,20 +1035,6 @@ rules:
   # TIER 2.5: FILE SIZE HEURISTICS
   # ===========================================================================
 
-  - id: alignment_size_wgs
-    tier: 2
-    scope: file_size
-    when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
-      file_size_min_gb: 50
-      modality_not_set: true
-    then:
-      data_modality: genomic
-      data_type: alignments
-      assay_type: WGS
-    confidence: 0.60
-    rationale: "Large alignment file (>50GB) suggests WGS"
-    terminal: false
 
   # NOTE: Platform-dependent assay_type size rules live in assay_type_rules
   # (post-hoc inference), not here. Platform is set by tier 3 header rules,
@@ -1059,9 +1057,8 @@ rules:
       header_pattern: "PACBIO"
     then:
       platform: PACBIO
-      data_modality: genomic
     confidence: 0.70
-    rationale: "PL:PACBIO indicates PacBio long-read sequencing. PacBio is primarily used for whole genome sequencing, structural variant detection, and de novo assembly due to its long read lengths (10-25kb average for HiFi)"
+    rationale: "PL:PACBIO indicates PacBio long-read sequencing"
     terminal: false
 
   - id: platform_illumina
@@ -1088,9 +1085,8 @@ rules:
       header_pattern: "ONT"
     then:
       platform: ONT
-      data_modality: genomic
     confidence: 0.70
-    rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing. ONT is primarily used for whole genome sequencing, structural variants, and direct RNA sequencing"
+    rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing"
     terminal: false
 
   - id: platform_ont_alt
@@ -1103,7 +1099,6 @@ rules:
       header_pattern: "NANOPORE"
     then:
       platform: ONT
-      data_modality: genomic
     confidence: 0.70
     rationale: "Alternative platform identifier for Oxford Nanopore Technology"
     terminal: false
@@ -1281,11 +1276,9 @@ rules:
       header_field: "PN"
       header_pattern: "ccs"
     then:
-      data_modality: genomic
       platform: PACBIO
-      assay_type: WGS
     confidence: 0.85
-    rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio HiFi data"
+    rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq)"
     terminal: false
 
   - id: program_isoseq

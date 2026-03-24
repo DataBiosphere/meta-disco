@@ -54,25 +54,24 @@ CONVERGENT_RULES = [
         signal_a="platform_pacbio",
         signal_b="pacbio_hifi",
         relationship="convergent",
-        expected_agreement="genomic",
-        rationale="PL:PACBIO and READTYPE=CCS both indicate PacBio HiFi sequencing, "
-                  "which is used for whole genome sequencing. These signals reinforce each other."
+        expected_agreement="PACBIO",
+        rationale="PL:PACBIO and READTYPE=CCS both confirm PacBio HiFi platform."
     ),
     ConsistencyRule(
         id="pacbio_platform_ccs_program",
         signal_a="platform_pacbio",
         signal_b="program_ccs",
         relationship="convergent",
-        expected_agreement="genomic",
-        rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi data generation."
+        expected_agreement="PACBIO",
+        rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi platform."
     ),
     ConsistencyRule(
         id="pacbio_hifi_ccs_program",
         signal_a="pacbio_hifi",
         signal_b="program_ccs",
         relationship="convergent",
-        expected_agreement="genomic",
-        rationale="READTYPE=CCS and PN:ccs both indicate HiFi consensus calling was performed."
+        expected_agreement="PACBIO",
+        rationale="READTYPE=CCS and PN:ccs both confirm PacBio HiFi platform."
     ),
     ConsistencyRule(
         id="illumina_bwa",
@@ -324,15 +323,6 @@ def classify_from_header(
 
     # Apply confidence boost/penalty from consistency
     final_confidence = min(1.0, max(0.0, result.confidence + consistency["confidence_boost"]))
-
-    # Default to genomic if platform detected but no modality
-    if result.data_modality in (None, NOT_CLASSIFIED) and result.platform not in (None, NOT_CLASSIFIED):
-        result.data_modality = "genomic"
-        result.field_evidence["data_modality"].append({
-            "rule_id": "platform_default_genomic",
-            "reason": "Platform detected but no modality — defaulting to genomic",
-            "confidence": 0.5,
-        })
 
     # Apply inferred assay type only if not already set by a rule
     if assay_type and result.assay_type in (None, NOT_CLASSIFIED):
