@@ -121,13 +121,16 @@ def fetch_bam_header(
 
         header_text = result.stdout
         if header_text:
-            save_evidence(evidence_dir, md5sum, {
+            evidence = {
                 "md5sum": md5sum,
                 "file_name": file_name,
                 "header_text": header_text,
                 "header_line_count": len(header_text.split('\n')),
                 "fetch_timestamp": _timestamp(),
-            })
+            }
+            if url:
+                evidence["source_url"] = url
+            save_evidence(evidence_dir, md5sum, evidence)
 
         return header_text
     except subprocess.TimeoutExpired:
@@ -227,6 +230,8 @@ def fetch_vcf_header(
             }
             if max_positions:
                 evidence["max_positions"] = max_positions
+            if url:
+                evidence["source_url"] = url
             save_evidence(evidence_dir, md5sum, evidence)
             return header_text
 
@@ -285,13 +290,16 @@ def fetch_fastq_reads(
                 i += 1
 
         if read_names:
-            save_evidence(evidence_dir, md5sum, {
+            evidence = {
                 "md5sum": md5sum,
                 "file_name": file_name,
                 "read_names": read_names,
                 "raw_bytes_fetched": raw_bytes,
                 "fetch_timestamp": _timestamp(),
-            })
+            }
+            if url:
+                evidence["source_url"] = url
+            save_evidence(evidence_dir, md5sum, evidence)
 
         return read_names if read_names else None
 
@@ -343,14 +351,17 @@ def fetch_fasta_headers(
                 if name:
                     contig_names.append(name)
 
-        save_evidence(evidence_dir, md5sum, {
+        evidence = {
             "md5sum": md5sum,
             "file_name": file_name,
             "contig_names": contig_names,
             "contig_count": len(contig_names),
             "raw_bytes_fetched": raw_bytes,
             "fetch_timestamp": _timestamp(),
-        })
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
 
         return contig_names
 
