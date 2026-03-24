@@ -451,6 +451,8 @@ class RuleEngine:
                         and current is not None
                         and current != NOT_CLASSIFIED
                         and current != NOT_APPLICABLE
+                        and new_val != NOT_CLASSIFIED
+                        and new_val != NOT_APPLICABLE
                         and current != new_val):
                     setattr(result, fld, NOT_CLASSIFIED)
                     result.field_evidence[fld].append({
