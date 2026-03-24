@@ -362,33 +362,16 @@ def print_summary(classifications: list[dict]):
         return
 
     refs = defaultdict(int)
-    confidences = []
     for c in classifications:
-        ref = c.get("reference_assembly") or "not_classified"
-        refs[ref] += 1
-        confidences.append(c.get("confidence", 0))
+        cls = c.get("classifications", {})
+        ref_entry = cls.get("reference_assembly", {})
+        ref = ref_entry.get("value") if isinstance(ref_entry, dict) else "not_classified"
+        refs[ref or "not_classified"] += 1
 
     print(f"\nTotal: {len(classifications)}")
     print("\nReference assemblies:")
     for ref, count in sorted(refs.items(), key=lambda x: -x[1]):
         print(f"  {ref:<20} {count:>6} ({100*count/len(classifications):.1f}%)")
-
-    high = sum(1 for c in confidences if c >= 0.85)
-    med = sum(1 for c in confidences if 0.7 <= c < 0.85)
-    low = sum(1 for c in confidences if 0 < c < 0.7)
-    none = sum(1 for c in confidences if c == 0)
-    print("\nConfidence:")
-    print(f"  High (>=85%):  {high}")
-    print(f"  Medium (70-84%): {med}")
-    print(f"  Low (<70%):    {low}")
-    print(f"  None:          {none}")
-
-    # Show samples
-    print("\nSample classifications (first 5):")
-    for c in classifications[:5]:
-        print(f"  {c['file_name']}")
-        print(f"    ref={c.get('reference_assembly')}  conf={c.get('confidence', 0):.0%}")
-        print(f"    {c.get('rationale', '')[:80]}")
 
     print("=" * 70)
 

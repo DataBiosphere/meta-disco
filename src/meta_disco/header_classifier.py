@@ -917,7 +917,12 @@ def classify_from_bed_signals(
         coord_ref, coord_conf, coord_rationale = _infer_bed_reference(signals)
 
         if coord_ref and coord_conf > 0:
-            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > result.confidence:
+            existing_ref_evidence = result.field_evidence.get("reference_assembly") or []
+            existing_ref_conf = max(
+                (ev.get("confidence", 0.0) for ev in existing_ref_evidence),
+                default=0.0,
+            )
+            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > existing_ref_conf:
                 result.reference_assembly = coord_ref
                 result.confidence = max(result.confidence, coord_conf)
                 result.field_evidence["reference_assembly"] = [{
