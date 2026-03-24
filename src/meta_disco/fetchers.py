@@ -54,11 +54,14 @@ def _timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60) -> bytes | None:
-    """Fetch bytes 0 through end_byte (inclusive) from S3 mirror. Returns raw bytes or None."""
-    url = f"{S3_MIRROR_URL}/{md5sum}.md5"
+def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes | None:
+    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes or None.
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    """
+    fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
-    resp = requests.get(url, headers=headers, timeout=timeout)
+    resp = requests.get(fetch_url, headers=headers, timeout=timeout)
     if resp.status_code not in [200, 206]:
         return None
     return resp.content
@@ -92,10 +95,12 @@ def fetch_bam_header(
     md5sum: str,
     file_name: str = "",
     use_cache: bool = True,
+    url: str | None = None,
     **kwargs,
 ) -> str | None:
-    """Read BAM/CRAM header from S3 mirror using samtools.
+    """Read BAM/CRAM header from S3 using samtools.
 
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
     Returns raw SAM header text or None.
     """
     if use_cache:
@@ -103,10 +108,10 @@ def fetch_bam_header(
         if cached and cached.get("header_text"):
             return cached["header_text"]
 
-    url = f"{S3_MIRROR_URL}/{md5sum}.md5"
+    fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     try:
         result = subprocess.run(
-            ["samtools", "view", "-H", url],
+            ["samtools", "view", "-H", fetch_url],
             capture_output=True,
             text=True,
             timeout=120,
@@ -116,13 +121,16 @@ def fetch_bam_header(
 
         header_text = result.stdout
         if header_text:
-            save_evidence(evidence_dir, md5sum, {
+            evidence = {
                 "md5sum": md5sum,
                 "file_name": file_name,
                 "header_text": header_text,
                 "header_line_count": len(header_text.split('\n')),
                 "fetch_timestamp": _timestamp(),
-            })
+            }
+            if url:
+                evidence["source_url"] = url
+            save_evidence(evidence_dir, md5sum, evidence)
 
         return header_text
     except subprocess.TimeoutExpired:
@@ -177,10 +185,12 @@ def fetch_vcf_header(
     file_name: str = "",
     is_gzipped: bool = True,
     use_cache: bool = True,
+    url: str | None = None,
     **kwargs,
 ) -> str | None:
-    """Read VCF header from S3 mirror via range request.
+    """Read VCF header from S3 via range request.
 
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
     Returns header text (lines starting with #) or None.
     """
     if use_cache:
@@ -189,7 +199,7 @@ def fetch_vcf_header(
             return cached["header_text"]
 
     try:
-        content = _fetch_range(md5sum, 1048576, timeout=60)  # 1MB
+        content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
         if content is None:
             return None
         raw_bytes = len(content)
@@ -220,6 +230,8 @@ def fetch_vcf_header(
             }
             if max_positions:
                 evidence["max_positions"] = max_positions
+            if url:
+                evidence["source_url"] = url
             save_evidence(evidence_dir, md5sum, evidence)
             return header_text
 
@@ -244,10 +256,12 @@ def fetch_fastq_reads(
     is_gzipped: bool = True,
     num_reads: int = 10,
     use_cache: bool = True,
+    url: str | None = None,
     **kwargs,
 ) -> list[str] | None:
     """Read first N read names from a FASTQ file on S3.
 
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
     Returns list of read name lines (starting with @) or None.
     """
     if use_cache:
@@ -256,7 +270,7 @@ def fetch_fastq_reads(
             return cached["read_names"]
 
     try:
-        content = _fetch_range(md5sum, 262144, timeout=60)  # 256KB
+        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
         if content is None:
             return None
         raw_bytes = len(content)
@@ -276,13 +290,16 @@ def fetch_fastq_reads(
                 i += 1
 
         if read_names:
-            save_evidence(evidence_dir, md5sum, {
+            evidence = {
                 "md5sum": md5sum,
                 "file_name": file_name,
                 "read_names": read_names,
                 "raw_bytes_fetched": raw_bytes,
                 "fetch_timestamp": _timestamp(),
-            })
+            }
+            if url:
+                evidence["source_url"] = url
+            save_evidence(evidence_dir, md5sum, evidence)
 
         return read_names if read_names else None
 
@@ -304,10 +321,12 @@ def fetch_fasta_headers(
     file_name: str = "",
     is_gzipped: bool = True,
     use_cache: bool = True,
+    url: str | None = None,
     **kwargs,
 ) -> list[str] | None:
     """Read contig names from a FASTA file on S3.
 
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
     Returns list of contig names (from > header lines, without >) or None.
     """
     if use_cache:
@@ -316,7 +335,7 @@ def fetch_fasta_headers(
             return cached["contig_names"]
 
     try:
-        content = _fetch_range(md5sum, 262144, timeout=60)  # 256KB
+        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
         if content is None:
             return None
         raw_bytes = len(content)
@@ -332,14 +351,17 @@ def fetch_fasta_headers(
                 if name:
                     contig_names.append(name)
 
-        save_evidence(evidence_dir, md5sum, {
+        evidence = {
             "md5sum": md5sum,
             "file_name": file_name,
             "contig_names": contig_names,
             "contig_count": len(contig_names),
             "raw_bytes_fetched": raw_bytes,
             "fetch_timestamp": _timestamp(),
-        })
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
 
         return contig_names
 

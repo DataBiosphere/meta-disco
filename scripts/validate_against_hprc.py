@@ -12,7 +12,7 @@ Usage:
     python scripts/validate_against_hprc.py --catalog-dir data/hprc
     python scripts/validate_against_hprc.py --fetch --limit 100
 
-Output saved to: output/anvil/hprc_validation_results.json
+Output saved to: output/hprc/hprc_validation_results.json
 """
 
 import argparse
@@ -339,15 +339,6 @@ def validate_against_hprc(
     return dim_results
 
 
-INPUT_FILENAMES = [
-    "bam_classifications.json",
-    "fastq_classifications.json",
-    "bed_classifications.json",
-    "auxiliary_classifications.json",
-    "fasta_classifications.json",
-]
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Validate classifications against HPRC catalogs"
@@ -358,19 +349,13 @@ def main():
         type=Path,
         nargs="+",
         default=None,
-        help="Input classification files (default: auto-detect from latest run)",
-    )
-    parser.add_argument(
-        "--run-dir",
-        type=Path,
-        default=None,
-        help="Classification run directory (default: latest timestamped dir)",
+        help="Input classification files (default: auto-detect from latest HPRC run)",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/hprc_validation_results.json"),
+        default=Path("output/hprc/hprc_validation_results.json"),
         help="Output file",
     )
     parser.add_argument(
@@ -397,12 +382,13 @@ def main():
         input_paths = args.input
     else:
         try:
-            run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
+            hprc_run_dir = find_latest_run(Path("output/hprc"))
         except FileNotFoundError as exc:
             print(exc, file=sys.stderr)
+            print("Run 'make classify-hprc' first.", file=sys.stderr)
             raise SystemExit(1)
-        print(f"Using run directory: {run_dir}")
-        input_paths = [run_dir / f for f in INPUT_FILENAMES]
+        print(f"Using HPRC run directory: {hprc_run_dir}")
+        input_paths = [f for f in sorted(hprc_run_dir.glob("*_classifications.json"))]
 
     validate_against_hprc(
         input_paths, args.output, args.catalog_dir, args.fetch, args.limit

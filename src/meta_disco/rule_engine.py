@@ -68,6 +68,7 @@ class ExtendedClassificationResult:
         "_general": [],  # Rules that don't set a specific classification field
     })
     skip: bool = False
+    _conflicted_fields: set = field(default_factory=set)
     needs_header_inspection: bool = False
     needs_study_context: bool = False
     needs_manual_review: bool = False
@@ -443,8 +444,33 @@ class RuleEngine:
         set_any_field = False
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
-                setattr(result, fld, then[fld])
-                result.field_evidence[fld].append(evidence_entry.copy())
+                current = getattr(result, fld)
+                new_val = then[fld]
+
+                # Skip fields already marked as conflicted
+                if fld in result._conflicted_fields:
+                    continue
+
+                # Detect conflicting reference_assembly values (e.g., filename
+                # contains both "hg38" and "chm13" — ambiguous liftover/comparison)
+                if (fld == "reference_assembly"
+                        and current is not None
+                        and current != NOT_CLASSIFIED
+                        and current != NOT_APPLICABLE
+                        and new_val != NOT_CLASSIFIED
+                        and new_val != NOT_APPLICABLE
+                        and current != new_val):
+                    setattr(result, fld, NOT_CLASSIFIED)
+                    result._conflicted_fields.add(fld)
+                    result.field_evidence[fld] = [{
+                        "rule_id": "conflicting_reference_rules",
+                        "reason": (f"Conflicting references: '{current}' vs '{new_val}' "
+                                   f"(from {rule.id}) — ambiguous"),
+                        "confidence": 0.0,
+                    }]
+                else:
+                    setattr(result, fld, new_val)
+                    result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 
         # Rules that don't set classification fields (skip, needs_*, etc.)

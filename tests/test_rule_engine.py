@@ -295,6 +295,32 @@ class TestIntegration:
         assert result.needs_manual_review is True
 
 
+class TestConflictingReferenceRules:
+    """Test that conflicting reference_assembly rules produce not_classified."""
+
+    def test_ambiguous_filename_two_refs(self, engine):
+        """Filename with both CHM13 and hg38 should be not_classified."""
+        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        assert result.reference_assembly == NOT_CLASSIFIED
+
+    def test_liftover_chain_two_refs(self, engine):
+        """Liftover chain with two references should be not_classified."""
+        result = engine.classify_extended(FileInfo(filename="liftover.hg19.to.hg38.chain"))
+        assert result.reference_assembly == NOT_CLASSIFIED
+
+    def test_single_ref_not_affected(self, engine):
+        """Single reference in filename should still work."""
+        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bed"))
+        assert result.reference_assembly == "GRCh38"
+
+    def test_conflict_evidence_recorded(self, engine):
+        """Conflict should produce evidence with conflicting_reference_rules."""
+        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        ref_evidence = result.field_evidence.get("reference_assembly", [])
+        rule_ids = [e["rule_id"] for e in ref_evidence]
+        assert "conflicting_reference_rules" in rule_ids
+
+
 class TestReasonChain:
     """Test that reason chains are properly built."""
 
