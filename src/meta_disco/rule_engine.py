@@ -455,12 +455,12 @@ class RuleEngine:
                         and new_val != NOT_APPLICABLE
                         and current != new_val):
                     setattr(result, fld, NOT_CLASSIFIED)
-                    result.field_evidence[fld].append({
+                    result.field_evidence[fld] = [{
                         "rule_id": "conflicting_reference_rules",
                         "reason": (f"Conflicting references: '{current}' vs '{new_val}' "
                                    f"(from {rule.id}) — ambiguous"),
                         "confidence": 0.0,
-                    })
+                    }]
                 else:
                     setattr(result, fld, new_val)
                     result.field_evidence[fld].append(evidence_entry.copy())
