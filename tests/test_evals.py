@@ -245,6 +245,7 @@ class TestFastqE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
         assert get_val(result, "data_modality") == NOT_CLASSIFIED
+        assert get_val(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WGS inference
 
     def test_mgi_fastq(self):
         """MGI/BGI platform FASTQ — 32.3 GB."""

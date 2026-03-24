@@ -24,9 +24,6 @@
     .tab.active { color: #24292f; background: #fff; border-color: #d0d7de; border-radius: 6px 6px 0 0; font-weight: 600; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .legend { display: flex; gap: 20px; margin: 16px 0; font-size: 13px; }
-    .legend-item { display: flex; align-items: center; gap: 6px; }
-    .legend-swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
     .disc-table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     .disc-table th, .disc-table td { border: 1px solid #d0d7de; padding: 6px 10px; text-align: left; font-size: 13px; }
     .disc-table th { background: #f6f8fa; }
@@ -44,12 +41,6 @@
 
   <div class="summary-grid" id="summary-cards"></div>
 
-  <div class="legend">
-    <div class="legend-item"><span class="legend-swatch" style="background: #2da44e;"></span> Agree</div>
-    <div class="legend-item"><span class="legend-swatch" style="background: #cf222e;"></span> Discrepancy</div>
-    <div class="legend-item"><span class="legend-swatch" style="background: #bf8700;"></span> No Ground Truth</div>
-    <div class="legend-item"><span class="legend-swatch" style="background: #d0d7de;"></span> We Missed</div>
-  </div>
 
   <div class="tab-bar" id="tab-bar"></div>
   <div id="tab-contents"></div>
