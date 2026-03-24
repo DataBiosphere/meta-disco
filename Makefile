@@ -1,4 +1,4 @@
-.PHONY: test lint classify download classify-bam classify-vcf classify-fastq classify-fasta classify-headers classify-bed report validate-report reports download-hprc validate-hprc clean help
+.PHONY: test lint classify classify-all download classify-bam classify-vcf classify-fastq classify-fasta classify-headers classify-bed report validate-report reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -6,6 +6,7 @@ help:
 	@echo "  make test            Run all tests"
 	@echo "  make lint            Run ruff linter"
 	@echo "  make classify        Run full classification pipeline (all file types, parallel)"
+	@echo "  make classify-all    Run classify + regenerate all reports"
 	@echo "  make download        Download fresh AnVIL metadata from API"
 	@echo ""
 	@echo "  make classify-bam    Classify BAM/CRAM files (network required)"
@@ -30,6 +31,8 @@ lint:
 
 classify:
 	python scripts/rerun_all_classifications.py
+
+classify-all: classify reports
 
 download:
 	python scripts/download_anvil_metadata.py
