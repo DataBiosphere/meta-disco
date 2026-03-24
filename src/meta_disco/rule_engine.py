@@ -68,6 +68,7 @@ class ExtendedClassificationResult:
         "_general": [],  # Rules that don't set a specific classification field
     })
     skip: bool = False
+    _conflicted_fields: set = field(default_factory=set)
     needs_header_inspection: bool = False
     needs_study_context: bool = False
     needs_manual_review: bool = False
@@ -445,6 +446,11 @@ class RuleEngine:
             if fld in then and then[fld] is not None:
                 current = getattr(result, fld)
                 new_val = then[fld]
+
+                # Skip fields already marked as conflicted
+                if fld in result._conflicted_fields:
+                    continue
+
                 # Detect conflicting reference_assembly values (e.g., filename
                 # contains both "hg38" and "chm13" — ambiguous liftover/comparison)
                 if (fld == "reference_assembly"
@@ -455,6 +461,7 @@ class RuleEngine:
                         and new_val != NOT_APPLICABLE
                         and current != new_val):
                     setattr(result, fld, NOT_CLASSIFIED)
+                    result._conflicted_fields.add(fld)
                     result.field_evidence[fld] = [{
                         "rule_id": "conflicting_reference_rules",
                         "reason": (f"Conflicting references: '{current}' vs '{new_val}' "
