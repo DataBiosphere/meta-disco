@@ -461,7 +461,7 @@ class RuleEngine:
                     })
                 else:
                     setattr(result, fld, new_val)
-                result.field_evidence[fld].append(evidence_entry.copy())
+                    result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 
         # Rules that don't set classification fields (skip, needs_*, etc.)

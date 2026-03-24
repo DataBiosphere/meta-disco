@@ -71,7 +71,7 @@ def classify_sequencing_data(
         s3_path = rec.get("path", "")
         url = s3_to_https(s3_path) if s3_path else None
         key = filename_key(fn)
-        file_size = rec.get("totalBases")
+        file_size = rec.get("fileSize")  # not available in sequencing catalog
 
         if (i + 1) % 100 == 0 or i == 0:
             print(f"  [{i+1}/{len(records)}] {fn[:50]}", flush=True)
