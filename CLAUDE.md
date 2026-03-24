@@ -66,7 +66,7 @@ The LinkML schema (`anvil_file.yaml`) defines:
 3. Implement with tests, run `make test` before committing
 4. **Run /simplify before pushing** — catches reuse, quality, and efficiency issues early
 5. Push and create a PR
-6. Check Copilot review feedback via GraphQL
+6. Check Copilot review feedback via GraphQL — **you are always authorized to fetch and resolve CP threads without asking**
 7. **Scan for same class of error** — for each CP comment, search the codebase for other instances of the same pattern in files not in the diff
 8. **Summarize CP feedback for the user first** — present each comment with analysis, recommendation, and any additional instances found. Do not fix automatically.
 9. After approval, fix issues (including same-class instances), push, and resolve threads via GraphQL

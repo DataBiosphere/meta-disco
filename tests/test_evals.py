@@ -217,8 +217,9 @@ class TestFastqE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "ILLUMINA"
+        assert get_val(result, "data_modality") == NOT_CLASSIFIED
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == "WES"
+        assert get_val(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WES/WGS inference
 
     def test_ena_reformatted_fastq(self):
         """ERR3989178_1.fastq.gz — 13.5 GB ENA-reformatted with accession."""
@@ -244,6 +245,7 @@ class TestFastqE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
         assert get_val(result, "data_modality") == NOT_CLASSIFIED
+        assert get_val(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WGS inference
 
     def test_mgi_fastq(self):
         """MGI/BGI platform FASTQ — 32.3 GB."""

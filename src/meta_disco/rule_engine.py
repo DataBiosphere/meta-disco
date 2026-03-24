@@ -496,6 +496,11 @@ class RuleEngine:
                 if modality_contains not in result.data_modality:
                     continue
 
+            # Check data_modality exact match condition
+            if modality := conditions.get("data_modality"):
+                if result.data_modality != modality:
+                    continue
+
             # Check platform condition
             if platform := conditions.get("platform"):
                 if result.platform != platform:

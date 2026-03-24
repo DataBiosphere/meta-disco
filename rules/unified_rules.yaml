@@ -2340,12 +2340,14 @@ assay_type_rules:
   - id: wgs_longread
     priority: 80
     conditions:
+      data_modality: genomic
       platform_in: [PACBIO, ONT]
     assay_type: WGS
 
   - id: wgs_illumina_bam_large
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format_not: ".cram"
       file_size_gb_gt: 50
@@ -2354,6 +2356,7 @@ assay_type_rules:
   - id: wgs_illumina_bam_medium
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format_not: ".cram"
       file_size_gb_gt: 20
@@ -2363,6 +2366,7 @@ assay_type_rules:
   - id: wes_illumina_bam_small
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format_not: ".cram"
       file_size_gb_lt: 20
@@ -2371,6 +2375,7 @@ assay_type_rules:
   - id: wgs_illumina_cram_large
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format: ".cram"
       file_size_gb_gt: 20
@@ -2379,6 +2384,7 @@ assay_type_rules:
   - id: wgs_illumina_cram_medium
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format: ".cram"
       file_size_gb_gt: 8
@@ -2388,6 +2394,7 @@ assay_type_rules:
   - id: wes_illumina_cram_small
     priority: 50
     conditions:
+      data_modality: genomic
       platform: ILLUMINA
       file_format: ".cram"
       file_size_gb_lt: 8
