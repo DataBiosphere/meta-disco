@@ -1,4 +1,4 @@
-"""BAM/CRAM, VCF, FASTQ, and FASTA header-based classification.
+"""BAM/CRAM, VCF, FASTQ, FASTA, and BED header-based classification.
 
 This module provides functions to classify sequencing files based on their headers.
 The actual classification rules are defined in rules/unified_rules.yaml and executed
@@ -283,7 +283,7 @@ def classify_from_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         bam_header=header_text,
     )
 
@@ -388,7 +388,7 @@ def classify_from_vcf_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         vcf_header=header_text,
     )
 
@@ -486,7 +486,7 @@ def classify_from_fastq_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         fastq_first_read=first_read,
     )
 
@@ -765,9 +765,186 @@ def classify_from_fasta_header(
     return result.to_output_dict()
 
 
+# =============================================================================
+# BED COORDINATE-BASED CLASSIFICATION
+# =============================================================================
+
+_STANDARD_CHROM_PATTERN = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
+
+
+def _pick_closest_reference(
+    max_coords: dict[str, int],
+    ref_lengths: dict[str, dict[str, int]],
+    candidates: list[str],
+) -> str | None:
+    """Pick the reference whose chromosome lengths best match observed max coordinates.
+
+    When max coordinates don't rule out multiple references, we pick the one where
+    coordinates come closest to (but don't exceed) the chromosome lengths. Files
+    covering the full chromosome will have max coordinates near the chromosome length.
+    """
+    scores = {}
+    for assembly in candidates:
+        chrom_lengths = ref_lengths[assembly]
+        score = 0
+        matched = 0
+
+        for chrom, max_coord in max_coords.items():
+            chrom_key = chrom if chrom in chrom_lengths else f"chr{chrom}"
+            if chrom_key not in chrom_lengths:
+                continue
+
+            ref_len = chrom_lengths[chrom_key]
+            ratio = max_coord / ref_len
+            if ratio <= 1.0:
+                score += ratio
+                matched += 1
+
+        if matched > 0:
+            scores[assembly] = score / matched
+
+    if not scores:
+        return None
+
+    best_score = max(scores.values())
+    tied = [a for a, s in scores.items() if abs(s - best_score) < 0.001]
+    if len(tied) > 1:
+        return None  # Ambiguous — don't guess
+    return tied[0]
+
+
+def _infer_bed_reference(signals: dict) -> tuple[str | None, float, str]:
+    """Infer reference assembly from BED coordinate signals.
+
+    Uses max coordinates to rule out references where coordinates exceed
+    chromosome lengths. The remaining reference(s) are candidates.
+
+    Returns:
+        Tuple of (assembly, confidence, rationale)
+    """
+    max_coords = signals.get("max_coordinates", {})
+    has_chr_prefix = signals.get("has_chr_prefix", True)
+
+    if not max_coords:
+        return None, 0.0, "No coordinates found"
+
+    standard_chroms = [c for c in signals.get("chromosomes", [])
+                       if _STANDARD_CHROM_PATTERN.match(c)]
+
+    if not standard_chroms:
+        return None, 0.0, ("Non-standard chromosome names — likely de novo assembly, "
+                           "not aligned to a standard reference")
+
+    if not has_chr_prefix:
+        return "GRCh37", 0.85, "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
+
+    ref_lengths = _get_engine().rules.reference_contig_lengths
+
+    tolerance = 500
+    ruled_out = set()
+    evidence_details = []
+
+    for assembly, chrom_lengths in ref_lengths.items():
+        for chrom, max_coord in max_coords.items():
+            chrom_key = chrom if chrom in chrom_lengths else f"chr{chrom}"
+            if chrom_key not in chrom_lengths:
+                continue
+
+            ref_length = chrom_lengths[chrom_key]
+            if max_coord > ref_length + tolerance:
+                ruled_out.add(assembly)
+                evidence_details.append(
+                    f"{chrom}:{max_coord} exceeds {assembly} {chrom_key} length {ref_length}"
+                )
+                break
+
+    candidates = [a for a in ref_lengths if a not in ruled_out]
+
+    if has_chr_prefix and "GRCh37" in candidates and len(candidates) > 1:
+        candidates.remove("GRCh37")
+        evidence_details.append("chr prefix rules out GRCh37 (b37 convention uses bare names)")
+
+    if len(candidates) == 1:
+        rationale = f"Only {candidates[0]} not ruled out. {'; '.join(evidence_details)}"
+        return candidates[0], 0.92, rationale
+    elif len(candidates) == 0:
+        return None, 0.0, f"All references ruled out: {'; '.join(evidence_details)}"
+    else:
+        best = _pick_closest_reference(max_coords, ref_lengths, candidates)
+        if best:
+            return best, 0.80, (f"Multiple references possible ({', '.join(candidates)}), "
+                                f"{best} is closest match by coordinates")
+        return None, 0.0, f"Cannot distinguish between {', '.join(candidates)}"
+
+
+def classify_from_bed_signals(
+    signals: dict,
+    *,
+    file_name: str | None = None,
+    file_size: int | None = None,
+    dataset_title: str | None = None,
+) -> dict:
+    """Classify BED file based on coordinate signals.
+
+    Combines rule engine classification (extension/filename patterns) with
+    coordinate-based reference detection (elimination algorithm).
+
+    Args:
+        signals: Dict with keys: chromosomes, max_coordinates, has_chr_prefix
+        file_name: Filename for pattern matching
+        file_size: Optional file size in bytes
+        dataset_title: Optional dataset title for context rules
+
+    Returns:
+        Per-field classification dict with evidence
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    filename = file_name or "sample.bed"
+    max_coordinates = signals.get("max_coordinates", {})
+
+    file_info = ExtendedFileInfo(
+        filename=filename,
+        file_size=file_size,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
+        dataset_title=dataset_title,
+    )
+
+    engine = _get_engine()
+    result = engine.classify_extended(file_info, include_tier3=False)
+
+    if max_coordinates:
+        coord_ref, coord_conf, coord_rationale = _infer_bed_reference(signals)
+
+        if coord_ref and coord_conf > 0:
+            existing_ref_evidence = result.field_evidence.get("reference_assembly") or []
+            existing_ref_conf = max(
+                (ev.get("confidence", 0.0) for ev in existing_ref_evidence),
+                default=0.0,
+            )
+            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > existing_ref_conf:
+                result.reference_assembly = coord_ref
+                result.confidence = max(result.confidence, coord_conf)
+                result.field_evidence["reference_assembly"] = [{
+                    "rule_id": "bed_coordinate_reference",
+                    "reason": coord_rationale,
+                    "confidence": coord_conf,
+                }]
+        elif coord_ref is None and coord_conf == 0.0:
+            if "Non-standard chromosome" in coord_rationale:
+                result.reference_assembly = NOT_APPLICABLE
+                result.field_evidence["reference_assembly"] = [{
+                    "rule_id": "bed_nonstandard_contigs",
+                    "reason": coord_rationale,
+                    "confidence": 0.0,
+                }]
+
+    return result.to_output_dict()
+
+
 def get_rules_documentation() -> str:
     """Generate documentation pointing to the unified rules file."""
-    return """# BAM/CRAM, VCF, FASTQ, and FASTA Header Classification Rules
+    return """# BAM/CRAM, VCF, FASTQ, FASTA, and BED Header Classification Rules
 
 ## Overview
 

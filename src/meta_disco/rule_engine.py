@@ -558,7 +558,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size is not None else None,
             bam_header=bam_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -585,7 +585,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size is not None else None,
             vcf_header=vcf_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -612,7 +612,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size is not None else None,
             fastq_first_read=first_read,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -641,7 +641,7 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size else None,
+            file_size_gb=file_size / 1e9 if file_size is not None else None,
             fasta_contig_names=contig_names,
         )
         return self.classify_extended(file_info, include_tier3=False)

@@ -8,7 +8,8 @@ import pytest
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import NOT_APPLICABLE, FileInfo
+from src.meta_disco.header_classifier import classify_from_bed_signals
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
 from src.meta_disco.rule_engine import RuleEngine
 
 # Create a shared engine instance
@@ -264,3 +265,79 @@ class TestPatternEdgeCases:
         rule_id = get_matched_rule_id(filename)
         # Matches ChIP-seq specific rule due to "chipseq" in filename
         assert rule_id == "bed_chip_peaks"
+
+
+def _get_val(result: dict, field: str):
+    """Extract classification value from per-field output."""
+    v = result.get(field, {})
+    return v.get("value") if isinstance(v, dict) else v
+
+
+class TestBedCoordinateClassification:
+    """Test coordinate-based reference detection via classify_from_bed_signals."""
+
+    def test_grch38_coordinates(self):
+        """GRCh38 coordinates with chr prefix should detect GRCh38."""
+        signals = {
+            "chromosomes": ["chr1", "chr2", "chr3"],
+            "has_chr_prefix": True,
+            # GRCh38 chr1=248956422; use a value close but under
+            "max_coordinates": {"chr1": 248956000, "chr2": 242193000},
+        }
+        result = classify_from_bed_signals(signals, file_name="sample.regions.bed.gz")
+        ref = _get_val(result, "reference_assembly")
+        assert ref in ("GRCh38", "CHM13"), f"Expected GRCh38 or CHM13, got {ref}"
+
+    def test_no_chr_prefix_grch37(self):
+        """No chr prefix on standard chroms -> GRCh37."""
+        signals = {
+            "chromosomes": ["1", "2", "3"],
+            "has_chr_prefix": False,
+            "max_coordinates": {"1": 200000000},
+        }
+        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        assert _get_val(result, "reference_assembly") == "GRCh37"
+
+    def test_nonstandard_chroms_not_applicable(self):
+        """Non-standard chromosome names -> reference is not_applicable."""
+        signals = {
+            "chromosomes": ["HG01106#1#JAHAMC010000001.1", "HG01106#1#JAHAMC010000002.1"],
+            "has_chr_prefix": False,
+            "max_coordinates": {"HG01106#1#JAHAMC010000001.1": 92310948},
+        }
+        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        assert _get_val(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_empty_signals_preserves_filename_classification(self):
+        """Empty signals still returns rule engine classification from filename."""
+        result = classify_from_bed_signals({}, file_name="sample.modbam2bed.cpg.bed")
+        assert _get_val(result, "data_modality") == "epigenomic.methylation"
+
+    def test_empty_signals_no_reference(self):
+        """Empty signals should leave reference as not_classified."""
+        result = classify_from_bed_signals({}, file_name="sample.bed")
+        assert _get_val(result, "reference_assembly") == NOT_CLASSIFIED
+
+    def test_coordinates_exceeding_grch38_rule_it_out(self):
+        """Coordinates exceeding GRCh38 chr lengths should rule out GRCh38."""
+        # CHM13 chr8=146259331, GRCh38 chr8=145138636, GRCh37 chr8=146364022
+        # A coordinate of 145500000 exceeds GRCh38 but not CHM13 or GRCh37
+        # chr prefix rules out GRCh37
+        signals = {
+            "chromosomes": ["chr8"],
+            "has_chr_prefix": True,
+            "max_coordinates": {"chr8": 145500000},
+        }
+        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        ref = _get_val(result, "reference_assembly")
+        assert ref != "GRCh38", f"GRCh38 should be ruled out, got {ref}"
+
+    def test_no_coordinates_no_crash(self):
+        """Signals with empty max_coordinates should not crash."""
+        signals = {
+            "chromosomes": ["chr1"],
+            "has_chr_prefix": True,
+            "max_coordinates": {},
+        }
+        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        assert _get_val(result, "reference_assembly") == NOT_CLASSIFIED
