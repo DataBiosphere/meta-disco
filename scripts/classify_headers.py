@@ -4,7 +4,7 @@
 Replaces the 4 separate classify_*_files.py scripts with a single entry point.
 
 Examples:
-    python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/bam.json
+    python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam.json
     python scripts/classify_headers.py --type bam --md5 abc123
 """
 

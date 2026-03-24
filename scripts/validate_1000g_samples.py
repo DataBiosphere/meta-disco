@@ -9,7 +9,7 @@ Usage:
     python scripts/validate_1000g_samples.py --input output/anvil/bam_classifications.json
     python scripts/validate_1000g_samples.py --limit 100 --workers 5
 
-Output saved to: output/1000g_validation_results.json
+Output saved to: output/anvil/1000g_validation_results.json
 """
 
 import argparse
@@ -374,7 +374,7 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("output/1000g_validation_results.json"),
+        default=Path("output/anvil/1000g_validation_results.json"),
         help="Output validation results file",
     )
     parser.add_argument(

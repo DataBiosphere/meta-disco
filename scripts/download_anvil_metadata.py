@@ -209,7 +209,7 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
 def main():
     parser = argparse.ArgumentParser(description="Download AnVIL file metadata (supports resume)")
     parser.add_argument("--output", "-o", type=str, default="data/anvil",
-                        help="Output directory (default: data)")
+                        help="Output directory (default: data/anvil)")
     parser.add_argument("--delay", "-d", type=float, default=DEFAULT_DELAY,
                         help=f"Delay between requests in seconds (default: {DEFAULT_DELAY})")
     parser.add_argument("--max-pages", "-m", type=int, default=None,

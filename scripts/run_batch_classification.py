@@ -225,7 +225,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run batch classification on AnVIL metadata")
     parser.add_argument("--input", "-i", type=str, default="data/anvil/anvil_files_metadata.json",
                         help="Input metadata file (JSON or NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output",
+    parser.add_argument("--output", "-o", type=str, default="output/anvil",
                         help="Output directory")
     parser.add_argument("--rules", "-r", type=str, default="rules/unified_rules.yaml",
                         help="Path to rules file")
