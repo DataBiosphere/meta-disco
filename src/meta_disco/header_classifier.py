@@ -283,7 +283,7 @@ def classify_from_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         bam_header=header_text,
     )
 
@@ -388,7 +388,7 @@ def classify_from_vcf_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         vcf_header=header_text,
     )
 
@@ -486,7 +486,7 @@ def classify_from_fastq_header(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         fastq_first_read=first_read,
     )
 
@@ -906,7 +906,7 @@ def classify_from_bed_signals(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size else None,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
         dataset_title=dataset_title,
     )
 
@@ -944,7 +944,7 @@ def classify_from_bed_signals(
 
 def get_rules_documentation() -> str:
     """Generate documentation pointing to the unified rules file."""
-    return """# BAM/CRAM, VCF, FASTQ, and FASTA Header Classification Rules
+    return """# BAM/CRAM, VCF, FASTQ, FASTA, and BED Header Classification Rules
 
 ## Overview
 
