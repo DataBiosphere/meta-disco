@@ -307,12 +307,19 @@ def classify_from_header(
         result.reference_assembly = contig_ref
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        # Replace any previous evidence (e.g., stale not_classified from finalization)
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "contig_length_detection",
             "reason": reason,
             "confidence": contig_conf,
         }]
+        # Aligned to a known reference genome = genomic data
+        if result.data_modality in (None, NOT_CLASSIFIED):
+            result.data_modality = "genomic"
+            result.field_evidence["data_modality"] = [{
+                "rule_id": "aligned_to_reference",
+                "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
+                "confidence": contig_conf,
+            }]
 
     # Infer assay type
     assay_type = engine.infer_assay_type(result, file_info)
