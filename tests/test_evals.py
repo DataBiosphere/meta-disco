@@ -73,8 +73,8 @@ class TestBamE2E:
         assert_output_format(result)
         assert get_val(result, "reference_assembly") == "GRCh38"
         assert get_val(result, "platform") in ("ILLUMINA", "ONT", "PACBIO")
-        # TODO #73: aligned BAM with reference contigs should infer genomic modality,
-        # which would then enable WGS assay_type inference
+        assert get_val(result, "data_modality") == "genomic"  # from aligned reference contigs
+        assert get_val(result, "assay_type") == "WGS"
 
     def test_pacbio_hifi_unaligned(self):
         """PacBio reads BAM — 229.4 GB, unaligned, reference N/A."""
