@@ -142,7 +142,7 @@ CONFLICTING_RULES = [
 ALL_CONSISTENCY_RULES = CONVERGENT_RULES + CONFLICTING_RULES
 
 
-def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
+def check_consistency(matched_rules: list[str]) -> dict:
     """
     Check for consistency between matched rules.
 
@@ -151,14 +151,12 @@ def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
         - conflicting_signals: list of matching conflicting rule pairs
         - confidence_boost: float adjustment based on convergent signals
         - warnings: list of warning messages for conflicts
-        - reference_consistency: bool indicating if all @SQ refs agree
     """
     result = {
         "convergent_signals": [],
         "conflicting_signals": [],
         "confidence_boost": 0.0,
         "warnings": [],
-        "reference_consistency": True,
     }
 
     matched_set = set(matched_rules)
@@ -189,17 +187,6 @@ def check_consistency(matched_rules: list[str], evidence: list[dict]) -> dict:
                     f"CONFLICT: {rule.signal_a} + {rule.signal_b} - {rule.rationale}"
                 )
                 result["confidence_boost"] -= 0.15
-
-    # Check reference consistency from evidence
-    refs_found = set()
-    for e in evidence:
-        if "reference_assembly" in e.get("classification", ""):
-            refs_found.add(e.get("classification"))
-    if len(refs_found) > 1:
-        result["reference_consistency"] = False
-        result["warnings"].append(
-            f"INCONSISTENT: Multiple references found: {refs_found}"
-        )
 
     return result
 
@@ -293,7 +280,7 @@ def classify_from_header(
 
     # Check consistency using flattened rule list
     flat_rules = [e["rule_id"] for entries in result.field_evidence.values() for e in entries]
-    consistency = check_consistency(flat_rules, [])
+    consistency = check_consistency(flat_rules)
 
     # Apply confidence boost/penalty from consistency
     final_confidence = min(1.0, max(0.0, result.confidence + consistency["confidence_boost"]))
