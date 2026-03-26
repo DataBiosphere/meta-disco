@@ -84,7 +84,7 @@ class TestBamE2E:
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
         assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == "WGS"
+        assert get_val(result, "assay_type") == NOT_CLASSIFIED
 
     def test_ont_bam(self):
         """ONT BAM file — 69.8 GB."""

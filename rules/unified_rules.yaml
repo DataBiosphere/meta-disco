@@ -1105,38 +1105,6 @@ rules:
     terminal: false
 
   # ---------------------------------------------------------------------------
-  # PacBio read type from @RG DS field
-  # ---------------------------------------------------------------------------
-  - id: pacbio_hifi
-    tier: 3
-    scope: header
-    when:
-      extensions: [".bam", ".cram"]
-      header_section: "@RG"
-      header_field: "DS"
-      header_pattern: "READTYPE=CCS"
-    then:
-      data_modality: genomic
-      assay_type: WGS
-    confidence: 0.85
-    rationale: "READTYPE=CCS indicates PacBio HiFi (High-Fidelity) reads. CCS generates highly accurate long reads (>Q20, ~99% accuracy)"
-    terminal: false
-
-  - id: pacbio_clr
-    tier: 3
-    scope: header
-    when:
-      extensions: [".bam", ".cram"]
-      header_section: "@RG"
-      header_field: "DS"
-      header_pattern: "READTYPE=SUBREAD"
-    then:
-      data_modality: genomic
-    confidence: 0.80
-    rationale: "READTYPE=SUBREAD indicates PacBio CLR (Continuous Long Read) data. Longer but less accurate than HiFi"
-    terminal: false
-
-  # ---------------------------------------------------------------------------
   # RNA-seq aligner programs from @PG PN field
   # ---------------------------------------------------------------------------
   - id: program_star
