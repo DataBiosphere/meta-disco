@@ -636,13 +636,13 @@ class TestBamCramClassification:
         assert val(result, "data_type") == "alignments"
 
     def test_pacbio_hifi_readtype(self):
-        """Detect PacBio HiFi from READTYPE tag."""
+        """READTYPE=CCS no longer implies genomic — modality left to other signals."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS"""
         result = classify_from_header(header)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
-        assert val(result, "assay_type") == "WGS"
+        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert val(result, "assay_type") == NOT_CLASSIFIED
 
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
@@ -662,12 +662,11 @@ class TestBamCramClassification:
     def test_consistency_convergent(self):
         """Test convergent signal boosts confidence."""
         header = """@HD\tVN:1.6
-@RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS
+@RG\tID:sample1\tPL:PACBIO
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        # Multiple PacBio indicators should all be present
+        # PacBio platform + CCS program converge on platform
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == "genomic"
 
     def test_consistency_conflicting(self):
         """Test conflicting signals add warnings."""

@@ -50,28 +50,12 @@ class ConsistencyRule:
 
 CONVERGENT_RULES = [
     ConsistencyRule(
-        id="pacbio_platform_readtype",
-        signal_a="platform_pacbio",
-        signal_b="pacbio_hifi",
-        relationship="convergent",
-        expected_agreement="PACBIO",
-        rationale="PL:PACBIO and READTYPE=CCS both confirm PacBio HiFi platform."
-    ),
-    ConsistencyRule(
         id="pacbio_platform_ccs_program",
         signal_a="platform_pacbio",
         signal_b="program_ccs",
         relationship="convergent",
         expected_agreement="PACBIO",
         rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi platform."
-    ),
-    ConsistencyRule(
-        id="pacbio_hifi_ccs_program",
-        signal_a="pacbio_hifi",
-        signal_b="program_ccs",
-        relationship="convergent",
-        expected_agreement="PACBIO",
-        rationale="READTYPE=CCS and PN:ccs both confirm PacBio HiFi platform."
     ),
     ConsistencyRule(
         id="illumina_bwa",
@@ -127,15 +111,6 @@ CONFLICTING_RULES = [
                   "This combination is unexpected and may indicate a pipeline error or misannotation."
     ),
     ConsistencyRule(
-        id="illumina_ccs_conflict",
-        signal_a="platform_illumina",
-        signal_b="pacbio_hifi",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="READTYPE=CCS is PacBio-specific. Finding it with PL:ILLUMINA indicates "
-                  "a header error or file corruption."
-    ),
-    ConsistencyRule(
         id="illumina_ccs_program_conflict",
         signal_a="platform_illumina",
         signal_b="program_ccs",
@@ -143,14 +118,6 @@ CONFLICTING_RULES = [
         expected_agreement=None,
         rationale="The ccs program is PacBio-specific. Finding it with Illumina platform "
                   "indicates a header error."
-    ),
-    ConsistencyRule(
-        id="ont_ccs_conflict",
-        signal_a="platform_ont",
-        signal_b="pacbio_hifi",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="READTYPE=CCS is PacBio-specific and incompatible with ONT platform."
     ),
     ConsistencyRule(
         id="bwa_star_conflict",
