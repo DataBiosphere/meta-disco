@@ -410,7 +410,6 @@ Cross-validation checks for consistency between multiple signals:
 
 | Signal A    | Signal B     | Expected Agreement   |
 | ----------- | ------------ | -------------------- |
-| PL:PACBIO   | READTYPE=CCS | genomic.whole_genome |
 | PL:ILLUMINA | PN:bwa       | genomic              |
 | PL:ILLUMINA | PN:STAR      | transcriptomic       |
 | PL:PACBIO   | PN:minimap2  | genomic              |
@@ -420,7 +419,6 @@ Cross-validation checks for consistency between multiple signals:
 | Signal A    | Signal B     | Issue                       |
 | ----------- | ------------ | --------------------------- |
 | PL:PACBIO   | PN:STAR      | STAR is short-read only     |
-| PL:ILLUMINA | READTYPE=CCS | CCS is PacBio-specific      |
 | PN:bwa      | PN:STAR      | Mutually exclusive aligners |
 
 ### 3.3 File Size Heuristics

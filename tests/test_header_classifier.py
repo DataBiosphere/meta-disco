@@ -635,7 +635,7 @@ class TestBamCramClassification:
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "alignments"
 
-    def test_pacbio_hifi_readtype(self):
+    def test_readtype_ccs_no_modality_inference(self):
         """READTYPE=CCS no longer implies genomic — modality left to other signals."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS"""
