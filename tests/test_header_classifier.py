@@ -644,6 +644,30 @@ class TestBamCramClassification:
         assert val(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "assay_type") == NOT_CLASSIFIED
 
+    def test_ont_basecall_dna_modality(self):
+        """ONT basecall_model=dna_* implies genomic modality."""
+        header = """@HD\tVN:1.6
+@RG\tID:sample1\tPL:ONT\tDS:basecall_model=dna_r10.4.1_e8.2_400bps_sup@v4.3.0"""
+        result = classify_from_header(header)
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == "genomic"
+
+    def test_ont_basecall_dna_legacy(self):
+        """Legacy Guppy basecall model with date prefix still detected as genomic."""
+        header = """@HD\tVN:1.6
+@RG\tID:sample1\tPL:ONT\tDS:runid=92ad6c38 basecall_model=2021-05-05_dna_r9.4.1_promethion_768_922a514b"""
+        result = classify_from_header(header)
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == "genomic"
+
+    def test_ont_basecall_rna_modality(self):
+        """ONT basecall_model=rna_* implies transcriptomic modality."""
+        header = """@HD\tVN:1.6
+@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast"""
+        result = classify_from_header(header)
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == "transcriptomic.bulk"
+
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
         header = """@HD\tVN:1.6

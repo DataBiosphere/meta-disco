@@ -1105,6 +1105,37 @@ rules:
     terminal: false
 
   # ---------------------------------------------------------------------------
+  # ONT basecall model from @RG DS field
+  # ---------------------------------------------------------------------------
+  - id: ont_basecall_dna
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "DS"
+      header_pattern: "basecall_model=.*dna_"
+    then:
+      data_modality: genomic
+    confidence: 0.90
+    rationale: "ONT basecall model name starting with dna_ indicates DNA sequencing (genomic data)"
+    terminal: false
+
+  - id: ont_basecall_rna
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "DS"
+      header_pattern: "basecall_model=.*rna_"
+    then:
+      data_modality: transcriptomic.bulk
+    confidence: 0.90
+    rationale: "ONT basecall model name starting with rna_ indicates RNA sequencing (transcriptomic data)"
+    terminal: false
+
+  # ---------------------------------------------------------------------------
   # RNA-seq aligner programs from @PG PN field
   # ---------------------------------------------------------------------------
   - id: program_star
