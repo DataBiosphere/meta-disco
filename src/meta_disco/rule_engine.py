@@ -69,6 +69,7 @@ class ExtendedClassificationResult:
     })
     skip: bool = False
     _conflicted_fields: set = field(default_factory=set)
+    _field_set_by_tier: dict[str, int] = field(default_factory=dict)
     needs_header_inspection: bool = False
     needs_study_context: bool = False
     needs_manual_review: bool = False
@@ -451,25 +452,26 @@ class RuleEngine:
                 if fld in result._conflicted_fields:
                     continue
 
-                # Detect conflicting reference_assembly values (e.g., filename
-                # contains both "hg38" and "chm13" — ambiguous liftover/comparison)
-                if (fld == "reference_assembly"
-                        and current is not None
+                # Detect conflicting values — two same-tier rules disagree
+                prior_tier = result._field_set_by_tier.get(fld, 0)
+                if (current is not None
                         and current != NOT_CLASSIFIED
                         and current != NOT_APPLICABLE
                         and new_val != NOT_CLASSIFIED
                         and new_val != NOT_APPLICABLE
-                        and current != new_val):
+                        and current != new_val
+                        and rule.tier <= prior_tier):
                     setattr(result, fld, NOT_CLASSIFIED)
                     result._conflicted_fields.add(fld)
                     result.field_evidence[fld] = [{
-                        "rule_id": "conflicting_reference_rules",
-                        "reason": (f"Conflicting references: '{current}' vs '{new_val}' "
+                        "rule_id": f"conflicting_{fld}_rules",
+                        "reason": (f"Conflicting {fld}: '{current}' vs '{new_val}' "
                                    f"(from {rule.id}) — ambiguous"),
                         "confidence": 0.0,
                     }]
                 else:
                     setattr(result, fld, new_val)
+                    result._field_set_by_tier[fld] = rule.tier
                     result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 

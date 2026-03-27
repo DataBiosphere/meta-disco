@@ -676,6 +676,16 @@ class TestBamCramClassification:
         assert val(result, "platform") == "ONT"
         assert val(result, "data_modality") == "transcriptomic.bulk"
 
+    def test_ont_basecall_rna_with_minimap2(self):
+        """Conflicting modality signals produce not_classified instead of wrong answer."""
+        header = """@HD\tVN:1.6
+@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast
+@PG\tID:minimap2\tPN:minimap2\tVN:2.24"""
+        result = classify_from_header(header)
+        assert val(result, "platform") == "ONT"
+        # basecall_model=rna_ (transcriptomic) vs minimap2 (genomic) = conflict
+        assert val(result, "data_modality") == NOT_CLASSIFIED
+
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
         header = """@HD\tVN:1.6
@@ -701,14 +711,13 @@ class TestBamCramClassification:
         assert val(result, "platform") == "PACBIO"
 
     def test_consistency_conflicting(self):
-        """Test conflicting signals add warnings."""
+        """Illumina platform + PacBio CCS program = platform conflict."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:ILLUMINA
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        # Illumina platform + PacBio CCS program is conflicting
-        # Warnings are nested in the consistency dict
-        assert len(result["consistency"]["warnings"]) > 0
+        # Same-tier rules disagree on platform → conflict detected at rule level
+        assert val(result, "platform") == NOT_CLASSIFIED
 
     def test_empty_header(self):
         """Handle empty header — treated as unaligned."""
