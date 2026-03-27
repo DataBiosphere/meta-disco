@@ -463,12 +463,12 @@ class RuleEngine:
                         and rule.tier <= prior_tier):
                     setattr(result, fld, NOT_CLASSIFIED)
                     result._conflicted_fields.add(fld)
-                    result.field_evidence[fld] = [{
+                    result.field_evidence[fld].append({
                         "rule_id": f"conflicting_{fld}_rules",
                         "reason": (f"Conflicting {fld}: '{current}' vs '{new_val}' "
                                    f"(from {rule.id}) — ambiguous"),
                         "confidence": 0.0,
-                    }]
+                    })
                 else:
                     setattr(result, fld, new_val)
                     result._field_set_by_tier[fld] = rule.tier

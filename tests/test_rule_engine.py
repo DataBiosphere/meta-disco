@@ -309,43 +309,29 @@ class TestConflictingReferenceRules:
         ref_evidence = result.field_evidence.get("reference_assembly", [])
         rule_ids = [e["rule_id"] for e in ref_evidence]
         assert "conflicting_reference_assembly_rules" in rule_ids
+        # Prior evidence should also be preserved
+        assert len(ref_evidence) >= 2
 
 
 class TestConflictingClassificationFields:
     """Test that conflict detection works for all classification fields, not just reference_assembly."""
 
     def test_data_modality_conflict(self, engine):
-        """Two rules setting different data_modality values should produce not_classified."""
-        # Create a result and manually apply two conflicting rules
-        file_info = FileInfo(filename="test.bam")
-        result = engine.classify_extended(file_info)
-        # If the engine set data_modality from one rule, and a later rule disagrees,
-        # it should be not_classified. We test via the header classifier integration test.
-        # Here, verify the mechanism works by checking the _conflicted_fields set.
-        from src.meta_disco.rule_engine import ExtendedClassificationResult
-        r = ExtendedClassificationResult()
-        r.data_modality = "genomic"
-        r.field_evidence["data_modality"].append({
-            "rule_id": "rule_a", "reason": "test", "confidence": 0.9
-        })
-        # Simulate a conflicting rule via _apply_rule-like logic
-        from src.meta_disco.models import NOT_CLASSIFIED, NOT_APPLICABLE
-        # The field has a value, new value differs → conflict
-        assert r.data_modality == "genomic"
-        # Now mark as conflicted (mimicking _apply_rule behavior)
-        r.data_modality = NOT_CLASSIFIED
-        r._conflicted_fields.add("data_modality")
-        assert r.data_modality == NOT_CLASSIFIED
-        assert "data_modality" in r._conflicted_fields
+        """Same-tier rules disagreeing on data_modality produce not_classified."""
+        result = engine.classify_extended(FileInfo(filename="sample_rnaseq_wgs_aligned.bam"))
+        assert result.data_modality == NOT_CLASSIFIED
+        evidence = result.field_evidence.get("data_modality", [])
+        rule_ids = [e["rule_id"] for e in evidence]
+        assert "conflicting_data_modality_rules" in rule_ids
 
-    def test_conflicted_field_stays_locked(self, engine):
-        """Once a field is conflicted, subsequent rules cannot override it."""
-        from src.meta_disco.rule_engine import ExtendedClassificationResult
-        r = ExtendedClassificationResult()
-        r._conflicted_fields.add("platform")
-        r.platform = NOT_CLASSIFIED
-        # _apply_rule skips conflicted fields (line 451-452)
-        assert "platform" in r._conflicted_fields
+    def test_conflict_preserves_prior_evidence(self, engine):
+        """Conflict marker is appended to existing evidence, not replaced."""
+        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        evidence = result.field_evidence.get("reference_assembly", [])
+        rule_ids = [e["rule_id"] for e in evidence]
+        # Both the original rule and the conflict marker should be present
+        assert "filename_ref_grch38" in rule_ids or "filename_ref_chm13" in rule_ids
+        assert "conflicting_reference_assembly_rules" in rule_ids
 
 
 class TestReasonChain:
