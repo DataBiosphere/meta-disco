@@ -668,6 +668,14 @@ class TestBamCramClassification:
         assert val(result, "platform") == "ONT"
         assert val(result, "data_modality") == "transcriptomic.bulk"
 
+    def test_ont_basecall_rna_not_overridden_by_later_dna(self):
+        """Mixed DS with basecall_model=rna_* and later dna_ substring stays transcriptomic."""
+        header = """@HD\tVN:1.6
+@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast control=dna_spikein"""
+        result = classify_from_header(header)
+        assert val(result, "platform") == "ONT"
+        assert val(result, "data_modality") == "transcriptomic.bulk"
+
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
         header = """@HD\tVN:1.6
