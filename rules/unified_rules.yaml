@@ -1114,7 +1114,7 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@RG"
       header_field: "DS"
-      header_pattern: "basecall_model=\\S*dna_"
+      header_pattern: "basecall_model=[^;\\s]*dna_"
     then:
       data_modality: genomic
     confidence: 0.90
@@ -1128,7 +1128,7 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@RG"
       header_field: "DS"
-      header_pattern: "basecall_model=\\S*rna_"
+      header_pattern: "basecall_model=[^;\\s]*rna_"
     then:
       data_modality: transcriptomic.bulk
     confidence: 0.90
