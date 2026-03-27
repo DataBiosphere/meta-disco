@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-03-27 01:05:02**
+Classification run: **2026-03-27 07:52:24**
 
 Source: **758,658** files across **11** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **758,657** files (1 not yet handled by any classifier).
@@ -333,7 +333,7 @@ Processed **758,657** files (1 not yet handled by any classifier).
 | .indel | 4 | No rule determined a value for reference_assembly |
 | .xml | 4 | No rule determined a value for reference_assembly |
 | .chimeric | 4 | No rule determined a value for reference_assembly |
-| .xg | 4 | Conflicting reference_assembly: 'GRCh38' vs 'CHM13' (from filename_ref_chm13) — ambiguous |
+| .xg | 4 | Filename contains GRCh38/hg38 reference indicator |
 | .bed | 2 | No rule determined a value for reference_assembly |
 | .gct | 2 | No rule determined a value for reference_assembly |
 | .yak | 2 | No rule determined a value for reference_assembly |
@@ -347,7 +347,7 @@ Processed **758,657** files (1 not yet handled by any classifier).
 | .out | 2 | No rule determined a value for reference_assembly |
 | .errbias0 | 2 | No rule determined a value for reference_assembly |
 | .reads_bam | 2 | No rule determined a value for reference_assembly |
-| .chain | 2 | Conflicting reference_assembly: 'GRCh38' vs 'CHM13' (from filename_ref_chm13) — ambiguous |
+| .chain | 2 | Filename contains GRCh38/hg38 reference indicator |
 | .txt~ | 1 | No rule determined a value for reference_assembly |
 | .fofn | 1 | No rule determined a value for reference_assembly |
 | .snakefile | 1 | No rule determined a value for reference_assembly |
