@@ -1,12 +1,12 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-03-26 01:39:42**
+Classification run: **2026-03-26 20:26:15**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
 | AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
-| HPRC | 6,041 | 4 | 8,934 | 4 |
+| HPRC | 6,041 | 4 | 9,510 | 4 |
 
 ---
 
@@ -124,14 +124,14 @@ HPRC's open-access datasets currently populate the following genomic metadata di
 ### Data Modality Validation
 
 - **5,841** files available from HPRC with ground truth Data Modality
-- **634** files comparable (both source and rule engine have values)
-- **5,207** files not classified by rule engine
-- **634** inferred data modality values match HPRC
+- **922** files comparable (both source and rule engine have values)
+- **4,919** files not classified by rule engine
+- **922** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,841 files on HPRC with ground truth data modality, we inferred data modality values for 634 files. 5,207 files remain unclassifiable by the rule engine.
-Of the 634 inferred data modality values, 634 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
+Of the 5,841 files on HPRC with ground truth data modality, we inferred data modality values for 922 files. 4,919 files remain unclassifiable by the rule engine.
+Of the 922 inferred data modality values, 922 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
 ### Data Type Validation
 
@@ -178,13 +178,13 @@ Of the 1,629 inferred reference assembly values, 1,625 (99.8%) matched HPRC. The
 ### Assay Type Validation
 
 - **6,041** files available from HPRC with ground truth Assay Type
-- **634** files comparable (both source and rule engine have values)
-- **5,407** files not classified by rule engine
-- **634** inferred assay type values match HPRC
+- **922** files comparable (both source and rule engine have values)
+- **5,119** files not classified by rule engine
+- **922** inferred assay type values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 6,041 files on HPRC with ground truth assay type, we inferred assay type values for 634 files. 5,407 files remain unclassifiable by the rule engine.
-Of the 634 inferred assay type values, 634 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
+Of the 6,041 files on HPRC with ground truth assay type, we inferred assay type values for 922 files. 5,119 files remain unclassifiable by the rule engine.
+Of the 922 inferred assay type values, 922 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in assay type between meta-disco and HPRC.
 
 
