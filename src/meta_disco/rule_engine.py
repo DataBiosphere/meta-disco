@@ -497,12 +497,15 @@ class RuleEngine:
         self,
         result: ExtendedClassificationResult,
         file_info: ExtendedFileInfo
-    ) -> str | None:
+    ) -> None:
         """Infer assay type from other classification signals.
 
-        Uses the assay_type_rules from unified rules to infer WGS/WES/RNA-seq/etc.
-        based on matched rules, modality, platform, and file size.
+        Sets result.assay_type and appends evidence when a matching
+        assay_type_rule is found. Skips if assay_type is already set.
         """
+        if result.assay_type not in (None, NOT_CLASSIFIED):
+            return
+
         for assay_rule in self.rules.assay_type_rules:
             conditions = assay_rule.conditions
 
@@ -554,16 +557,13 @@ class RuleEngine:
                     continue
 
             # All conditions passed — apply and record evidence
-            if result.assay_type in (None, NOT_CLASSIFIED):
-                result.assay_type = assay_rule.assay_type
-                result.field_evidence["assay_type"].append({
-                    "rule_id": "infer_assay_type",
-                    "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
-                    "confidence": 0.70,
-                })
-            return assay_rule.assay_type
-
-        return None
+            result.assay_type = assay_rule.assay_type
+            result.field_evidence["assay_type"].append({
+                "rule_id": "infer_assay_type",
+                "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                "confidence": 0.70,
+            })
+            return
 
     def classify_with_bam_header(
         self,
