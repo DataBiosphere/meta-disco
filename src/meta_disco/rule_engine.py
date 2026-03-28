@@ -234,6 +234,11 @@ class RuleEngine:
                             inferred = self.infer_assay_type(result, ext_info)
                             if inferred:
                                 result.assay_type = inferred
+                                result.field_evidence["assay_type"] = [{
+                                    "rule_id": "infer_assay_type",
+                                    "reason": f"Inferred {inferred} from platform/modality/file size signals",
+                                    "confidence": 0.70,
+                                }]
                         self._finalize_result(result)
                         return result
 
@@ -242,6 +247,11 @@ class RuleEngine:
             inferred = self.infer_assay_type(result, ext_info)
             if inferred:
                 result.assay_type = inferred
+                result.field_evidence["assay_type"] = [{
+                    "rule_id": "infer_assay_type",
+                    "reason": f"Inferred {inferred} from platform/modality/file size signals",
+                    "confidence": 0.70,
+                }]
 
         self._finalize_result(result)
         return result
