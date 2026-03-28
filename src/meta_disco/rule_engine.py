@@ -501,8 +501,11 @@ class RuleEngine:
         """Infer assay type from other classification signals.
 
         Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already set.
+        assay_type_rule is found. Skips if assay_type is already set
+        or if the file is marked for skipping.
         """
+        if result.skip:
+            return
         if result.assay_type not in (None, NOT_CLASSIFIED):
             return
 
@@ -558,6 +561,11 @@ class RuleEngine:
 
             # All conditions passed — apply and record evidence
             result.assay_type = assay_rule.assay_type
+            # Remove stale not_classified placeholder if _finalize_result ran first
+            result.field_evidence["assay_type"] = [
+                e for e in result.field_evidence["assay_type"]
+                if e.get("rule_id") != "not_classified"
+            ]
             result.field_evidence["assay_type"].append({
                 "rule_id": "infer_assay_type",
                 "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
