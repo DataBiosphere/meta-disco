@@ -230,28 +230,12 @@ class RuleEngine:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
                     if rule.terminal:
-                        if result.assay_type is None:
-                            inferred = self.infer_assay_type(result, ext_info)
-                            if inferred:
-                                result.assay_type = inferred
-                                result.field_evidence["assay_type"] = [{
-                                    "rule_id": "infer_assay_type",
-                                    "reason": f"Inferred {inferred} from platform/modality/file size signals",
-                                    "confidence": 0.70,
-                                }]
+                        self.infer_assay_type(result, ext_info)
                         self._finalize_result(result)
                         return result
 
         # After all rules, attempt assay_type inference if still unset
-        if result.assay_type is None:
-            inferred = self.infer_assay_type(result, ext_info)
-            if inferred:
-                result.assay_type = inferred
-                result.field_evidence["assay_type"] = [{
-                    "rule_id": "infer_assay_type",
-                    "reason": f"Inferred {inferred} from platform/modality/file size signals",
-                    "confidence": 0.70,
-                }]
+        self.infer_assay_type(result, ext_info)
 
         self._finalize_result(result)
         return result
@@ -569,7 +553,14 @@ class RuleEngine:
                 if file_info.file_size_gb is None or file_info.file_size_gb >= size_lt:
                     continue
 
-            # All conditions passed - return this assay type
+            # All conditions passed — apply and record evidence
+            if result.assay_type in (None, NOT_CLASSIFIED):
+                result.assay_type = assay_rule.assay_type
+                result.field_evidence["assay_type"].append({
+                    "rule_id": "infer_assay_type",
+                    "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                    "confidence": 0.70,
+                })
             return assay_rule.assay_type
 
         return None

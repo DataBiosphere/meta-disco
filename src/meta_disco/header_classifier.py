@@ -276,7 +276,7 @@ def classify_from_header(
             }]
 
     # Infer assay type
-    assay_type = engine.infer_assay_type(result, file_info)
+    engine.infer_assay_type(result, file_info)
 
     # Check consistency using flattened rule list
     flat_rules = [e["rule_id"] for entries in result.field_evidence.values() for e in entries]
@@ -284,15 +284,6 @@ def classify_from_header(
 
     # Apply confidence boost/penalty from consistency
     final_confidence = min(1.0, max(0.0, result.confidence + consistency["confidence_boost"]))
-
-    # Apply inferred assay type only if not already set by a rule
-    if assay_type and result.assay_type in (None, NOT_CLASSIFIED):
-        result.assay_type = assay_type
-        result.field_evidence["assay_type"] = [{
-            "rule_id": "infer_assay_type",
-            "reason": f"Inferred {assay_type} from platform/modality/file size signals",
-            "confidence": 0.70,
-        }]
 
     result.confidence = final_confidence
     classifications = result.to_output_dict()
