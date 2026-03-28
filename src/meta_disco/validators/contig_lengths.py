@@ -26,7 +26,7 @@ def _load_contig_lengths() -> dict[str, dict[str, int]]:
         for name, length in contigs.items():
             expanded[name] = length
             # Generate bare-name variant (e.g., "1" from "chr1")
-            bare = name.replace("chr", "")
+            bare = name.removeprefix("chr")
             if bare != name:
                 expanded[bare] = length
         result[assembly] = expanded
@@ -43,19 +43,21 @@ _CONTIG_LENGTH_TO_ASSEMBLY: dict[tuple[str, int], str] = {}
 for _assembly, _contigs in REFERENCE_CONTIG_LENGTHS.items():
     for _contig, _length in _contigs.items():
         # Normalize contig name (remove chr prefix)
-        _normalized = _contig.replace("chr", "")
+        _normalized = _contig.removeprefix("chr")
         _key = (_normalized, _length)
         _CONTIG_LENGTH_TO_ASSEMBLY[_key] = _assembly
 
 
 # Maximum chromosome lengths for position-based exclusion
 # (grch37_len, grch38_len, chm13_len) for key chromosomes
+# Derived from REFERENCE_CONTIG_LENGTHS to avoid a second hardcoded copy.
 CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
-    "1": (249250621, 248956422, 248387497),
-    "2": (243199373, 242193529, 242696747),
-    "3": (198022430, 198295559, 201106605),
-    "10": (135534747, 133797422, 134758134),
-    "22": (51304566, 50818468, 51324926),
+    chrom: (
+        REFERENCE_CONTIG_LENGTHS["GRCh37"][f"chr{chrom}"],
+        REFERENCE_CONTIG_LENGTHS["GRCh38"][f"chr{chrom}"],
+        REFERENCE_CONTIG_LENGTHS["CHM13"][f"chr{chrom}"],
+    )
+    for chrom in ("1", "2", "3", "10", "22")
 }
 
 
@@ -100,14 +102,14 @@ def detect_reference_from_contig_lengths(
             id_match = re.search(vcf_id_pattern, line)
             len_match = re.search(vcf_len_pattern, line)
             if id_match and len_match:
-                contig = id_match.group(1).replace("chr", "")
+                contig = id_match.group(1).removeprefix("chr")
                 length = int(len_match.group(1))
         else:
             # Try BAM format (SN and LN tags can appear in any order)
             sn_match = re.search(bam_sn_pattern, line)
             ln_match = re.search(bam_ln_pattern, line)
             if sn_match and ln_match:
-                contig = sn_match.group(1).replace("chr", "")
+                contig = sn_match.group(1).removeprefix("chr")
                 length = int(ln_match.group(1))
 
         if contig is None or length is None:
@@ -126,7 +128,7 @@ def detect_reference_from_contig_lengths(
             for ref_assembly, ref_contigs in REFERENCE_CONTIG_LENGTHS.items():
                 # Check both chr-prefixed and non-prefixed versions
                 for ref_contig, ref_length in ref_contigs.items():
-                    ref_norm = ref_contig.replace("chr", "")
+                    ref_norm = ref_contig.removeprefix("chr")
                     if ref_norm == contig:
                         diff = abs(ref_length - length)
                         if diff <= tolerance and diff < best_diff:
@@ -176,7 +178,7 @@ def detect_reference_from_max_positions(
     evidence_count = 0
 
     for chrom, max_pos in max_positions.items():
-        chrom = chrom.replace("chr", "")
+        chrom = chrom.removeprefix("chr")
         if chrom not in CHROMOSOME_MAX_LENGTHS:
             continue
 
