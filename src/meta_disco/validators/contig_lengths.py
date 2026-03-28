@@ -8,95 +8,35 @@ Sources:
 - GRCh38: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.40
 - GRCh37: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.13
 - CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
+
+Data loaded from rules/unified_rules.yaml (single source of truth).
 """
 
 import re
 
+from src.meta_disco.rule_loader import get_unified_rules
+
+
+def _load_contig_lengths() -> dict[str, dict[str, int]]:
+    """Load contig lengths from YAML and generate bare-name variants."""
+    yaml_data = get_unified_rules().reference_contig_lengths
+    result: dict[str, dict[str, int]] = {}
+    for assembly, contigs in yaml_data.items():
+        expanded: dict[str, int] = {}
+        for name, length in contigs.items():
+            expanded[name] = length
+            # Generate bare-name variant (e.g., "1" from "chr1")
+            bare = name.replace("chr", "")
+            if bare != name:
+                expanded[bare] = length
+        result[assembly] = expanded
+    return result
+
+
 # Chromosome lengths for each reference assembly
-# Uses a subset of chromosomes for efficient matching
 # All 22 autosomes + X + Y with both chr-prefixed and bare names.
 # Every chromosome has a unique length per assembly (min diff 41Kbp).
-# TODO: Consolidate with reference_contig_lengths in unified_rules.yaml
-REFERENCE_CONTIG_LENGTHS: dict[str, dict[str, int]] = {
-    "GRCh38": {
-        "chr1": 248956422, "1": 248956422,
-        "chr2": 242193529, "2": 242193529,
-        "chr3": 198295559, "3": 198295559,
-        "chr4": 190214555, "4": 190214555,
-        "chr5": 181538259, "5": 181538259,
-        "chr6": 170805979, "6": 170805979,
-        "chr7": 159345973, "7": 159345973,
-        "chr8": 145138636, "8": 145138636,
-        "chr9": 138394717, "9": 138394717,
-        "chr10": 133797422, "10": 133797422,
-        "chr11": 135086622, "11": 135086622,
-        "chr12": 133275309, "12": 133275309,
-        "chr13": 114364328, "13": 114364328,
-        "chr14": 107043718, "14": 107043718,
-        "chr15": 101991189, "15": 101991189,
-        "chr16": 90338345, "16": 90338345,
-        "chr17": 83257441, "17": 83257441,
-        "chr18": 80373285, "18": 80373285,
-        "chr19": 58617616, "19": 58617616,
-        "chr20": 64444167, "20": 64444167,
-        "chr21": 46709983, "21": 46709983,
-        "chr22": 50818468, "22": 50818468,
-        "chrX": 156040895, "X": 156040895,
-        "chrY": 57227415, "Y": 57227415,
-    },
-    "GRCh37": {
-        "chr1": 249250621, "1": 249250621,
-        "chr2": 243199373, "2": 243199373,
-        "chr3": 198022430, "3": 198022430,
-        "chr4": 191154276, "4": 191154276,
-        "chr5": 180915260, "5": 180915260,
-        "chr6": 171115067, "6": 171115067,
-        "chr7": 159138663, "7": 159138663,
-        "chr8": 146364022, "8": 146364022,
-        "chr9": 141213431, "9": 141213431,
-        "chr10": 135534747, "10": 135534747,
-        "chr11": 135006516, "11": 135006516,
-        "chr12": 133851895, "12": 133851895,
-        "chr13": 115169878, "13": 115169878,
-        "chr14": 107349540, "14": 107349540,
-        "chr15": 102531392, "15": 102531392,
-        "chr16": 90354753, "16": 90354753,
-        "chr17": 81195210, "17": 81195210,
-        "chr18": 78077248, "18": 78077248,
-        "chr19": 59128983, "19": 59128983,
-        "chr20": 63025520, "20": 63025520,
-        "chr21": 48129895, "21": 48129895,
-        "chr22": 51304566, "22": 51304566,
-        "chrX": 155270560, "X": 155270560,
-        "chrY": 59373566, "Y": 59373566,
-    },
-    "CHM13": {
-        "chr1": 248387497, "1": 248387497,
-        "chr2": 242696747, "2": 242696747,
-        "chr3": 201106605, "3": 201106605,
-        "chr4": 193574945, "4": 193574945,
-        "chr5": 182045439, "5": 182045439,
-        "chr6": 172126628, "6": 172126628,
-        "chr7": 160567428, "7": 160567428,
-        "chr8": 146259331, "8": 146259331,
-        "chr9": 150617247, "9": 150617247,
-        "chr10": 134758134, "10": 134758134,
-        "chr11": 135127769, "11": 135127769,
-        "chr12": 133324548, "12": 133324548,
-        "chr13": 113566686, "13": 113566686,
-        "chr14": 101161492, "14": 101161492,
-        "chr15": 99753195, "15": 99753195,
-        "chr16": 96330374, "16": 96330374,
-        "chr17": 84276897, "17": 84276897,
-        "chr18": 80542538, "18": 80542538,
-        "chr19": 61707364, "19": 61707364,
-        "chr20": 66210255, "20": 66210255,
-        "chr21": 45090682, "21": 45090682,
-        "chr22": 51324926, "22": 51324926,
-        "chrX": 154259566, "X": 154259566,
-        "chrY": 62460029, "Y": 62460029,
-    }
-}
+REFERENCE_CONTIG_LENGTHS: dict[str, dict[str, int]] = _load_contig_lengths()
 
 # Build reverse lookup: (normalized_contig, length) -> assembly
 _CONTIG_LENGTH_TO_ASSEMBLY: dict[tuple[str, int], str] = {}
