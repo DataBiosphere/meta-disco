@@ -234,7 +234,7 @@ class RuleEngine:
                         self._finalize_result(result)
                         return result
 
-        # After all rules, attempt assay_type inference if still unset
+        # After all rules, attempt assay_type inference (guards are internal)
         self.infer_assay_type(result, ext_info)
 
         self._finalize_result(result)
@@ -507,6 +507,8 @@ class RuleEngine:
         if result.skip:
             return
         if result.assay_type not in (None, NOT_CLASSIFIED):
+            return
+        if "assay_type" in result._conflicted_fields:
             return
 
         for assay_rule in self.rules.assay_type_rules:
