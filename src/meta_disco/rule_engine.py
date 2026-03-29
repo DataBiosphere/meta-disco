@@ -230,18 +230,12 @@ class RuleEngine:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
                     if rule.terminal:
-                        if result.assay_type is None:
-                            inferred = self.infer_assay_type(result, ext_info)
-                            if inferred:
-                                result.assay_type = inferred
+                        self.infer_assay_type(result, ext_info)
                         self._finalize_result(result)
                         return result
 
-        # After all rules, attempt assay_type inference if still unset
-        if result.assay_type is None:
-            inferred = self.infer_assay_type(result, ext_info)
-            if inferred:
-                result.assay_type = inferred
+        # After all rules, attempt assay_type inference (guards are internal)
+        self.infer_assay_type(result, ext_info)
 
         self._finalize_result(result)
         return result
@@ -503,12 +497,20 @@ class RuleEngine:
         self,
         result: ExtendedClassificationResult,
         file_info: ExtendedFileInfo
-    ) -> str | None:
+    ) -> None:
         """Infer assay type from other classification signals.
 
-        Uses the assay_type_rules from unified rules to infer WGS/WES/RNA-seq/etc.
-        based on matched rules, modality, platform, and file size.
+        Sets result.assay_type and appends evidence when a matching
+        assay_type_rule is found. Skips if assay_type is already set,
+        if the file is marked for skipping, or if assay_type is conflicted.
         """
+        if result.skip:
+            return
+        if result.assay_type not in (None, NOT_CLASSIFIED):
+            return
+        if "assay_type" in result._conflicted_fields:
+            return
+
         for assay_rule in self.rules.assay_type_rules:
             conditions = assay_rule.conditions
 
@@ -559,10 +561,19 @@ class RuleEngine:
                 if file_info.file_size_gb is None or file_info.file_size_gb >= size_lt:
                     continue
 
-            # All conditions passed - return this assay type
-            return assay_rule.assay_type
-
-        return None
+            # All conditions passed — apply and record evidence
+            result.assay_type = assay_rule.assay_type
+            # Remove stale not_classified placeholder if _finalize_result ran first
+            result.field_evidence["assay_type"] = [
+                e for e in result.field_evidence["assay_type"]
+                if e.get("rule_id") != "not_classified"
+            ]
+            result.field_evidence["assay_type"].append({
+                "rule_id": "infer_assay_type",
+                "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                "confidence": 0.70,
+            })
+            return
 
     def classify_with_bam_header(
         self,
