@@ -54,8 +54,6 @@
 #
 # - skip: Files to ignore (indices, checksums, logs)
 #
-# - needs_*: Flags indicating more information needed for classification
-#
 #
 # FILE STRUCTURE (Multi-document YAML)
 # ------------------------------------
@@ -120,9 +118,6 @@
 #
 # Control flags:
 # - skip: true to mark file for skipping (indices, checksums)
-# - needs_header_inspection: true to flag for header analysis
-# - needs_study_context: true to flag for study context needed
-# - needs_manual_review: true to flag for human review
 #
 #
 # TIPS FOR REVIEWING/EDITING RULES

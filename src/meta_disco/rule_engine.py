@@ -73,19 +73,17 @@ class ExtendedClassificationResult:
 
     @property
     def rules_matched(self) -> list[str]:
-        """Deduplicated list of all rule IDs that matched, including skip/category rules."""
+        """All rule IDs that matched: field-setting rules from evidence + skip/category rules."""
         seen = set()
         result = []
-        for rid in self._all_matched_rules:
-            if rid not in seen:
-                seen.add(rid)
-                result.append(rid)
         for entries in self.field_evidence.values():
             for e in entries:
                 rid = e["rule_id"]
                 if rid not in seen:
                     seen.add(rid)
                     result.append(rid)
+        # Add rules that only set skip/file_category (not in field_evidence)
+        result.extend(self._all_matched_rules)
         return result
 
     @property
@@ -426,8 +424,6 @@ class RuleEngine:
             "reason": rule.rationale or "",
             "confidence": rule.confidence,
         }
-        result._all_matched_rules.append(rule.id)
-
         # Set classification fields and record per-field evidence
         set_any_field = False
         for fld in result._CLASSIFICATION_FIELDS:
@@ -461,6 +457,10 @@ class RuleEngine:
                     result._field_set_by_tier[fld] = rule.tier
                     result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
+
+        # Track rules that don't set classification fields (skip, file_category)
+        if not set_any_field:
+            result._all_matched_rules.append(rule.id)
 
         # Set file category (not a classification field)
         if "file_category" in then and then["file_category"] is not None:
