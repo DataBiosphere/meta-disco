@@ -214,16 +214,10 @@ def classify_from_header(
         file_format: Optional file format string (e.g., ".bam", ".cram")
 
     Returns:
-        Dict with:
-            - data_modality: str or None
-            - data_type: str (typically "alignments")
-            - assay_type: str or None (WGS, WES, RNA-seq, etc.)
-            - reference_assembly: str or None
-            - platform: str or None (ILLUMINA, PACBIO, ONT)
-            - confidence: float
-            - is_aligned: bool or None
-            - matched_rules: list of rule IDs that matched
-            - evidence: list of dicts with rule details
+        Dict with per-field classifications and consistency info:
+            - {field}: {value, confidence, evidence[]} for each of
+              data_modality, data_type, assay_type, reference_assembly, platform
+            - consistency: {convergent_signals, conflicting_signals, warnings}
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -243,7 +237,6 @@ def classify_from_header(
     # Detect reference from contig lengths first — definitive signal
     lines = header_text.strip().split("\n") if header_text else []
     sq_lines = [line for line in lines if line.startswith("@SQ")]
-    is_aligned = bool(sq_lines) if lines else None
 
     from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
     contig_ref = None
@@ -287,7 +280,6 @@ def classify_from_header(
 
     result.confidence = final_confidence
     classifications = result.to_output_dict()
-    classifications["is_aligned"] = is_aligned
     classifications["consistency"] = consistency
     return classifications
 

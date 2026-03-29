@@ -77,12 +77,6 @@ class TestRuleMatching:
         )
         assert result.data_modality == "transcriptomic.bulk"
 
-    def test_alignment_needs_header_inspection(self, engine):
-        """BAM without indicators should need header inspection."""
-        result = engine.classify(FileInfo(filename="sample.bam"))
-        assert result.needs_header_inspection is True
-        assert result.confidence == 0.0
-
     def test_star_aligner_indicates_rnaseq(self, engine):
         """STAR aligner output pattern should indicate RNA-seq."""
         result = engine.classify(
@@ -182,9 +176,9 @@ class TestFastqFiles:
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_fastq_ambiguous(self, engine):
-        """FASTQ without indicators needs study context."""
+        """FASTQ without indicators is not classified for modality."""
         result = engine.classify(FileInfo(filename="sample_R1.fastq.gz"))
-        assert result.needs_study_context is True
+        assert result.data_modality == NOT_CLASSIFIED
 
 
 class TestSignalTracks:
@@ -246,9 +240,9 @@ class TestTextFiles:
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_ambiguous_txt(self, engine):
-        """Ambiguous text files need manual review."""
+        """Ambiguous text files are not classified for modality."""
         result = engine.classify(FileInfo(filename="data.txt"))
-        assert result.needs_manual_review is True
+        assert result.data_modality == NOT_CLASSIFIED
 
 
 class TestIntegration:
@@ -280,9 +274,9 @@ class TestIntegration:
         assert result.skip is True
 
     def test_unknown_extension(self, engine):
-        """Unknown extensions should need manual review."""
+        """Unknown extensions are not classified."""
         result = engine.classify(FileInfo(filename="sample.xyz"))
-        assert result.needs_manual_review is True
+        assert result.data_modality == NOT_CLASSIFIED
 
 
 class TestConflictingReferenceRules:
