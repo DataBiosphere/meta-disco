@@ -248,13 +248,9 @@ class ClassifyPipeline:
             "md5sum": md5,
             "file_size": file_size,
             "file_format": file_format,
+            "dataset_title": record.get("dataset_title"),
             "classifications": classifications,
             "entry_id": entry_id,
-            "original_record": {
-                "file_format": file_format,
-                "file_size": file_size,
-                "dataset_title": record.get("dataset_title"),
-            },
             "from_cache": was_cached,
         }
         return result, was_cached
