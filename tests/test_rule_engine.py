@@ -334,6 +334,50 @@ class TestConflictingClassificationFields:
         assert "conflicting_reference_assembly_rules" in rule_ids
 
 
+class TestAssayTypeInference:
+    """Test that infer_assay_type records evidence correctly."""
+
+    def test_inferred_assay_type_has_evidence(self, engine):
+        """Inferred assay_type should have evidence with confidence 0.70."""
+        file_info = ExtendedFileInfo(
+            filename="sample.bam", file_size=60_000_000_000,
+            file_size_gb=60.0, file_format=".bam",
+        )
+        result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
+        # Set conditions that trigger WGS inference
+        result.data_modality = "genomic"
+        result.platform = "ILLUMINA"
+        result.assay_type = None
+        result.field_evidence["assay_type"] = []
+        engine.infer_assay_type(result, file_info)
+        assert result.assay_type == "WGS"
+        evidence = result.field_evidence["assay_type"]
+        assert len(evidence) == 1
+        assert evidence[0]["rule_id"] == "infer_assay_type"
+        assert evidence[0]["confidence"] == 0.70
+
+    def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
+        """Inference should remove stale not_classified placeholder evidence."""
+        file_info = ExtendedFileInfo(
+            filename="sample.bam", file_size=60_000_000_000,
+            file_size_gb=60.0, file_format=".bam",
+        )
+        result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
+        result.data_modality = "genomic"
+        result.platform = "ILLUMINA"
+        result.assay_type = NOT_CLASSIFIED
+        result.field_evidence["assay_type"] = [{
+            "rule_id": "not_classified",
+            "reason": "No rule determined a value for assay_type",
+            "confidence": 0.0,
+        }]
+        engine.infer_assay_type(result, file_info)
+        assert result.assay_type == "WGS"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["assay_type"]]
+        assert "not_classified" not in rule_ids
+        assert "infer_assay_type" in rule_ids
+
+
 class TestReasonChain:
     """Test that reason chains are properly built."""
 
