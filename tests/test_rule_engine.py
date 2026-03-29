@@ -107,30 +107,28 @@ class TestVariantFiles:
         assert result.reference_assembly == "GRCh38"
 
 
-class TestSkipFiles:
-    """Test files that should be skipped."""
+class TestDerivativeFiles:
+    """Test that derivative files (indices, checksums, logs) are not misclassified."""
 
-    def test_index_bai(self, engine):
-        """BAI index files should be skipped."""
+    def test_index_bai_not_misclassified(self, engine):
+        """BAI index files should not be classified as BAM data."""
         result = engine.classify(FileInfo(filename="sample.bam.bai"))
-        assert result.skip is True
-        assert "index_skip" in result.rules_matched
+        assert result.data_modality == NOT_CLASSIFIED
 
-    def test_index_crai(self, engine):
-        """CRAI index files should be skipped."""
+    def test_index_crai_not_misclassified(self, engine):
+        """CRAI index files should not be classified as CRAM data."""
         result = engine.classify(FileInfo(filename="sample.cram.crai"))
-        assert result.skip is True
+        assert result.data_modality == NOT_CLASSIFIED
 
-    def test_checksum_md5(self, engine):
-        """MD5 checksum files should be skipped."""
+    def test_checksum_md5_not_misclassified(self, engine):
+        """MD5 checksum files should not be classified."""
         result = engine.classify(FileInfo(filename="HG02558.final.cram.md5"))
-        assert result.skip is True
-        assert "checksum_skip" in result.rules_matched
+        assert result.data_modality == NOT_CLASSIFIED
 
-    def test_log_files(self, engine):
-        """Log files should be skipped."""
+    def test_log_files_not_misclassified(self, engine):
+        """Log files should not be classified."""
         result = engine.classify(FileInfo(filename="pipeline.log"))
-        assert result.skip is True
+        assert result.data_modality == NOT_CLASSIFIED
 
 
 class TestSpecialFileTypes:
@@ -230,9 +228,9 @@ class TestTextFiles:
     """Test text/tabular file classification."""
 
     def test_stats_file(self, engine):
-        """QC stats files should be skipped."""
+        """QC stats files are not classified for modality."""
         result = engine.classify(FileInfo(filename="sample.stats.txt"))
-        assert result.skip is True
+        assert result.data_modality == NOT_CLASSIFIED
 
     def test_count_matrix(self, engine):
         """Count matrix files should be transcriptomic."""
@@ -269,9 +267,9 @@ class TestIntegration:
         assert result.confidence >= 0.95
 
     def test_cram_md5(self, engine):
-        """CRAM MD5 checksum should be skipped."""
+        """CRAM MD5 checksum is not classified."""
         result = engine.classify(FileInfo(filename="HG02558.final.cram.md5"))
-        assert result.skip is True
+        assert result.data_modality == NOT_CLASSIFIED
 
     def test_unknown_extension(self, engine):
         """Unknown extensions are not classified."""
@@ -390,19 +388,17 @@ class TestReasonChain:
 class TestSentinelValues:
     """Test that not_applicable/not_classified sentinels are used correctly."""
 
-    def test_skipped_files_get_not_applicable(self, engine):
-        """Skipped files (indexes, checksums) should get not_applicable for all fields."""
+    def test_derivative_files_get_not_classified(self, engine):
+        """Derivative files (indexes, checksums) get not_classified — no rules match their extensions."""
         result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
-        assert result.skip is True
-        assert result.data_modality == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
-        assert result.platform == NOT_APPLICABLE
-        assert result.assay_type == NOT_APPLICABLE
+        assert result.data_modality == NOT_CLASSIFIED
+        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.platform == NOT_CLASSIFIED
+        assert result.assay_type == NOT_CLASSIFIED
 
     def test_unclassified_fields_get_not_classified(self, engine):
-        """Non-skipped files with unset fields should get not_classified."""
+        """Files with unset fields should get not_classified."""
         result = engine.classify_extended(FileInfo(filename="sample.xyz"))
-        assert result.skip is False
         assert result.data_modality == NOT_CLASSIFIED
         assert result.reference_assembly == NOT_CLASSIFIED
 

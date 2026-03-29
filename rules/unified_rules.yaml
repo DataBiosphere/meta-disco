@@ -52,8 +52,6 @@
 #
 # - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
 #
-# - skip: Files to ignore (indices, checksums, logs)
-#
 #
 # FILE STRUCTURE (Multi-document YAML)
 # ------------------------------------
@@ -116,8 +114,6 @@
 # - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
 # - file_category: set category (qc_stats, reference_intervals, etc.)
 #
-# Control flags:
-# - skip: true to mark file for skipping (indices, checksums)
 #
 #
 # TIPS FOR REVIEWING/EDITING RULES
@@ -177,7 +173,7 @@ extension_map:
   ".bigWig": signal
   ".bedGraph": signal
 
-  # Indices (skip - inherit from parent)
+  # Indices (inherit from parent via classify_index_files.py)
   ".bai": index
   ".crai": index
   ".tbi": index
@@ -186,7 +182,7 @@ extension_map:
   ".idx": index
   ".pbi": index
 
-  # Checksums (skip)
+  # Checksums
   ".md5": checksum
 
   # Genotyping (PLINK)
@@ -244,75 +240,6 @@ rules:
   # TIER 1: EXTENSION-BASED RULES
   # ===========================================================================
 
-  # ---------------------------------------------------------------------------
-  # Index files - skip classification
-  # ---------------------------------------------------------------------------
-  - id: index_skip
-    tier: 1
-    scope: extension
-    when:
-      extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Index file - inherits classification from parent data file"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Checksum files - skip classification
-  # ---------------------------------------------------------------------------
-  - id: checksum_skip
-    tier: 1
-    scope: extension
-    when:
-      extensions: [".md5"]
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Checksum file - not data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Chunked upload artifacts - skip classification
-  # ---------------------------------------------------------------------------
-  - id: chunked_upload_skip
-    tier: 1
-    scope: filename
-    when:
-      filename_pattern: "gs-chunked-io-part\\.\\d+"
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Incomplete chunked upload artifact from Google Cloud Storage - not usable data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Bare timestamp filenames - skip classification
-  # ---------------------------------------------------------------------------
-  - id: timestamp_filename_skip
-    tier: 1
-    scope: filename
-    when:
-      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Bare ISO timestamp filename - metadata artifact, not data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Log files - skip classification
-  # ---------------------------------------------------------------------------
-  - id: log_skip
-    tier: 1
-    scope: extension
-    when:
-      extensions: [".log"]
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Log file - not data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # VCF files - genomic by default
@@ -938,34 +865,9 @@ rules:
     rationale: "ChIP-seq histone modification peaks"
     terminal: true
 
-  - id: intervals_targets
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed", ".bed.gz"]
-      filename_pattern: "(?i)targets?|regions?|capture|exome"
-    then:
-      file_category: reference_intervals
-      skip: true
-    confidence: 0.85
-    rationale: "Target/capture region file - reference data"
-    terminal: true
-
   # ---------------------------------------------------------------------------
   # Text files - QC stats
   # ---------------------------------------------------------------------------
-  - id: text_stats
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".txt", ".tsv"]
-      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|mosdepth|flagstat"
-    then:
-      skip: true
-      file_category: qc_stats
-    confidence: 0.90
-    rationale: "QC/stats file - supplementary data"
-    terminal: true
 
   - id: text_counts
     tier: 2
@@ -983,31 +885,6 @@ rules:
   # ---------------------------------------------------------------------------
   # Images - QC plots
   # ---------------------------------------------------------------------------
-  - id: image_qc_plot
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
-      filename_pattern: "(?i)plot|qc|fastqc|multiqc"
-    then:
-      skip: true
-      file_category: qc_plot
-    confidence: 0.85
-    rationale: "QC plot - supplementary visualization"
-    terminal: true
-
-  - id: image_assembly_plot
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
-      filename_pattern: "(?i)merqury|assembly|kmer"
-    then:
-      skip: true
-      file_category: assembly_plot
-    confidence: 0.80
-    rationale: "Assembly QC plot - supplementary visualization"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Archive files - T2T specific
