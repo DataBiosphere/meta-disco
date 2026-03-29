@@ -27,6 +27,3 @@ class ClassificationResult:
     reasons: list[str] = field(default_factory=list)
     rules_matched: list[str] = field(default_factory=list)
     skip: bool = False
-    needs_header_inspection: bool = False
-    needs_study_context: bool = False
-    needs_manual_review: bool = False

@@ -38,8 +38,6 @@ def print_bam_summary(classifications: list[dict]):
     modalities = {}
     references = {}
     platforms = {}
-    aligned_count = 0
-    unaligned_count = 0
 
     for c in classifications:
         mod = _val(c, "data_modality") or "unknown"
@@ -51,14 +49,7 @@ def print_bam_summary(classifications: list[dict]):
         plat = _val(c, "platform") or "unknown"
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        if _val(c, "is_aligned"):
-            aligned_count += 1
-        else:
-            unaligned_count += 1
-
     print(f"\nTotal files classified: {len(classifications)}")
-    print(f"  Aligned: {aligned_count}")
-    print(f"  Unaligned: {unaligned_count}")
 
     _print_field_table("Data Modalities", modalities)
     _print_field_table("Reference Assemblies", references)
@@ -68,7 +59,6 @@ def print_bam_summary(classifications: list[dict]):
         ("Modality", "data_modality"),
         ("Reference", "reference_assembly"),
         ("Platform", "platform"),
-        ("Aligned", "is_aligned"),
     ])
 
 

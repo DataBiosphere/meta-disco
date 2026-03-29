@@ -472,7 +472,6 @@ rules:
       data_type: sequence
       platform: not_applicable
       assay_type: not_applicable
-      needs_header_inspection: true
     confidence: 0.30
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
     terminal: false
@@ -2139,54 +2138,6 @@ rules:
   # FALLBACK RULES
   # ===========================================================================
 
-  - id: alignment_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
-      modality_not_set: true
-    then:
-      needs_header_inspection: true
-    confidence: 0.0
-    rationale: "No modality indicators found; requires BAM header inspection"
-    terminal: false
-
-  - id: variant_needs_header
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
-      reference_not_set: true
-    then:
-      needs_header_inspection: true
-    confidence: 0.0
-    rationale: "Reference assembly not in filename; check VCF header"
-    terminal: false
-
-  - id: reads_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
-      modality_not_set: true
-    then:
-      needs_study_context: true
-    confidence: 0.0
-    rationale: "FASTQ modality ambiguous; requires study context"
-    terminal: false
-
-  - id: signal_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
-      modality_not_set: true
-    then:
-      needs_study_context: true
-    confidence: 0.0
-    rationale: "Signal track modality unclear - needs study context"
-    terminal: true
-
   - id: intervals_fallback
     tier: 2
     scope: filename
@@ -2196,69 +2147,10 @@ rules:
     then:
       data_modality: genomic
       data_type: annotations
-      needs_study_context: true
     confidence: 0.60
     rationale: "BED file with no specific pattern - defaulting to genomic intervals"
     terminal: true
 
-  - id: fasta_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
-      modality_not_set: true
-    then:
-      needs_header_inspection: true
-    confidence: 0.0
-    rationale: "FASTA modality ambiguous; requires header inspection"
-    terminal: false
-
-  - id: archive_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".tar", ".tar.gz", ".zip"]
-      modality_not_set: true
-    then:
-      needs_manual_review: true
-    confidence: 0.0
-    rationale: "Archive contents unknown - needs inspection"
-    terminal: true
-
-  - id: image_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
-      modality_not_set: true
-    then:
-      needs_manual_review: true
-    confidence: 0.0
-    rationale: "Image purpose unclear"
-    terminal: true
-
-  - id: text_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".txt", ".tsv", ".csv"]
-      modality_not_set: true
-    then:
-      needs_manual_review: true
-    confidence: 0.0
-    rationale: "Ambiguous text file - requires manual review"
-    terminal: true
-
-  - id: unknown_extension_fallback
-    tier: 2
-    scope: filename
-    when:
-      modality_not_set: true
-    then:
-      needs_manual_review: true
-    confidence: 0.0
-    rationale: "Unknown file extension - requires manual review"
-    terminal: false  # Allow tier 3 header rules to run
 
 ---
 # =============================================================================

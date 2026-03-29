@@ -67,9 +67,6 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
             "predicted_reference": result.reference_assembly,
             "confidence": result.confidence,
             "skip": result.skip,
-            "needs_header_inspection": result.needs_header_inspection,
-            "needs_study_context": result.needs_study_context,
-            "needs_manual_review": result.needs_manual_review,
             "rules_matched": "|".join(result.rules_matched),
             "reasons": "|".join(result.reasons),
         })
@@ -86,9 +83,6 @@ def compute_stats(results: list[dict]) -> dict:
         "classified_with_modality": 0,
         "classified_with_reference": 0,
         "skipped": 0,
-        "needs_header_inspection": 0,
-        "needs_study_context": 0,
-        "needs_manual_review": 0,
         "high_confidence": 0,  # >= 0.9
         "medium_confidence": 0,  # 0.7-0.89
         "low_confidence": 0,  # < 0.7
@@ -104,13 +98,6 @@ def compute_stats(results: list[dict]) -> dict:
     for r in results:
         if r["skip"]:
             stats["skipped"] += 1
-        if r["needs_header_inspection"]:
-            stats["needs_header_inspection"] += 1
-        if r["needs_study_context"]:
-            stats["needs_study_context"] += 1
-        if r["needs_manual_review"]:
-            stats["needs_manual_review"] += 1
-
 
         mod = r["predicted_modality"]
         if mod and mod not in _SENTINEL_VALUES:
@@ -205,11 +192,6 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     print(f"  High (>=90%):               {stats['high_confidence']:,}")
     print(f"  Medium (70-89%):            {stats['medium_confidence']:,}")
     print(f"  Low (<70%):                 {stats['low_confidence']:,}")
-    print()
-    print("NEEDS FURTHER WORK:")
-    print(f"  Needs header inspection:    {stats['needs_header_inspection']:,}")
-    print(f"  Needs study context:        {stats['needs_study_context']:,}")
-    print(f"  Needs manual review:        {stats['needs_manual_review']:,}")
     print()
     print("TOP MODALITIES:")
     for mod, count in sorted(stats["modality_breakdown"].items(), key=lambda x: -x[1])[:10]:

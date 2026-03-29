@@ -251,7 +251,6 @@ class ClassifyPipeline:
             "dataset_title": record.get("dataset_title"),
             "classifications": classifications,
             "entry_id": entry_id,
-            "from_cache": was_cached,
         }
         return result, was_cached
 

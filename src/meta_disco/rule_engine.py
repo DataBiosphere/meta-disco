@@ -65,20 +65,21 @@ class ExtendedClassificationResult:
         "reference_assembly": [],
         "assay_type": [],
         "platform": [],
-        "_general": [],  # Rules that don't set a specific classification field
     })
     skip: bool = False
+    _all_matched_rules: list[str] = field(default_factory=list)
     _conflicted_fields: set = field(default_factory=set)
     _field_set_by_tier: dict[str, int] = field(default_factory=dict)
-    needs_header_inspection: bool = False
-    needs_study_context: bool = False
-    needs_manual_review: bool = False
 
     @property
     def rules_matched(self) -> list[str]:
-        """Flatten field_evidence into a deduplicated list of rule IDs."""
+        """Deduplicated list of all rule IDs that matched, including skip/category rules."""
         seen = set()
         result = []
+        for rid in self._all_matched_rules:
+            if rid not in seen:
+                seen.add(rid)
+                result.append(rid)
         for entries in self.field_evidence.values():
             for e in entries:
                 rid = e["rule_id"]
@@ -109,9 +110,6 @@ class ExtendedClassificationResult:
             reasons=self.reasons,
             rules_matched=self.rules_matched,
             skip=self.skip,
-            needs_header_inspection=self.needs_header_inspection,
-            needs_study_context=self.needs_study_context,
-            needs_manual_review=self.needs_manual_review,
         )
 
     def to_output_dict(self) -> dict:
@@ -125,12 +123,6 @@ class ExtendedClassificationResult:
                 "value": value,
                 "confidence": fld_conf,
                 "evidence": evidence,
-            }
-        # Include general evidence (skip rules, etc.) if any
-        general = self.field_evidence.get("_general", [])
-        if general:
-            classifications["_general"] = {
-                "evidence": general,
             }
         return classifications
 
@@ -434,6 +426,7 @@ class RuleEngine:
             "reason": rule.rationale or "",
             "confidence": rule.confidence,
         }
+        result._all_matched_rules.append(rule.id)
 
         # Set classification fields and record per-field evidence
         set_any_field = False
@@ -469,10 +462,6 @@ class RuleEngine:
                     result.field_evidence[fld].append(evidence_entry.copy())
                 set_any_field = True
 
-        # Rules that don't set classification fields (skip, needs_*, etc.)
-        if not set_any_field:
-            result.field_evidence["_general"].append(evidence_entry)
-
         # Set file category (not a classification field)
         if "file_category" in then and then["file_category"] is not None:
             result.file_category = then["file_category"]
@@ -480,14 +469,6 @@ class RuleEngine:
         # Set skip flag
         if then.get("skip"):
             result.skip = True
-
-        # Set inspection/review flags
-        if then.get("needs_header_inspection"):
-            result.needs_header_inspection = True
-        if then.get("needs_study_context"):
-            result.needs_study_context = True
-        if then.get("needs_manual_review"):
-            result.needs_manual_review = True
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
