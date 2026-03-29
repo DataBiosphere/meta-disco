@@ -81,6 +81,7 @@ The LinkML schema (`anvil_file.yaml`) defines:
 
 - **After any rename/move**: grep the entire codebase for all references to the old name — imports, comments, docs, Makefile targets, YAML, tests. Do not assume you found them all by hand.
 - **After changing a function signature or rule ID**: grep for all callers/references before committing.
+- **After changing function behavior**: verify the docstring still matches — especially guard conditions, side effects, return values, and mutation behavior.
 - **After changing output format**: check all consumers — summary printers, tests, downstream scripts.
 
 ## Environment
