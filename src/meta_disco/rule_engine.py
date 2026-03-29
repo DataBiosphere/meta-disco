@@ -501,8 +501,8 @@ class RuleEngine:
         """Infer assay type from other classification signals.
 
         Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already set
-        or if the file is marked for skipping.
+        assay_type_rule is found. Skips if assay_type is already set,
+        if the file is marked for skipping, or if assay_type is conflicted.
         """
         if result.skip:
             return
