@@ -214,15 +214,10 @@ def classify_from_header(
         file_format: Optional file format string (e.g., ".bam", ".cram")
 
     Returns:
-        Dict with:
-            - data_modality: str or None
-            - data_type: str (typically "alignments")
-            - assay_type: str or None (WGS, WES, RNA-seq, etc.)
-            - reference_assembly: str or None
-            - platform: str or None (ILLUMINA, PACBIO, ONT)
-            - confidence: float
-            - matched_rules: list of rule IDs that matched
-            - evidence: list of dicts with rule details
+        Dict with per-field classifications and consistency info:
+            - {field}: {value, confidence, evidence[]} for each of
+              data_modality, data_type, assay_type, reference_assembly, platform
+            - consistency: {convergent_signals, conflicting_signals, warnings}
     """
     from .rule_engine import ExtendedFileInfo
 
