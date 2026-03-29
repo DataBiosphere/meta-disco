@@ -112,7 +112,6 @@
 # - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
 # - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
 # - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
-# - file_category: set category (qc_stats, reference_intervals, etc.)
 #
 #
 #
