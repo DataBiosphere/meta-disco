@@ -83,7 +83,10 @@ class ExtendedClassificationResult:
                     seen.add(rid)
                     result.append(rid)
         # Add rules that only set skip/file_category (not in field_evidence)
-        result.extend(self._all_matched_rules)
+        for rid in self._all_matched_rules:
+            if rid not in seen:
+                seen.add(rid)
+                result.append(rid)
         return result
 
     @property
