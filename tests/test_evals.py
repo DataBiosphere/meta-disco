@@ -317,21 +317,21 @@ class TestRuleEngineE2E:
         assert result.data_modality == "transcriptomic.bulk"
         assert result.reference_assembly == NOT_APPLICABLE
 
-    def test_checksum_not_classified(self):
+    def test_checksum_not_applicable(self):
         result = engine.classify_extended(FileInfo(filename="sample.md5"))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.data_modality == NOT_APPLICABLE
 
-    def test_chunked_upload_not_classified(self):
+    def test_chunked_upload_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"
         ))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.data_modality == NOT_APPLICABLE
 
-    def test_timestamp_filename_not_classified(self):
+    def test_timestamp_filename_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="2020-11-20T212208.245537Z"
         ))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.data_modality == NOT_APPLICABLE
 
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo(filename="assembly_plot.png"))
@@ -339,10 +339,10 @@ class TestRuleEngineE2E:
         assert result.platform == NOT_APPLICABLE
         assert result.reference_assembly == NOT_APPLICABLE
 
-    def test_all_index_types_not_classified(self):
+    def test_all_index_types_not_applicable(self):
         for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
             result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
-            assert result.data_modality == NOT_CLASSIFIED, f"{ext} should not be classified"
+            assert result.data_modality == NOT_APPLICABLE, f"{ext} should be not_applicable"
 
     def test_narrowpeak_is_chromatin(self):
         result = engine.classify_extended(FileInfo(filename="sample.narrowPeak"))

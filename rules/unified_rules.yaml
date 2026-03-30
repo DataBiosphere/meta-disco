@@ -241,6 +241,96 @@ rules:
 
 
   # ---------------------------------------------------------------------------
+  # Index files - not applicable (inherit from parent via classify_index_files.py)
+  # ---------------------------------------------------------------------------
+  - id: index_not_applicable
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Index file — metadata inherited from parent data file"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Checksum files - not applicable
+  # ---------------------------------------------------------------------------
+  - id: checksum_not_applicable
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".md5"]
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Checksum file — not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Log files - not applicable
+  # ---------------------------------------------------------------------------
+  - id: log_not_applicable
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".log"]
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Log file — not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Chunked upload artifacts - not applicable
+  # ---------------------------------------------------------------------------
+  - id: chunked_upload_not_applicable
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "gs-chunked-io-part\\.\\d+"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Incomplete chunked upload artifact — not usable data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Bare timestamp filenames - not applicable
+  # ---------------------------------------------------------------------------
+  - id: timestamp_not_applicable
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Bare ISO timestamp filename — metadata artifact, not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
   # VCF files - genomic by default
   # ---------------------------------------------------------------------------
   - id: variant_default_genomic
@@ -848,7 +938,26 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # Intervals - target regions
+  # Intervals - target/capture region files (reference data, not primary)
+  # ---------------------------------------------------------------------------
+  - id: intervals_targets
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)targets?|regions?|capture|exome"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 0.85
+    rationale: "Target/capture region file — reference data, not primary experimental data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Intervals - ChIP-seq peaks
   # ---------------------------------------------------------------------------
   - id: intervals_chip_peaks
     tier: 2
@@ -865,8 +974,23 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # Text files - QC stats
+  # Text files - QC stats (not primary data)
   # ---------------------------------------------------------------------------
+  - id: text_stats
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".txt", ".tsv"]
+      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|mosdepth|flagstat"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 0.90
+    rationale: "QC/stats file — supplementary data, not primary experimental data"
+    terminal: true
 
   - id: text_counts
     tier: 2
