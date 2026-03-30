@@ -26,4 +26,3 @@ class ClassificationResult:
     confidence: float = 0.0
     reasons: list[str] = field(default_factory=list)
     rules_matched: list[str] = field(default_factory=list)
-    skip: bool = False

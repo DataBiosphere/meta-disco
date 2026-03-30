@@ -66,7 +66,6 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
             "predicted_modality": result.data_modality,
             "predicted_reference": result.reference_assembly,
             "confidence": result.confidence,
-            "skip": result.skip,
             "rules_matched": "|".join(result.rules_matched),
             "reasons": "|".join(result.reasons),
         })
@@ -82,7 +81,6 @@ def compute_stats(results: list[dict]) -> dict:
         "total_files": total,
         "classified_with_modality": 0,
         "classified_with_reference": 0,
-        "skipped": 0,
         "high_confidence": 0,  # >= 0.9
         "medium_confidence": 0,  # 0.7-0.89
         "low_confidence": 0,  # < 0.7
@@ -96,9 +94,6 @@ def compute_stats(results: list[dict]) -> dict:
     }
 
     for r in results:
-        if r["skip"]:
-            stats["skipped"] += 1
-
         mod = r["predicted_modality"]
         if mod and mod not in _SENTINEL_VALUES:
             stats["classified_with_modality"] += 1
@@ -176,7 +171,6 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     print("CLASSIFICATION SUMMARY")
     print("=" * 70)
     print(f"Total files:                  {stats['total_files']:,}")
-    print(f"Skipped (index/checksum):     {stats['skipped']:,} ({100*stats['skipped']/stats['total_files']:.1f}%)")
     print()
     print("MODALITY CLASSIFICATION:")
     print(f"  Classified with modality:   {stats['classified_with_modality']:,} ({100*stats['classified_with_modality']/stats['total_files']:.1f}%)")

@@ -317,23 +317,20 @@ class TestRuleEngineE2E:
         assert result.data_modality == "transcriptomic.bulk"
         assert result.reference_assembly == NOT_APPLICABLE
 
-    def test_checksum_skipped(self):
+    def test_checksum_not_applicable(self):
         result = engine.classify_extended(FileInfo(filename="sample.md5"))
-        assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 
-    def test_chunked_upload_skipped(self):
+    def test_chunked_upload_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"
         ))
-        assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 
-    def test_timestamp_filename_skipped(self):
+    def test_timestamp_filename_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="2020-11-20T212208.245537Z"
         ))
-        assert result.skip is True
         assert result.data_modality == NOT_APPLICABLE
 
     def test_png_derived(self):
@@ -342,10 +339,10 @@ class TestRuleEngineE2E:
         assert result.platform == NOT_APPLICABLE
         assert result.reference_assembly == NOT_APPLICABLE
 
-    def test_all_index_types_skipped(self):
+    def test_all_index_types_not_applicable(self):
         for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
             result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
-            assert result.skip is True, f"{ext} should be skipped"
+            assert result.data_modality == NOT_APPLICABLE, f"{ext} should be not_applicable"
 
     def test_narrowpeak_is_chromatin(self):
         result = engine.classify_extended(FileInfo(filename="sample.narrowPeak"))

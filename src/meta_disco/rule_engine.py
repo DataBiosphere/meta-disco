@@ -57,7 +57,6 @@ class ExtendedClassificationResult:
     reference_assembly: str | None = None
     assay_type: str | None = None
     platform: str | None = None
-    file_category: str | None = None
     confidence: float = 0.0
     field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {
         "data_modality": [],
@@ -66,14 +65,16 @@ class ExtendedClassificationResult:
         "assay_type": [],
         "platform": [],
     })
-    skip: bool = False
-    _all_matched_rules: list[str] = field(default_factory=list)
     _conflicted_fields: set = field(default_factory=set)
     _field_set_by_tier: dict[str, int] = field(default_factory=dict)
 
     @property
     def rules_matched(self) -> list[str]:
-        """All rule IDs that matched: field-setting rules from evidence + skip/category rules."""
+        """Deduplicated list of all rule identifiers from field evidence.
+
+        Includes YAML-defined rule IDs and synthetic IDs (not_classified,
+        infer_assay_type, conflicting_*) added by the rule engine.
+        """
         seen = set()
         result = []
         for entries in self.field_evidence.values():
@@ -82,11 +83,6 @@ class ExtendedClassificationResult:
                 if rid not in seen:
                     seen.add(rid)
                     result.append(rid)
-        # Add rules that only set skip/file_category (not in field_evidence)
-        for rid in self._all_matched_rules:
-            if rid not in seen:
-                seen.add(rid)
-                result.append(rid)
         return result
 
     @property
@@ -110,7 +106,6 @@ class ExtendedClassificationResult:
             confidence=self.confidence,
             reasons=self.reasons,
             rules_matched=self.rules_matched,
-            skip=self.skip,
         )
 
     def to_output_dict(self) -> dict:
@@ -237,20 +232,9 @@ class RuleEngine:
         """Set any remaining None values to appropriate sentinels with evidence.
 
         This distinguishes between:
-        - not_applicable: Field doesn't apply (skipped files, or explicitly set by rules)
-        - not_classified: No rule determined a value (default for non-skipped files)
+        - not_applicable: Field doesn't apply (explicitly set by rules)
+        - not_classified: No rule determined a value
         """
-        if result.skip:
-            for fld in result._CLASSIFICATION_FIELDS:
-                if getattr(result, fld) is None:
-                    setattr(result, fld, NOT_APPLICABLE)
-                    result.field_evidence[fld].append({
-                        "rule_id": "skip",
-                        "reason": "File type is skipped (index, checksum, etc.)",
-                        "confidence": 1.0,
-                    })
-            return
-
         for fld in result._CLASSIFICATION_FIELDS:
             if getattr(result, fld) is None:
                 setattr(result, fld, NOT_CLASSIFIED)
@@ -428,7 +412,6 @@ class RuleEngine:
             "confidence": rule.confidence,
         }
         # Set classification fields and record per-field evidence
-        set_any_field = False
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
                 current = getattr(result, fld)
@@ -459,19 +442,6 @@ class RuleEngine:
                     setattr(result, fld, new_val)
                     result._field_set_by_tier[fld] = rule.tier
                     result.field_evidence[fld].append(evidence_entry.copy())
-                set_any_field = True
-
-        # Track rules that don't set classification fields (skip, file_category)
-        if not set_any_field:
-            result._all_matched_rules.append(rule.id)
-
-        # Set file category (not a classification field)
-        if "file_category" in then and then["file_category"] is not None:
-            result.file_category = then["file_category"]
-
-        # Set skip flag
-        if then.get("skip"):
-            result.skip = True
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
@@ -485,11 +455,9 @@ class RuleEngine:
         """Infer assay type from other classification signals.
 
         Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already set,
-        if the file is marked for skipping, or if assay_type is conflicted.
+        assay_type_rule is found. Skips if assay_type is already set
+        or conflicted.
         """
-        if result.skip:
-            return
         if result.assay_type not in (None, NOT_CLASSIFIED):
             return
         if "assay_type" in result._conflicted_fields:

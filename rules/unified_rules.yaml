@@ -52,8 +52,6 @@
 #
 # - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
 #
-# - skip: Files to ignore (indices, checksums, logs)
-#
 #
 # FILE STRUCTURE (Multi-document YAML)
 # ------------------------------------
@@ -114,10 +112,7 @@
 # - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
 # - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
 # - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
-# - file_category: set category (qc_stats, reference_intervals, etc.)
 #
-# Control flags:
-# - skip: true to mark file for skipping (indices, checksums)
 #
 #
 # TIPS FOR REVIEWING/EDITING RULES
@@ -177,7 +172,7 @@ extension_map:
   ".bigWig": signal
   ".bedGraph": signal
 
-  # Indices (skip - inherit from parent)
+  # Indices (inherit from parent via classify_index_files.py)
   ".bai": index
   ".crai": index
   ".tbi": index
@@ -186,7 +181,7 @@ extension_map:
   ".idx": index
   ".pbi": index
 
-  # Checksums (skip)
+  # Checksums
   ".md5": checksum
 
   # Genotyping (PLINK)
@@ -244,74 +239,95 @@ rules:
   # TIER 1: EXTENSION-BASED RULES
   # ===========================================================================
 
+
   # ---------------------------------------------------------------------------
-  # Index files - skip classification
+  # Index files - not applicable (inherit from parent via classify_index_files.py)
   # ---------------------------------------------------------------------------
-  - id: index_skip
+  - id: index_not_applicable
     tier: 1
     scope: extension
     when:
       extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
     then:
-      skip: true
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
     confidence: 1.0
-    rationale: "Index file - inherits classification from parent data file"
+    rationale: "Index file — metadata inherited from parent data file"
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # Checksum files - skip classification
+  # Checksum files - not applicable
   # ---------------------------------------------------------------------------
-  - id: checksum_skip
+  - id: checksum_not_applicable
     tier: 1
     scope: extension
     when:
       extensions: [".md5"]
     then:
-      skip: true
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
     confidence: 1.0
-    rationale: "Checksum file - not data"
+    rationale: "Checksum file — not data"
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # Chunked upload artifacts - skip classification
+  # Log files - not applicable
   # ---------------------------------------------------------------------------
-  - id: chunked_upload_skip
-    tier: 1
-    scope: filename
-    when:
-      filename_pattern: "gs-chunked-io-part\\.\\d+"
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Incomplete chunked upload artifact from Google Cloud Storage - not usable data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Bare timestamp filenames - skip classification
-  # ---------------------------------------------------------------------------
-  - id: timestamp_filename_skip
-    tier: 1
-    scope: filename
-    when:
-      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
-    then:
-      skip: true
-    confidence: 1.0
-    rationale: "Bare ISO timestamp filename - metadata artifact, not data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Log files - skip classification
-  # ---------------------------------------------------------------------------
-  - id: log_skip
+  - id: log_not_applicable
     tier: 1
     scope: extension
     when:
       extensions: [".log"]
     then:
-      skip: true
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
     confidence: 1.0
-    rationale: "Log file - not data"
+    rationale: "Log file — not data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Chunked upload artifacts - not applicable
+  # ---------------------------------------------------------------------------
+  - id: chunked_upload_not_applicable
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "gs-chunked-io-part\\.\\d+"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Incomplete chunked upload artifact — not usable data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Bare timestamp filenames - not applicable
+  # ---------------------------------------------------------------------------
+  - id: timestamp_not_applicable
+    tier: 1
+    scope: filename
+    when:
+      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 1.0
+    rationale: "Bare ISO timestamp filename — metadata artifact, not data"
     terminal: true
 
   # ---------------------------------------------------------------------------
@@ -394,13 +410,13 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # PNG images - derived/QC plots
+  # Images - derived/QC plots
   # ---------------------------------------------------------------------------
-  - id: image_png_derived
+  - id: image_derived
     tier: 1
     scope: extension
     when:
-      extensions: [".png"]
+      extensions: [".png", ".jpg", ".tiff", ".tif"]
     then:
       data_modality: not_applicable
       data_type: images
@@ -408,7 +424,7 @@ rules:
       reference_assembly: not_applicable
       assay_type: not_applicable
     confidence: 0.90
-    rationale: "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data"
+    rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
     terminal: false
 
   # ---------------------------------------------------------------------------
@@ -922,7 +938,26 @@ rules:
     terminal: true
 
   # ---------------------------------------------------------------------------
-  # Intervals - target regions
+  # Intervals - target/capture region files (reference data, not primary)
+  # ---------------------------------------------------------------------------
+  - id: intervals_targets
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed", ".bed.gz"]
+      filename_pattern: "(?i)targets?|regions?|capture|exome"
+    then:
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
+    confidence: 0.85
+    rationale: "Target/capture region file — reference data, not primary experimental data"
+    terminal: true
+
+  # ---------------------------------------------------------------------------
+  # Intervals - ChIP-seq peaks
   # ---------------------------------------------------------------------------
   - id: intervals_chip_peaks
     tier: 2
@@ -938,21 +973,8 @@ rules:
     rationale: "ChIP-seq histone modification peaks"
     terminal: true
 
-  - id: intervals_targets
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed", ".bed.gz"]
-      filename_pattern: "(?i)targets?|regions?|capture|exome"
-    then:
-      file_category: reference_intervals
-      skip: true
-    confidence: 0.85
-    rationale: "Target/capture region file - reference data"
-    terminal: true
-
   # ---------------------------------------------------------------------------
-  # Text files - QC stats
+  # Text files - QC stats (not primary data)
   # ---------------------------------------------------------------------------
   - id: text_stats
     tier: 2
@@ -961,10 +983,13 @@ rules:
       extensions: [".txt", ".tsv"]
       filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|mosdepth|flagstat"
     then:
-      skip: true
-      file_category: qc_stats
+      data_modality: not_applicable
+      data_type: not_applicable
+      reference_assembly: not_applicable
+      assay_type: not_applicable
+      platform: not_applicable
     confidence: 0.90
-    rationale: "QC/stats file - supplementary data"
+    rationale: "QC/stats file — supplementary data, not primary experimental data"
     terminal: true
 
   - id: text_counts
@@ -978,35 +1003,6 @@ rules:
       data_type: expression_matrix
     confidence: 0.70
     rationale: "Filename suggests expression count data"
-    terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Images - QC plots
-  # ---------------------------------------------------------------------------
-  - id: image_qc_plot
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
-      filename_pattern: "(?i)plot|qc|fastqc|multiqc"
-    then:
-      skip: true
-      file_category: qc_plot
-    confidence: 0.85
-    rationale: "QC plot - supplementary visualization"
-    terminal: true
-
-  - id: image_assembly_plot
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
-      filename_pattern: "(?i)merqury|assembly|kmer"
-    then:
-      skip: true
-      file_category: assembly_plot
-    confidence: 0.80
-    rationale: "Assembly QC plot - supplementary visualization"
     terminal: true
 
   # ---------------------------------------------------------------------------
