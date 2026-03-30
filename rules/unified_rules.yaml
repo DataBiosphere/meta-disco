@@ -412,11 +412,11 @@ rules:
   # ---------------------------------------------------------------------------
   # PNG images - derived/QC plots
   # ---------------------------------------------------------------------------
-  - id: image_png_derived
+  - id: image_derived
     tier: 1
     scope: extension
     when:
-      extensions: [".png"]
+      extensions: [".png", ".jpg", ".tiff", ".tif"]
     then:
       data_modality: not_applicable
       data_type: images
@@ -424,7 +424,7 @@ rules:
       reference_assembly: not_applicable
       assay_type: not_applicable
     confidence: 0.90
-    rationale: "PNG files are derived visualizations (QC plots, assembly graphs) - not primary experimental data"
+    rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
     terminal: false
 
   # ---------------------------------------------------------------------------
@@ -1004,10 +1004,6 @@ rules:
     confidence: 0.70
     rationale: "Filename suggests expression count data"
     terminal: true
-
-  # ---------------------------------------------------------------------------
-  # Images - QC plots
-  # ---------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------
   # Archive files - T2T specific

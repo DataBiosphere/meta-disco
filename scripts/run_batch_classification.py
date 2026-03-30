@@ -94,7 +94,6 @@ def compute_stats(results: list[dict]) -> dict:
     }
 
     for r in results:
-
         mod = r["predicted_modality"]
         if mod and mod not in _SENTINEL_VALUES:
             stats["classified_with_modality"] += 1

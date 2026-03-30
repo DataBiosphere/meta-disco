@@ -408,7 +408,6 @@ class RuleEngine:
             "confidence": rule.confidence,
         }
         # Set classification fields and record per-field evidence
-        set_any_field = False
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
                 current = getattr(result, fld)
@@ -439,7 +438,6 @@ class RuleEngine:
                     setattr(result, fld, new_val)
                     result._field_set_by_tier[fld] = rule.tier
                     result.field_evidence[fld].append(evidence_entry.copy())
-                set_any_field = True
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
