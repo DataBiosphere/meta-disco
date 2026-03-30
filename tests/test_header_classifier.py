@@ -701,22 +701,20 @@ class TestBamCramClassification:
         # minimap2 is used for long reads (genomic)
         assert val(result, "data_modality") == "genomic"
 
-    def test_consistency_convergent(self):
-        """Test convergent signal boosts confidence."""
+    def test_pacbio_platform_with_ccs_program(self):
+        """PacBio platform + CCS program both confirm PACBIO."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:PACBIO
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        # PacBio platform + CCS program converge on platform
         assert val(result, "platform") == "PACBIO"
 
-    def test_consistency_conflicting(self):
+    def test_illumina_platform_with_ccs_program_conflict(self):
         """Illumina platform + PacBio CCS program = platform conflict."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:ILLUMINA
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        # Same-tier rules disagree on platform → conflict detected at rule level
         assert val(result, "platform") == NOT_CLASSIFIED
 
     def test_empty_header(self):

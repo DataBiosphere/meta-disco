@@ -5,12 +5,11 @@ The actual classification rules are defined in rules/unified_rules.yaml and exec
 by the RuleEngine. This module provides:
 
 1. Public API functions (classify_from_header, classify_from_vcf_header, etc.)
-2. Consistency checking for detecting convergent/conflicting signals
-3. Re-exports of read name parsers from validators.read_name_parsers
+2. Re-exports of read name parsers from validators.read_name_parsers
 """
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from .models import NOT_APPLICABLE, NOT_CLASSIFIED
 from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
@@ -37,160 +36,6 @@ def _get_engine():
 # CONSISTENCY RULES
 # =============================================================================
 
-@dataclass
-class ConsistencyRule:
-    """A rule defining expected consistency between header signals."""
-    id: str
-    signal_a: str  # Rule ID or signal type
-    signal_b: str  # Rule ID or signal type
-    relationship: str  # "convergent" or "conflicting"
-    expected_agreement: str | None  # What they should agree on (for convergent)
-    rationale: str
-
-
-CONVERGENT_RULES = [
-    ConsistencyRule(
-        id="pacbio_platform_ccs_program",
-        signal_a="platform_pacbio",
-        signal_b="program_ccs",
-        relationship="convergent",
-        expected_agreement="PACBIO",
-        rationale="PL:PACBIO platform with ccs program confirms PacBio HiFi platform."
-    ),
-    ConsistencyRule(
-        id="illumina_bwa",
-        signal_a="platform_illumina",
-        signal_b="program_bwa",
-        relationship="convergent",
-        expected_agreement="genomic",
-        rationale="Illumina platform with BWA aligner is the standard WGS/WES pipeline. "
-                  "Both indicate short-read DNA sequencing."
-    ),
-    ConsistencyRule(
-        id="illumina_star",
-        signal_a="platform_illumina",
-        signal_b="program_star",
-        relationship="convergent",
-        expected_agreement="transcriptomic.bulk",
-        rationale="Illumina platform with STAR aligner indicates standard RNA-seq workflow."
-    ),
-    ConsistencyRule(
-        id="pacbio_minimap2",
-        signal_a="platform_pacbio",
-        signal_b="program_minimap2",
-        relationship="convergent",
-        expected_agreement="genomic",
-        rationale="PacBio platform with minimap2 is the standard long-read alignment pipeline."
-    ),
-    ConsistencyRule(
-        id="ont_minimap2",
-        signal_a="platform_ont",
-        signal_b="program_minimap2",
-        relationship="convergent",
-        expected_agreement="genomic",
-        rationale="ONT platform with minimap2 is the standard nanopore alignment pipeline."
-    ),
-    ConsistencyRule(
-        id="pacbio_isoseq",
-        signal_a="platform_pacbio",
-        signal_b="program_isoseq",
-        relationship="convergent",
-        expected_agreement="transcriptomic.bulk",
-        rationale="PacBio platform with IsoSeq program indicates long-read RNA sequencing."
-    ),
-]
-
-CONFLICTING_RULES = [
-    ConsistencyRule(
-        id="pacbio_star_conflict",
-        signal_a="platform_pacbio",
-        signal_b="program_star",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="STAR is a short-read splice-aware aligner not designed for PacBio long reads. "
-                  "This combination is unexpected and may indicate a pipeline error or misannotation."
-    ),
-    ConsistencyRule(
-        id="illumina_ccs_program_conflict",
-        signal_a="platform_illumina",
-        signal_b="program_ccs",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="The ccs program is PacBio-specific. Finding it with Illumina platform "
-                  "indicates a header error."
-    ),
-    ConsistencyRule(
-        id="bwa_star_conflict",
-        signal_a="program_bwa",
-        signal_b="program_star",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="BWA (DNA aligner) and STAR (RNA aligner) in the same file suggests "
-                  "mixed or incorrectly processed data. Files should use one or the other."
-    ),
-    ConsistencyRule(
-        id="dna_rna_aligner_conflict",
-        signal_a="program_bowtie2",
-        signal_b="program_star",
-        relationship="conflicting",
-        expected_agreement=None,
-        rationale="Bowtie2 (DNA/ChIP aligner) and STAR (RNA aligner) indicate conflicting "
-                  "data modalities in the same file."
-    ),
-]
-
-ALL_CONSISTENCY_RULES = CONVERGENT_RULES + CONFLICTING_RULES
-
-
-def check_consistency(matched_rules: list[str]) -> dict:
-    """
-    Check for consistency between matched rules.
-
-    Returns dict with:
-        - convergent_signals: list of matching convergent rule pairs
-        - conflicting_signals: list of matching conflicting rule pairs
-        - confidence_boost: float adjustment based on convergent signals
-        - warnings: list of warning messages for conflicts
-    """
-    result = {
-        "convergent_signals": [],
-        "conflicting_signals": [],
-        "confidence_boost": 0.0,
-        "warnings": [],
-    }
-
-    matched_set = set(matched_rules)
-
-    for rule in ALL_CONSISTENCY_RULES:
-        # Check if both signals are present
-        a_present = rule.signal_a in matched_set
-        b_present = rule.signal_b in matched_set
-
-        if a_present and b_present:
-            if rule.relationship == "convergent":
-                result["convergent_signals"].append({
-                    "rule_id": rule.id,
-                    "signal_a": rule.signal_a,
-                    "signal_b": rule.signal_b,
-                    "expected": rule.expected_agreement,
-                    "rationale": rule.rationale,
-                })
-                result["confidence_boost"] += 0.05
-            else:  # conflicting
-                result["conflicting_signals"].append({
-                    "rule_id": rule.id,
-                    "signal_a": rule.signal_a,
-                    "signal_b": rule.signal_b,
-                    "rationale": rule.rationale,
-                })
-                result["warnings"].append(
-                    f"CONFLICT: {rule.signal_a} + {rule.signal_b} - {rule.rationale}"
-                )
-                result["confidence_boost"] -= 0.15
-
-    return result
-
-
 # =============================================================================
 # PUBLIC API FUNCTIONS
 # =============================================================================
@@ -214,10 +59,9 @@ def classify_from_header(
         file_format: Optional file format string (e.g., ".bam", ".cram")
 
     Returns:
-        Dict with per-field classifications and consistency info:
+        Dict with per-field classifications:
             - {field}: {value, confidence, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
-            - consistency: {convergent_signals, conflicting_signals, warnings}
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -271,17 +115,7 @@ def classify_from_header(
     # Infer assay type
     engine.infer_assay_type(result, file_info)
 
-    # Check consistency using flattened rule list
-    flat_rules = [e["rule_id"] for entries in result.field_evidence.values() for e in entries]
-    consistency = check_consistency(flat_rules)
-
-    # Apply confidence boost/penalty from consistency
-    final_confidence = min(1.0, max(0.0, result.confidence + consistency["confidence_boost"]))
-
-    result.confidence = final_confidence
-    classifications = result.to_output_dict()
-    classifications["consistency"] = consistency
-    return classifications
+    return result.to_output_dict()
 
 
 def classify_from_vcf_header(
@@ -907,9 +741,4 @@ To view the full rules, see:
 - `rules/unified_rules.yaml` - All classification rules
 - The documentation header in that file explains the rule engine
 
-## Consistency Validation
-
-The classifier also checks for consistency between matched signals.
-See `CONVERGENT_RULES` and `CONFLICTING_RULES` in this module for
-signal pairs that should (or should not) appear together.
 """
