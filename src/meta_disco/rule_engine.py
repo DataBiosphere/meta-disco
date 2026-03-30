@@ -70,7 +70,11 @@ class ExtendedClassificationResult:
 
     @property
     def rules_matched(self) -> list[str]:
-        """Deduplicated list of all rule IDs from field evidence."""
+        """Deduplicated list of all rule identifiers from field evidence.
+
+        Includes YAML-defined rule IDs and synthetic IDs (not_classified,
+        infer_assay_type, conflicting_*) added by the rule engine.
+        """
         seen = set()
         result = []
         for entries in self.field_evidence.values():
