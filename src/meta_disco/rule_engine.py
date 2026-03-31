@@ -175,6 +175,19 @@ def evaluate_claims(claims: list[dict]) -> dict:
     top_tier_claims = [c for c in real_claims if c.get("tier", 0) == max_tier]
     top_tier_values = {c["value"] for c in top_tier_claims}
 
+    # NOT_APPLICABLE is a terminal declaration — it wins over real values
+    # at the same tier without triggering a conflict (e.g., text_stats
+    # setting not_applicable shouldn't conflict with filename_ref patterns)
+    if NOT_APPLICABLE in top_tier_values:
+        na_claims = [c for c in top_tier_claims if c["value"] == NOT_APPLICABLE]
+        best = max(na_claims, key=lambda c: c.get("confidence", 0))
+        return {
+            "value": NOT_APPLICABLE,
+            "confidence": best.get("confidence", 0),
+            "reason": "not_applicable_terminal",
+            "is_conflict": False,
+        }
+
     if len(top_tier_values) == 1:
         # Highest tier is unanimous — override lower tiers
         winner_value = top_tier_values.pop()

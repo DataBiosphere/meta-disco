@@ -420,13 +420,15 @@ class TestEvaluateClaims:
         assert result["value"] == NOT_APPLICABLE
         assert result["reason"] == "single_claim"
 
-    def test_not_applicable_vs_real_value_same_tier(self):
-        """NOT_APPLICABLE vs a real value at same tier → conflict."""
+    def test_not_applicable_wins_over_real_value_same_tier(self):
+        """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
         result = evaluate_claims([
             {"rule_id": "r1", "value": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
             {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 1},
         ])
-        assert result["is_conflict"] is True
+        assert result["value"] == NOT_APPLICABLE
+        assert result["is_conflict"] is False
+        assert result["reason"] == "not_applicable_terminal"
 
 
 class TestAssayTypeInference:
