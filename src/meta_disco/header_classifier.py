@@ -135,13 +135,9 @@ def classify_from_vcf_header(
         file_format: Optional file format string (e.g., ".vcf", ".vcf.gz")
 
     Returns:
-        Dict with:
-            - data_modality: str (typically "genomic")
-            - data_type: str (germline_variants, somatic_variants, etc.)
-            - reference_assembly: str or None
-            - confidence: float
-            - matched_rules: list of rule IDs
-            - evidence: list of dicts
+        Dict with per-field classifications:
+            - {field}: {value, confidence, evidence[]} for each of
+              data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo
 
