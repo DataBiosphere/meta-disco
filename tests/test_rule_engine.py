@@ -362,6 +362,7 @@ class TestAssayTypeInference:
             "rule_id": "not_classified",
             "reason": "No rule determined a value for assay_type",
             "confidence": 0.0,
+            "value": NOT_CLASSIFIED,
         }]
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
