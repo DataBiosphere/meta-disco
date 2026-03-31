@@ -325,6 +325,21 @@ class TestConflictingClassificationFields:
         assert "filename_ref_grch38" in rule_ids or "filename_ref_chm13" in rule_ids
         assert "conflicting_reference_assembly_rules" in rule_ids
 
+    def test_conflict_evidence_has_value_and_competing_values(self, engine):
+        """Conflict evidence should have structured value and competing_values fields."""
+        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        evidence = result.field_evidence.get("reference_assembly", [])
+        conflict = [e for e in evidence if "conflicting_" in e["rule_id"]][0]
+        assert conflict["value"] == NOT_CLASSIFIED
+        assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
+
+    def test_normal_evidence_has_value_field(self, engine):
+        """Every evidence entry should include the value that was set."""
+        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bed"))
+        evidence = result.field_evidence.get("reference_assembly", [])
+        ref_entry = [e for e in evidence if e["rule_id"] == "filename_ref_grch38"][0]
+        assert ref_entry["value"] == "GRCh38"
+
 
 class TestAssayTypeInference:
     """Test that infer_assay_type records evidence correctly."""
