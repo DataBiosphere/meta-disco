@@ -380,9 +380,10 @@ class RuleEngine:
             if file_info.file_size_gb is None or file_info.file_size_gb > max_gb:
                 return False
 
-        # Check platform constraint
+        # Check platform constraint — check claims since fields aren't set until evaluation
         if platform := when.get("platform"):
-            if current.platform != platform and file_info.platform != platform:
+            platform_claims = [c.get("value") for c in current.field_evidence.get("platform", [])]
+            if platform not in platform_claims and file_info.platform != platform:
                 return False
 
         # Check file format constraint
