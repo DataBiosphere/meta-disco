@@ -3,7 +3,7 @@
 import pytest
 
 from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, ClassificationResult, FileInfo
-from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine
+from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine, evaluate_claims
 
 
 @pytest.fixture
@@ -339,6 +339,86 @@ class TestConflictingClassificationFields:
         evidence = result.field_evidence.get("reference_assembly", [])
         ref_entry = [e for e in evidence if e["rule_id"] == "filename_ref_grch38"][0]
         assert ref_entry["value"] == "GRCh38"
+
+
+class TestEvaluateClaims:
+    """Test the standalone evaluate_claims() function."""
+
+    def test_no_claims(self):
+        """No claims → not_classified."""
+        result = evaluate_claims([])
+        assert result["value"] == NOT_CLASSIFIED
+        assert result["is_conflict"] is False
+        assert result["reason"] == "no_claims"
+
+    def test_single_claim(self):
+        """Single claim → use it."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": "genomic", "confidence": 0.90, "tier": 2},
+        ])
+        assert result["value"] == "genomic"
+        assert result["confidence"] == 0.90
+        assert result["reason"] == "single_claim"
+        assert result["is_conflict"] is False
+
+    def test_two_claims_agree(self):
+        """Two claims with same value → unanimous, max confidence."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": "genomic", "confidence": 0.80, "tier": 2},
+            {"rule_id": "r2", "value": "genomic", "confidence": 0.95, "tier": 3},
+        ])
+        assert result["value"] == "genomic"
+        assert result["confidence"] == 0.95
+        assert result["reason"] == "unanimous"
+
+    def test_disagree_different_tiers(self):
+        """Higher tier wins when claims disagree."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": "sequence", "confidence": 0.30, "tier": 1},
+            {"rule_id": "r2", "value": "assembly", "confidence": 0.80, "tier": 2},
+        ])
+        assert result["value"] == "assembly"
+        assert result["confidence"] == 0.80
+        assert result["reason"] == "higher_specificity_override"
+        assert result["is_conflict"] is False
+
+    def test_disagree_same_tier(self):
+        """Same tier, different values → conflict."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": "GRCh38", "confidence": 0.90, "tier": 2},
+            {"rule_id": "r2", "value": "CHM13", "confidence": 0.90, "tier": 2},
+        ])
+        assert result["value"] == NOT_CLASSIFIED
+        assert result["is_conflict"] is True
+        assert result["reason"] == "conflict"
+        assert set(result["competing_values"]) == {"GRCh38", "CHM13"}
+
+    def test_three_claims_conflict_at_top_tier(self):
+        """Lower tier agrees but top tier has conflict → conflict wins."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": "genomic", "confidence": 0.30, "tier": 1},
+            {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 3},
+            {"rule_id": "r3", "value": "transcriptomic.bulk", "confidence": 0.90, "tier": 3},
+        ])
+        assert result["value"] == NOT_CLASSIFIED
+        assert result["is_conflict"] is True
+
+    def test_not_classified_claims_ignored(self):
+        """Claims with value=NOT_CLASSIFIED are filtered out."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": NOT_CLASSIFIED, "confidence": 0.0},
+            {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 2},
+        ])
+        assert result["value"] == "genomic"
+        assert result["reason"] == "single_claim"
+
+    def test_not_applicable_is_real_value(self):
+        """NOT_APPLICABLE is a real value, not filtered out."""
+        result = evaluate_claims([
+            {"rule_id": "r1", "value": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
+        ])
+        assert result["value"] == NOT_APPLICABLE
+        assert result["reason"] == "single_claim"
 
 
 class TestAssayTypeInference:

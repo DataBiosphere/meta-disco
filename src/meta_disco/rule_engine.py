@@ -128,6 +128,79 @@ class ExtendedClassificationResult:
     )
 
 
+def evaluate_claims(claims: list[dict]) -> dict:
+    """Evaluate competing claims for a single classification field.
+
+    Takes a list of evidence entries (each with rule_id, value, confidence,
+    and optionally tier) and resolves them to a single value.
+
+    Resolution rules:
+    - No claims → not_classified
+    - Single claim → use it
+    - All claims agree → use value, max confidence
+    - Claims disagree, highest tier is unique → highest tier wins (override)
+    - Claims disagree, same max tier → conflict (not_classified)
+
+    Args:
+        claims: List of evidence dicts with at least {value, confidence}.
+                Optional: tier (int), rule_id (str), reason (str).
+
+    Returns:
+        Dict with: value, confidence, reason, is_conflict, competing_values (if conflict)
+    """
+    # Filter out synthetic entries (not_classified placeholders)
+    real_claims = [c for c in claims if c.get("value") not in (None, NOT_CLASSIFIED)]
+
+    if not real_claims:
+        return {
+            "value": NOT_CLASSIFIED,
+            "confidence": 0.0,
+            "reason": "no_claims",
+            "is_conflict": False,
+        }
+
+    # Check if all claims agree
+    values = {c["value"] for c in real_claims}
+
+    if len(values) == 1:
+        # Unanimous — use the value with highest confidence
+        best = max(real_claims, key=lambda c: c.get("confidence", 0))
+        return {
+            "value": best["value"],
+            "confidence": max(c.get("confidence", 0) for c in real_claims),
+            "reason": "unanimous" if len(real_claims) > 1 else "single_claim",
+            "is_conflict": False,
+        }
+
+    # Claims disagree — check tiers
+    max_tier = max(c.get("tier", 0) for c in real_claims)
+    top_tier_claims = [c for c in real_claims if c.get("tier", 0) == max_tier]
+    top_tier_values = {c["value"] for c in top_tier_claims}
+
+    if len(top_tier_values) == 1:
+        # Highest tier is unanimous — override lower tiers
+        winner_value = top_tier_values.pop()
+        best = max(
+            (c for c in top_tier_claims if c["value"] == winner_value),
+            key=lambda c: c.get("confidence", 0),
+        )
+        return {
+            "value": best["value"],
+            "confidence": best.get("confidence", 0),
+            "reason": "higher_specificity_override",
+            "is_conflict": False,
+        }
+
+    # Same tier, different values — conflict
+    return {
+        "value": NOT_CLASSIFIED,
+        "confidence": 0.0,
+        "reason": "conflict",
+        "is_conflict": True,
+        "competing_values": sorted(top_tier_values),
+    }
+
+
 class RuleEngine:
     """Engine for classifying files using the unified rules format.
 
@@ -411,6 +484,7 @@ class RuleEngine:
             "rule_id": rule.id,
             "reason": rule.rationale or "",
             "confidence": rule.confidence,
+            "tier": rule.tier,
         }
         # Set classification fields and record per-field evidence
         for fld in result._CLASSIFICATION_FIELDS:
