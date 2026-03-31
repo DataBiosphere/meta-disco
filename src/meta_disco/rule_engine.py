@@ -65,8 +65,6 @@ class ExtendedClassificationResult:
         "assay_type": [],
         "platform": [],
     })
-    _conflicted_fields: set = field(default_factory=set)
-    _field_set_by_tier: dict[str, int] = field(default_factory=dict)
 
     @property
     def rules_matched(self) -> list[str]:
@@ -291,26 +289,37 @@ class RuleEngine:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
                     if rule.terminal:
-                        self.infer_assay_type(result, ext_info)
                         self._finalize_result(result)
+                        self.infer_assay_type(result, ext_info)
                         return result
 
-        # After all rules, attempt assay_type inference (guards are internal)
-        self.infer_assay_type(result, ext_info)
-
+        # Evaluate all collected claims, then attempt assay_type inference
         self._finalize_result(result)
+        self.infer_assay_type(result, ext_info)
         return result
 
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
-        """Set any remaining None values to appropriate sentinels with evidence.
+        """Evaluate collected claims for each field and set final values.
 
-        This distinguishes between:
-        - not_applicable: Field doesn't apply (explicitly set by rules)
-        - not_classified: No rule determined a value
+        Calls evaluate_claims() per field to resolve competing claims
+        into a single value. Appends conflict or not_classified markers
+        to evidence as appropriate.
         """
         for fld in result._CLASSIFICATION_FIELDS:
-            if getattr(result, fld) is None:
-                setattr(result, fld, NOT_CLASSIFIED)
+            claims = result.field_evidence.get(fld, [])
+            evaluation = evaluate_claims(claims)
+            setattr(result, fld, evaluation["value"])
+
+            if evaluation["is_conflict"]:
+                result.field_evidence[fld].append({
+                    "rule_id": f"conflicting_{fld}_rules",
+                    "reason": (f"Conflicting {fld}: {evaluation['competing_values']}"
+                               " — ambiguous"),
+                    "confidence": 0.0,
+                    "value": NOT_CLASSIFIED,
+                    "competing_values": evaluation["competing_values"],
+                })
+            elif evaluation["reason"] == "no_claims":
                 result.field_evidence[fld].append({
                     "rule_id": "not_classified",
                     "reason": f"No rule determined a value for {fld}",
@@ -367,13 +376,19 @@ class RuleEngine:
             if file_info.file_format != file_format:
                 return False
 
-        # Check modality_not_set (treat sentinels as "not set")
-        if when.get("modality_not_set") and current.data_modality not in (None, NOT_CLASSIFIED):
-            return False
+        # Check modality_not_set — true if no real claims for data_modality yet
+        if when.get("modality_not_set"):
+            real_claims = [c for c in current.field_evidence.get("data_modality", [])
+                          if c.get("value") not in (None, NOT_CLASSIFIED)]
+            if real_claims:
+                return False
 
-        # Check reference_not_set (treat sentinels as "not set")
-        if when.get("reference_not_set") and current.reference_assembly not in (None, NOT_CLASSIFIED):
-            return False
+        # Check reference_not_set — true if no real claims for reference_assembly yet
+        if when.get("reference_not_set"):
+            real_claims = [c for c in current.field_evidence.get("reference_assembly", [])
+                          if c.get("value") not in (None, NOT_CLASSIFIED)]
+            if real_claims:
+                return False
 
         # Check header section (tier 3) — skip if checking for absence
         if rule.scope == "header" and when.get("header_section") and not when.get("header_absent"):
@@ -478,7 +493,11 @@ class RuleEngine:
         rule: UnifiedRule,
         result: ExtendedClassificationResult
     ) -> None:
-        """Apply a rule's effects to the result."""
+        """Collect claims from a rule without setting field values.
+
+        Claims are appended to field_evidence. Evaluation happens
+        later in _finalize_result via evaluate_claims().
+        """
         then = rule.then
         evidence_entry = {
             "rule_id": rule.id,
@@ -486,41 +505,11 @@ class RuleEngine:
             "confidence": rule.confidence,
             "tier": rule.tier,
         }
-        # Set classification fields and record per-field evidence
         for fld in result._CLASSIFICATION_FIELDS:
             if fld in then and then[fld] is not None:
-                current = getattr(result, fld)
-                new_val = then[fld]
-
-                # Skip fields already marked as conflicted
-                if fld in result._conflicted_fields:
-                    continue
-
-                # Detect conflicting values — two same-tier rules disagree
-                prior_tier = result._field_set_by_tier.get(fld, 0)
-                if (current is not None
-                        and current != NOT_CLASSIFIED
-                        and current != NOT_APPLICABLE
-                        and new_val != NOT_CLASSIFIED
-                        and new_val != NOT_APPLICABLE
-                        and current != new_val
-                        and rule.tier <= prior_tier):
-                    setattr(result, fld, NOT_CLASSIFIED)
-                    result._conflicted_fields.add(fld)
-                    result.field_evidence[fld].append({
-                        "rule_id": f"conflicting_{fld}_rules",
-                        "reason": (f"Conflicting {fld}: '{current}' vs '{new_val}' "
-                                   f"(from {rule.id}) — ambiguous"),
-                        "confidence": 0.0,
-                        "value": NOT_CLASSIFIED,
-                        "competing_values": [current, new_val],
-                    })
-                else:
-                    setattr(result, fld, new_val)
-                    result._field_set_by_tier[fld] = rule.tier
-                    entry = evidence_entry.copy()
-                    entry["value"] = new_val
-                    result.field_evidence[fld].append(entry)
+                entry = evidence_entry.copy()
+                entry["value"] = then[fld]
+                result.field_evidence[fld].append(entry)
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
@@ -539,7 +528,9 @@ class RuleEngine:
         """
         if result.assay_type not in (None, NOT_CLASSIFIED):
             return
-        if "assay_type" in result._conflicted_fields:
+        # Don't infer over conflicts
+        assay_evidence = result.field_evidence.get("assay_type", [])
+        if any("conflicting_" in e.get("rule_id", "") for e in assay_evidence):
             return
 
         for assay_rule in self.rules.assay_type_rules:
