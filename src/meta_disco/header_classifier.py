@@ -98,6 +98,7 @@ def classify_from_header(
             "rule_id": "contig_length_detection",
             "reason": reason,
             "confidence": contig_conf,
+            "value": contig_ref,
         }]
         # Aligned to a known reference genome = genomic data
         if result.data_modality in (None, NOT_CLASSIFIED):
@@ -106,6 +107,7 @@ def classify_from_header(
                 "rule_id": "aligned_to_reference",
                 "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
                 "confidence": contig_conf,
+                "value": "genomic",
             }]
 
     # Infer assay type
@@ -133,13 +135,9 @@ def classify_from_vcf_header(
         file_format: Optional file format string (e.g., ".vcf", ".vcf.gz")
 
     Returns:
-        Dict with:
-            - data_modality: str (typically "genomic")
-            - data_type: str (germline_variants, somatic_variants, etc.)
-            - reference_assembly: str or None
-            - confidence: float
-            - matched_rules: list of rule IDs
-            - evidence: list of dicts
+        Dict with per-field classifications:
+            - {field}: {value, confidence, evidence[]} for each of
+              data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -180,6 +178,7 @@ def classify_from_vcf_header(
             "rule_id": "vcf_contig_length",
             "reason": reason,
             "confidence": contig_conf,
+            "value": contig_ref,
         }]
 
     return result.to_output_dict()
@@ -404,11 +403,13 @@ def classify_from_fasta_header(
             "rule_id": "fasta_transcript_contigs",
             "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
             "confidence": 0.90,
+            "value": "transcriptomic.bulk",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_transcript_contigs",
             "reason": "Transcript sequences in FASTA",
             "confidence": 0.90,
+            "value": "sequence",
         }]
         result.confidence = 0.90
         return result.to_output_dict()
@@ -449,16 +450,19 @@ def classify_from_fasta_header(
                 "reason": f"Matched {best_count} contigs to reference chromosomes"
                           + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
                 "confidence": 0.95 if best_ref else 0.50,
+                "value": best_ref or NOT_CLASSIFIED,
             }]
             result.field_evidence["data_modality"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "Contig names match known reference genome",
                 "confidence": 0.95,
+                "value": "genomic",
             }]
             result.field_evidence["data_type"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "FASTA contains reference genome sequences",
                 "confidence": 0.95,
+                "value": "reference_genome",
             }]
             return result.to_output_dict()
 
@@ -473,16 +477,19 @@ def classify_from_fasta_header(
             "rule_id": "fasta_assembler_contigs",
             "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
             "confidence": 0.90,
+            "value": "genomic",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_assembler_contigs",
             "reason": "Contig names indicate assembler output",
             "confidence": 0.90,
+            "value": "assembly",
         }]
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "fasta_assembler_contigs",
             "reason": "De novo assembly — no reference genome applicable",
             "confidence": 0.90,
+            "value": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
 
@@ -496,16 +503,19 @@ def classify_from_fasta_header(
             "rule_id": "fasta_many_contigs",
             "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
             "confidence": 0.75,
+            "value": "genomic",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_many_contigs",
             "reason": "High contig count suggests assembly",
             "confidence": 0.75,
+            "value": "assembly",
         }]
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "fasta_many_contigs",
             "reason": "De novo assembly — no reference genome applicable",
             "confidence": 0.75,
+            "value": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
 
@@ -517,6 +527,7 @@ def classify_from_fasta_header(
             "rule_id": "fasta_default_genomic",
             "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
             "confidence": 0.50,
+            "value": "genomic",
         }]
     if result.data_type in (None, NOT_CLASSIFIED):
         result.data_type = "sequence"
@@ -524,6 +535,7 @@ def classify_from_fasta_header(
             "rule_id": "fasta_default_genomic",
             "reason": "Unable to determine specific FASTA type from headers",
             "confidence": 0.50,
+            "value": "sequence",
         }]
     result.confidence = max(result.confidence, 0.50)
     return result.to_output_dict()
@@ -693,6 +705,7 @@ def classify_from_bed_signals(
                     "rule_id": "bed_coordinate_reference",
                     "reason": coord_rationale,
                     "confidence": coord_conf,
+                    "value": coord_ref,
                 }]
         elif coord_ref is None and coord_conf == 0.0:
             if "Non-standard chromosome" in coord_rationale:
@@ -701,6 +714,7 @@ def classify_from_bed_signals(
                     "rule_id": "bed_nonstandard_contigs",
                     "reason": coord_rationale,
                     "confidence": 0.0,
+                    "value": NOT_APPLICABLE,
                 }]
 
     return result.to_output_dict()

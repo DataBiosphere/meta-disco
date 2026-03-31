@@ -242,6 +242,7 @@ class RuleEngine:
                     "rule_id": "not_classified",
                     "reason": f"No rule determined a value for {fld}",
                     "confidence": 0.0,
+                    "value": NOT_CLASSIFIED,
                 })
 
     def _rule_matches(
@@ -437,11 +438,15 @@ class RuleEngine:
                         "reason": (f"Conflicting {fld}: '{current}' vs '{new_val}' "
                                    f"(from {rule.id}) — ambiguous"),
                         "confidence": 0.0,
+                        "value": NOT_CLASSIFIED,
+                        "competing_values": [current, new_val],
                     })
                 else:
                     setattr(result, fld, new_val)
                     result._field_set_by_tier[fld] = rule.tier
-                    result.field_evidence[fld].append(evidence_entry.copy())
+                    entry = evidence_entry.copy()
+                    entry["value"] = new_val
+                    result.field_evidence[fld].append(entry)
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
@@ -524,6 +529,7 @@ class RuleEngine:
                 "rule_id": "infer_assay_type",
                 "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
                 "confidence": 0.70,
+                "value": assay_rule.assay_type,
             })
             return
 

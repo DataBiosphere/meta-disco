@@ -288,10 +288,12 @@ def propagate_to_index_files(
         if field_val and field_val not in _sentinels:
             return [{"rule_id": "inherited_from_parent",
                      "reason": f"Inherited from parent file: {parent}",
-                     "confidence": 0.95}]
+                     "confidence": 0.95,
+                     "value": field_val}]
         return [{"rule_id": "inherited_from_parent",
                  "reason": f"Parent file {parent} had no value for {field_name}",
-                 "confidence": 0.0}]
+                 "confidence": 0.0,
+                 "value": field_val or nc}]
 
     standard_results = []
     for r in results:
