@@ -318,6 +318,7 @@ class RuleEngine:
                     "confidence": 0.0,
                     "value": NOT_CLASSIFIED,
                     "competing_values": evaluation["competing_values"],
+                    "is_conflict": True,
                 })
             elif evaluation["reason"] == "no_claims":
                 result.field_evidence[fld].append({
@@ -493,10 +494,11 @@ class RuleEngine:
         rule: UnifiedRule,
         result: ExtendedClassificationResult
     ) -> None:
-        """Collect claims from a rule without setting field values.
+        """Collect claims from a rule without setting classification fields.
 
         Claims are appended to field_evidence. Evaluation happens
         later in _finalize_result via evaluate_claims().
+        Also updates result.confidence (running max, not a classification field).
         """
         then = rule.then
         evidence_entry = {
@@ -530,7 +532,7 @@ class RuleEngine:
             return
         # Don't infer over conflicts
         assay_evidence = result.field_evidence.get("assay_type", [])
-        if any("conflicting_" in e.get("rule_id", "") for e in assay_evidence):
+        if any(e.get("is_conflict") for e in assay_evidence):
             return
 
         for assay_rule in self.rules.assay_type_rules:
