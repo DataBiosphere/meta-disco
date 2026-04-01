@@ -165,7 +165,8 @@ def evaluate_claims(claims: list[dict]) -> dict:
             "is_conflict": False,
         }
 
-    # If no assertive claims (only rule-authored NOT_CLASSIFIED), preserve the rationale
+    # If no assertive claims (only rule-authored NOT_CLASSIFIED), resolve as not_classified
+    # (the rule's rationale is preserved in field_evidence, not in this return value)
     if not assertive_claims:
         best = max(real_claims, key=lambda c: c.get("confidence", 0))
         return {

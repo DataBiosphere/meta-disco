@@ -431,8 +431,8 @@ class TestEvaluateClaims:
         assert result["reason"] == "not_applicable_terminal"
 
 
-    def test_rule_authored_not_classified_preserves_rationale(self):
-        """A rule that intentionally sets NOT_CLASSIFIED should preserve its rationale."""
+    def test_rule_authored_not_classified_is_not_no_claims(self):
+        """A rule that intentionally sets NOT_CLASSIFIED is treated as a real claim, not no_claims."""
         result = evaluate_claims([
             {"rule_id": "fastq_modality_unknown", "value": NOT_CLASSIFIED,
              "confidence": 0.0, "tier": 3,
