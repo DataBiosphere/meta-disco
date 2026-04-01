@@ -137,6 +137,7 @@ def evaluate_claims(claims: list[dict]) -> dict:
     - Single claim → use it
     - All claims agree → use value, max confidence
     - Claims disagree, highest tier is unique → highest tier wins (override)
+    - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
     - Claims disagree, same max tier → conflict (not_classified)
 
     Args:
