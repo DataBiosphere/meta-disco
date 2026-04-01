@@ -1,12 +1,12 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-04-01 00:50:33**
+Classification run: **2026-04-01 13:28:10**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
 | AnVIL (Azul metadata) | 11,231 | 2 | 983 | 4 |
-| HPRC | 6,048 | 4 | 9,531 | 4 |
+| HPRC | 6,048 | 4 | 10,469 | 4 |
 
 ---
 
@@ -159,14 +159,14 @@ Of the 6,048 inferred platform values, 6,048 (100.0%) matched HPRC. There were 0
 ### Reference Assembly Validation
 
 - **2,574** files available from HPRC with ground truth Reference Assembly
-- **1,629** files comparable (both source and rule engine have values)
-- **945** files not classified by rule engine
-- **1,625** inferred reference assembly values match HPRC
+- **2,567** files comparable (both source and rule engine have values)
+- **7** files not classified by rule engine
+- **2,563** inferred reference assembly values match HPRC
 - **4** discrepancies
 - **99.8%** accuracy
 
-Of the 2,574 files on HPRC with ground truth reference assembly, we inferred reference assembly values for 1,629 files. 945 files remain unclassifiable by the rule engine.
-Of the 1,629 inferred reference assembly values, 1,625 (99.8%) matched HPRC. There were 4 discrepancies (0.2%) in reference assembly between meta-disco and HPRC.
+Of the 2,574 files on HPRC with ground truth reference assembly, we inferred reference assembly values for 2,567 files. 7 files remain unclassifiable by the rule engine.
+Of the 2,567 inferred reference assembly values, 2,563 (99.8%) matched HPRC. There were 4 discrepancies (0.2%) in reference assembly between meta-disco and HPRC.
 
 #### Discrepancies
 
