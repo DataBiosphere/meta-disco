@@ -949,7 +949,6 @@ rules:
     then:
       data_modality: not_applicable
       data_type: not_applicable
-      reference_assembly: not_applicable
       assay_type: not_applicable
       platform: not_applicable
     confidence: 0.85
@@ -985,7 +984,6 @@ rules:
     then:
       data_modality: not_applicable
       data_type: not_applicable
-      reference_assembly: not_applicable
       assay_type: not_applicable
       platform: not_applicable
     confidence: 0.90
