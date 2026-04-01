@@ -431,6 +431,41 @@ class TestEvaluateClaims:
         assert result["reason"] == "not_applicable_terminal"
 
 
+    def test_rule_authored_not_classified_preserves_rationale(self):
+        """A rule that intentionally sets NOT_CLASSIFIED should preserve its rationale."""
+        result = evaluate_claims([
+            {"rule_id": "fastq_modality_unknown", "value": NOT_CLASSIFIED,
+             "confidence": 0.0, "tier": 3,
+             "reason": "FASTQ modality cannot be determined from reads alone"},
+        ])
+        assert result["value"] == NOT_CLASSIFIED
+        assert result["reason"] == "single_claim"
+        # The claim should NOT be treated as "no_claims"
+        assert result["reason"] != "no_claims"
+
+    def test_rule_authored_not_classified_does_not_conflict_with_real(self):
+        """A rule's NOT_CLASSIFIED shouldn't conflict with a real value claim."""
+        result = evaluate_claims([
+            {"rule_id": "fastq_modality_unknown", "value": NOT_CLASSIFIED,
+             "confidence": 0.0, "tier": 3},
+            {"rule_id": "some_rule", "value": "genomic",
+             "confidence": 0.90, "tier": 3},
+        ])
+        assert result["value"] == "genomic"
+        assert result["is_conflict"] is False
+
+    def test_rule_authored_not_classified_in_evidence(self, engine):
+        """fastq_modality_unknown rationale should appear in evidence, not generic placeholder."""
+        result = engine.classify_extended(
+            FileInfo(filename="sample_R1.fastq.gz"), include_tier3=True
+        )
+        dm_evidence = result.field_evidence.get("data_modality", [])
+        rule_ids = [e["rule_id"] for e in dm_evidence]
+        # Should have the rule's ID, not the generic "not_classified" placeholder
+        assert "fastq_modality_unknown" in rule_ids
+        assert "not_classified" not in rule_ids
+
+
 class TestAssayTypeInference:
     """Test that infer_assay_type records evidence correctly."""
 
