@@ -147,8 +147,15 @@ def evaluate_claims(claims: list[dict]) -> dict:
     Returns:
         Dict with: value, confidence, reason, is_conflict, competing_values (if conflict)
     """
-    # Filter out synthetic entries (not_classified placeholders)
-    real_claims = [c for c in claims if c.get("value") not in (None, NOT_CLASSIFIED)]
+    # Filter out synthetic placeholders and None values, but keep
+    # rule-authored NOT_CLASSIFIED claims (e.g., fastq_modality_unknown)
+    real_claims = [c for c in claims
+                   if c.get("value") is not None
+                   and c.get("rule_id") != "not_classified"]
+
+    # For conflict resolution, separate claims with real values from
+    # NOT_CLASSIFIED claims (which mean "I looked but can't determine")
+    assertive_claims = [c for c in real_claims if c["value"] != NOT_CLASSIFIED]
 
     if not real_claims:
         return {
@@ -158,22 +165,32 @@ def evaluate_claims(claims: list[dict]) -> dict:
             "is_conflict": False,
         }
 
-    # Check if all claims agree
-    values = {c["value"] for c in real_claims}
-
-    if len(values) == 1:
-        # Unanimous — use the value with highest confidence
+    # If no assertive claims (only rule-authored NOT_CLASSIFIED), preserve the rationale
+    if not assertive_claims:
         best = max(real_claims, key=lambda c: c.get("confidence", 0))
         return {
-            "value": best["value"],
-            "confidence": max(c.get("confidence", 0) for c in real_claims),
-            "reason": "unanimous" if len(real_claims) > 1 else "single_claim",
+            "value": NOT_CLASSIFIED,
+            "confidence": best.get("confidence", 0),
+            "reason": "single_claim" if len(real_claims) == 1 else "unanimous",
             "is_conflict": False,
         }
 
-    # Claims disagree — check tiers
-    max_tier = max(c.get("tier", 0) for c in real_claims)
-    top_tier_claims = [c for c in real_claims if c.get("tier", 0) == max_tier]
+    # Check if all assertive claims agree
+    values = {c["value"] for c in assertive_claims}
+
+    if len(values) == 1:
+        # Unanimous — use the value with highest confidence
+        best = max(assertive_claims, key=lambda c: c.get("confidence", 0))
+        return {
+            "value": best["value"],
+            "confidence": max(c.get("confidence", 0) for c in assertive_claims),
+            "reason": "unanimous" if len(assertive_claims) > 1 else "single_claim",
+            "is_conflict": False,
+        }
+
+    # Assertive claims disagree — check tiers
+    max_tier = max(c.get("tier", 0) for c in assertive_claims)
+    top_tier_claims = [c for c in assertive_claims if c.get("tier", 0) == max_tier]
     top_tier_values = {c["value"] for c in top_tier_claims}
 
     # NOT_APPLICABLE is a terminal declaration — it wins over real values
