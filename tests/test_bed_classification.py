@@ -260,11 +260,11 @@ class TestPatternEdgeCases:
         assert rule_id != "bed_assembly_qc"
 
     def test_peak_in_filename_matches(self):
-        """'peak' anywhere in filename should match."""
+        """'peak' anywhere in filename should match ChIP-seq rule."""
         filename = "chipseq_peak_calls.bed"
-        rule_id = get_matched_rule_id(filename)
-        # Matches ChIP-seq specific rule due to "chipseq" in filename
-        assert rule_id == "bed_chip_peaks"
+        result = classify_bed(filename)
+        # bed_chip_peaks (tier 2) wins over bed_peaks_generic (tier 1) due to "chipseq" in filename
+        assert _get_val(result, "data_modality") == "epigenomic.histone_modification"
 
 
 def _get_val(result: dict, field: str):

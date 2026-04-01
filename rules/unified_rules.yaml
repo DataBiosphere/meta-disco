@@ -74,7 +74,6 @@
 # - then: effects to apply when rule matches (required)
 # - confidence: 0.0-1.0 confidence score (default: 0.0)
 # - rationale: explanation for this classification (recommended)
-# - terminal: if true, stop processing after this rule matches (default: false)
 #
 #
 # CONDITION TYPES (in 'when')
@@ -256,7 +255,6 @@ rules:
       platform: not_applicable
     confidence: 1.0
     rationale: "Index file — metadata inherited from parent data file"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Checksum files - not applicable
@@ -274,7 +272,6 @@ rules:
       platform: not_applicable
     confidence: 1.0
     rationale: "Checksum file — not data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Log files - not applicable
@@ -292,7 +289,6 @@ rules:
       platform: not_applicable
     confidence: 1.0
     rationale: "Log file — not data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Chunked upload artifacts - not applicable
@@ -310,7 +306,6 @@ rules:
       platform: not_applicable
     confidence: 1.0
     rationale: "Incomplete chunked upload artifact — not usable data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Bare timestamp filenames - not applicable
@@ -328,7 +323,6 @@ rules:
       platform: not_applicable
     confidence: 1.0
     rationale: "Bare ISO timestamp filename — metadata artifact, not data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # VCF files - genomic by default
@@ -343,7 +337,6 @@ rules:
       data_type: variants
     confidence: 0.85
     rationale: "VCF files contain variant calls (genomic data)"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # PLINK genotype files
@@ -358,7 +351,6 @@ rules:
       data_type: genotypes
     confidence: 0.95
     rationale: "PLINK files contain genotype data (genomic)"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Methylation array files
@@ -374,7 +366,6 @@ rules:
       assay_type: Methylation array
     confidence: 0.95
     rationale: "IDAT files are Illumina methylation array data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Single-cell matrix files
@@ -389,7 +380,6 @@ rules:
       data_type: expression_matrix
     confidence: 0.90
     rationale: "Single-cell matrix format indicates scRNA-seq"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Histology images (SVS)
@@ -407,7 +397,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.95
     rationale: "SVS files are Aperio whole-slide histology images used for pathology analysis"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Images - derived/QC plots
@@ -425,7 +414,6 @@ rules:
       assay_type: not_applicable
     confidence: 0.90
     rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Nanopore raw signal files
@@ -441,7 +429,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.90
     rationale: "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment"
-    terminal: false
 
   - id: nanopore_pod5
     tier: 1
@@ -454,7 +441,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.90
     rationale: "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5)"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # FASTQ/FQ - raw sequencing reads (unaligned, no reference)
@@ -469,7 +455,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.50
     rationale: "FASTQ files contain raw sequencing reads. Reference not applicable until alignment"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # FASTA files - sequence data (assembly, reference, or transcriptome)
@@ -485,7 +470,6 @@ rules:
       assay_type: not_applicable
     confidence: 0.30
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
-    terminal: false
 
   # ===========================================================================
   # TIER 2: FILENAME-BASED RULES
@@ -505,7 +489,6 @@ rules:
       data_type: alignments
     confidence: 0.80
     rationale: "Filename contains RNA-seq indicator"
-    terminal: false
 
   - id: alignment_isoseq_filename
     tier: 2
@@ -518,7 +501,6 @@ rules:
       data_type: alignments
     confidence: 0.85
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
-    terminal: false
 
   - id: alignment_scrna_filename
     tier: 2
@@ -531,7 +513,6 @@ rules:
       data_type: alignments
     confidence: 0.85
     rationale: "Filename contains single-cell RNA indicator"
-    terminal: false
 
   - id: alignment_atac_filename
     tier: 2
@@ -545,7 +526,6 @@ rules:
       assay_type: ATAC-seq
     confidence: 0.85
     rationale: "Filename contains ATAC-seq indicator"
-    terminal: false
 
   - id: alignment_chip_filename
     tier: 2
@@ -559,7 +539,6 @@ rules:
       assay_type: ChIP-seq
     confidence: 0.80
     rationale: "Filename contains ChIP-seq indicator"
-    terminal: false
 
   - id: alignment_wgs_filename
     tier: 2
@@ -573,7 +552,6 @@ rules:
       assay_type: WGS
     confidence: 0.85
     rationale: "Filename contains WGS indicator"
-    terminal: false
 
   - id: alignment_wes_filename
     tier: 2
@@ -587,7 +565,6 @@ rules:
       assay_type: WES
     confidence: 0.85
     rationale: "Filename contains exome indicator"
-    terminal: false
 
   - id: alignment_hifi_filename
     tier: 2
@@ -602,7 +579,6 @@ rules:
       platform: PACBIO
     confidence: 0.70
     rationale: "HiFi/PacBio reads typically used for genome assembly"
-    terminal: false
 
   - id: alignment_star_aligner
     tier: 2
@@ -616,7 +592,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.90
     rationale: "STAR aligner output indicates RNA-seq"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Reference assembly in filename
@@ -630,7 +605,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.90
     rationale: "Filename contains GRCh38/hg38 reference indicator"
-    terminal: false
 
   - id: filename_ref_grch37
     tier: 2
@@ -641,7 +615,6 @@ rules:
       reference_assembly: GRCh37
     confidence: 0.90
     rationale: "Filename contains GRCh37/hg19 reference indicator"
-    terminal: false
 
   - id: filename_ref_chm13
     tier: 2
@@ -652,7 +625,6 @@ rules:
       reference_assembly: CHM13
     confidence: 0.90
     rationale: "Filename contains CHM13/T2T reference indicator"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Dataset-based reference rules (run early to set reference before terminal rules)
@@ -671,7 +643,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.95
     rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # FASTQ reads - modality from filename
@@ -687,7 +658,6 @@ rules:
       data_type: reads
     confidence: 0.80
     rationale: "Filename contains RNA indicator"
-    terminal: false
 
   - id: reads_scrna_filename
     tier: 2
@@ -700,7 +670,6 @@ rules:
       data_type: reads
     confidence: 0.85
     rationale: "Filename contains single-cell indicator"
-    terminal: false
 
   - id: reads_atac_filename
     tier: 2
@@ -714,7 +683,6 @@ rules:
       assay_type: ATAC-seq
     confidence: 0.85
     rationale: "Filename contains ATAC indicator"
-    terminal: false
 
   - id: reads_wgs_filename
     tier: 2
@@ -728,7 +696,6 @@ rules:
       assay_type: WGS
     confidence: 0.80
     rationale: "Filename contains WGS indicator"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # FASTA assembly indicators
@@ -745,7 +712,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.80
     rationale: "Filename contains assembly/assembler indicator — de novo assembly"
-    terminal: false
 
   - id: fasta_haplotype_filename
     tier: 2
@@ -759,7 +725,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.80
     rationale: "Filename contains haplotype/phasing indicator — de novo assembly"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Single-cell matrix - ATAC variant
@@ -776,7 +741,6 @@ rules:
       assay_type: ATAC-seq
     confidence: 0.85
     rationale: "Single-cell matrix with ATAC indicator"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Nanopore - direct RNA
@@ -793,7 +757,6 @@ rules:
       platform: ONT
     confidence: 0.80
     rationale: "Nanopore direct RNA sequencing"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # BED file classification rules (from classify_bed_files.py)
@@ -810,7 +773,6 @@ rules:
       assay_type: Bisulfite-seq
     confidence: 0.90
     rationale: "BED file contains CpG methylation calls or bisulfite sequencing regions"
-    terminal: true
 
   - id: bed_expression
     tier: 2
@@ -824,7 +786,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.90
     rationale: "BED file contains gene expression quantification or splicing data"
-    terminal: true
 
   - id: bed_atac_peaks
     tier: 2
@@ -838,7 +799,6 @@ rules:
       assay_type: ATAC-seq
     confidence: 0.90
     rationale: "BED file contains ATAC-seq peak calls for chromatin accessibility"
-    terminal: true
 
   - id: bed_chip_peaks
     tier: 2
@@ -852,10 +812,9 @@ rules:
       assay_type: ChIP-seq
     confidence: 0.90
     rationale: "BED file contains ChIP-seq peak calls for histone marks or TF binding"
-    terminal: true
 
   - id: bed_peaks_generic
-    tier: 2
+    tier: 1
     scope: filename
     when:
       extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
@@ -865,7 +824,6 @@ rules:
       data_type: peaks
     confidence: 0.85
     rationale: "BED file contains ChIP-seq or ATAC-seq peak calls"
-    terminal: false
 
   - id: bed_assembly_qc
     tier: 2
@@ -878,7 +836,6 @@ rules:
       data_type: annotations
     confidence: 0.85
     rationale: "BED file is assembly QC output (haplotype regions, error flags) on de novo genomic assemblies"
-    terminal: true
 
   - id: bed_regions
     tier: 2
@@ -891,7 +848,6 @@ rules:
       data_type: annotations
     confidence: 0.80
     rationale: "BED file contains genomic analysis regions (callable, target, etc.)"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Signal track classification
@@ -908,7 +864,6 @@ rules:
       assay_type: ChIP-seq
     confidence: 0.85
     rationale: "Signal track with ChIP/histone indicator"
-    terminal: true
 
   - id: signal_atac
     tier: 2
@@ -922,7 +877,6 @@ rules:
       assay_type: ATAC-seq
     confidence: 0.85
     rationale: "Signal track with ATAC indicator"
-    terminal: true
 
   - id: signal_rnaseq
     tier: 2
@@ -935,13 +889,12 @@ rules:
       data_type: signal
     confidence: 0.75
     rationale: "Signal track with RNA/coverage indicator"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Intervals - target/capture region files (reference data, not primary)
   # ---------------------------------------------------------------------------
   - id: intervals_targets
-    tier: 2
+    tier: 1
     scope: filename
     when:
       extensions: [".bed", ".bed.gz"]
@@ -953,7 +906,6 @@ rules:
       platform: not_applicable
     confidence: 0.85
     rationale: "Target/capture region file — reference data, not primary experimental data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Intervals - ChIP-seq peaks
@@ -970,7 +922,6 @@ rules:
       assay_type: ChIP-seq
     confidence: 0.90
     rationale: "ChIP-seq histone modification peaks"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Text files - QC stats (not primary data)
@@ -988,7 +939,6 @@ rules:
       platform: not_applicable
     confidence: 0.90
     rationale: "QC/stats file — supplementary data, not primary experimental data"
-    terminal: true
 
   - id: text_counts
     tier: 2
@@ -1001,7 +951,6 @@ rules:
       data_type: expression_matrix
     confidence: 0.70
     rationale: "Filename suggests expression count data"
-    terminal: true
 
   # ---------------------------------------------------------------------------
   # Archive files - T2T specific
@@ -1018,7 +967,6 @@ rules:
       data_type: archive
     confidence: 0.75
     rationale: "T2T project genomic region archive"
-    terminal: true
 
   # ===========================================================================
   # TIER 2.5: FILE SIZE HEURISTICS
@@ -1048,7 +996,6 @@ rules:
       platform: PACBIO
     confidence: 0.70
     rationale: "PL:PACBIO indicates PacBio long-read sequencing"
-    terminal: false
 
   - id: platform_illumina
     tier: 3
@@ -1062,7 +1009,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.95
     rationale: "PL:ILLUMINA in @RG header — definitive Illumina platform tag"
-    terminal: false
 
   - id: platform_ont
     tier: 3
@@ -1076,7 +1022,6 @@ rules:
       platform: ONT
     confidence: 0.70
     rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing"
-    terminal: false
 
   - id: platform_ont_alt
     tier: 3
@@ -1090,7 +1035,6 @@ rules:
       platform: ONT
     confidence: 0.70
     rationale: "Alternative platform identifier for Oxford Nanopore Technology"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # ONT basecall model from @RG DS field
@@ -1107,7 +1051,6 @@ rules:
       data_modality: genomic
     confidence: 0.90
     rationale: "ONT basecall model containing dna_ indicates DNA sequencing (genomic data). Handles both modern (dna_r10...) and legacy date-prefixed (2021-05-05_dna_r9...) formats"
-    terminal: false
 
   - id: ont_basecall_rna
     tier: 3
@@ -1121,7 +1064,6 @@ rules:
       data_modality: transcriptomic.bulk
     confidence: 0.90
     rationale: "ONT basecall model containing rna_ indicates RNA sequencing (transcriptomic data). Handles both modern (rna_r9...) and legacy date-prefixed formats"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # RNA-seq aligner programs from @PG PN field
@@ -1140,7 +1082,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
-    terminal: false
 
   - id: program_hisat2
     tier: 3
@@ -1156,7 +1097,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "HISAT2 is a splice-aware aligner optimized for RNA-seq"
-    terminal: false
 
   - id: program_tophat
     tier: 3
@@ -1172,7 +1112,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "TopHat was an early splice-aware aligner for RNA-seq (now superseded by HISAT2)"
-    terminal: false
 
   - id: program_salmon
     tier: 3
@@ -1187,7 +1126,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "Salmon is a transcript-level quantification tool for RNA-seq"
-    terminal: false
 
   - id: program_kallisto
     tier: 3
@@ -1202,7 +1140,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "Kallisto performs rapid transcript quantification using pseudoalignment"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # DNA aligner programs from @PG PN field
@@ -1220,7 +1157,6 @@ rules:
       data_type: alignments
     confidence: 0.80
     rationale: "BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. Commonly used for WGS, WES, and ChIP-seq"
-    terminal: false
 
   - id: program_minimap2
     tier: 3
@@ -1235,7 +1171,6 @@ rules:
       data_type: alignments
     confidence: 0.75
     rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset"
-    terminal: false
 
   - id: program_bowtie2
     tier: 3
@@ -1250,7 +1185,6 @@ rules:
       data_type: alignments
     confidence: 0.75
     rationale: "Bowtie2 is a fast short-read aligner commonly used for ChIP-seq, ATAC-seq, and WGS"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # PacBio-specific programs
@@ -1267,7 +1201,6 @@ rules:
       platform: PACBIO
     confidence: 0.85
     rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq)"
-    terminal: false
 
   - id: program_isoseq
     tier: 3
@@ -1283,7 +1216,6 @@ rules:
       assay_type: RNA-seq
     confidence: 0.95
     rationale: "IsoSeq is PacBio's full-length transcript sequencing method for isoform characterization"
-    terminal: false
 
   - id: program_lima
     tier: 3
@@ -1297,7 +1229,6 @@ rules:
       platform: PACBIO
     confidence: 0.0
     rationale: "Lima is PacBio's barcode demultiplexer. Doesn't indicate modality"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Reference assembly from @SQ
@@ -1314,7 +1245,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.95
     rationale: "Contig names containing GRCh38/hg38/hs38 indicate alignment to GRCh38 reference"
-    terminal: false
 
   - id: header_ref_grch37
     tier: 3
@@ -1328,7 +1258,6 @@ rules:
       reference_assembly: GRCh37
     confidence: 0.95
     rationale: "Contig names containing GRCh37/hg19/hs37 indicate alignment to GRCh37 reference"
-    terminal: false
 
   - id: header_ref_chm13
     tier: 3
@@ -1342,7 +1271,6 @@ rules:
       reference_assembly: CHM13
     confidence: 0.95
     rationale: "Contig names containing CHM13/T2T/hs1 indicate alignment to T2T-CHM13 reference"
-    terminal: false
 
   - id: header_ref_as_grch38
     tier: 3
@@ -1356,7 +1284,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.95
     rationale: "AS field containing GRCh38/hg38/hs38 explicitly identifies the reference assembly"
-    terminal: false
 
   - id: header_ref_as_grch37
     tier: 3
@@ -1370,7 +1297,6 @@ rules:
       reference_assembly: GRCh37
     confidence: 0.95
     rationale: "AS field containing GRCh37/hg19/hs37/b37 explicitly identifies the reference assembly"
-    terminal: false
 
   - id: header_ref_as_chm13
     tier: 3
@@ -1384,7 +1310,6 @@ rules:
       reference_assembly: CHM13
     confidence: 0.95
     rationale: "AS field containing CHM13/T2T/hs1 explicitly identifies the reference assembly"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Unaligned indicator
@@ -1400,7 +1325,6 @@ rules:
       reference_assembly: not_applicable
     confidence: 0.90
     rationale: "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment"
-    terminal: false
 
   # ===========================================================================
   # TIER 3: VCF HEADER RULES
@@ -1420,7 +1344,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.95
     rationale: "##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession indicates variants called against GRCh38"
-    terminal: false
 
   - id: vcf_ref_grch37
     tier: 3
@@ -1433,7 +1356,6 @@ rules:
       reference_assembly: GRCh37
     confidence: 0.95
     rationale: "##reference line containing GRCh37, hg19, b37, or earlier accessions indicates variants called against GRCh37"
-    terminal: false
 
   - id: vcf_ref_chm13
     tier: 3
@@ -1446,7 +1368,6 @@ rules:
       reference_assembly: CHM13
     confidence: 0.95
     rationale: "##reference line containing CHM13 or T2T indicates variants called against T2T-CHM13"
-    terminal: false
 
   - id: vcf_contig_grch38
     tier: 3
@@ -1459,7 +1380,6 @@ rules:
       reference_assembly: GRCh38
     confidence: 0.95
     rationale: "##contig lines with assembly=GRCh38 explicitly declare the reference genome"
-    terminal: false
 
   - id: vcf_contig_grch37
     tier: 3
@@ -1472,7 +1392,6 @@ rules:
       reference_assembly: GRCh37
     confidence: 0.95
     rationale: "##contig lines with assembly=GRCh37 explicitly declare the reference genome"
-    terminal: false
 
   - id: vcf_contig_chm13
     tier: 3
@@ -1485,7 +1404,6 @@ rules:
       reference_assembly: CHM13
     confidence: 0.95
     rationale: "##contig lines with assembly=CHM13 explicitly declare the reference genome"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # VCF germline variant callers
@@ -1502,7 +1420,6 @@ rules:
       data_type: variants.germline
     confidence: 0.90
     rationale: "GATK HaplotypeCaller is the standard germline SNV/indel caller"
-    terminal: false
 
   - id: vcf_deepvariant
     tier: 3
@@ -1516,7 +1433,6 @@ rules:
       data_type: variants.germline
     confidence: 0.90
     rationale: "DeepVariant is Google's deep learning-based germline variant caller"
-    terminal: false
 
   - id: vcf_gatk_genotypegvcfs
     tier: 3
@@ -1530,7 +1446,6 @@ rules:
       data_type: variants.germline
     confidence: 0.90
     rationale: "GATK GenotypeGVCFs performs joint genotyping on gVCF files"
-    terminal: false
 
   - id: vcf_glnexus
     tier: 3
@@ -1544,7 +1459,6 @@ rules:
       data_type: variants.germline
     confidence: 0.90
     rationale: "GLnexus is a scalable gVCF merging and joint genotyping tool"
-    terminal: false
 
   - id: vcf_bcftools_call
     tier: 3
@@ -1558,7 +1472,6 @@ rules:
       data_type: variants.germline
     confidence: 0.85
     rationale: "bcftools call is a lightweight germline variant caller"
-    terminal: false
 
   - id: vcf_freebayes
     tier: 3
@@ -1572,7 +1485,6 @@ rules:
       data_type: variants.germline
     confidence: 0.85
     rationale: "FreeBayes is a Bayesian haplotype-based germline variant caller"
-    terminal: false
 
   - id: vcf_strelka2_germline
     tier: 3
@@ -1586,7 +1498,6 @@ rules:
       data_type: variants.germline
     confidence: 0.85
     rationale: "Strelka2 in germline mode calls SNVs and indels from germline samples"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # VCF somatic variant callers
@@ -1603,7 +1514,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.95
     rationale: "GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal analysis"
-    terminal: false
 
   - id: vcf_strelka_somatic
     tier: 3
@@ -1617,7 +1527,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.90
     rationale: "Strelka in somatic mode calls somatic variants from tumor-normal pairs"
-    terminal: false
 
   - id: vcf_varscan_somatic
     tier: 3
@@ -1631,7 +1540,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.90
     rationale: "VarScan somatic mode calls somatic variants from tumor-normal pairs"
-    terminal: false
 
   - id: vcf_somaticsniper
     tier: 3
@@ -1645,7 +1553,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.90
     rationale: "SomaticSniper identifies somatic point mutations in tumor-normal pairs"
-    terminal: false
 
   - id: vcf_muse
     tier: 3
@@ -1659,7 +1566,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.90
     rationale: "MuSE calls somatic point mutations using a Markov substitution model"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # VCF structural variant callers
@@ -1676,7 +1582,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "Manta calls structural variants (deletions, insertions, inversions, translocations)"
-    terminal: false
 
   - id: vcf_delly
     tier: 3
@@ -1690,7 +1595,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "DELLY discovers structural variants using paired-end and split-read analysis"
-    terminal: false
 
   - id: vcf_lumpy
     tier: 3
@@ -1704,7 +1608,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "LUMPY is a probabilistic SV caller using multiple alignment signals"
-    terminal: false
 
   - id: vcf_smoove
     tier: 3
@@ -1718,7 +1621,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "Smoove simplifies SV calling by wrapping LUMPY with additional filtering"
-    terminal: false
 
   - id: vcf_svim
     tier: 3
@@ -1732,7 +1634,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "SVIM detects structural variants from long-read sequencing data (PacBio/ONT)"
-    terminal: false
 
   - id: vcf_sniffles
     tier: 3
@@ -1746,7 +1647,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "Sniffles is a long-read SV caller optimized for PacBio and ONT data"
-    terminal: false
 
   - id: vcf_pbsv
     tier: 3
@@ -1760,7 +1660,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "PBSV is PacBio's structural variant caller for HiFi and CLR data"
-    terminal: false
 
   - id: vcf_cutesv
     tier: 3
@@ -1774,7 +1673,6 @@ rules:
       data_type: variants.structural
     confidence: 0.90
     rationale: "CuteSV is a fast long-read SV caller using clustering of signatures"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # VCF copy number variant callers
@@ -1791,7 +1689,6 @@ rules:
       data_type: variants.cnv
     confidence: 0.90
     rationale: "CNVkit detects copy number variants from targeted/exome or WGS data"
-    terminal: false
 
   - id: vcf_gatk_cnv
     tier: 3
@@ -1805,7 +1702,6 @@ rules:
       data_type: variants.cnv
     confidence: 0.90
     rationale: "GATK CNV tools (ModelSegments, etc.) call copy number variants from read depth data"
-    terminal: false
 
   - id: vcf_canvas
     tier: 3
@@ -1819,7 +1715,6 @@ rules:
       data_type: variants.cnv
     confidence: 0.90
     rationale: "Canvas is Illumina's CNV caller for WGS and tumor-normal analysis"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # VCF INFO field indicators
@@ -1835,7 +1730,6 @@ rules:
       data_type: variants.somatic
     confidence: 0.85
     rationale: "INFO fields with SOMATIC, TUMOR_, or NORMAL_ prefixes indicate somatic variant calls"
-    terminal: false
 
   - id: vcf_info_sv
     tier: 3
@@ -1848,7 +1742,6 @@ rules:
       data_type: variants.structural
     confidence: 0.80
     rationale: "Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate structural variant calls"
-    terminal: false
 
   - id: vcf_info_cnv
     tier: 3
@@ -1861,7 +1754,6 @@ rules:
       data_type: variants.cnv
     confidence: 0.80
     rationale: "CNV-specific INFO fields indicate copy number variant calls"
-    terminal: false
 
   # ===========================================================================
   # TIER 3: FASTQ HEADER RULES
@@ -1880,7 +1772,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.90
     rationale: "Modern Illumina read names (Casava 1.8+) follow the format @instrument:run:flowcell:lane:tile:x:y"
-    terminal: false
 
   - id: fastq_illumina_legacy
     tier: 3
@@ -1892,7 +1783,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.85
     rationale: "Legacy Illumina read names follow @instrument:lane:tile:x:y#index format"
-    terminal: false
 
   - id: fastq_illumina_srr
     tier: 3
@@ -1904,7 +1794,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.70
     rationale: "SRA-reformatted read names starting with @SRR typically indicate Illumina data from NCBI SRA"
-    terminal: false
 
   - id: fastq_illumina_hiseq_desc
     tier: 3
@@ -1916,7 +1805,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.85
     rationale: "HiSeq 2000/2500 instrument identifier found in read description"
-    terminal: false
 
   - id: fastq_illumina_ena_hiseq
     tier: 3
@@ -1928,7 +1816,6 @@ rules:
       platform: ILLUMINA
     confidence: 0.90
     rationale: "ENA/SRA-reformatted read names with HiSeq 2000/2500 instrument ID in description"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # PacBio read name patterns
@@ -1944,7 +1831,6 @@ rules:
       data_type: reads
     confidence: 0.95
     rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
-    terminal: false
 
   - id: fastq_pacbio_clr
     tier: 3
@@ -1957,7 +1843,6 @@ rules:
       data_type: reads
     confidence: 0.90
     rationale: "PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format"
-    terminal: false
 
   - id: fastq_pacbio_generic
     tier: 3
@@ -1970,7 +1855,6 @@ rules:
       data_type: reads
     confidence: 0.85
     rationale: "Generic PacBio read names follow @movie/zmw format"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # ONT read name patterns
@@ -1986,7 +1870,6 @@ rules:
       data_type: reads
     confidence: 0.95
     rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
-    terminal: false
 
   - id: fastq_ont_metadata
     tier: 3
@@ -1999,7 +1882,6 @@ rules:
       data_type: reads
     confidence: 0.95
     rationale: "ONT reads often include 'runid=' metadata in the header line"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # MGI/BGI read name patterns
@@ -2014,7 +1896,6 @@ rules:
       platform: MGI
     confidence: 0.90
     rationale: "MGI/BGI-SEQ read names follow @flowcellLaneCcolumnRrow format"
-    terminal: false
 
   - id: fastq_mgi_alt
     tier: 3
@@ -2026,7 +1907,6 @@ rules:
       platform: MGI
     confidence: 0.85
     rationale: "Alternative MGI/BGI read name format with varying digit lengths"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Element Biosciences patterns
@@ -2041,7 +1921,6 @@ rules:
       platform: ELEMENT
     confidence: 0.80
     rationale: "Element Biosciences AVITI read names follow a similar format to Illumina"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Ultima Genomics patterns
@@ -2056,7 +1935,6 @@ rules:
       platform: ULTIMA
     confidence: 0.80
     rationale: "Ultima Genomics read names include flow-space encoded sequences"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Archive accession patterns (ENA/SRA)
@@ -2070,7 +1948,6 @@ rules:
     then: {}
     confidence: 0.60
     rationale: "ERR accessions indicate data from the European Nucleotide Archive (ENA)"
-    terminal: false
 
   - id: fastq_sra_srr
     tier: 3
@@ -2081,7 +1958,6 @@ rules:
     then: {}
     confidence: 0.60
     rationale: "SRR accessions indicate data from NCBI Sequence Read Archive (SRA)"
-    terminal: false
 
   - id: fastq_ddbj_drr
     tier: 3
@@ -2092,7 +1968,6 @@ rules:
     then: {}
     confidence: 0.60
     rationale: "DRR accessions indicate data from DDBJ Sequence Read Archive (Japan)"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Paired-end detection (works across platforms)
@@ -2106,7 +1981,6 @@ rules:
     then: {}
     confidence: 0.80
     rationale: "Read 1/2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing"
-    terminal: false
 
   # ---------------------------------------------------------------------------
   # Default for FASTQ when no modality signal found
@@ -2121,7 +1995,6 @@ rules:
       data_modality: not_classified
     confidence: 0.0
     rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
-    terminal: false
 
   # ===========================================================================
   # FALLBACK RULES
@@ -2138,7 +2011,6 @@ rules:
       data_type: annotations
     confidence: 0.60
     rationale: "BED file with no specific pattern - defaulting to genomic intervals"
-    terminal: true
 
 
 ---

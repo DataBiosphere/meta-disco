@@ -320,11 +320,6 @@ class RuleEngine:
             for rule in tier_rules:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
-                    if rule.terminal:
-                        self._finalize_result(result)
-                        self.infer_assay_type(result, ext_info)
-                        return result
-
         # Evaluate all collected claims, then attempt assay_type inference
         self._finalize_result(result)
         self.infer_assay_type(result, ext_info)
