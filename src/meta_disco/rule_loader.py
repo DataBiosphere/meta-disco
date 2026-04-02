@@ -18,8 +18,6 @@ class UnifiedRule:
     then: dict[str, Any]
     confidence: float
     rationale: str
-    terminal: bool = False
-
     def matches_extension(self, extension: str) -> bool:
         """Check if this rule applies to a given file extension."""
         if "extensions" not in self.when:
@@ -227,7 +225,6 @@ class RuleLoader:
                 then=rule_data.get("then", {}),
                 confidence=rule_data.get("confidence", 0.0),
                 rationale=rule_data.get("rationale", ""),
-                terminal=rule_data.get("terminal", False),
             ))
 
         return rules

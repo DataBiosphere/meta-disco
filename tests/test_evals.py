@@ -516,3 +516,105 @@ class TestFastaE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
+
+
+# =============================================================================
+# DERIVED / NOT-APPLICABLE FILES — tier precedence tests
+# =============================================================================
+
+class TestDerivedFileTierPrecedence:
+    """Verify that not_applicable rules at tier 2 win over filename_ref_* at tier 2,
+    and that index files allow reference_assembly from filename patterns."""
+
+    # --- Index files: reference_assembly IS applicable (#106/#107) ---
+
+    def test_index_with_reference_in_filename(self):
+        """Index file with GRCh38 in filename should get reference_assembly=GRCh38."""
+        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.bai"))
+        assert result.data_modality == NOT_APPLICABLE
+        assert result.reference_assembly == "GRCh38"
+        assert result.platform == NOT_APPLICABLE
+
+    def test_index_with_chm13_in_filename(self):
+        """Index file with CHM13 in filename should get reference_assembly=CHM13."""
+        result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.cram.crai"))
+        assert result.reference_assembly == "CHM13"
+        assert result.data_modality == NOT_APPLICABLE
+
+    def test_index_without_reference_in_filename(self):
+        """Index file without reference hint should get reference_assembly=not_classified."""
+        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.data_modality == NOT_APPLICABLE
+
+    # --- Checksum files: all fields not_applicable, even with reference in filename ---
+
+    def test_checksum_ignores_filename_reference(self):
+        """Checksum file should stay not_applicable even with GRCh38 in filename."""
+        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.md5"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.data_modality == NOT_APPLICABLE
+
+    # --- Log files: all fields not_applicable ---
+
+    def test_log_ignores_filename_reference(self):
+        """Log file should stay not_applicable even with hg38 in filename."""
+        result = engine.classify_extended(FileInfo(filename="alignment.hg38.log"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.data_modality == NOT_APPLICABLE
+
+    # --- Image files: reference_assembly not_applicable at tier 2 ---
+
+    def test_svs_ignores_filename_reference(self):
+        """SVS histology image should stay not_applicable for reference_assembly."""
+        result = engine.classify_extended(FileInfo(filename="hg38.sample.svs"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.data_modality == "imaging.histology"
+
+    def test_png_ignores_filename_reference(self):
+        """PNG plot with reference in filename should stay not_applicable."""
+        result = engine.classify_extended(FileInfo(filename="GRCh38_coverage_plot.png"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.data_modality == NOT_APPLICABLE
+
+    # --- Nanopore raw signal: reference_assembly not_applicable ---
+
+    def test_fast5_ignores_filename_reference(self):
+        """FAST5 raw signal with reference in filename should stay not_applicable."""
+        result = engine.classify_extended(FileInfo(filename="GRCh38_run.fast5"))
+        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.platform == "ONT"
+
+    # --- Stats files: reference_assembly applicable, other fields not_applicable (#106) ---
+
+    def test_stats_with_reference_in_filename(self):
+        """Stats file with CHM13 in filename should get reference_assembly=CHM13."""
+        result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.chrX.samtools.stats.txt"))
+        assert result.reference_assembly == "CHM13"
+        assert result.data_modality == NOT_APPLICABLE
+        assert result.platform == NOT_APPLICABLE
+
+    def test_stats_without_reference_in_filename(self):
+        """Stats file without reference hint should get not_classified, not not_applicable."""
+        result = engine.classify_extended(FileInfo(filename="HG00345.mosdepth.region.dist.txt"))
+        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.data_modality == NOT_APPLICABLE
+
+    # --- BED tier precedence: specific rules beat fallbacks ---
+
+    def test_assembly_qc_beats_intervals_targets(self):
+        """Assembly QC BED (tier 2) should override intervals_targets (tier 1)."""
+        result = engine.classify_extended(FileInfo(
+            filename="HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed"
+        ))
+        assert result.data_modality == "genomic"  # not not_applicable
+
+    def test_chip_peaks_beat_generic_peaks(self):
+        """ChIP-seq peaks (tier 2) should override generic peaks (tier 1)."""
+        result = engine.classify_extended(FileInfo(filename="H3K27ac_chip_peaks.bed"))
+        assert result.data_modality == "epigenomic.histone_modification"
+
+    def test_capture_targets_not_applicable(self):
+        """Capture target BED without competing rules should get not_applicable."""
+        result = engine.classify_extended(FileInfo(filename="exome_capture_targets.bed"))
+        assert result.data_modality == NOT_APPLICABLE

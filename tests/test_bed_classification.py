@@ -233,13 +233,11 @@ class TestRulePrecedence:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_methylation"  # Should match first
 
-    def test_assembly_qc_before_regions(self):
-        """Assembly QC should match before regions rule."""
-        # This could match regions but should match assembly_qc first
+    def test_assembly_qc_and_regions_agree(self):
+        """File matching both assembly_qc and regions should still be genomic."""
         filename = "sample.hap1.callable.regions.bed"
-        rule_id = get_matched_rule_id(filename)
-        # hap1 should trigger assembly_qc since it comes before regions in the list
-        assert rule_id == "bed_assembly_qc"
+        result = classify_bed(filename)
+        assert _get_val(result, "data_modality") == "genomic"
 
     def test_no_specific_pattern_gets_default(self):
         """Files that don't match any specific pattern should get default classification."""
@@ -259,12 +257,12 @@ class TestPatternEdgeCases:
         # Should NOT match assembly_qc because pattern requires .maternal. with dots
         assert rule_id != "bed_assembly_qc"
 
-    def test_peak_in_filename_matches(self):
-        """'peak' anywhere in filename should match."""
+    def test_chip_peak_beats_generic_peak(self):
+        """ChIP-seq specific rule (tier 2) overrides generic peaks rule (tier 1)."""
         filename = "chipseq_peak_calls.bed"
-        rule_id = get_matched_rule_id(filename)
-        # Matches ChIP-seq specific rule due to "chipseq" in filename
-        assert rule_id == "bed_chip_peaks"
+        result = classify_bed(filename)
+        # bed_chip_peaks (tier 2) wins over bed_peaks_generic (tier 1) due to "chipseq" in filename
+        assert _get_val(result, "data_modality") == "epigenomic.histone_modification"
 
 
 def _get_val(result: dict, field: str):
