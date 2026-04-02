@@ -250,7 +250,6 @@ rules:
     then:
       data_modality: not_applicable
       data_type: not_applicable
-      reference_assembly: not_applicable
       assay_type: not_applicable
       platform: not_applicable
     confidence: 1.0
@@ -260,7 +259,7 @@ rules:
   # Checksum files - not applicable
   # ---------------------------------------------------------------------------
   - id: checksum_not_applicable
-    tier: 1
+    tier: 2
     scope: extension
     when:
       extensions: [".md5"]
@@ -277,7 +276,7 @@ rules:
   # Log files - not applicable
   # ---------------------------------------------------------------------------
   - id: log_not_applicable
-    tier: 1
+    tier: 2
     scope: extension
     when:
       extensions: [".log"]
@@ -294,7 +293,7 @@ rules:
   # Chunked upload artifacts - not applicable
   # ---------------------------------------------------------------------------
   - id: chunked_upload_not_applicable
-    tier: 1
+    tier: 2
     scope: filename
     when:
       filename_pattern: "gs-chunked-io-part\\.\\d+"
@@ -311,7 +310,7 @@ rules:
   # Bare timestamp filenames - not applicable
   # ---------------------------------------------------------------------------
   - id: timestamp_not_applicable
-    tier: 1
+    tier: 2
     scope: filename
     when:
       filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
@@ -627,7 +626,7 @@ rules:
     rationale: "Filename contains CHM13/T2T reference indicator"
 
   # ---------------------------------------------------------------------------
-  # Dataset-based reference rules (run early to set reference before terminal rules)
+  # Dataset-based reference rules
   # ---------------------------------------------------------------------------
   # dataset_t2t_reference was removed — replaced by coordinate-based detection
   # in fetch_bed_headers.py which reads actual BED file content from S3.

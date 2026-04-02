@@ -259,8 +259,8 @@ class TestPatternEdgeCases:
         # Should NOT match assembly_qc because pattern requires .maternal. with dots
         assert rule_id != "bed_assembly_qc"
 
-    def test_peak_in_filename_matches(self):
-        """'peak' anywhere in filename should match ChIP-seq rule."""
+    def test_chip_peak_beats_generic_peak(self):
+        """ChIP-seq specific rule (tier 2) overrides generic peaks rule (tier 1)."""
         filename = "chipseq_peak_calls.bed"
         result = classify_bed(filename)
         # bed_chip_peaks (tier 2) wins over bed_peaks_generic (tier 1) due to "chipseq" in filename

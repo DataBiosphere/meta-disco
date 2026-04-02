@@ -530,10 +530,11 @@ class TestSentinelValues:
     """Test that not_applicable/not_classified sentinels are used correctly."""
 
     def test_derivative_files_get_not_applicable(self, engine):
-        """Derivative files (indexes, checksums) should get not_applicable for all fields."""
+        """Index files get not_applicable for modality/platform/assay but not reference_assembly
+        (reference IS applicable to indexes — it's determined by the parent file's alignment)."""
         result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
         assert result.data_modality == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.reference_assembly == NOT_CLASSIFIED  # applicable but unknown without filename hint
         assert result.platform == NOT_APPLICABLE
         assert result.assay_type == NOT_APPLICABLE
 
