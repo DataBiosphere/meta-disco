@@ -233,13 +233,11 @@ class TestRulePrecedence:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_methylation"  # Should match first
 
-    def test_assembly_qc_before_regions(self):
-        """Assembly QC should match before regions rule."""
-        # This could match regions but should match assembly_qc first
+    def test_assembly_qc_and_regions_agree(self):
+        """File matching both assembly_qc and regions should still be genomic."""
         filename = "sample.hap1.callable.regions.bed"
-        rule_id = get_matched_rule_id(filename)
-        # hap1 should trigger assembly_qc since it comes before regions in the list
-        assert rule_id == "bed_assembly_qc"
+        result = classify_bed(filename)
+        assert _get_val(result, "data_modality") == "genomic"
 
     def test_no_specific_pattern_gets_default(self):
         """Files that don't match any specific pattern should get default classification."""

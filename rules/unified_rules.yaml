@@ -235,9 +235,11 @@ extension_map:
 rules:
 
   # ===========================================================================
-  # TIER 1: EXTENSION-BASED RULES
+  # EXTENSION-BASED RULES (tiers 1–2)
   # ===========================================================================
-
+  # Tier 1: broad fallbacks (index files — reference_assembly left open)
+  # Tier 2: definitive not_applicable (checksum, log, upload, timestamp,
+  #         images, nanopore raw, FASTQ baseline)
 
   # ---------------------------------------------------------------------------
   # Index files - not applicable (inherit from parent via classify_index_files.py)
