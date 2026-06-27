@@ -167,7 +167,7 @@ class RuleLoader:
         if not self.rules_path.exists():
             raise FileNotFoundError(f"Rules file not found: {self.rules_path}")
 
-        with open(self.rules_path) as f:
+        with open(self.rules_path, encoding="utf-8") as f:
             docs = list(yaml.safe_load_all(f))
 
         if len(docs) < 2:
@@ -242,7 +242,12 @@ class RuleLoader:
             if scope not in self.VALID_SCOPES:
                 raise ValueError(f"Rule {rule_id}: invalid scope '{scope}', must be one of {self.VALID_SCOPES}")
 
-            when = rule_data.get("when") or {}
+            # Coerce only a null block to {}; any other non-mapping (e.g. "" or [])
+            # is a malformed rule and must raise rather than silently become an
+            # unconditional match.
+            when = rule_data.get("when", {})
+            if when is None:
+                when = {}
             if not isinstance(when, dict):
                 raise ValueError(
                     f"Rule {rule_id}: 'when' must be a mapping, got {type(when).__name__}"
@@ -254,7 +259,9 @@ class RuleLoader:
                     f"valid keys are {sorted(self.VALID_WHEN_KEYS)}"
                 )
 
-            then = rule_data.get("then") or {}
+            then = rule_data.get("then", {})
+            if then is None:
+                then = {}
             if not isinstance(then, dict):
                 raise ValueError(
                     f"Rule {rule_id}: 'then' must be a mapping, got {type(then).__name__}"

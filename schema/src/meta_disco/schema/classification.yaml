@@ -158,7 +158,7 @@ slots:
     range: classification_status_enum
     required: true
   confidence:
-    description: Confidence in [0, 1]; vestigial, see issue #56.
+    description: "Confidence in [0, 1]; vestigial, see issue #56."
     range: float
   evidence:
     range: Evidence
@@ -171,7 +171,7 @@ slots:
   reason:
     description: Human-readable rationale.
   source_type:
-    description: Kind of source that produced this evidence (provenance, #90).
+    description: "Kind of source that produced this evidence (provenance, #90)."
     range: source_type_enum
   authority:
     description: The authority the claim rests on.
@@ -306,7 +306,7 @@ enums:
       any:
 
   source_type_enum:
-    description: Kind of source behind a piece of evidence (provenance model, #90).
+    description: "Kind of source behind a piece of evidence (provenance model, #90)."
     permissible_values:
       header_rule:
       filename_rule:

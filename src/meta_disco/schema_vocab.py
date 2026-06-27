@@ -37,7 +37,7 @@ def default_schema_path() -> Path:
 @lru_cache(maxsize=None)
 def _load_enums() -> dict[str, frozenset[str]]:
     """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
-    with open(default_schema_path()) as f:
+    with open(default_schema_path(), encoding="utf-8") as f:
         schema = yaml.safe_load(f)
     return {
         name: frozenset(((defn or {}).get("permissible_values") or {}).keys())

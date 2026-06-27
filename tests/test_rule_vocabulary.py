@@ -12,8 +12,8 @@ Two layers of protection:
 Together they keep the rules and the schema from drifting apart.
 """
 
-import yaml
 import pytest
+import yaml
 
 from src.meta_disco import schema_vocab
 from src.meta_disco.rule_loader import RuleLoader, get_unified_rules
@@ -56,7 +56,7 @@ def test_assay_type_inference_values_in_vocabulary():
 def _write_rules_file(tmp_path, rule):
     """Write a minimal two-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump_all([{"extension_map": {}}, {"rules": [rule]}], f)
     return path
 
@@ -81,12 +81,14 @@ def test_loader_rejects_unknown_then_key(tmp_path):
         RuleLoader(path).load()
 
 
-def test_loader_rejects_non_mapping_when(tmp_path):
-    # `when: always` (scalar) instead of `when: {always: true}` — must give a
-    # clear error, not a TypeError or a per-character "unknown key" message.
+@pytest.mark.parametrize("bad_when", ["always", "", [], 0])
+def test_loader_rejects_non_mapping_when(tmp_path, bad_when):
+    # Any non-mapping `when` (scalar, empty string, empty list, ...) must raise a
+    # clear error — not a TypeError, not a per-character "unknown key" message,
+    # and crucially not silently coerce to {} (an unconditional match).
     path = _write_rules_file(tmp_path, {
-        "id": "scalar_when", "tier": 1, "scope": "extension",
-        "when": "always",
+        "id": "bad_when", "tier": 1, "scope": "extension",
+        "when": bad_when,
         "then": {"data_modality": "genomic"},
     })
     with pytest.raises(ValueError, match="'when' must be a mapping"):
