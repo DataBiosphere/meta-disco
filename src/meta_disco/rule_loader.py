@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from .models import CLASSIFICATION_FIELDS
+
 
 @dataclass
 class UnifiedRule:
@@ -120,6 +122,22 @@ class RuleLoader:
     VALID_SCOPES = {"extension", "filename", "header", "vcf_header", "fastq_header", "file_size"}
     VALID_TIERS = {1, 2, 3}
 
+    # Condition keys the engine interprets. Keep in sync with
+    # rule_engine.RuleEngine._rule_matches() and its _match_* helpers — a key not
+    # listed here is silently ignored at match time, so an unrecognized key is
+    # almost always a typo (e.g. "filename_patern").
+    VALID_WHEN_KEYS = {
+        "always",
+        "extensions", "filename_pattern", "dataset_pattern", "file_format",
+        "file_size_min_gb", "file_size_max_gb",
+        "platform", "modality_not_set", "reference_not_set",
+        "header_section", "header_field", "header_pattern", "header_absent",
+        "vcf_header_type", "vcf_pattern", "fastq_pattern",
+    }
+    # Effect keys (classification fields) that _apply_rule() reads. A key not
+    # listed here would never be applied, so it is treated as an error.
+    VALID_THEN_KEYS = set(CLASSIFICATION_FIELDS)
+
     def __init__(self, rules_path: str | Path | None = None):
         """Initialize the rule loader.
 
@@ -196,7 +214,14 @@ class RuleLoader:
         return self._rules
 
     def _parse_rules(self, rules_data: list[dict]) -> list[UnifiedRule]:
-        """Parse rule definitions from YAML."""
+        """Parse rule definitions from YAML.
+
+        Validates each rule's id (present, unique), tier, scope, and the keys
+        used in its ``when``/``then`` blocks (against VALID_WHEN_KEYS /
+        VALID_THEN_KEYS). Raises ValueError on any violation. Does not validate
+        ``then`` *values* against the controlled vocabulary — that check lives in
+        tests/test_rule_vocabulary.py, which reads the LinkML schema.
+        """
         rules = []
         seen_ids = set()
 
@@ -217,12 +242,28 @@ class RuleLoader:
             if scope not in self.VALID_SCOPES:
                 raise ValueError(f"Rule {rule_id}: invalid scope '{scope}', must be one of {self.VALID_SCOPES}")
 
+            when = rule_data.get("when", {})
+            unknown_when = set(when) - self.VALID_WHEN_KEYS
+            if unknown_when:
+                raise ValueError(
+                    f"Rule {rule_id}: unknown 'when' condition key(s) {sorted(unknown_when)}; "
+                    f"valid keys are {sorted(self.VALID_WHEN_KEYS)}"
+                )
+
+            then = rule_data.get("then", {})
+            unknown_then = set(then) - self.VALID_THEN_KEYS
+            if unknown_then:
+                raise ValueError(
+                    f"Rule {rule_id}: unknown 'then' effect key(s) {sorted(unknown_then)}; "
+                    f"valid keys are {sorted(self.VALID_THEN_KEYS)}"
+                )
+
             rules.append(UnifiedRule(
                 id=rule_id,
                 tier=tier,
                 scope=scope,
-                when=rule_data.get("when", {}),
-                then=rule_data.get("then", {}),
+                when=when,
+                then=then,
                 confidence=rule_data.get("confidence", 0.0),
                 rationale=rule_data.get("rationale", ""),
             ))

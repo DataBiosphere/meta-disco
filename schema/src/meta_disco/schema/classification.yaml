@@ -1,0 +1,317 @@
+id: https://github.com/DataBiosphere/meta-disco/blob/main/schema/src/meta_disco/schema/classification.yaml
+name: meta_disco_classification
+title: Meta-Disco File Classification Model
+description: >-
+  Full classification data model for meta-disco: the five metadata dimensions,
+  per-field evidence, classification-status sentinels, and typed derivation
+  edges. This is the prototype expansion of anvil_file.yaml (issue #33) and the
+  data-model decision record in docs/derived-file-data-model.md.
+
+  Authoring source of truth. JSON Schema (for validating output records and the
+  rules file) and Pydantic (for the Python pipeline) are GENERATED from this file
+  via `gen-json-schema` / `gen-pydantic` — do not hand-edit the generated copies.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  anvil: https://github.com/DataBiosphere/meta-disco/schema/
+default_prefix: anvil
+default_range: string
+
+imports:
+  - linkml:types
+
+# =============================================================================
+# CLASSES
+# =============================================================================
+classes:
+
+  ClassificationRecord:
+    tree_root: true
+    description: >-
+      One classified file. The five dimension fields describe the file's
+      identity (what it is); derived_from is a typed edge to the file it was
+      derived from (where it came from).
+    slots:
+      - md5sum
+      - file_name
+      - file_format
+      - file_size
+      - data_modality
+      - data_type
+      - reference_assembly
+      - assay_type
+      - platform
+      - derived_from
+    slot_usage:
+      data_modality:
+        range: DataModalityClassification
+      data_type:
+        range: DataTypeClassification
+      reference_assembly:
+        range: ReferenceAssemblyClassification
+      assay_type:
+        range: AssayTypeClassification
+      platform:
+        range: PlatformClassification
+
+  Classification:
+    abstract: true
+    description: >-
+      A single classified field: its resolved value (null unless status is
+      'classified'), a status sentinel, and the evidence behind it. Subclasses
+      narrow `value` to the right enum per dimension.
+    slots:
+      - value
+      - status
+      - confidence
+      - evidence
+
+  DataModalityClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: data_modality_enum
+
+  DataTypeClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: data_type_enum
+
+  ReferenceAssemblyClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: reference_assembly_enum
+
+  AssayTypeClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: assay_type_enum
+
+  PlatformClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: platform_enum
+
+  Evidence:
+    description: One piece of supporting evidence for a classification value.
+    slots:
+      - rule_id
+      - reason
+      - confidence
+      - source_type
+      - authority
+      - reference
+
+  DerivationEdge:
+    description: >-
+      Typed link from a derived file to the file it was derived from. The verb
+      (relation) and parent_kind are the type — knowable from the filename;
+      parent_md5sum is the grounding, which may be null when the parent cannot
+      be resolved. See docs/derived-file-data-model.md.
+    slots:
+      - relation
+      - parent_md5sum
+      - parent_file
+      - parent_kind
+
+# =============================================================================
+# SLOTS
+# =============================================================================
+slots:
+  md5sum:
+    description: MD5 checksum of the file; primary key for records.
+    identifier: true
+  file_name:
+    description: The file name.
+  file_format:
+    description: File extension / compound extension (e.g. .bam, .vcf.gz).
+  file_size:
+    description: File size in bytes.
+    range: integer
+
+  # --- the five dimensions (ranges narrowed to *Classification in slot_usage) ---
+  data_modality:
+    description: The biological signal the file carries.
+  data_type:
+    description: The content type of the file (biological or descriptive class).
+  reference_assembly:
+    description: The reference genome the file's coordinates are expressed against.
+  assay_type:
+    description: The experimental assay that produced the upstream data.
+  platform:
+    description: The sequencing platform / instrument family.
+
+  derived_from:
+    description: Typed derivation edge to the parent file, if this is a derived file.
+    range: DerivationEdge
+
+  # --- Classification sub-fields ---
+  value:
+    description: The resolved value; null unless status is 'classified'.
+    required: false
+  status:
+    description: Whether the field was classified, is not applicable, etc.
+    range: classification_status_enum
+    required: true
+  confidence:
+    description: Confidence in [0, 1]; vestigial, see issue #56.
+    range: float
+  evidence:
+    range: Evidence
+    multivalued: true
+    inlined_as_list: true
+
+  # --- Evidence sub-fields ---
+  rule_id:
+    description: Identifier of the rule (or synthetic source) that produced this evidence.
+  reason:
+    description: Human-readable rationale.
+  source_type:
+    description: Kind of source that produced this evidence (provenance, #90).
+    range: source_type_enum
+  authority:
+    description: The authority the claim rests on.
+  reference:
+    description: A URL or identifier backing the claim, if any.
+
+  # --- DerivationEdge sub-fields ---
+  relation:
+    description: The derivation verb.
+    range: relation_enum
+    required: true
+  parent_md5sum:
+    description: md5sum of the parent file; null if the edge is ungrounded.
+  parent_file:
+    description: Name of the parent file.
+  parent_kind:
+    description: The kind of file the parent is.
+    range: parent_kind_enum
+
+# =============================================================================
+# ENUMS  (the controlled vocabulary — the canonical source of truth)
+# =============================================================================
+enums:
+
+  data_modality_enum:
+    description: The biological signal a file carries. Dotted values are hierarchical.
+    permissible_values:
+      genomic:
+        # meaning: <OBI/EDAM CURIE>   # LinkML supports ontology mapping here
+      "transcriptomic.bulk":
+      "transcriptomic.single_cell":
+      "epigenomic.chromatin_accessibility":
+      "epigenomic.histone_modification":
+      "epigenomic.methylation":
+      "imaging.histology":
+
+  data_type_enum:
+    description: >-
+      Content type, spanning two classes. BIOLOGICAL: the bytes are the signal.
+      DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.)
+    permissible_values:
+      # --- biological class ---
+      alignments:
+      reads:
+      sequence:
+      assembly:
+      variants:
+      "variants.germline":
+      "variants.somatic":
+      "variants.structural":
+      "variants.cnv":
+      genotypes:
+      expression_matrix:
+      annotations:
+      peaks:
+      signal:
+      raw_signal:
+      array_signal:
+      images:
+      # --- descriptive class ---
+      index:
+      checksum:
+      statistics:
+      log:
+      interval_set:
+      archive:
+
+  reference_assembly_enum:
+    permissible_values:
+      GRCh37:
+      GRCh38:
+      CHM13:
+      # GRCm39:  # mouse — pending issue #15
+
+  assay_type_enum:
+    permissible_values:
+      WGS:
+      WES:
+      "RNA-seq":
+      "ATAC-seq":
+      "ChIP-seq":
+      "Bisulfite-seq":
+      "Methylation array":
+      Histology:
+
+  platform_enum:
+    permissible_values:
+      ILLUMINA:
+      PACBIO:
+      ONT:
+      MGI:
+      ELEMENT:
+      ULTIMA:
+
+  classification_status_enum:
+    description: >-
+      Why a field has (or lacks) a value. Replaces sentinel values that were
+      previously smuggled into each dimension enum (not_applicable /
+      not_classified). See issues #56, #88.
+    permissible_values:
+      classified:
+        description: A value was determined.
+      not_applicable:
+        description: The field has no meaning for this file.
+      not_classified:
+        description: The field is meaningful but no value could be determined.
+      conflict:
+        description: Multiple rules disagreed at the same tier.
+
+  relation_enum:
+    description: >-
+      Derivation verbs we can currently detect. subset_of / merged_from /
+      member_of are intentionally held back until detectable (data-model doc 8d).
+    permissible_values:
+      index_of:
+      checksum_of:
+      summarizes:
+      lifted_over_from:
+      derived_from:   # generic fallback: related, verb unknown
+
+  parent_kind_enum:
+    description: The kind of file a derivation edge points at.
+    permissible_values:
+      alignment:
+      variants:
+      reads:
+      sequence:
+      intervals:
+      signal:
+      expression_matrix:
+      genotypes:
+      any:
+
+  source_type_enum:
+    description: Kind of source behind a piece of evidence (provenance model, #90).
+    permissible_values:
+      header_rule:
+      filename_rule:
+      contig_detection:
+      external_ground_truth:
+      repository_metadata:
+      derivation_inheritance:
+      wrangler_annotation:

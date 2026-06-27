@@ -6,6 +6,13 @@ from dataclasses import dataclass, field
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
 
+# The five classification dimension fields, in canonical output order. Single
+# source of truth for the field set — the rule engine, rule_loader's 'then' key
+# validation, and schema_vocab's dimensions all derive from this.
+CLASSIFICATION_FIELDS = (
+    "data_modality", "data_type", "platform", "reference_assembly", "assay_type",
+)
+
 
 @dataclass
 class FileInfo:
