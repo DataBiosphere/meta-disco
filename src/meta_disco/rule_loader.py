@@ -242,7 +242,11 @@ class RuleLoader:
             if scope not in self.VALID_SCOPES:
                 raise ValueError(f"Rule {rule_id}: invalid scope '{scope}', must be one of {self.VALID_SCOPES}")
 
-            when = rule_data.get("when", {})
+            when = rule_data.get("when") or {}
+            if not isinstance(when, dict):
+                raise ValueError(
+                    f"Rule {rule_id}: 'when' must be a mapping, got {type(when).__name__}"
+                )
             unknown_when = set(when) - self.VALID_WHEN_KEYS
             if unknown_when:
                 raise ValueError(
@@ -250,7 +254,11 @@ class RuleLoader:
                     f"valid keys are {sorted(self.VALID_WHEN_KEYS)}"
                 )
 
-            then = rule_data.get("then", {})
+            then = rule_data.get("then") or {}
+            if not isinstance(then, dict):
+                raise ValueError(
+                    f"Rule {rule_id}: 'then' must be a mapping, got {type(then).__name__}"
+                )
             unknown_then = set(then) - self.VALID_THEN_KEYS
             if unknown_then:
                 raise ValueError(

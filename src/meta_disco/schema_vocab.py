@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import NOT_APPLICABLE, NOT_CLASSIFIED
+from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
 # Sentinel values that rules currently emit as classification *values*. Per the
 # schema these are slated to move into a separate ``status`` field (issues #56,
@@ -20,14 +20,10 @@ from .models import NOT_APPLICABLE, NOT_CLASSIFIED
 # real enum values.
 SENTINEL_VALUES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
 
-# Classification field -> the enum that defines its permissible values.
-DIMENSION_ENUMS = {
-    "data_modality": "data_modality_enum",
-    "data_type": "data_type_enum",
-    "reference_assembly": "reference_assembly_enum",
-    "assay_type": "assay_type_enum",
-    "platform": "platform_enum",
-}
+# Classification field -> the enum that defines its permissible values. By
+# convention each dimension's enum is named ``<field>_enum`` in the schema, so
+# this derives from the single source of truth rather than re-listing the fields.
+DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 
 
 def default_schema_path() -> Path:
@@ -44,7 +40,7 @@ def _load_enums() -> dict[str, frozenset[str]]:
     with open(default_schema_path()) as f:
         schema = yaml.safe_load(f)
     return {
-        name: frozenset((defn.get("permissible_values") or {}).keys())
+        name: frozenset(((defn or {}).get("permissible_values") or {}).keys())
         for name, defn in schema.get("enums", {}).items()
     }
 

@@ -15,8 +15,8 @@ Together they keep the rules and the schema from drifting apart.
 import yaml
 import pytest
 
-from meta_disco import schema_vocab
-from meta_disco.rule_loader import RuleLoader, get_unified_rules
+from src.meta_disco import schema_vocab
+from src.meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 
 def test_rule_then_values_in_vocabulary():
@@ -79,6 +79,28 @@ def test_loader_rejects_unknown_then_key(tmp_path):
     })
     with pytest.raises(ValueError, match="unknown 'then' effect key"):
         RuleLoader(path).load()
+
+
+def test_loader_rejects_non_mapping_when(tmp_path):
+    # `when: always` (scalar) instead of `when: {always: true}` — must give a
+    # clear error, not a TypeError or a per-character "unknown key" message.
+    path = _write_rules_file(tmp_path, {
+        "id": "scalar_when", "tier": 1, "scope": "extension",
+        "when": "always",
+        "then": {"data_modality": "genomic"},
+    })
+    with pytest.raises(ValueError, match="'when' must be a mapping"):
+        RuleLoader(path).load()
+
+
+def test_loader_accepts_null_when_and_then(tmp_path):
+    # Empty/null when/then blocks must not crash the load (set(None) TypeError).
+    path = _write_rules_file(tmp_path, {
+        "id": "null_blocks", "tier": 1, "scope": "extension",
+        "when": None, "then": None,
+    })
+    loaded = RuleLoader(path).load()
+    assert loaded.rules[0].when == {} and loaded.rules[0].then == {}
 
 
 def test_loader_accepts_known_keys(tmp_path):
