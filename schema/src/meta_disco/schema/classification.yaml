@@ -7,9 +7,13 @@ description: >-
   edges. This is the prototype expansion of anvil_file.yaml (issue #33) and the
   data-model decision record in docs/derived-file-data-model.md.
 
-  Authoring source of truth. JSON Schema (for validating output records and the
-  rules file) and Pydantic (for the Python pipeline) are GENERATED from this file
-  via `gen-json-schema` / `gen-pydantic` — do not hand-edit the generated copies.
+  Authoring source of truth. `make gen` generates JSON Schema and Pydantic from
+  this file (via `gen-json-schema` / `gen-pydantic`) — do not hand-edit the
+  generated copies. Today the schema's vocabulary backs the rule drift check
+  (tests/test_rule_vocabulary.py). Validating pipeline output records against the
+  generated JSON Schema and adopting the Pydantic records in the pipeline are
+  planned follow-ups — the current output shape is `{..., "classifications": {...}}`,
+  which this schema does not yet match (see docs/derived-file-data-model.md section 8).
 
 prefixes:
   linkml: https://w3id.org/linkml/
