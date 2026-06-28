@@ -37,7 +37,13 @@ def default_schema_path() -> Path:
 @lru_cache(maxsize=None)
 def _load_enums() -> dict[str, frozenset[str]]:
     """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
-    with open(default_schema_path(), encoding="utf-8") as f:
+    path = default_schema_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"LinkML classification schema not found at {path}. schema_vocab expects "
+            "to run from a repo checkout with the schema/ directory present."
+        )
+    with open(path, encoding="utf-8") as f:
         schema = yaml.safe_load(f)
     return {
         name: frozenset(((defn or {}).get("permissible_values") or {}).keys())
@@ -46,5 +52,22 @@ def _load_enums() -> dict[str, frozenset[str]]:
 
 
 def dimension_values(field: str) -> frozenset[str]:
-    """Return the permissible values for a classification dimension field."""
-    return _load_enums()[DIMENSION_ENUMS[field]]
+    """Return the permissible values for a classification dimension field.
+
+    Raises ValueError for an unrecognized field, and KeyError (with the schema
+    path) if the schema is missing the expected ``<field>_enum`` — so schema/rule
+    drift fails with a diagnosable message rather than a bare lookup error.
+    """
+    if field not in DIMENSION_ENUMS:
+        raise ValueError(
+            f"Unknown classification dimension {field!r}; "
+            f"expected one of {sorted(DIMENSION_ENUMS)}"
+        )
+    enum_name = DIMENSION_ENUMS[field]
+    enums = _load_enums()
+    if enum_name not in enums:
+        raise KeyError(
+            f"Schema at {default_schema_path()} is missing enum {enum_name!r} "
+            f"for dimension {field!r}"
+        )
+    return enums[enum_name]

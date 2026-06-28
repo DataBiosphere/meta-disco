@@ -53,6 +53,11 @@ def test_assay_type_inference_values_in_vocabulary():
     )
 
 
+def test_dimension_values_unknown_field_raises_clear_error():
+    with pytest.raises(ValueError, match="Unknown classification dimension"):
+        schema_vocab.dimension_values("not_a_field")
+
+
 def _write_rules_file(tmp_path, rule):
     """Write a minimal two-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"
