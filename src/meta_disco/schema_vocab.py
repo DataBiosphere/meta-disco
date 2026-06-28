@@ -25,6 +25,16 @@ SENTINEL_VALUES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
 # this derives from the single source of truth rather than re-listing the fields.
 DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 
+# ``when`` condition keys whose value must be a member of a dimension enum,
+# mapped to that dimension. The rule engine compares these against enum values at
+# match time, so a typo'd value silently never matches rather than erroring — the
+# same class of bug the ``then``-value check guards against. Only ``platform``
+# qualifies today; the other ``when`` keys carry regexes, header field codes,
+# numeric bounds, or booleans, none of which are dimension-enum-backed.
+# ``when.file_format`` is checked against extension_map keys, not a dimension enum
+# (see issue #114). Keep in sync with rule_engine.RuleEngine._rule_matches().
+ENUM_BACKED_WHEN_KEYS = {"platform": "platform"}
+
 
 def default_schema_path() -> Path:
     """Path to the canonical LinkML classification schema."""
@@ -71,3 +81,13 @@ def dimension_values(field: str) -> frozenset[str]:
             f"for dimension {field!r}"
         )
     return enums[enum_name]
+
+
+def value_in_vocabulary(field: str, value: str) -> bool:
+    """True if ``value`` is permissible for the dimension, or a sentinel.
+
+    The membership test the rule drift checks use: a dimension's enum values plus
+    SENTINEL_VALUES. Raises the same errors as ``dimension_values`` for an
+    unrecognized field or a schema missing the expected enum.
+    """
+    return value in (dimension_values(field) | SENTINEL_VALUES)
