@@ -5,7 +5,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .models import NOT_APPLICABLE, NOT_CLASSIFIED, ClassificationResult, FileInfo
+from .models import (
+    CLASSIFICATION_FIELDS,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    ClassificationResult,
+    FileInfo,
+)
 from .rule_loader import UnifiedRule, get_unified_rules
 
 
@@ -120,10 +126,8 @@ class ExtendedClassificationResult:
             }
         return classifications
 
-    # Classification field names (shared with _finalize_result)
-    _CLASSIFICATION_FIELDS = (
-        "data_modality", "data_type", "platform", "reference_assembly", "assay_type"
-    )
+    # Classification field names (single source of truth: models.CLASSIFICATION_FIELDS)
+    _CLASSIFICATION_FIELDS = CLASSIFICATION_FIELDS
 
 
 def evaluate_claims(claims: list[dict]) -> dict:
