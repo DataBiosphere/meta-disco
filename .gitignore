@@ -63,3 +63,6 @@ venv.bak/
 # Data and output directories (large files from API)
 data/
 output/
+
+# Classification run outputs (large generated JSON, written at repo root)
+/*_classifications.json

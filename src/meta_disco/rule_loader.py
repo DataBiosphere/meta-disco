@@ -138,6 +138,12 @@ class RuleLoader:
     # listed here would never be applied, so it is treated as an error.
     VALID_THEN_KEYS = set(CLASSIFICATION_FIELDS)
 
+    # assay_type_rules condition keys that infer_assay_type() treats as iterables
+    # (`x not in platform_in`, `any(r in ... for r in matched_rules_any)`). A
+    # scalar string here silently becomes a per-character membership test, so it
+    # must be a list. Keep in sync with rule_engine.RuleEngine.infer_assay_type().
+    LIST_VALUED_ASSAY_CONDITIONS = {"platform_in", "matched_rules_any"}
+
     def __init__(self, rules_path: str | Path | None = None):
         """Initialize the rule loader.
 
@@ -306,10 +312,35 @@ class RuleLoader:
         rules = []
 
         for rule_data in rules_data:
+            assay_id = rule_data.get("id", "")
+
+            # Coerce only a null block to {} (a catch-all rule); any other
+            # non-mapping is malformed and must raise rather than crash
+            # infer_assay_type, which assumes conditions is a mapping. Mirrors
+            # the when/then handling in _parse_rules.
+            conditions = rule_data.get("conditions", {})
+            if conditions is None:
+                conditions = {}
+            if not isinstance(conditions, dict):
+                raise ValueError(
+                    f"Assay type rule {assay_id}: 'conditions' must be a mapping, "
+                    f"got {type(conditions).__name__}"
+                )
+
+            # List-typed condition keys must be lists; a scalar string would be
+            # iterated character-by-character by infer_assay_type and silently
+            # mis-match (e.g. platform_in: ILLUMINA).
+            for key in self.LIST_VALUED_ASSAY_CONDITIONS:
+                if key in conditions and not isinstance(conditions[key], list):
+                    raise ValueError(
+                        f"Assay type rule {assay_id}: condition '{key}' must be a "
+                        f"list, got {type(conditions[key]).__name__}"
+                    )
+
             rules.append(AssayTypeRule(
-                id=rule_data.get("id", ""),
+                id=assay_id,
                 priority=rule_data.get("priority", 0),
-                conditions=rule_data.get("conditions", {}),
+                conditions=conditions,
                 assay_type=rule_data.get("assay_type", ""),
             ))
 
