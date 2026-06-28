@@ -185,6 +185,29 @@ def test_loader_accepts_null_assay_conditions(tmp_path):
     assert loaded.assay_type_rules[0].conditions == {}
 
 
+@pytest.mark.parametrize("list_key", ["platform_in", "matched_rules_any"])
+def test_loader_rejects_scalar_list_valued_assay_condition(tmp_path, list_key):
+    # A scalar where a list is expected would be iterated char-by-char by
+    # infer_assay_type and silently mis-match; the loader must reject it.
+    path = _write_assay_rules_file(tmp_path, {
+        "id": "scalar_list", "priority": 1,
+        "conditions": {list_key: "ILLUMINA"},  # should be ["ILLUMINA"]
+        "assay_type": "WGS",
+    })
+    with pytest.raises(ValueError, match=f"condition '{list_key}' must be a list"):
+        RuleLoader(path).load()
+
+
+def test_loader_accepts_list_valued_assay_conditions(tmp_path):
+    path = _write_assay_rules_file(tmp_path, {
+        "id": "list_ok", "priority": 1,
+        "conditions": {"platform_in": ["PACBIO", "ONT"], "matched_rules_any": ["r1"]},
+        "assay_type": "WGS",
+    })
+    loaded = RuleLoader(path).load()
+    assert loaded.assay_type_rules[0].conditions["platform_in"] == ["PACBIO", "ONT"]
+
+
 def test_dimension_values_unknown_field_raises_clear_error():
     with pytest.raises(ValueError, match="Unknown classification dimension"):
         schema_vocab.dimension_values("not_a_field")
