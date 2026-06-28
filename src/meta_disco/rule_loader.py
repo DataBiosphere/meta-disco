@@ -306,10 +306,25 @@ class RuleLoader:
         rules = []
 
         for rule_data in rules_data:
+            assay_id = rule_data.get("id", "")
+
+            # Coerce only a null block to {} (a catch-all rule); any other
+            # non-mapping is malformed and must raise rather than crash
+            # infer_assay_type, which assumes conditions is a mapping. Mirrors
+            # the when/then handling in _parse_rules.
+            conditions = rule_data.get("conditions", {})
+            if conditions is None:
+                conditions = {}
+            if not isinstance(conditions, dict):
+                raise ValueError(
+                    f"Assay type rule {assay_id}: 'conditions' must be a mapping, "
+                    f"got {type(conditions).__name__}"
+                )
+
             rules.append(AssayTypeRule(
-                id=rule_data.get("id", ""),
+                id=assay_id,
                 priority=rule_data.get("priority", 0),
-                conditions=rule_data.get("conditions", {}),
+                conditions=conditions,
                 assay_type=rule_data.get("assay_type", ""),
             ))
 

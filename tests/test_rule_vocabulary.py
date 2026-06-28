@@ -150,6 +150,41 @@ def test_assay_condition_check_rejects_bogus_platform(tmp_path):
     assert violations == ["bogus_assay: conditions.platform_in='ILUMINA'"]
 
 
+def _write_assay_rules_file(tmp_path, assay_rule):
+    """Write a rules file whose fourth document holds a single assay_type_rule."""
+    path = tmp_path / "rules.yaml"
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump_all([
+            {"extension_map": {}},
+            {"rules": []},
+            {"validators": {}},
+            {"assay_type_rules": [assay_rule]},
+        ], f)
+    return path
+
+
+@pytest.mark.parametrize("bad_conditions", ["always", "", [], 0])
+def test_loader_rejects_non_mapping_assay_conditions(tmp_path, bad_conditions):
+    # A non-mapping `conditions` must raise at load time rather than crash
+    # infer_assay_type (which assumes a mapping). Mirrors the when/then guard.
+    path = _write_assay_rules_file(tmp_path, {
+        "id": "bad_conditions", "priority": 1,
+        "conditions": bad_conditions, "assay_type": "WGS",
+    })
+    with pytest.raises(ValueError, match="'conditions' must be a mapping"):
+        RuleLoader(path).load()
+
+
+def test_loader_accepts_null_assay_conditions(tmp_path):
+    # A null `conditions` block is a catch-all rule; coerced to {}, not a crash.
+    path = _write_assay_rules_file(tmp_path, {
+        "id": "null_conditions", "priority": 1,
+        "conditions": None, "assay_type": "WGS",
+    })
+    loaded = RuleLoader(path).load()
+    assert loaded.assay_type_rules[0].conditions == {}
+
+
 def test_dimension_values_unknown_field_raises_clear_error():
     with pytest.raises(ValueError, match="Unknown classification dimension"):
         schema_vocab.dimension_values("not_a_field")
