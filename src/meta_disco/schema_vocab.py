@@ -35,6 +35,19 @@ DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 # (see issue #114). Keep in sync with rule_engine.RuleEngine._rule_matches().
 ENUM_BACKED_WHEN_KEYS = {"platform": "platform"}
 
+# assay_type_rules ``conditions`` keys whose value(s) must be dimension-enum
+# members, mapped to (dimension, is_list). The same antecedent-value class as
+# ENUM_BACKED_WHEN_KEYS, but in the separate assay-inference block. Excluded
+# (intentionally): data_modality_contains (substring match, not full-enum
+# membership), file_format / file_format_not (extension_map, not a dimension
+# enum — see #114), matched_rules_any (rule ids), and numeric size bounds.
+# Keep in sync with rule_engine.RuleEngine.infer_assay_type().
+ENUM_BACKED_ASSAY_CONDITIONS = {
+    "data_modality": ("data_modality", False),
+    "platform": ("platform", False),
+    "platform_in": ("platform", True),
+}
+
 
 def default_schema_path() -> Path:
     """Path to the canonical LinkML classification schema."""
@@ -83,11 +96,14 @@ def dimension_values(field: str) -> frozenset[str]:
     return enums[enum_name]
 
 
-def value_in_vocabulary(field: str, value: str) -> bool:
+def value_in_vocabulary(field: str, value: object) -> bool:
     """True if ``value`` is permissible for the dimension, or a sentinel.
 
     The membership test the rule drift checks use: a dimension's enum values plus
-    SENTINEL_VALUES. Raises the same errors as ``dimension_values`` for an
+    SENTINEL_VALUES. Permissible values are always strings, so a non-string value
+    (e.g. a list from a malformed rule like ``platform: [ILLUMINA, PACBIO]``) is
+    reported as not-in-vocabulary rather than raising ``TypeError`` on the set
+    membership test. Raises the same errors as ``dimension_values`` for an
     unrecognized field or a schema missing the expected enum.
     """
-    return value in (dimension_values(field) | SENTINEL_VALUES)
+    return isinstance(value, str) and value in (dimension_values(field) | SENTINEL_VALUES)

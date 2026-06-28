@@ -98,6 +98,58 @@ def test_assay_type_inference_values_in_vocabulary():
     )
 
 
+def _assay_condition_violations(rules):
+    """Enum-backed assay_type_rules *condition* values not in the vocabulary.
+
+    The antecedent side of the assay-inference block — the same class as
+    _when_value_violations, for the conditions matched in infer_assay_type.
+    """
+    violations = []
+    for rule in rules.assay_type_rules:
+        conditions = rule.conditions or {}
+        for key, (dimension, is_list) in schema_vocab.ENUM_BACKED_ASSAY_CONDITIONS.items():
+            if key not in conditions:
+                continue
+            raw = conditions[key]
+            values = raw if is_list and isinstance(raw, list) else [raw]
+            for value in values:
+                if not schema_vocab.value_in_vocabulary(dimension, value):
+                    violations.append(f"{rule.id}: conditions.{key}={value!r}")
+    return violations
+
+
+def test_assay_type_condition_values_in_vocabulary():
+    """Enum-backed assay_type_rules *conditions* must use vocabulary values too.
+
+    The antecedent-value gap (#113) also exists in the assay-inference block:
+    data_modality / platform / platform_in are matched against the schema enums
+    in infer_assay_type, so a typo there silently never matches.
+    """
+    violations = _assay_condition_violations(get_unified_rules())
+    assert not violations, (
+        "assay_type_rules conditions use values not in the LinkML schema vocabulary:\n  "
+        + "\n  ".join(violations)
+    )
+
+
+def test_assay_condition_check_rejects_bogus_platform(tmp_path):
+    """The assay-condition drift check catches a typo'd enum-backed value (#113)."""
+    path = tmp_path / "rules.yaml"
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump_all([
+            {"extension_map": {}},
+            {"rules": []},
+            {"validators": {}},
+            {"assay_type_rules": [{
+                "id": "bogus_assay", "priority": 1,
+                "conditions": {"platform_in": ["ILUMINA"]},  # typo: should be ILLUMINA
+                "assay_type": "WGS",
+            }]},
+        ], f)
+    violations = _assay_condition_violations(RuleLoader(path).load())
+    assert violations == ["bogus_assay: conditions.platform_in='ILUMINA'"]
+
+
 def test_dimension_values_unknown_field_raises_clear_error():
     with pytest.raises(ValueError, match="Unknown classification dimension"):
         schema_vocab.dimension_values("not_a_field")

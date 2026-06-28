@@ -64,5 +64,5 @@ venv.bak/
 data/
 output/
 
-# Classification run outputs (large generated JSON)
-*_classifications.json
+# Classification run outputs (large generated JSON, written at repo root)
+/*_classifications.json
