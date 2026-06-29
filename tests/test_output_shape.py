@@ -21,10 +21,13 @@ Three layers of protection:
 The golden is produced by running the real FileTypeConfig classifiers (so it
 guards the real ``to_output_dict`` record/dimension shape and the pipeline
 envelope) with a per-type stub fetcher — deterministic, no network. The stub
-supplies a placeholder header, so classification runs the filename/extension
-(tier-1/2) path; header-driven (tier-3) evidence variants are not exercised in
-Stage 0. That is acceptable: this guards output *shape*, not classification
-accuracy. Regenerate with::
+supplies a placeholder header with no real content, so tier-3 rules that key on
+*specific* header content (contig lengths, instrument IDs, assembly tokens) do
+not fire — content-driven classification is not exercised. Tier-3 rules that key
+on the *absence* of such content (e.g. ``unaligned_no_sq``,
+``fastq_modality_unknown``) do fire and appear in the golden. That is acceptable:
+this guards output *shape*, not content-driven classification accuracy.
+Regenerate with::
 
     python -m tests.test_output_shape   # writes tests/fixtures/golden/expected_output.json
 
