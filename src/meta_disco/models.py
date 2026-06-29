@@ -48,11 +48,14 @@ def field_value(record: dict, field_name: str):
 
 
 def field_status(record: dict, field_name: str) -> str:
-    """Status of a classification field: CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED.
+    """Status of a classification field.
 
-    Prefers an explicit non-None ``status`` on the field entry when present (the
-    shape the migration is moving toward); otherwise derives it from the current
-    sentinel-in-``value`` convention. A missing/None value reads as NOT_CLASSIFIED.
+    Returns an explicit non-None ``status`` from the field entry verbatim when
+    present (the shape the migration is moving toward — this may be values beyond
+    the three below, e.g. ``conflict`` in later stages). Otherwise derives the
+    status from the current sentinel-in-``value`` convention, yielding one of
+    CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None value reads as
+    NOT_CLASSIFIED.
     """
     entry = _field_entry(record, field_name)
     if isinstance(entry, dict):

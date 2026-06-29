@@ -28,6 +28,8 @@ def val(result: dict, field: str):
                         rules.append(e["rule_id"])
         return rules
     return field_value(result, field)
+
+
 from src.meta_disco.header_classifier import (
     # Classification functions
     classify_from_fastq_header,
