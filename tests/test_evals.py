@@ -24,19 +24,21 @@ from classify_fasta_files import classify_single_fasta as classify_fasta
 from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_vcf_files import classify_single_vcf as classify_vcf
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
+from src.meta_disco.models import (
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    FileInfo,
+    field_status,
+    field_value,
+)
 from src.meta_disco.rule_engine import RuleEngine
 
 engine = RuleEngine()
 
 
 def get_val(record, field):
-    """Extract classification value from per-field output."""
-    cls = record.get("classifications", record)
-    v = cls.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    return v
+    """Extract a classification field's value (delegates to models.field_value)."""
+    return field_value(record, field)
 
 
 def assert_output_format(record):
@@ -83,8 +85,8 @@ class TestBamE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == NOT_CLASSIFIED
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
     def test_ont_bam(self):
         """ONT BAM file — 69.8 GB."""
@@ -160,7 +162,7 @@ class TestVcfE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "assay_type") == NOT_CLASSIFIED
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
     def test_single_chrom_reference_detection(self):
         """Single-chromosome VCF should still identify reference assembly."""
@@ -194,7 +196,7 @@ class TestVcfE2E:
                               file_size=443147740)
         cls = result["classifications"]
         ref = cls["reference_assembly"]
-        if ref["value"] not in (NOT_CLASSIFIED, None):
+        if field_status(result, "reference_assembly") != NOT_CLASSIFIED:
             stale = [e for e in ref["evidence"] if e["rule_id"] == "not_classified"]
             assert len(stale) == 0, f"Stale evidence: {stale}"
 
@@ -213,9 +215,9 @@ class TestFastqE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "ILLUMINA"
-        assert get_val(result, "data_modality") == NOT_CLASSIFIED
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WES/WGS inference
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WES/WGS inference
 
     def test_ena_reformatted_fastq(self):
         """ERR3989178_1.fastq.gz — 13.5 GB ENA-reformatted with accession."""
@@ -230,7 +232,7 @@ class TestFastqE2E:
         result = classify_fastq("000644fa14ab21a7106a746664d58aa9", "HG02486x02PE20573_1_sequence.fastq.gz",
                                 file_size=84212465)
         assert result is not None
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_pacbio_ccs_fastq(self):
         """PacBio CCS/HiFi FASTQ — 28.6 GB, should detect PacBio platform."""
@@ -240,8 +242,8 @@ class TestFastqE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
-        assert get_val(result, "data_modality") == NOT_CLASSIFIED
-        assert get_val(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WGS inference
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED  # modality unknown, so no WGS inference
 
     def test_mgi_fastq(self):
         """MGI/BGI platform FASTQ — 32.3 GB."""
@@ -250,7 +252,8 @@ class TestFastqE2E:
         assert result is not None
         assert_output_format(result)
         platform = get_val(result, "platform")
-        assert platform in ("MGI", "ILLUMINA", NOT_CLASSIFIED), f"Unexpected platform: {platform}"
+        assert platform in ("MGI", "ILLUMINA") or field_status(result, "platform") == NOT_CLASSIFIED, \
+            f"Unexpected platform: {platform}"
 
 
 # =============================================================================
@@ -413,8 +416,8 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
-        assert get_val(result, "assay_type") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "assay_type") == NOT_APPLICABLE
 
     def test_verkko_diploid_assembly(self):
         """HG02300_verkko_gfase_diploid.fasta.gz — verkko assembler output."""
@@ -425,7 +428,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_hapdup_contigs(self):
         """hapdup_contigs_2.fasta — hapdup output, contig name is just "0".
@@ -438,7 +441,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_grch38_reference_genome(self):
         """grch38.XX.fasta — 3.2 GB GRCh38 reference genome."""
@@ -450,7 +453,7 @@ class TestFastaE2E:
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "reference_genome"
         assert get_val(result, "reference_assembly") == "GRCh38"
-        assert get_val(result, "assay_type") == NOT_APPLICABLE
+        assert field_status(result, "assay_type") == NOT_APPLICABLE
 
     def test_chm13_reference_genome(self):
         """chm13v2.0.fasta — 3.2 GB CHM13 T2T reference."""
@@ -462,7 +465,7 @@ class TestFastaE2E:
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "reference_genome"
         assert get_val(result, "reference_assembly") == "CHM13"
-        assert get_val(result, "assay_type") == NOT_APPLICABLE
+        assert field_status(result, "assay_type") == NOT_APPLICABLE
 
     def test_hifiasm_mito_contigs(self):
         """HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz — 26 KB, 7 mitochondrial contigs."""
@@ -473,7 +476,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_verkko_mito_contigs(self):
         """HG002_verkko_gfase_mito.fasta.gz — 38 KB, 12 verkko contigs."""
@@ -484,7 +487,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_verkko_mito_single_contig(self):
         """HG02809_verkko_asm_mito_exemplar.fasta.gz — 3.5 KB single contig."""
@@ -495,7 +498,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_empty_gzip_fasta(self):
         """HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz — valid gzip, 20 bytes."""
@@ -506,7 +509,7 @@ class TestFastaE2E:
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
-        assert get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_genbank_single_region(self):
         """hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa — 2.3 MB single GenBank region."""

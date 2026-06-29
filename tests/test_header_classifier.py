@@ -2,29 +2,24 @@
 
 import pytest
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
 
 
 def val(result: dict, field: str):
-    """Extract a classification value from the per-field output format.
+    """Extract a classification value (or a derived test aggregate) from output.
 
-    Handles both old flat format (result["field"]) and new per-field format
-    (result["field"]["value"]).
-
-    For "confidence", returns the max confidence across all fields.
+    Field values delegate to models.field_value. Two test-only pseudo-fields are
+    derived from the per-field structure:
+    - "confidence": max confidence across all fields
+    - "matched_rules": flattened, de-duplicated rule_ids from all evidence
     """
-    v = result.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    if field == "confidence" and v is None:
-        # Compute overall confidence as max across per-field confidences
+    if field == "confidence" and result.get(field) is None:
         max_conf = 0.0
-        for fld_name, fld_val in result.items():
+        for fld_val in result.values():
             if isinstance(fld_val, dict) and "confidence" in fld_val:
                 max_conf = max(max_conf, fld_val["confidence"])
         return max_conf
-    if field == "matched_rules" and v is None:
-        # Flatten matched rules from per-field evidence
+    if field == "matched_rules" and result.get(field) is None:
         rules = []
         for fld_val in result.values():
             if isinstance(fld_val, dict) and "evidence" in fld_val:
@@ -32,7 +27,7 @@ def val(result: dict, field: str):
                     if e.get("rule_id") not in rules:
                         rules.append(e["rule_id"])
         return rules
-    return v
+    return field_value(result, field)
 from src.meta_disco.header_classifier import (
     # Classification functions
     classify_from_fastq_header,
@@ -321,7 +316,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
         assert val(result, "confidence") >= 0.90
 
@@ -369,7 +364,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert result["archive_accession"] == "ERR1395578"
         assert val(result, "confidence") >= 0.85
 
@@ -380,7 +375,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "confidence") >= 0.85
 
     def test_pacbio_ccs(self):
@@ -392,7 +387,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
         assert val(result, "confidence") >= 0.95
 
@@ -404,7 +399,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_pacbio_generic(self):
         """Classify generic PacBio FASTQ (movie/zmw without CCS or CLR suffix)."""
@@ -414,7 +409,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
 
     def test_ont_uuid(self):
@@ -425,7 +420,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_ont_runid(self):
         """Classify ONT FASTQ by runid metadata only."""
@@ -435,7 +430,7 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_mgi(self):
         """Classify MGI/BGI FASTQ."""
@@ -641,8 +636,8 @@ class TestBamCramClassification:
 @RG\tID:sample1\tPL:PACBIO\tDS:READTYPE=CCS"""
         result = classify_from_header(header)
         assert val(result, "platform") == "PACBIO"
-        assert val(result, "data_modality") == NOT_CLASSIFIED
-        assert val(result, "assay_type") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
     def test_ont_basecall_dna_modality(self):
         """ONT basecall_model=dna_* implies genomic modality."""
@@ -684,7 +679,7 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert val(result, "platform") == "ONT"
         # basecall_model=rna_ (transcriptomic) vs minimap2 (genomic) = conflict
-        assert val(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""
@@ -715,12 +710,12 @@ class TestBamCramClassification:
 @RG\tID:sample1\tPL:ILLUMINA
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        assert val(result, "platform") == NOT_CLASSIFIED
+        assert field_status(result, "platform") == NOT_CLASSIFIED
 
     def test_empty_header(self):
         """Handle empty header — treated as unaligned."""
         result = classify_from_header("")
-        assert val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
 
 # =============================================================================
@@ -809,7 +804,8 @@ class TestContigLengthDetection:
         result = classify_from_vcf_header(header)
         # Currently assembly= in contig is matched by vcf_contig_assembly rules
         # The ##reference line is the primary detection path
-        assert val(result, "reference_assembly") in ("GRCh38", NOT_CLASSIFIED)
+        assert (val(result, "reference_assembly") == "GRCh38"
+                or field_status(result, "reference_assembly") == NOT_CLASSIFIED)
 
     def test_vcf_reference_field(self):
         """VCF reference detection from ##reference= line."""
@@ -827,7 +823,7 @@ class TestEdgeCases:
         """Handle malformed FASTQ read names."""
         reads = ["not_a_valid_read", "another_invalid", ""]
         result = classify_from_fastq_header(reads)
-        assert val(result, "platform") == NOT_CLASSIFIED
+        assert field_status(result, "platform") == NOT_CLASSIFIED
 
     def test_vcf_minimal(self):
         """Handle minimal VCF with just column header."""

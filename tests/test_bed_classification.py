@@ -9,7 +9,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.header_classifier import classify_from_bed_signals
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo
+from src.meta_disco.models import (
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    FileInfo,
+    field_status,
+    field_value,
+)
 from src.meta_disco.rule_engine import RuleEngine
 
 # Create a shared engine instance
@@ -266,9 +272,8 @@ class TestPatternEdgeCases:
 
 
 def _get_val(result: dict, field: str):
-    """Extract classification value from per-field output."""
-    v = result.get(field, {})
-    return v.get("value") if isinstance(v, dict) else v
+    """Extract a classification field's value (delegates to models.field_value)."""
+    return field_value(result, field)
 
 
 class TestBedCoordinateClassification:
@@ -304,7 +309,7 @@ class TestBedCoordinateClassification:
             "max_coordinates": {"HG01106#1#JAHAMC010000001.1": 92310948},
         }
         result = classify_from_bed_signals(signals, file_name="sample.bed")
-        assert _get_val(result, "reference_assembly") == NOT_APPLICABLE
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_empty_signals_preserves_filename_classification(self):
         """Empty signals still returns rule engine classification from filename."""
@@ -314,7 +319,7 @@ class TestBedCoordinateClassification:
     def test_empty_signals_no_reference(self):
         """Empty signals should leave reference as not_classified."""
         result = classify_from_bed_signals({}, file_name="sample.bed")
-        assert _get_val(result, "reference_assembly") == NOT_CLASSIFIED
+        assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
 
     def test_coordinates_exceeding_grch38_rule_it_out(self):
         """Coordinates exceeding GRCh38 chr lengths should rule out GRCh38."""
@@ -338,4 +343,4 @@ class TestBedCoordinateClassification:
             "max_coordinates": {},
         }
         result = classify_from_bed_signals(signals, file_name="sample.bed")
-        assert _get_val(result, "reference_assembly") == NOT_CLASSIFIED
+        assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
