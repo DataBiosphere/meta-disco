@@ -13,10 +13,11 @@ Three layers of protection:
    values while ignoring JSON key order / formatting.
 2. ``test_output_structural_contract`` — an explicit keys+types contract per
    record and per field, for legible failures.
-3. ``test_output_values_in_vocabulary`` — every emitted field value is a member
-   of the matching LinkML schema enum (or a sentinel / null). This is the slice
-   of the schema that applies to today's output; full record-level JSON-Schema
-   validation lands in Stage 4a (#122), once the output shape matches the schema.
+3. ``test_output_values_in_vocabulary`` — every classification *dimension* value
+   is a member of the matching LinkML schema enum (or a sentinel / null). This is
+   the slice of the schema that applies to today's output; full record-level
+   JSON-Schema validation lands in Stage 4a (#122), once the output shape matches
+   the schema.
 
 The golden is produced by running the real FileTypeConfig classifiers (so it
 guards the real ``to_output_dict`` record/dimension shape and the pipeline
@@ -198,7 +199,12 @@ def test_output_structural_contract(output):
 
 
 def test_output_values_in_vocabulary(output):
-    """Every emitted field value must be in the schema vocabulary (or null/sentinel)."""
+    """Every classification *dimension* value must be in the schema vocabulary.
+
+    Scoped to the five CLASSIFICATION_FIELDS (or null/sentinel). Type-specific
+    scalar keys some classifiers add (fastq's instrument_model, is_paired_end, ...)
+    are not enum-backed, so they have no vocabulary to check against.
+    """
     violations = []
     for ftype, record in _all_records(output):
         for field in CLASSIFICATION_FIELDS:
@@ -208,7 +214,7 @@ def test_output_values_in_vocabulary(output):
             if not schema_vocab.value_in_vocabulary(field, value):
                 violations.append(f"{ftype}: {field}={value!r}")
     assert not violations, (
-        "Pipeline output emits values not in the LinkML schema vocabulary:\n  "
+        "Pipeline output emits dimension values not in the LinkML schema vocabulary:\n  "
         + "\n  ".join(violations)
     )
 
