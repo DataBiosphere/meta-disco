@@ -84,6 +84,18 @@ The LinkML schema (`anvil_file.yaml`) defines:
 - **After changing function behavior**: verify the docstring still matches — especially guard conditions, side effects, return values, and mutation behavior.
 - **After changing output format**: check all consumers — summary printers, tests, downstream scripts.
 
+## Docstring & Comment Accuracy
+
+Docstrings and comments are claims about behavior and MUST be literally true and
+precisely scoped — verify each against the code before committing. This is a
+review gate: `/simplify` and `/code-review` must check docstrings/comments for
+these, and flag any that overclaim.
+
+- **No overclaiming scope/coverage**: do not say "every"/"all"/"any" when the code covers a subset (e.g. a check that only iterates `CLASSIFICATION_FIELDS` is not "every emitted field"). State the actual scope.
+- **No false absolutes**: do not say "byte-identical" for a semantic dict compare, or "deterministic / no network" unless the code guarantees it. Describe the real mechanism.
+- **No speculation as fact** (see Design Principles): if a comment asserts what a code path does, confirm it actually does that on the inputs in question.
+- **Prefer precise over tidy**: a longer accurate sentence beats a clean wrong one. Re-read every docstring/comment you touched against the final code.
+
 ## Environment
 
 - LLM component: Conda (`environment.yaml`) with Python 3.8, pandas, requests
