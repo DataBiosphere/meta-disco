@@ -16,9 +16,13 @@ Three layers of protection:
    of the schema that applies to today's output; full record-level JSON-Schema
    validation lands in Stage 4a (#122), once the output shape matches the schema.
 
-The golden is produced by the real FileTypeConfig classifiers (so it guards the
-real ``to_output_dict`` shape) with a stub fetcher, so the run is deterministic
-and touches no network. Regenerate with::
+The golden is produced by running the real FileTypeConfig classifiers (so it
+guards the real ``to_output_dict`` record/dimension shape and the pipeline
+envelope) with a per-type stub fetcher — deterministic, no network. The stub
+supplies a placeholder header, so classification runs the filename/extension
+(tier-1/2) path; header-driven (tier-3) evidence variants are not exercised in
+Stage 0. That is acceptable: this guards output *shape*, not classification
+accuracy. Regenerate with::
 
     python -m tests.test_output_shape   # writes tests/fixtures/golden/expected_output.json
 
@@ -72,6 +76,11 @@ GOLDEN_INPUTS = {
 }
 
 STUB_HEADER = "stub-header-no-network"
+# Real fetchers return str (bam/vcf header text) or list[str] (fastq reads /
+# fasta contig names) — see fetchers.py. The stub honors each type's contract so
+# the golden exercises realistic classifier input and stays robust if a classifier
+# later type-guards its argument.
+LIST_RETURNING_TYPES = {"fastq", "fasta"}
 EVIDENCE_KEYS = {"rule_id", "reason", "confidence"}
 FIELD_KEYS = {"value", "confidence", "evidence"}
 RECORD_KEYS = {
@@ -80,9 +89,14 @@ RECORD_KEYS = {
 }
 
 
-def _stub_fetcher(evidence_dir, md5, **kwargs):
-    """Deterministic stand-in for the real header fetcher — no network."""
-    return STUB_HEADER
+def _make_stub_fetcher(file_type: str):
+    """A deterministic, network-free fetcher whose return type matches the real one."""
+    payload = [STUB_HEADER] if file_type in LIST_RETURNING_TYPES else STUB_HEADER
+
+    def _fetch(evidence_dir, md5, **kwargs):
+        return payload
+
+    return _fetch
 
 
 def build_output(tmp_path: Path) -> dict:
@@ -94,7 +108,7 @@ def build_output(tmp_path: Path) -> dict:
     """
     out = {}
     for ftype, records in GOLDEN_INPUTS.items():
-        config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_stub_fetcher)
+        config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_make_stub_fetcher(ftype))
         input_path = tmp_path / f"{ftype}_input.json"
         input_path.write_text(json.dumps({"results": records}))
         # workers=1 forces sequential processing so the record order in the output
@@ -105,7 +119,13 @@ def build_output(tmp_path: Path) -> dict:
             config, input_path, tmp_path / f"{ftype}_out.json",
             evidence_base=tmp_path / "evidence", workers=1,
         )
-        pipeline.run()
+        results = pipeline.run()
+        # run() returns [] (and writes no output file) if every record was filtered
+        # out — surface that as a clear failure rather than a later FileNotFoundError.
+        assert results, (
+            f"No records classified for {ftype!r}: a GOLDEN_INPUTS record was filtered "
+            "out (check its file_format/file_name against the config's extensions)."
+        )
         out[ftype] = json.loads((tmp_path / f"{ftype}_out.json").read_text())
     return out
 
@@ -165,7 +185,8 @@ def test_output_structural_contract(output):
             entry = classifications[field]
             assert set(entry) == FIELD_KEYS, f"{ftype}.{field}: {set(entry)}"
             assert entry["value"] is None or isinstance(entry["value"], str)
-            assert isinstance(entry["confidence"], (int, float))
+            conf = entry["confidence"]
+            assert isinstance(conf, (int, float)) and not isinstance(conf, bool)
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
                 assert EVIDENCE_KEYS <= set(ev), f"{ftype}.{field} evidence: {set(ev)}"
