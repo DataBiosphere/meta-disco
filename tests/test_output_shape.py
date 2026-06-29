@@ -1,14 +1,16 @@
 """Golden-fixture + structural guardrail for the classification output shape.
 
 Stage 0 of the sentinel→status migration (epic #116, issue #117). Pins the
-pipeline's output shape so the pure-refactor stages (#118/#119) can prove
-byte-identical output, and the deliberate reshape stages (#120/#121) produce a
-small, reviewable diff against the golden.
+pipeline's output shape so the pure-refactor stages (#118/#119) can prove the
+output is unchanged in structure and values, and the deliberate reshape stages
+(#120/#121) produce a small, reviewable diff against the golden.
 
 Three layers of protection:
 
 1. ``test_output_matches_golden`` — the real pipeline output deep-equals a
-   committed golden JSON. Catches *any* change, byte for byte.
+   committed golden JSON. The comparison is on parsed records (semantic
+   deep-equality, not byte-level), so it catches any change to structure or
+   values while ignoring JSON key order / formatting.
 2. ``test_output_structural_contract`` — an explicit keys+types contract per
    record and per field, for legible failures.
 3. ``test_output_values_in_vocabulary`` — every emitted field value is a member
@@ -28,7 +30,7 @@ accuracy. Regenerate with::
 
 Note: the golden deep-equal is intentionally *value-sensitive* — it pins exact
 values/confidence/reason strings so the migration's pure-refactor stages can prove
-byte-identical output. That couples it to rule content for the duration of epic
+the output is unchanged. That couples it to rule content for the duration of epic
 #116; once the shape stabilizes (after #122) this file should be de-tuned to
 shape-only (drop the deep-equal layer, keep the structural + vocabulary layers).
 """
