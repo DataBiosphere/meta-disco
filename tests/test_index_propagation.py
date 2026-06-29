@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
+from src.meta_disco.models import NOT_CLASSIFIED, field_status, field_value
+
 
 class TestParentCandidateGeneration:
     """Test parent filename candidate generation."""
@@ -238,9 +240,9 @@ class TestLoadClassifications:
         assert csi["file_name"] == "HG03652.regions.bed.gz.csi"
         assert csi["parent_file"] == "HG03652.regions.bed.gz"
         cls = csi["classifications"]
-        assert cls["data_modality"]["value"] == "genomic"
-        assert cls["data_type"]["value"] == "annotations"
-        assert cls["reference_assembly"]["value"] == "CHM13"
+        assert field_value(cls, "data_modality") == "genomic"
+        assert field_value(cls, "data_type") == "annotations"
+        assert field_value(cls, "reference_assembly") == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
@@ -271,9 +273,9 @@ class TestLoadClassifications:
             output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        assert cls["data_modality"]["value"] == "genomic"
-        assert cls["data_type"]["value"] == "variants.germline"
-        assert cls["reference_assembly"]["value"] == "GRCh38"
+        assert field_value(cls, "data_modality") == "genomic"
+        assert field_value(cls, "data_type") == "variants.germline"
+        assert field_value(cls, "reference_assembly") == "GRCh38"
 
     def test_bai_inherits_from_bam_parent(self, tmp_path):
         """End-to-end: a .bai index inherits from its .bam parent."""
@@ -303,9 +305,9 @@ class TestLoadClassifications:
             output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        assert cls["data_modality"]["value"] == "transcriptomic.bulk"
-        assert cls["platform"]["value"] == "ILLUMINA"
-        assert cls["assay_type"]["value"] == "RNA-seq"
+        assert field_value(cls, "data_modality") == "transcriptomic.bulk"
+        assert field_value(cls, "platform") == "ILLUMINA"
+        assert field_value(cls, "assay_type") == "RNA-seq"
 
     def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
         """Index file with no parent in metadata goes to unmatched_files, not classifications."""
@@ -349,5 +351,5 @@ class TestLoadClassifications:
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
-            assert cls[fld]["value"] == "not_classified", f"{fld} should be not_classified"
+            assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
