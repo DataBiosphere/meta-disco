@@ -214,21 +214,21 @@ def validate_against_hprc(
             catalog_stats["sequencing-data"]["matched"] += 1
             meta = seq_lookup[filename]
 
-            our_platform = field_label(c, "platform") or ""
+            our_platform = field_label(c, "platform")
             m = validate_dimension(our_platform, meta["platform"], counters, "platform")
             if m:
                 m["hprc_instrument"] = meta.get("instrument_model")
                 m["our_instrument"] = field_value(c, "instrument_model")
                 file_mismatches["platform"] = m
 
-            our_modality = field_label(c, "data_modality") or ""
+            our_modality = field_label(c, "data_modality")
             m = validate_dimension(
                 our_modality, meta["data_modality"], counters, "data_modality"
             )
             if m:
                 file_mismatches["data_modality"] = m
 
-            our_assay = field_label(c, "assay_type") or ""
+            our_assay = field_label(c, "assay_type")
             m = validate_dimension(
                 our_assay, meta["assay_type"], counters, "assay_type"
             )
@@ -240,7 +240,7 @@ def validate_against_hprc(
             catalog_stats["alignments"]["matched"] += 1
             meta = align_lookup[filename]
 
-            our_ref = field_label(c, "reference_assembly") or ""
+            our_ref = field_label(c, "reference_assembly")
             m = validate_dimension(our_ref, meta["reference_assembly"], counters, "reference_assembly")
             if m:
                 m["source"] = "alignments"
@@ -251,7 +251,7 @@ def validate_against_hprc(
             catalog_stats["annotations"]["matched"] += 1
             meta = annot_lookup[filename]
 
-            our_ref = field_label(c, "reference_assembly") or ""
+            our_ref = field_label(c, "reference_assembly")
             m = validate_dimension(our_ref, meta["reference_assembly"], counters, "reference_assembly")
             if m:
                 m["source"] = "annotations"

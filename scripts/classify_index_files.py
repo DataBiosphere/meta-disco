@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_value
+from src.meta_disco.models import field_label
 
 
 def _get_max_confidence(record: dict) -> float:
@@ -84,11 +84,11 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
             md5 = c.get("md5sum")
             if md5:
                 classifications[md5] = {
-                    "data_modality": field_value(c, "data_modality"),
-                    "data_type": field_value(c, "data_type"),
-                    "assay_type": field_value(c, "assay_type"),
-                    "platform": field_value(c, "platform"),
-                    "reference_assembly": field_value(c, "reference_assembly"),
+                    "data_modality": field_label(c, "data_modality"),
+                    "data_type": field_label(c, "data_type"),
+                    "assay_type": field_label(c, "assay_type"),
+                    "platform": field_label(c, "platform"),
+                    "reference_assembly": field_label(c, "reference_assembly"),
                     "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }

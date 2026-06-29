@@ -14,7 +14,7 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo, field_value
+from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo, field_label
 from src.meta_disco.rule_engine import RuleEngine
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
@@ -101,7 +101,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     # Count by modality
     modalities = {}
     for r in results:
-        mod = field_value(r, "data_modality") or "N/A"
+        mod = field_label(r, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
     print("\nBy modality:")
@@ -111,7 +111,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     # Count by reference
     refs = {}
     for r in results:
-        ref = field_value(r, "reference_assembly") or "N/A"
+        ref = field_label(r, "reference_assembly")
         refs[ref] = refs.get(ref, 0) + 1
 
     print("\nBy reference_assembly:")

@@ -40,13 +40,13 @@ def print_bam_summary(classifications: list[dict]):
     platforms = {}
 
     for c in classifications:
-        mod = field_label(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        ref = field_label(c, "reference_assembly") or "unknown"
+        ref = field_label(c, "reference_assembly")
         references[ref] = references.get(ref, 0) + 1
 
-        plat = field_label(c, "platform") or "unknown"
+        plat = field_label(c, "platform")
         platforms[plat] = platforms.get(plat, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
@@ -77,13 +77,13 @@ def print_vcf_summary(classifications: list[dict]):
     references = {}
 
     for c in classifications:
-        mod = field_label(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        dtype = field_label(c, "data_type") or "unknown"
+        dtype = field_label(c, "data_type")
         data_types[dtype] = data_types.get(dtype, 0) + 1
 
-        ref = field_label(c, "reference_assembly") or "unknown"
+        ref = field_label(c, "reference_assembly")
         references[ref] = references.get(ref, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
@@ -116,12 +116,15 @@ def print_fastq_summary(classifications: list[dict]):
     archive_sources = {}
 
     for c in classifications:
-        plat = field_label(c, "platform") or "unknown"
+        plat = field_label(c, "platform")
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        mod = field_label(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
+        # Dimensions above use field_label so unclassified files bucket as a
+        # sentinel; these scalar metadata fields have no sentinel convention, so
+        # they use field_value and are simply skipped when absent.
         if field_value(c, "is_paired_end"):
             paired_count += 1
 

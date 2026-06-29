@@ -14,7 +14,7 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import FileInfo, field_value
+from src.meta_disco.models import FileInfo, field_label
 from src.meta_disco.rule_engine import RuleEngine
 
 
@@ -84,7 +84,7 @@ def classify_images(metadata_path: Path, output_path: Path):
     # Count by modality
     modalities = {}
     for r in results:
-        mod = field_value(r, "data_modality") or "N/A"
+        mod = field_label(r, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
     print("\nBy modality:")

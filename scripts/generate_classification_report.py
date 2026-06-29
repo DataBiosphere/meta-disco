@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_label as _val
+from src.meta_disco.models import CLASSIFIED, field_label, field_status
+from src.meta_disco.models import field_value as _val
 
 # =============================================================================
 # FILE FORMAT CATEGORY RULES
@@ -202,7 +203,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     modality_counts = Counter()
     for item in all_classified:
-        mod = _val(item, "data_modality") or "N/A"
+        mod = field_label(item, "data_modality")
         modality_counts[mod] += 1
 
     # Sort by count
@@ -227,7 +228,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     ref_counts = Counter()
     for item in all_classified:
-        ref = _val(item, "reference_assembly") or "N/A"
+        ref = field_label(item, "reference_assembly")
         ref_counts[ref] += 1
 
     ref_sorted = sorted(ref_counts.items(), key=lambda x: x[1], reverse=True)
@@ -250,7 +251,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     platform_counts = Counter()
     for item in all_classified:
-        plat = _val(item, "platform") or "N/A"
+        plat = field_label(item, "platform")
         platform_counts[plat] += 1
 
     plat_sorted = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
@@ -370,11 +371,11 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     print("\n--- Coverage by Axis ---")
 
-    with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
-    with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
-    with_platform = sum(1 for item in all_classified if _val(item, "platform"))
-    with_dtype = sum(1 for item in all_classified if _val(item, "data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
-    with_assay = sum(1 for item in all_classified if _val(item, "assay_type"))
+    with_modality = sum(1 for item in all_classified if field_status(item, "data_modality") == CLASSIFIED)
+    with_ref = sum(1 for item in all_classified if field_status(item, "reference_assembly") == CLASSIFIED)
+    with_platform = sum(1 for item in all_classified if field_status(item, "platform") == CLASSIFIED)
+    with_dtype = sum(1 for item in all_classified if field_status(item, "data_type") == CLASSIFIED or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
+    with_assay = sum(1 for item in all_classified if field_status(item, "assay_type") == CLASSIFIED)
 
     print(f"data_modality:      {with_modality:,} / {total_classified:,} ({with_modality/total_classified*100:.1f}%)")
     print(f"reference_assembly: {with_ref:,} / {total_classified:,} ({with_ref/total_classified*100:.1f}%)")

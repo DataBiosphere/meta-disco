@@ -136,7 +136,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 
     print("\nBy modality:")
     for mod, count in sorted(stats["by_modality"].items(), key=lambda x: -x[1]):
-        print(f"  {mod or 'N/A'}: {count:,}")
+        print(f"  {mod}: {count:,}")
 
     print("\nBy reference:")
     for ref, count in sorted(stats["by_reference"].items(), key=lambda x: -x[1]):
