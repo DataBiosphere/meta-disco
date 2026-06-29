@@ -14,7 +14,7 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import FileInfo
+from src.meta_disco.models import FileInfo, field_value
 from src.meta_disco.rule_engine import RuleEngine
 
 
@@ -81,17 +81,10 @@ def classify_images(metadata_path: Path, output_path: Path):
     print(f"Total images: {total_all:,}")
     print("=" * 70)
 
-    def _val(rec, field):
-        cls = rec.get("classifications", {})
-        if isinstance(cls, dict) and field in cls:
-            v = cls[field]
-            return v["value"] if isinstance(v, dict) and "value" in v else v
-        return rec.get(field)
-
     # Count by modality
     modalities = {}
     for r in results:
-        mod = _val(r, "data_modality") or "N/A"
+        mod = field_value(r, "data_modality") or "N/A"
         modalities[mod] = modalities.get(mod, 0) + 1
 
     print("\nBy modality:")

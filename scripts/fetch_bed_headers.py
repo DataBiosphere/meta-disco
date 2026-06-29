@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import requests
 
 from src.meta_disco.header_classifier import classify_from_bed_signals
+from src.meta_disco.models import field_label
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 EVIDENCE_DIR = Path("data/evidence/anvil/bed")
@@ -363,10 +364,7 @@ def print_summary(classifications: list[dict]):
 
     refs = defaultdict(int)
     for c in classifications:
-        cls = c.get("classifications", {})
-        ref_entry = cls.get("reference_assembly", {})
-        ref = ref_entry.get("value") if isinstance(ref_entry, dict) else "not_classified"
-        refs[ref or "not_classified"] += 1
+        refs[field_label(c, "reference_assembly")] += 1
 
     print(f"\nTotal: {len(classifications)}")
     print("\nReference assemblies:")

@@ -24,6 +24,7 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.meta_disco.models import field_label, field_value
 from src.meta_disco.output_utils import find_latest_run
 from src.meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
@@ -33,7 +34,6 @@ from src.meta_disco.validation_maps import (
     HPRC_PLATFORM_MAP,
     HPRC_REF_COORDINATES_MAP,
     extract_ref_from_annotation_type,
-    get_classification_value,
 )
 
 
@@ -214,21 +214,21 @@ def validate_against_hprc(
             catalog_stats["sequencing-data"]["matched"] += 1
             meta = seq_lookup[filename]
 
-            our_platform = get_classification_value(c, "platform") or ""
+            our_platform = field_label(c, "platform") or ""
             m = validate_dimension(our_platform, meta["platform"], counters, "platform")
             if m:
                 m["hprc_instrument"] = meta.get("instrument_model")
-                m["our_instrument"] = get_classification_value(c, "instrument_model")
+                m["our_instrument"] = field_value(c, "instrument_model")
                 file_mismatches["platform"] = m
 
-            our_modality = get_classification_value(c, "data_modality") or ""
+            our_modality = field_label(c, "data_modality") or ""
             m = validate_dimension(
                 our_modality, meta["data_modality"], counters, "data_modality"
             )
             if m:
                 file_mismatches["data_modality"] = m
 
-            our_assay = get_classification_value(c, "assay_type") or ""
+            our_assay = field_label(c, "assay_type") or ""
             m = validate_dimension(
                 our_assay, meta["assay_type"], counters, "assay_type"
             )
@@ -240,7 +240,7 @@ def validate_against_hprc(
             catalog_stats["alignments"]["matched"] += 1
             meta = align_lookup[filename]
 
-            our_ref = get_classification_value(c, "reference_assembly") or ""
+            our_ref = field_label(c, "reference_assembly") or ""
             m = validate_dimension(our_ref, meta["reference_assembly"], counters, "reference_assembly")
             if m:
                 m["source"] = "alignments"
@@ -251,7 +251,7 @@ def validate_against_hprc(
             catalog_stats["annotations"]["matched"] += 1
             meta = annot_lookup[filename]
 
-            our_ref = get_classification_value(c, "reference_assembly") or ""
+            our_ref = field_label(c, "reference_assembly") or ""
             m = validate_dimension(our_ref, meta["reference_assembly"], counters, "reference_assembly")
             if m:
                 m["source"] = "annotations"

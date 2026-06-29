@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.models import field_label
 from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
@@ -69,14 +70,9 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
         with open(path) as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
-            cls = r.get("classifications", r)
             rec = {}
             for field in DIMENSIONS:
-                v = cls.get(field)
-                if isinstance(v, dict) and "value" in v:
-                    rec[field] = v["value"]
-                else:
-                    rec[field] = v
+                rec[field] = field_label(r, field)
             md5 = r.get("md5sum") or r.get("file_md5sum")
             file_name = r.get("file_name", "")
             if md5:

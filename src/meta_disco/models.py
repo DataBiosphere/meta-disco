@@ -71,6 +71,18 @@ def field_status(record: dict, field_name: str) -> str:
     return CLASSIFIED
 
 
+def field_label(record: dict, field_name: str) -> str | None:
+    """Display label for a field: its value when classified, else its status.
+
+    Reproduces the pre-split convention where ``value`` held either a real value or
+    a sentinel — for histograms / aggregations that bucket by that combined label.
+    Survives the sentinel→status split (epic #116): once sentinels move out of
+    ``value``, this still yields the sentinel via the status.
+    """
+    status = field_status(record, field_name)
+    return field_value(record, field_name) if status == CLASSIFIED else status
+
+
 @dataclass
 class FileInfo:
     """Input file information for classification."""

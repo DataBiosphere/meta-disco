@@ -2,24 +2,15 @@
 """Generate classification coverage report with charts."""
 
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-def _val(rec, field):
-    """Extract value from per-field or flat format."""
-    cls = rec.get("classifications", {})
-    if isinstance(cls, dict) and field in cls:
-        v = cls[field]
-        return v["value"] if isinstance(v, dict) and "value" in v else v
-    v = rec.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    return v
-
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.meta_disco.models import field_label as _val
 
 # =============================================================================
 # FILE FORMAT CATEGORY RULES
