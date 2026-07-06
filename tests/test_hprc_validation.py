@@ -113,7 +113,7 @@ class TestExtractRefFromAnnotationType:
         assert extract_ref_from_annotation_type("") is None
 
 
-class TestGetClassificationValue:
+class TestFieldValue:
     def test_per_field_format(self):
         record = {"classifications": {"platform": {"value": "PACBIO", "confidence": 0.9}}}
         assert field_value(record, "platform") == "PACBIO"
