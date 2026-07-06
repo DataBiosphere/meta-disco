@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import CLASSIFIED, field_label, field_status
+from src.meta_disco.models import field_label
 from src.meta_disco.models import field_value as _val
 
 # =============================================================================
@@ -371,11 +371,16 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     print("\n--- Coverage by Axis ---")
 
-    with_modality = sum(1 for item in all_classified if field_status(item, "data_modality") == CLASSIFIED)
-    with_ref = sum(1 for item in all_classified if field_status(item, "reference_assembly") == CLASSIFIED)
-    with_platform = sum(1 for item in all_classified if field_status(item, "platform") == CLASSIFIED)
-    with_dtype = sum(1 for item in all_classified if field_status(item, "data_type") == CLASSIFIED or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
-    with_assay = sum(1 for item in all_classified if field_status(item, "assay_type") == CLASSIFIED)
+    # These "is classified" counts stay on field_value (via _val) to keep Stage 1b a
+    # pure refactor: today a sentinel value is truthy (counted, as before); once
+    # Stage 3 moves sentinels out of `value`, field_value returns None and the count
+    # self-corrects with no code change. (The old truthy-count over-reports coverage
+    # for not_applicable/not_classified fields — tracked as a follow-up, not fixed here.)
+    with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
+    with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
+    with_platform = sum(1 for item in all_classified if _val(item, "platform"))
+    with_dtype = sum(1 for item in all_classified if _val(item, "data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
+    with_assay = sum(1 for item in all_classified if _val(item, "assay_type"))
 
     print(f"data_modality:      {with_modality:,} / {total_classified:,} ({with_modality/total_classified*100:.1f}%)")
     print(f"reference_assembly: {with_ref:,} / {total_classified:,} ({with_ref/total_classified*100:.1f}%)")
