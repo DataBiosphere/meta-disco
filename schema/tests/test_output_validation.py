@@ -25,7 +25,10 @@ import yaml
 from linkml.validator import Validator
 from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidationPlugin
 
-# schema/tests/ -> schema/ -> repo root
+# schema/tests/ -> schema/ -> repo root. This gate deliberately validates the
+# root component's golden output (the real classifier shape), so it reads across
+# the component boundary — it expects a repo checkout, not a standalone install of
+# the schema package. test_golden_present fails loudly if the golden is missing.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = Path(__file__).resolve().parents[1] / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
@@ -35,8 +38,10 @@ def _dimension_classes() -> dict:
     """Map each output dimension to the schema class that constrains its entry.
 
     Derived from ``ClassificationRecord``'s slot_usage (the single source of
-    truth) rather than hardcoded, so a dimension added to the schema is validated
-    automatically instead of being silently skipped.
+    truth) rather than hardcoded, so a dimension added to the schema's record is
+    picked up automatically. (A dimension present in the *output* but absent from
+    slot_usage would still not be validated — but that divergence is exactly the
+    schema/output record-shape mismatch tracked in #134.)
     """
     schema = yaml.safe_load(_SCHEMA.read_text())
     slot_usage = schema["classes"]["ClassificationRecord"]["slot_usage"]
@@ -49,7 +54,7 @@ DIMENSION_CLASS = _dimension_classes()
 @pytest.fixture(scope="session")
 def validator():
     # Building a linkml Validator compiles the schema to pydantic models, which is
-    # slow — do it once for the whole module rather than per test.
+    # slow — build it once per session and share it across the tests.
     return Validator(
         schema=str(_SCHEMA),
         validation_plugins=[PydanticValidationPlugin(closed=False)],
