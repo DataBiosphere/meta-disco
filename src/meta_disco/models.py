@@ -55,6 +55,25 @@ def status_for_value(value) -> str:
     return CLASSIFIED
 
 
+def _assert_coherent(value, status) -> None:
+    """Raise ValueError if (value, status) contradict epic #116's Stage 3 contract.
+
+    The single definition of entry coherence: a CLASSIFIED field must carry a real
+    value (not None, not a sentinel string), and a non-CLASSIFIED status must not
+    carry one. Enforced on both sides — when building output (``build_field_entry``)
+    and when reading an explicit status (``_entry_status``) — so a sentinel can
+    never be smuggled into ``value`` under a classified status, or a real value be
+    dropped under a non-classified status, from either direction.
+    """
+    value_is_real = status_for_value(value) == CLASSIFIED
+    if status == CLASSIFIED and not value_is_real:
+        raise ValueError(
+            f"incoherent entry: CLASSIFIED status requires a real value, got {value!r}")
+    if status != CLASSIFIED and value_is_real:
+        raise ValueError(
+            f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
+
+
 def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict:
     """Build a serialized per-field classification entry.
 
@@ -76,12 +95,7 @@ def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict
     """
     if status is None:
         status = status_for_value(value)
-    # "real value" = a value that classifies (not None, not a sentinel string).
-    value_is_real = status_for_value(value) == CLASSIFIED
-    if status == CLASSIFIED and not value_is_real:
-        raise ValueError(f"CLASSIFIED field entry needs a real value, got {value!r}")
-    if status != CLASSIFIED and value_is_real:
-        raise ValueError(f"{status!r} field entry must not carry a real value, got {value!r}")
+    _assert_coherent(value, status)
     return {
         "value": value if status == CLASSIFIED else None,
         "status": status,
@@ -93,20 +107,19 @@ def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict
 def _entry_status(entry) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived.
 
-    Raises ValueError on an incoherent entry — an explicit ``status == classified``
-    with a null ``value``. Epic #116's Stage 3 invariant is that a classified field
-    carries a real value; this is the loud-failure counterpart to the declined
-    field_label None-guard (#129): reject the self-contradictory shape rather than
-    fabricating a ``None`` bucket label from it. Both field_status and field_label
-    route through here, so both fail loudly instead of silently mis-reading.
+    When the entry carries an explicit ``status``, it is validated against ``value``
+    via ``_assert_coherent`` — an incoherent pairing (CLASSIFIED without a real
+    value, or a non-CLASSIFIED status carrying a real value) raises ValueError.
+    Epic #116's Stage 3 invariant is that sentinels live only in ``status``; this
+    is the loud-failure counterpart to the declined field_label None-guard (#129):
+    reject the self-contradictory shape rather than fabricating a bucket label from
+    it. Both field_status and field_label route through here, so both fail loudly
+    instead of silently mis-reading a smuggled sentinel as a classified value.
     """
     if isinstance(entry, dict):
         status = entry.get("status")
         if status is not None:
-            if status == CLASSIFIED and entry.get("value") is None:
-                raise ValueError(
-                    f"incoherent classification entry: status=classified but value is None ({entry!r})"
-                )
+            _assert_coherent(entry.get("value"), status)
             return status
         value = entry.get("value")
     else:

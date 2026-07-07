@@ -184,6 +184,24 @@ class TestCoherenceGuard:
         rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE})
         assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
 
+    def test_field_status_raises_on_classified_sentinel_value(self):
+        # A sentinel value under CLASSIFIED would be read as a classified value —
+        # sentinel smuggling on the read side. Reject it (same rule as the producer).
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_status(rec, "reference_assembly")
+
+    def test_field_status_raises_on_real_value_under_unclassified(self):
+        rec = _wrapped("data_modality", {"value": "genomic", "status": NOT_CLASSIFIED})
+        with pytest.raises(ValueError, match="must not carry a real value"):
+            field_status(rec, "data_modality")
+
+    def test_stage2_transitional_record_still_reads(self):
+        # Stage 2 shape (sentinel in value AND matching non-classified status) is
+        # coherent — value isn't a *real* value, so the guard leaves it alone.
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE, "status": NOT_APPLICABLE})
+        assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
+
 
 # --- build_field_entry: the single producer shape/invariant --------------------
 
