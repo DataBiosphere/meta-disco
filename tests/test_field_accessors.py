@@ -14,6 +14,7 @@ from src.meta_disco.models import (
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    build_field_entry,
     field_label,
     field_status,
     field_value,
@@ -149,3 +150,100 @@ def test_accessor_consistency_today(value, exp_status, exp_label):
     assert field_value(rec, "data_modality") == value
     assert field_status(rec, "data_modality") == exp_status
     assert field_label(rec, "data_modality") == exp_label
+
+
+# --- coherence guard (#129): reject status=classified with a null value --------
+
+class TestCoherenceGuard:
+    def test_field_status_raises_on_classified_none(self):
+        rec = _wrapped("data_modality", {"value": None, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_status(rec, "data_modality")
+
+    def test_field_label_raises_on_classified_none(self):
+        # The declined None-guard, inverted: fail loudly instead of returning a
+        # None bucket label from a self-contradictory entry.
+        rec = _wrapped("data_modality", {"value": None, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_label(rec, "data_modality")
+
+    def test_coherent_classified_does_not_raise(self):
+        rec = _wrapped("data_modality", {"value": "genomic", "status": CLASSIFIED})
+        assert field_status(rec, "data_modality") == CLASSIFIED
+        assert field_label(rec, "data_modality") == "genomic"
+
+    def test_non_classified_status_with_none_value_is_fine(self):
+        # not_applicable / not_classified / conflict with value=None are the
+        # normal Stage 3 shape — only status==classified requires a value.
+        for status in (NOT_APPLICABLE, NOT_CLASSIFIED, "conflict"):
+            rec = _wrapped("reference_assembly", {"value": None, "status": status})
+            assert field_status(rec, "reference_assembly") == status
+
+    def test_legacy_sentinel_in_value_still_reads(self):
+        # No explicit status (old on-disk shape) → derive; never triggers the guard.
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE})
+        assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
+
+    def test_field_status_raises_on_classified_sentinel_value(self):
+        # A sentinel value under CLASSIFIED would be read as a classified value —
+        # sentinel smuggling on the read side. Reject it (same rule as the producer).
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_status(rec, "reference_assembly")
+
+    def test_field_status_raises_on_real_value_under_unclassified(self):
+        rec = _wrapped("data_modality", {"value": "genomic", "status": NOT_CLASSIFIED})
+        with pytest.raises(ValueError, match="must not carry a real value"):
+            field_status(rec, "data_modality")
+
+    def test_stage2_transitional_record_still_reads(self):
+        # Stage 2 shape (sentinel in value AND matching non-classified status) is
+        # coherent — value isn't a *real* value, so the guard leaves it alone.
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE, "status": NOT_APPLICABLE})
+        assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
+
+
+# --- build_field_entry: the single producer shape/invariant --------------------
+
+class TestBuildFieldEntry:
+    def test_classified_keeps_value(self):
+        e = build_field_entry("genomic", confidence=0.9, evidence=[{"x": 1}])
+        assert e == {"value": "genomic", "status": CLASSIFIED,
+                     "confidence": 0.9, "evidence": [{"x": 1}]}
+
+    def test_derived_sentinel_nulls_value(self):
+        # Sentinel-carrying value with no explicit status → status derived, value nulled.
+        assert build_field_entry(NOT_APPLICABLE)["value"] is None
+        assert build_field_entry(NOT_APPLICABLE)["status"] == NOT_APPLICABLE
+        assert build_field_entry(None)["status"] == NOT_CLASSIFIED
+
+    def test_explicit_status_nulls_value_when_unclassified(self):
+        e = build_field_entry(None, status=NOT_APPLICABLE)
+        assert (e["value"], e["status"]) == (None, NOT_APPLICABLE)
+
+    def test_explicit_classified_with_value(self):
+        e = build_field_entry("reads", status=CLASSIFIED)
+        assert (e["value"], e["status"]) == ("reads", CLASSIFIED)
+
+    def test_evidence_defaults_to_fresh_list(self):
+        a = build_field_entry(None)
+        b = build_field_entry(None)
+        assert a["evidence"] == [] and a["evidence"] is not b["evidence"]
+
+    def test_classified_without_value_raises(self):
+        # Self-guard: build_field_entry never emits the incoherent shape the
+        # read-side guard would reject (#129).
+        with pytest.raises(ValueError, match="CLASSIFIED"):
+            build_field_entry(None, status=CLASSIFIED)
+
+    def test_classified_with_sentinel_value_raises(self):
+        # Explicit CLASSIFIED + a sentinel value would smuggle the sentinel back
+        # into `value`; reject it.
+        with pytest.raises(ValueError, match="real value"):
+            build_field_entry(NOT_APPLICABLE, status=CLASSIFIED)
+
+    def test_unclassified_status_with_real_value_raises(self):
+        # A real value under a non-CLASSIFIED status would be silently dropped;
+        # reject the contradiction instead.
+        with pytest.raises(ValueError, match="must not carry a real value"):
+            build_field_entry("genomic", status=NOT_CLASSIFIED)

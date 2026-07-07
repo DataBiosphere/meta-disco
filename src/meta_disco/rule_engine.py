@@ -11,7 +11,7 @@ from .models import (
     NOT_CLASSIFIED,
     ClassificationResult,
     FileInfo,
-    status_for_value,
+    build_field_entry,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
 
@@ -116,25 +116,20 @@ class ExtendedClassificationResult:
     def to_output_dict(self) -> dict:
         """Convert to the per-field output format.
 
-        Each dimension emits ``{value, status, confidence, evidence}``. Epic #116
-        Stage 2 dual-writes ``status`` (derived from the sentinel-carrying
-        ``value`` via ``status_for_value``) additively — ``value`` still holds the
-        sentinel this stage; Stage 3 nulls it out. Readers are unaffected (they
-        already prefer an explicit ``status`` via models.field_status); the sibling
-        hand-built entry producers — the fastq empty-input fallback and index
-        propagation — dual-write ``status`` through the same helper to match.
+        Each dimension emits ``{value, status, confidence, evidence}`` via
+        ``models.build_field_entry``, which applies epic #116's Stage 3 invariant:
+        ``status`` carries ``not_applicable`` / ``not_classified`` and ``value`` is
+        ``None`` unless the field is CLASSIFIED. The internal attribute
+        (``getattr(self, fld)``) still holds the sentinel; only the serialized
+        output is nulled. Readers are unaffected (they read ``status`` via
+        models.field_status).
         """
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
             value = getattr(self, fld)
             evidence = self.field_evidence.get(fld, [])
             fld_conf = max((e.get("confidence", 0) for e in evidence), default=0.0)
-            classifications[fld] = {
-                "value": value,
-                "status": status_for_value(value),
-                "confidence": fld_conf,
-                "evidence": evidence,
-            }
+            classifications[fld] = build_field_entry(value, confidence=fld_conf, evidence=evidence)
         return classifications
 
     # Classification field names (single source of truth: models.CLASSIFICATION_FIELDS)

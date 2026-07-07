@@ -43,12 +43,10 @@ def status_for_value(value) -> str:
 
     The one place that maps a sentinel-carrying ``value`` to a status string:
     ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
-    NOT_CLASSIFIED, any real value → CLASSIFIED. The read side
-    (``_entry_status``) and every producer that dual-writes ``status`` in epic
-    #116 Stage 2 — rule_engine's ``to_output_dict`` plus the header_classifier
-    empty-input fallback and the index-propagation script — go through this, so
-    reader and producers stay in lockstep as the migration moves sentinels out of
-    ``value``.
+    NOT_CLASSIFIED, any real value → CLASSIFIED. Used by the read side
+    (``_entry_status``) and by ``build_field_entry`` when a producer carries the
+    sentinel in ``value`` and no explicit status is given, so reader and producers
+    stay in lockstep as epic #116 moves sentinels out of ``value``.
     """
     if value == NOT_APPLICABLE:
         return NOT_APPLICABLE
@@ -57,11 +55,72 @@ def status_for_value(value) -> str:
     return CLASSIFIED
 
 
+def _assert_coherent(value, status) -> None:
+    """Raise ValueError if (value, status) contradict epic #116's Stage 3 contract.
+
+    The single definition of entry coherence: a CLASSIFIED field must carry a real
+    value (not None, not a sentinel string), and a non-CLASSIFIED status must not
+    carry one. Enforced on both sides — when building output (``build_field_entry``)
+    and when reading an explicit status (``_entry_status``) — so a sentinel can
+    never be smuggled into ``value`` under a classified status, or a real value be
+    dropped under a non-classified status, from either direction.
+    """
+    value_is_real = status_for_value(value) == CLASSIFIED
+    if status == CLASSIFIED and not value_is_real:
+        raise ValueError(
+            f"incoherent entry: CLASSIFIED status requires a real value, got {value!r}")
+    if status != CLASSIFIED and value_is_real:
+        raise ValueError(
+            f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
+
+
+def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict:
+    """Build a serialized per-field classification entry.
+
+    The single place that assembles the ``{value, status, confidence, evidence}``
+    output shape and enforces epic #116's Stage 3 invariant: sentinels live only
+    in ``status`` and ``value`` is ``None`` unless the field is CLASSIFIED. Every
+    producer (rule_engine's ``to_output_dict``, the index-propagation script, the
+    header_classifier empty-input fallback) goes through here, so the invariant is
+    defined once. When an explicit ``status`` is passed it must be coherent with
+    ``value``: a CLASSIFIED status requires a real value, and a non-CLASSIFIED
+    status must not carry one (a sentinel or ``None`` is fine) — either mismatch
+    raises ValueError rather than smuggling a sentinel into ``value`` or silently
+    dropping a real value. So the entry is always coherent and the read-side guard
+    (``_entry_status``) is never handed a contradictory shape.
+
+    ``status`` defaults to ``status_for_value(value)`` for producers that still
+    carry the sentinel in ``value``; pass it explicitly when the status is known
+    directly. The derived path is coherent by construction and never raises.
+    """
+    if status is None:
+        status = status_for_value(value)
+    _assert_coherent(value, status)
+    return {
+        "value": value if status == CLASSIFIED else None,
+        "status": status,
+        "confidence": confidence,
+        "evidence": evidence if evidence is not None else [],
+    }
+
+
 def _entry_status(entry) -> str:
-    """Status from a per-field entry: explicit ``status`` if set, else derived."""
+    """Status from a per-field entry: explicit ``status`` if set, else derived.
+
+    When the entry carries an explicit ``status``, it is validated against ``value``
+    via ``_assert_coherent`` — an incoherent pairing (CLASSIFIED without a real
+    value, or a non-CLASSIFIED status carrying a real value) raises ValueError.
+    Epic #116's Stage 3 invariant is that sentinels live only in ``status``; this
+    is the loud-failure counterpart to the declined field_label None-guard (#129):
+    reject the self-contradictory shape rather than fabricating a bucket label from
+    it. Both field_status and field_label route through here, so both fail loudly
+    instead of silently mis-reading a smuggled sentinel as a classified value.
+    """
     if isinstance(entry, dict):
-        if entry.get("status") is not None:
-            return entry["status"]
+        status = entry.get("status")
+        if status is not None:
+            _assert_coherent(entry.get("value"), status)
+            return status
         value = entry.get("value")
     else:
         value = entry

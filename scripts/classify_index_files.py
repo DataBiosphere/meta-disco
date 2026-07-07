@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_label, status_for_value
+from src.meta_disco.models import CLASSIFICATION_FIELDS, build_field_entry, field_label
 
 
 def _get_max_confidence(record: dict) -> float:
@@ -287,6 +287,14 @@ def propagate_to_index_files(
     standard_results = []
     for r in results:
         parent = r["parent_file"]
+        # Field entries share to_output_dict's builder (epic #116): `status`
+        # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
+        classifications = {}
+        for fld in CLASSIFICATION_FIELDS:
+            value = r.get(fld)
+            evidence = inherited_evidence(fld, value, parent)
+            classifications[fld] = build_field_entry(
+                value, confidence=evidence[0]["confidence"], evidence=evidence)
         standard_results.append({
             "file_name": r["file_name"],
             "file_format": r["file_format"],
@@ -297,17 +305,7 @@ def propagate_to_index_files(
             "dataset_title": r["dataset_title"],
             "parent_file": parent,
             "parent_md5sum": r["parent_md5sum"],
-            # Field entries mirror to_output_dict's shape, incl. the Stage 2
-            # `status` key (epic #116), derived from the inherited value.
-            "classifications": {
-                fld: (lambda v, evi: {
-                    "value": v,
-                    "status": status_for_value(v),
-                    "confidence": evi[0]["confidence"],
-                    "evidence": evi,
-                })(r.get(fld), inherited_evidence(fld, r.get(fld), parent))
-                for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
-            },
+            "classifications": classifications,
         })
 
     with open(output_path, "w") as f:
