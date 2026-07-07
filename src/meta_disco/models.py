@@ -58,10 +58,23 @@ def status_for_value(value) -> str:
 
 
 def _entry_status(entry) -> str:
-    """Status from a per-field entry: explicit ``status`` if set, else derived."""
+    """Status from a per-field entry: explicit ``status`` if set, else derived.
+
+    Raises ValueError on an incoherent entry — an explicit ``status == classified``
+    with a null ``value``. Epic #116's Stage 3 invariant is that a classified field
+    carries a real value; this is the loud-failure counterpart to the declined
+    field_label None-guard (#129): reject the self-contradictory shape rather than
+    fabricating a ``None`` bucket label from it. Both field_status and field_label
+    route through here, so both fail loudly instead of silently mis-reading.
+    """
     if isinstance(entry, dict):
-        if entry.get("status") is not None:
-            return entry["status"]
+        status = entry.get("status")
+        if status is not None:
+            if status == CLASSIFIED and entry.get("value") is None:
+                raise ValueError(
+                    f"incoherent classification entry: status=classified but value is None ({entry!r})"
+                )
+            return status
         value = entry.get("value")
     else:
         value = entry

@@ -149,3 +149,36 @@ def test_accessor_consistency_today(value, exp_status, exp_label):
     assert field_value(rec, "data_modality") == value
     assert field_status(rec, "data_modality") == exp_status
     assert field_label(rec, "data_modality") == exp_label
+
+
+# --- coherence guard (#129): reject status=classified with a null value --------
+
+class TestCoherenceGuard:
+    def test_field_status_raises_on_classified_none(self):
+        rec = _wrapped("data_modality", {"value": None, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_status(rec, "data_modality")
+
+    def test_field_label_raises_on_classified_none(self):
+        # The declined None-guard, inverted: fail loudly instead of returning a
+        # None bucket label from a self-contradictory entry.
+        rec = _wrapped("data_modality", {"value": None, "status": CLASSIFIED})
+        with pytest.raises(ValueError, match="incoherent"):
+            field_label(rec, "data_modality")
+
+    def test_coherent_classified_does_not_raise(self):
+        rec = _wrapped("data_modality", {"value": "genomic", "status": CLASSIFIED})
+        assert field_status(rec, "data_modality") == CLASSIFIED
+        assert field_label(rec, "data_modality") == "genomic"
+
+    def test_non_classified_status_with_none_value_is_fine(self):
+        # not_applicable / not_classified / conflict with value=None are the
+        # normal Stage 3 shape — only status==classified requires a value.
+        for status in (NOT_APPLICABLE, NOT_CLASSIFIED, "conflict"):
+            rec = _wrapped("reference_assembly", {"value": None, "status": status})
+            assert field_status(rec, "reference_assembly") == status
+
+    def test_legacy_sentinel_in_value_still_reads(self):
+        # No explicit status (old on-disk shape) → derive; never triggers the guard.
+        rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE})
+        assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
