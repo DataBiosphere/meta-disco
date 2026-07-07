@@ -234,12 +234,18 @@ def test_value_in_vocabulary_rejects_bogus_and_non_string():
     assert not schema_vocab.value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
 
 
-def test_emitted_value_in_vocabulary_accepts_dimension_value_or_status():
-    # Emitted (then / assay_type) values may be a real value or a status sentinel —
-    # rules still write `not_applicable` as a then-value (#133). Both schema-derived.
+def test_emitted_value_in_vocabulary_accepts_dimension_value_or_sentinel():
+    # Emitted (then / assay_type) values may be a real value or a value-slot
+    # sentinel — rules still write `not_applicable` as a then-value (#133).
     assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "GRCh38")
     assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "not_applicable")
     assert schema_vocab.emitted_value_in_vocabulary("data_modality", "not_classified")
+
+
+def test_emitted_value_in_vocabulary_rejects_non_value_statuses():
+    # `classified` / `conflict` are never emitted into a value slot — catch the typo.
+    assert not schema_vocab.emitted_value_in_vocabulary("platform", "classified")
+    assert not schema_vocab.emitted_value_in_vocabulary("platform", "conflict")
 
 
 def test_emitted_value_in_vocabulary_rejects_bogus_and_non_string():

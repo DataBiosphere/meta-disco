@@ -43,7 +43,8 @@ def _dimension_classes() -> dict:
     slot_usage would still not be validated — but that divergence is exactly the
     schema/output record-shape mismatch tracked in #134.)
     """
-    schema = yaml.safe_load(_SCHEMA.read_text())
+    assert _SCHEMA.exists(), f"classification schema not found at {_SCHEMA}"
+    schema = yaml.safe_load(_SCHEMA.read_text(encoding="utf-8"))
     slot_usage = schema["classes"]["ClassificationRecord"]["slot_usage"]
     return {dim: cfg["range"] for dim, cfg in slot_usage.items()}
 
