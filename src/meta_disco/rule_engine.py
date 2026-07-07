@@ -11,6 +11,7 @@ from .models import (
     NOT_CLASSIFIED,
     ClassificationResult,
     FileInfo,
+    status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
 
@@ -113,7 +114,15 @@ class ExtendedClassificationResult:
         )
 
     def to_output_dict(self) -> dict:
-        """Convert to the per-field output format."""
+        """Convert to the per-field output format.
+
+        Each dimension emits ``{value, status, confidence, evidence}``. Epic #116
+        Stage 2 dual-writes ``status`` (derived from the sentinel-carrying
+        ``value`` via ``status_for_value``) additively — ``value`` still holds the
+        sentinel this stage; Stage 3 nulls it out. Readers already prefer an
+        explicit ``status`` (models.field_status), so this producer change ripples
+        nowhere but the output shape (the Stage 0 golden gains a ``status`` key).
+        """
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
             value = getattr(self, fld)
@@ -121,6 +130,7 @@ class ExtendedClassificationResult:
             fld_conf = max((e.get("confidence", 0) for e in evidence), default=0.0)
             classifications[fld] = {
                 "value": value,
+                "status": status_for_value(value),
                 "confidence": fld_conf,
                 "evidence": evidence,
             }

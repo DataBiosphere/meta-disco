@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from src.meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
 
 
 def val(result: dict, field: str):
@@ -463,6 +463,11 @@ class TestFastqClassification:
         result = classify_from_fastq_header([])
         assert val(result, "platform") is None
         assert val(result, "confidence") == 0.0
+        # The empty-input fallback mirrors to_output_dict's Stage 2 shape (#116):
+        # dimension entries carry a `status` derived from the sentinel value.
+        assert "status" in result["data_modality"]
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+        assert field_status(result, "data_type") == CLASSIFIED  # value "reads"
 
     def test_confidence_boost_on_agreement(self):
         """Confidence should increase when all reads agree."""

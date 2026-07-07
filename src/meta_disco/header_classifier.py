@@ -11,7 +11,7 @@ by the RuleEngine. This module provides:
 import re
 from dataclasses import replace
 
-from .models import NOT_APPLICABLE, NOT_CLASSIFIED
+from .models import NOT_APPLICABLE, NOT_CLASSIFIED, status_for_value
 from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -223,8 +223,9 @@ def classify_from_fastq_header(
 
     # Handle empty input — return per-field format with empty evidence
     if not reads or not reads[0]:
+        # Mirror to_output_dict's shape, incl. the Stage 2 `status` key (epic #116).
         def empty_field(v):
-            return {"value": v, "confidence": 0.0, "evidence": []}
+            return {"value": v, "status": status_for_value(v), "confidence": 0.0, "evidence": []}
         return {
             "data_modality": empty_field(None),
             "data_type": empty_field("reads"),

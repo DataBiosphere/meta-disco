@@ -38,6 +38,23 @@ def _entry_value(entry):
     return entry.get("value") if isinstance(entry, dict) else entry
 
 
+def status_for_value(value) -> str:
+    """Derive a field's status from its (pre-split) value.
+
+    The one place that maps a sentinel-carrying ``value`` to a status string:
+    ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
+    NOT_CLASSIFIED, any real value → CLASSIFIED. Both the read side
+    (``_entry_status``) and the producer (rule_engine's ``to_output_dict``, which
+    dual-writes ``status`` in epic #116 Stage 2) go through this, so the two stay
+    in lockstep as the migration moves sentinels out of ``value``.
+    """
+    if value == NOT_APPLICABLE:
+        return NOT_APPLICABLE
+    if value is None or value == NOT_CLASSIFIED:
+        return NOT_CLASSIFIED
+    return CLASSIFIED
+
+
 def _entry_status(entry) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived."""
     if isinstance(entry, dict):
@@ -46,11 +63,7 @@ def _entry_status(entry) -> str:
         value = entry.get("value")
     else:
         value = entry
-    if value == NOT_APPLICABLE:
-        return NOT_APPLICABLE
-    if value is None or value == NOT_CLASSIFIED:
-        return NOT_CLASSIFIED
-    return CLASSIFIED
+    return status_for_value(value)
 
 
 def field_value(record: dict, field_name: str):
