@@ -266,10 +266,14 @@ def classify_from_fastq_header(
         file_info_stripped = replace(file_info, fastq_first_read=stripped_read)
         result_stripped = engine.classify_extended(file_info_stripped, include_tier3=True)
         if result_stripped.platform:
-            # Merge results - keep the platform and modality from stripped version
+            # Merge results - keep the platform and modality from stripped version.
+            # Adopt the stripped modality whenever it made a definitive statement
+            # (a real value or not_applicable), carrying its status — a status-only
+            # declaration has data_modality=None, so a truthiness check would drop it.
             result.set_field("platform", result_stripped.platform)
-            if result_stripped.data_modality:
-                result.set_field("data_modality", result_stripped.data_modality)
+            if result_stripped.is_declared("data_modality"):
+                result.set_field("data_modality", result_stripped.data_modality,
+                                 result_stripped.status_of("data_modality"))
             result.confidence = max(result.confidence, result_stripped.confidence)
             # Merge per-field evidence
             for fld, entries in result_stripped.field_evidence.items():

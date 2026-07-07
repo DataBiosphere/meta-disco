@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    NOT_APPLICABLE,
     build_field_entry,
     field_label,
     status_for_value,
@@ -284,10 +285,18 @@ def propagate_to_index_files(
                      "reason": f"Inherited from parent file: {parent}",
                      "confidence": 0.95,
                      "value": field_val}]
+        status = status_for_value(field_val)
+        # An explicit not_applicable parent isn't "no value" — the field is
+        # determined (not applicable). Keep "had no value" for the not_classified /
+        # missing case. (generate_coverage_report normalizes both reason forms.)
+        if status == NOT_APPLICABLE:
+            reason = f"Parent file {parent} marks {field_name} not applicable"
+        else:
+            reason = f"Parent file {parent} had no value for {field_name}"
         return [{"rule_id": "inherited_from_parent",
-                 "reason": f"Parent file {parent} had no value for {field_name}",
+                 "reason": reason,
                  "confidence": 0.0,
-                 "status": status_for_value(field_val)}]
+                 "status": status}]
 
     standard_results = []
     for r in results:
