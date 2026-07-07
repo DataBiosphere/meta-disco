@@ -217,3 +217,15 @@ class TestBuildFieldEntry:
         # read-side guard would reject (#129).
         with pytest.raises(ValueError, match="CLASSIFIED"):
             build_field_entry(None, status=CLASSIFIED)
+
+    def test_classified_with_sentinel_value_raises(self):
+        # Explicit CLASSIFIED + a sentinel value would smuggle the sentinel back
+        # into `value`; reject it.
+        with pytest.raises(ValueError, match="real value"):
+            build_field_entry(NOT_APPLICABLE, status=CLASSIFIED)
+
+    def test_unclassified_status_with_real_value_raises(self):
+        # A real value under a non-CLASSIFIED status would be silently dropped;
+        # reject the contradiction instead.
+        with pytest.raises(ValueError, match="must not carry a real value"):
+            build_field_entry("genomic", status=NOT_CLASSIFIED)
