@@ -47,12 +47,7 @@ import pytest
 
 from src.meta_disco import schema_vocab
 from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-from src.meta_disco.models import (
-    CLASSIFICATION_FIELDS,
-    CLASSIFIED,
-    NOT_APPLICABLE,
-    NOT_CLASSIFIED,
-)
+from src.meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from src.meta_disco.pipeline import ClassifyPipeline
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
@@ -196,9 +191,10 @@ def test_output_structural_contract(output):
             entry = classifications[field]
             assert set(entry) == FIELD_KEYS, f"{ftype}.{field}: {set(entry)}"
             assert entry["value"] is None or isinstance(entry["value"], str)
-            # Stage 3 (#116) coherence: sentinels live only in `status`; `value`
-            # is non-null iff the field is CLASSIFIED.
-            assert entry["status"] in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED), \
+            # Stage 3 (#116) coherence: status is a schema-defined value (incl.
+            # conflict, #88); sentinels live only in `status`; `value` is non-null
+            # iff the field is CLASSIFIED.
+            assert entry["status"] in schema_vocab.status_values(), \
                 f"{ftype}.{field}: status={entry['status']!r}"
             assert (entry["status"] == CLASSIFIED) == (entry["value"] is not None), \
                 f"{ftype}.{field}: incoherent value={entry['value']!r} status={entry['status']!r}"

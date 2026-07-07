@@ -213,6 +213,14 @@ def test_dimension_values_unknown_field_raises_clear_error():
         schema_vocab.dimension_values("not_a_field")
 
 
+def test_status_values_from_schema():
+    # The permissible per-field `status` values, loaded from the schema enum —
+    # incl. `conflict` (#88), which is not yet produced but is a valid status.
+    assert schema_vocab.status_values() == frozenset(
+        {"classified", "not_applicable", "not_classified", "conflict"}
+    )
+
+
 def _write_rules_file(tmp_path, rule):
     """Write a minimal two-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"

@@ -25,6 +25,10 @@ SENTINEL_VALUES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
 # this derives from the single source of truth rather than re-listing the fields.
 DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 
+# The enum defining the permissible per-field ``status`` values (epic #116's
+# sentinel→status split): classified / not_applicable / not_classified / conflict.
+STATUS_ENUM = "classification_status_enum"
+
 # ``when`` condition keys whose value must be a member of a dimension enum,
 # mapped to that dimension. The rule engine compares these against enum values at
 # match time, so a typo'd value silently never matches rather than erroring — the
@@ -94,6 +98,22 @@ def dimension_values(field: str) -> frozenset[str]:
             f"for dimension {field!r}"
         )
     return enums[enum_name]
+
+
+def status_values() -> frozenset[str]:
+    """Return the permissible per-field ``status`` values from the schema.
+
+    The single source of truth for the status vocabulary (classified /
+    not_applicable / not_classified / conflict), mirroring dimension_values for
+    the ``status`` field the sentinel→status migration adds (epic #116). Raises
+    KeyError (with the schema path) if the schema is missing the status enum.
+    """
+    enums = _load_enums()
+    if STATUS_ENUM not in enums:
+        raise KeyError(
+            f"Schema at {default_schema_path()} is missing enum {STATUS_ENUM!r}"
+        )
+    return enums[STATUS_ENUM]
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:
