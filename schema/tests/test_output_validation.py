@@ -11,7 +11,7 @@ dimension's enum.
 Scoped to the per-field *entries* (value/status/confidence/evidence). Validating
 the whole record against ``ClassificationRecord`` is deferred: the schema models
 the five dimensions at the top level while the pipeline nests them under a
-``classifications`` key — that record-shape reconciliation is tracked separately.
+``classifications`` key — that record-shape reconciliation is tracked in #134.
 
 Runs in the schema/ Poetry component, which has linkml installed (the root
 component does not).
@@ -20,6 +20,8 @@ component does not).
 import json
 from pathlib import Path
 
+import pytest
+import yaml
 from linkml.validator import Validator
 from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidationPlugin
 
@@ -28,14 +30,30 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = Path(__file__).resolve().parents[1] / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 
-# Each output dimension -> the schema class that constrains its entry.
-DIMENSION_CLASS = {
-    "data_modality": "DataModalityClassification",
-    "data_type": "DataTypeClassification",
-    "reference_assembly": "ReferenceAssemblyClassification",
-    "assay_type": "AssayTypeClassification",
-    "platform": "PlatformClassification",
-}
+
+def _dimension_classes() -> dict:
+    """Map each output dimension to the schema class that constrains its entry.
+
+    Derived from ``ClassificationRecord``'s slot_usage (the single source of
+    truth) rather than hardcoded, so a dimension added to the schema is validated
+    automatically instead of being silently skipped.
+    """
+    schema = yaml.safe_load(_SCHEMA.read_text())
+    slot_usage = schema["classes"]["ClassificationRecord"]["slot_usage"]
+    return {dim: cfg["range"] for dim, cfg in slot_usage.items()}
+
+
+DIMENSION_CLASS = _dimension_classes()
+
+
+@pytest.fixture(scope="session")
+def validator():
+    # Building a linkml Validator compiles the schema to pydantic models, which is
+    # slow — do it once for the whole module rather than per test.
+    return Validator(
+        schema=str(_SCHEMA),
+        validation_plugins=[PydanticValidationPlugin(closed=False)],
+    )
 
 
 def _golden_entries():
@@ -52,11 +70,7 @@ def test_golden_present():
     assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
 
 
-def test_output_entries_validate_against_schema():
-    validator = Validator(
-        schema=str(_SCHEMA),
-        validation_plugins=[PydanticValidationPlugin(closed=False)],
-    )
+def test_output_entries_validate_against_schema(validator):
     failures = []
     checked = 0
     for label, dim, entry in _golden_entries():
@@ -70,22 +84,15 @@ def test_output_entries_validate_against_schema():
         "\n  ".join(failures)
 
 
-def _validator():
-    return Validator(
-        schema=str(_SCHEMA),
-        validation_plugins=[PydanticValidationPlugin(closed=False)],
-    )
-
-
-def test_gate_rejects_missing_status():
+def test_gate_rejects_missing_status(validator):
     # status is required — an entry without it must fail (proves the gate bites).
     bad = {"value": "genomic", "confidence": 1.0, "evidence": []}
-    report = _validator().validate(bad, target_class="DataModalityClassification")
+    report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "missing status should have failed validation"
 
 
-def test_gate_rejects_out_of_enum_value():
+def test_gate_rejects_out_of_enum_value(validator):
     bad = {"value": "not_a_real_modality", "status": "classified",
            "confidence": 1.0, "evidence": []}
-    report = _validator().validate(bad, target_class="DataModalityClassification")
+    report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "an out-of-enum value should have failed validation"
