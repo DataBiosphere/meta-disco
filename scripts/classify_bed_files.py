@@ -20,9 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.meta_disco.header_classifier import classify_from_bed_signals
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
-
-_SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
+from src.meta_disco.models import CLASSIFIED, field_label, field_status
 
 EVIDENCE_DIR = Path("data/evidence/anvil/bed")
 
@@ -104,16 +102,16 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         )
 
         # Update stats
-        data_modality = classifications.get("data_modality", {}).get("value")
-        reference_assembly = classifications.get("reference_assembly", {}).get("value")
+        modality_label = field_label(classifications, "data_modality")
+        reference_label = field_label(classifications, "reference_assembly")
 
-        if data_modality and data_modality not in _SENTINEL_VALUES:
+        if field_status(classifications, "data_modality") == CLASSIFIED:
             stats["with_modality"] += 1
-        stats["by_modality"][data_modality or "N/A"] = stats["by_modality"].get(data_modality or "N/A", 0) + 1
+        stats["by_modality"][modality_label] = stats["by_modality"].get(modality_label, 0) + 1
 
-        if reference_assembly and reference_assembly not in _SENTINEL_VALUES:
+        if field_status(classifications, "reference_assembly") == CLASSIFIED:
             stats["with_reference"] += 1
-        stats["by_reference"][reference_assembly or "N/A"] = stats["by_reference"].get(reference_assembly or "N/A", 0) + 1
+        stats["by_reference"][reference_label] = stats["by_reference"].get(reference_label, 0) + 1
 
         results.append({
             "file_name": name,
@@ -138,7 +136,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 
     print("\nBy modality:")
     for mod, count in sorted(stats["by_modality"].items(), key=lambda x: -x[1]):
-        print(f"  {mod or 'N/A'}: {count:,}")
+        print(f"  {mod}: {count:,}")
 
     print("\nBy reference:")
     for ref, count in sorted(stats["by_reference"].items(), key=lambda x: -x[1]):

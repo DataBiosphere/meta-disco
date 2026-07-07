@@ -27,24 +27,43 @@ def _field_entry(record: dict, field_name: str):
     - flat:       record[field] -> value
     Returns whatever is found at the field (a dict entry, a scalar, or None).
     """
-    cls = record.get("classifications", {})
+    cls = record.get("classifications")
     if isinstance(cls, dict) and field_name in cls:
         return cls[field_name]
     return record.get(field_name)
+
+
+def _entry_value(entry):
+    """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar)."""
+    return entry.get("value") if isinstance(entry, dict) else entry
+
+
+def _entry_status(entry) -> str:
+    """Status from a per-field entry: explicit ``status`` if set, else derived."""
+    if isinstance(entry, dict):
+        if entry.get("status") is not None:
+            return entry["status"]
+        value = entry.get("value")
+    else:
+        value = entry
+    if value == NOT_APPLICABLE:
+        return NOT_APPLICABLE
+    if value is None or value == NOT_CLASSIFIED:
+        return NOT_CLASSIFIED
+    return CLASSIFIED
 
 
 def field_value(record: dict, field_name: str):
     """Resolved value of a classification field, normalizing record layout.
 
     Use this for *value* reads. For "is this field applicable / classified?"
-    questions use field_status — so that when the sentinel→status migration moves
-    sentinels out of `value` (epic #116), value-reads and status-checks stay
-    correctly separated and call sites do not need to change again.
+    questions use field_status, and for histogram / aggregation bucket keys that
+    should fold unclassified into a sentinel bucket use field_label — so that when
+    the sentinel→status migration moves sentinels out of `value` (epic #116),
+    value-reads, status-checks, and bucket labels stay correctly separated and
+    call sites do not need to change again.
     """
-    entry = _field_entry(record, field_name)
-    if isinstance(entry, dict):
-        return entry.get("value")
-    return entry
+    return _entry_value(_field_entry(record, field_name))
 
 
 def field_status(record: dict, field_name: str) -> str:
@@ -57,18 +76,23 @@ def field_status(record: dict, field_name: str) -> str:
     CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None value reads as
     NOT_CLASSIFIED.
     """
+    return _entry_status(_field_entry(record, field_name))
+
+
+def field_label(record: dict, field_name: str) -> str | None:
+    """Display label for a field: its value when classified, else its status.
+
+    Reproduces the pre-split convention where ``value`` held either a real value or
+    a sentinel — for histograms / aggregations that bucket by that combined label.
+    Returns the field_value when status is CLASSIFIED (which may be None only in the
+    future explicit-status shape), otherwise the status string. Survives the
+    sentinel→status split (epic #116): the not_applicable / not_classified buckets
+    persist via the status once sentinels move out of ``value`` (a non-sentinel
+    status such as ``conflict`` would likewise surface here).
+    """
     entry = _field_entry(record, field_name)
-    if isinstance(entry, dict):
-        if entry.get("status") is not None:
-            return entry["status"]
-        value = entry.get("value")
-    else:
-        value = entry
-    if value == NOT_APPLICABLE:
-        return NOT_APPLICABLE
-    if value is None or value == NOT_CLASSIFIED:
-        return NOT_CLASSIFIED
-    return CLASSIFIED
+    status = _entry_status(entry)
+    return _entry_value(entry) if status == CLASSIFIED else status
 
 
 @dataclass

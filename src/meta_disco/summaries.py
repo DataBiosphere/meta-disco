@@ -1,6 +1,6 @@
 """Summary printers for classification results."""
 
-from .validation_maps import get_classification_value as _val
+from .models import field_label, field_value
 
 
 def _print_field_table(title: str, counts: dict, width: int = 35):
@@ -18,7 +18,7 @@ def _print_sample_evidence(classifications: list[dict], fields: list[tuple[str, 
     for c in classifications[:3]:
         print(f"\nFile: {c.get('file_name', 'unknown')}")
         for label, field in fields:
-            val = _val(c, field)
+            val = field_value(c, field)
             if val is not None:
                 print(f"  {label}: {val}")
 
@@ -40,13 +40,13 @@ def print_bam_summary(classifications: list[dict]):
     platforms = {}
 
     for c in classifications:
-        mod = _val(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        ref = _val(c, "reference_assembly") or "unknown"
+        ref = field_label(c, "reference_assembly")
         references[ref] = references.get(ref, 0) + 1
 
-        plat = _val(c, "platform") or "unknown"
+        plat = field_label(c, "platform")
         platforms[plat] = platforms.get(plat, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
@@ -77,13 +77,13 @@ def print_vcf_summary(classifications: list[dict]):
     references = {}
 
     for c in classifications:
-        mod = _val(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        dtype = _val(c, "data_type") or "unknown"
+        dtype = field_label(c, "data_type")
         data_types[dtype] = data_types.get(dtype, 0) + 1
 
-        ref = _val(c, "reference_assembly") or "unknown"
+        ref = field_label(c, "reference_assembly")
         references[ref] = references.get(ref, 0) + 1
 
     print(f"\nTotal files classified: {len(classifications)}")
@@ -116,20 +116,23 @@ def print_fastq_summary(classifications: list[dict]):
     archive_sources = {}
 
     for c in classifications:
-        plat = _val(c, "platform") or "unknown"
+        plat = field_label(c, "platform")
         platforms[plat] = platforms.get(plat, 0) + 1
 
-        mod = _val(c, "data_modality") or "unknown"
+        mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
 
-        if _val(c, "is_paired_end"):
+        # Dimensions above use field_label so unclassified files bucket as a
+        # sentinel; these scalar metadata fields have no sentinel convention, so
+        # they use field_value and are simply skipped when absent.
+        if field_value(c, "is_paired_end"):
             paired_count += 1
 
-        model = _val(c, "instrument_model")
+        model = field_value(c, "instrument_model")
         if model:
             instrument_models[model] = instrument_models.get(model, 0) + 1
 
-        source = _val(c, "archive_source")
+        source = field_value(c, "archive_source")
         if source:
             archive_sources[source] = archive_sources.get(source, 0) + 1
 

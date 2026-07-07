@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.models import field_label
 from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 from src.meta_disco.rule_loader import UnifiedRules
 
@@ -67,15 +68,13 @@ def load_records(run_dir: Path) -> list[dict]:
             cls = r.get("classifications", r)
             rec = {"file_name": r.get("file_name", "")}
             for field in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+                rec[field] = field_label(r, field)
+                # Store the first evidence reason (used for not_classified aggregation)
                 v = cls.get(field)
-                if isinstance(v, dict) and "value" in v:
-                    rec[field] = v["value"]
-                    # Store the first evidence reason (used for not_classified aggregation)
+                if isinstance(v, dict):
                     evidence = v.get("evidence", [])
                     if evidence:
                         rec[f"{field}_reason"] = evidence[0].get("reason", "")
-                else:
-                    rec[field] = v
             rec["ext"] = get_extension(rec["file_name"])
             records.append(rec)
     return records

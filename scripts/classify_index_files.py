@@ -7,23 +7,12 @@ reference_assembly from their parent files (.bam, .vcf.gz, .cram).
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
-
-def _get_field(record: dict, field: str):
-    """Extract a classification field from either per-field or flat format."""
-    # Per-field format: {"classifications": {"field": {"value": ...}}}
-    cls = record.get("classifications", {})
-    if isinstance(cls, dict) and field in cls:
-        entry = cls[field]
-        if isinstance(entry, dict) and "value" in entry:
-            return entry["value"]
-    # Flat format: {"field": value}
-    v = record.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    return v
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.meta_disco.models import field_label
 
 
 def _get_max_confidence(record: dict) -> float:
@@ -95,11 +84,11 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
             md5 = c.get("md5sum")
             if md5:
                 classifications[md5] = {
-                    "data_modality": _get_field(c, "data_modality"),
-                    "data_type": _get_field(c, "data_type"),
-                    "assay_type": _get_field(c, "assay_type"),
-                    "platform": _get_field(c, "platform"),
-                    "reference_assembly": _get_field(c, "reference_assembly"),
+                    "data_modality": field_label(c, "data_modality"),
+                    "data_type": field_label(c, "data_type"),
+                    "assay_type": field_label(c, "assay_type"),
+                    "platform": field_label(c, "platform"),
+                    "reference_assembly": field_label(c, "reference_assembly"),
                     "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }

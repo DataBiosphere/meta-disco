@@ -4,8 +4,6 @@ Each external source uses different naming conventions. These maps normalize
 external values to our internal classification values.
 """
 
-from .models import field_value
-
 HPRC_CATALOG_NAMES = ["sequencing-data", "alignments", "annotations", "assemblies"]
 
 HPRC_CATALOG_BASE_URL = (
@@ -49,19 +47,6 @@ _ANNOTATION_REF_PATTERNS: dict[str, str] = {
     "Reference Mappings GRCh38": "GRCh38",
     "ChromAlias T2T": "CHM13",
 }
-
-
-def get_classification_value(record: dict, field: str):
-    """Extract a classification value from per-field or flat record format.
-
-    Thin alias for ``models.field_value`` (the canonical accessor), kept so its
-    callers (summaries.py, scripts/, tests/test_hprc_validation.py) keep working
-    until they migrate in Stage 1b (#119). Handles the per-field, nested-dict, and
-    flat layouts.
-    """
-    return field_value(record, field)
-
-
 def extract_ref_from_annotation_type(annotation_type: str) -> str | None:
     """Extract reference assembly from an HPRC annotation type string.
 

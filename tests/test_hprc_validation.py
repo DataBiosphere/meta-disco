@@ -7,6 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.meta_disco.models import field_value
 from src.meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
     HPRC_CATALOG_NAMES,
@@ -15,7 +16,6 @@ from src.meta_disco.validation_maps import (
     HPRC_PLATFORM_MAP,
     HPRC_REF_COORDINATES_MAP,
     extract_ref_from_annotation_type,
-    get_classification_value,
 )
 
 
@@ -113,25 +113,25 @@ class TestExtractRefFromAnnotationType:
         assert extract_ref_from_annotation_type("") is None
 
 
-class TestGetClassificationValue:
+class TestFieldValue:
     def test_per_field_format(self):
         record = {"classifications": {"platform": {"value": "PACBIO", "confidence": 0.9}}}
-        assert get_classification_value(record, "platform") == "PACBIO"
+        assert field_value(record, "platform") == "PACBIO"
 
     def test_flat_format(self):
         record = {"platform": "ILLUMINA"}
-        assert get_classification_value(record, "platform") == "ILLUMINA"
+        assert field_value(record, "platform") == "ILLUMINA"
 
     def test_nested_dict_value(self):
         record = {"platform": {"value": "ONT"}}
-        assert get_classification_value(record, "platform") == "ONT"
+        assert field_value(record, "platform") == "ONT"
 
     def test_missing_field(self):
         record = {"classifications": {"platform": {"value": "PACBIO"}}}
-        assert get_classification_value(record, "data_modality") is None
+        assert field_value(record, "data_modality") is None
 
     def test_empty_record(self):
-        assert get_classification_value({}, "platform") is None
+        assert field_value({}, "platform") is None
 
 
 class TestSharedConstants:

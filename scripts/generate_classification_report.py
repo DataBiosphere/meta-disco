@@ -2,24 +2,16 @@
 """Generate classification coverage report with charts."""
 
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-def _val(rec, field):
-    """Extract value from per-field or flat format."""
-    cls = rec.get("classifications", {})
-    if isinstance(cls, dict) and field in cls:
-        v = cls[field]
-        return v["value"] if isinstance(v, dict) and "value" in v else v
-    v = rec.get(field)
-    if isinstance(v, dict) and "value" in v:
-        return v["value"]
-    return v
-
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.meta_disco.models import field_label
+from src.meta_disco.models import field_value as _val
 
 # =============================================================================
 # FILE FORMAT CATEGORY RULES
@@ -211,7 +203,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     modality_counts = Counter()
     for item in all_classified:
-        mod = _val(item, "data_modality") or "N/A"
+        mod = field_label(item, "data_modality")
         modality_counts[mod] += 1
 
     # Sort by count
@@ -236,7 +228,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     ref_counts = Counter()
     for item in all_classified:
-        ref = _val(item, "reference_assembly") or "N/A"
+        ref = field_label(item, "reference_assembly")
         ref_counts[ref] += 1
 
     ref_sorted = sorted(ref_counts.items(), key=lambda x: x[1], reverse=True)
@@ -259,7 +251,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     platform_counts = Counter()
     for item in all_classified:
-        plat = _val(item, "platform") or "N/A"
+        plat = field_label(item, "platform")
         platform_counts[plat] += 1
 
     plat_sorted = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
@@ -379,6 +371,11 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     print("\n--- Coverage by Axis ---")
 
+    # These "is classified" counts stay on field_value (via _val) to keep Stage 1b a
+    # pure refactor: today a sentinel value is truthy (counted, as before); once
+    # Stage 3 moves sentinels out of `value`, field_value returns None and the count
+    # self-corrects with no code change. (The old truthy-count over-reports coverage
+    # for not_applicable/not_classified fields — tracked as a follow-up, not fixed here.)
     with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
     with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
     with_platform = sum(1 for item in all_classified if _val(item, "platform"))
