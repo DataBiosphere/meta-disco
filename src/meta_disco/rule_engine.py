@@ -119,9 +119,10 @@ class ExtendedClassificationResult:
         Each dimension emits ``{value, status, confidence, evidence}``. Epic #116
         Stage 2 dual-writes ``status`` (derived from the sentinel-carrying
         ``value`` via ``status_for_value``) additively — ``value`` still holds the
-        sentinel this stage; Stage 3 nulls it out. Readers already prefer an
-        explicit ``status`` (models.field_status), so this producer change ripples
-        nowhere but the output shape (the Stage 0 golden gains a ``status`` key).
+        sentinel this stage; Stage 3 nulls it out. Readers are unaffected (they
+        already prefer an explicit ``status`` via models.field_status); the sibling
+        hand-built entry producers — the fastq empty-input fallback and index
+        propagation — dual-write ``status`` through the same helper to match.
         """
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:

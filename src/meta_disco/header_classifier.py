@@ -56,7 +56,7 @@ def classify_from_header(
 
     Returns:
         Dict with per-field classifications:
-            - {field}: {value, confidence, evidence[]} for each of
+            - {field}: {value, status, confidence, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo
@@ -136,7 +136,7 @@ def classify_from_vcf_header(
 
     Returns:
         Dict with per-field classifications:
-            - {field}: {value, confidence, evidence[]} for each of
+            - {field}: {value, status, confidence, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo

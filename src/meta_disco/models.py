@@ -43,10 +43,12 @@ def status_for_value(value) -> str:
 
     The one place that maps a sentinel-carrying ``value`` to a status string:
     ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
-    NOT_CLASSIFIED, any real value → CLASSIFIED. Both the read side
-    (``_entry_status``) and the producer (rule_engine's ``to_output_dict``, which
-    dual-writes ``status`` in epic #116 Stage 2) go through this, so the two stay
-    in lockstep as the migration moves sentinels out of ``value``.
+    NOT_CLASSIFIED, any real value → CLASSIFIED. The read side
+    (``_entry_status``) and every producer that dual-writes ``status`` in epic
+    #116 Stage 2 — rule_engine's ``to_output_dict`` plus the header_classifier
+    empty-input fallback and the index-propagation script — go through this, so
+    reader and producers stay in lockstep as the migration moves sentinels out of
+    ``value``.
     """
     if value == NOT_APPLICABLE:
         return NOT_APPLICABLE

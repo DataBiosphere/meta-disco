@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
-from src.meta_disco.models import NOT_CLASSIFIED, field_status, field_value
+from src.meta_disco.models import CLASSIFIED, NOT_CLASSIFIED, field_status, field_value
 
 
 class TestParentCandidateGeneration:
@@ -244,6 +244,9 @@ class TestLoadClassifications:
         assert field_value(cls, "data_type") == "annotations"
         assert field_value(cls, "reference_assembly") == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
+        # Propagated entries carry the Stage 2 `status` key (epic #116), like to_output_dict.
+        assert "status" in cls["data_modality"]
+        assert field_status(cls, "data_modality") == CLASSIFIED
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
         """End-to-end: a .tbi index inherits from its .vcf.gz parent."""
