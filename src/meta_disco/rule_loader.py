@@ -1,17 +1,24 @@
 """Loader for unified classification rules from YAML."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS
+from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
 
 @dataclass
 class UnifiedRule:
-    """A unified classification rule."""
+    """A unified classification rule.
+
+    ``then`` holds only real dimension values ({field: value}). A field a rule
+    declares non-classified is authored in the ``then.status`` sub-map instead and
+    parsed into ``then_status`` ({field: status}); the two never share a field. So
+    a sentinel (``not_applicable`` / ``not_classified``) is never written into a
+    value slot — see epic #116 / issue #133.
+    """
 
     id: str
     tier: int
@@ -20,6 +27,7 @@ class UnifiedRule:
     then: dict[str, Any]
     confidence: float
     rationale: str
+    then_status: dict[str, str] = field(default_factory=dict)
     def matches_extension(self, extension: str) -> bool:
         """Check if this rule applies to a given file extension."""
         if "extensions" not in self.when:
@@ -134,9 +142,17 @@ class RuleLoader:
         "header_section", "header_field", "header_pattern", "header_absent",
         "vcf_header_type", "vcf_pattern", "fastq_pattern",
     }
-    # Effect keys (classification fields) that _apply_rule() reads. A key not
-    # listed here would never be applied, so it is treated as an error.
-    VALID_THEN_KEYS = set(CLASSIFICATION_FIELDS)
+    # Effect keys _apply_rule() reads from a `then` block: the classification
+    # fields (real-value effects) plus the reserved `status` key, whose value is a
+    # sub-map of {field: status} for fields a rule declares non-classified (#133).
+    # A key not listed here would never be applied, so it is treated as an error.
+    THEN_STATUS_KEY = "status"
+    VALID_THEN_KEYS = set(CLASSIFICATION_FIELDS) | {THEN_STATUS_KEY}
+
+    # Statuses a rule may author in a `then.status` sub-map. `classified` is
+    # implied by a real value and `conflict` is engine-derived, so neither may be
+    # written by a rule (mirrors schema_vocab's antecedent/emitted split).
+    AUTHORABLE_STATUSES = {NOT_APPLICABLE, NOT_CLASSIFIED}
 
     # assay_type_rules condition keys that infer_assay_type() treats as iterables
     # (`x not in platform_in`, `any(r in ... for r in matched_rules_any)`). A
@@ -224,8 +240,10 @@ class RuleLoader:
 
         Validates each rule's id (present, unique), tier, scope, and the keys
         used in its ``when``/``then`` blocks (against VALID_WHEN_KEYS /
-        VALID_THEN_KEYS). Raises ValueError on any violation. Does not validate
-        ``then`` *values* against the controlled vocabulary — that check lives in
+        VALID_THEN_KEYS), including the ``then.status`` sub-map (fields, authorable
+        statuses, and value/status non-overlap — see ``_parse_then_status``).
+        Raises ValueError on any violation. Does not validate ``then`` *values*
+        against the controlled vocabulary — that check lives in
         tests/test_rule_vocabulary.py, which reads the LinkML schema.
         """
         rules = []
@@ -278,18 +296,61 @@ class RuleLoader:
                     f"Rule {rule_id}: unknown 'then' effect key(s) {sorted(unknown_then)}; "
                     f"valid keys are {sorted(self.VALID_THEN_KEYS)}"
                 )
+            then_values = {k: v for k, v in then.items() if k != self.THEN_STATUS_KEY}
+            then_status = self._parse_then_status(
+                rule_id, then.get(self.THEN_STATUS_KEY), then_values
+            )
 
             rules.append(UnifiedRule(
                 id=rule_id,
                 tier=tier,
                 scope=scope,
                 when=when,
-                then=then,
+                then=then_values,
                 confidence=rule_data.get("confidence", 0.0),
                 rationale=rule_data.get("rationale", ""),
+                then_status=then_status,
             ))
 
         return rules
+
+    def _parse_then_status(
+        self, rule_id: str, raw: Any, then_values: dict[str, Any]
+    ) -> dict[str, str]:
+        """Validate and return a rule's ``then.status`` sub-map ({field: status}).
+
+        ``raw`` is the value of the ``then.status`` key (``None`` if the block has
+        no ``status``). Each key must be a classification field, each value an
+        authorable status (``not_applicable`` / ``not_classified`` — not the
+        implied ``classified`` or engine-derived ``conflict``), and no field may
+        also carry a real value in ``then_values`` (a value-vs-status
+        contradiction). Raises ValueError on any violation.
+        """
+        if raw is None:
+            return {}
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f"Rule {rule_id}: 'then.status' must be a mapping, got {type(raw).__name__}"
+            )
+        unknown_fields = set(raw) - set(CLASSIFICATION_FIELDS)
+        if unknown_fields:
+            raise ValueError(
+                f"Rule {rule_id}: unknown 'then.status' field(s) {sorted(unknown_fields)}; "
+                f"valid fields are {sorted(CLASSIFICATION_FIELDS)}"
+            )
+        bad = sorted(f"{k}={v!r}" for k, v in raw.items() if v not in self.AUTHORABLE_STATUSES)
+        if bad:
+            raise ValueError(
+                f"Rule {rule_id}: 'then.status' values must be one of "
+                f"{sorted(self.AUTHORABLE_STATUSES)}; got {bad}"
+            )
+        conflicting = set(raw) & set(then_values)
+        if conflicting:
+            raise ValueError(
+                f"Rule {rule_id}: field(s) {sorted(conflicting)} appear in both 'then' "
+                f"(as a value) and 'then.status' (as a status) — a field is one or the other"
+            )
+        return dict(raw)
 
     def _parse_validators(self, validators_data: dict) -> dict[str, ValidatorConfig]:
         """Parse validator configurations from YAML."""

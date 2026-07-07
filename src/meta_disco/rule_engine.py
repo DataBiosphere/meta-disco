@@ -534,11 +534,18 @@ class RuleEngine:
     ) -> None:
         """Collect claims from a rule without setting classification fields.
 
-        Claims are appended to field_evidence. Evaluation happens
-        later in _finalize_result via evaluate_claims().
+        A rule authors each field either as a real value (``then``) or as a
+        non-classified status (``then.status`` → ``rule.then_status``); the loader
+        guarantees never both. Both become a claim appended to field_evidence;
+        evaluation happens later in _finalize_result via evaluate_claims(). A
+        status is still carried internally as a sentinel string in the claim's
+        ``value`` so claim evaluation, the result attributes and the evidence
+        output are unchanged from the pre-#133 sentinel-as-value behavior — the
+        internal sentinel→status cleanup is deferred (see issue #136).
         Also updates result.confidence (running max, not a classification field).
         """
         then = rule.then
+        then_status = rule.then_status
         evidence_entry = {
             "rule_id": rule.id,
             "reason": rule.rationale or "",
@@ -546,9 +553,15 @@ class RuleEngine:
             "tier": rule.tier,
         }
         for fld in result._CLASSIFICATION_FIELDS:
-            if fld in then and then[fld] is not None:
+            # A field is authored as a real value (`then`) or a status
+            # (`then.status`), never both; most rules author no status, so only
+            # consult then_status when the rule has one.
+            claim_value = then.get(fld)
+            if claim_value is None and then_status:
+                claim_value = then_status.get(fld)
+            if claim_value is not None:
                 entry = evidence_entry.copy()
-                entry["value"] = then[fld]
+                entry["value"] = claim_value
                 result.field_evidence[fld].append(entry)
 
         # Update overall confidence (take highest confidence from matching rules)
