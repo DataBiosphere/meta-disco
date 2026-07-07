@@ -14,11 +14,11 @@ import yaml
 
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
-# Sentinel values that rules currently emit as classification *values*. Per the
-# schema these are slated to move into a separate ``status`` field (issues #56,
-# #88); until that migration lands, the vocabulary check accepts them alongside
-# real enum values.
-SENTINEL_VALUES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
+# The two statuses a rule may emit *into a value slot* to mean "no value here"
+# (a real value → classified is implied; conflict is engine-derived, never authored).
+# The emitted-value drift check accepts these alongside real dimension values while
+# rules still author them as `then`-values; #133 removes that, and this with it.
+_EMITTABLE_STATUSES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
 
 # Classification field -> the enum that defines its permissible values. By
 # convention each dimension's enum is named ``<field>_enum`` in the schema, so
@@ -117,13 +117,35 @@ def status_values() -> frozenset[str]:
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:
-    """True if ``value`` is permissible for the dimension, or a sentinel.
+    """True if ``value`` is a permissible *value* for the dimension (strict).
 
-    The membership test the rule drift checks use: a dimension's enum values plus
-    SENTINEL_VALUES. Permissible values are always strings, so a non-string value
-    (e.g. a list from a malformed rule like ``platform: [ILLUMINA, PACBIO]``) is
-    reported as not-in-vocabulary rather than raising ``TypeError`` on the set
-    membership test. Raises the same errors as ``dimension_values`` for an
-    unrecognized field or a schema missing the expected enum.
+    Membership against the dimension's enum only. This is the check for values
+    that must be real dimension values — the *antecedent* side (``when`` /
+    assay ``conditions``, matched against actual values in the rule engine, where
+    a status is a typo — #115) and *output* values (real-or-null since Stage 3,
+    #116). For values a rule *emits* (``then`` values, inferred ``assay_type``),
+    which may legitimately be a status sentinel, use
+    ``emitted_value_in_vocabulary``.
+
+    Permissible values are always strings, so a non-string value (e.g. a list from
+    a malformed rule like ``platform: [ILLUMINA, PACBIO]``) is reported as
+    not-in-vocabulary rather than raising ``TypeError`` on the set membership test.
+    Raises the same errors as ``dimension_values`` for an unrecognized field or a
+    schema missing the expected enum.
     """
-    return isinstance(value, str) and value in (dimension_values(field) | SENTINEL_VALUES)
+    return isinstance(value, str) and value in dimension_values(field)
+
+
+def emitted_value_in_vocabulary(field: str, value: object) -> bool:
+    """True if ``value`` is valid for a field a rule *emits*: a dimension value or a sentinel.
+
+    Emitted values — ``then`` values and inferred ``assay_type`` — may be a real
+    dimension enum value OR one of the two value-slot sentinels
+    (``not_applicable`` / ``not_classified``) that rules still write to mean "no
+    value here" (see #133 for removing that). ``classified`` / ``conflict`` are
+    *not* accepted — a rule never emits those, so ``then: {platform: classified}``
+    is a typo the drift check should catch. Antecedent and output values are
+    stricter still (dimension only) — see ``value_in_vocabulary``. Non-string
+    values report as not-in-vocabulary.
+    """
+    return isinstance(value, str) and value in (dimension_values(field) | _EMITTABLE_STATUSES)

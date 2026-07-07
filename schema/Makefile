@@ -19,4 +19,4 @@ validate:
 	poetry run python scripts/validate_outputs.py $(INSTANCE)
 
 test:
-	poetry run pytest tests/test_validation.py
+	poetry run pytest tests/
