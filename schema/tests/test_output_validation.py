@@ -66,12 +66,18 @@ def _golden_entries():
     """Yield (label, dimension, entry) for every dimension entry in the golden."""
     # Guard here (not just in test_golden_present) so a missing fixture fails with
     # a clear message regardless of test order, never a bare FileNotFoundError.
+    # Assert the nested shape too, so a producer/fixture drift fails legibly rather
+    # than a bare KeyError.
     assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
-    data = json.loads(_GOLDEN.read_text())
+    data = json.loads(_GOLDEN.read_text(encoding="utf-8"))
     for ftype, payload in data.items():
+        assert "classifications" in payload, f"{ftype}: golden payload missing 'classifications'"
         for i, record in enumerate(payload["classifications"]):
-            classifications = record["classifications"]
+            classifications = record.get("classifications")
+            assert isinstance(classifications, dict), \
+                f"{ftype}[{i}]: record missing a 'classifications' dict"
             for dim in DIMENSION_CLASS:
+                assert dim in classifications, f"{ftype}[{i}]: missing dimension {dim!r}"
                 yield f"{ftype}[{i}].{dim}", dim, classifications[dim]
 
 
