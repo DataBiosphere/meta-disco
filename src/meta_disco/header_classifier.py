@@ -11,7 +11,7 @@ by the RuleEngine. This module provides:
 import re
 from dataclasses import replace
 
-from .models import NOT_APPLICABLE, NOT_CLASSIFIED, status_for_value
+from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
 from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -221,17 +221,19 @@ def classify_from_fastq_header(
     # Use provided filename or generate one
     filename = file_name or "sample.fastq.gz"
 
-    # Handle empty input — return per-field format with empty evidence
+    # Handle empty input — no reads to classify. Mirror to_output_dict's Stage 3
+    # shape (epic #116): `value` is None unless CLASSIFIED, sentinels live in
+    # `status`. reference_assembly is not_applicable (reads are unaligned),
+    # matching the non-empty path (#131); the other dimensions are not_classified.
     if not reads or not reads[0]:
-        # Mirror to_output_dict's shape, incl. the Stage 2 `status` key (epic #116).
-        def empty_field(v):
-            return {"value": v, "status": status_for_value(v), "confidence": 0.0, "evidence": []}
+        def field_entry(status, value=None):
+            return {"value": value, "status": status, "confidence": 0.0, "evidence": []}
         return {
-            "data_modality": empty_field(None),
-            "data_type": empty_field("reads"),
-            "platform": empty_field(None),
-            "reference_assembly": empty_field(None),
-            "assay_type": empty_field(None),
+            "data_modality": field_entry(NOT_CLASSIFIED),
+            "data_type": field_entry(CLASSIFIED, "reads"),
+            "platform": field_entry(NOT_CLASSIFIED),
+            "reference_assembly": field_entry(NOT_APPLICABLE),
+            "assay_type": field_entry(NOT_CLASSIFIED),
             "is_paired_end": None,
             "instrument_model": None,
             "instrument_hint": None,

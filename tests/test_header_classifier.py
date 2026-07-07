@@ -463,11 +463,16 @@ class TestFastqClassification:
         result = classify_from_fastq_header([])
         assert val(result, "platform") is None
         assert val(result, "confidence") == 0.0
-        # The empty-input fallback mirrors to_output_dict's Stage 2 shape (#116):
-        # dimension entries carry a `status` derived from the sentinel value.
+        # The empty-input fallback mirrors to_output_dict's Stage 3 shape (#116):
+        # sentinels live in `status`, `value` is None unless CLASSIFIED.
         assert "status" in result["data_modality"]
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert field_status(result, "data_type") == CLASSIFIED  # value "reads"
+        assert val(result, "data_type") == "reads"
+        # #131: empty reads are still unaligned → reference_assembly not_applicable,
+        # matching the non-empty fastq path (not not_classified).
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        assert val(result, "reference_assembly") is None
 
     def test_confidence_boost_on_agreement(self):
         """Confidence should increase when all reads agree."""
