@@ -72,7 +72,10 @@ def _golden_entries():
     data = json.loads(_GOLDEN.read_text(encoding="utf-8"))
     for ftype, payload in data.items():
         assert "classifications" in payload, f"{ftype}: golden payload missing 'classifications'"
-        for i, record in enumerate(payload["classifications"]):
+        records = payload["classifications"]
+        assert isinstance(records, list), f"{ftype}: 'classifications' is not a list"
+        for i, record in enumerate(records):
+            assert isinstance(record, dict), f"{ftype}[{i}]: record is not a mapping"
             classifications = record.get("classifications")
             assert isinstance(classifications, dict), \
                 f"{ftype}[{i}]: record missing a 'classifications' dict"
