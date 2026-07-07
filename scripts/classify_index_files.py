@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_label
+from src.meta_disco.models import field_label, status_for_value
 
 
 def _get_max_confidence(record: dict) -> float:
@@ -297,10 +297,15 @@ def propagate_to_index_files(
             "dataset_title": r["dataset_title"],
             "parent_file": parent,
             "parent_md5sum": r["parent_md5sum"],
+            # Field entries mirror to_output_dict's shape, incl. the Stage 2
+            # `status` key (epic #116), derived from the inherited value.
             "classifications": {
-                fld: (lambda evi: {"value": r.get(fld), "confidence": evi[0]["confidence"], "evidence": evi})(
-                    inherited_evidence(fld, r.get(fld), parent)
-                )
+                fld: (lambda v, evi: {
+                    "value": v,
+                    "status": status_for_value(v),
+                    "confidence": evi[0]["confidence"],
+                    "evidence": evi,
+                })(r.get(fld), inherited_evidence(fld, r.get(fld), parent))
                 for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
             },
         })

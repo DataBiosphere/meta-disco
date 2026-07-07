@@ -2,7 +2,14 @@
 
 import pytest
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, ClassificationResult, FileInfo
+from src.meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    CLASSIFIED,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    ClassificationResult,
+    FileInfo,
+)
 from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine, evaluate_claims
 
 
@@ -590,3 +597,30 @@ class TestSentinelValues:
         assert result.platform == NOT_APPLICABLE
         assert result.reference_assembly == NOT_APPLICABLE
         assert result.assay_type == NOT_APPLICABLE
+
+
+class TestOutputDictStatus:
+    """to_output_dict dual-writes a `status` key alongside `value` (epic #116 Stage 2)."""
+
+    def test_every_dimension_gets_the_status_key(self, engine):
+        # The Stage 2 shape contract: every dimension entry gains `status`
+        # alongside the existing keys, across a spread of file types.
+        for filename in ("sample_WGS_aligned.bam", "sample.fastq.gz", "plot.png"):
+            out = engine.classify_extended(FileInfo(filename=filename)).to_output_dict()
+            for fld in CLASSIFICATION_FIELDS:
+                assert set(out[fld]) == {"value", "status", "confidence", "evidence"}
+
+    def test_status_pins_each_sentinel_state(self, engine):
+        # Concrete value→status outcomes, asserted independently of status_for_value:
+        # a real value classifies, and each sentinel keeps its own status this stage.
+        classified = engine.classify_extended(
+            FileInfo(filename="sample_WGS_aligned.bam")).to_output_dict()["data_modality"]
+        assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)
+
+        n_a = engine.classify_extended(
+            FileInfo(filename="plot.png")).to_output_dict()["reference_assembly"]
+        assert (n_a["value"], n_a["status"]) == (NOT_APPLICABLE, NOT_APPLICABLE)
+
+        n_c = engine.classify_extended(
+            ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)).to_output_dict()["data_modality"]
+        assert (n_c["value"], n_c["status"]) == (NOT_CLASSIFIED, NOT_CLASSIFIED)

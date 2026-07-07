@@ -88,7 +88,7 @@ STUB_HEADER = "stub-header-no-network"
 # later type-guards its argument.
 LIST_RETURNING_TYPES = {"fastq", "fasta"}
 EVIDENCE_KEYS = {"rule_id", "reason", "confidence"}
-FIELD_KEYS = {"value", "confidence", "evidence"}
+FIELD_KEYS = {"value", "status", "confidence", "evidence"}
 RECORD_KEYS = {
     "file_name", "md5sum", "file_size", "file_format",
     "dataset_title", "classifications", "entry_id",
