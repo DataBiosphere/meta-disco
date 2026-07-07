@@ -36,19 +36,46 @@ def _when_value_violations(rules):
 
 
 def test_rule_then_values_in_vocabulary():
-    """Every value a rule emits must be in the schema vocabulary (or a sentinel)."""
+    """Every value a rule emits must be a real value in the schema vocabulary.
+
+    Since #133, a field a rule declares non-classified is authored in
+    ``then.status`` (see test_rule_then_status_values_are_schema_statuses), so a
+    ``then``-value is always a real dimension value and the check is strict
+    (``value_in_vocabulary``) — a sentinel in a value slot is now a violation.
+    """
     rules = get_unified_rules()
     violations = []
     for rule in rules.rules:
         for field, value in (rule.then or {}).items():
             if field not in schema_vocab.DIMENSION_ENUMS or value is None:
                 continue
-            if not schema_vocab.emitted_value_in_vocabulary(field, value):
+            if not schema_vocab.value_in_vocabulary(field, value):
                 violations.append(f"{rule.id}: {field}={value!r}")
 
     assert not violations, (
         "Rules emit classification values not in the LinkML schema vocabulary.\n"
         "Add them to classification.yaml or fix the rule:\n  "
+        + "\n  ".join(violations)
+    )
+
+
+def test_rule_then_status_values_are_schema_statuses():
+    """Every ``then.status`` value a rule authors must be a schema status value.
+
+    The status counterpart to test_rule_then_values_in_vocabulary: rules author
+    ``not_applicable`` / ``not_classified`` in ``then.status`` (#133), and those
+    must be members of the schema's classification_status_enum — so the loader's
+    authorable set and the schema stay in lockstep.
+    """
+    statuses = schema_vocab.status_values()
+    violations = [
+        f"{rule.id}: status.{field}={status!r}"
+        for rule in get_unified_rules().rules
+        for field, status in rule.then_status.items()
+        if status not in statuses
+    ]
+    assert not violations, (
+        "Rules author then.status values not in the schema status enum:\n  "
         + "\n  ".join(violations)
     )
 
@@ -90,7 +117,7 @@ def test_assay_type_inference_values_in_vocabulary():
     violations = [
         f"{r.id}: assay_type={r.assay_type!r}"
         for r in rules.assay_type_rules
-        if r.assay_type and not schema_vocab.emitted_value_in_vocabulary("assay_type", r.assay_type)
+        if r.assay_type and not schema_vocab.value_in_vocabulary("assay_type", r.assay_type)
     ]
     assert not violations, (
         "assay_type inference rules emit values not in the schema vocabulary:\n  "
@@ -234,23 +261,11 @@ def test_value_in_vocabulary_rejects_bogus_and_non_string():
     assert not schema_vocab.value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
 
 
-def test_emitted_value_in_vocabulary_accepts_dimension_value_or_sentinel():
-    # Emitted (then / assay_type) values may be a real value or a value-slot
-    # sentinel — rules still write `not_applicable` as a then-value (#133).
-    assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "GRCh38")
-    assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "not_applicable")
-    assert schema_vocab.emitted_value_in_vocabulary("data_modality", "not_classified")
-
-
-def test_emitted_value_in_vocabulary_rejects_non_value_statuses():
-    # `classified` / `conflict` are never emitted into a value slot — catch the typo.
-    assert not schema_vocab.emitted_value_in_vocabulary("platform", "classified")
-    assert not schema_vocab.emitted_value_in_vocabulary("platform", "conflict")
-
-
-def test_emitted_value_in_vocabulary_rejects_bogus_and_non_string():
-    assert not schema_vocab.emitted_value_in_vocabulary("reference_assembly", "GRCh99")
-    assert not schema_vocab.emitted_value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
+def test_value_in_vocabulary_rejects_all_statuses():
+    # A status never belongs in a value slot — the emitted-value check is now
+    # strict too (#133), so then/assay/output values reject every status.
+    for status in ("not_applicable", "not_classified", "classified", "conflict"):
+        assert not schema_vocab.value_in_vocabulary("platform", status)
 
 
 def _write_rules_file(tmp_path, rule):
@@ -278,6 +293,70 @@ def test_loader_rejects_unknown_then_key(tmp_path):
         "then": {"data_modalty": "genomic"},  # typo: should be data_modality
     })
     with pytest.raises(ValueError, match="unknown 'then' effect key"):
+        RuleLoader(path).load()
+
+
+def test_loader_parses_then_status(tmp_path):
+    # A `then.status` sub-map is parsed into `then_status`; `then` keeps only the
+    # real-value effects, with the `status` key stripped out (#133).
+    path = _write_rules_file(tmp_path, {
+        "id": "mixed", "tier": 2, "scope": "extension",
+        "when": {"extensions": [".fast5"]},
+        "then": {
+            "data_type": "raw_signal", "platform": "ONT",
+            "status": {"reference_assembly": "not_applicable"},
+        },
+    })
+    rule = RuleLoader(path).load().rules[0]
+    assert rule.then == {"data_type": "raw_signal", "platform": "ONT"}
+    assert rule.then_status == {"reference_assembly": "not_applicable"}
+
+
+def test_loader_rejects_unknown_then_status_field(tmp_path):
+    path = _write_rules_file(tmp_path, {
+        "id": "bad_status_field", "tier": 1, "scope": "extension",
+        "when": {"extensions": [".md5"]},
+        "then": {"status": {"data_modalty": "not_applicable"}},  # typo
+    })
+    with pytest.raises(ValueError, match="unknown 'then.status' field"):
+        RuleLoader(path).load()
+
+
+@pytest.mark.parametrize("bad_status", ["classified", "conflict", "genomic", "typo"])
+def test_loader_rejects_non_authorable_then_status_value(tmp_path, bad_status):
+    # Only not_applicable / not_classified may be authored; classified is implied
+    # by a real value and conflict is engine-derived.
+    path = _write_rules_file(tmp_path, {
+        "id": "bad_status_value", "tier": 1, "scope": "extension",
+        "when": {"extensions": [".md5"]},
+        "then": {"status": {"data_modality": bad_status}},
+    })
+    with pytest.raises(ValueError, match="'then.status' values must be one of"):
+        RuleLoader(path).load()
+
+
+def test_loader_rejects_field_in_both_then_and_status(tmp_path):
+    # A field is either a real value or a status, never both.
+    path = _write_rules_file(tmp_path, {
+        "id": "field_conflict", "tier": 2, "scope": "extension",
+        "when": {"extensions": [".bam"]},
+        "then": {
+            "data_modality": "genomic",
+            "status": {"data_modality": "not_applicable"},
+        },
+    })
+    with pytest.raises(ValueError, match="appear in both 'then'"):
+        RuleLoader(path).load()
+
+
+@pytest.mark.parametrize("bad_status_block", ["not_applicable", [], 0])
+def test_loader_rejects_non_mapping_then_status(tmp_path, bad_status_block):
+    path = _write_rules_file(tmp_path, {
+        "id": "bad_status_block", "tier": 1, "scope": "extension",
+        "when": {"extensions": [".md5"]},
+        "then": {"status": bad_status_block},
+    })
+    with pytest.raises(ValueError, match="'then.status' must be a mapping"):
         RuleLoader(path).load()
 
 

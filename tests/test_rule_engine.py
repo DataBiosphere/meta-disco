@@ -114,6 +114,43 @@ class TestVariantFiles:
         assert result.reference_assembly == "GRCh38"
 
 
+class TestThenStatus:
+    """A rule authoring a non-classified status via `then.status` (#133)."""
+
+    def _engine_with_rule(self, tmp_path, then):
+        import yaml
+        path = tmp_path / "rules.yaml"
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.safe_dump_all([
+                {"extension_map": {".foo": "foo"}},
+                {"rules": [{
+                    "id": "foo_rule", "tier": 1, "scope": "extension",
+                    "when": {"extensions": [".foo"]}, "then": then, "confidence": 1.0,
+                }]},
+            ], f)
+        return RuleEngine(path)
+
+    def test_status_only_field_is_not_applicable(self, tmp_path):
+        engine = self._engine_with_rule(
+            tmp_path, {"status": {"reference_assembly": "not_applicable"}})
+        out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
+        assert out["reference_assembly"]["status"] == NOT_APPLICABLE
+        assert out["reference_assembly"]["value"] is None
+
+    def test_real_value_and_status_coexist_in_one_rule(self, tmp_path):
+        # The mixed case (e.g. nanopore_fast5): a real value and a status in the
+        # same then-clause resolve independently and correctly.
+        engine = self._engine_with_rule(tmp_path, {
+            "data_type": "raw_signal",
+            "status": {"reference_assembly": "not_applicable"},
+        })
+        out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
+        assert out["data_type"]["status"] == CLASSIFIED
+        assert out["data_type"]["value"] == "raw_signal"
+        assert out["reference_assembly"]["status"] == NOT_APPLICABLE
+        assert out["reference_assembly"]["value"] is None
+
+
 class TestDerivativeFiles:
     """Test that derivative files (indices, checksums, logs) get not_applicable."""
 
