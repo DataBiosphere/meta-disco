@@ -14,10 +14,8 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED, FileInfo, field_label
+from src.meta_disco.models import FileInfo, field_label
 from src.meta_disco.rule_engine import RuleEngine
-
-_SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 
 # Extensions handled by this script
 AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar", ".psam", ".pgen"}
@@ -61,7 +59,9 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         )
         result = engine.classify_extended(file_info)
 
-        if result.reference_assembly and result.reference_assembly not in _SENTINEL_VALUES:
+        # reference_assembly holds a real value or None (the sentinel lives in
+        # status now — epic #116 / #136), so truthiness = a real reference.
+        if result.reference_assembly:
             stats[matched_ext]["with_ref"] += 1
 
         results.append({

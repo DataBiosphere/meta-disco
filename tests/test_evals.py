@@ -266,22 +266,22 @@ class TestRuleEngineE2E:
     def test_histology_svs(self):
         result = engine.classify_extended(FileInfo(filename="GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
-        assert result.platform == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fast5_raw_signal(self):
         result = engine.classify_extended(FileInfo(filename="PAK57726.fast5"))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_pod5_raw_signal(self):
         result = engine.classify_extended(FileInfo(filename="sample_run.pod5"))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_flnc_bam_is_transcriptomic(self):
         """IsoSeq flnc BAM should be transcriptomic, not genomic."""
@@ -298,7 +298,7 @@ class TestRuleEngineE2E:
     def test_plain_bam_no_modality(self):
         """BAM without header or platform signals should not get genomic modality."""
         result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_plink_1000g(self):
         result = engine.classify_extended(
@@ -318,34 +318,34 @@ class TestRuleEngineE2E:
     def test_fastq_rna_filename(self):
         result = engine.classify_extended(FileInfo(filename="sample_RNA_001.fastq.gz"))
         assert result.data_modality == "transcriptomic.bulk"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_checksum_not_applicable(self):
         result = engine.classify_extended(FileInfo(filename="sample.md5"))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_chunked_upload_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"
         ))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_timestamp_filename_not_applicable(self):
         result = engine.classify_extended(FileInfo(
             filename="2020-11-20T212208.245537Z"
         ))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo(filename="assembly_plot.png"))
-        assert result.data_modality == NOT_APPLICABLE
-        assert result.platform == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_all_index_types_not_applicable(self):
         for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
             result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
-            assert result.data_modality == NOT_APPLICABLE, f"{ext} should be not_applicable"
+            assert result.status_of("data_modality") == NOT_APPLICABLE, f"{ext} should be not_applicable"
 
     def test_narrowpeak_is_chromatin(self):
         result = engine.classify_extended(FileInfo(filename="sample.narrowPeak"))
@@ -368,36 +368,38 @@ class TestRuleEngineE2E:
     def test_no_crash_on_unknown(self):
         for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
             result = engine.classify_extended(FileInfo(filename=name))
-            assert result.data_modality is not None
+            # Unknown files don't crash and resolve to a not_classified status
+            # (the value stays None — the sentinel lives in status now).
+            assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_fasta_base_rule(self):
         """FASTA files should get base rule classification."""
         for ext in [".fa", ".fasta", ".fa.gz", ".fasta.gz"]:
             result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
             assert result.data_type == "sequence", f"{ext} should be sequence"
-            assert result.platform == NOT_APPLICABLE
-            assert result.assay_type == NOT_APPLICABLE
+            assert result.status_of("platform") == NOT_APPLICABLE
+            assert result.status_of("assay_type") == NOT_APPLICABLE
 
     def test_fasta_assembly_filename(self):
         """FASTA with assembly keyword in filename."""
         result = engine.classify_extended(FileInfo(filename="HG00673.paternal.f1_assembly_v1.fa.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fasta_haplotype_filename(self):
         """FASTA with haplotype keyword in filename."""
         result = engine.classify_extended(FileInfo(filename="hapdup_contigs_2.fasta"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fasta_verkko_filename(self):
         """FASTA with verkko assembler keyword."""
         result = engine.classify_extended(FileInfo(filename="HG02300_verkko_gfase_diploid.fasta.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
 # =============================================================================
@@ -534,58 +536,58 @@ class TestDerivedFileTierPrecedence:
     def test_index_with_reference_in_filename(self):
         """Index file with GRCh38 in filename should get reference_assembly=GRCh38."""
         result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.bai"))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.reference_assembly == "GRCh38"
-        assert result.platform == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
 
     def test_index_with_chm13_in_filename(self):
         """Index file with CHM13 in filename should get reference_assembly=CHM13."""
         result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.cram.crai"))
         assert result.reference_assembly == "CHM13"
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_index_without_reference_in_filename(self):
         """Index file without reference hint should get reference_assembly=not_classified."""
         result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
-        assert result.reference_assembly == NOT_CLASSIFIED
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- Checksum files: all fields not_applicable, even with reference in filename ---
 
     def test_checksum_ignores_filename_reference(self):
         """Checksum file should stay not_applicable even with GRCh38 in filename."""
         result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.md5"))
-        assert result.reference_assembly == NOT_APPLICABLE
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- Log files: all fields not_applicable ---
 
     def test_log_ignores_filename_reference(self):
         """Log file should stay not_applicable even with hg38 in filename."""
         result = engine.classify_extended(FileInfo(filename="alignment.hg38.log"))
-        assert result.reference_assembly == NOT_APPLICABLE
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- Image files: reference_assembly not_applicable at tier 2 ---
 
     def test_svs_ignores_filename_reference(self):
         """SVS histology image should stay not_applicable for reference_assembly."""
         result = engine.classify_extended(FileInfo(filename="hg38.sample.svs"))
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.data_modality == "imaging.histology"
 
     def test_png_ignores_filename_reference(self):
         """PNG plot with reference in filename should stay not_applicable."""
         result = engine.classify_extended(FileInfo(filename="GRCh38_coverage_plot.png"))
-        assert result.reference_assembly == NOT_APPLICABLE
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- Nanopore raw signal: reference_assembly not_applicable ---
 
     def test_fast5_ignores_filename_reference(self):
         """FAST5 raw signal with reference in filename should stay not_applicable."""
         result = engine.classify_extended(FileInfo(filename="GRCh38_run.fast5"))
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.platform == "ONT"
 
     # --- Stats files: reference_assembly applicable, other fields not_applicable (#106) ---
@@ -594,14 +596,14 @@ class TestDerivedFileTierPrecedence:
         """Stats file with CHM13 in filename should get reference_assembly=CHM13."""
         result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.chrX.samtools.stats.txt"))
         assert result.reference_assembly == "CHM13"
-        assert result.data_modality == NOT_APPLICABLE
-        assert result.platform == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
 
     def test_stats_without_reference_in_filename(self):
         """Stats file without reference hint should get not_classified, not not_applicable."""
         result = engine.classify_extended(FileInfo(filename="HG00345.mosdepth.region.dist.txt"))
-        assert result.reference_assembly == NOT_CLASSIFIED
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- BED tier precedence: specific rules beat fallbacks ---
 
@@ -620,4 +622,4 @@ class TestDerivedFileTierPrecedence:
     def test_capture_targets_not_applicable(self):
         """Capture target BED without competing rules should get not_applicable."""
         result = engine.classify_extended(FileInfo(filename="exome_capture_targets.bed"))
-        assert result.data_modality == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE

@@ -12,7 +12,12 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import CLASSIFICATION_FIELDS, build_field_entry, field_label
+from src.meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    build_field_entry,
+    field_label,
+    status_for_value,
+)
 
 
 def _get_max_confidence(record: dict) -> float:
@@ -282,7 +287,7 @@ def propagate_to_index_files(
         return [{"rule_id": "inherited_from_parent",
                  "reason": f"Parent file {parent} had no value for {field_name}",
                  "confidence": 0.0,
-                 "value": field_val or nc}]
+                 "status": status_for_value(field_val)}]
 
     standard_results = []
     for r in results:

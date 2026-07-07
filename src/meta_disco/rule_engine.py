@@ -7,11 +7,14 @@ from typing import Any
 
 from .models import (
     CLASSIFICATION_FIELDS,
+    CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     ClassificationResult,
     FileInfo,
+    _assert_coherent,
     build_field_entry,
+    status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
 
@@ -72,6 +75,44 @@ class ExtendedClassificationResult:
         "assay_type": [],
         "platform": [],
     })
+    # Resolved status per dimension (epic #116 / #136): the dimension attributes
+    # above hold a real value or None only — the sentinel (not_applicable /
+    # not_classified) lives here, never in a value slot. Defaults to
+    # not_classified (no statement made) until a value or status is set.
+    field_status: dict[str, str] = field(
+        default_factory=lambda: {fld: NOT_CLASSIFIED for fld in CLASSIFICATION_FIELDS})
+
+    def set_field(self, fld: str, value: str | None = None, status: str | None = None) -> None:
+        """Set a dimension's value and status coherently.
+
+        ``value`` is a real value or None; ``status`` defaults to
+        ``status_for_value(value)``. A CLASSIFIED status stores the value; any
+        non-classified status stores None (the sentinel lives only in
+        ``field_status``). The (value, status) pairing is checked against the
+        single coherence definition (``models._assert_coherent``): a CLASSIFIED
+        status without a real value, or a non-classified status carrying one,
+        raises rather than silently mis-storing.
+        """
+        if status is None:
+            status = status_for_value(value)
+        _assert_coherent(value, status)  # single coherence definition (models)
+        setattr(self, fld, value if status == CLASSIFIED else None)
+        self.field_status[fld] = status
+
+    def status_of(self, fld: str) -> str:
+        """Resolved status of a dimension (classified / not_applicable / not_classified)."""
+        return self.field_status[fld]
+
+    def is_declared(self, fld: str) -> bool:
+        """True if a definitive statement was made for the field — a real value
+        (CLASSIFIED) or an explicit not_applicable — vs not_classified/unset."""
+        return self.field_status[fld] in (CLASSIFIED, NOT_APPLICABLE)
+
+    def label(self, fld: str) -> str | None:
+        """Combined value-or-status label for the field (mirrors models.field_label):
+        the real value when CLASSIFIED, else the status string. For flat/legacy
+        views (basic ClassificationResult, CSV reports) that want one column."""
+        return getattr(self, fld) if self.field_status[fld] == CLASSIFIED else self.field_status[fld]
 
     @property
     def rules_matched(self) -> list[str]:
@@ -117,128 +158,130 @@ class ExtendedClassificationResult:
         """Convert to the per-field output format.
 
         Each dimension emits ``{value, status, confidence, evidence}`` via
-        ``models.build_field_entry``, which applies epic #116's Stage 3 invariant:
-        ``status`` carries ``not_applicable`` / ``not_classified`` and ``value`` is
-        ``None`` unless the field is CLASSIFIED. The internal attribute
-        (``getattr(self, fld)``) still holds the sentinel; only the serialized
-        output is nulled. Readers are unaffected (they read ``status`` via
-        models.field_status).
+        ``models.build_field_entry``. The dimension attribute holds a real value or
+        None and ``field_status`` holds the resolved status (epic #116 / #136), so
+        both are passed straight through — the sentinel is never in ``value``,
+        internally or in the output.
         """
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
-            value = getattr(self, fld)
             evidence = self.field_evidence.get(fld, [])
             fld_conf = max((e.get("confidence", 0) for e in evidence), default=0.0)
-            classifications[fld] = build_field_entry(value, confidence=fld_conf, evidence=evidence)
+            classifications[fld] = build_field_entry(
+                getattr(self, fld), status=self.field_status[fld],
+                confidence=fld_conf, evidence=evidence)
         return classifications
 
     # Classification field names (single source of truth: models.CLASSIFICATION_FIELDS)
     _CLASSIFICATION_FIELDS = CLASSIFICATION_FIELDS
 
 
+def _claim_declaration(claim: dict) -> str | None:
+    """A claim's *declaration*: its real ``value``, else its ``status`` (a rule
+    authors not_applicable / not_classified as a ``status``, never in the value
+    slot — epic #116 / #136). Resolution runs over declarations; the winner is
+    split back into (value, status) by ``_resolved``."""
+    value = claim.get("value")
+    return value if value is not None else claim.get("status")
+
+
+def _resolved(declaration: str | None, confidence: float, reason: str,
+              is_conflict: bool = False, competing: list | None = None) -> dict:
+    """Package a winning declaration as ``{value, status, ...}``: a real declaration
+    becomes value with status CLASSIFIED; a status declaration becomes that status
+    with value None — so a sentinel never lands in ``value``."""
+    status = status_for_value(declaration)
+    out = {
+        "value": declaration if status == CLASSIFIED else None,
+        "status": status,
+        "confidence": confidence,
+        "reason": reason,
+        "is_conflict": is_conflict,
+    }
+    if competing is not None:
+        out["competing_values"] = competing
+    return out
+
+
 def evaluate_claims(claims: list[dict]) -> dict:
     """Evaluate competing claims for a single classification field.
 
-    Takes a list of evidence entries (each with rule_id, value, confidence,
-    and optionally tier) and resolves them to a single value.
+    Each claim *declares* either a real value or a status (not_applicable /
+    not_classified — see ``_claim_declaration``). Resolution runs in declaration
+    space and the winner is split back into a real value + status.
 
     Resolution rules:
     - No claims → not_classified
     - Single claim → use it
-    - All claims agree → use value, max confidence
+    - All claims agree → use declaration, max confidence
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
     - Claims disagree, same max tier → conflict (not_classified)
 
     Args:
-        claims: List of evidence dicts with at least {value, confidence}.
-                Optional: tier (int), rule_id (str), reason (str).
+        claims: List of evidence dicts, each with a ``value`` or a ``status``, plus
+                ``confidence`` and optionally ``tier`` / ``rule_id`` / ``reason``.
 
     Returns:
-        Dict with: value, confidence, reason, is_conflict, competing_values (if conflict)
+        Dict with: value (real or None), status, confidence, reason, is_conflict,
+        competing_values (if conflict).
     """
-    # Filter out synthetic placeholders and None values, but keep
-    # rule-authored NOT_CLASSIFIED claims (e.g., fastq_modality_unknown)
+    # Drop the synthetic not_classified placeholder and empty claims, but keep
+    # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
     real_claims = [c for c in claims
-                   if c.get("value") is not None
+                   if _claim_declaration(c) is not None
                    and c.get("rule_id") != "not_classified"]
 
-    # For conflict resolution, separate claims with real values from
-    # NOT_CLASSIFIED claims (which mean "I looked but can't determine")
-    assertive_claims = [c for c in real_claims if c["value"] != NOT_CLASSIFIED]
+    # Assertive = real-value declarations; a not_classified status means
+    # "I looked but can't determine" and doesn't assert a value.
+    assertive_claims = [c for c in real_claims if _claim_declaration(c) != NOT_CLASSIFIED]
 
     if not real_claims:
-        return {
-            "value": NOT_CLASSIFIED,
-            "confidence": 0.0,
-            "reason": "no_claims",
-            "is_conflict": False,
-        }
+        return _resolved(NOT_CLASSIFIED, 0.0, "no_claims")
 
-    # If no assertive claims (only rule-authored NOT_CLASSIFIED), resolve as not_classified
+    # Only not_classified declarations present → resolve as not_classified
     # (the rule's rationale is preserved in field_evidence, not in this return value)
     if not assertive_claims:
         best = max(real_claims, key=lambda c: c.get("confidence", 0))
-        return {
-            "value": NOT_CLASSIFIED,
-            "confidence": best.get("confidence", 0),
-            "reason": "single_claim" if len(real_claims) == 1 else "unanimous",
-            "is_conflict": False,
-        }
+        return _resolved(NOT_CLASSIFIED, best.get("confidence", 0),
+                         "single_claim" if len(real_claims) == 1 else "unanimous")
 
-    # Check if all assertive claims agree
-    values = {c["value"] for c in assertive_claims}
+    # Check if all assertive declarations agree
+    declarations = {_claim_declaration(c) for c in assertive_claims}
 
-    if len(values) == 1:
-        # Unanimous — use the value with highest confidence
+    if len(declarations) == 1:
+        # Unanimous — use the highest-confidence claim
         best = max(assertive_claims, key=lambda c: c.get("confidence", 0))
-        return {
-            "value": best["value"],
-            "confidence": max(c.get("confidence", 0) for c in assertive_claims),
-            "reason": "unanimous" if len(assertive_claims) > 1 else "single_claim",
-            "is_conflict": False,
-        }
+        return _resolved(_claim_declaration(best),
+                         max(c.get("confidence", 0) for c in assertive_claims),
+                         "unanimous" if len(assertive_claims) > 1 else "single_claim")
 
-    # Assertive claims disagree — check tiers
+    # Assertive declarations disagree — check tiers
     max_tier = max(c.get("tier", 0) for c in assertive_claims)
     top_tier_claims = [c for c in assertive_claims if c.get("tier", 0) == max_tier]
-    top_tier_values = {c["value"] for c in top_tier_claims}
+    top_tier_decls = {_claim_declaration(c) for c in top_tier_claims}
 
     # NOT_APPLICABLE is a terminal declaration — it wins over real values
     # at the same tier without triggering a conflict (e.g., text_stats
     # setting not_applicable shouldn't conflict with filename_ref patterns)
-    if NOT_APPLICABLE in top_tier_values:
-        na_claims = [c for c in top_tier_claims if c["value"] == NOT_APPLICABLE]
+    if NOT_APPLICABLE in top_tier_decls:
+        na_claims = [c for c in top_tier_claims if _claim_declaration(c) == NOT_APPLICABLE]
         best = max(na_claims, key=lambda c: c.get("confidence", 0))
-        return {
-            "value": NOT_APPLICABLE,
-            "confidence": best.get("confidence", 0),
-            "reason": "not_applicable_terminal",
-            "is_conflict": False,
-        }
+        return _resolved(NOT_APPLICABLE, best.get("confidence", 0), "not_applicable_terminal")
 
-    if len(top_tier_values) == 1:
+    if len(top_tier_decls) == 1:
         # Highest tier is unanimous — override lower tiers
-        winner_value = top_tier_values.pop()
+        winner = top_tier_decls.pop()
         best = max(
-            (c for c in top_tier_claims if c["value"] == winner_value),
+            (c for c in top_tier_claims if _claim_declaration(c) == winner),
             key=lambda c: c.get("confidence", 0),
         )
-        return {
-            "value": best["value"],
-            "confidence": best.get("confidence", 0),
-            "reason": "higher_specificity_override",
-            "is_conflict": False,
-        }
+        return _resolved(_claim_declaration(best), best.get("confidence", 0),
+                         "higher_specificity_override")
 
     # Same tier, different values — conflict
-    return {
-        "value": NOT_CLASSIFIED,
-        "confidence": 0.0,
-        "reason": "conflict",
-        "is_conflict": True,
-        "competing_values": sorted(top_tier_values),
-    }
+    return _resolved(NOT_CLASSIFIED, 0.0, "conflict",
+                     is_conflict=True, competing=sorted(top_tier_decls))
 
 
 class RuleEngine:
@@ -345,7 +388,7 @@ class RuleEngine:
         for fld in result._CLASSIFICATION_FIELDS:
             claims = result.field_evidence.get(fld, [])
             evaluation = evaluate_claims(claims)
-            setattr(result, fld, evaluation["value"])
+            result.set_field(fld, evaluation["value"], evaluation["status"])
 
             if evaluation["is_conflict"]:
                 result.field_evidence[fld].append({
@@ -353,7 +396,7 @@ class RuleEngine:
                     "reason": (f"Conflicting {fld}: {evaluation['competing_values']}"
                                " — ambiguous"),
                     "confidence": 0.0,
-                    "value": NOT_CLASSIFIED,
+                    "status": NOT_CLASSIFIED,
                     "competing_values": evaluation["competing_values"],
                     "is_conflict": True,
                 })
@@ -362,7 +405,7 @@ class RuleEngine:
                     "rule_id": "not_classified",
                     "reason": f"No rule determined a value for {fld}",
                     "confidence": 0.0,
-                    "value": NOT_CLASSIFIED,
+                    "status": NOT_CLASSIFIED,
                 })
 
     def _rule_matches(
@@ -415,18 +458,20 @@ class RuleEngine:
             if file_info.file_format != file_format:
                 return False
 
-        # Check modality_not_set — true if no real claims for data_modality yet
+        # Check modality_not_set — true unless data_modality already has a
+        # definitive declaration (a real value or an explicit not_applicable; a
+        # not_classified declaration does not count as "set").
         if when.get("modality_not_set"):
-            real_claims = [c for c in current.field_evidence.get("data_modality", [])
-                          if c.get("value") not in (None, NOT_CLASSIFIED)]
-            if real_claims:
+            declared = [c for c in current.field_evidence.get("data_modality", [])
+                        if _claim_declaration(c) not in (None, NOT_CLASSIFIED)]
+            if declared:
                 return False
 
-        # Check reference_not_set — true if no real claims for reference_assembly yet
+        # Check reference_not_set — same "definitive declaration" test as above.
         if when.get("reference_not_set"):
-            real_claims = [c for c in current.field_evidence.get("reference_assembly", [])
-                          if c.get("value") not in (None, NOT_CLASSIFIED)]
-            if real_claims:
+            declared = [c for c in current.field_evidence.get("reference_assembly", [])
+                        if _claim_declaration(c) not in (None, NOT_CLASSIFIED)]
+            if declared:
                 return False
 
         # Check header section (tier 3) — skip if checking for absence
@@ -535,13 +580,11 @@ class RuleEngine:
         """Collect claims from a rule without setting classification fields.
 
         A rule authors each field either as a real value (``then``) or as a
-        non-classified status (``then.status`` → ``rule.then_status``); the loader
-        guarantees never both. Both become a claim appended to field_evidence;
-        evaluation happens later in _finalize_result via evaluate_claims(). A
-        status is still carried internally as a sentinel string in the claim's
-        ``value`` so claim evaluation, the result attributes and the evidence
-        output are unchanged from the pre-#133 sentinel-as-value behavior — the
-        internal sentinel→status cleanup is deferred (see issue #136).
+        not_applicable / not_classified status (``then.status`` →
+        ``rule.then_status``); the loader guarantees never both. Each becomes a
+        claim appended to field_evidence — a value claim carries ``value``, a status
+        claim carries ``status`` (never a sentinel in the value slot — epic #116 /
+        #136); evaluation happens later in _finalize_result via evaluate_claims().
         Also updates result.confidence (running max, not a classification field).
         """
         then = rule.then
@@ -553,16 +596,12 @@ class RuleEngine:
             "tier": rule.tier,
         }
         for fld in result._CLASSIFICATION_FIELDS:
-            # A field is authored as a real value (`then`) or a status
-            # (`then.status`), never both; most rules author no status, so only
-            # consult then_status when the rule has one.
-            claim_value = then.get(fld)
-            if claim_value is None and then_status:
-                claim_value = then_status.get(fld)
-            if claim_value is not None:
-                entry = evidence_entry.copy()
-                entry["value"] = claim_value
-                result.field_evidence[fld].append(entry)
+            value = then.get(fld)
+            status = then_status.get(fld) if then_status else None
+            if value is not None:
+                result.field_evidence[fld].append({**evidence_entry, "value": value})
+            elif status is not None:
+                result.field_evidence[fld].append({**evidence_entry, "status": status})
 
         # Update overall confidence (take highest confidence from matching rules)
         if rule.confidence > result.confidence:
@@ -576,10 +615,10 @@ class RuleEngine:
         """Infer assay type from other classification signals.
 
         Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already set
-        or conflicted.
+        assay_type_rule is found. Skips if assay_type is already declared
+        (a real value or an explicit not_applicable).
         """
-        if result.assay_type not in (None, NOT_CLASSIFIED):
+        if result.is_declared("assay_type"):
             return
         # Don't infer over conflicts
         assay_evidence = result.field_evidence.get("assay_type", [])
@@ -637,7 +676,7 @@ class RuleEngine:
                     continue
 
             # All conditions passed — apply and record evidence
-            result.assay_type = assay_rule.assay_type
+            result.set_field("assay_type", assay_rule.assay_type)
             # Remove stale not_classified placeholder if _finalize_result ran first
             result.field_evidence["assay_type"] = [
                 e for e in result.field_evidence["assay_type"]

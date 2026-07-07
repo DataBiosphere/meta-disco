@@ -47,7 +47,7 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
             dataset_title=file_data.get("dataset_title"),
         )
 
-        result = engine.classify(file_info)
+        result = engine.classify_extended(file_info)
 
         results.append({
             # Original metadata
@@ -62,9 +62,9 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
             # Original API values
             "api_data_modality": file_data.get("data_modality"),
             "api_reference_assembly": file_data.get("reference_assembly"),
-            # Classification results
-            "predicted_modality": result.data_modality,
-            "predicted_reference": result.reference_assembly,
+            # Classification results (label = value when classified, else the status)
+            "predicted_modality": result.label("data_modality"),
+            "predicted_reference": result.label("reference_assembly"),
             "confidence": result.confidence,
             "rules_matched": "|".join(result.rules_matched),
             "reasons": "|".join(result.reasons),
