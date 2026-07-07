@@ -63,6 +63,9 @@ def validator():
 
 def _golden_entries():
     """Yield (label, dimension, entry) for every dimension entry in the golden."""
+    # Guard here (not just in test_golden_present) so a missing fixture fails with
+    # a clear message regardless of test order, never a bare FileNotFoundError.
+    assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
     data = json.loads(_GOLDEN.read_text())
     for ftype, payload in data.items():
         for i, record in enumerate(payload["classifications"]):

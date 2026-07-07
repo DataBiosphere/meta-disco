@@ -43,7 +43,7 @@ def test_rule_then_values_in_vocabulary():
         for field, value in (rule.then or {}).items():
             if field not in schema_vocab.DIMENSION_ENUMS or value is None:
                 continue
-            if not schema_vocab.value_in_vocabulary(field, value):
+            if not schema_vocab.emitted_value_in_vocabulary(field, value):
                 violations.append(f"{rule.id}: {field}={value!r}")
 
     assert not violations, (
@@ -90,7 +90,7 @@ def test_assay_type_inference_values_in_vocabulary():
     violations = [
         f"{r.id}: assay_type={r.assay_type!r}"
         for r in rules.assay_type_rules
-        if r.assay_type and not schema_vocab.value_in_vocabulary("assay_type", r.assay_type)
+        if r.assay_type and not schema_vocab.emitted_value_in_vocabulary("assay_type", r.assay_type)
     ]
     assert not violations, (
         "assay_type inference rules emit values not in the schema vocabulary:\n  "
@@ -221,17 +221,30 @@ def test_status_values_from_schema():
     )
 
 
-def test_value_in_vocabulary_accepts_dimension_value_or_status():
-    # A then/when value may be a real dimension value or a status — rules still
-    # write `not_applicable` as a then-value (#133). Both are schema-derived.
+def test_value_in_vocabulary_is_strict_dimension_only():
+    # Antecedent/output check: a real dimension value passes; a status does NOT —
+    # a status in a when/condition (or an output value) is a bug (#115, Stage 3).
     assert schema_vocab.value_in_vocabulary("reference_assembly", "GRCh38")
-    assert schema_vocab.value_in_vocabulary("reference_assembly", "not_applicable")
-    assert schema_vocab.value_in_vocabulary("data_modality", "not_classified")
+    assert not schema_vocab.value_in_vocabulary("reference_assembly", "not_applicable")
+    assert not schema_vocab.value_in_vocabulary("data_modality", "not_classified")
 
 
 def test_value_in_vocabulary_rejects_bogus_and_non_string():
     assert not schema_vocab.value_in_vocabulary("reference_assembly", "GRCh99")
     assert not schema_vocab.value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
+
+
+def test_emitted_value_in_vocabulary_accepts_dimension_value_or_status():
+    # Emitted (then / assay_type) values may be a real value or a status sentinel —
+    # rules still write `not_applicable` as a then-value (#133). Both schema-derived.
+    assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "GRCh38")
+    assert schema_vocab.emitted_value_in_vocabulary("reference_assembly", "not_applicable")
+    assert schema_vocab.emitted_value_in_vocabulary("data_modality", "not_classified")
+
+
+def test_emitted_value_in_vocabulary_rejects_bogus_and_non_string():
+    assert not schema_vocab.emitted_value_in_vocabulary("reference_assembly", "GRCh99")
+    assert not schema_vocab.emitted_value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
 
 
 def _write_rules_file(tmp_path, rule):

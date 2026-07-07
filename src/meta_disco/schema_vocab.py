@@ -111,17 +111,34 @@ def status_values() -> frozenset[str]:
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:
-    """True if ``value`` is a permissible dimension value or a valid status.
+    """True if ``value`` is a permissible *value* for the dimension (strict).
 
-    The membership test the rule drift checks use. A rule ``then``/``when`` value
-    may be a real dimension enum value OR a status: rules still express "not
-    applicable" by writing the status (``not_applicable`` / ``not_classified``)
-    where a value goes (see #133 for removing that). Both sets are schema-derived
-    — dimension_values plus status_values — so nothing special-cases sentinels;
-    they are simply members of the status enum. Permissible values are always
-    strings, so a non-string value (e.g. a list from a malformed rule like
-    ``platform: [ILLUMINA, PACBIO]``) is reported as not-in-vocabulary rather than
-    raising ``TypeError`` on the set membership test. Raises the same errors as
-    ``dimension_values`` for an unrecognized field or a schema missing the enum.
+    Membership against the dimension's enum only. This is the check for values
+    that must be real dimension values — the *antecedent* side (``when`` /
+    assay ``conditions``, matched against actual values in the rule engine, where
+    a status is a typo — #115) and *output* values (real-or-null since Stage 3,
+    #116). For values a rule *emits* (``then`` values, inferred ``assay_type``),
+    which may legitimately be a status sentinel, use
+    ``emitted_value_in_vocabulary``.
+
+    Permissible values are always strings, so a non-string value (e.g. a list from
+    a malformed rule like ``platform: [ILLUMINA, PACBIO]``) is reported as
+    not-in-vocabulary rather than raising ``TypeError`` on the set membership test.
+    Raises the same errors as ``dimension_values`` for an unrecognized field or a
+    schema missing the expected enum.
+    """
+    return isinstance(value, str) and value in dimension_values(field)
+
+
+def emitted_value_in_vocabulary(field: str, value: object) -> bool:
+    """True if ``value`` is valid for a field a rule *emits*: a dimension value or a status.
+
+    Emitted values — ``then`` values and inferred ``assay_type`` — may be a real
+    dimension enum value OR a status: rules still express "not applicable" by
+    writing the status (``not_applicable`` / ``not_classified``) where a value
+    goes (see #133 for removing that). Both sets are schema-derived — dimension_values
+    plus status_values — so nothing special-cases sentinels; they are simply members
+    of the status enum. Antecedent and output values are stricter — see
+    ``value_in_vocabulary``. Non-string values report as not-in-vocabulary.
     """
     return isinstance(value, str) and value in (dimension_values(field) | status_values())
