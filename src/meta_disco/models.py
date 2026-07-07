@@ -43,18 +43,41 @@ def status_for_value(value) -> str:
 
     The one place that maps a sentinel-carrying ``value`` to a status string:
     ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
-    NOT_CLASSIFIED, any real value → CLASSIFIED. The read side (``_entry_status``)
-    and the producers that derive status from a sentinel-carrying value —
-    rule_engine's ``to_output_dict`` and the index-propagation script — go through
-    this, so reader and producers stay in lockstep as epic #116 moves sentinels
-    out of ``value``. (The header_classifier empty-input fallback knows each
-    field's status directly, so it sets ``status`` explicitly rather than deriving.)
+    NOT_CLASSIFIED, any real value → CLASSIFIED. Used by the read side
+    (``_entry_status``) and by ``build_field_entry`` when a producer carries the
+    sentinel in ``value`` and no explicit status is given, so reader and producers
+    stay in lockstep as epic #116 moves sentinels out of ``value``.
     """
     if value == NOT_APPLICABLE:
         return NOT_APPLICABLE
     if value is None or value == NOT_CLASSIFIED:
         return NOT_CLASSIFIED
     return CLASSIFIED
+
+
+def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict:
+    """Build a serialized per-field classification entry.
+
+    The single place that assembles the ``{value, status, confidence, evidence}``
+    output shape and enforces epic #116's Stage 3 invariant: sentinels live only
+    in ``status`` and ``value`` is ``None`` unless the field is CLASSIFIED. Every
+    producer (rule_engine's ``to_output_dict``, the index-propagation script, the
+    header_classifier empty-input fallback) goes through here, so the invariant is
+    defined once and the read-side guard (``_entry_status``) never sees an
+    incoherent entry.
+
+    ``status`` defaults to ``status_for_value(value)`` for producers that still
+    carry the sentinel in ``value``; pass it explicitly when the status is known
+    directly.
+    """
+    if status is None:
+        status = status_for_value(value)
+    return {
+        "value": value if status == CLASSIFIED else None,
+        "status": status,
+        "confidence": confidence,
+        "evidence": evidence if evidence is not None else [],
+    }
 
 
 def _entry_status(entry) -> str:

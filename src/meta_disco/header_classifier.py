@@ -11,7 +11,7 @@ by the RuleEngine. This module provides:
 import re
 from dataclasses import replace
 
-from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
+from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -221,19 +221,17 @@ def classify_from_fastq_header(
     # Use provided filename or generate one
     filename = file_name or "sample.fastq.gz"
 
-    # Handle empty input — no reads to classify. Mirror to_output_dict's Stage 3
-    # shape (epic #116): `value` is None unless CLASSIFIED, sentinels live in
-    # `status`. reference_assembly is not_applicable (reads are unaligned),
-    # matching the non-empty path (#131); the other dimensions are not_classified.
+    # Handle empty input — no reads to classify. Statuses are known directly, so
+    # pass them explicitly to build_field_entry (epic #116 Stage 3 shape).
+    # reference_assembly is not_applicable (reads are unaligned), matching the
+    # non-empty path (#131); the other dimensions are not_classified.
     if not reads or not reads[0]:
-        def field_entry(status, value=None):
-            return {"value": value, "status": status, "confidence": 0.0, "evidence": []}
         return {
-            "data_modality": field_entry(NOT_CLASSIFIED),
-            "data_type": field_entry(CLASSIFIED, "reads"),
-            "platform": field_entry(NOT_CLASSIFIED),
-            "reference_assembly": field_entry(NOT_APPLICABLE),
-            "assay_type": field_entry(NOT_CLASSIFIED),
+            "data_modality": build_field_entry(None, status=NOT_CLASSIFIED),
+            "data_type": build_field_entry("reads", status=CLASSIFIED),
+            "platform": build_field_entry(None, status=NOT_CLASSIFIED),
+            "reference_assembly": build_field_entry(None, status=NOT_APPLICABLE),
+            "assay_type": build_field_entry(None, status=NOT_CLASSIFIED),
             "is_paired_end": None,
             "instrument_model": None,
             "instrument_hint": None,
