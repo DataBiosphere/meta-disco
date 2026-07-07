@@ -14,6 +14,7 @@ from src.meta_disco.models import (
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    build_field_entry,
     field_label,
     field_status,
     field_value,
@@ -182,3 +183,37 @@ class TestCoherenceGuard:
         # No explicit status (old on-disk shape) → derive; never triggers the guard.
         rec = _wrapped("reference_assembly", {"value": NOT_APPLICABLE})
         assert field_status(rec, "reference_assembly") == NOT_APPLICABLE
+
+
+# --- build_field_entry: the single producer shape/invariant --------------------
+
+class TestBuildFieldEntry:
+    def test_classified_keeps_value(self):
+        e = build_field_entry("genomic", confidence=0.9, evidence=[{"x": 1}])
+        assert e == {"value": "genomic", "status": CLASSIFIED,
+                     "confidence": 0.9, "evidence": [{"x": 1}]}
+
+    def test_derived_sentinel_nulls_value(self):
+        # Sentinel-carrying value with no explicit status → status derived, value nulled.
+        assert build_field_entry(NOT_APPLICABLE)["value"] is None
+        assert build_field_entry(NOT_APPLICABLE)["status"] == NOT_APPLICABLE
+        assert build_field_entry(None)["status"] == NOT_CLASSIFIED
+
+    def test_explicit_status_nulls_value_when_unclassified(self):
+        e = build_field_entry(None, status=NOT_APPLICABLE)
+        assert (e["value"], e["status"]) == (None, NOT_APPLICABLE)
+
+    def test_explicit_classified_with_value(self):
+        e = build_field_entry("reads", status=CLASSIFIED)
+        assert (e["value"], e["status"]) == ("reads", CLASSIFIED)
+
+    def test_evidence_defaults_to_fresh_list(self):
+        a = build_field_entry(None)
+        b = build_field_entry(None)
+        assert a["evidence"] == [] and a["evidence"] is not b["evidence"]
+
+    def test_classified_without_value_raises(self):
+        # Self-guard: build_field_entry never emits the incoherent shape the
+        # read-side guard would reject (#129).
+        with pytest.raises(ValueError, match="CLASSIFIED"):
+            build_field_entry(None, status=CLASSIFIED)

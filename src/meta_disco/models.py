@@ -63,8 +63,9 @@ def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict
     in ``status`` and ``value`` is ``None`` unless the field is CLASSIFIED. Every
     producer (rule_engine's ``to_output_dict``, the index-propagation script, the
     header_classifier empty-input fallback) goes through here, so the invariant is
-    defined once and the read-side guard (``_entry_status``) never sees an
-    incoherent entry.
+    defined once. A non-CLASSIFIED status nulls ``value``; a CLASSIFIED status
+    with no value raises ValueError — either way the entry is coherent, so the
+    read-side guard (``_entry_status``) is never handed a contradictory shape.
 
     ``status`` defaults to ``status_for_value(value)`` for producers that still
     carry the sentinel in ``value``; pass it explicitly when the status is known
@@ -72,6 +73,8 @@ def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict
     """
     if status is None:
         status = status_for_value(value)
+    if status == CLASSIFIED and value is None:
+        raise ValueError("cannot build a CLASSIFIED field entry with value=None")
     return {
         "value": value if status == CLASSIFIED else None,
         "status": status,

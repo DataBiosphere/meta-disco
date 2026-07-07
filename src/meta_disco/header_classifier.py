@@ -223,8 +223,9 @@ def classify_from_fastq_header(
 
     # Handle empty input — no reads to classify. Statuses are known directly, so
     # pass them explicitly to build_field_entry (epic #116 Stage 3 shape).
-    # reference_assembly is not_applicable (reads are unaligned), matching the
-    # non-empty path (#131); the other dimensions are not_classified.
+    # data_type is the classified "reads"; reference_assembly is not_applicable
+    # (reads are unaligned), matching the non-empty path (#131); the remaining
+    # dimensions are not_classified.
     if not reads or not reads[0]:
         return {
             "data_modality": build_field_entry(None, status=NOT_CLASSIFIED),

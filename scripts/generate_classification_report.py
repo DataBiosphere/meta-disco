@@ -371,11 +371,11 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     print("\n--- Coverage by Axis ---")
 
-    # These "is classified" counts stay on field_value (via _val) to keep Stage 1b a
-    # pure refactor: today a sentinel value is truthy (counted, as before); once
-    # Stage 3 moves sentinels out of `value`, field_value returns None and the count
-    # self-corrects with no code change. (The old truthy-count over-reports coverage
-    # for not_applicable/not_classified fields — tracked as a follow-up, not fixed here.)
+    # "is classified" coverage counts: field_value (via _val) returns None for
+    # not_applicable/not_classified fields now that Stage 3 nulls sentinels out of
+    # `value` (epic #116), so a falsy value is not counted and these reflect true
+    # coverage. This self-corrected the Stage 1b over-count of sentinels-as-
+    # classified with no logic change here (closes #127).
     with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
     with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
     with_platform = sum(1 for item in all_classified if _val(item, "platform"))
