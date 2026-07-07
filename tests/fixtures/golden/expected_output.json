@@ -14,7 +14,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "data_modality": {
             "confidence": 0.0,
@@ -27,7 +27,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "data_type": {
             "confidence": 0.0,
@@ -40,7 +40,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "platform": {
             "confidence": 0.0,
@@ -53,7 +53,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "reference_assembly": {
             "confidence": 0.9,
@@ -67,7 +67,7 @@
               }
             ],
             "status": "not_applicable",
-            "value": "not_applicable"
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -103,7 +103,7 @@
               }
             ],
             "status": "not_applicable",
-            "value": "not_applicable"
+            "value": null
           },
           "data_modality": {
             "confidence": 0.8,
@@ -166,7 +166,7 @@
               }
             ],
             "status": "not_applicable",
-            "value": "not_applicable"
+            "value": null
           },
           "reference_assembly": {
             "confidence": 0.8,
@@ -187,7 +187,7 @@
               }
             ],
             "status": "not_applicable",
-            "value": "not_applicable"
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -224,7 +224,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "data_modality": {
             "confidence": 0.0,
@@ -238,7 +238,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "data_type": {
             "confidence": 0.5,
@@ -268,7 +268,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "reference_assembly": {
             "confidence": 0.5,
@@ -282,7 +282,7 @@
               }
             ],
             "status": "not_applicable",
-            "value": "not_applicable"
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -317,7 +317,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "data_modality": {
             "confidence": 0.85,
@@ -358,7 +358,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           },
           "reference_assembly": {
             "confidence": 0.0,
@@ -371,7 +371,7 @@
               }
             ],
             "status": "not_classified",
-            "value": "not_classified"
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
