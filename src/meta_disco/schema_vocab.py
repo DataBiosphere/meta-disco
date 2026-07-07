@@ -12,13 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
-
-# Sentinel values that rules currently emit as classification *values*. Per the
-# schema these are slated to move into a separate ``status`` field (issues #56,
-# #88); until that migration lands, the vocabulary check accepts them alongside
-# real enum values.
-SENTINEL_VALUES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
+from .models import CLASSIFICATION_FIELDS
 
 # Classification field -> the enum that defines its permissible values. By
 # convention each dimension's enum is named ``<field>_enum`` in the schema, so
@@ -117,13 +111,17 @@ def status_values() -> frozenset[str]:
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:
-    """True if ``value`` is permissible for the dimension, or a sentinel.
+    """True if ``value`` is a permissible dimension value or a valid status.
 
-    The membership test the rule drift checks use: a dimension's enum values plus
-    SENTINEL_VALUES. Permissible values are always strings, so a non-string value
-    (e.g. a list from a malformed rule like ``platform: [ILLUMINA, PACBIO]``) is
-    reported as not-in-vocabulary rather than raising ``TypeError`` on the set
-    membership test. Raises the same errors as ``dimension_values`` for an
-    unrecognized field or a schema missing the expected enum.
+    The membership test the rule drift checks use. A rule ``then``/``when`` value
+    may be a real dimension enum value OR a status: rules still express "not
+    applicable" by writing the status (``not_applicable`` / ``not_classified``)
+    where a value goes (see #133 for removing that). Both sets are schema-derived
+    — dimension_values plus status_values — so nothing special-cases sentinels;
+    they are simply members of the status enum. Permissible values are always
+    strings, so a non-string value (e.g. a list from a malformed rule like
+    ``platform: [ILLUMINA, PACBIO]``) is reported as not-in-vocabulary rather than
+    raising ``TypeError`` on the set membership test. Raises the same errors as
+    ``dimension_values`` for an unrecognized field or a schema missing the enum.
     """
-    return isinstance(value, str) and value in (dimension_values(field) | SENTINEL_VALUES)
+    return isinstance(value, str) and value in (dimension_values(field) | status_values())

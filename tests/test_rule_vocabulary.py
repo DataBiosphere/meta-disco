@@ -221,6 +221,19 @@ def test_status_values_from_schema():
     )
 
 
+def test_value_in_vocabulary_accepts_dimension_value_or_status():
+    # A then/when value may be a real dimension value or a status — rules still
+    # write `not_applicable` as a then-value (#133). Both are schema-derived.
+    assert schema_vocab.value_in_vocabulary("reference_assembly", "GRCh38")
+    assert schema_vocab.value_in_vocabulary("reference_assembly", "not_applicable")
+    assert schema_vocab.value_in_vocabulary("data_modality", "not_classified")
+
+
+def test_value_in_vocabulary_rejects_bogus_and_non_string():
+    assert not schema_vocab.value_in_vocabulary("reference_assembly", "GRCh99")
+    assert not schema_vocab.value_in_vocabulary("platform", ["ILLUMINA", "PACBIO"])
+
+
 def _write_rules_file(tmp_path, rule):
     """Write a minimal two-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"
