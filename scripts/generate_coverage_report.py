@@ -93,6 +93,11 @@ def _normalize_reason(reason: str) -> str:
         reason,
     )
     reason = re.sub(
+        r"Parent file .+ marks (\w+) not applicable",
+        r"Parent file marks \1 not applicable",
+        reason,
+    )
+    reason = re.sub(
         r"Inherited from parent file: .+",
         "Inherited from parent file",
         reason,

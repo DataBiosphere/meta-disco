@@ -10,7 +10,12 @@ from src.meta_disco.models import (
     ClassificationResult,
     FileInfo,
 )
-from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine, evaluate_claims
+from src.meta_disco.rule_engine import (
+    ExtendedClassificationResult,
+    ExtendedFileInfo,
+    RuleEngine,
+    evaluate_claims,
+)
 
 
 @pytest.fixture
@@ -151,28 +156,58 @@ class TestThenStatus:
         assert out["reference_assembly"]["value"] is None
 
 
+class TestSetFieldValidation:
+    """set_field rejects unknown fields/statuses instead of silently mis-storing."""
+
+    def test_rejects_unknown_field(self):
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown classification field"):
+            result.set_field("platfrom", "ILLUMINA")  # typo
+
+    def test_rejects_unknown_status(self):
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown status"):
+            result.set_field("data_modality", status="confict")  # typo for conflict
+
+    def test_accepts_known_field_and_status(self):
+        result = ExtendedClassificationResult()
+        result.set_field("platform", "ILLUMINA")
+        result.set_field("reference_assembly", status=NOT_APPLICABLE)
+        assert result.platform == "ILLUMINA"
+        assert result.status_of("platform") == CLASSIFIED
+        assert result.reference_assembly is None
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+
+    @pytest.mark.parametrize("accessor", ["status_of", "is_declared", "label"])
+    def test_read_accessors_reject_unknown_field(self, accessor):
+        # Read helpers raise a consistent ValueError (not a bare KeyError) on a typo.
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown classification field"):
+            getattr(result, accessor)("platfrom")
+
+
 class TestDerivativeFiles:
     """Test that derivative files (indices, checksums, logs) get not_applicable."""
 
     def test_index_bai(self, engine):
         """BAI index files should be not_applicable."""
-        result = engine.classify(FileInfo(filename="sample.bam.bai"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_index_crai(self, engine):
         """CRAI index files should be not_applicable."""
-        result = engine.classify(FileInfo(filename="sample.cram.crai"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="sample.cram.crai"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_checksum_md5(self, engine):
         """MD5 checksum files should be not_applicable."""
-        result = engine.classify(FileInfo(filename="HG02558.final.cram.md5"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="HG02558.final.cram.md5"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_log_files(self, engine):
         """Log files should be not_applicable."""
-        result = engine.classify(FileInfo(filename="pipeline.log"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="pipeline.log"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
 
 class TestSpecialFileTypes:
@@ -219,8 +254,8 @@ class TestFastqFiles:
 
     def test_fastq_ambiguous(self, engine):
         """FASTQ without indicators is not classified for modality."""
-        result = engine.classify(FileInfo(filename="sample_R1.fastq.gz"))
-        assert result.data_modality == NOT_CLASSIFIED
+        result = engine.classify_extended(FileInfo(filename="sample_R1.fastq.gz"))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
 class TestSignalTracks:
@@ -273,8 +308,8 @@ class TestTextFiles:
 
     def test_stats_file(self, engine):
         """QC stats files should be not_applicable."""
-        result = engine.classify(FileInfo(filename="sample.stats.txt"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="sample.stats.txt"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_count_matrix(self, engine):
         """Count matrix files should be transcriptomic."""
@@ -283,8 +318,8 @@ class TestTextFiles:
 
     def test_ambiguous_txt(self, engine):
         """Ambiguous text files are not classified for modality."""
-        result = engine.classify(FileInfo(filename="data.txt"))
-        assert result.data_modality == NOT_CLASSIFIED
+        result = engine.classify_extended(FileInfo(filename="data.txt"))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
 class TestIntegration:
@@ -312,13 +347,13 @@ class TestIntegration:
 
     def test_cram_md5(self, engine):
         """CRAM MD5 checksum should be not_applicable."""
-        result = engine.classify(FileInfo(filename="HG02558.final.cram.md5"))
-        assert result.data_modality == NOT_APPLICABLE
+        result = engine.classify_extended(FileInfo(filename="HG02558.final.cram.md5"))
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_unknown_extension(self, engine):
         """Unknown extensions are not classified."""
-        result = engine.classify(FileInfo(filename="sample.xyz"))
-        assert result.data_modality == NOT_CLASSIFIED
+        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
 class TestConflictingReferenceRules:
@@ -327,12 +362,12 @@ class TestConflictingReferenceRules:
     def test_ambiguous_filename_two_refs(self, engine):
         """Filename with both CHM13 and hg38 should be not_classified."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
-        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_liftover_chain_two_refs(self, engine):
         """Liftover chain with two references should be not_classified."""
         result = engine.classify_extended(FileInfo(filename="liftover.hg19.to.hg38.chain"))
-        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_single_ref_not_affected(self, engine):
         """Single reference in filename should still work."""
@@ -355,7 +390,7 @@ class TestConflictingClassificationFields:
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
         result = engine.classify_extended(FileInfo(filename="sample_rnaseq_wgs_aligned.bam"))
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         rule_ids = [e["rule_id"] for e in evidence]
         assert "conflicting_data_modality_rules" in rule_ids
@@ -369,12 +404,14 @@ class TestConflictingClassificationFields:
         assert "filename_ref_grch38" in rule_ids or "filename_ref_chm13" in rule_ids
         assert "conflicting_reference_assembly_rules" in rule_ids
 
-    def test_conflict_evidence_has_value_and_competing_values(self, engine):
-        """Conflict evidence should have structured value and competing_values fields."""
+    def test_conflict_evidence_has_status_and_competing_values(self, engine):
+        """Conflict evidence carries a not_classified status (in the status field,
+        not the value slot) and the structured competing_values field."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
         conflict = [e for e in evidence if "conflicting_" in e["rule_id"]][0]
-        assert conflict["value"] == NOT_CLASSIFIED
+        assert conflict["status"] == NOT_CLASSIFIED
+        assert "value" not in conflict
         assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
 
     def test_normal_evidence_has_value_field(self, engine):
@@ -389,9 +426,10 @@ class TestEvaluateClaims:
     """Test the standalone evaluate_claims() function."""
 
     def test_no_claims(self):
-        """No claims → not_classified."""
+        """No claims → not_classified (status), no value."""
         result = evaluate_claims([])
-        assert result["value"] == NOT_CLASSIFIED
+        assert result["status"] == NOT_CLASSIFIED
+        assert result["value"] is None
         assert result["is_conflict"] is False
         assert result["reason"] == "no_claims"
 
@@ -427,12 +465,13 @@ class TestEvaluateClaims:
         assert result["is_conflict"] is False
 
     def test_disagree_same_tier(self):
-        """Same tier, different values → conflict."""
+        """Same tier, different values → conflict (not_classified status, no value)."""
         result = evaluate_claims([
             {"rule_id": "r1", "value": "GRCh38", "confidence": 0.90, "tier": 2},
             {"rule_id": "r2", "value": "CHM13", "confidence": 0.90, "tier": 2},
         ])
-        assert result["value"] == NOT_CLASSIFIED
+        assert result["status"] == NOT_CLASSIFIED
+        assert result["value"] is None
         assert result["is_conflict"] is True
         assert result["reason"] == "conflict"
         assert set(result["competing_values"]) == {"GRCh38", "CHM13"}
@@ -444,53 +483,56 @@ class TestEvaluateClaims:
             {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 3},
             {"rule_id": "r3", "value": "transcriptomic.bulk", "confidence": 0.90, "tier": 3},
         ])
-        assert result["value"] == NOT_CLASSIFIED
+        assert result["status"] == NOT_CLASSIFIED
+        assert result["value"] is None
         assert result["is_conflict"] is True
 
     def test_not_classified_claims_ignored(self):
-        """Claims with value=NOT_CLASSIFIED are filtered out."""
+        """Claims declaring not_classified (status) don't assert a value."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": NOT_CLASSIFIED, "confidence": 0.0},
+            {"rule_id": "r1", "status": NOT_CLASSIFIED, "confidence": 0.0},
             {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 2},
         ])
         assert result["value"] == "genomic"
         assert result["reason"] == "single_claim"
 
-    def test_not_applicable_is_real_value(self):
-        """NOT_APPLICABLE is a real value, not filtered out."""
+    def test_not_applicable_status_declaration(self):
+        """A not_applicable status claim resolves to status not_applicable, value None."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
+            {"rule_id": "r1", "status": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
         ])
-        assert result["value"] == NOT_APPLICABLE
+        assert result["status"] == NOT_APPLICABLE
+        assert result["value"] is None
         assert result["reason"] == "single_claim"
 
     def test_not_applicable_wins_over_real_value_same_tier(self):
         """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
+            {"rule_id": "r1", "status": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
             {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 1},
         ])
-        assert result["value"] == NOT_APPLICABLE
+        assert result["status"] == NOT_APPLICABLE
+        assert result["value"] is None
         assert result["is_conflict"] is False
         assert result["reason"] == "not_applicable_terminal"
 
-
     def test_rule_authored_not_classified_is_not_no_claims(self):
-        """A rule that intentionally sets NOT_CLASSIFIED is treated as a real claim, not no_claims."""
+        """A rule that intentionally declares not_classified is a real claim, not no_claims."""
         result = evaluate_claims([
-            {"rule_id": "fastq_modality_unknown", "value": NOT_CLASSIFIED,
+            {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
              "confidence": 0.0, "tier": 3,
              "reason": "FASTQ modality cannot be determined from reads alone"},
         ])
-        assert result["value"] == NOT_CLASSIFIED
+        assert result["status"] == NOT_CLASSIFIED
+        assert result["value"] is None
         assert result["reason"] == "single_claim"
         # The claim should NOT be treated as "no_claims"
         assert result["reason"] != "no_claims"
 
     def test_rule_authored_not_classified_does_not_conflict_with_real(self):
-        """A rule's NOT_CLASSIFIED shouldn't conflict with a real value claim."""
+        """A rule's not_classified declaration shouldn't conflict with a real value claim."""
         result = evaluate_claims([
-            {"rule_id": "fastq_modality_unknown", "value": NOT_CLASSIFIED,
+            {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
              "confidence": 0.0, "tier": 3},
             {"rule_id": "some_rule", "value": "genomic",
              "confidence": 0.90, "tier": 3},
@@ -520,10 +562,10 @@ class TestAssayTypeInference:
             file_size_gb=60.0, file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
-        # Set conditions that trigger WGS inference
-        result.data_modality = "genomic"
-        result.platform = "ILLUMINA"
-        result.assay_type = None
+        # Set conditions that trigger WGS inference (via set_field to stay coherent)
+        result.set_field("data_modality", "genomic")
+        result.set_field("platform", "ILLUMINA")
+        result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = []
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
@@ -539,14 +581,14 @@ class TestAssayTypeInference:
             file_size_gb=60.0, file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
-        result.data_modality = "genomic"
-        result.platform = "ILLUMINA"
-        result.assay_type = NOT_CLASSIFIED
+        result.set_field("data_modality", "genomic")
+        result.set_field("platform", "ILLUMINA")
+        result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = [{
             "rule_id": "not_classified",
             "reason": "No rule determined a value for assay_type",
             "confidence": 0.0,
-            "value": NOT_CLASSIFIED,
+            "status": NOT_CLASSIFIED,
         }]
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
@@ -577,16 +619,16 @@ class TestSentinelValues:
         """Index files get not_applicable for modality/platform/assay but not reference_assembly
         (reference IS applicable to indexes — it's determined by the parent file's alignment)."""
         result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
-        assert result.data_modality == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_CLASSIFIED  # applicable but unknown without filename hint
-        assert result.platform == NOT_APPLICABLE
-        assert result.assay_type == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED  # applicable but unknown without filename hint
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("assay_type") == NOT_APPLICABLE
 
     def test_unclassified_fields_get_not_classified(self, engine):
         """Files with unset fields should get not_classified."""
         result = engine.classify_extended(FileInfo(filename="sample.xyz"))
-        assert result.data_modality == NOT_CLASSIFIED
-        assert result.reference_assembly == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_not_classified_evidence_includes_field_name(self, engine):
         """Evidence reason for not_classified should name the specific field."""
@@ -605,18 +647,18 @@ class TestSentinelValues:
         """Image files should get not_applicable for platform and reference."""
         result = engine.classify_extended(FileInfo(filename="sample.svs"))
         assert result.data_modality == "imaging.histology"
-        assert result.platform == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fastq_gets_not_applicable_reference(self, engine):
         """FASTQ files should get not_applicable for reference (unaligned reads)."""
         result = engine.classify_extended(FileInfo(filename="sample.fastq.gz"))
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fast5_gets_not_applicable_reference(self, engine):
         """FAST5 files should get not_applicable for reference (raw signal)."""
         result = engine.classify_extended(FileInfo(filename="sample.fast5"))
-        assert result.reference_assembly == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.platform == "ONT"
 
     def test_bam_without_header_not_classified(self, engine):
@@ -625,15 +667,15 @@ class TestSentinelValues:
             ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)
         )
         # No header = no modality evidence, even for large files
-        assert result.data_modality == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_png_all_fields_not_applicable(self, engine):
         """PNG files should get not_applicable for all non-applicable fields."""
         result = engine.classify_extended(FileInfo(filename="plot.png"))
-        assert result.data_modality == NOT_APPLICABLE
-        assert result.platform == NOT_APPLICABLE
-        assert result.reference_assembly == NOT_APPLICABLE
-        assert result.assay_type == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+        assert result.status_of("assay_type") == NOT_APPLICABLE
 
 
 class TestOutputDictStatus:

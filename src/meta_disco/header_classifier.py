@@ -91,7 +91,7 @@ def classify_from_header(
 
     # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
-        result.reference_assembly = contig_ref
+        result.set_field("reference_assembly", contig_ref)
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.field_evidence["reference_assembly"] = [{
@@ -101,8 +101,8 @@ def classify_from_header(
             "value": contig_ref,
         }]
         # Aligned to a known reference genome = genomic data
-        if result.data_modality in (None, NOT_CLASSIFIED):
-            result.data_modality = "genomic"
+        if not result.is_declared("data_modality"):
+            result.set_field("data_modality", "genomic")
             result.field_evidence["data_modality"] = [{
                 "rule_id": "aligned_to_reference",
                 "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
@@ -171,7 +171,7 @@ def classify_from_vcf_header(
 
     # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
-        result.reference_assembly = contig_ref
+        result.set_field("reference_assembly", contig_ref)
         result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.field_evidence["reference_assembly"] = [{
@@ -261,14 +261,19 @@ def classify_from_fastq_header(
 
     # If no platform detected and this is archive-reformatted, try the stripped version
     # This handles cases like @ERR... A00297:... where the Illumina pattern is after the space
-    if (not result.platform or result.platform == NOT_CLASSIFIED) and accession and remainder.strip():
+    if not result.is_declared("platform") and accession and remainder.strip():
         stripped_read = "@" + remainder.strip()
         file_info_stripped = replace(file_info, fastq_first_read=stripped_read)
         result_stripped = engine.classify_extended(file_info_stripped, include_tier3=True)
         if result_stripped.platform:
-            # Merge results - keep the platform and modality from stripped version
-            result.platform = result_stripped.platform
-            result.data_modality = result_stripped.data_modality or result.data_modality
+            # Merge results - keep the platform and modality from stripped version.
+            # Adopt the stripped modality whenever it made a definitive statement
+            # (a real value or not_applicable), carrying its status — a status-only
+            # declaration has data_modality=None, so a truthiness check would drop it.
+            result.set_field("platform", result_stripped.platform)
+            if result_stripped.is_declared("data_modality"):
+                result.set_field("data_modality", result_stripped.data_modality,
+                                 result_stripped.status_of("data_modality"))
             result.confidence = max(result.confidence, result_stripped.confidence)
             # Merge per-field evidence
             for fld, entries in result_stripped.field_evidence.items():
@@ -397,10 +402,10 @@ def classify_from_fasta_header(
 
     # 1. Transcript IDs → transcriptomic
     if transcript_contigs and len(transcript_contigs) > len(ref_matches):
-        result.data_modality = "transcriptomic.bulk"
-        result.data_type = "sequence"
-        if result.reference_assembly in (None, NOT_CLASSIFIED):
-            result.reference_assembly = NOT_CLASSIFIED
+        result.set_field("data_modality", "transcriptomic.bulk")
+        result.set_field("data_type", "sequence")
+        if not result.is_declared("reference_assembly"):
+            result.set_field("reference_assembly", status=NOT_CLASSIFIED)
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_transcript_contigs",
             "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
@@ -433,27 +438,30 @@ def classify_from_fasta_header(
             tied = [a for a, c in assembly_counts.items() if c == best_count]
             if len(tied) == 1:
                 best_ref = tied[0]
-            elif result.reference_assembly and result.reference_assembly not in (NOT_CLASSIFIED, NOT_APPLICABLE):
+            elif result.reference_assembly:
                 # Rule engine already detected reference from filename (e.g., "chm13" in name)
                 best_ref = result.reference_assembly
             else:
                 # Can't distinguish — contigs match multiple references equally
                 best_ref = None
 
-            result.data_modality = "genomic"
-            result.data_type = "reference_genome"
-            if best_ref:
-                result.reference_assembly = best_ref
-                result.confidence = 0.95
-            else:
-                result.confidence = 0.80
-            result.field_evidence["reference_assembly"] = [{
+            result.set_field("data_modality", "genomic")
+            result.set_field("data_type", "reference_genome")
+            ref_entry = {
                 "rule_id": "fasta_reference_contigs",
                 "reason": f"Matched {best_count} contigs to reference chromosomes"
                           + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
                 "confidence": 0.95 if best_ref else 0.50,
-                "value": best_ref or NOT_CLASSIFIED,
-            }]
+            }
+            if best_ref:
+                result.set_field("reference_assembly", best_ref)
+                result.confidence = 0.95
+                ref_entry["value"] = best_ref
+            else:
+                result.set_field("reference_assembly", status=NOT_CLASSIFIED)
+                result.confidence = 0.80
+                ref_entry["status"] = NOT_CLASSIFIED
+            result.field_evidence["reference_assembly"] = [ref_entry]
             result.field_evidence["data_modality"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "Contig names match known reference genome",
@@ -470,9 +478,9 @@ def classify_from_fasta_header(
 
     # 3. Assembler output contigs → de novo assembly
     if assembler_contigs:
-        result.data_modality = "genomic"
-        result.data_type = "assembly"
-        result.reference_assembly = NOT_APPLICABLE
+        result.set_field("data_modality", "genomic")
+        result.set_field("data_type", "assembly")
+        result.set_field("reference_assembly", status=NOT_APPLICABLE)
         result.confidence = 0.90
         sample = assembler_contigs[0]
         result.field_evidence["data_modality"] = [{
@@ -491,15 +499,15 @@ def classify_from_fasta_header(
             "rule_id": "fasta_assembler_contigs",
             "reason": "De novo assembly — no reference genome applicable",
             "confidence": 0.90,
-            "value": NOT_APPLICABLE,
+            "status": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
 
     # 4. Many non-standard contigs → likely de novo assembly
     if num_contigs > 50 and not ref_matches:
-        result.data_modality = "genomic"
-        result.data_type = "assembly"
-        result.reference_assembly = NOT_APPLICABLE
+        result.set_field("data_modality", "genomic")
+        result.set_field("data_type", "assembly")
+        result.set_field("reference_assembly", status=NOT_APPLICABLE)
         result.confidence = 0.75
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_many_contigs",
@@ -517,22 +525,22 @@ def classify_from_fasta_header(
             "rule_id": "fasta_many_contigs",
             "reason": "De novo assembly — no reference genome applicable",
             "confidence": 0.75,
-            "value": NOT_APPLICABLE,
+            "status": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
 
     # 5. Default: preserve rule engine results if they set modality/type,
     #    otherwise fall back to genomic/sequence
-    if result.data_modality in (None, NOT_CLASSIFIED):
-        result.data_modality = "genomic"
+    if not result.is_declared("data_modality"):
+        result.set_field("data_modality", "genomic")
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
             "confidence": 0.50,
             "value": "genomic",
         }]
-    if result.data_type in (None, NOT_CLASSIFIED):
-        result.data_type = "sequence"
+    if not result.is_declared("data_type"):
+        result.set_field("data_type", "sequence")
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": "Unable to determine specific FASTA type from headers",
@@ -700,8 +708,8 @@ def classify_from_bed_signals(
                 (ev.get("confidence", 0.0) for ev in existing_ref_evidence),
                 default=0.0,
             )
-            if result.reference_assembly in (None, NOT_CLASSIFIED) or coord_conf > existing_ref_conf:
-                result.reference_assembly = coord_ref
+            if not result.is_declared("reference_assembly") or coord_conf > existing_ref_conf:
+                result.set_field("reference_assembly", coord_ref)
                 result.confidence = max(result.confidence, coord_conf)
                 result.field_evidence["reference_assembly"] = [{
                     "rule_id": "bed_coordinate_reference",
@@ -711,12 +719,12 @@ def classify_from_bed_signals(
                 }]
         elif coord_ref is None and coord_conf == 0.0:
             if "Non-standard chromosome" in coord_rationale:
-                result.reference_assembly = NOT_APPLICABLE
+                result.set_field("reference_assembly", status=NOT_APPLICABLE)
                 result.field_evidence["reference_assembly"] = [{
                     "rule_id": "bed_nonstandard_contigs",
                     "reason": coord_rationale,
                     "confidence": 0.0,
-                    "value": NOT_APPLICABLE,
+                    "status": NOT_APPLICABLE,
                 }]
 
     return result.to_output_dict()

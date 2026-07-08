@@ -10,7 +10,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -23,7 +23,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for data_modality",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -36,7 +36,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for data_type",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -49,7 +49,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -62,8 +62,8 @@
                 "confidence": 0.9,
                 "reason": "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment",
                 "rule_id": "unaligned_no_sq",
-                "tier": 3,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 3
               }
             ],
             "status": "not_applicable",
@@ -98,8 +98,8 @@
                 "confidence": 0.3,
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
-                "tier": 1,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 1
               }
             ],
             "status": "not_applicable",
@@ -161,8 +161,8 @@
                 "confidence": 0.3,
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
-                "tier": 1,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 1
               }
             ],
             "status": "not_applicable",
@@ -175,15 +175,15 @@
                 "confidence": 0.8,
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
-                "tier": 2,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 2
               },
               {
                 "confidence": 0.8,
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
-                "tier": 2,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
             "status": "not_applicable",
@@ -220,7 +220,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -233,8 +233,8 @@
                 "confidence": 0.0,
                 "reason": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay",
                 "rule_id": "fastq_modality_unknown",
-                "tier": 3,
-                "value": "not_classified"
+                "status": "not_classified",
+                "tier": 3
               }
             ],
             "status": "not_classified",
@@ -264,7 +264,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -277,8 +277,8 @@
                 "confidence": 0.5,
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
                 "rule_id": "reads_base",
-                "tier": 2,
-                "value": "not_applicable"
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
             "status": "not_applicable",
@@ -313,7 +313,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -354,7 +354,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
@@ -367,7 +367,7 @@
                 "confidence": 0.0,
                 "reason": "No rule determined a value for reference_assembly",
                 "rule_id": "not_classified",
-                "value": "not_classified"
+                "status": "not_classified"
               }
             ],
             "status": "not_classified",
