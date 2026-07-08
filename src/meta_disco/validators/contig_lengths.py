@@ -64,7 +64,7 @@ CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
 def detect_reference_from_contig_lengths(
     contig_lines: list[str],
     tolerance: int = 1000
-) -> tuple[str | None, int, float]:
+) -> tuple[str | None, int]:
     """
     Detect reference assembly from contig lengths in VCF ##contig lines or BAM @SQ lines.
 
@@ -77,13 +77,11 @@ def detect_reference_from_contig_lengths(
         tolerance: Max difference in bp to consider a match (default 1000)
 
     Returns:
-        Tuple of (assembly, vote_count, confidence)
+        Tuple of (assembly, vote_count)
         - assembly: "GRCh38", "GRCh37", "CHM13", or None
         - vote_count: Number of contigs that matched
-        - confidence: 0.98 for exact match, 0.95 for fuzzy match
     """
     votes: dict[str, int] = {}
-    exact_matches = 0
 
     # VCF contig fields can appear in any order: ##contig=<ID=chr1,length=248387497>
     # or ##contig=<ID=chr1,assembly=GRCh38,length=248387497>
@@ -120,7 +118,6 @@ def detect_reference_from_contig_lengths(
         if key in _CONTIG_LENGTH_TO_ASSEMBLY:
             assembly = _CONTIG_LENGTH_TO_ASSEMBLY[key]
             votes[assembly] = votes.get(assembly, 0) + 1
-            exact_matches += 1
         else:
             # Fuzzy match: find closest assembly within tolerance
             best_match = None
@@ -143,17 +140,15 @@ def detect_reference_from_contig_lengths(
         top_count = votes[winner]
         # If multiple assemblies are tied, evidence is ambiguous — don't guess
         if sum(1 for v in votes.values() if v == top_count) > 1:
-            return None, 0, 0.0
-        # Lower confidence if no exact matches (fuzzy only)
-        confidence = 0.98 if exact_matches > 0 else 0.95
-        return winner, top_count, confidence
+            return None, 0
+        return winner, top_count
 
-    return None, 0, 0.0
+    return None, 0
 
 
 def detect_reference_from_max_positions(
     max_positions: dict[str, int],
-) -> tuple[str | None, int, float]:
+) -> tuple[str | None, int]:
     """
     Detect reference assembly by ruling out references where variant
     positions exceed chromosome lengths.
@@ -166,13 +161,12 @@ def detect_reference_from_max_positions(
         max_positions: Dict mapping chromosome (without 'chr') to max position seen
 
     Returns:
-        Tuple of (assembly, evidence_count, confidence)
+        Tuple of (assembly, evidence_count)
         - assembly: "GRCh38", "GRCh37", "CHM13", or None if inconclusive
         - evidence_count: Number of chromosomes used for ruling out
-        - confidence: 0.90 when narrowed to one reference
     """
     if not max_positions:
-        return None, 0, 0.0
+        return None, 0
 
     possible = {"GRCh37", "GRCh38", "CHM13"}
     evidence_count = 0
@@ -200,6 +194,6 @@ def detect_reference_from_max_positions(
 
     # If narrowed to exactly one reference
     if len(possible) == 1 and evidence_count > 0:
-        return possible.pop(), evidence_count, 0.90
+        return possible.pop(), evidence_count
 
-    return None, 0, 0.0
+    return None, 0

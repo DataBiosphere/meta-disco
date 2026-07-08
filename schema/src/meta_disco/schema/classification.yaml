@@ -87,7 +87,6 @@ classes:
     slots:
       - value
       - status
-      - confidence
       - evidence
 
   DataModalityClassification:
@@ -125,7 +124,6 @@ classes:
     slots:
       - rule_id
       - reason
-      - confidence
       - value
       - status
       - tier
@@ -199,9 +197,6 @@ slots:
     description: Whether the field was classified, is not applicable, etc.
     range: classification_status_enum
     required: true
-  confidence:
-    description: "Confidence in [0, 1]; vestigial, see issue #56."
-    range: float
   evidence:
     range: Evidence
     multivalued: true

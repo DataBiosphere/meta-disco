@@ -65,7 +65,6 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
             # Classification results (label = value when classified, else the status)
             "predicted_modality": result.label("data_modality"),
             "predicted_reference": result.label("reference_assembly"),
-            "confidence": result.confidence,
             "rules_matched": "|".join(result.rules_matched),
             "reasons": "|".join(result.reasons),
         })
@@ -81,9 +80,6 @@ def compute_stats(results: list[dict]) -> dict:
         "total_files": total,
         "classified_with_modality": 0,
         "classified_with_reference": 0,
-        "high_confidence": 0,  # >= 0.9
-        "medium_confidence": 0,  # 0.7-0.89
-        "low_confidence": 0,  # < 0.7
         "modality_breakdown": {},
         "reference_breakdown": {},
         "file_format_breakdown": {},
@@ -105,14 +101,6 @@ def compute_stats(results: list[dict]) -> dict:
             stats["classified_with_reference"] += 1
         if ref:
             stats["reference_breakdown"][ref] = stats["reference_breakdown"].get(ref, 0) + 1
-
-        conf = r["confidence"]
-        if conf >= 0.9:
-            stats["high_confidence"] += 1
-        elif conf >= 0.7:
-            stats["medium_confidence"] += 1
-        elif conf > 0:
-            stats["low_confidence"] += 1
 
         # Track file formats
         fmt = r.get("file_format", "unknown")
@@ -181,11 +169,6 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     print(f"  Classified with reference:  {stats['classified_with_reference']:,} ({100*stats['classified_with_reference']/stats['total_files']:.1f}%)")
     print(f"  API had reference:          {stats['api_had_reference']:,} ({100*stats['api_had_reference']/stats['total_files']:.1f}%)")
     print(f"  Filled missing reference:   {stats['filled_missing_reference']:,}")
-    print()
-    print("CONFIDENCE LEVELS:")
-    print(f"  High (>=90%):               {stats['high_confidence']:,}")
-    print(f"  Medium (70-89%):            {stats['medium_confidence']:,}")
-    print(f"  Low (<70%):                 {stats['low_confidence']:,}")
     print()
     print("TOP MODALITIES:")
     for mod, count in sorted(stats["modality_breakdown"].items(), key=lambda x: -x[1])[:10]:

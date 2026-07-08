@@ -56,7 +56,7 @@ def classify_from_header(
 
     Returns:
         Dict with per-field classifications:
-            - {field}: {value, status, confidence, evidence[]} for each of
+            - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo
@@ -80,10 +80,9 @@ def classify_from_header(
 
     from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
     contig_ref = None
-    contig_conf = 0.0
     contig_matches = 0
     if sq_lines:
-        contig_ref, contig_matches, contig_conf = detect_from_contigs(sq_lines)
+        contig_ref, contig_matches = detect_from_contigs(sq_lines)
 
     # Run classification with tier 3 (header rules)
     engine = _get_engine()
@@ -92,12 +91,10 @@ def classify_from_header(
     # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.set_field("reference_assembly", contig_ref)
-        result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "contig_length_detection",
             "reason": reason,
-            "confidence": contig_conf,
             "value": contig_ref,
         }]
         # Aligned to a known reference genome = genomic data
@@ -106,7 +103,6 @@ def classify_from_header(
             result.field_evidence["data_modality"] = [{
                 "rule_id": "aligned_to_reference",
                 "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
-                "confidence": contig_conf,
                 "value": "genomic",
             }]
 
@@ -136,7 +132,7 @@ def classify_from_vcf_header(
 
     Returns:
         Dict with per-field classifications:
-            - {field}: {value, status, confidence, evidence[]} for each of
+            - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
     from .rule_engine import ExtendedFileInfo
@@ -158,12 +154,11 @@ def classify_from_vcf_header(
     from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
 
     contig_ref = None
-    contig_conf = 0.0
     contig_matches = 0
     if header_text:
         contig_lines = [line for line in header_text.split("\n") if line.startswith("##contig")]
         if contig_lines:
-            contig_ref, contig_matches, contig_conf = detect_from_contigs(contig_lines)
+            contig_ref, contig_matches = detect_from_contigs(contig_lines)
 
     # Run classification with tier 3 (header rules)
     engine = _get_engine()
@@ -172,12 +167,10 @@ def classify_from_vcf_header(
     # Apply contig-based reference (overrides everything — definitive signal)
     if contig_ref:
         result.set_field("reference_assembly", contig_ref)
-        result.confidence = max(result.confidence, contig_conf)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "vcf_contig_length",
             "reason": reason,
-            "confidence": contig_conf,
             "value": contig_ref,
         }]
 
@@ -207,7 +200,6 @@ def classify_from_fastq_header(
             - data_modality: str or None
             - data_type: str (typically "reads")
             - platform: str or None (ILLUMINA, PACBIO, ONT, etc.)
-            - confidence: float
             - is_paired_end: bool or None
             - instrument_model: str or None (for Illumina)
             - instrument_hint: str or None (instrument ID from read name)
@@ -274,7 +266,6 @@ def classify_from_fastq_header(
             if result_stripped.is_declared("data_modality"):
                 result.set_field("data_modality", result_stripped.data_modality,
                                  result_stripped.status_of("data_modality"))
-            result.confidence = max(result.confidence, result_stripped.confidence)
             # Merge per-field evidence
             for fld, entries in result_stripped.field_evidence.items():
                 result.field_evidence[fld].extend(entries)
@@ -409,16 +400,13 @@ def classify_from_fasta_header(
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_transcript_contigs",
             "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
-            "confidence": 0.90,
             "value": "transcriptomic.bulk",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_transcript_contigs",
             "reason": "Transcript sequences in FASTA",
-            "confidence": 0.90,
             "value": "sequence",
         }]
-        result.confidence = 0.90
         return result.to_output_dict()
 
     # 2. Contigs match a known reference set → reference genome
@@ -451,27 +439,22 @@ def classify_from_fasta_header(
                 "rule_id": "fasta_reference_contigs",
                 "reason": f"Matched {best_count} contigs to reference chromosomes"
                           + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
-                "confidence": 0.95 if best_ref else 0.50,
             }
             if best_ref:
                 result.set_field("reference_assembly", best_ref)
-                result.confidence = 0.95
                 ref_entry["value"] = best_ref
             else:
                 result.set_field("reference_assembly", status=NOT_CLASSIFIED)
-                result.confidence = 0.80
                 ref_entry["status"] = NOT_CLASSIFIED
             result.field_evidence["reference_assembly"] = [ref_entry]
             result.field_evidence["data_modality"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "Contig names match known reference genome",
-                "confidence": 0.95,
                 "value": "genomic",
             }]
             result.field_evidence["data_type"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "FASTA contains reference genome sequences",
-                "confidence": 0.95,
                 "value": "reference_genome",
             }]
             return result.to_output_dict()
@@ -481,24 +464,20 @@ def classify_from_fasta_header(
         result.set_field("data_modality", "genomic")
         result.set_field("data_type", "assembly")
         result.set_field("reference_assembly", status=NOT_APPLICABLE)
-        result.confidence = 0.90
         sample = assembler_contigs[0]
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_assembler_contigs",
             "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
-            "confidence": 0.90,
             "value": "genomic",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_assembler_contigs",
             "reason": "Contig names indicate assembler output",
-            "confidence": 0.90,
             "value": "assembly",
         }]
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "fasta_assembler_contigs",
             "reason": "De novo assembly — no reference genome applicable",
-            "confidence": 0.90,
             "status": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
@@ -508,23 +487,19 @@ def classify_from_fasta_header(
         result.set_field("data_modality", "genomic")
         result.set_field("data_type", "assembly")
         result.set_field("reference_assembly", status=NOT_APPLICABLE)
-        result.confidence = 0.75
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_many_contigs",
             "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
-            "confidence": 0.75,
             "value": "genomic",
         }]
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_many_contigs",
             "reason": "High contig count suggests assembly",
-            "confidence": 0.75,
             "value": "assembly",
         }]
         result.field_evidence["reference_assembly"] = [{
             "rule_id": "fasta_many_contigs",
             "reason": "De novo assembly — no reference genome applicable",
-            "confidence": 0.75,
             "status": NOT_APPLICABLE,
         }]
         return result.to_output_dict()
@@ -536,7 +511,6 @@ def classify_from_fasta_header(
         result.field_evidence["data_modality"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
-            "confidence": 0.50,
             "value": "genomic",
         }]
     if not result.is_declared("data_type"):
@@ -544,10 +518,8 @@ def classify_from_fasta_header(
         result.field_evidence["data_type"] = [{
             "rule_id": "fasta_default_genomic",
             "reason": "Unable to determine specific FASTA type from headers",
-            "confidence": 0.50,
             "value": "sequence",
         }]
-    result.confidence = max(result.confidence, 0.50)
     return result.to_output_dict()
 
 
@@ -558,71 +530,30 @@ def classify_from_fasta_header(
 _STANDARD_CHROM_PATTERN = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
 
 
-def _pick_closest_reference(
-    max_coords: dict[str, int],
-    ref_lengths: dict[str, dict[str, int]],
-    candidates: list[str],
-) -> str | None:
-    """Pick the reference whose chromosome lengths best match observed max coordinates.
-
-    When max coordinates don't rule out multiple references, we pick the one where
-    coordinates come closest to (but don't exceed) the chromosome lengths. Files
-    covering the full chromosome will have max coordinates near the chromosome length.
-    """
-    scores = {}
-    for assembly in candidates:
-        chrom_lengths = ref_lengths[assembly]
-        score = 0
-        matched = 0
-
-        for chrom, max_coord in max_coords.items():
-            chrom_key = chrom if chrom in chrom_lengths else f"chr{chrom}"
-            if chrom_key not in chrom_lengths:
-                continue
-
-            ref_len = chrom_lengths[chrom_key]
-            ratio = max_coord / ref_len
-            if ratio <= 1.0:
-                score += ratio
-                matched += 1
-
-        if matched > 0:
-            scores[assembly] = score / matched
-
-    if not scores:
-        return None
-
-    best_score = max(scores.values())
-    tied = [a for a, s in scores.items() if abs(s - best_score) < 0.001]
-    if len(tied) > 1:
-        return None  # Ambiguous — don't guess
-    return tied[0]
-
-
-def _infer_bed_reference(signals: dict) -> tuple[str | None, float, str]:
+def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
     """Infer reference assembly from BED coordinate signals.
 
     Uses max coordinates to rule out references where coordinates exceed
     chromosome lengths. The remaining reference(s) are candidates.
 
     Returns:
-        Tuple of (assembly, confidence, rationale)
+        Tuple of (assembly, rationale)
     """
     max_coords = signals.get("max_coordinates", {})
     has_chr_prefix = signals.get("has_chr_prefix", True)
 
     if not max_coords:
-        return None, 0.0, "No coordinates found"
+        return None, "No coordinates found"
 
     standard_chroms = [c for c in signals.get("chromosomes", [])
                        if _STANDARD_CHROM_PATTERN.match(c)]
 
     if not standard_chroms:
-        return None, 0.0, ("Non-standard chromosome names — likely de novo assembly, "
-                           "not aligned to a standard reference")
+        return None, ("Non-standard chromosome names — likely de novo assembly, "
+                      "not aligned to a standard reference")
 
     if not has_chr_prefix:
-        return "GRCh37", 0.85, "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
+        return "GRCh37", "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
 
     ref_lengths = _get_engine().rules.reference_contig_lengths
 
@@ -652,15 +583,17 @@ def _infer_bed_reference(signals: dict) -> tuple[str | None, float, str]:
 
     if len(candidates) == 1:
         rationale = f"Only {candidates[0]} not ruled out. {'; '.join(evidence_details)}"
-        return candidates[0], 0.92, rationale
+        return candidates[0], rationale
     elif len(candidates) == 0:
-        return None, 0.0, f"All references ruled out: {'; '.join(evidence_details)}"
+        return None, f"All references ruled out: {'; '.join(evidence_details)}"
     else:
-        best = _pick_closest_reference(max_coords, ref_lengths, candidates)
-        if best:
-            return best, 0.80, (f"Multiple references possible ({', '.join(candidates)}), "
-                                f"{best} is closest match by coordinates")
-        return None, 0.0, f"Cannot distinguish between {', '.join(candidates)}"
+        # More than one reference is still consistent with these coordinates —
+        # the file's coordinates don't reach into regions where the candidates'
+        # chromosome lengths differ, so we genuinely can't tell them apart. Return
+        # "can't tell" (None) rather than guessing a closest match: an undefined
+        # coordinate result must not override a filename-based reference.
+        return None, (f"Cannot distinguish between {', '.join(candidates)} — "
+                      "coordinates fit multiple references")
 
 
 def classify_from_bed_signals(
@@ -700,32 +633,25 @@ def classify_from_bed_signals(
     result = engine.classify_extended(file_info, include_tier3=False)
 
     if max_coordinates:
-        coord_ref, coord_conf, coord_rationale = _infer_bed_reference(signals)
+        coord_ref, coord_rationale = _infer_bed_reference(signals)
 
-        if coord_ref and coord_conf > 0:
-            existing_ref_evidence = result.field_evidence.get("reference_assembly") or []
-            existing_ref_conf = max(
-                (ev.get("confidence", 0.0) for ev in existing_ref_evidence),
-                default=0.0,
-            )
-            if not result.is_declared("reference_assembly") or coord_conf > existing_ref_conf:
-                result.set_field("reference_assembly", coord_ref)
-                result.confidence = max(result.confidence, coord_conf)
-                result.field_evidence["reference_assembly"] = [{
-                    "rule_id": "bed_coordinate_reference",
-                    "reason": coord_rationale,
-                    "confidence": coord_conf,
-                    "value": coord_ref,
-                }]
-        elif coord_ref is None and coord_conf == 0.0:
-            if "Non-standard chromosome" in coord_rationale:
-                result.set_field("reference_assembly", status=NOT_APPLICABLE)
-                result.field_evidence["reference_assembly"] = [{
-                    "rule_id": "bed_nonstandard_contigs",
-                    "reason": coord_rationale,
-                    "confidence": 0.0,
-                    "status": NOT_APPLICABLE,
-                }]
+        if coord_ref:
+            # Coordinate detection reads the actual file content, so it overrides
+            # any filename-based reference guess (CLAUDE.md design principle:
+            # prefer reading actual file content over guessing from filenames).
+            result.set_field("reference_assembly", coord_ref)
+            result.field_evidence["reference_assembly"] = [{
+                "rule_id": "bed_coordinate_reference",
+                "reason": coord_rationale,
+                "value": coord_ref,
+            }]
+        elif "Non-standard chromosome" in coord_rationale:
+            result.set_field("reference_assembly", status=NOT_APPLICABLE)
+            result.field_evidence["reference_assembly"] = [{
+                "rule_id": "bed_nonstandard_contigs",
+                "reason": coord_rationale,
+                "status": NOT_APPLICABLE,
+            }]
 
     return result.to_output_dict()
 
@@ -752,7 +678,6 @@ Each rule has:
 - `scope`: extension, filename, header, vcf_header, fastq_header, or file_size
 - `when`: Conditions that must match
 - `then`: Effects to apply
-- `confidence`: 0.0-1.0
 - `rationale`: Explanation
 
 ## Viewing Rules

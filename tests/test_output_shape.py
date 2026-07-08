@@ -33,7 +33,7 @@ Regenerate with::
     python -m tests.test_output_shape   # writes tests/fixtures/golden/expected_output.json
 
 Note: the golden deep-equal is intentionally *value-sensitive* — it pins exact
-values/confidence/reason strings so the migration's pure-refactor stages can prove
+values/reason strings so the migration's pure-refactor stages can prove
 the output is unchanged. That couples it to rule content for the duration of epic
 #116; once the shape stabilizes (after #122) this file should be de-tuned to
 shape-only (drop the deep-equal layer, keep the structural + vocabulary layers).
@@ -87,8 +87,8 @@ STUB_HEADER = "stub-header-no-network"
 # the golden exercises realistic classifier input and stays robust if a classifier
 # later type-guards its argument.
 LIST_RETURNING_TYPES = {"fastq", "fasta"}
-EVIDENCE_KEYS = {"rule_id", "reason", "confidence"}
-FIELD_KEYS = {"value", "status", "confidence", "evidence"}
+EVIDENCE_KEYS = {"rule_id", "reason"}
+FIELD_KEYS = {"value", "status", "evidence"}
 RECORD_KEYS = {
     "file_name", "md5sum", "file_size", "file_format",
     "dataset_title", "classifications", "entry_id",
@@ -198,8 +198,6 @@ def test_output_structural_contract(output):
                 f"{ftype}.{field}: status={entry['status']!r}"
             assert (entry["status"] == CLASSIFIED) == (entry["value"] is not None), \
                 f"{ftype}.{field}: incoherent value={entry['value']!r} status={entry['status']!r}"
-            conf = entry["confidence"]
-            assert isinstance(conf, (int, float)) and not isinstance(conf, bool)
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
                 assert EVIDENCE_KEYS <= set(ev), f"{ftype}.{field} evidence: {set(ev)}"

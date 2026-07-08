@@ -10,7 +10,7 @@ dimension's enum.
 
 Two levels of validation:
 
-* per-field *entries* (value/status/confidence/evidence) against their
+* per-field *entries* (value/status/evidence) against their
   ``Classification`` subclass, and
 * the whole record against ``ClassificationRecord`` — enabled by #134, which added
   the ``classifications`` container so the schema matches the pipeline output shape
@@ -147,8 +147,8 @@ def test_record_gate_rejects_missing_classifications(validator):
 def test_record_gate_rejects_bad_dimension_value(validator):
     # A bad enum value nested inside the container must fail record validation.
     entry = {"value": "not_a_real_modality", "status": "classified",
-             "confidence": 1.0, "evidence": []}
-    ok = {"value": None, "status": "not_classified", "confidence": 0.0, "evidence": []}
+             "evidence": []}
+    ok = {"value": None, "status": "not_classified", "evidence": []}
     classifications = {dim: (entry if dim == "data_modality" else ok)
                        for dim in DIMENSION_CLASS}
     bad = {"md5sum": "x", "file_name": "f.bam", "classifications": classifications}
@@ -161,13 +161,13 @@ def test_record_gate_rejects_bad_dimension_value(validator):
 
 def test_gate_rejects_missing_status(validator):
     # status is required — an entry without it must fail (proves the gate bites).
-    bad = {"value": "genomic", "confidence": 1.0, "evidence": []}
+    bad = {"value": "genomic", "evidence": []}
     report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "missing status should have failed validation"
 
 
 def test_gate_rejects_out_of_enum_value(validator):
     bad = {"value": "not_a_real_modality", "status": "classified",
-           "confidence": 1.0, "evidence": []}
+           "evidence": []}
     report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "an out-of-enum value should have failed validation"

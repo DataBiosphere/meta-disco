@@ -207,9 +207,9 @@ class TestCoherenceGuard:
 
 class TestBuildFieldEntry:
     def test_classified_keeps_value(self):
-        e = build_field_entry("genomic", confidence=0.9, evidence=[{"x": 1}])
+        e = build_field_entry("genomic", evidence=[{"x": 1}])
         assert e == {"value": "genomic", "status": CLASSIFIED,
-                     "confidence": 0.9, "evidence": [{"x": 1}]}
+                     "evidence": [{"x": 1}]}
 
     def test_derived_sentinel_nulls_value(self):
         # Sentinel-carrying value with no explicit status → status derived, value nulled.

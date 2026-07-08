@@ -115,7 +115,7 @@ class TestExtractRefFromAnnotationType:
 
 class TestFieldValue:
     def test_per_field_format(self):
-        record = {"classifications": {"platform": {"value": "PACBIO", "confidence": 0.9}}}
+        record = {"classifications": {"platform": {"value": "PACBIO"}}}
         assert field_value(record, "platform") == "PACBIO"
 
     def test_flat_format(self):

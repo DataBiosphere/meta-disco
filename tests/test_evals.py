@@ -52,8 +52,8 @@ def assert_output_format(record):
         entry = cls[field]
         assert isinstance(entry, dict), f"{field} should be dict"
         assert "value" in entry, f"{field} missing 'value'"
+        assert "status" in entry, f"{field} missing 'status'"
         assert "evidence" in entry, f"{field} missing 'evidence'"
-        assert "confidence" in entry, f"{field} missing 'confidence'"
         # assay_type may be set by post-hoc inference which doesn't produce evidence
         if field != "assay_type":
             assert len(entry["evidence"]) > 0, f"{field} has empty evidence"
@@ -117,13 +117,13 @@ class TestBamE2E:
         assert get_val(result, "data_type") == "alignments"
         assert get_val(result, "assay_type") == "RNA-seq"
 
-    def test_platform_confidence_meaningful(self):
-        """Platform detection from @RG PL: should have non-zero confidence."""
+    def test_platform_detection_meaningful(self):
+        """Platform detection from @RG PL: should classify a platform value."""
         result = classify_bam("000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam",
                               file_size=239579784536, file_format=".bam")
         cls = result["classifications"]
-        platform_conf = cls["platform"]["confidence"]
-        assert platform_conf > 0, f"Platform confidence should be > 0, got {platform_conf}"
+        platform_val = cls["platform"]["value"]
+        assert platform_val is not None, f"Platform should be classified, got {platform_val}"
 
     def test_illumina_cram_wgs_assay_type(self):
         """HG00741.final.cram — 15.9 GB Illumina CRAM should infer WGS.

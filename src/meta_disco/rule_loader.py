@@ -25,7 +25,6 @@ class UnifiedRule:
     scope: str
     when: dict[str, Any]
     then: dict[str, Any]
-    confidence: float
     rationale: str
     then_status: dict[str, str] = field(default_factory=dict)
     def matches_extension(self, extension: str) -> bool:
@@ -44,7 +43,6 @@ class ValidatorConfig:
     module: str
     function: str
     applies_to: list[str]
-    confidence: float = 0.0
 
 
 @dataclass
@@ -307,7 +305,6 @@ class RuleLoader:
                 scope=scope,
                 when=when,
                 then=then_values,
-                confidence=rule_data.get("confidence", 0.0),
                 rationale=rule_data.get("rationale", ""),
                 then_status=then_status,
             ))
@@ -363,7 +360,6 @@ class RuleLoader:
                 module=config.get("module", ""),
                 function=config.get("function", ""),
                 applies_to=config.get("applies_to", []),
-                confidence=config.get("confidence", 0.0),
             )
 
         return validators
