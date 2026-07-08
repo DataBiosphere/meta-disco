@@ -50,9 +50,10 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
         return False
 
 def main():
-    # Updated schema path to use the new location
-    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                              "src/meta_disco/schema/anvil_file.yaml")
+    # Validate whole records against the classification model (ClassificationRecord
+    # is its tree_root). Ran against the legacy anvil_file.yaml stub until #134.
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "src/meta_disco/schema/classification.yaml")
     
     if len(sys.argv) < 2:
         print("Usage: python scripts/validate_outputs.py <instance_file>")

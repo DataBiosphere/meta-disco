@@ -16,7 +16,7 @@ The project has two main components:
    - Expects Ollama running on `localhost:11434`
 
 2. **Schema Validation** (`schema/` directory): LinkML-based validation of extracted metadata
-   - `src/meta_disco/schema/anvil_file.yaml`: LinkML schema defining File class with required `reference_assembly` and `data_modality` fields
+   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the five metadata dimensions nested under `classifications`, each a `{value, status, confidence, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
    - Uses Poetry for dependency management (Python 3.10+)
 
@@ -48,10 +48,15 @@ python metadisco-inference.py <row_index> <model_name> <output_tsv_path>
 
 ## Schema Details
 
-The LinkML schema (`anvil_file.yaml`) defines:
+The LinkML schema (`classification.yaml`) defines the `ClassificationRecord` — the
+five metadata dimensions nested under `classifications`, each a `{value, status,
+confidence, evidence}` entry — plus the controlled vocabulary:
 - **reference_assembly_enum**: GRCh37, GRCh38, CHM13
-- **data_modality_enum**: genomic, transcriptomic
-- Both fields are required on the `File` class
+- **data_modality_enum**: genomic, transcriptomic.*, epigenomic.*, imaging.histology
+- **classification_status_enum**: classified, not_applicable, not_classified, conflict
+- also **data_type_enum**, **assay_type_enum**, **platform_enum**
+
+`status` is required on every dimension; `value` is null unless status is `classified`.
 
 ## Design Principles
 

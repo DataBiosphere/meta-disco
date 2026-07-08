@@ -1,4 +1,40 @@
-id: "ex:file1"
-filename: "sample1.fasta"
-reference_assembly: "GRCh38"
-data_modality: "genomic"
+# A whole ClassificationRecord in the pipeline output shape (issue #134).
+# The five dimensions live under `classifications`; each is a Classification
+# entry with a required `status` and a `value` that is null unless classified.
+md5sum: "aaa111"
+file_name: "NA12878.bam"
+file_format: ".bam"
+file_size: 123456
+entry_id: "entry-1"
+dataset_title: "Example AnVIL dataset"
+classifications:
+  data_modality:
+    value: "genomic"
+    status: "classified"
+    confidence: 0.95
+    evidence:
+      - rule_id: "aligned_reads_bam"
+        reason: "BAM with @SQ lines aligned to a human assembly"
+        confidence: 0.95
+        value: "genomic"
+        tier: 1
+  data_type:
+    value: "alignments"
+    status: "classified"
+    confidence: 0.9
+    evidence: []
+  reference_assembly:
+    value: "GRCh38"
+    status: "classified"
+    confidence: 0.9
+    evidence: []
+  assay_type:
+    value: null
+    status: "not_classified"
+    confidence: 0.0
+    evidence: []
+  platform:
+    value: "ILLUMINA"
+    status: "classified"
+    confidence: 0.8
+    evidence: []
