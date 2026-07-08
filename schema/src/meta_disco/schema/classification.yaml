@@ -3,17 +3,20 @@ name: meta_disco_classification
 title: Meta-Disco File Classification Model
 description: >-
   Full classification data model for meta-disco: the five metadata dimensions,
-  per-field evidence, classification-status sentinels, and typed derivation
-  edges. This is the prototype expansion of anvil_file.yaml (issue #33) and the
-  data-model decision record in docs/derived-file-data-model.md.
+  per-field evidence, classification status, and typed derivation edges. Supersedes
+  the retired anvil_file.yaml stub (issue #33) and realizes the data-model decision
+  record in docs/derived-file-data-model.md.
 
   Authoring source of truth. `make gen` generates JSON Schema and Pydantic from
   this file (via `gen-json-schema` / `gen-pydantic`) — do not hand-edit the
-  generated copies. Today the schema's vocabulary backs the rule drift check
-  (tests/test_rule_vocabulary.py). Validating pipeline output records against the
-  generated JSON Schema and adopting the Pydantic records in the pipeline are
-  planned follow-ups — the current output shape is `{..., "classifications": {...}}`,
-  which this schema does not yet match (see docs/derived-file-data-model.md section 8).
+  generated copies. The schema's vocabulary backs the rule drift check
+  (tests/test_rule_vocabulary.py), and `ClassificationRecord` now matches the
+  pipeline output shape (`{..., "classifications": {...}}`, see
+  docs/derived-file-data-model.md section 5a) so whole records validate against it
+  (schema/tests/test_output_validation.py, run closed=False, so any unmodeled key is
+  tolerated; in practice the pipeline's only such extras are the fastq scalar hints
+  inside `classifications` — modeling them is a #134 follow-up).
+  Adopting the generated Pydantic records in the pipeline is a planned follow-up (#33).
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -32,31 +35,48 @@ classes:
   ClassificationRecord:
     tree_root: true
     description: >-
-      One classified file. The five dimension fields describe the file's
-      identity (what it is); derived_from is a typed edge to the file it was
-      derived from (where it came from).
+      One classified file. `classifications` carries the file's identity (the
+      five dimension fields — what it is); derived_from is a typed edge to the
+      file it was derived from (where it came from). Matches the pipeline output
+      shape (see docs/derived-file-data-model.md section 5a).
     slots:
       - md5sum
       - file_name
       - file_format
       - file_size
+      - entry_id
+      - dataset_title
+      - classifications
+      - derived_from
+
+  Classifications:
+    description: >-
+      The five metadata dimensions for one file, each a Classification entry.
+      The pipeline also emits some file-type-specific scalar hints here (e.g.
+      fastq's is_paired_end / instrument_model); those are not modeled yet and
+      pass under the gate's closed=False mode (see #134 follow-up).
+    slots:
       - data_modality
       - data_type
       - reference_assembly
       - assay_type
       - platform
-      - derived_from
     slot_usage:
       data_modality:
         range: DataModalityClassification
+        required: true
       data_type:
         range: DataTypeClassification
+        required: true
       reference_assembly:
         range: ReferenceAssemblyClassification
+        required: true
       assay_type:
         range: AssayTypeClassification
+        required: true
       platform:
         range: PlatformClassification
+        required: true
 
   Classification:
     abstract: true
@@ -106,9 +126,18 @@ classes:
       - rule_id
       - reason
       - confidence
+      - value
+      - status
+      - tier
       - source_type
       - authority
       - reference
+    slot_usage:
+      # A rule's claimed value / status for this dimension, and the rule tier it
+      # fired at. status is optional on evidence (only sentinel-bearing evidence
+      # carries it), unlike the required status on a Classification entry.
+      status:
+        required: false
 
   DerivationEdge:
     description: >-
@@ -136,6 +165,15 @@ slots:
   file_size:
     description: File size in bytes.
     range: integer
+  entry_id:
+    description: Source catalog entry identifier the record was classified from.
+  dataset_title:
+    description: Title of the dataset the file belongs to.
+  classifications:
+    description: The five classified dimensions for this file.
+    range: Classifications
+    required: true
+    inlined: true
 
   # --- the five dimensions (ranges narrowed to *Classification in slot_usage) ---
   data_modality:
@@ -174,6 +212,9 @@ slots:
     description: Identifier of the rule (or synthetic source) that produced this evidence.
   reason:
     description: Human-readable rationale.
+  tier:
+    description: The rule tier at which this evidence fired.
+    range: integer
   source_type:
     description: "Kind of source that produced this evidence (provenance, #90)."
     range: source_type_enum

@@ -629,14 +629,17 @@ the same machinery.
 Verification turned up that we have **no real single source of truth** for
 permissible slot values:
 
-- The **LinkML schema** (`schema/src/meta_disco/schema/anvil_file.yaml`) is a
-  stub. It defines only `File` with `id / filename / reference_assembly /
+- The **LinkML schema** (then `schema/src/meta_disco/schema/anvil_file.yaml`) was a
+  stub. It defined only `File` with `id / filename / reference_assembly /
   data_modality` — **two of our five dimensions**. `data_type`, `assay_type`, and
-  `platform` have no slots at all. `data_modality_enum` lists only `genomic` and
+  `platform` had no slots at all. `data_modality_enum` listed only `genomic` and
   `transcriptomic`, while the rules actually emit `transcriptomic.bulk`,
   `transcriptomic.single_cell`, `epigenomic.chromatin_accessibility`,
   `epigenomic.histone_modification`, `epigenomic.methylation`, `imaging.histology`.
-  Neither `not_applicable` nor `not_classified` is modeled anywhere in the schema.
+  Neither `not_applicable` nor `not_classified` was modeled anywhere in the schema.
+  **Resolved:** `anvil_file.yaml` was retired (#134) and replaced by
+  `classification.yaml`, which models all five dimensions, the full vocabulary, and
+  `classification_status_enum`; whole records now validate against it.
 - The **de-facto vocabulary** therefore lives, unenforced, in the `then:` blocks
   of `rules/unified_rules.yaml` (plus partial external mappings in
   `validation_maps.py`). Nothing checks that a rule emits a value the schema knows

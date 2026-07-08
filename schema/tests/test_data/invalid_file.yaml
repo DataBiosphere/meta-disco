@@ -1,4 +1,35 @@
-id: "ex:file2"
-filename: "sample2.fasta"
-reference_assembly: "GRCh39"   # ❌ Invalid: not one of GRCh37, GRCh38, CHM13
-data_modality: "proteomic"      # ❌ Invalid: not genomic or transcriptomic
+# Same record shape as valid_file.yaml, but with schema violations that the gate
+# must catch even under closed=False (enum-range and required-slot checks still
+# apply; only unmodeled extra keys are tolerated).
+md5sum: "bbb222"
+file_name: "sample2.bam"
+file_format: ".bam"
+file_size: 654321
+entry_id: "entry-2"
+dataset_title: "Example AnVIL dataset"
+classifications:
+  data_modality:
+    value: "proteomic"          # ❌ not in data_modality_enum
+    status: "classified"
+    confidence: 0.9
+    evidence: []
+  data_type:
+    value: "alignments"
+    status: "classified"
+    confidence: 0.9
+    evidence: []
+  reference_assembly:
+    value: "GRCh39"             # ❌ not in reference_assembly_enum
+    status: "classified"
+    confidence: 0.9
+    evidence: []
+  assay_type:
+    value: null
+    # ❌ missing required `status`
+    confidence: 0.0
+    evidence: []
+  platform:
+    value: "ILLUMINA"
+    status: "classified"
+    confidence: 0.8
+    evidence: []

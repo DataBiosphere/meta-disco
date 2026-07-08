@@ -8,10 +8,20 @@ contract at the schema level: ``status`` is required and drawn from
 ``classification_status_enum``, and ``value`` is either null or a member of that
 dimension's enum.
 
-Scoped to the per-field *entries* (value/status/confidence/evidence). Validating
-the whole record against ``ClassificationRecord`` is deferred: the schema models
-the five dimensions at the top level while the pipeline nests them under a
-``classifications`` key — that record-shape reconciliation is tracked in #134.
+Two levels of validation:
+
+* per-field *entries* (value/status/confidence/evidence) against their
+  ``Classification`` subclass, and
+* the whole record against ``ClassificationRecord`` — enabled by #134, which added
+  the ``classifications`` container so the schema matches the pipeline output shape
+  (``{..., "classifications": {...}}``).
+
+Both run ``closed=False``: structure, required slots, and enum ranges are enforced,
+but keys the schema does not model — the fastq scalar hints inside
+``classifications`` (``is_paired_end``, ``instrument_model``, ``archive_*``) — are
+tolerated. Modeling those and tightening to ``closed=True`` is a #134 follow-up.
+(Evidence's ``value``/``status``/``tier`` are modeled, so they are validated, not
+merely tolerated.)
 
 Runs in the schema/ Poetry component, which has linkml installed (the root
 component does not).
@@ -37,15 +47,15 @@ _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 def _dimension_classes() -> dict:
     """Map each output dimension to the schema class that constrains its entry.
 
-    Derived from ``ClassificationRecord``'s slot_usage (the single source of
-    truth) rather than hardcoded, so a dimension added to the schema's record is
-    picked up automatically. (A dimension present in the *output* but absent from
-    slot_usage would still not be validated — but that divergence is exactly the
-    schema/output record-shape mismatch tracked in #134.)
+    Derived from the ``Classifications`` container's slot_usage (the single source
+    of truth) rather than hardcoded, so a dimension added to the schema is picked
+    up automatically. (A dimension present in the *output* but absent from
+    slot_usage would still not be validated per-entry — but the whole-record test
+    validates the container as a whole, catching such a divergence there.)
     """
     assert _SCHEMA.exists(), f"classification schema not found at {_SCHEMA}"
     schema = yaml.safe_load(_SCHEMA.read_text(encoding="utf-8"))
-    slot_usage = schema["classes"]["ClassificationRecord"]["slot_usage"]
+    slot_usage = schema["classes"]["Classifications"]["slot_usage"]
     return {dim: cfg["range"] for dim, cfg in slot_usage.items()}
 
 
@@ -62,12 +72,14 @@ def validator():
     )
 
 
-def _golden_entries():
-    """Yield (label, dimension, entry) for every dimension entry in the golden."""
-    # Guard here (not just in test_golden_present) so a missing fixture fails with
-    # a clear message regardless of test order, never a bare FileNotFoundError.
-    # Assert the nested shape too, so a producer/fixture drift fails legibly rather
-    # than a bare KeyError.
+def _golden_records():
+    """Yield (label, record) for every classification record in the golden.
+
+    Guard here (not just in test_golden_present) so a missing fixture fails with a
+    clear message regardless of test order, never a bare FileNotFoundError. Assert
+    the nested shape too, so a producer/fixture drift fails legibly rather than a
+    bare KeyError.
+    """
     assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
     data = json.loads(_GOLDEN.read_text(encoding="utf-8"))
     for ftype, payload in data.items():
@@ -76,12 +88,18 @@ def _golden_entries():
         assert isinstance(records, list), f"{ftype}: 'classifications' is not a list"
         for i, record in enumerate(records):
             assert isinstance(record, dict), f"{ftype}[{i}]: record is not a mapping"
-            classifications = record.get("classifications")
-            assert isinstance(classifications, dict), \
-                f"{ftype}[{i}]: record missing a 'classifications' dict"
-            for dim in DIMENSION_CLASS:
-                assert dim in classifications, f"{ftype}[{i}]: missing dimension {dim!r}"
-                yield f"{ftype}[{i}].{dim}", dim, classifications[dim]
+            yield f"{ftype}[{i}]", record
+
+
+def _golden_entries():
+    """Yield (label, dimension, entry) for every dimension entry in the golden."""
+    for label, record in _golden_records():
+        classifications = record.get("classifications")
+        assert isinstance(classifications, dict), \
+            f"{label}: record missing a 'classifications' dict"
+        for dim in DIMENSION_CLASS:
+            assert dim in classifications, f"{label}: missing dimension {dim!r}"
+            yield f"{label}.{dim}", dim, classifications[dim]
 
 
 def test_golden_present():
@@ -100,6 +118,45 @@ def test_output_entries_validate_against_schema(validator):
     assert checked > 0, "no golden entries were validated"
     assert not failures, "Pipeline output violates the classification schema:\n  " + \
         "\n  ".join(failures)
+
+
+def test_output_records_validate_against_schema(validator):
+    # Whole-record gate (#134): each golden record validates against
+    # ClassificationRecord, exercising the `classifications` container end to end.
+    failures = []
+    checked = 0
+    for label, record in _golden_records():
+        checked += 1
+        report = validator.validate(record, target_class="ClassificationRecord")
+        for result in report.results:
+            failures.append(f"{label}: {result.severity}: {result.message}")
+
+    assert checked > 0, "no golden records were validated"
+    assert not failures, "Pipeline output violates the record schema:\n  " + \
+        "\n  ".join(failures)
+
+
+def test_record_gate_rejects_missing_classifications(validator):
+    # The record gate must bite: a record without the required `classifications`
+    # container fails (proves whole-record validation is actually enforced).
+    bad = {"md5sum": "x", "file_name": "f.bam"}
+    report = validator.validate(bad, target_class="ClassificationRecord")
+    assert report.results, "a record missing 'classifications' should have failed"
+
+
+def test_record_gate_rejects_bad_dimension_value(validator):
+    # A bad enum value nested inside the container must fail record validation.
+    entry = {"value": "not_a_real_modality", "status": "classified",
+             "confidence": 1.0, "evidence": []}
+    ok = {"value": None, "status": "not_classified", "confidence": 0.0, "evidence": []}
+    classifications = {dim: (entry if dim == "data_modality" else ok)
+                       for dim in DIMENSION_CLASS}
+    bad = {"md5sum": "x", "file_name": "f.bam", "classifications": classifications}
+    report = validator.validate(bad, target_class="ClassificationRecord")
+    # Assert it fails *because of* the bad enum value, not some unrelated reason —
+    # otherwise a regression in nested enum validation could leave this test green.
+    assert any("not_a_real_modality" in r.message for r in report.results), \
+        f"expected a failure citing the bad enum value, got: {[r.message for r in report.results]}"
 
 
 def test_gate_rejects_missing_status(validator):
