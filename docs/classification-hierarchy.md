@@ -98,7 +98,7 @@ file_format (extension)
 
 ## Sequences (.fasta, .fasta.gz, .fa, .fa.gz)
 
-**data_type**: `sequence`, `assembly`, `reference_genome`
+**data_type**: `sequence`, `assembly`, `assembly.reference`
 
 **data_modality**:
 - `genomic` ← filename (assembly keywords, haplotype keywords), contig names (assembler patterns)

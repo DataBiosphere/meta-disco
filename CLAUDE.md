@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It uses LLMs to infer `data_modality` (genomic/transcriptomic) and `reference_genome` (GRCh38/GRCh37/CHM13) from filenames and BAM/SAM headers.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It uses LLMs to infer `data_modality` (genomic/transcriptomic) and `reference_assembly` (GRCh38/GRCh37/CHM13) from filenames and BAM/SAM headers.
 
 ## Architecture
 
