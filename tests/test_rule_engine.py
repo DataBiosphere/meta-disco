@@ -568,7 +568,8 @@ class TestAssayTypeInference:
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = [{
             "rule_id": "not_classified",
-            "reason": "No rule determined a value for assay_type",            "status": NOT_CLASSIFIED,
+            "reason": "No rule determined a value for assay_type",
+            "status": NOT_CLASSIFIED,
         }]
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
