@@ -178,6 +178,13 @@ class TestSetFieldValidation:
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
+    @pytest.mark.parametrize("accessor", ["status_of", "is_declared", "label"])
+    def test_read_accessors_reject_unknown_field(self, accessor):
+        # Read helpers raise a consistent ValueError (not a bare KeyError) on a typo.
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown classification field"):
+            getattr(result, accessor)("platfrom")
+
 
 class TestDerivativeFiles:
     """Test that derivative files (indices, checksums, logs) get not_applicable."""

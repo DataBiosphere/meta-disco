@@ -96,8 +96,7 @@ class ExtendedClassificationResult:
         without a real value, or a non-classified status carrying one, raises
         rather than silently mis-storing.
         """
-        if fld not in self.field_status:
-            raise ValueError(f"unknown classification field {fld!r}")
+        self._require_field(fld)
         if status is None:
             status = status_for_value(value)
         if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED):
@@ -106,19 +105,29 @@ class ExtendedClassificationResult:
         setattr(self, fld, value if status == CLASSIFIED else None)
         self.field_status[fld] = status
 
+    def _require_field(self, fld: str) -> None:
+        """Raise ValueError for an unknown classification field, so every accessor
+        that takes a ``fld`` fails with one clear message rather than a bare
+        KeyError leaking from the ``field_status`` lookup."""
+        if fld not in self.field_status:
+            raise ValueError(f"unknown classification field {fld!r}")
+
     def status_of(self, fld: str) -> str:
         """Resolved status of a dimension (classified / not_applicable / not_classified)."""
+        self._require_field(fld)
         return self.field_status[fld]
 
     def is_declared(self, fld: str) -> bool:
         """True if a definitive statement was made for the field — a real value
         (CLASSIFIED) or an explicit not_applicable — vs not_classified/unset."""
+        self._require_field(fld)
         return self.field_status[fld] in (CLASSIFIED, NOT_APPLICABLE)
 
     def label(self, fld: str) -> str | None:
         """Combined value-or-status label for the field (mirrors models.field_label):
         the real value when CLASSIFIED, else the status string. For flat/legacy
         views (basic ClassificationResult, CSV reports) that want one column."""
+        self._require_field(fld)
         return getattr(self, fld) if self.field_status[fld] == CLASSIFIED else self.field_status[fld]
 
     @property
