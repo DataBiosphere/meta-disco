@@ -562,10 +562,10 @@ class TestAssayTypeInference:
             file_size_gb=60.0, file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
-        # Set conditions that trigger WGS inference
-        result.data_modality = "genomic"
-        result.platform = "ILLUMINA"
-        result.assay_type = None
+        # Set conditions that trigger WGS inference (via set_field to stay coherent)
+        result.set_field("data_modality", "genomic")
+        result.set_field("platform", "ILLUMINA")
+        result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = []
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"

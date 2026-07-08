@@ -68,13 +68,8 @@ class ExtendedClassificationResult:
     assay_type: str | None = None
     platform: str | None = None
     confidence: float = 0.0
-    field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {
-        "data_modality": [],
-        "data_type": [],
-        "reference_assembly": [],
-        "assay_type": [],
-        "platform": [],
-    })
+    field_evidence: dict[str, list[dict]] = field(
+        default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /
     # not_classified) lives here, never in a value slot. Defaults to
