@@ -10,7 +10,12 @@ from src.meta_disco.models import (
     ClassificationResult,
     FileInfo,
 )
-from src.meta_disco.rule_engine import ExtendedFileInfo, RuleEngine, evaluate_claims
+from src.meta_disco.rule_engine import (
+    ExtendedClassificationResult,
+    ExtendedFileInfo,
+    RuleEngine,
+    evaluate_claims,
+)
 
 
 @pytest.fixture
@@ -149,6 +154,29 @@ class TestThenStatus:
         assert out["data_type"]["value"] == "raw_signal"
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
         assert out["reference_assembly"]["value"] is None
+
+
+class TestSetFieldValidation:
+    """set_field rejects unknown fields/statuses instead of silently mis-storing."""
+
+    def test_rejects_unknown_field(self):
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown classification field"):
+            result.set_field("platfrom", "ILLUMINA")  # typo
+
+    def test_rejects_unknown_status(self):
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown status"):
+            result.set_field("data_modality", status="confict")  # typo for conflict
+
+    def test_accepts_known_field_and_status(self):
+        result = ExtendedClassificationResult()
+        result.set_field("platform", "ILLUMINA")
+        result.set_field("reference_assembly", status=NOT_APPLICABLE)
+        assert result.platform == "ILLUMINA"
+        assert result.status_of("platform") == CLASSIFIED
+        assert result.reference_assembly is None
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
 class TestDerivativeFiles:

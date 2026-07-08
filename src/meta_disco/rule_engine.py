@@ -88,13 +88,20 @@ class ExtendedClassificationResult:
         ``value`` is a real value or None; ``status`` defaults to
         ``status_for_value(value)``. A CLASSIFIED status stores the value; any
         non-classified status stores None (the sentinel lives only in
-        ``field_status``). The (value, status) pairing is checked against the
-        single coherence definition (``models._assert_coherent``): a CLASSIFIED
-        status without a real value, or a non-classified status carrying one,
-        raises rather than silently mis-storing.
+        ``field_status``). ``fld`` must be a known classification field and
+        ``status`` one of classified / not_applicable / not_classified — a typo
+        raises rather than silently creating a stray attribute or emitting an
+        invalid status. The (value, status) pairing is checked against the single
+        coherence definition (``models._assert_coherent``): a CLASSIFIED status
+        without a real value, or a non-classified status carrying one, raises
+        rather than silently mis-storing.
         """
+        if fld not in self.field_status:
+            raise ValueError(f"unknown classification field {fld!r}")
         if status is None:
             status = status_for_value(value)
+        if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED):
+            raise ValueError(f"unknown status {status!r} for field {fld}")
         _assert_coherent(value, status)  # single coherence definition (models)
         setattr(self, fld, value if status == CLASSIFIED else None)
         self.field_status[fld] = status
