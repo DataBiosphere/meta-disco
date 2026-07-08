@@ -153,7 +153,10 @@ def test_record_gate_rejects_bad_dimension_value(validator):
                        for dim in DIMENSION_CLASS}
     bad = {"md5sum": "x", "file_name": "f.bam", "classifications": classifications}
     report = validator.validate(bad, target_class="ClassificationRecord")
-    assert report.results, "a bad nested dimension value should have failed"
+    # Assert it fails *because of* the bad enum value, not some unrelated reason —
+    # otherwise a regression in nested enum validation could leave this test green.
+    assert any("not_a_real_modality" in r.message for r in report.results), \
+        f"expected a failure citing the bad enum value, got: {[r.message for r in report.results]}"
 
 
 def test_gate_rejects_missing_status(validator):

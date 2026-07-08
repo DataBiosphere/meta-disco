@@ -13,8 +13,9 @@ description: >-
   (tests/test_rule_vocabulary.py), and `ClassificationRecord` now matches the
   pipeline output shape (`{..., "classifications": {...}}`, see
   docs/derived-file-data-model.md section 5a) so whole records validate against it
-  (schema/tests/test_output_validation.py, run closed=False — only the fastq scalar
-  hints inside `classifications` are tolerated as not-yet-modeled; #134 follow-up).
+  (schema/tests/test_output_validation.py, run closed=False, so any unmodeled key is
+  tolerated; in practice the pipeline's only such extras are the fastq scalar hints
+  inside `classifications` — modeling them is a #134 follow-up).
   Adopting the generated Pydantic records in the pipeline is a planned follow-up (#33).
 
 prefixes:
