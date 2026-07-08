@@ -635,10 +635,12 @@ def classify_from_bed_signals(
     if max_coordinates:
         coord_ref, coord_rationale = _infer_bed_reference(signals)
 
-        if coord_ref:
+        if coord_ref and result.status_of("reference_assembly") != NOT_APPLICABLE:
             # Coordinate detection reads the actual file content, so it overrides
-            # any filename-based reference guess (CLAUDE.md design principle:
-            # prefer reading actual file content over guessing from filenames).
+            # a filename-based reference guess (CLAUDE.md design principle: prefer
+            # reading actual file content over guessing from filenames). But it does
+            # not overturn an existing not_applicable — that is a positive
+            # determination ("no reference applies"), not a filename guess.
             result.set_field("reference_assembly", coord_ref)
             result.field_evidence["reference_assembly"] = [{
                 "rule_id": "bed_coordinate_reference",
