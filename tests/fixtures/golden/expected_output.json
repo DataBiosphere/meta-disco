@@ -4,10 +4,8 @@
       {
         "classifications": {
           "assay_type": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -17,10 +15,8 @@
             "value": null
           },
           "data_modality": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for data_modality",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -30,10 +26,8 @@
             "value": null
           },
           "data_type": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for data_type",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -43,10 +37,8 @@
             "value": null
           },
           "platform": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -56,10 +48,8 @@
             "value": null
           },
           "reference_assembly": {
-            "confidence": 0.9,
             "evidence": [
               {
-                "confidence": 0.9,
                 "reason": "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment",
                 "rule_id": "unaligned_no_sq",
                 "status": "not_applicable",
@@ -92,10 +82,8 @@
       {
         "classifications": {
           "assay_type": {
-            "confidence": 0.3,
             "evidence": [
               {
-                "confidence": 0.3,
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
                 "status": "not_applicable",
@@ -106,17 +94,14 @@
             "value": null
           },
           "data_modality": {
-            "confidence": 0.8,
             "evidence": [
               {
-                "confidence": 0.8,
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
                 "tier": 2,
                 "value": "genomic"
               },
               {
-                "confidence": 0.8,
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
                 "tier": 2,
@@ -127,24 +112,20 @@
             "value": "genomic"
           },
           "data_type": {
-            "confidence": 0.8,
             "evidence": [
               {
-                "confidence": 0.3,
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
                 "tier": 1,
                 "value": "sequence"
               },
               {
-                "confidence": 0.8,
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
                 "tier": 2,
                 "value": "assembly"
               },
               {
-                "confidence": 0.8,
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
                 "tier": 2,
@@ -155,10 +136,8 @@
             "value": "assembly"
           },
           "platform": {
-            "confidence": 0.3,
             "evidence": [
               {
-                "confidence": 0.3,
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
                 "status": "not_applicable",
@@ -169,17 +148,14 @@
             "value": null
           },
           "reference_assembly": {
-            "confidence": 0.8,
             "evidence": [
               {
-                "confidence": 0.8,
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
                 "status": "not_applicable",
                 "tier": 2
               },
               {
-                "confidence": 0.8,
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
                 "status": "not_applicable",
@@ -214,10 +190,8 @@
           "archive_accession": null,
           "archive_source": null,
           "assay_type": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -227,10 +201,8 @@
             "value": null
           },
           "data_modality": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay",
                 "rule_id": "fastq_modality_unknown",
                 "status": "not_classified",
@@ -241,10 +213,8 @@
             "value": null
           },
           "data_type": {
-            "confidence": 0.5,
             "evidence": [
               {
-                "confidence": 0.5,
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
                 "rule_id": "reads_base",
                 "tier": 2,
@@ -258,10 +228,8 @@
           "instrument_model": null,
           "is_paired_end": false,
           "platform": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -271,10 +239,8 @@
             "value": null
           },
           "reference_assembly": {
-            "confidence": 0.5,
             "evidence": [
               {
-                "confidence": 0.5,
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
                 "rule_id": "reads_base",
                 "status": "not_applicable",
@@ -307,10 +273,8 @@
       {
         "classifications": {
           "assay_type": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for assay_type",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -320,10 +284,8 @@
             "value": null
           },
           "data_modality": {
-            "confidence": 0.85,
             "evidence": [
               {
-                "confidence": 0.85,
                 "reason": "VCF files contain variant calls (genomic data)",
                 "rule_id": "variant_default_genomic",
                 "tier": 1,
@@ -334,10 +296,8 @@
             "value": "genomic"
           },
           "data_type": {
-            "confidence": 0.85,
             "evidence": [
               {
-                "confidence": 0.85,
                 "reason": "VCF files contain variant calls (genomic data)",
                 "rule_id": "variant_default_genomic",
                 "tier": 1,
@@ -348,10 +308,8 @@
             "value": "variants"
           },
           "platform": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for platform",
                 "rule_id": "not_classified",
                 "status": "not_classified"
@@ -361,10 +319,8 @@
             "value": null
           },
           "reference_assembly": {
-            "confidence": 0.0,
             "evidence": [
               {
-                "confidence": 0.0,
                 "reason": "No rule determined a value for reference_assembly",
                 "rule_id": "not_classified",
                 "status": "not_classified"

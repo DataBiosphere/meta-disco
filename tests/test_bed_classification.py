@@ -34,7 +34,6 @@ def classify_bed(filename: str, dataset_title: str = "") -> dict:
         "data_type": result.data_type,
         "assay_type": result.assay_type,
         "reference_assembly": result.reference_assembly,
-        "confidence": result.confidence,
         "rules_matched": result.rules_matched,
     }
 

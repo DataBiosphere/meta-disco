@@ -57,20 +57,17 @@ class TestRuleMatching:
         """RNA-seq indicators in filename should set transcriptomic modality."""
         result = engine.classify(FileInfo(filename="sample_RNA_aligned.bam"))
         assert result.data_modality == "transcriptomic.bulk"
-        assert result.confidence >= 0.80
         assert "alignment_rnaseq_filename" in result.rules_matched
 
     def test_alignment_wgs_filename(self, engine):
         """WGS indicators should set genomic modality with WGS assay_type."""
         result = engine.classify(FileInfo(filename="sample_WGS_aligned.bam"))
         assert result.data_modality == "genomic"
-        assert result.confidence >= 0.85
 
     def test_alignment_ref_grch38(self, engine):
         """hg38/GRCh38 in filename should set reference assembly."""
         result = engine.classify(FileInfo(filename="sample.hg38.cram"))
         assert result.reference_assembly == "GRCh38"
-        assert result.confidence >= 0.90
 
     def test_alignment_ref_grch37(self, engine):
         """hg19/GRCh37 in filename should set reference assembly."""
@@ -95,7 +92,6 @@ class TestRuleMatching:
             FileInfo(filename="sample.Aligned.sortedByCoord.out.bam")
         )
         assert result.data_modality == "transcriptomic.bulk"
-        assert result.confidence >= 0.90
 
 
 class TestVariantFiles:
@@ -105,7 +101,6 @@ class TestVariantFiles:
         """VCF files should default to genomic."""
         result = engine.classify(FileInfo(filename="sample.vcf"))
         assert result.data_modality == "genomic"
-        assert result.confidence >= 0.85
 
     def test_vcf_gz_default_genomic(self, engine):
         """Compressed VCF files should default to genomic."""
@@ -130,7 +125,7 @@ class TestThenStatus:
                 {"extension_map": {".foo": "foo"}},
                 {"rules": [{
                     "id": "foo_rule", "tier": 1, "scope": "extension",
-                    "when": {"extensions": [".foo"]}, "then": then, "confidence": 1.0,
+                    "when": {"extensions": [".foo"]}, "then": then,
                 }]},
             ], f)
         return RuleEngine(path)
@@ -218,13 +213,11 @@ class TestSpecialFileTypes:
         for ext in [".pgen", ".pvar", ".psam"]:
             result = engine.classify(FileInfo(filename=f"sample{ext}"))
             assert result.data_modality == "genomic"
-            assert result.confidence >= 0.95
 
     def test_single_cell_matrix(self, engine):
         """Single-cell matrix files should be transcriptomic.single_cell."""
         result = engine.classify(FileInfo(filename="sample.h5ad"))
         assert result.data_modality == "transcriptomic.single_cell"
-        assert result.confidence >= 0.90
 
     def test_single_cell_atac(self, engine):
         """Single-cell ATAC matrix should be epigenomic."""
@@ -235,13 +228,11 @@ class TestSpecialFileTypes:
         """IDAT files should be epigenomic.methylation."""
         result = engine.classify(FileInfo(filename="sample.idat"))
         assert result.data_modality == "epigenomic.methylation"
-        assert result.confidence >= 0.95
 
     def test_histology_svs(self, engine):
         """SVS files should be imaging.histology."""
         result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
-        assert result.confidence >= 0.95
 
 
 class TestFastqFiles:
@@ -279,7 +270,6 @@ class TestPeakFiles:
         """narrowPeak files should be epigenomic.chromatin_accessibility."""
         result = engine.classify(FileInfo(filename="sample.narrowPeak"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
-        assert result.confidence >= 0.85
 
     def test_broadpeak_chromatin_accessibility(self, engine):
         """broadPeak files should be epigenomic.chromatin_accessibility."""
@@ -295,7 +285,6 @@ class TestPeakFiles:
         """ChIP-seq peak files should be epigenomic.histone_modification."""
         result = engine.classify(FileInfo(filename="H3K27ac_chip_peaks.bed"))
         assert result.data_modality == "epigenomic.histone_modification"
-        assert result.confidence >= 0.90
 
     def test_summit_bed_chromatin_accessibility(self, engine):
         """Summit files should be epigenomic.chromatin_accessibility."""
@@ -331,19 +320,16 @@ class TestIntegration:
             FileInfo(filename="m64043_210211_005516.hifi_reads.bam")
         )
         assert result.data_modality == "genomic"
-        assert result.confidence >= 0.70
 
     def test_vcf_with_chr(self, engine):
         """VCF with chromosome in filename."""
         result = engine.classify(FileInfo(filename="NA19189.chr2.hc.vcf.gz"))
         assert result.data_modality == "genomic"
-        assert result.confidence >= 0.85
 
     def test_gtex_histology(self, engine):
         """GTEx histology image."""
         result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
-        assert result.confidence >= 0.95
 
     def test_cram_md5(self, engine):
         """CRAM MD5 checksum should be not_applicable."""
@@ -436,39 +422,36 @@ class TestEvaluateClaims:
     def test_single_claim(self):
         """Single claim → use it."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "confidence": 0.90, "tier": 2},
+            {"rule_id": "r1", "value": "genomic", "tier": 2},
         ])
         assert result["value"] == "genomic"
-        assert result["confidence"] == 0.90
         assert result["reason"] == "single_claim"
         assert result["is_conflict"] is False
 
     def test_two_claims_agree(self):
-        """Two claims with same value → unanimous, max confidence."""
+        """Two claims with same value → unanimous."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "confidence": 0.80, "tier": 2},
-            {"rule_id": "r2", "value": "genomic", "confidence": 0.95, "tier": 3},
+            {"rule_id": "r1", "value": "genomic", "tier": 2},
+            {"rule_id": "r2", "value": "genomic", "tier": 3},
         ])
         assert result["value"] == "genomic"
-        assert result["confidence"] == 0.95
         assert result["reason"] == "unanimous"
 
     def test_disagree_different_tiers(self):
         """Higher tier wins when claims disagree."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": "sequence", "confidence": 0.30, "tier": 1},
-            {"rule_id": "r2", "value": "assembly", "confidence": 0.80, "tier": 2},
+            {"rule_id": "r1", "value": "sequence", "tier": 1},
+            {"rule_id": "r2", "value": "assembly", "tier": 2},
         ])
         assert result["value"] == "assembly"
-        assert result["confidence"] == 0.80
         assert result["reason"] == "higher_specificity_override"
         assert result["is_conflict"] is False
 
     def test_disagree_same_tier(self):
         """Same tier, different values → conflict (not_classified status, no value)."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": "GRCh38", "confidence": 0.90, "tier": 2},
-            {"rule_id": "r2", "value": "CHM13", "confidence": 0.90, "tier": 2},
+            {"rule_id": "r1", "value": "GRCh38", "tier": 2},
+            {"rule_id": "r2", "value": "CHM13", "tier": 2},
         ])
         assert result["status"] == NOT_CLASSIFIED
         assert result["value"] is None
@@ -479,9 +462,9 @@ class TestEvaluateClaims:
     def test_three_claims_conflict_at_top_tier(self):
         """Lower tier agrees but top tier has conflict → conflict wins."""
         result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "confidence": 0.30, "tier": 1},
-            {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 3},
-            {"rule_id": "r3", "value": "transcriptomic.bulk", "confidence": 0.90, "tier": 3},
+            {"rule_id": "r1", "value": "genomic", "tier": 1},
+            {"rule_id": "r2", "value": "genomic", "tier": 3},
+            {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
         ])
         assert result["status"] == NOT_CLASSIFIED
         assert result["value"] is None
@@ -490,8 +473,8 @@ class TestEvaluateClaims:
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
         result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_CLASSIFIED, "confidence": 0.0},
-            {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 2},
+            {"rule_id": "r1", "status": NOT_CLASSIFIED},
+            {"rule_id": "r2", "value": "genomic", "tier": 2},
         ])
         assert result["value"] == "genomic"
         assert result["reason"] == "single_claim"
@@ -499,7 +482,7 @@ class TestEvaluateClaims:
     def test_not_applicable_status_declaration(self):
         """A not_applicable status claim resolves to status not_applicable, value None."""
         result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
+            {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
         ])
         assert result["status"] == NOT_APPLICABLE
         assert result["value"] is None
@@ -508,8 +491,8 @@ class TestEvaluateClaims:
     def test_not_applicable_wins_over_real_value_same_tier(self):
         """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
         result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_APPLICABLE, "confidence": 1.0, "tier": 1},
-            {"rule_id": "r2", "value": "genomic", "confidence": 0.90, "tier": 1},
+            {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
+            {"rule_id": "r2", "value": "genomic", "tier": 1},
         ])
         assert result["status"] == NOT_APPLICABLE
         assert result["value"] is None
@@ -520,7 +503,7 @@ class TestEvaluateClaims:
         """A rule that intentionally declares not_classified is a real claim, not no_claims."""
         result = evaluate_claims([
             {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
-             "confidence": 0.0, "tier": 3,
+             "tier": 3,
              "reason": "FASTQ modality cannot be determined from reads alone"},
         ])
         assert result["status"] == NOT_CLASSIFIED
@@ -533,9 +516,9 @@ class TestEvaluateClaims:
         """A rule's not_classified declaration shouldn't conflict with a real value claim."""
         result = evaluate_claims([
             {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
-             "confidence": 0.0, "tier": 3},
+             "tier": 3},
             {"rule_id": "some_rule", "value": "genomic",
-             "confidence": 0.90, "tier": 3},
+             "tier": 3},
         ])
         assert result["value"] == "genomic"
         assert result["is_conflict"] is False
@@ -556,7 +539,7 @@ class TestAssayTypeInference:
     """Test that infer_assay_type records evidence correctly."""
 
     def test_inferred_assay_type_has_evidence(self, engine):
-        """Inferred assay_type should have evidence with confidence 0.70."""
+        """Inferred assay_type should have evidence from the infer_assay_type rule."""
         file_info = ExtendedFileInfo(
             filename="sample.bam", file_size=60_000_000_000,
             file_size_gb=60.0, file_format=".bam",
@@ -572,7 +555,6 @@ class TestAssayTypeInference:
         evidence = result.field_evidence["assay_type"]
         assert len(evidence) == 1
         assert evidence[0]["rule_id"] == "infer_assay_type"
-        assert evidence[0]["confidence"] == 0.70
 
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
         """Inference should remove stale not_classified placeholder evidence."""
@@ -587,7 +569,6 @@ class TestAssayTypeInference:
         result.field_evidence["assay_type"] = [{
             "rule_id": "not_classified",
             "reason": "No rule determined a value for assay_type",
-            "confidence": 0.0,
             "status": NOT_CLASSIFIED,
         }]
         engine.infer_assay_type(result, file_info)
@@ -688,7 +669,7 @@ class TestOutputDictStatus:
         for filename in ("sample_WGS_aligned.bam", "sample.fastq.gz", "plot.png"):
             out = engine.classify_extended(FileInfo(filename=filename)).to_output_dict()
             for fld in CLASSIFICATION_FIELDS:
-                assert set(out[fld]) == {"value", "status", "confidence", "evidence"}
+                assert set(out[fld]) == {"value", "status", "evidence"}
 
     def test_status_pins_each_sentinel_state(self, engine):
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives

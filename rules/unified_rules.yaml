@@ -34,8 +34,7 @@
 # 6. TERMINAL RULES: If terminal=true and the rule matches, processing stops
 #    immediately. Use for definitive classifications.
 #
-# 7. CONFIDENCE & REASONS: Each matching rule adds its rationale to the reasons
-#    list. The highest confidence from matching rules is used.
+# 7. REASONS: Each matching rule adds its rationale to the reasons list.
 #
 #
 # KEY CONCEPTS
@@ -72,7 +71,6 @@
 # - scope: extension|filename|header|vcf_header|fastq_header|file_size (required)
 # - when: conditions that must all match (required)
 # - then: effects to apply when rule matches (required)
-# - confidence: 0.0-1.0 confidence score (default: 0.0)
 # - rationale: explanation for this classification (recommended)
 #
 #
@@ -255,7 +253,6 @@ rules:
         data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 1.0
     rationale: "Index file — metadata inherited from parent data file"
 
   # ---------------------------------------------------------------------------
@@ -273,7 +270,6 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 1.0
     rationale: "Checksum file — not data"
 
   # ---------------------------------------------------------------------------
@@ -291,7 +287,6 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 1.0
     rationale: "Log file — not data"
 
   # ---------------------------------------------------------------------------
@@ -309,7 +304,6 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 1.0
     rationale: "Incomplete chunked upload artifact — not usable data"
 
   # ---------------------------------------------------------------------------
@@ -327,7 +321,6 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 1.0
     rationale: "Bare ISO timestamp filename — metadata artifact, not data"
 
   # ---------------------------------------------------------------------------
@@ -341,7 +334,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants
-    confidence: 0.85
     rationale: "VCF files contain variant calls (genomic data)"
 
   # ---------------------------------------------------------------------------
@@ -355,7 +347,6 @@ rules:
     then:
       data_modality: genomic
       data_type: genotypes
-    confidence: 0.95
     rationale: "PLINK files contain genotype data (genomic)"
 
   # ---------------------------------------------------------------------------
@@ -370,7 +361,6 @@ rules:
       data_modality: epigenomic.methylation
       data_type: array_signal
       assay_type: Methylation array
-    confidence: 0.95
     rationale: "IDAT files are Illumina methylation array data"
 
   # ---------------------------------------------------------------------------
@@ -384,7 +374,6 @@ rules:
     then:
       data_modality: transcriptomic.single_cell
       data_type: expression_matrix
-    confidence: 0.90
     rationale: "Single-cell matrix format indicates scRNA-seq"
 
   # ---------------------------------------------------------------------------
@@ -402,7 +391,6 @@ rules:
       status:
         platform: not_applicable
         reference_assembly: not_applicable
-    confidence: 0.95
     rationale: "SVS files are Aperio whole-slide histology images used for pathology analysis"
 
   # ---------------------------------------------------------------------------
@@ -420,7 +408,6 @@ rules:
         platform: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
-    confidence: 0.90
     rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
 
   # ---------------------------------------------------------------------------
@@ -436,7 +423,6 @@ rules:
       platform: ONT
       status:
         reference_assembly: not_applicable
-    confidence: 0.90
     rationale: "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment"
 
   - id: nanopore_pod5
@@ -449,7 +435,6 @@ rules:
       platform: ONT
       status:
         reference_assembly: not_applicable
-    confidence: 0.90
     rationale: "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5)"
 
   # ---------------------------------------------------------------------------
@@ -464,7 +449,6 @@ rules:
       data_type: reads
       status:
         reference_assembly: not_applicable
-    confidence: 0.50
     rationale: "FASTQ files contain raw sequencing reads. Reference not applicable until alignment"
 
   # ---------------------------------------------------------------------------
@@ -480,7 +464,6 @@ rules:
       status:
         platform: not_applicable
         assay_type: not_applicable
-    confidence: 0.30
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
 
   # ===========================================================================
@@ -499,7 +482,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: alignments
-    confidence: 0.80
     rationale: "Filename contains RNA-seq indicator"
 
   - id: alignment_isoseq_filename
@@ -511,7 +493,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: alignments
-    confidence: 0.85
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
 
   - id: alignment_scrna_filename
@@ -523,7 +504,6 @@ rules:
     then:
       data_modality: transcriptomic.single_cell
       data_type: alignments
-    confidence: 0.85
     rationale: "Filename contains single-cell RNA indicator"
 
   - id: alignment_atac_filename
@@ -536,7 +516,6 @@ rules:
       data_modality: epigenomic.chromatin_accessibility
       data_type: alignments
       assay_type: ATAC-seq
-    confidence: 0.85
     rationale: "Filename contains ATAC-seq indicator"
 
   - id: alignment_chip_filename
@@ -549,7 +528,6 @@ rules:
       data_modality: epigenomic.histone_modification
       data_type: alignments
       assay_type: ChIP-seq
-    confidence: 0.80
     rationale: "Filename contains ChIP-seq indicator"
 
   - id: alignment_wgs_filename
@@ -562,7 +540,6 @@ rules:
       data_modality: genomic
       data_type: alignments
       assay_type: WGS
-    confidence: 0.85
     rationale: "Filename contains WGS indicator"
 
   - id: alignment_wes_filename
@@ -575,7 +552,6 @@ rules:
       data_modality: genomic
       data_type: alignments
       assay_type: WES
-    confidence: 0.85
     rationale: "Filename contains exome indicator"
 
   - id: alignment_hifi_filename
@@ -589,7 +565,6 @@ rules:
       data_type: alignments
       assay_type: WGS
       platform: PACBIO
-    confidence: 0.70
     rationale: "HiFi/PacBio reads typically used for genome assembly"
 
   - id: alignment_star_aligner
@@ -602,7 +577,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: alignments
       assay_type: RNA-seq
-    confidence: 0.90
     rationale: "STAR aligner output indicates RNA-seq"
 
   # ---------------------------------------------------------------------------
@@ -615,7 +589,6 @@ rules:
       filename_pattern: "(?i)hg38|grch38|hs38"
     then:
       reference_assembly: GRCh38
-    confidence: 0.90
     rationale: "Filename contains GRCh38/hg38 reference indicator"
 
   - id: filename_ref_grch37
@@ -625,7 +598,6 @@ rules:
       filename_pattern: "(?i)hg19|grch37|hs37|b37"
     then:
       reference_assembly: GRCh37
-    confidence: 0.90
     rationale: "Filename contains GRCh37/hg19 reference indicator"
 
   - id: filename_ref_chm13
@@ -635,7 +607,6 @@ rules:
       filename_pattern: "(?i)chm13|t2t|CHM13v2|hs1"
     then:
       reference_assembly: CHM13
-    confidence: 0.90
     rationale: "Filename contains CHM13/T2T reference indicator"
 
   # ---------------------------------------------------------------------------
@@ -653,7 +624,6 @@ rules:
       dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
     then:
       reference_assembly: GRCh38
-    confidence: 0.95
     rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
 
   # ---------------------------------------------------------------------------
@@ -668,7 +638,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: reads
-    confidence: 0.80
     rationale: "Filename contains RNA indicator"
 
   - id: reads_scrna_filename
@@ -680,7 +649,6 @@ rules:
     then:
       data_modality: transcriptomic.single_cell
       data_type: reads
-    confidence: 0.85
     rationale: "Filename contains single-cell indicator"
 
   - id: reads_atac_filename
@@ -693,7 +661,6 @@ rules:
       data_modality: epigenomic.chromatin_accessibility
       data_type: reads
       assay_type: ATAC-seq
-    confidence: 0.85
     rationale: "Filename contains ATAC indicator"
 
   - id: reads_wgs_filename
@@ -706,7 +673,6 @@ rules:
       data_modality: genomic
       data_type: reads
       assay_type: WGS
-    confidence: 0.80
     rationale: "Filename contains WGS indicator"
 
   # ---------------------------------------------------------------------------
@@ -723,7 +689,6 @@ rules:
       data_type: assembly
       status:
         reference_assembly: not_applicable
-    confidence: 0.80
     rationale: "Filename contains assembly/assembler indicator — de novo assembly"
 
   - id: fasta_haplotype_filename
@@ -737,7 +702,6 @@ rules:
       data_type: assembly
       status:
         reference_assembly: not_applicable
-    confidence: 0.80
     rationale: "Filename contains haplotype/phasing indicator — de novo assembly"
 
   # ---------------------------------------------------------------------------
@@ -753,7 +717,6 @@ rules:
       data_modality: epigenomic.chromatin_accessibility
       data_type: expression_matrix
       assay_type: ATAC-seq
-    confidence: 0.85
     rationale: "Single-cell matrix with ATAC indicator"
 
   # ---------------------------------------------------------------------------
@@ -769,7 +732,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: raw_signal
       platform: ONT
-    confidence: 0.80
     rationale: "Nanopore direct RNA sequencing"
 
   # ---------------------------------------------------------------------------
@@ -785,7 +747,6 @@ rules:
       data_modality: epigenomic.methylation
       data_type: annotations
       assay_type: Bisulfite-seq
-    confidence: 0.90
     rationale: "BED file contains CpG methylation calls or bisulfite sequencing regions"
 
   - id: bed_expression
@@ -798,7 +759,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: annotations
       assay_type: RNA-seq
-    confidence: 0.90
     rationale: "BED file contains gene expression quantification or splicing data"
 
   - id: bed_atac_peaks
@@ -811,7 +771,6 @@ rules:
       data_modality: epigenomic.chromatin_accessibility
       data_type: peaks
       assay_type: ATAC-seq
-    confidence: 0.90
     rationale: "BED file contains ATAC-seq peak calls for chromatin accessibility"
 
   - id: bed_chip_peaks
@@ -824,7 +783,6 @@ rules:
       data_modality: epigenomic.histone_modification
       data_type: peaks
       assay_type: ChIP-seq
-    confidence: 0.90
     rationale: "BED file contains ChIP-seq peak calls for histone marks or TF binding"
 
   - id: bed_peaks_generic
@@ -836,7 +794,6 @@ rules:
     then:
       data_modality: epigenomic.chromatin_accessibility
       data_type: peaks
-    confidence: 0.85
     rationale: "BED file contains ChIP-seq or ATAC-seq peak calls"
 
   - id: bed_assembly_qc
@@ -848,7 +805,6 @@ rules:
     then:
       data_modality: genomic
       data_type: annotations
-    confidence: 0.85
     rationale: "BED file is assembly QC output (haplotype regions, error flags) on de novo genomic assemblies"
 
   - id: bed_regions
@@ -860,7 +816,6 @@ rules:
     then:
       data_modality: genomic
       data_type: annotations
-    confidence: 0.80
     rationale: "BED file contains genomic analysis regions (callable, target, etc.)"
 
   # ---------------------------------------------------------------------------
@@ -876,7 +831,6 @@ rules:
       data_modality: epigenomic.histone_modification
       data_type: signal
       assay_type: ChIP-seq
-    confidence: 0.85
     rationale: "Signal track with ChIP/histone indicator"
 
   - id: signal_atac
@@ -889,7 +843,6 @@ rules:
       data_modality: epigenomic.chromatin_accessibility
       data_type: signal
       assay_type: ATAC-seq
-    confidence: 0.85
     rationale: "Signal track with ATAC indicator"
 
   - id: signal_rnaseq
@@ -901,7 +854,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: signal
-    confidence: 0.75
     rationale: "Signal track with RNA/coverage indicator"
 
   # ---------------------------------------------------------------------------
@@ -919,7 +871,6 @@ rules:
         data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 0.85
     rationale: "Target/capture region file — reference data, not primary experimental data"
 
   # ---------------------------------------------------------------------------
@@ -935,7 +886,6 @@ rules:
       data_modality: epigenomic.histone_modification
       data_type: peaks
       assay_type: ChIP-seq
-    confidence: 0.90
     rationale: "ChIP-seq histone modification peaks"
 
   # ---------------------------------------------------------------------------
@@ -953,7 +903,6 @@ rules:
         data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    confidence: 0.90
     rationale: "QC/stats file — supplementary data, not primary experimental data"
 
   - id: text_counts
@@ -965,7 +914,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: expression_matrix
-    confidence: 0.70
     rationale: "Filename suggests expression count data"
 
   # ---------------------------------------------------------------------------
@@ -981,7 +929,6 @@ rules:
     then:
       data_modality: genomic
       data_type: archive
-    confidence: 0.75
     rationale: "T2T project genomic region archive"
 
   # ===========================================================================
@@ -1010,7 +957,6 @@ rules:
       header_pattern: "PACBIO"
     then:
       platform: PACBIO
-    confidence: 0.70
     rationale: "PL:PACBIO indicates PacBio long-read sequencing"
 
   - id: platform_illumina
@@ -1023,7 +969,6 @@ rules:
       header_pattern: "ILLUMINA"
     then:
       platform: ILLUMINA
-    confidence: 0.95
     rationale: "PL:ILLUMINA in @RG header — definitive Illumina platform tag"
 
   - id: platform_ont
@@ -1036,7 +981,6 @@ rules:
       header_pattern: "ONT"
     then:
       platform: ONT
-    confidence: 0.70
     rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing"
 
   - id: platform_ont_alt
@@ -1049,7 +993,6 @@ rules:
       header_pattern: "NANOPORE"
     then:
       platform: ONT
-    confidence: 0.70
     rationale: "Alternative platform identifier for Oxford Nanopore Technology"
 
   # ---------------------------------------------------------------------------
@@ -1065,7 +1008,6 @@ rules:
       header_pattern: "basecall_model=[^;\\s]*dna_"
     then:
       data_modality: genomic
-    confidence: 0.90
     rationale: "ONT basecall model containing dna_ indicates DNA sequencing (genomic data). Handles both modern (dna_r10...) and legacy date-prefixed (2021-05-05_dna_r9...) formats"
 
   - id: ont_basecall_rna
@@ -1078,7 +1020,6 @@ rules:
       header_pattern: "basecall_model=[^;\\s]*rna_"
     then:
       data_modality: transcriptomic.bulk
-    confidence: 0.90
     rationale: "ONT basecall model containing rna_ indicates RNA sequencing (transcriptomic data). Handles both modern (rna_r9...) and legacy date-prefixed formats"
 
   # ---------------------------------------------------------------------------
@@ -1096,7 +1037,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: alignments
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
 
   - id: program_hisat2
@@ -1111,7 +1051,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: alignments
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "HISAT2 is a splice-aware aligner optimized for RNA-seq"
 
   - id: program_tophat
@@ -1126,7 +1065,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: alignments
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "TopHat was an early splice-aware aligner for RNA-seq (now superseded by HISAT2)"
 
   - id: program_salmon
@@ -1140,7 +1078,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "Salmon is a transcript-level quantification tool for RNA-seq"
 
   - id: program_kallisto
@@ -1154,7 +1091,6 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "Kallisto performs rapid transcript quantification using pseudoalignment"
 
   # ---------------------------------------------------------------------------
@@ -1171,7 +1107,6 @@ rules:
     then:
       data_modality: genomic
       data_type: alignments
-    confidence: 0.80
     rationale: "BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. Commonly used for WGS, WES, and ChIP-seq"
 
   - id: program_minimap2
@@ -1185,7 +1120,6 @@ rules:
     then:
       data_modality: genomic
       data_type: alignments
-    confidence: 0.75
     rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset"
 
   - id: program_bowtie2
@@ -1199,7 +1133,6 @@ rules:
     then:
       data_modality: genomic
       data_type: alignments
-    confidence: 0.75
     rationale: "Bowtie2 is a fast short-read aligner commonly used for ChIP-seq, ATAC-seq, and WGS"
 
   # ---------------------------------------------------------------------------
@@ -1215,7 +1148,6 @@ rules:
       header_pattern: "ccs"
     then:
       platform: PACBIO
-    confidence: 0.85
     rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq)"
 
   - id: program_isoseq
@@ -1230,7 +1162,6 @@ rules:
       data_modality: transcriptomic.bulk
       platform: PACBIO
       assay_type: RNA-seq
-    confidence: 0.95
     rationale: "IsoSeq is PacBio's full-length transcript sequencing method for isoform characterization"
 
   - id: program_lima
@@ -1243,7 +1174,6 @@ rules:
       header_pattern: "lima"
     then:
       platform: PACBIO
-    confidence: 0.0
     rationale: "Lima is PacBio's barcode demultiplexer. Doesn't indicate modality"
 
   # ---------------------------------------------------------------------------
@@ -1259,7 +1189,6 @@ rules:
       header_pattern: "(?i)(grch38|hg38|hs38)"
     then:
       reference_assembly: GRCh38
-    confidence: 0.95
     rationale: "Contig names containing GRCh38/hg38/hs38 indicate alignment to GRCh38 reference"
 
   - id: header_ref_grch37
@@ -1272,7 +1201,6 @@ rules:
       header_pattern: "(?i)(grch37|hg19|hs37)"
     then:
       reference_assembly: GRCh37
-    confidence: 0.95
     rationale: "Contig names containing GRCh37/hg19/hs37 indicate alignment to GRCh37 reference"
 
   - id: header_ref_chm13
@@ -1285,7 +1213,6 @@ rules:
       header_pattern: "(?i)(chm13|t2t|hs1)"
     then:
       reference_assembly: CHM13
-    confidence: 0.95
     rationale: "Contig names containing CHM13/T2T/hs1 indicate alignment to T2T-CHM13 reference"
 
   - id: header_ref_as_grch38
@@ -1298,7 +1225,6 @@ rules:
       header_pattern: "(?i)(grch38|hg38|hs38)"
     then:
       reference_assembly: GRCh38
-    confidence: 0.95
     rationale: "AS field containing GRCh38/hg38/hs38 explicitly identifies the reference assembly"
 
   - id: header_ref_as_grch37
@@ -1311,7 +1237,6 @@ rules:
       header_pattern: "(?i)(grch37|hg19|hs37|b37)"
     then:
       reference_assembly: GRCh37
-    confidence: 0.95
     rationale: "AS field containing GRCh37/hg19/hs37/b37 explicitly identifies the reference assembly"
 
   - id: header_ref_as_chm13
@@ -1324,7 +1249,6 @@ rules:
       header_pattern: "(?i)(chm13|t2t|hs1)"
     then:
       reference_assembly: CHM13
-    confidence: 0.95
     rationale: "AS field containing CHM13/T2T/hs1 explicitly identifies the reference assembly"
 
   # ---------------------------------------------------------------------------
@@ -1340,7 +1264,6 @@ rules:
     then:
       status:
         reference_assembly: not_applicable
-    confidence: 0.90
     rationale: "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment"
 
   # ===========================================================================
@@ -1359,7 +1282,6 @@ rules:
       vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.15)"
     then:
       reference_assembly: GRCh38
-    confidence: 0.95
     rationale: "##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession indicates variants called against GRCh38"
 
   - id: vcf_ref_grch37
@@ -1371,7 +1293,6 @@ rules:
       vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.[^5]|b37)"
     then:
       reference_assembly: GRCh37
-    confidence: 0.95
     rationale: "##reference line containing GRCh37, hg19, b37, or earlier accessions indicates variants called against GRCh37"
 
   - id: vcf_ref_chm13
@@ -1383,7 +1304,6 @@ rules:
       vcf_pattern: "(?i)(chm13|t2t|hs1)"
     then:
       reference_assembly: CHM13
-    confidence: 0.95
     rationale: "##reference line containing CHM13 or T2T indicates variants called against T2T-CHM13"
 
   - id: vcf_contig_grch38
@@ -1395,7 +1315,6 @@ rules:
       vcf_pattern: "(?i)assembly=(grch38|hg38|GCA_000001405\\.15)"
     then:
       reference_assembly: GRCh38
-    confidence: 0.95
     rationale: "##contig lines with assembly=GRCh38 explicitly declare the reference genome"
 
   - id: vcf_contig_grch37
@@ -1407,7 +1326,6 @@ rules:
       vcf_pattern: "(?i)assembly=(grch37|hg19|b37)"
     then:
       reference_assembly: GRCh37
-    confidence: 0.95
     rationale: "##contig lines with assembly=GRCh37 explicitly declare the reference genome"
 
   - id: vcf_contig_chm13
@@ -1419,7 +1337,6 @@ rules:
       vcf_pattern: "(?i)assembly=(chm13|t2t|hs1)"
     then:
       reference_assembly: CHM13
-    confidence: 0.95
     rationale: "##contig lines with assembly=CHM13 explicitly declare the reference genome"
 
   # ---------------------------------------------------------------------------
@@ -1435,7 +1352,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.90
     rationale: "GATK HaplotypeCaller is the standard germline SNV/indel caller"
 
   - id: vcf_deepvariant
@@ -1448,7 +1364,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.90
     rationale: "DeepVariant is Google's deep learning-based germline variant caller"
 
   - id: vcf_gatk_genotypegvcfs
@@ -1461,7 +1376,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.90
     rationale: "GATK GenotypeGVCFs performs joint genotyping on gVCF files"
 
   - id: vcf_glnexus
@@ -1474,7 +1388,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.90
     rationale: "GLnexus is a scalable gVCF merging and joint genotyping tool"
 
   - id: vcf_bcftools_call
@@ -1487,7 +1400,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.85
     rationale: "bcftools call is a lightweight germline variant caller"
 
   - id: vcf_freebayes
@@ -1500,7 +1412,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.85
     rationale: "FreeBayes is a Bayesian haplotype-based germline variant caller"
 
   - id: vcf_strelka2_germline
@@ -1513,7 +1424,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.germline
-    confidence: 0.85
     rationale: "Strelka2 in germline mode calls SNVs and indels from germline samples"
 
   # ---------------------------------------------------------------------------
@@ -1529,7 +1439,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.somatic
-    confidence: 0.95
     rationale: "GATK Mutect2 is the standard somatic SNV/indel caller for tumor-normal analysis"
 
   - id: vcf_strelka_somatic
@@ -1542,7 +1451,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.somatic
-    confidence: 0.90
     rationale: "Strelka in somatic mode calls somatic variants from tumor-normal pairs"
 
   - id: vcf_varscan_somatic
@@ -1555,7 +1463,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.somatic
-    confidence: 0.90
     rationale: "VarScan somatic mode calls somatic variants from tumor-normal pairs"
 
   - id: vcf_somaticsniper
@@ -1568,7 +1475,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.somatic
-    confidence: 0.90
     rationale: "SomaticSniper identifies somatic point mutations in tumor-normal pairs"
 
   - id: vcf_muse
@@ -1581,7 +1487,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.somatic
-    confidence: 0.90
     rationale: "MuSE calls somatic point mutations using a Markov substitution model"
 
   # ---------------------------------------------------------------------------
@@ -1597,7 +1502,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "Manta calls structural variants (deletions, insertions, inversions, translocations)"
 
   - id: vcf_delly
@@ -1610,7 +1514,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "DELLY discovers structural variants using paired-end and split-read analysis"
 
   - id: vcf_lumpy
@@ -1623,7 +1526,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "LUMPY is a probabilistic SV caller using multiple alignment signals"
 
   - id: vcf_smoove
@@ -1636,7 +1538,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "Smoove simplifies SV calling by wrapping LUMPY with additional filtering"
 
   - id: vcf_svim
@@ -1649,7 +1550,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "SVIM detects structural variants from long-read sequencing data (PacBio/ONT)"
 
   - id: vcf_sniffles
@@ -1662,7 +1562,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "Sniffles is a long-read SV caller optimized for PacBio and ONT data"
 
   - id: vcf_pbsv
@@ -1675,7 +1574,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "PBSV is PacBio's structural variant caller for HiFi and CLR data"
 
   - id: vcf_cutesv
@@ -1688,7 +1586,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.structural
-    confidence: 0.90
     rationale: "CuteSV is a fast long-read SV caller using clustering of signatures"
 
   # ---------------------------------------------------------------------------
@@ -1704,7 +1601,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.cnv
-    confidence: 0.90
     rationale: "CNVkit detects copy number variants from targeted/exome or WGS data"
 
   - id: vcf_gatk_cnv
@@ -1717,7 +1613,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.cnv
-    confidence: 0.90
     rationale: "GATK CNV tools (ModelSegments, etc.) call copy number variants from read depth data"
 
   - id: vcf_canvas
@@ -1730,7 +1625,6 @@ rules:
     then:
       data_modality: genomic
       data_type: variants.cnv
-    confidence: 0.90
     rationale: "Canvas is Illumina's CNV caller for WGS and tumor-normal analysis"
 
   # ---------------------------------------------------------------------------
@@ -1745,7 +1639,6 @@ rules:
       vcf_pattern: "^(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)"
     then:
       data_type: variants.somatic
-    confidence: 0.85
     rationale: "INFO fields with SOMATIC, TUMOR_, or NORMAL_ prefixes indicate somatic variant calls"
 
   - id: vcf_info_sv
@@ -1757,7 +1650,6 @@ rules:
       vcf_pattern: "^(SVTYPE|SVLEN|CIPOS|CIEND|MATEID|IMPRECISE)$"
     then:
       data_type: variants.structural
-    confidence: 0.80
     rationale: "Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate structural variant calls"
 
   - id: vcf_info_cnv
@@ -1769,7 +1661,6 @@ rules:
       vcf_pattern: "^(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)$"
     then:
       data_type: variants.cnv
-    confidence: 0.80
     rationale: "CNV-specific INFO fields indicate copy number variant calls"
 
   # ===========================================================================
@@ -1787,7 +1678,6 @@ rules:
       fastq_pattern: "^@[A-Z0-9-]+:\\d+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+"
     then:
       platform: ILLUMINA
-    confidence: 0.90
     rationale: "Modern Illumina read names (Casava 1.8+) follow the format @instrument:run:flowcell:lane:tile:x:y"
 
   - id: fastq_illumina_legacy
@@ -1798,7 +1688,6 @@ rules:
       fastq_pattern: "^@[A-Z0-9-]+:\\d+:\\d+:\\d+:\\d+#"
     then:
       platform: ILLUMINA
-    confidence: 0.85
     rationale: "Legacy Illumina read names follow @instrument:lane:tile:x:y#index format"
 
   - id: fastq_illumina_srr
@@ -1809,7 +1698,6 @@ rules:
       fastq_pattern: "^@SRR\\d+\\.\\d+"
     then:
       platform: ILLUMINA
-    confidence: 0.70
     rationale: "SRA-reformatted read names starting with @SRR typically indicate Illumina data from NCBI SRA"
 
   - id: fastq_illumina_hiseq_desc
@@ -1820,7 +1708,6 @@ rules:
       fastq_pattern: " HS2[05]00[-_]"
     then:
       platform: ILLUMINA
-    confidence: 0.85
     rationale: "HiSeq 2000/2500 instrument identifier found in read description"
 
   - id: fastq_illumina_ena_hiseq
@@ -1831,7 +1718,6 @@ rules:
       fastq_pattern: "^@[EDS]RR\\d+\\.\\d+ HS2[05]00"
     then:
       platform: ILLUMINA
-    confidence: 0.90
     rationale: "ENA/SRA-reformatted read names with HiSeq 2000/2500 instrument ID in description"
 
   # ---------------------------------------------------------------------------
@@ -1846,7 +1732,6 @@ rules:
     then:
       platform: PACBIO
       data_type: reads
-    confidence: 0.95
     rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
 
   - id: fastq_pacbio_clr
@@ -1858,7 +1743,6 @@ rules:
     then:
       platform: PACBIO
       data_type: reads
-    confidence: 0.90
     rationale: "PacBio CLR (Continuous Long Read) subread names follow @movie/zmw/start_end format"
 
   - id: fastq_pacbio_generic
@@ -1870,7 +1754,6 @@ rules:
     then:
       platform: PACBIO
       data_type: reads
-    confidence: 0.85
     rationale: "Generic PacBio read names follow @movie/zmw format"
 
   # ---------------------------------------------------------------------------
@@ -1885,7 +1768,6 @@ rules:
     then:
       platform: ONT
       data_type: reads
-    confidence: 0.95
     rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
 
   - id: fastq_ont_metadata
@@ -1897,7 +1779,6 @@ rules:
     then:
       platform: ONT
       data_type: reads
-    confidence: 0.95
     rationale: "ONT reads often include 'runid=' metadata in the header line"
 
   # ---------------------------------------------------------------------------
@@ -1911,7 +1792,6 @@ rules:
       fastq_pattern: "^@[A-Z]\\d{9}L\\dC\\d{3}R\\d{3}\\d+"
     then:
       platform: MGI
-    confidence: 0.90
     rationale: "MGI/BGI-SEQ read names follow @flowcellLaneCcolumnRrow format"
 
   - id: fastq_mgi_alt
@@ -1922,7 +1802,6 @@ rules:
       fastq_pattern: "^@[A-Z]\\d+L\\d+C\\d+R\\d+"
     then:
       platform: MGI
-    confidence: 0.85
     rationale: "Alternative MGI/BGI read name format with varying digit lengths"
 
   # ---------------------------------------------------------------------------
@@ -1936,7 +1815,6 @@ rules:
       fastq_pattern: "^@[A-Z0-9]+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+:\\d+"
     then:
       platform: ELEMENT
-    confidence: 0.80
     rationale: "Element Biosciences AVITI read names follow a similar format to Illumina"
 
   # ---------------------------------------------------------------------------
@@ -1950,7 +1828,6 @@ rules:
       fastq_pattern: "^@[A-Z0-9]+_\\d+_\\d+_\\d+_[ACGT]+"
     then:
       platform: ULTIMA
-    confidence: 0.80
     rationale: "Ultima Genomics read names include flow-space encoded sequences"
 
   # ---------------------------------------------------------------------------
@@ -1963,7 +1840,6 @@ rules:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       fastq_pattern: "^@ERR\\d+\\.\\d+"
     then: {}
-    confidence: 0.60
     rationale: "ERR accessions indicate data from the European Nucleotide Archive (ENA)"
 
   - id: fastq_sra_srr
@@ -1973,7 +1849,6 @@ rules:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       fastq_pattern: "^@SRR\\d+\\.\\d+"
     then: {}
-    confidence: 0.60
     rationale: "SRR accessions indicate data from NCBI Sequence Read Archive (SRA)"
 
   - id: fastq_ddbj_drr
@@ -1983,7 +1858,6 @@ rules:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       fastq_pattern: "^@DRR\\d+\\.\\d+"
     then: {}
-    confidence: 0.60
     rationale: "DRR accessions indicate data from DDBJ Sequence Read Archive (Japan)"
 
   # ---------------------------------------------------------------------------
@@ -1996,7 +1870,6 @@ rules:
       extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
       fastq_pattern: "[/\\s][12]$|[/\\s][12]:|_R[12]_|\\.R[12]\\.|_r[12]_|\\.r[12]\\."
     then: {}
-    confidence: 0.80
     rationale: "Read 1/2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing"
 
   # ---------------------------------------------------------------------------
@@ -2011,7 +1884,6 @@ rules:
     then:
       status:
         data_modality: not_classified
-    confidence: 0.0
     rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
 
   # ===========================================================================
@@ -2027,7 +1899,6 @@ rules:
     then:
       data_modality: genomic
       data_type: annotations
-    confidence: 0.60
     rationale: "BED file with no specific pattern - defaulting to genomic intervals"
 
 
@@ -2043,14 +1914,12 @@ validators:
     module: "meta_disco.validators.contig_lengths"
     function: "detect_reference_from_contig_lengths"
     applies_to: ["header", "vcf_header"]
-    confidence: 0.98
 
   max_position_detector:
     description: "Detect reference assembly by ruling out references where variant positions exceed chromosome lengths"
     module: "meta_disco.validators.contig_lengths"
     function: "detect_reference_from_max_positions"
     applies_to: ["vcf_header"]
-    confidence: 0.90
 
   illumina_read_parser:
     description: "Parse Illumina read names to extract instrument, flowcell, lane"

@@ -11,25 +11,20 @@ classifications:
   data_modality:
     value: "proteomic"          # ❌ not in data_modality_enum
     status: "classified"
-    confidence: 0.9
     evidence: []
   data_type:
     value: "alignments"
     status: "classified"
-    confidence: 0.9
     evidence: []
   reference_assembly:
     value: "GRCh39"             # ❌ not in reference_assembly_enum
     status: "classified"
-    confidence: 0.9
     evidence: []
   assay_type:
     value: null
     # ❌ missing required `status`
-    confidence: 0.0
     evidence: []
   platform:
     value: "ILLUMINA"
     status: "classified"
-    confidence: 0.8
     evidence: []

@@ -131,11 +131,11 @@ class TestLoadClassifications:
                 "md5sum": "abc123",
                 "file_name": "sample.bam",
                 "classifications": {
-                    "data_modality": {"value": "genomic", "confidence": 0.9, "evidence": []},
-                    "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
-                    "platform": {"value": "ILLUMINA", "confidence": 0.9, "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "confidence": 0.9, "evidence": []},
-                    "assay_type": {"value": "WGS", "confidence": 0.9, "evidence": []},
+                    "data_modality": {"value": "genomic", "evidence": []},
+                    "data_type": {"value": "alignments", "evidence": []},
+                    "platform": {"value": "ILLUMINA", "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "evidence": []},
+                    "assay_type": {"value": "WGS", "evidence": []},
                 },
             }],
         }))
@@ -152,11 +152,11 @@ class TestLoadClassifications:
                 "md5sum": "bam_md5",
                 "file_name": "sample.bam",
                 "classifications": {
-                    "data_modality": {"value": "genomic", "confidence": 0.9, "evidence": []},
-                    "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
-                    "platform": {"value": "ILLUMINA", "confidence": 0.9, "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "confidence": 0.9, "evidence": []},
-                    "assay_type": {"value": "WGS", "confidence": 0.9, "evidence": []},
+                    "data_modality": {"value": "genomic", "evidence": []},
+                    "data_type": {"value": "alignments", "evidence": []},
+                    "platform": {"value": "ILLUMINA", "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "evidence": []},
+                    "assay_type": {"value": "WGS", "evidence": []},
                 },
             }],
         }))
@@ -166,11 +166,11 @@ class TestLoadClassifications:
                 "md5sum": "bed_md5",
                 "file_name": "sample.regions.bed.gz",
                 "classifications": {
-                    "data_modality": {"value": "genomic", "confidence": 0.8, "evidence": []},
-                    "data_type": {"value": "annotations", "confidence": 0.8, "evidence": []},
-                    "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "confidence": 0.8, "evidence": []},
-                    "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                    "data_modality": {"value": "genomic", "evidence": []},
+                    "data_type": {"value": "annotations", "evidence": []},
+                    "platform": {"value": "not_classified", "evidence": []},
+                    "reference_assembly": {"value": "GRCh38", "evidence": []},
+                    "assay_type": {"value": "not_classified", "evidence": []},
                 },
             }],
         }))
@@ -218,11 +218,11 @@ class TestLoadClassifications:
                 "md5sum": "bed_parent_md5",
                 "file_name": "HG03652.regions.bed.gz",
                 "classifications": {
-                    "data_modality": {"value": "genomic", "confidence": 0.8, "evidence": []},
-                    "data_type": {"value": "annotations", "confidence": 0.8, "evidence": []},
-                    "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
-                    "reference_assembly": {"value": "CHM13", "confidence": 0.9, "evidence": []},
-                    "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                    "data_modality": {"value": "genomic", "evidence": []},
+                    "data_type": {"value": "annotations", "evidence": []},
+                    "platform": {"value": "not_classified", "evidence": []},
+                    "reference_assembly": {"value": "CHM13", "evidence": []},
+                    "assay_type": {"value": "not_classified", "evidence": []},
                 },
             }],
         }))
@@ -263,11 +263,11 @@ class TestLoadClassifications:
         vcf_cls.write_text(json.dumps({"classifications": [{
             "md5sum": "vcf_md5", "file_name": "sample.vcf.gz",
             "classifications": {
-                "data_modality": {"value": "genomic", "confidence": 0.85, "evidence": []},
-                "data_type": {"value": "variants.germline", "confidence": 0.9, "evidence": []},
-                "platform": {"value": "not_classified", "confidence": 0.0, "evidence": []},
-                "reference_assembly": {"value": "GRCh38", "confidence": 0.98, "evidence": []},
-                "assay_type": {"value": "not_classified", "confidence": 0.0, "evidence": []},
+                "data_modality": {"value": "genomic", "evidence": []},
+                "data_type": {"value": "variants.germline", "evidence": []},
+                "platform": {"value": "not_classified", "evidence": []},
+                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                "assay_type": {"value": "not_classified", "evidence": []},
             },
         }]}))
         output_file = tmp_path / "out.json"
@@ -295,11 +295,11 @@ class TestLoadClassifications:
         bam_cls.write_text(json.dumps({"classifications": [{
             "md5sum": "bam_md5", "file_name": "sample.bam",
             "classifications": {
-                "data_modality": {"value": "transcriptomic.bulk", "confidence": 0.95, "evidence": []},
-                "data_type": {"value": "alignments", "confidence": 0.9, "evidence": []},
-                "platform": {"value": "ILLUMINA", "confidence": 0.95, "evidence": []},
-                "reference_assembly": {"value": "GRCh38", "confidence": 0.98, "evidence": []},
-                "assay_type": {"value": "RNA-seq", "confidence": 0.95, "evidence": []},
+                "data_modality": {"value": "transcriptomic.bulk", "evidence": []},
+                "data_type": {"value": "alignments", "evidence": []},
+                "platform": {"value": "ILLUMINA", "evidence": []},
+                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                "assay_type": {"value": "RNA-seq", "evidence": []},
             },
         }]}))
         output_file = tmp_path / "out.json"

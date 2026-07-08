@@ -283,7 +283,7 @@ of this is already built. `classify_index_files.py` already writes
 is **materialize** the parent's values: lines 214–218 copy the parent's
 `data_modality / data_type / assay_type / platform / reference_assembly` onto the
 index, and lines 311–316 wrap them in per-field `classifications` blocks carrying
-an `inherited_from_parent` evidence entry at confidence `0.95`. So the refactor is
+an `inherited_from_parent` evidence entry. So the refactor is
 narrower than it first appears: keep the pointer (already there), stop treating
 the copied-in values as the index's own identity, and move "what it inherits" to
 query time (next section).
@@ -753,7 +753,7 @@ roadmap starts to cash in on generation.
   doesn't *add* the link — it stops the materialization that sits next to it.
 - **Materialization is real and localized.** Parent values are copied at lines
   214–218 and re-wrapped as per-field `classifications` with an
-  `inherited_from_parent` evidence entry (confidence `0.95`) at lines 311–316.
+  `inherited_from_parent` evidence entry at lines 311–316.
   That's the exact code this design changes.
 - **No in-repo search layer.** Discovery lives in the external Explorer/TDR.
   In-repo consumers are the report generators, which already index everything by

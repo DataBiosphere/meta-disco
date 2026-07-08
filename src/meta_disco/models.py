@@ -74,13 +74,13 @@ def _assert_coherent(value, status) -> None:
             f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
-def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict:
+def build_field_entry(value, status=None, evidence=None) -> dict:
     """Build a serialized per-field classification entry.
 
-    The single place that assembles the ``{value, status, confidence, evidence}``
-    output shape and enforces epic #116's Stage 3 invariant: sentinels live only
-    in ``status`` and ``value`` is ``None`` unless the field is CLASSIFIED. Every
-    producer (rule_engine's ``to_output_dict``, the index-propagation script, the
+    The single place that assembles the ``{value, status, evidence}`` output shape
+    and enforces epic #116's Stage 3 invariant: sentinels live only in ``status``
+    and ``value`` is ``None`` unless the field is CLASSIFIED. Every producer
+    (rule_engine's ``to_output_dict``, the index-propagation script, the
     header_classifier empty-input fallback) goes through here, so the invariant is
     defined once. When an explicit ``status`` is passed it must be coherent with
     ``value``: a CLASSIFIED status requires a real value, and a non-CLASSIFIED
@@ -99,7 +99,6 @@ def build_field_entry(value, status=None, confidence=0.0, evidence=None) -> dict
     return {
         "value": value if status == CLASSIFIED else None,
         "status": status,
-        "confidence": confidence,
         "evidence": evidence if evidence is not None else [],
     }
 
@@ -185,6 +184,5 @@ class ClassificationResult:
 
     data_modality: str | None = None
     reference_assembly: str | None = None
-    confidence: float = 0.0
     reasons: list[str] = field(default_factory=list)
     rules_matched: list[str] = field(default_factory=list)

@@ -11,30 +11,24 @@ classifications:
   data_modality:
     value: "genomic"
     status: "classified"
-    confidence: 0.95
     evidence:
       - rule_id: "aligned_reads_bam"
         reason: "BAM with @SQ lines aligned to a human assembly"
-        confidence: 0.95
         value: "genomic"
         tier: 1
   data_type:
     value: "alignments"
     status: "classified"
-    confidence: 0.9
     evidence: []
   reference_assembly:
     value: "GRCh38"
     status: "classified"
-    confidence: 0.9
     evidence: []
   assay_type:
     value: null
     status: "not_classified"
-    confidence: 0.0
     evidence: []
   platform:
     value: "ILLUMINA"
     status: "classified"
-    confidence: 0.8
     evidence: []

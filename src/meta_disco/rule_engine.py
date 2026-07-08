@@ -67,7 +67,6 @@ class ExtendedClassificationResult:
     reference_assembly: str | None = None
     assay_type: str | None = None
     platform: str | None = None
-    confidence: float = 0.0
     field_evidence: dict[str, list[dict]] = field(
         default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
@@ -160,7 +159,6 @@ class ExtendedClassificationResult:
         return ClassificationResult(
             data_modality=self.data_modality,
             reference_assembly=self.reference_assembly,
-            confidence=self.confidence,
             reasons=self.reasons,
             rules_matched=self.rules_matched,
         )
@@ -168,7 +166,7 @@ class ExtendedClassificationResult:
     def to_output_dict(self) -> dict:
         """Convert to the per-field output format.
 
-        Each dimension emits ``{value, status, confidence, evidence}`` via
+        Each dimension emits ``{value, status, evidence}`` via
         ``models.build_field_entry``. The dimension attribute holds a real value or
         None and ``field_status`` holds the resolved status (epic #116 / #136), so
         both are passed straight through — the sentinel is never in ``value``,
@@ -177,10 +175,8 @@ class ExtendedClassificationResult:
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
             evidence = self.field_evidence.get(fld, [])
-            fld_conf = max((e.get("confidence", 0) for e in evidence), default=0.0)
             classifications[fld] = build_field_entry(
-                getattr(self, fld), status=self.field_status[fld],
-                confidence=fld_conf, evidence=evidence)
+                getattr(self, fld), status=self.field_status[fld], evidence=evidence)
         return classifications
 
     # Classification field names (single source of truth: models.CLASSIFICATION_FIELDS)
@@ -196,7 +192,7 @@ def _claim_declaration(claim: dict) -> str | None:
     return value if value is not None else claim.get("status")
 
 
-def _resolved(declaration: str | None, confidence: float, reason: str,
+def _resolved(declaration: str | None, reason: str,
               is_conflict: bool = False, competing: list | None = None) -> dict:
     """Package a winning declaration as ``{value, status, ...}``: a real declaration
     becomes value with status CLASSIFIED; a status declaration becomes that status
@@ -205,7 +201,6 @@ def _resolved(declaration: str | None, confidence: float, reason: str,
     out = {
         "value": declaration if status == CLASSIFIED else None,
         "status": status,
-        "confidence": confidence,
         "reason": reason,
         "is_conflict": is_conflict,
     }
@@ -224,17 +219,17 @@ def evaluate_claims(claims: list[dict]) -> dict:
     Resolution rules:
     - No claims → not_classified
     - Single claim → use it
-    - All claims agree → use declaration, max confidence
+    - All claims agree → use that declaration
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
     - Claims disagree, same max tier → conflict (not_classified)
 
     Args:
-        claims: List of evidence dicts, each with a ``value`` or a ``status``, plus
-                ``confidence`` and optionally ``tier`` / ``rule_id`` / ``reason``.
+        claims: List of evidence dicts, each with a ``value`` or a ``status`` and
+                optionally ``tier`` / ``rule_id`` / ``reason``.
 
     Returns:
-        Dict with: value (real or None), status, confidence, reason, is_conflict,
+        Dict with: value (real or None), status, reason, is_conflict,
         competing_values (if conflict).
     """
     # Drop the synthetic not_classified placeholder and empty claims, but keep
@@ -248,23 +243,20 @@ def evaluate_claims(claims: list[dict]) -> dict:
     assertive_claims = [c for c in real_claims if _claim_declaration(c) != NOT_CLASSIFIED]
 
     if not real_claims:
-        return _resolved(NOT_CLASSIFIED, 0.0, "no_claims")
+        return _resolved(NOT_CLASSIFIED, "no_claims")
 
     # Only not_classified declarations present → resolve as not_classified
     # (the rule's rationale is preserved in field_evidence, not in this return value)
     if not assertive_claims:
-        best = max(real_claims, key=lambda c: c.get("confidence", 0))
-        return _resolved(NOT_CLASSIFIED, best.get("confidence", 0),
+        return _resolved(NOT_CLASSIFIED,
                          "single_claim" if len(real_claims) == 1 else "unanimous")
 
     # Check if all assertive declarations agree
     declarations = {_claim_declaration(c) for c in assertive_claims}
 
     if len(declarations) == 1:
-        # Unanimous — use the highest-confidence claim
-        best = max(assertive_claims, key=lambda c: c.get("confidence", 0))
-        return _resolved(_claim_declaration(best),
-                         max(c.get("confidence", 0) for c in assertive_claims),
+        # Unanimous — every assertive claim declares the same value
+        return _resolved(next(iter(declarations)),
                          "unanimous" if len(assertive_claims) > 1 else "single_claim")
 
     # Assertive declarations disagree — check tiers
@@ -276,22 +268,14 @@ def evaluate_claims(claims: list[dict]) -> dict:
     # at the same tier without triggering a conflict (e.g., text_stats
     # setting not_applicable shouldn't conflict with filename_ref patterns)
     if NOT_APPLICABLE in top_tier_decls:
-        na_claims = [c for c in top_tier_claims if _claim_declaration(c) == NOT_APPLICABLE]
-        best = max(na_claims, key=lambda c: c.get("confidence", 0))
-        return _resolved(NOT_APPLICABLE, best.get("confidence", 0), "not_applicable_terminal")
+        return _resolved(NOT_APPLICABLE, "not_applicable_terminal")
 
     if len(top_tier_decls) == 1:
         # Highest tier is unanimous — override lower tiers
-        winner = top_tier_decls.pop()
-        best = max(
-            (c for c in top_tier_claims if _claim_declaration(c) == winner),
-            key=lambda c: c.get("confidence", 0),
-        )
-        return _resolved(_claim_declaration(best), best.get("confidence", 0),
-                         "higher_specificity_override")
+        return _resolved(top_tier_decls.pop(), "higher_specificity_override")
 
     # Same tier, different values — conflict
-    return _resolved(NOT_CLASSIFIED, 0.0, "conflict",
+    return _resolved(NOT_CLASSIFIED, "conflict",
                      is_conflict=True, competing=sorted(top_tier_decls))
 
 
@@ -406,7 +390,6 @@ class RuleEngine:
                     "rule_id": f"conflicting_{fld}_rules",
                     "reason": (f"Conflicting {fld}: {evaluation['competing_values']}"
                                " — ambiguous"),
-                    "confidence": 0.0,
                     "status": NOT_CLASSIFIED,
                     "competing_values": evaluation["competing_values"],
                     "is_conflict": True,
@@ -415,7 +398,6 @@ class RuleEngine:
                 result.field_evidence[fld].append({
                     "rule_id": "not_classified",
                     "reason": f"No rule determined a value for {fld}",
-                    "confidence": 0.0,
                     "status": NOT_CLASSIFIED,
                 })
 
@@ -596,14 +578,12 @@ class RuleEngine:
         claim appended to field_evidence — a value claim carries ``value``, a status
         claim carries ``status`` (never a sentinel in the value slot — epic #116 /
         #136); evaluation happens later in _finalize_result via evaluate_claims().
-        Also updates result.confidence (running max, not a classification field).
         """
         then = rule.then
         then_status = rule.then_status
         evidence_entry = {
             "rule_id": rule.id,
             "reason": rule.rationale or "",
-            "confidence": rule.confidence,
             "tier": rule.tier,
         }
         for fld in result._CLASSIFICATION_FIELDS:
@@ -613,10 +593,6 @@ class RuleEngine:
                 result.field_evidence[fld].append({**evidence_entry, "value": value})
             elif status is not None:
                 result.field_evidence[fld].append({**evidence_entry, "status": status})
-
-        # Update overall confidence (take highest confidence from matching rules)
-        if rule.confidence > result.confidence:
-            result.confidence = rule.confidence
 
     def infer_assay_type(
         self,
@@ -696,7 +672,6 @@ class RuleEngine:
             result.field_evidence["assay_type"].append({
                 "rule_id": "infer_assay_type",
                 "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
-                "confidence": 0.70,
                 "value": assay_rule.assay_type,
             })
             return

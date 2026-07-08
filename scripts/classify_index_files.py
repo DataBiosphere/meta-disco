@@ -20,19 +20,6 @@ from src.meta_disco.models import (
     status_for_value,
 )
 
-
-def _get_max_confidence(record: dict) -> float:
-    """Extract max confidence from either format."""
-    cls = record.get("classifications", {})
-    if isinstance(cls, dict):
-        confs = []
-        for v in cls.values():
-            if isinstance(v, dict) and "confidence" in v:
-                confs.append(v["confidence"])
-        if confs:
-            return max(confs)
-    return record.get("confidence", 0.0) or 0.0
-
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
 INDEX_TO_PARENT = {
@@ -95,7 +82,6 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
                     "reference_assembly": field_label(c, "reference_assembly"),
-                    "confidence": _get_max_confidence(c),
                     "source_file": c.get("file_name"),
                 }
 
@@ -211,7 +197,6 @@ def propagate_to_index_files(
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
-                "confidence": parent_class.get("confidence") or 0.0,
                 "inheritance_source": "parent_file",
             }
 
@@ -283,7 +268,6 @@ def propagate_to_index_files(
         if field_val and field_val not in _sentinels:
             return [{"rule_id": "inherited_from_parent",
                      "reason": f"Inherited from parent file: {parent}",
-                     "confidence": 0.95,
                      "value": field_val}]
         status = status_for_value(field_val)
         # An explicit not_applicable parent isn't "no value" — the field is
@@ -295,7 +279,6 @@ def propagate_to_index_files(
             reason = f"Parent file {parent} had no value for {field_name}"
         return [{"rule_id": "inherited_from_parent",
                  "reason": reason,
-                 "confidence": 0.0,
                  "status": status}]
 
     standard_results = []
@@ -307,8 +290,7 @@ def propagate_to_index_files(
         for fld in CLASSIFICATION_FIELDS:
             value = r.get(fld)
             evidence = inherited_evidence(fld, value, parent)
-            classifications[fld] = build_field_entry(
-                value, confidence=evidence[0]["confidence"], evidence=evidence)
+            classifications[fld] = build_field_entry(value, evidence=evidence)
         standard_results.append({
             "file_name": r["file_name"],
             "file_format": r["file_format"],

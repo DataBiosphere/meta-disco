@@ -8,17 +8,10 @@ from src.meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, fi
 def val(result: dict, field: str):
     """Extract a classification value (or a derived test aggregate) from output.
 
-    Field values delegate to models.field_value. Two test-only pseudo-fields are
+    Field values delegate to models.field_value. One test-only pseudo-field is
     derived from the per-field structure:
-    - "confidence": max confidence across all fields
     - "matched_rules": flattened, de-duplicated rule_ids from all evidence
     """
-    if field == "confidence" and result.get(field) is None:
-        max_conf = 0.0
-        for fld_val in result.values():
-            if isinstance(fld_val, dict) and "confidence" in fld_val:
-                max_conf = max(max_conf, fld_val["confidence"])
-        return max_conf
     if field == "matched_rules" and result.get(field) is None:
         rules = []
         for fld_val in result.values():
@@ -320,7 +313,6 @@ class TestFastqClassification:
         assert val(result, "platform") == "ILLUMINA"
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
-        assert val(result, "confidence") >= 0.90
 
     def test_illumina_instrument_model(self):
         """Extract Illumina instrument model."""
@@ -337,7 +329,6 @@ class TestFastqClassification:
         ]
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
-        assert val(result, "confidence") >= 0.85
 
     def test_ena_reformatted(self):
         """Classify ENA-reformatted FASTQ with accession extraction."""
@@ -368,7 +359,6 @@ class TestFastqClassification:
         assert val(result, "platform") == "ILLUMINA"
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert result["archive_accession"] == "ERR1395578"
-        assert val(result, "confidence") >= 0.85
 
     def test_ena_hiseq_2500(self):
         """Classify ENA-reformatted FASTQ with HiSeq 2500 instrument."""
@@ -378,7 +368,6 @@ class TestFastqClassification:
         result = classify_from_fastq_header(reads)
         assert val(result, "platform") == "ILLUMINA"
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
-        assert val(result, "confidence") >= 0.85
 
     def test_pacbio_ccs(self):
         """Classify PacBio CCS/HiFi FASTQ."""
@@ -391,7 +380,6 @@ class TestFastqClassification:
         assert val(result, "platform") == "PACBIO"
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
-        assert val(result, "confidence") >= 0.95
 
     def test_pacbio_clr(self):
         """Classify PacBio CLR FASTQ."""
@@ -462,7 +450,6 @@ class TestFastqClassification:
         """Handle empty input gracefully."""
         result = classify_from_fastq_header([])
         assert val(result, "platform") is None
-        assert val(result, "confidence") == 0.0
         # The empty-input fallback mirrors to_output_dict's Stage 3 shape (#116):
         # sentinels live in `status`, `value` is None unless CLASSIFIED.
         assert "status" in result["data_modality"]
@@ -474,16 +461,16 @@ class TestFastqClassification:
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
         assert val(result, "reference_assembly") is None
 
-    def test_confidence_boost_on_agreement(self):
-        """Confidence should increase when all reads agree."""
+    def test_platform_on_agreement(self):
+        """Platform should be classified when all reads agree."""
         reads = [
             "@A00297:44:HFKH3DSXX:2:1354:30508:28839",
             "@A00297:44:HFKH3DSXX:2:1354:30509:28840",
             "@A00297:44:HFKH3DSXX:2:1354:30510:28841",
         ]
         result = classify_from_fastq_header(reads)
-        # Should get boost for consistent reads
-        assert val(result, "confidence") >= 0.90
+        # Consistent reads should classify platform as ILLUMINA
+        assert val(result, "platform") == "ILLUMINA"
 
 
 # =============================================================================
@@ -501,8 +488,6 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert val(result, "reference_assembly") == "GRCh38"
-        # Reference detection is lower confidence than caller detection
-        assert val(result, "confidence") >= 0.50
 
     def test_grch37_reference(self):
         """Detect GRCh37/hg19 reference."""
@@ -578,7 +563,7 @@ class TestVcfClassification:
         header = """##fileformat=VCFv4.2
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
-        # Should still work but with lower confidence
+        # Should still produce a well-formed result
         assert "data_modality" in result
 
 
@@ -806,7 +791,6 @@ class TestContigLengthDetection:
         header += "@SQ\tSN:chr22\tLN:50818468"
         result = classify_from_header(header)
         assert val(result, "reference_assembly") == "GRCh38"
-        assert val(result, "confidence") >= 0.9
 
     def test_vcf_contig_with_assembly_tag(self):
         """VCF ##contig assembly= is matched via contig pattern rules."""
