@@ -108,6 +108,11 @@ RECORD_KEYS = {
 
 def _make_stub_fetcher(file_type: str):
     """A deterministic, network-free fetcher whose return type matches the real one."""
+    if file_type not in STUB_PAYLOADS:
+        raise ValueError(
+            f"No stub payload for file type {file_type!r}. Add one to STUB_PAYLOADS "
+            f"matching that fetcher's return type. Stubbed: {sorted(STUB_PAYLOADS)}"
+        )
     payload = STUB_PAYLOADS[file_type]
 
     def _fetch(evidence_dir, md5, **kwargs):
@@ -169,6 +174,16 @@ def test_golden_inputs_cover_all_file_types():
     assert set(GOLDEN_INPUTS) == set(FILE_TYPE_REGISTRY), (
         "GOLDEN_INPUTS must cover every FILE_TYPE_REGISTRY type so no output shape is "
         f"unguarded. Missing: {set(FILE_TYPE_REGISTRY) - set(GOLDEN_INPUTS)}"
+    )
+
+
+def test_stub_payloads_cover_all_file_types():
+    """Every registered file type needs a stub payload, or build_output fails deep
+    inside the session fixture instead of here with a clear message."""
+    assert set(STUB_PAYLOADS) == set(FILE_TYPE_REGISTRY), (
+        "STUB_PAYLOADS must cover every FILE_TYPE_REGISTRY type, with a payload whose "
+        "type matches that fetcher's real return value. Missing: "
+        f"{set(FILE_TYPE_REGISTRY) - set(STUB_PAYLOADS)}"
     )
 
 

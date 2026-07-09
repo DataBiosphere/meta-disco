@@ -435,7 +435,7 @@ def fetch_gfa_segment_tags(
     Returns a list of tag dicts, one per rGFA-tagged segment (empty for a plain
     GFA), or None if the file could not be read.
 
-    Only the first 256KB is fetched, and for BGZF input only that range's first
+    Only the first 256KiB is fetched, and for BGZF input only that range's first
     gzip member decompresses — about 64KiB (see #149).
 
     rGFA tags sit on the leading segments, after each segment's sequence, so the
@@ -454,7 +454,8 @@ def fetch_gfa_segment_tags(
             return cached["gfa_segment_tags"]
 
     try:
-        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
+        # end_byte is inclusive, so 262143 fetches exactly 256KiB.
+        content = _fetch_range(md5sum, 262143, timeout=60, url=url)
         if content is None:
             return None
         raw_bytes = len(content)

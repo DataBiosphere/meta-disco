@@ -354,6 +354,9 @@ def classify_from_gfa_segment_tags(
         file_name: Optional filename for extension/filename rules
         file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
             extension rules when file_name is empty
+        file_size: Unused. Accepted because ClassifyPipeline calls every
+            classifier with the same keyword arguments (pipeline.py:242); no
+            graph rule keys on file size. Same as the fasta/fastq classifiers.
 
     Returns:
         Per-field classification dict (same format as classify_from_fasta_header)
