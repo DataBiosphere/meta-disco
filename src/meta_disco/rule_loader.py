@@ -85,6 +85,8 @@ class UnifiedRules:
         ".fa.gz",
         ".bed.gz",
         ".sam.gz",
+        ".rgfa.gz",
+        ".gfa.gz",
         ".fast5.tar.gz",  # Must come before .tar.gz
         ".fast5.tar",     # Must come before .tar
         ".tar.gz",

@@ -403,6 +403,56 @@ class TestRuleEngineE2E:
 
 
 # =============================================================================
+# Pangenome / sequence graphs (issue #144) — rule engine from filename only
+# =============================================================================
+
+class TestPangenomeGraphs:
+    """Sequence-graph formats classify as data_type `pangenome`; HPRC
+    minigraph-cactus reference graphs refine to `pangenome.reference`."""
+
+    def test_gfa_assembly_graph_is_pangenome(self):
+        """A single-sample assembly graph (.gfa) is still a sequence graph."""
+        result = engine.classify_extended(
+            FileInfo(filename="HG002-full-0.14.1.hap1.p_ctg.gfa")
+        )
+        assert result.data_modality == "genomic"
+        assert result.data_type == "pangenome"
+        assert result.status_of("platform") == NOT_APPLICABLE
+        assert result.status_of("assay_type") == NOT_APPLICABLE
+
+    def test_pggb_gfa_gz_is_pangenome(self):
+        """PGGB pangenome graph (.gfa.gz compound extension) — not an mc reference."""
+        result = engine.classify_extended(
+            FileInfo(filename="chr1.hprc-v1.0-pggb.gfa.gz")
+        )
+        assert result.data_modality == "genomic"
+        assert result.data_type == "pangenome"
+
+    def test_vg_and_xg_are_pangenome(self):
+        for name in ("sample.vg", "graph.xg"):
+            result = engine.classify_extended(FileInfo(filename=name))
+            assert result.data_type == "pangenome", name
+            assert result.data_modality == "genomic", name
+
+    def test_mc_gbz_is_pangenome_reference(self):
+        """HPRC minigraph-cactus GBZ — the published alignment reference graph."""
+        result = engine.classify_extended(
+            FileInfo(filename="hprc-v1.0-mc-grch38.gbz")
+        )
+        assert result.data_modality == "genomic"
+        assert result.data_type == "pangenome.reference"
+        # reference_assembly comes from the shared filename_ref_* rules
+        assert result.reference_assembly == "GRCh38"
+
+    def test_mc_gbwt_chm13_is_pangenome_reference(self):
+        result = engine.classify_extended(
+            FileInfo(filename="hprc-v1.0-mc-chm13.gbwt")
+        )
+        assert result.data_type == "pangenome.reference"
+        assert result.reference_assembly == "CHM13"
+
+
+# =============================================================================
 # FASTA — end-to-end through classify_fasta_files.classify_single_fasta
 # =============================================================================
 

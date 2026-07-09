@@ -116,6 +116,24 @@ file_format (extension)
 
 ---
 
+## Pangenome Graphs (.gfa, .gfa.gz, .rgfa, .rgfa.gz, .gbz, .vg, .gbwt, .xg)
+
+**data_type**: `pangenome`, `pangenome.reference`
+
+`data_type` describes structure: linear sequence (FASTA — `sequence`, refining to `assembly`/`assembly.reference`) versus a sequence graph (nodes/edges/haplotype paths), which is `pangenome`. The reference-graph case — an HPRC minigraph-cactus (`mc`) graph used as the alignment coordinate system — refines to `pangenome.reference`. PGGB and single-sample assembly graphs stay `pangenome`.
+
+**data_modality**: `genomic` ← extension (all graph formats)
+
+**assay_type**: `not_applicable`
+
+**platform**: `not_applicable` (a graph is an assembled product, not raw reads)
+
+**reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system)
+
+**Coverage**: Extension-driven, so all listed formats classify. `pangenome.reference` detection keys on the `-mc-` filename token. Auxiliary vg indices (`.min`, `.dist`, `.snarls`, `.gg`) are out of scope (issue #144).
+
+---
+
 ## Intervals/Peaks (.bed, .bed.gz, .narrowPeak, .broadPeak)
 
 **data_type**: `annotations`, `peaks`
