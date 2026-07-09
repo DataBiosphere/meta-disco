@@ -299,8 +299,15 @@
           "data_type": {
             "evidence": [
               {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "tier": 1,
+                "value": "pangenome"
+              },
+              {
                 "reason": "1 rGFA segment carries stable rank 0 (SR:i:0) on chr1 \u2014 graph defines a reference coordinate system",
                 "rule_id": "rgfa_stable_rank_reference",
+                "tier": 3,
                 "value": "pangenome.reference"
               }
             ],

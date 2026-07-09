@@ -33,7 +33,7 @@ from src.meta_disco.models import (
     field_status,
     field_value,
 )
-from src.meta_disco.rule_engine import RuleEngine
+from src.meta_disco.rule_engine import RuleEngine, evaluate_claims
 
 engine = RuleEngine()
 
@@ -475,6 +475,28 @@ class TestRgfaContentClassification:
         evidence = record["data_type"]["evidence"]
         assert any(e["rule_id"] == "rgfa_stable_rank_reference" for e in evidence)
 
+    def test_content_claim_is_appended_not_clobbered(self):
+        """The tier-1 `pangenome_graph` claim must survive the content refinement,
+        so the evidence chain matches the engine-resolved `-mc-` case."""
+        record = classify_from_gfa_segment_tags(
+            [{"SN": "chr1", "SR": "0"}], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+        )
+        rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
+        assert rules == ["pangenome_graph", "rgfa_stable_rank_reference"]
+
+    def test_content_claim_carries_tier_3(self):
+        """evaluate_claims defaults a missing tier to 0, which would lose to the
+        tier-1 `pangenome` claim. Pin the tier so resolving from claims agrees
+        with the value set here."""
+        record = classify_from_gfa_segment_tags(
+            [{"SN": "chr1", "SR": "0"}], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+        )
+        claims = record["data_type"]["evidence"]
+        content = next(c for c in claims if c["rule_id"] == "rgfa_stable_rank_reference")
+        assert content["tier"] == 3
+        # Resolving the claim list independently must reach the same value.
+        assert evaluate_claims(claims)["value"] == "pangenome.reference"
+
     def test_nonzero_rank_only_stays_pangenome(self):
         """Non-reference haplotype segments (rank >= 1) do not make a reference graph."""
         tags = [{"SN": "HG002#1#chr1", "SR": "1"}]
@@ -511,8 +533,9 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             [{"SN": "chr1", "SR": "0"}], file_name="some-graph.gfa"
         )
-        reason = record["data_type"]["evidence"][0]["reason"]
-        assert "1 rGFA segment carries" in reason
+        content = next(e for e in record["data_type"]["evidence"]
+                       if e["rule_id"] == "rgfa_stable_rank_reference")
+        assert "1 rGFA segment carries" in content["reason"]
 
 
 class TestGfaSegmentTagParsing:

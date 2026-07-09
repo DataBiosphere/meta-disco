@@ -368,23 +368,27 @@ def classify_from_gfa_segment_tags(
 
     rank0 = [t for t in segment_tags if t.get("SR") == "0" and t.get("SN")]
     if rank0:
-        # Overrides the field rather than appending a tier-3 claim, so the tier-1
-        # `pangenome_graph` evidence is replaced, not accumulated. Matches
-        # classify_from_fasta_header; both are to be routed through the engine's
-        # claim model in #150.
-        result.set_field("data_type", "pangenome.reference")
         contigs = sorted({t["SN"] for t in rank0})
         preview = ", ".join(contigs[:3])
         phrase = "segment carries" if len(rank0) == 1 else "segments carry"
-        result.field_evidence["data_type"] = [{
+        # Appended as a tier-3 claim, not assigned over the list, so the tier-1
+        # `pangenome_graph` claim survives and the derivation chain reads the same
+        # as the engine-resolved `-mc-` case. The tier matters: evaluate_claims
+        # defaults a missing tier to 0, which would lose to the tier-1 `pangenome`
+        # claim and undo this refinement once #150 resolves this path from claims.
+        result.field_evidence["data_type"].append({
             "rule_id": "rgfa_stable_rank_reference",
+            "tier": 3,
             "reason": (
                 f"{len(rank0)} rGFA {phrase} stable rank 0 "
                 f"(SR:i:0) on {preview} — graph defines a reference "
                 f"coordinate system"
             ),
             "value": "pangenome.reference",
-        }]
+        })
+        # Still set imperatively rather than resolved from the claims above;
+        # conflict detection for data_type is bypassed here (see #150).
+        result.set_field("data_type", "pangenome.reference")
 
     return result.to_output_dict()
 

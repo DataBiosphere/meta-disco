@@ -407,7 +407,7 @@ def parse_gfa_segment_tags(text: str) -> list[dict]:
             if pos == -1:
                 break
         if pos == -1:
-            continue  # fewer than 3 columns — no tags to read
+            continue  # fewer than 4 columns — no tag columns follow the sequence
 
         tags = {}
         for fld in line[pos + 1:].rstrip("\r").split("\t"):
