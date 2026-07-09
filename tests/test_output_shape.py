@@ -21,13 +21,20 @@ Three layers of protection:
 
 The golden is produced by running the real FileTypeConfig classifiers (so it
 guards the real ``to_output_dict`` record/dimension shape and the pipeline
-envelope) with a per-type stub fetcher — deterministic, no network. The stub
-supplies a placeholder header with no real content, so tier-3 rules that key on
-*specific* header content (contig lengths, instrument IDs, assembly tokens) do
-not fire — content-driven classification is not exercised. Tier-3 rules that key
-on the *absence* of such content (e.g. ``unaligned_no_sq``,
-``fastq_modality_unknown``) do fire and appear in the golden. That is acceptable:
-this guards output *shape*, not content-driven classification accuracy.
+envelope) with a per-type stub fetcher — deterministic, no network.
+
+For bam/vcf/fastq/fasta the stub supplies a placeholder header with no real
+content, so tier-3 rules that key on *specific* header content (contig lengths,
+instrument IDs, assembly tokens) do not fire. Tier-3 rules that key on the
+*absence* of such content (e.g. ``unaligned_no_sq``, ``fastq_modality_unknown``)
+do fire and appear in the golden. The gfa stub is the exception: its payload is a
+real rank-0 rGFA tag, and it is what drives that record's
+``data_type: pangenome.reference`` (rule ``rgfa_stable_rank_reference``) — the
+filename alone yields only ``pangenome``. Do not replace it with a content-free
+value; the golden would silently record the unrefined result.
+
+This guards output *shape*; it is not a substitute for the content-driven
+classification tests in ``tests/test_evals.py``.
 Regenerate with::
 
     python -m tests.test_output_shape   # writes tests/fixtures/golden/expected_output.json

@@ -345,9 +345,12 @@ def classify_from_gfa_segment_tags(
     reference coordinate system — the `pangenome.reference` case. Plain GFA
     segments carry no such tags and stay at the tier-1 `pangenome` base.
 
-    This does not set reference_assembly. Only the leading segments of one
-    contig are visible in the fetched head, which is too few contigs for
-    contig-length detection; the assembly is left to the filename rules.
+    This does not set reference_assembly, for two reasons. `parse_gfa_segment_tags`
+    extracts no sequence lengths, so `detect_reference_from_contig_lengths` — the
+    definitive signal used for BAM/VCF — cannot run here at all. And the stable
+    names that are extracted do not identify an assembly: the fetched head of the
+    HPRC minigraph graphs exposes only `chr1`, a name GRCh38 and CHM13 share.
+    The assembly is left to the shared filename_ref_* rules.
 
     Args:
         segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags

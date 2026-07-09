@@ -385,14 +385,17 @@ def parse_gfa_segment_tags(text: str) -> list[dict]:
     segment of a plain GFA, such as a minigraph-cactus graph — are omitted, so
     a plain GFA yields an empty list.
 
-    The sequence column is never copied: in a real graph it holds the full
-    segment sequence and dominates the line, while the tags follow it.
+    The sequence column is not sliced out into its own string: in a real graph it
+    holds the full segment sequence and dominates the line, while the tags follow
+    it. Splitting `text` into lines does copy each sequence once; the tag scan
+    below avoids copying it a second time.
 
     `text` is expected to be the head of a file, so the final line is usually
-    truncated mid-record; it is dropped unless `text` ends with a newline.
+    truncated mid-record; it is dropped unless `text` ends with a newline. A
+    complete final line that happens to lack a trailing newline is dropped too.
     """
     lines = text.split("\n")
-    if not text.endswith("\n") and lines:
+    if not text.endswith("\n"):
         lines.pop()  # partial trailing record from the byte-range cut
 
     segments = []
@@ -439,11 +442,13 @@ def fetch_gfa_segment_tags(
     gzip member decompresses — about 64KiB (see #149).
 
     rGFA tags sit on the leading segments, after each segment's sequence, so the
-    rank-0 signal is normally within the first KB: on the HPRC minigraph graphs
-    every segment in the decoded head is rank-0 tagged. It is not guaranteed —
-    a graph whose leading segment sequences exceed the decoded head would push
-    the tags out of reach, yielding no tags. That degrades safely: the caller
-    makes no content claim and falls back to the filename rules.
+    rank-0 signal is normally within the first KB — on the two HPRC minigraph
+    graphs I fetched, every segment in the decoded head was rank-0 tagged. It is
+    not guaranteed: a graph whose leading segment sequences exceed the decoded
+    head would push the tags out of reach, yielding no tags. That degrades
+    safely — the caller makes no content claim and falls back to the filename
+    rules, so a reference graph without an identifying filename token is left
+    unrefined rather than misclassified.
 
     On graphs of that scale the head does not reach GFA `P`/`W` path lines,
     which follow every segment line.

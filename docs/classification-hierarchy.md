@@ -133,7 +133,7 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **platform**: `not_applicable` (a graph is an assembled product, not raw reads)
 
-**reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system). Not derived from graph content: only the leading segments of a single contig are visible in the fetched head, too few contigs for contig-length detection.
+**reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system). Not derived from graph content: no sequence lengths are parsed, so contig-length detection cannot run, and the stable names in the fetched head (`chr1`) are shared between GRCh38 and CHM13.
 
 **Coverage**: Extension-driven, so all listed formats classify. Content inspection covers the text GFA formats (`.gfa`, `.gfa.gz`, `.rgfa`, `.rgfa.gz`); the binary vg/GBWT formats (`.gbz`, `.vg`, `.gbwt`, `.xg`) classify from extension and filename alone. Auxiliary vg indices (`.min`, `.dist`, `.snarls`, `.gg`) are out of scope (issue #144). Single- vs multi-sample graph distinction is deferred (issue #147).
 
