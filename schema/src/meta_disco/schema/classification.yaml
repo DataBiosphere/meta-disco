@@ -259,6 +259,8 @@ enums:
       sequence:
       assembly:
       "assembly.reference":   # a published reference genome (e.g. GRCh38/CHM13); de-novo stays `assembly`
+      pangenome:              # a sequence graph (GFA/rGFA/GBZ/vg/GBWT/xg); linear sequence stays `assembly`
+      "pangenome.reference":  # a graph used as an alignment reference (e.g. HPRC minigraph-cactus)
       variants:
       "variants.germline":
       "variants.somatic":

@@ -214,6 +214,16 @@ extension_map:
   ".fasta.gz": sequence
   ".fa.gz": sequence
 
+  # Pangenome / sequence graphs (GFA/rGFA/GBZ/vg + graph indices)
+  ".gfa": pangenome
+  ".gfa.gz": pangenome
+  ".rgfa": pangenome
+  ".rgfa.gz": pangenome
+  ".gbz": pangenome
+  ".vg": pangenome
+  ".gbwt": pangenome
+  ".xg": pangenome
+
   # Archives (need special handling)
   ".tar": archive
   ".tar.gz": archive
@@ -466,6 +476,27 @@ rules:
         assay_type: not_applicable
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
 
+  # ---------------------------------------------------------------------------
+  # Pangenome / sequence graphs (GFA, rGFA, GBZ, vg, GBWT, xg)
+  # ---------------------------------------------------------------------------
+  # data_type describes structure: linear sequence is `assembly` (FASTA), a
+  # sequence graph is `pangenome`. The reference-graph case (HPRC
+  # minigraph-cactus, used as the alignment coordinate system) refines to
+  # `pangenome.reference` via a tier-2 filename rule below. reference_assembly is
+  # left to the shared filename_ref_* rules (an mc graph's grch38/chm13 token).
+  - id: pangenome_graph
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz", ".gbz", ".vg", ".gbwt", ".xg"]
+    then:
+      data_modality: genomic
+      data_type: pangenome
+      status:
+        platform: not_applicable
+        assay_type: not_applicable
+    rationale: "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph — a genomic assembly product, so no sequencing platform or assay applies"
+
   # ===========================================================================
   # TIER 2: FILENAME-BASED RULES
   # ===========================================================================
@@ -578,6 +609,25 @@ rules:
       data_type: alignments
       assay_type: RNA-seq
     rationale: "STAR aligner output indicates RNA-seq"
+
+  # ---------------------------------------------------------------------------
+  # Pangenome reference graphs (minigraph-cactus)
+  # ---------------------------------------------------------------------------
+  # HPRC minigraph-cactus (`mc`) graphs are the published pangenome references
+  # used as the coordinate system for graph alignment (e.g. vg Giraffe), so they
+  # refine the tier-1 `pangenome` base to `pangenome.reference`. Scoped to graph
+  # extensions so the `-mc-` token can't match unrelated files. PGGB and
+  # single-sample assembly graphs stay `pangenome` (not alignment references).
+  - id: pangenome_reference_mc
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz", ".gbz", ".vg", ".gbwt", ".xg"]
+      filename_pattern: "(?i)-mc-"
+    then:
+      data_modality: genomic
+      data_type: pangenome.reference
+    rationale: "Minigraph-Cactus (mc) HPRC graphs are published pangenome references used as the alignment coordinate system"
 
   # ---------------------------------------------------------------------------
   # Reference assembly in filename
