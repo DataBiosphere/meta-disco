@@ -79,14 +79,25 @@ GOLDEN_INPUTS = {
          "file_size": 8000, "file_format": ".fastq.gz", "entry_id": "g-fastq-1",
          "dataset_title": "GOLDEN_FIXTURE"},
     ],
+    "gfa": [
+        {"file_md5sum": "golden_gfa_rgfa", "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
+         "file_size": 848467761, "file_format": ".gfa.gz", "entry_id": "g-gfa-1",
+         "dataset_title": "GOLDEN_FIXTURE"},
+    ],
 }
 
 STUB_HEADER = "stub-header-no-network"
-# Real fetchers return str (bam/vcf header text) or list[str] (fastq reads /
-# fasta contig names) — see fetchers.py. The stub honors each type's contract so
-# the golden exercises realistic classifier input and stays robust if a classifier
-# later type-guards its argument.
-LIST_RETURNING_TYPES = {"fastq", "fasta"}
+# Real fetchers return str (bam/vcf header text), list[str] (fastq reads / fasta
+# contig names), or list[dict] (gfa segment tags) — see fetchers.py. The stub
+# honors each type's contract so the golden exercises realistic classifier input
+# and stays robust if a classifier later type-guards its argument.
+STUB_PAYLOADS = {
+    "bam": STUB_HEADER,
+    "vcf": STUB_HEADER,
+    "fastq": [STUB_HEADER],
+    "fasta": [STUB_HEADER],
+    "gfa": [{"SN": "chr1", "SR": "0"}],
+}
 EVIDENCE_KEYS = {"rule_id", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}
 RECORD_KEYS = {
@@ -97,7 +108,7 @@ RECORD_KEYS = {
 
 def _make_stub_fetcher(file_type: str):
     """A deterministic, network-free fetcher whose return type matches the real one."""
-    payload = [STUB_HEADER] if file_type in LIST_RETURNING_TYPES else STUB_HEADER
+    payload = STUB_PAYLOADS[file_type]
 
     def _fetch(evidence_dir, md5, **kwargs):
         return payload

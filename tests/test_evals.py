@@ -24,6 +24,8 @@ from classify_fasta_files import classify_single_fasta as classify_fasta
 from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_vcf_files import classify_single_vcf as classify_vcf
 
+from src.meta_disco.fetchers import parse_gfa_segment_tags
+from src.meta_disco.header_classifier import classify_from_gfa_segment_tags
 from src.meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -450,6 +452,117 @@ class TestPangenomeGraphs:
         )
         assert result.data_type == "pangenome.reference"
         assert result.reference_assembly == "CHM13"
+
+
+# =============================================================================
+# rGFA content check — pangenome.reference from stable-rank tags (#148)
+# =============================================================================
+
+class TestRgfaContentClassification:
+    """rGFA segments carrying stable rank 0 (`SR:i:0`) define a reference
+    coordinate system, so the graph refines to `pangenome.reference` from file
+    content rather than from a filename token."""
+
+    def test_rank0_segments_are_pangenome_reference(self):
+        """The real signal: minigraph rGFA, all leading segments SR:i:0 on chr1."""
+        tags = [{"SN": "chr1", "SR": "0"} for _ in range(5)]
+        record = classify_from_gfa_segment_tags(
+            tags, file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+        )
+        assert record["data_type"]["value"] == "pangenome.reference"
+        # reference_assembly still comes from the filename rules, not content
+        assert record["reference_assembly"]["value"] == "GRCh38"
+        evidence = record["data_type"]["evidence"]
+        assert any(e["rule_id"] == "rgfa_stable_rank_reference" for e in evidence)
+
+    def test_nonzero_rank_only_stays_pangenome(self):
+        """Non-reference haplotype segments (rank >= 1) do not make a reference graph."""
+        tags = [{"SN": "HG002#1#chr1", "SR": "1"}]
+        record = classify_from_gfa_segment_tags(
+            tags, file_name="some-graph.gfa.gz"
+        )
+        assert record["data_type"]["value"] == "pangenome"
+
+    def test_untagged_gfa_stays_pangenome(self):
+        """A plain GFA (pggb) carries no rGFA tags, so parsing yields no segments."""
+        record = classify_from_gfa_segment_tags(
+            [], file_name="chr1.hprc-v1.0-pggb.gfa.gz"
+        )
+        assert record["data_type"]["value"] == "pangenome"
+
+    def test_no_segments_falls_back_to_filename_rules(self):
+        """No content claim must not downgrade the tier-1/2 result.
+
+        Minigraph-cactus GFA segments are untagged, so the `-mc-` filename rule
+        is what keeps this a reference graph.
+        """
+        record = classify_from_gfa_segment_tags([], file_name="hprc-v1.0-mc-grch38.gfa.gz")
+        assert record["data_type"]["value"] == "pangenome.reference"
+        assert record["reference_assembly"]["value"] == "GRCh38"
+
+    def test_rank0_without_stable_name_is_not_a_reference_claim(self):
+        """SR without SN is malformed rGFA — no contig to anchor the claim."""
+        record = classify_from_gfa_segment_tags(
+            [{"SR": "0"}], file_name="some-graph.gfa"
+        )
+        assert record["data_type"]["value"] == "pangenome"
+
+    def test_evidence_reason_is_singular_for_one_segment(self):
+        record = classify_from_gfa_segment_tags(
+            [{"SN": "chr1", "SR": "0"}], file_name="some-graph.gfa"
+        )
+        reason = record["data_type"]["evidence"][0]["reason"]
+        assert "1 rGFA segment carries" in reason
+
+
+class TestGfaSegmentTagParsing:
+    """parse_gfa_segment_tags reads S-line rGFA tags from a truncated file head."""
+
+    def test_parses_stable_tags_and_ignores_sequence(self):
+        text = (
+            "H\tVN:Z:1.0\n"
+            "S\ts1\tACGTACGT\tLN:i:8\tSN:Z:chr1\tSO:i:0\tSR:i:0\n"
+            "S\ts2\tGGGG\tLN:i:4\tSN:Z:chr1\tSO:i:8\tSR:i:0\n"
+            "L\ts1\t+\ts2\t+\t0M\n"
+        )
+        assert parse_gfa_segment_tags(text) == [
+            {"SN": "chr1", "SR": "0"},
+            {"SN": "chr1", "SR": "0"},
+        ]
+
+    def test_sequence_column_is_never_read_as_a_tag(self):
+        """Tags start at column 4; a tag-shaped sequence must not be picked up.
+
+        A parser that scanned every field would report SN=decoy here.
+        """
+        text = "S\ts1\tSN:Z:decoy\tSR:i:0\n"
+        assert parse_gfa_segment_tags(text) == [{"SR": "0"}]
+
+    def test_drops_truncated_trailing_line(self):
+        """A byte-range cut leaves a partial final record — it must not be parsed.
+
+        Without the newline the trailing `SR:i:0` is unreachable, so a naive
+        parser would emit a segment whose tags are silently incomplete.
+        """
+        text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\nS\ts2\tACG\tSN:Z:chr1\tSR"
+        assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
+
+    def test_keeps_complete_trailing_line_when_newline_terminated(self):
+        text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\n"
+        assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
+
+    def test_untagged_segments_are_omitted(self):
+        """Plain GFA 1.0 (minigraph-cactus): segments with no optional tags."""
+        text = "H\tVN:Z:1.0\nS\t1\tAC\nS\t2\tGTGT\n"
+        assert parse_gfa_segment_tags(text) == []
+
+    def test_segment_without_tag_columns_is_omitted(self):
+        """A 3-column S line has no tag columns at all — no trailing tab to find."""
+        assert parse_gfa_segment_tags("S\ts1\tACGT\n") == []
+
+    def test_ignores_non_segment_lines(self):
+        text = "H\tVN:Z:1.0\nP\tHG002#1#chr1\ts1+,s2+\t*\nW\tHG002\t1\tchr1\t0\t100\t>s1>s2\n"
+        assert parse_gfa_segment_tags(text) == []
 
 
 # =============================================================================

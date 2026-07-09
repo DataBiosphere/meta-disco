@@ -329,6 +329,66 @@ _TRANSCRIPT_PATTERN = re.compile(
 )
 
 
+def classify_from_gfa_segment_tags(
+    segment_tags: list[dict],
+    *,
+    file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """
+    Refine a sequence graph to `pangenome.reference` from rGFA segment tags.
+
+    In rGFA, each segment carries a stable rank (`SR`) naming which sequence it
+    came from; rank 0 is the reference backbone, and `SN` names its contig. A
+    graph whose segments carry rank-0 stable sequences therefore defines a
+    reference coordinate system — the `pangenome.reference` case. Plain GFA
+    segments carry no such tags and stay at the tier-1 `pangenome` base.
+
+    This does not set reference_assembly. Only the leading segments of one
+    contig are visible in the fetched head, which is too few contigs for
+    contig-length detection; the assembly is left to the filename rules.
+
+    Args:
+        segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags
+        file_name: Optional filename for extension/filename rules
+
+    Returns:
+        Per-field classification dict (same format as classify_from_fasta_header)
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    filename = file_name or "graph.gfa"
+
+    # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
+    # and reference_assembly from the filename.
+    file_info = ExtendedFileInfo(filename=filename)
+    engine = _get_engine()
+    result = engine.classify_extended(file_info, include_tier3=False)
+
+    rank0 = [t for t in segment_tags if t.get("SR") == "0" and t.get("SN")]
+    if rank0:
+        # Overrides the field rather than appending a tier-3 claim, so the tier-1
+        # `pangenome_graph` evidence is replaced, not accumulated. Matches
+        # classify_from_fasta_header; both are to be routed through the engine's
+        # claim model in #150.
+        result.set_field("data_type", "pangenome.reference")
+        contigs = sorted({t["SN"] for t in rank0})
+        preview = ", ".join(contigs[:3])
+        phrase = "segment carries" if len(rank0) == 1 else "segments carry"
+        result.field_evidence["data_type"] = [{
+            "rule_id": "rgfa_stable_rank_reference",
+            "reason": (
+                f"{len(rank0)} rGFA {phrase} stable rank 0 "
+                f"(SR:i:0) on {preview} — graph defines a reference "
+                f"coordinate system"
+            ),
+            "value": "pangenome.reference",
+        }]
+
+    return result.to_output_dict()
+
+
 def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""
     if not hasattr(_get_ref_chrom_names, "_cache"):

@@ -5,10 +5,17 @@ for one file type. These are used by ClassifyPipeline and the unified
 classify_headers.py script.
 """
 
-from .fetchers import fetch_bam_header, fetch_fasta_headers, fetch_fastq_reads, fetch_vcf_header
+from .fetchers import (
+    fetch_bam_header,
+    fetch_fasta_headers,
+    fetch_fastq_reads,
+    fetch_gfa_segment_tags,
+    fetch_vcf_header,
+)
 from .header_classifier import (
     classify_from_fasta_header,
     classify_from_fastq_header,
+    classify_from_gfa_segment_tags,
     classify_from_header,
     classify_from_vcf_header,
 )
@@ -46,9 +53,20 @@ FASTA_CONFIG = FileTypeConfig(
     classifier=classify_from_fasta_header,
 )
 
+# Text GFA only. The other graph extensions the `pangenome` rules cover
+# (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats that this fetcher cannot
+# parse; they classify from extension and filename alone.
+GFA_CONFIG = FileTypeConfig(
+    name="gfa",
+    extensions=(".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz"),
+    fetcher=fetch_gfa_segment_tags,
+    classifier=classify_from_gfa_segment_tags,
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
     "fastq": FASTQ_CONFIG,
     "fasta": FASTA_CONFIG,
+    "gfa": GFA_CONFIG,
 }

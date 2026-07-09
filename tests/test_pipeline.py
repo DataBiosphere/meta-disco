@@ -207,7 +207,7 @@ class TestPipelineRun:
 class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta"}
+        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
 
     def test_configs_have_required_fields(self):
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY

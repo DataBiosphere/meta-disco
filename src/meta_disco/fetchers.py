@@ -371,3 +371,108 @@ def fetch_fasta_headers(
     except Exception as e:
         print(f"Error reading FASTA for {md5sum}: {e}")
         return None
+
+
+# =============================================================================
+# GFA FETCHER
+# =============================================================================
+
+def parse_gfa_segment_tags(text: str) -> list[dict]:
+    """Parse rGFA stable-sequence tags from the S (segment) lines of GFA text.
+
+    Returns one dict per segment that carries at least one of `SN:Z:` (stable
+    sequence name) and `SR:i:` (stable rank). Segments with neither — every
+    segment of a plain GFA, such as a minigraph-cactus graph — are omitted, so
+    a plain GFA yields an empty list.
+
+    The sequence column is never copied: in a real graph it holds the full
+    segment sequence and dominates the line, while the tags follow it.
+
+    `text` is expected to be the head of a file, so the final line is usually
+    truncated mid-record; it is dropped unless `text` ends with a newline.
+    """
+    lines = text.split("\n")
+    if not text.endswith("\n") and lines:
+        lines.pop()  # partial trailing record from the byte-range cut
+
+    segments = []
+    for line in lines:
+        if not line.startswith("S\t"):
+            continue
+        # Advance past the record type (0), name (1), and sequence (2) columns
+        # by locating their trailing tabs, so the sequence is never materialized.
+        pos = -1
+        for _ in range(3):
+            pos = line.find("\t", pos + 1)
+            if pos == -1:
+                break
+        if pos == -1:
+            continue  # fewer than 3 columns — no tags to read
+
+        tags = {}
+        for fld in line[pos + 1:].rstrip("\r").split("\t"):
+            if fld.startswith("SN:Z:"):
+                tags["SN"] = fld[5:]
+            elif fld.startswith("SR:i:"):
+                tags["SR"] = fld[5:]
+        if tags:
+            segments.append(tags)
+    return segments
+
+
+def fetch_gfa_segment_tags(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = True,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> list[dict] | None:
+    """Read rGFA stable-sequence tags from the S lines at the head of a GFA file.
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    Returns a list of tag dicts, one per rGFA-tagged segment (empty for a plain
+    GFA), or None if the file could not be read.
+
+    Only the first 256KB is fetched, and for BGZF input only that range's first
+    gzip member decompresses (see #149). Both bounds are well past the leading
+    segments, where rGFA tags appear, so the reference signal is always visible.
+    Neither reaches GFA `P`/`W` path lines, which follow every segment line.
+    """
+    if use_cache:
+        cached = load_cached_evidence(evidence_dir, md5sum)
+        if cached and "gfa_segment_tags" in cached:
+            return cached["gfa_segment_tags"]
+
+    try:
+        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
+        if content is None:
+            return None
+        raw_bytes = len(content)
+
+        content = _decompress_if_gzipped(content, is_gzipped)
+        text = _decode_bytes(content)
+
+        segment_tags = parse_gfa_segment_tags(text)
+
+        evidence = {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "gfa_segment_tags": segment_tags,
+            "tagged_segment_count": len(segment_tags),
+            "raw_bytes_fetched": raw_bytes,
+            "fetch_timestamp": _timestamp(),
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
+
+        return segment_tags
+
+    except requests.Timeout:
+        print(f"Timeout reading GFA for {md5sum}")
+        return None
+    except Exception as e:
+        print(f"Error reading GFA for {md5sum}: {e}")
+        return None
