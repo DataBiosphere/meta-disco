@@ -120,7 +120,7 @@ file_format (extension)
 
 **data_type**: `pangenome`, `pangenome.reference`
 
-`data_type` describes structure: linear sequence is `assembly` (FASTA), a sequence graph (nodes/edges/haplotype paths) is `pangenome`. The reference-graph case — an HPRC minigraph-cactus (`mc`) graph used as the alignment coordinate system — refines to `pangenome.reference`. PGGB and single-sample assembly graphs stay `pangenome`.
+`data_type` describes structure: linear sequence (FASTA — `sequence`, refining to `assembly`/`assembly.reference`) versus a sequence graph (nodes/edges/haplotype paths), which is `pangenome`. The reference-graph case — an HPRC minigraph-cactus (`mc`) graph used as the alignment coordinate system — refines to `pangenome.reference`. PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_modality**: `genomic` ← extension (all graph formats)
 

@@ -479,8 +479,9 @@ rules:
   # ---------------------------------------------------------------------------
   # Pangenome / sequence graphs (GFA, rGFA, GBZ, vg, GBWT, xg)
   # ---------------------------------------------------------------------------
-  # data_type describes structure: linear sequence is `assembly` (FASTA), a
-  # sequence graph is `pangenome`. The reference-graph case (HPRC
+  # data_type describes structure: linear sequence is FASTA (`sequence`,
+  # refining to `assembly`/`assembly.reference`); a sequence graph is
+  # `pangenome`. The reference-graph case (HPRC
   # minigraph-cactus, used as the alignment coordinate system) refines to
   # `pangenome.reference` via a tier-2 filename rule below. reference_assembly is
   # left to the shared filename_ref_* rules (an mc graph's grch38/chm13 token).
