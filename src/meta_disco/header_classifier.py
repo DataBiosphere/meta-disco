@@ -352,13 +352,23 @@ def classify_from_gfa_segment_tags(
     Args:
         segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags
         file_name: Optional filename for extension/filename rules
+        file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
+            extension rules when file_name is empty
 
     Returns:
         Per-field classification dict (same format as classify_from_fasta_header)
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = file_name or "graph.gfa"
+    # The pipeline selects records on file_format OR file_name, so file_name can
+    # be empty on a record with a real extension. Fall back to file_format before
+    # the generic default, or extension-scoped rules would see the wrong suffix.
+    if file_name:
+        filename = file_name
+    elif file_format:
+        filename = f"graph{file_format}"
+    else:
+        filename = "graph.gfa"
 
     # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
     # and reference_assembly from the filename.

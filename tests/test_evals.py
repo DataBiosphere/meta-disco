@@ -529,6 +529,28 @@ class TestRgfaContentClassification:
         )
         assert record["data_type"]["value"] == "pangenome"
 
+    def test_empty_file_name_falls_back_to_file_format(self):
+        """The pipeline selects records on file_format OR file_name, so file_name
+        can be empty on a record with a real extension (pipeline._filter_records)."""
+        record = classify_from_gfa_segment_tags(
+            [], file_name="", file_format=".rgfa.gz"
+        )
+        assert record["data_type"]["value"] == "pangenome"
+        rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
+        assert "pangenome_graph" in rules
+
+    def test_file_name_wins_over_file_format(self):
+        """A real filename carries the tokens the tier-2 rules need."""
+        record = classify_from_gfa_segment_tags(
+            [], file_name="hprc-v1.0-mc-grch38.gfa.gz", file_format=".gfa"
+        )
+        assert record["data_type"]["value"] == "pangenome.reference"
+        assert record["reference_assembly"]["value"] == "GRCh38"
+
+    def test_no_file_name_or_format_still_classifies_as_graph(self):
+        record = classify_from_gfa_segment_tags([])
+        assert record["data_type"]["value"] == "pangenome"
+
     def test_evidence_reason_is_singular_for_one_segment(self):
         record = classify_from_gfa_segment_tags(
             [{"SN": "chr1", "SR": "0"}], file_name="some-graph.gfa"
