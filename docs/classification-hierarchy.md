@@ -122,7 +122,7 @@ file_format (extension)
 
 `data_type` describes structure: linear sequence (FASTA — `sequence`, refining to `assembly`/`assembly.reference`) versus a sequence graph (nodes/edges/haplotype paths), which is `pangenome`. The reference-graph case — a graph used as the alignment coordinate system — refines to `pangenome.reference`, detected two ways:
 
-- **From file content (preferred)** — an rGFA whose segments carry stable rank 0 (`SR:i:0`) plus a stable name (`SN:Z:`) defines a reference backbone. `fetch_gfa_segment_tags` reads the S-line tags from the head of the file and `classify_from_gfa_segment_tags` emits `rgfa_stable_rank_reference`. This is exact, and catches the HPRC `minigraph` graphs (#148).
+- **From file content (preferred)** — an rGFA whose segments carry stable rank 0 (`SR:i:0`) plus a stable name (`SN:Z:`) defines a reference backbone. `fetch_gfa_segment_tags` reads the S-line tags from the head of the file and `classify_from_gfa_segment_tags` emits `rgfa_stable_rank_reference`. When those tags are in the head the signal is exact; if they are not, no content claim is made and detection falls back to the filename. This catches the HPRC `minigraph` graphs (#148).
 - **From filename** — HPRC minigraph-cactus graphs match the `-mc-` token (tier-2 `pangenome_reference_mc`). Their GFA segments carry no tags, and the PanSN `P`/`W` path lines that identify them sit after every segment line — ~11 GB into the file — so content inspection is not economical.
 
 PGGB and single-sample assembly graphs stay `pangenome`.

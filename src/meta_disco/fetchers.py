@@ -436,9 +436,17 @@ def fetch_gfa_segment_tags(
     GFA), or None if the file could not be read.
 
     Only the first 256KB is fetched, and for BGZF input only that range's first
-    gzip member decompresses (see #149). Both bounds are well past the leading
-    segments, where rGFA tags appear, so the reference signal is always visible.
-    Neither reaches GFA `P`/`W` path lines, which follow every segment line.
+    gzip member decompresses — about 64KiB (see #149).
+
+    rGFA tags sit on the leading segments, after each segment's sequence, so the
+    rank-0 signal is normally within the first KB: on the HPRC minigraph graphs
+    every segment in the decoded head is rank-0 tagged. It is not guaranteed —
+    a graph whose leading segment sequences exceed the decoded head would push
+    the tags out of reach, yielding no tags. That degrades safely: the caller
+    makes no content claim and falls back to the filename rules.
+
+    On graphs of that scale the head does not reach GFA `P`/`W` path lines,
+    which follow every segment line.
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
