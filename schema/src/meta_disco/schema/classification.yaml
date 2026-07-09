@@ -258,6 +258,7 @@ enums:
       reads:
       sequence:
       assembly:
+      "assembly.reference":   # a published reference genome (e.g. GRCh38/CHM13); de-novo stays `assembly`
       variants:
       "variants.germline":
       "variants.somatic":

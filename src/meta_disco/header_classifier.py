@@ -434,7 +434,7 @@ def classify_from_fasta_header(
                 best_ref = None
 
             result.set_field("data_modality", "genomic")
-            result.set_field("data_type", "reference_genome")
+            result.set_field("data_type", "assembly.reference")
             ref_entry = {
                 "rule_id": "fasta_reference_contigs",
                 "reason": f"Matched {best_count} contigs to reference chromosomes"
@@ -455,7 +455,7 @@ def classify_from_fasta_header(
             result.field_evidence["data_type"] = [{
                 "rule_id": "fasta_reference_contigs",
                 "reason": "FASTA contains reference genome sequences",
-                "value": "reference_genome",
+                "value": "assembly.reference",
             }]
             return result.to_output_dict()
 

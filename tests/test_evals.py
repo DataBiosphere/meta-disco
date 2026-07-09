@@ -453,7 +453,7 @@ class TestFastaE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "reference_genome"
+        assert get_val(result, "data_type") == "assembly.reference"
         assert get_val(result, "reference_assembly") == "GRCh38"
         assert field_status(result, "assay_type") == NOT_APPLICABLE
 
@@ -465,7 +465,7 @@ class TestFastaE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "reference_genome"
+        assert get_val(result, "data_type") == "assembly.reference"
         assert get_val(result, "reference_assembly") == "CHM13"
         assert field_status(result, "assay_type") == NOT_APPLICABLE
 
