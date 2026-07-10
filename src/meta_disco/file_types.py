@@ -13,6 +13,7 @@ from .fetchers import (
     fetch_vcf_header,
 )
 from .header_classifier import (
+    GRAPH_TEXT_EXTENSIONS,
     classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
@@ -28,6 +29,9 @@ BAM_CONFIG = FileTypeConfig(
     fetcher=fetch_bam_header,
     classifier=classify_from_header,
     summary_printer=print_bam_summary,
+    # @SQ contig lengths, @RG platform; assay_type is inferred from those.
+    content_fields=("data_modality", "data_type", "reference_assembly",
+                    "platform", "assay_type"),
 )
 
 VCF_CONFIG = FileTypeConfig(
@@ -36,6 +40,8 @@ VCF_CONFIG = FileTypeConfig(
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
+    # ##contig lengths and header tokens; the VCF header names no platform.
+    content_fields=("data_modality", "data_type", "reference_assembly"),
 )
 
 FASTQ_CONFIG = FileTypeConfig(
@@ -43,6 +49,8 @@ FASTQ_CONFIG = FileTypeConfig(
     extensions=(".fastq", ".fastq.gz", ".fq", ".fq.gz"),
     fetcher=fetch_fastq_reads,
     classifier=classify_from_fastq_header,
+    # Read names give the instrument, hence platform; reads name no assembly.
+    content_fields=("data_modality", "platform", "assay_type"),
     summary_printer=print_fastq_summary,
 )
 
@@ -51,16 +59,22 @@ FASTA_CONFIG = FileTypeConfig(
     extensions=(".fasta", ".fasta.gz", ".fa", ".fa.gz"),
     fetcher=fetch_fasta_headers,
     classifier=classify_from_fasta_header,
+    # Contig names distinguish reference / assembly / transcriptome.
+    content_fields=("data_modality", "data_type", "reference_assembly"),
 )
 
-# Text GFA only. The other graph extensions the `pangenome` rules cover
-# (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats that this fetcher cannot
-# parse; they classify from extension and filename alone.
+# Text GFA only (GRAPH_TEXT_EXTENSIONS). The other graph extensions the
+# `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats
+# that this fetcher cannot parse; they classify from extension and filename alone.
 GFA_CONFIG = FileTypeConfig(
     name="gfa",
-    extensions=(".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz"),
+    extensions=GRAPH_TEXT_EXTENSIONS,
     fetcher=fetch_gfa_segment_tags,
     classifier=classify_from_gfa_segment_tags,
+    # rGFA stable-rank tags refine data_type to pangenome.reference. Nothing
+    # else: reference_assembly comes only from the filename (no lengths are
+    # parsed, and the visible stable name `chr1` is shared across assemblies).
+    content_fields=("data_type",),
 )
 
 FILE_TYPE_REGISTRY = {

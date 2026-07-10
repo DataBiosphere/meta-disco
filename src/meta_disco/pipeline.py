@@ -25,6 +25,10 @@ class FileTypeConfig:
     fetcher: Callable
     classifier: Callable
     summary_printer: Callable | None = None
+    # Dimensions this file type's *content* can determine. Used to attribute a
+    # fetch failure to the answers the unread bytes would have informed — never
+    # to dimensions only the filename can supply.
+    content_fields: tuple[str, ...] = ()
 
 
 class NdjsonWriter:
@@ -145,6 +149,8 @@ class ClassifyPipeline:
             classifications = classify_without_content(
                 e.reason, file_name=file_name, file_size=file_size,
                 file_format=file_format,
+                allowed_extensions=config.extensions,
+                content_fields=config.content_fields,
             )
         else:
             if raw_data is None:
@@ -264,8 +270,15 @@ class ClassifyPipeline:
             classifications = classify_without_content(
                 e.reason, file_name=file_name, file_size=file_size,
                 file_format=file_format,
+                allowed_extensions=self.config.extensions,
+                content_fields=self.config.content_fields,
             )
-            return self._build_record(record, classifications), was_cached, True
+            # was_cached is a file-existence stat taken before the fetch. A fetcher
+            # only raises after its own cache check missed, so it went to the
+            # network: report was_cached=False, or a stale/corrupt evidence file
+            # would count this record under "From cache" and hide it from the
+            # unreadable tally.
+            return self._build_record(record, classifications), False, True
 
         if raw_data is None:
             return None, was_cached, False
@@ -348,15 +361,22 @@ class ClassifyPipeline:
         print(f"  New fetches: {successful - from_cache - unreadable}")
         print(f"  Content unreadable, classified from filename: {unreadable}")
         print(f"Dropped (fetcher gave no cause): {failed}")
-        classifications = self._save_final(total, successful, failed, from_cache)
+        classifications = self._save_final(total, successful, failed, from_cache, unreadable)
 
         print(f"\nSaved to {self.output_path}")
         print(f"Evidence cached in: {self.evidence_dir}/")
 
         return classifications
 
-    def _save_final(self, total: int, successful: int, failed: int, from_cache: int) -> list[dict]:
-        """Write final JSON output from NDJSON progress file."""
+    def _save_final(self, total: int, successful: int, failed: int,
+                    from_cache: int, unreadable: int) -> list[dict]:
+        """Write final JSON output from NDJSON progress file.
+
+        ``unreadable`` is persisted alongside ``from_cache``: a record classified
+        from its filename after a failed fetch is otherwise indistinguishable from
+        one whose content was read, because a filename that settles every dimension
+        leaves no ``fetch_failed`` evidence behind.
+        """
         ndjson = self.output_path.with_suffix(".ndjson")
         classifications = []
         if ndjson.exists():
@@ -374,6 +394,7 @@ class ClassifyPipeline:
                     "successful": successful,
                     "failed": failed,
                     "from_cache": from_cache,
+                    "content_unreadable": unreadable,
                     "complete": True,
                 },
                 "classifications": classifications,

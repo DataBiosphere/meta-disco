@@ -596,6 +596,43 @@ class TestFilenameForRules:
         assert filename_for_rules("", "", "graph.gfa") == "graph.gfa"
         assert filename_for_rules(None, None, "graph.gfa") == "graph.gfa"
 
+    def test_non_dotted_file_format_is_not_grafted_on(self):
+        """~108k corpus records carry file_format 'Other'; 'graphOther' matches nothing.
+
+        The name is returned as-is rather than fabricated: nothing is knowable, and
+        claiming a `.gfa` we were never told about would be worse than not_classified.
+        """
+        assert filename_for_rules("graph", "Other", "graph.gfa") == "graph"
+        assert filename_for_rules("", "Other", "graph.gfa") == "graph.gfa"
+
+    def test_known_but_disallowed_extension_is_not_trusted(self):
+        """A graph record named *.tar.gz must not be classified off the tar rules
+        just because .tar.gz is a known extension somewhere in the map."""
+        assert filename_for_rules(
+            "hprc-graph.tar.gz", ".gfa.gz", "graph.gfa",
+            allowed_extensions=(".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz"),
+        ) == "hprc-graph.tar.gz.gfa.gz"
+
+    def test_allowed_extension_is_trusted_verbatim(self):
+        assert filename_for_rules(
+            "hprc-v1.0-mc-grch38.gfa.gz", ".gfa", "graph.gfa",
+            allowed_extensions=(".gfa", ".gfa.gz"),
+        ) == "hprc-v1.0-mc-grch38.gfa.gz"
+
+
+class TestGfaContentClaimCoherence:
+    def test_tar_named_graph_record_is_coherent(self):
+        """Previously: the .tar.gz name was trusted, pangenome_graph never fired, and
+        the rGFA claim forced data_type=pangenome.reference on a record whose
+        data_modality was not_classified."""
+        record = classify_from_gfa_segment_tags(
+            [{"SN": "chr1", "SR": "0"}],
+            file_name="hprc-graph.tar.gz", file_format=".gfa.gz",
+        )
+        assert record["data_type"]["value"] == "pangenome.reference"
+        assert record["data_modality"]["value"] == "genomic"
+        assert record["platform"]["status"] == NOT_APPLICABLE
+
     def test_no_file_name_or_format_still_classifies_as_graph(self):
         record = classify_from_gfa_segment_tags([])
         assert record["data_type"]["value"] == "pangenome"

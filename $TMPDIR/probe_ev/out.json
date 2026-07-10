@@ -1,0 +1,82 @@
+{
+  "metadata": {
+    "total_to_process": 1,
+    "processed": 1,
+    "successful": 1,
+    "failed": 0,
+    "from_cache": 1,
+    "complete": true
+  },
+  "classifications": [
+    {
+      "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
+      "md5sum": "deadbeef",
+      "file_size": 10,
+      "file_format": ".gfa.gz",
+      "dataset_title": null,
+      "classifications": {
+        "data_modality": {
+          "value": "genomic",
+          "status": "classified",
+          "evidence": [
+            {
+              "rule_id": "pangenome_graph",
+              "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+              "tier": 1,
+              "value": "genomic"
+            }
+          ]
+        },
+        "data_type": {
+          "value": "pangenome",
+          "status": "classified",
+          "evidence": [
+            {
+              "rule_id": "pangenome_graph",
+              "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+              "tier": 1,
+              "value": "pangenome"
+            }
+          ]
+        },
+        "platform": {
+          "value": null,
+          "status": "not_applicable",
+          "evidence": [
+            {
+              "rule_id": "pangenome_graph",
+              "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+              "tier": 1,
+              "status": "not_applicable"
+            }
+          ]
+        },
+        "reference_assembly": {
+          "value": "GRCh38",
+          "status": "classified",
+          "evidence": [
+            {
+              "rule_id": "filename_ref_grch38",
+              "reason": "Filename contains GRCh38/hg38 reference indicator",
+              "tier": 2,
+              "value": "GRCh38"
+            }
+          ]
+        },
+        "assay_type": {
+          "value": null,
+          "status": "not_applicable",
+          "evidence": [
+            {
+              "rule_id": "pangenome_graph",
+              "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+              "tier": 1,
+              "status": "not_applicable"
+            }
+          ]
+        }
+      },
+      "entry_id": "e1"
+    }
+  ]
+}

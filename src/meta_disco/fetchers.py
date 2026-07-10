@@ -29,10 +29,11 @@ class FetchError(Exception):
 
     Raised by `_fetch_range` on any non-2xx response, and by
     `fetch_gfa_segment_tags` around its parse. The other three range-based
-    fetchers (vcf, fastq, fasta) catch it in their `except Exception` and still
-    return None, so their records are still dropped (see #155).
-    `fetch_bam_header` never raises FetchError: it shells out to samtools rather
-    than calling `_fetch_range`.
+    fetchers (vcf, fastq, fasta) catch it and return None *silently*, so their
+    records are still dropped without a stated cause (see #155) — and so a
+    corpus-wide run is not flooded with one line per missing mirror object
+    (#156). `fetch_bam_header` never raises FetchError: it shells out to samtools
+    rather than calling `_fetch_range`.
     """
 
     def __init__(self, reason: str):
@@ -265,6 +266,12 @@ def fetch_vcf_header(
 
         return None
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading header for {md5sum}")
         return None
@@ -329,6 +336,12 @@ def fetch_fastq_reads(
 
         return read_names if read_names else None
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading FASTQ for {md5sum}")
         return None
@@ -389,6 +402,12 @@ def fetch_fasta_headers(
 
         return contig_names
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading FASTA for {md5sum}")
         return None

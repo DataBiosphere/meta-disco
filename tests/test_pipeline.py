@@ -248,14 +248,16 @@ class TestFileTypeConfigs:
         assert cls["platform"]["status"] == NOT_APPLICABLE
         assert cls["assay_type"]["status"] == NOT_APPLICABLE
 
-        # Not knowable without content or a filename token — annotated, not silent.
-        assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
-        failed = [e for e in cls["reference_assembly"]["evidence"]
-                  if e["rule_id"] == "fetch_failed"]
+        # The note lands on the dimension GFA *content* determines (data_type,
+        # which the unread rGFA tags might have refined to pangenome.reference).
+        failed = [e for e in cls["data_type"]["evidence"] if e["rule_id"] == "fetch_failed"]
         assert [e["reason"] for e in failed] == ["HTTPError: 404 Not Found"]
 
-        # The cause is not smeared across dimensions the filename already settled.
-        assert not [e for e in cls["data_type"]["evidence"]
+        # NOT on reference_assembly: GFA content never determines it (no lengths
+        # are parsed), so a note there would say a re-fetch could resolve an
+        # assembly only the filename can supply.
+        assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
+        assert not [e for e in cls["reference_assembly"]["evidence"]
                     if e["rule_id"] == "fetch_failed"]
 
     def test_fetch_error_on_mc_graph_keeps_the_filename_refinement(self, tmp_path):
@@ -267,16 +269,52 @@ class TestFileTypeConfigs:
         assert cls["data_type"]["value"] == "pangenome.reference"
         assert cls["reference_assembly"]["value"] == "GRCh38"
 
-    def test_unreadable_is_reported_even_when_no_fetch_failed_evidence_exists(self, tmp_path):
-        """An `-mc-` graph's filename settles all five dimensions, so its record
-        carries no `fetch_failed` evidence at all. The unreadable flag must come
-        from the FetchError branch, not be inferred from the output — otherwise
-        the summary silently under-reports."""
+    def test_fetch_error_reports_unreadable_and_never_counts_as_cached(self, tmp_path):
+        """A fetcher raises only after its own cache check missed, so it went to the
+        network. If a stale evidence file makes _is_cached True, the record must
+        still be reported unreadable rather than tallied under 'From cache'."""
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError, get_evidence_path
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        record = {"file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+                  "file_format": ".gfa.gz", "file_size": 10}
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [record]}))
+
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1, resume=True,
+        )
+        # A corrupt evidence file: _is_cached() sees it, load_cached_evidence() cannot
+        # read it, so the fetcher re-fetches and fails.
+        stale = get_evidence_path(pipeline.evidence_dir, "deadbeef")
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text("{ not json")
+
+        out, was_cached, content_unreadable = pipeline._process_single_record(record)
+
+        assert content_unreadable is True
+        assert was_cached is False, "a fetch that reached the network is not a cache hit"
+        # The note is on data_type (what content refines), not on the four others.
+        cls = out["classifications"]
+        noted = [f for f in cls
+                 if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
+        assert noted == ["data_type"]
+
+    def test_unreadable_count_is_persisted_in_run_metadata(self, tmp_path):
+        """from_cache is persisted; unreadable must be too, or a consumer cannot tell
+        a filename-only fallback from a real content read."""
         import dataclasses
 
         from src.meta_disco.fetchers import FetchError
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED
         from src.meta_disco.pipeline import ClassifyPipeline
 
         def _boom(evidence_dir, md5, **kwargs):
@@ -284,28 +322,20 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [{
-            "file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
-            "file_format": ".gfa.gz", "file_size": 10,
-        }]}))
-        pipeline = ClassifyPipeline(
-            config, input_path, tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence", workers=1, resume=False,
-        )
-        record, was_cached, content_unreadable = pipeline._process_single_record(
-            {"file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
-             "file_format": ".gfa.gz", "file_size": 10}
-        )
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "a1", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+             "file_format": ".gfa.gz"},
+            {"file_md5sum": "b2", "file_name": "HG002.hap1.p_ctg.gfa", "file_format": ".gfa"},
+        ]}))
+        out_path = tmp_path / "out.json"
+        ClassifyPipeline(config, input_path, out_path,
+                         evidence_base=tmp_path / "evidence", workers=1,
+                         resume=False).run()
 
-        # No dimension is not_classified, so no fetch_failed note is anywhere.
-        cls = record["classifications"]
-        assert all(cls[f]["status"] != NOT_CLASSIFIED for f in CLASSIFICATION_FIELDS)
-        notes = [e for f in CLASSIFICATION_FIELDS for e in cls[f]["evidence"]
-                 if e["rule_id"] == "fetch_failed"]
-        assert notes == []
-
-        # ...yet the flag still says the content was never read.
-        assert content_unreadable is True
+        meta = json.loads(out_path.read_text())["metadata"]
+        assert meta["content_unreadable"] == 2
+        assert meta["from_cache"] == 0
+        assert meta["successful"] == 2
 
     def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
         """Unchanged for the fetchers that give no cause (see #155)."""

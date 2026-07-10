@@ -22,6 +22,13 @@ from .validators.read_name_parsers import (  # noqa: F401 — re-exported for ba
 )
 
 
+# Text GFA formats this module can parse. The other graph extensions the
+# `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
+# GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
+# the config cannot disagree about which names it may trust.
+GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
+
+
 def _get_engine():
     """Get a cached RuleEngine instance (avoids re-parsing YAML on every call)."""
     if not hasattr(_get_engine, "_instance"):
@@ -333,6 +340,7 @@ def filename_for_rules(
     file_name: str | None,
     file_format: str | None,
     default: str,
+    allowed_extensions: tuple[str, ...] | None = None,
 ) -> str:
     """The filename to hand the rule engine, which reads the extension from it.
 
@@ -344,17 +352,30 @@ def filename_for_rules(
     worse, ``extract_extension("hprc-v1.0-mc-grch38")`` returns ``".0-mc-grch38"``,
     a nonsense suffix taken from the last dot.
 
-    So: keep ``file_name`` when it already yields a *known* extension, otherwise
+    So: keep ``file_name`` when it already yields a *usable* extension, otherwise
     append ``file_format`` to it, preserving the filename tokens the tier-2 rules
-    match (``-mc-``, ``grch38``). Testing "already known" rather than "ends with
+    match (``-mc-``, ``grch38``). Testing "already usable" rather than "ends with
     file_format" matters: 5,227 corpus records are named ``*.fastq.gz`` while
     declaring ``file_format: ".fastq"``, and appending there would produce
     ``*.fastq.gz.fastq``.
+
+    ``allowed_extensions`` narrows "usable" to the extensions the caller can
+    actually handle. Without it, a graph record named ``graph.tar.gz`` would be
+    trusted verbatim: the tar rules run, ``pangenome_graph`` never fires, and a
+    content-derived ``data_type`` claim then lands on a record whose
+    ``data_modality`` is not_classified. Pass the calling config's extensions.
+
+    ``file_format`` is only grafted on when it looks like an extension. The
+    corpus carries ``file_format: "Other"`` on ~108k records; appending that
+    would yield ``graphOther``, which matches nothing.
     """
     rules = _get_engine().rules
-    if file_name and rules.extract_extension(file_name) in rules.extension_map:
-        return file_name
-    if file_format:
+    if file_name:
+        ext = rules.extract_extension(file_name)
+        usable = ext in allowed_extensions if allowed_extensions else ext in rules.extension_map
+        if usable:
+            return file_name
+    if file_format and file_format.startswith("."):
         return f"{file_name or 'file'}{file_format}"
     return file_name or default
 
@@ -365,6 +386,8 @@ def classify_without_content(
     file_name: str | None = None,
     file_size: int | None = None,
     file_format: str | None = None,
+    allowed_extensions: tuple[str, ...] | None = None,
+    content_fields: tuple[str, ...] = (),
 ) -> dict:
     """Classify a file whose content could not be read, from its name alone.
 
@@ -373,16 +396,28 @@ def classify_without_content(
 
     Runs the tier-1/2 (extension and filename) rules only, so everything knowable
     without reading bytes is still classified: a `.gfa` is still `pangenome`,
-    still `genomic`, still `not_applicable` for platform and assay. Only the
-    dimensions that remain not_classified — the ones content might have settled —
-    are annotated with ``reason``, so the evidence says why they are unresolved
-    rather than blanking answers the filename already gave.
+    still `genomic`, still `not_applicable` for platform and assay.
 
-    ``reason`` should name the cause (e.g. ``"HTTPError: 404 ..."``).
+    ``content_fields`` names the dimensions *this file type's content* can
+    determine (``FileTypeConfig.content_fields``). Only those carry the
+    ``fetch_failed`` note, so the evidence says which answers the unread bytes
+    would have informed. Annotating every unresolved dimension instead would lie:
+    GFA content never determines reference_assembly (see
+    ``classify_from_gfa_segment_tags``), so a note there would tell a reader that
+    re-fetching could resolve an assembly the filename alone must supply.
+
+    The note is attached whether or not the dimension is already classified — a
+    filename-derived `pangenome` may be an unrefined `pangenome.reference`. It
+    declares a status, not a value, so ``evaluate_claims`` treats it as
+    non-assertive and it never competes with a real claim.
+
+    ``reason`` should name the cause (e.g. ``"HTTP 404 from AnVIL S3 mirror ..."``).
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = filename_for_rules(file_name, file_format, default="")
+    filename = filename_for_rules(
+        file_name, file_format, default="", allowed_extensions=allowed_extensions
+    )
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
@@ -391,9 +426,9 @@ def classify_without_content(
     result = _get_engine().classify_extended(file_info, include_tier3=False)
 
     output = result.to_output_dict()
-    for entry in output.values():
-        if entry["status"] == NOT_CLASSIFIED:
-            entry["evidence"].append({
+    for fld in content_fields:
+        if fld in output:
+            output[fld]["evidence"].append({
                 "rule_id": "fetch_failed",
                 "reason": reason,
                 "status": NOT_CLASSIFIED,
@@ -439,7 +474,10 @@ def classify_from_gfa_segment_tags(
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = filename_for_rules(file_name, file_format, default="graph.gfa")
+    filename = filename_for_rules(
+        file_name, file_format, default="graph.gfa",
+        allowed_extensions=GRAPH_TEXT_EXTENSIONS,
+    )
 
     # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
     # and reference_assembly from the filename.
