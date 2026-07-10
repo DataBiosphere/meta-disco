@@ -2,6 +2,10 @@
 
 from pathlib import Path
 
+# Every file a Phase 1/2/3 classifier writes. The coverage and validation report
+# generators read exactly this list, so a run's output file that is missing here
+# is silently excluded from both reports. Adding a FILE_TYPE_REGISTRY type means
+# adding its `{type}_classifications.json` here — pinned by tests/test_orchestration.py.
 CLASSIFICATION_FILES = [
     "bam_classifications.json",
     "vcf_classifications.json",
@@ -11,6 +15,7 @@ CLASSIFICATION_FILES = [
     "auxiliary_classifications.json",
     "index_classifications.json",
     "fasta_classifications.json",
+    "gfa_classifications.json",
     "remaining_classifications.json",
 ]
 

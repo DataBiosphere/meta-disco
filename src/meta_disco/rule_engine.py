@@ -128,8 +128,16 @@ class ExtendedClassificationResult:
     def rules_matched(self) -> list[str]:
         """Deduplicated list of all rule identifiers from field evidence.
 
-        Includes YAML-defined rule IDs and synthetic IDs (not_classified,
-        infer_assay_type, conflicting_*) added by the rule engine.
+        Not limited to YAML-defined rule IDs. Two other sources contribute:
+
+        * The engine itself adds ``not_classified``, ``infer_assay_type`` and
+          ``conflicting_{field}_rules``.
+        * The content classifiers in ``header_classifier`` add their own IDs for
+          signals no YAML rule expresses — ``contig_length_detection``,
+          ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
+          ``bed_*`` IDs, ``rgfa_stable_rank_reference``, and ``fetch_failed``.
+
+        So a caller must not assume an ID here names a rule in unified_rules.yaml.
         """
         seen = set()
         result = []
@@ -143,7 +151,12 @@ class ExtendedClassificationResult:
 
     @property
     def reasons(self) -> list[str]:
-        """Flatten field_evidence into a deduplicated list of reasons."""
+        """The reason from each distinct rule in field_evidence, in first-seen order.
+
+        Deduplication is by ``rule_id``, not by reason text, so two rules that
+        happen to share a reason both appear — and one rule contributing to
+        several fields appears once.
+        """
         seen = set()
         result = []
         for entries in self.field_evidence.values():

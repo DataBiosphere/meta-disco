@@ -21,13 +21,20 @@ Three layers of protection:
 
 The golden is produced by running the real FileTypeConfig classifiers (so it
 guards the real ``to_output_dict`` record/dimension shape and the pipeline
-envelope) with a per-type stub fetcher — deterministic, no network. The stub
-supplies a placeholder header with no real content, so tier-3 rules that key on
-*specific* header content (contig lengths, instrument IDs, assembly tokens) do
-not fire — content-driven classification is not exercised. Tier-3 rules that key
-on the *absence* of such content (e.g. ``unaligned_no_sq``,
-``fastq_modality_unknown``) do fire and appear in the golden. That is acceptable:
-this guards output *shape*, not content-driven classification accuracy.
+envelope) with a per-type stub fetcher — deterministic, no network.
+
+For bam/vcf/fastq/fasta the stub supplies a placeholder header with no real
+content, so tier-3 rules that key on *specific* header content (contig lengths,
+instrument IDs, assembly tokens) do not fire. Tier-3 rules that key on the
+*absence* of such content (e.g. ``unaligned_no_sq``, ``fastq_modality_unknown``)
+do fire and appear in the golden. The gfa stub is the exception: its payload is a
+real rank-0 rGFA tag, and it is what drives that record's
+``data_type: pangenome.reference`` (rule ``rgfa_stable_rank_reference``) — the
+filename alone yields only ``pangenome``. Do not replace it with a content-free
+value; the golden would silently record the unrefined result.
+
+This guards output *shape*; it is not a substitute for the content-driven
+classification tests in ``tests/test_evals.py``.
 Regenerate with::
 
     python -m tests.test_output_shape   # writes tests/fixtures/golden/expected_output.json
@@ -79,14 +86,25 @@ GOLDEN_INPUTS = {
          "file_size": 8000, "file_format": ".fastq.gz", "entry_id": "g-fastq-1",
          "dataset_title": "GOLDEN_FIXTURE"},
     ],
+    "gfa": [
+        {"file_md5sum": "golden_gfa_rgfa", "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
+         "file_size": 848467761, "file_format": ".gfa.gz", "entry_id": "g-gfa-1",
+         "dataset_title": "GOLDEN_FIXTURE"},
+    ],
 }
 
 STUB_HEADER = "stub-header-no-network"
-# Real fetchers return str (bam/vcf header text) or list[str] (fastq reads /
-# fasta contig names) — see fetchers.py. The stub honors each type's contract so
-# the golden exercises realistic classifier input and stays robust if a classifier
-# later type-guards its argument.
-LIST_RETURNING_TYPES = {"fastq", "fasta"}
+# Real fetchers return str (bam/vcf header text), list[str] (fastq reads / fasta
+# contig names), or list[dict] (gfa segment tags) — see fetchers.py. The stub
+# honors each type's contract so the golden exercises realistic classifier input
+# and stays robust if a classifier later type-guards its argument.
+STUB_PAYLOADS = {
+    "bam": STUB_HEADER,
+    "vcf": STUB_HEADER,
+    "fastq": [STUB_HEADER],
+    "fasta": [STUB_HEADER],
+    "gfa": [{"SN": "chr1", "SR": "0"}],
+}
 EVIDENCE_KEYS = {"rule_id", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}
 RECORD_KEYS = {
@@ -97,7 +115,12 @@ RECORD_KEYS = {
 
 def _make_stub_fetcher(file_type: str):
     """A deterministic, network-free fetcher whose return type matches the real one."""
-    payload = [STUB_HEADER] if file_type in LIST_RETURNING_TYPES else STUB_HEADER
+    if file_type not in STUB_PAYLOADS:
+        raise ValueError(
+            f"No stub payload for file type {file_type!r}. Add one to STUB_PAYLOADS "
+            f"matching that fetcher's return type. Stubbed: {sorted(STUB_PAYLOADS)}"
+        )
+    payload = STUB_PAYLOADS[file_type]
 
     def _fetch(evidence_dir, md5, **kwargs):
         return payload
@@ -158,6 +181,16 @@ def test_golden_inputs_cover_all_file_types():
     assert set(GOLDEN_INPUTS) == set(FILE_TYPE_REGISTRY), (
         "GOLDEN_INPUTS must cover every FILE_TYPE_REGISTRY type so no output shape is "
         f"unguarded. Missing: {set(FILE_TYPE_REGISTRY) - set(GOLDEN_INPUTS)}"
+    )
+
+
+def test_stub_payloads_cover_all_file_types():
+    """Every registered file type needs a stub payload, or build_output fails deep
+    inside the session fixture instead of here with a clear message."""
+    assert set(STUB_PAYLOADS) == set(FILE_TYPE_REGISTRY), (
+        "STUB_PAYLOADS must cover every FILE_TYPE_REGISTRY type, with a payload whose "
+        "type matches that fetcher's real return value. Missing: "
+        f"{set(FILE_TYPE_REGISTRY) - set(STUB_PAYLOADS)}"
     )
 
 

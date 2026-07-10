@@ -17,6 +17,33 @@ import requests
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
+# Bytes read from the head of a GFA file. rGFA tags sit on the leading
+# segments, well inside this.
+HEAD_BYTES = 262144  # 256KiB
+
+
+class FetchError(Exception):
+    """A file's content could not be read or parsed.
+
+    Raised instead of returning None so the caller can keep the file in the
+    output — classified as far as its filename allows — with `reason` recorded
+    as evidence. `reason` is a short human-readable cause, safe to store as
+    classification evidence, and should name the actual failure (an HTTP status,
+    an exception type), not merely that something went wrong.
+
+    Raised by `_fetch_range` on any non-2xx response, and by
+    `fetch_gfa_segment_tags` around its parse. The other three range-based
+    fetchers (vcf, fastq, fasta) catch it and return None *silently*, so their
+    records are still dropped without a stated cause (see #155) — and so a
+    corpus-wide run is not flooded with one line per missing mirror object
+    (#156). `fetch_bam_header` never raises FetchError: it shells out to samtools
+    rather than calling `_fetch_range`.
+    """
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
 
 # =============================================================================
 # SHARED EVIDENCE CACHE
@@ -54,28 +81,50 @@ def _timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes | None:
-    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes or None.
+def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes:
+    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+
+    Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
+    mirror does not hold this md5 — which is not the same as the file not existing,
+    since the catalog entry may still carry a size and a DRS URI. The vcf/fastq/fasta
+    callers catch it in an explicit `except FetchError` and return None silently,
+    so their records are still dropped without a cause (see #155). That clause must
+    precede their `except Exception`, or a non-2xx would be reported as an error.
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
     resp = requests.get(fetch_url, headers=headers, timeout=timeout)
     if resp.status_code not in [200, 206]:
-        return None
+        raise FetchError(
+            f"HTTP {resp.status_code} from {'source URL' if url else 'AnVIL S3 mirror'} "
+            f"range request"
+        )
     return resp.content
 
 
 def _decompress_if_gzipped(content: bytes, is_gzipped: bool) -> bytes:
     """Decompress gzipped content, returning original if not gzipped or on error."""
+    return _decompress_head(content, is_gzipped)[0]
+
+
+def _decompress_head(content: bytes, is_gzipped: bool) -> tuple[bytes, bool]:
+    """Decompress, and report whether the decompressed text ends the stream.
+
+    Returns ``(bytes, stream_complete)``. ``stream_complete`` is False when more
+    compressed data follows what was decoded — either the gzip stream was cut off,
+    or it is BGZF and only the first member was read (see #149). Non-gzipped input
+    is trivially complete: the bytes are exactly what was fetched.
+    """
     if is_gzipped and content[:2] == b'\x1f\x8b':
         try:
             decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
-            return decompressor.decompress(content)
+            out = decompressor.decompress(content)
+            return out, decompressor.eof and not decompressor.unused_data
         except zlib.error:
-            pass
-    return content
+            return content, False
+    return content, True
 
 
 def _decode_bytes(content: bytes) -> str:
@@ -200,8 +249,6 @@ def fetch_vcf_header(
 
     try:
         content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -237,6 +284,12 @@ def fetch_vcf_header(
 
         return None
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading header for {md5sum}")
         return None
@@ -271,8 +324,6 @@ def fetch_fastq_reads(
 
     try:
         content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -303,6 +354,12 @@ def fetch_fastq_reads(
 
         return read_names if read_names else None
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading FASTQ for {md5sum}")
         return None
@@ -336,8 +393,6 @@ def fetch_fasta_headers(
 
     try:
         content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -365,9 +420,156 @@ def fetch_fasta_headers(
 
         return contig_names
 
+    except FetchError:
+        # A non-2xx response. Silent, as before FetchError existed: this fetcher
+        # drops the record rather than reporting a cause (see #155). Printing per
+        # file would flood the run — the mirror is missing an unknown number of
+        # objects (#156).
+        return None
     except requests.Timeout:
         print(f"Timeout reading FASTA for {md5sum}")
         return None
     except Exception as e:
         print(f"Error reading FASTA for {md5sum}: {e}")
         return None
+
+
+# =============================================================================
+# GFA FETCHER
+# =============================================================================
+
+def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
+    """Parse rGFA stable-sequence tags from the S (segment) lines of GFA text.
+
+    Returns one dict per segment that carries at least one of `SN:Z:` (stable
+    sequence name) and `SR:i:` (stable rank). Segments with neither — every
+    segment of a plain GFA, such as a minigraph-cactus graph — are omitted, so
+    a plain GFA yields an empty list.
+
+    The sequence column is not sliced out into its own string: in a real graph it
+    holds the full segment sequence and dominates the line, while the tags follow
+    it. Splitting `text` into lines does copy each sequence once; the tag scan
+    below avoids copying it a second time.
+
+    ``truncated`` says whether `text` was cut short — the usual case, since the
+    fetcher reads only a head. An unterminated final line is then a partial record
+    and is dropped. The caller must tell us: a byte-range cut can land exactly on a
+    tag boundary, so a truncated line may be *syntactically complete* and no
+    inspection of the text can distinguish the two. When `text` is the whole file
+    (``truncated=False``), an unterminated final line is a real record and is
+    parsed — otherwise a small newline-less rGFA would lose its last segment's
+    tags, and with them the reference signal.
+    """
+    lines = text.split("\n")
+    if truncated and not text.endswith("\n"):
+        lines.pop()  # partial trailing record from the byte-range cut
+
+    segments = []
+    for line in lines:
+        if not line.startswith("S\t"):
+            continue
+        # Advance past the record type (0), name (1), and sequence (2) columns
+        # by locating their trailing tabs, so the sequence is never materialized.
+        pos = -1
+        for _ in range(3):
+            pos = line.find("\t", pos + 1)
+            if pos == -1:
+                break
+        if pos == -1:
+            continue  # fewer than 4 columns — no tag columns follow the sequence
+
+        tags = {}
+        for fld in line[pos + 1:].rstrip("\r").split("\t"):
+            if fld.startswith("SN:Z:"):
+                tags["SN"] = fld[5:]
+            elif fld.startswith("SR:i:"):
+                tags["SR"] = fld[5:]
+        if tags:
+            segments.append(tags)
+    return segments
+
+
+def fetch_gfa_segment_tags(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = True,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> list[dict]:
+    """Read rGFA stable-sequence tags from the S lines at the head of a GFA file.
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    Returns a list of tag dicts, one per rGFA-tagged segment — empty for a plain
+    GFA, which is a successful read of a graph that carries no rGFA tags.
+
+    Never returns None. A file that cannot be read or parsed raises FetchError,
+    so the caller can tell "read it, found no tags" from "could not read it" and
+    keep the file in the output with the cause recorded.
+
+    Only the first 256KiB is fetched, and for BGZF input only that range's first
+    gzip member decompresses — about 64KiB (see #149).
+
+    rGFA tags sit on the leading segments, after each segment's sequence, so the
+    rank-0 signal is normally within the first KB — on the two HPRC minigraph
+    graphs I fetched, every segment in the decoded head was rank-0 tagged. It is
+    not guaranteed: a graph whose leading segment sequences exceed the decoded
+    head would push the tags out of reach, yielding no tags. That degrades
+    safely — the caller makes no content claim and falls back to the filename
+    rules, so a reference graph without an identifying filename token is left
+    unrefined rather than misclassified.
+
+    On graphs of that scale the head does not reach GFA `P`/`W` path lines,
+    which follow every segment line.
+
+    When the fetch returns the whole file and the gzip stream ends, the text is not
+    truncated and its final line is parsed even without a trailing newline — so a
+    small complete rGFA keeps its last segment's tags.
+    """
+    if use_cache:
+        cached = load_cached_evidence(evidence_dir, md5sum)
+        if cached and "gfa_segment_tags" in cached:
+            return cached["gfa_segment_tags"]
+
+    try:
+        # end_byte is inclusive, so 262143 fetches exactly HEAD_BYTES.
+        content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
+        raw_bytes = len(content)
+
+        # Fewer bytes than we asked for means we hold the whole file; a gzip stream
+        # that ends with nothing after it means we decoded all of it. Only when both
+        # hold is the text complete, so an unterminated final line is a real record.
+        # (BGZF fails the second test: its first member ends but more members follow.)
+        got_whole_file = raw_bytes < HEAD_BYTES
+        content, stream_complete = _decompress_head(content, is_gzipped)
+        text = _decode_bytes(content)
+
+        segment_tags = parse_gfa_segment_tags(
+            text, truncated=not (got_whole_file and stream_complete)
+        )
+
+        evidence = {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "gfa_segment_tags": segment_tags,
+            "tagged_segment_count": len(segment_tags),
+            "raw_bytes_fetched": raw_bytes,
+            "fetch_timestamp": _timestamp(),
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
+
+        return segment_tags
+
+    except FetchError:
+        raise  # already carries its reason — don't re-wrap as "FetchError: ..."
+    except requests.Timeout as e:
+        raise FetchError(f"Timeout reading GFA head: {e}") from e
+    except Exception as e:
+        # Wrapped, not swallowed: the caller turns this into a not_classified
+        # record whose evidence names the cause. A programming error in the
+        # parser therefore surfaces as `TypeError: ...` in the output rather
+        # than silently deleting the file's row.
+        raise FetchError(f"{type(e).__name__}: {e}") from e

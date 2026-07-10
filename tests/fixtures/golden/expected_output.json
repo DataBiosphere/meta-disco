@@ -70,6 +70,9 @@
     ],
     "metadata": {
       "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
@@ -176,6 +179,9 @@
     ],
     "metadata": {
       "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
@@ -261,6 +267,100 @@
     ],
     "metadata": {
       "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
+      "failed": 0,
+      "from_cache": 0,
+      "processed": 1,
+      "successful": 1,
+      "total_to_process": 1
+    }
+  },
+  "gfa": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "status": "classified",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "tier": 1,
+                "value": "pangenome"
+              },
+              {
+                "reason": "1 rGFA segment carries stable rank 0 (SR:i:0) on chr1 \u2014 graph defines a reference coordinate system",
+                "rule_id": "rgfa_stable_rank_reference",
+                "tier": 3,
+                "value": "pangenome.reference"
+              }
+            ],
+            "status": "classified",
+            "value": "pangenome.reference"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Filename contains GRCh38/hg38 reference indicator",
+                "rule_id": "filename_ref_grch38",
+                "tier": 2,
+                "value": "GRCh38"
+              }
+            ],
+            "status": "classified",
+            "value": "GRCh38"
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "entry_id": "g-gfa-1",
+        "file_format": ".gfa.gz",
+        "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
+        "file_size": 848467761,
+        "md5sum": "golden_gfa_rgfa"
+      }
+    ],
+    "metadata": {
+      "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
@@ -340,6 +440,9 @@
     ],
     "metadata": {
       "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
