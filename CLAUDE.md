@@ -4,21 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It uses LLMs to infer `data_modality` (genomic/transcriptomic) and `reference_genome` (GRCh38/GRCh37/CHM13) from filenames and BAM/SAM headers.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers five dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content), using a deterministic tiered rule engine.
 
 ## Architecture
 
 The project has two main components:
 
-1. **LLM Inference** (root directory): Uses Ollama to run local LLMs for metadata extraction
-   - `metadisco-inference.py`: Main inference script that queries Ollama's `/api/chat` endpoint
-   - `anvil-harmonizer/modelfiles/`: Custom Ollama Modelfiles with domain-specific system prompts
-   - Expects Ollama running on `localhost:11434`
+1. **Classification** (`src/meta_disco/`, `rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
 
-2. **Schema Validation** (`schema/` directory): LinkML-based validation of extracted metadata
+2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
    - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the five metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
    - Uses Poetry for dependency management (Python 3.10+)
+
+> The classification `data_modality`/`reference_assembly` inference was originally
+> LLM-based (Ollama); that path has been removed in favor of the rule engine.
 
 ## Commands
 
@@ -39,11 +39,18 @@ make test
 poetry run pytest tests/test_validation.py
 ```
 
-### LLM Inference (run from root directory)
+### Classification (run from root directory)
 
 ```bash
-# Requires Conda environment and Ollama running
-python metadisco-inference.py <row_index> <model_name> <output_tsv_path>
+# Full pipeline over all file types, in parallel
+make classify
+
+# One file type (network required for header fetches)
+make classify-bam        # or classify-vcf / classify-fastq / classify-fasta / classify-gfa
+
+# Tests and lint
+make test
+make lint
 ```
 
 ## Schema Details
@@ -103,5 +110,5 @@ these, and flag any that overclaim.
 
 ## Environment
 
-- LLM component: Conda (`environment.yaml`) with Python 3.8, pandas, requests
-- Schema component: Poetry with Python 3.10+, linkml, linkml-validator
+- Classification (root): Python 3.10+, `pyproject.toml`; runtime deps `pyyaml`, `requests`; dev `pytest`, `ruff`
+- Schema (`schema/`): Poetry with Python 3.10+, linkml, linkml-validator

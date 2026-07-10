@@ -7,12 +7,12 @@ Meta-disco is a project focused on metadata discovery for biological data files,
 
 The meta-disco project consists of two main components:
 
-1. **LLM Component**: Responsible for running the Large Language Models to extract metadata from biological data files.
-2. **Schema Validation Component**: Responsible for validating the extracted metadata against LinkML schemas.
+1. **Classification**: A deterministic tiered rule engine (`src/meta_disco/`, `rules/unified_rules.yaml`) that classifies biological data files across five metadata dimensions from their names, extensions, and headers.
+2. **Schema Validation Component**: Responsible for validating the classification output against LinkML schemas.
 
-### LLM Component
+### Classification
 
-The LLM component uses Conda for environment management and Ollama for running the LLM models. Setup instructions can be found in the "Terra Jupyter Ollama Setup" section below.
+The rule engine runs from the repo root (Python 3.10+). See the [Makefile](Makefile) for the `classify`, `test`, and `lint` targets. An earlier LLM-based approach (Ollama) was removed — see "Why This Approach" below.
 
 ### Schema Validation Component
 
@@ -97,7 +97,7 @@ But there are real problems with "just ask Claude":
 3. **Validation** — "does this classification make sense?" as a sanity check
 4. **One-off analysis** — like when we explored the HPRC catalog
 
-The original `metadisco-inference.py` in this repo used Ollama to classify files. The rule engine replaced it because the LLM was slow, non-deterministic, and hard to debug. But the LLM was good at bootstrapping — figuring out what the rules should be in the first place.
+An earlier `metadisco-inference.py` (since removed) used Ollama to classify files. The rule engine replaced it because the LLM was slow, non-deterministic, and hard to debug. But the LLM was good at bootstrapping — figuring out what the rules should be in the first place.
 
 The ideal workflow is what we've been doing: **LLM designs rules, rule engine executes them, LLM reviews results and suggests improvements.** Claude as the architect, rules as the execution engine.
 
