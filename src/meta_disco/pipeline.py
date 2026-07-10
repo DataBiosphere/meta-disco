@@ -292,7 +292,11 @@ class ClassifyPipeline:
         note on `reference_assembly` alone.
 
         Iterates CLASSIFICATION_FIELDS rather than every key, because some
-        classifiers add non-dimension keys to the dict (e.g. fastq's `paired_end`).
+        classifiers add non-dimension keys whose values are scalars, not
+        `{value, status, evidence}` entries — the fastq classifier adds
+        `is_paired_end`, `instrument_model`, `instrument_hint`,
+        `archive_accession` and `archive_source`. Iterating `.values()` would
+        call `.get` on a bool or None.
         """
         return any(
             e.get("rule_id") == "fetch_failed"
