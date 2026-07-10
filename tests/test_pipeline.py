@@ -156,6 +156,54 @@ class TestPipelineRun:
             data = json.load(f)
         assert data["metadata"]["failed"] == 2
 
+    @pytest.mark.parametrize("workers", [1, 2])
+    def test_null_file_name_is_rejected_at_load(self, tmp_path, workers):
+        """The outer gate: `_load_input` validates the fields the pipeline reads, so a
+        present-but-null `file_name` never reaches the run loop (#161)."""
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "n1", "file_name": None, "file_format": ".test"},
+        ]}))
+        with pytest.raises(ValueError, match="null:file_name"):
+            ClassifyPipeline(
+                config, input_path, tmp_path / "out.json",
+                evidence_base=tmp_path / "evidence", workers=workers,
+            ).run()
+
+    @pytest.mark.parametrize("workers", [1, 2])
+    def test_null_file_name_in_the_run_loop_neither_crashes_nor_loses_the_record(
+        self, tmp_path, workers
+    ):
+        """Defense in depth, below the load-time gate.
+
+        `record.get("file_name", "")` returns None for a present-but-null key.
+        Sequentially that aborted the run. In the parallel path it was worse: the
+        raise landed in the executor's `except Exception`, so a record that had
+        classified successfully was counted as errored and never written.
+
+        Drives `_run_parallel` directly, since `_load_input` now rejects such a
+        record before it can reach here.
+        """
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": []}))
+        output = tmp_path / "out.json"
+        pipeline = ClassifyPipeline(
+            config, input_path, output,
+            evidence_base=tmp_path / "evidence", workers=workers,
+        )
+        pipeline.evidence_dir.mkdir(parents=True, exist_ok=True)
+        results = pipeline._run_parallel(
+            [{"file_md5sum": "n1", "file_name": None, "file_format": ".test"}]
+        )
+
+        assert len(results) == 1, "the record must be classified, not dropped"
+        meta = json.loads(output.read_text())["metadata"]
+        assert meta["successful"] == 1
+        assert meta["errored"] == 0
+        assert meta["failed"] == 0
+
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"
@@ -207,7 +255,186 @@ class TestPipelineRun:
 class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta"}
+        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
+
+    def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTPError: 404 Not Found")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [{
+            "file_md5sum": "deadbeef", "file_name": file_name,
+            "file_format": file_format, "file_size": 10, "entry_id": "e1",
+        }]}))
+        return ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1,
+        ).run()
+
+    def test_fetch_error_keeps_the_row_and_what_the_filename_already_gave(self, tmp_path):
+        """A dropped row is indistinguishable from a file that was never seen. But
+        blanking every dimension is also wrong: `pangenome` is knowable from the
+        extension without reading a byte. Only content-dependent fields go
+        not_classified, annotated with the cause."""
+        from src.meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
+
+        results = self._run_with_failing_fetcher(tmp_path, "graph.gfa", ".gfa")
+        assert len(results) == 1, "the unreadable file must still appear in the output"
+        cls = results[0]["classifications"]
+
+        # Knowable from the extension alone — must survive a failed fetch.
+        assert cls["data_type"]["value"] == "pangenome"
+        assert cls["data_type"]["status"] == CLASSIFIED
+        assert cls["data_modality"]["value"] == "genomic"
+        assert cls["platform"]["status"] == NOT_APPLICABLE
+        assert cls["assay_type"]["status"] == NOT_APPLICABLE
+
+        # The note lands on the dimension GFA *content* determines (data_type,
+        # which the unread rGFA tags might have refined to pangenome.reference).
+        failed = [e for e in cls["data_type"]["evidence"] if e["rule_id"] == "fetch_failed"]
+        assert [e["reason"] for e in failed] == ["HTTPError: 404 Not Found"]
+
+        # NOT on reference_assembly: GFA content never determines it (no lengths
+        # are parsed), so a note there would say a re-fetch could resolve an
+        # assembly only the filename can supply.
+        assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
+        assert not [e for e in cls["reference_assembly"]["evidence"]
+                    if e["rule_id"] == "fetch_failed"]
+
+    def test_fetch_error_on_mc_graph_keeps_the_filename_refinement(self, tmp_path):
+        """The `-mc-` token still refines data_type even though content is unreadable."""
+        results = self._run_with_failing_fetcher(
+            tmp_path, "hprc-v1.0-mc-grch38.gfa.gz", ".gfa.gz"
+        )
+        cls = results[0]["classifications"]
+        assert cls["data_type"]["value"] == "pangenome.reference"
+        assert cls["reference_assembly"]["value"] == "GRCh38"
+
+    def test_fetch_error_reports_unreadable_and_never_counts_as_cached(self, tmp_path):
+        """A fetcher raises only after its own cache check missed, so it went to the
+        network. If a stale evidence file makes _is_cached True, the record must
+        still be reported unreadable rather than tallied under 'From cache'."""
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError, get_evidence_path
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        record = {"file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+                  "file_format": ".gfa.gz", "file_size": 10}
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [record]}))
+
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1, resume=True,
+        )
+        # A corrupt evidence file: _is_cached() sees it, load_cached_evidence() cannot
+        # read it, so the fetcher re-fetches and fails.
+        stale = get_evidence_path(pipeline.evidence_dir, "deadbeef")
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text("{ not json")
+
+        out, was_cached, content_unreadable = pipeline._process_single_record(record)
+
+        assert content_unreadable is True
+        assert was_cached is False, "a fetch that reached the network is not a cache hit"
+        # The note is on data_type (what content refines), not on the four others.
+        cls = out["classifications"]
+        noted = [f for f in cls
+                 if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
+        assert noted == ["data_type"]
+
+    def test_unreadable_count_is_persisted_in_run_metadata(self, tmp_path):
+        """from_cache is persisted; unreadable must be too, or a consumer cannot tell
+        a filename-only fallback from a real content read."""
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "a1", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+             "file_format": ".gfa.gz"},
+            {"file_md5sum": "b2", "file_name": "HG002.hap1.p_ctg.gfa", "file_format": ".gfa"},
+        ]}))
+        out_path = tmp_path / "out.json"
+        ClassifyPipeline(config, input_path, out_path,
+                         evidence_base=tmp_path / "evidence", workers=1,
+                         resume=False).run()
+
+        meta = json.loads(out_path.read_text())["metadata"]
+        assert meta["content_unreadable"] == 2
+        assert meta["from_cache"] == 0
+        assert meta["successful"] == 2
+
+    def test_dropped_and_errored_are_counted_separately(self, tmp_path):
+        """`Dropped (fetcher gave no cause)` must not absorb records whose worker
+        raised and printed a cause. `failed` stays the sum, for existing consumers."""
+        import dataclasses
+
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _explode(evidence_dir, md5, **kwargs):
+            if md5 == "boom":
+                raise TypeError("a bug in the parser, not a fetch failure")
+            return None  # silent drop, no cause
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "boom", "file_name": "a.gfa", "file_format": ".gfa"},
+            {"file_md5sum": "quiet", "file_name": "b.gfa", "file_format": ".gfa"},
+        ]}))
+        out_path = tmp_path / "out.json"
+        # workers>1 so the executor's `except Exception` handles the TypeError.
+        ClassifyPipeline(config, input_path, out_path,
+                         evidence_base=tmp_path / "evidence", workers=2,
+                         resume=False).run()
+
+        meta = json.loads(out_path.read_text())["metadata"]
+        assert meta["dropped"] == 1, "the None-returning fetcher"
+        assert meta["errored"] == 1, "the raising fetcher"
+        assert meta["failed"] == 2, "kept as the sum for existing consumers"
+        assert meta["successful"] == 0
+
+    def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
+        """Unchanged for the fetchers that give no cause (see #155)."""
+        import dataclasses
+
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        config = dataclasses.replace(
+            FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None
+        )
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "d", "file_name": "graph.gfa", "file_format": ".gfa"}
+        ]}))
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1,
+        )
+        assert pipeline.run() == []
 
     def test_configs_have_required_fields(self):
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY

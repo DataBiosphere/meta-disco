@@ -21,6 +21,12 @@ from .validators.read_name_parsers import (  # noqa: F401 — re-exported for ba
     parse_pacbio_read_name,
 )
 
+# Text GFA formats this module can parse. The other graph extensions the
+# `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
+# GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
+# the config cannot disagree about which names it may trust.
+GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
+
 
 def _get_engine():
     """Get a cached RuleEngine instance (avoids re-parsing YAML on every call)."""
@@ -327,6 +333,182 @@ _TRANSCRIPT_PATTERN = re.compile(
     r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
     re.IGNORECASE
 )
+
+
+def filename_for_rules(
+    file_name: str | None,
+    file_format: str | None,
+    default: str,
+    allowed_extensions: tuple[str, ...] | None = None,
+) -> str:
+    """The filename to hand the rule engine, which reads the extension from it.
+
+    ``ClassifyPipeline._filter_records`` selects a record when *either* its
+    ``file_name`` or its ``file_format`` carries a matching extension, so a
+    selected record's ``file_name`` may not carry one. The engine derives
+    ``file_format`` strictly from the filename (``UnifiedRules.extract_extension``),
+    so an extensionless name silently disables every extension-scoped rule — and
+    worse, ``extract_extension("hprc-v1.0-mc-grch38")`` returns ``".0-mc-grch38"``,
+    a nonsense suffix taken from the last dot.
+
+    So: keep ``file_name`` when it already yields a *usable* extension, otherwise
+    append ``file_format`` to it, preserving the filename tokens the tier-2 rules
+    match (``-mc-``, ``grch38``). Testing "already usable" rather than "ends with
+    file_format" matters: 5,227 corpus records are named ``*.fastq.gz`` while
+    declaring ``file_format: ".fastq"``, and appending there would produce
+    ``*.fastq.gz.fastq``.
+
+    ``allowed_extensions`` narrows "usable" to the extensions the caller can
+    actually handle. Without it, a graph record named ``graph.tar.gz`` would be
+    trusted verbatim: the tar rules run, ``pangenome_graph`` never fires, and a
+    content-derived ``data_type`` claim then lands on a record whose
+    ``data_modality`` is not_classified. Pass the calling config's extensions.
+
+    ``file_format`` is only grafted on when it looks like an extension. The
+    corpus carries ``file_format: "Other"`` on ~108k records; appending that
+    would yield ``graphOther``, which matches nothing.
+    """
+    rules = _get_engine().rules
+    if file_name:
+        ext = rules.extract_extension(file_name)
+        usable = ext in allowed_extensions if allowed_extensions else ext in rules.extension_map
+        if usable:
+            return file_name
+    if file_format and file_format.startswith("."):
+        return f"{file_name or 'file'}{file_format}"
+    return file_name or default
+
+
+def classify_without_content(
+    reason: str,
+    *,
+    file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
+    allowed_extensions: tuple[str, ...] | None = None,
+    content_fields: tuple[str, ...] = (),
+) -> dict:
+    """Classify a file whose content could not be read, from its name alone.
+
+    Keeps the file in the output with a stated cause instead of dropping its row
+    — a missing record is indistinguishable from a file that was never seen.
+
+    Runs the tier-1/2 (extension and filename) rules only, so everything knowable
+    without reading bytes is still classified: a `.gfa` is still `pangenome`,
+    still `genomic`, still `not_applicable` for platform and assay.
+
+    ``content_fields`` names the dimensions *this file type's content* can
+    determine (``FileTypeConfig.content_fields``). Only those carry the
+    ``fetch_failed`` note, so the evidence says which answers the unread bytes
+    would have informed. Annotating every unresolved dimension instead would lie:
+    GFA content never determines reference_assembly (see
+    ``classify_from_gfa_segment_tags``), so a note there would tell a reader that
+    re-fetching could resolve an assembly the filename alone must supply.
+
+    The note is attached whether or not the dimension is already classified — a
+    filename-derived `pangenome` may be an unrefined `pangenome.reference`. It
+    declares a status, not a value, so ``evaluate_claims`` treats it as
+    non-assertive and it never competes with a real claim.
+
+    ``reason`` should name the cause (e.g. ``"HTTP 404 from AnVIL S3 mirror ..."``).
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    filename = filename_for_rules(
+        file_name, file_format, default="", allowed_extensions=allowed_extensions
+    )
+    file_info = ExtendedFileInfo(
+        filename=filename,
+        file_size=file_size,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
+    )
+    result = _get_engine().classify_extended(file_info, include_tier3=False)
+
+    output = result.to_output_dict()
+    for fld in content_fields:
+        if fld in output:
+            output[fld]["evidence"].append({
+                "rule_id": "fetch_failed",
+                "reason": reason,
+                "status": NOT_CLASSIFIED,
+            })
+    return output
+
+
+def classify_from_gfa_segment_tags(
+    segment_tags: list[dict],
+    *,
+    file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """
+    Refine a sequence graph to `pangenome.reference` from rGFA segment tags.
+
+    In rGFA, each segment carries a stable rank (`SR`) naming which sequence it
+    came from; rank 0 is the reference backbone, and `SN` names its contig. A
+    graph whose segments carry rank-0 stable sequences therefore defines a
+    reference coordinate system — the `pangenome.reference` case. Plain GFA
+    segments carry no such tags and stay at the tier-1 `pangenome` base.
+
+    This does not set reference_assembly, for two reasons. `parse_gfa_segment_tags`
+    extracts no sequence lengths, so `detect_reference_from_contig_lengths` — the
+    definitive signal used for BAM/VCF — cannot run here at all. And the stable
+    names that are extracted do not identify an assembly: the fetched head of the
+    HPRC minigraph graphs exposes only `chr1`, a name GRCh38 and CHM13 share.
+    The assembly is left to the shared filename_ref_* rules.
+
+    Args:
+        segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags
+        file_name: Optional filename for extension/filename rules
+        file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
+            extension rules when file_name carries no known extension
+            (see filename_for_rules)
+        file_size: Unused. Accepted because ``pipeline._fetch_and_classify`` calls
+            every classifier with the same keyword arguments; no graph rule keys
+            on file size. ``classify_from_fasta_header`` accepts it unused too.
+
+    Returns:
+        Per-field classification dict (same format as classify_from_fasta_header)
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    filename = filename_for_rules(
+        file_name, file_format, default="graph.gfa",
+        allowed_extensions=GRAPH_TEXT_EXTENSIONS,
+    )
+
+    # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
+    # and reference_assembly from the filename.
+    file_info = ExtendedFileInfo(filename=filename)
+    engine = _get_engine()
+    result = engine.classify_extended(file_info, include_tier3=False)
+
+    rank0 = [t for t in segment_tags if t.get("SR") == "0" and t.get("SN")]
+    if rank0:
+        contigs = sorted({t["SN"] for t in rank0})
+        preview = ", ".join(contigs[:3])
+        phrase = "segment carries" if len(rank0) == 1 else "segments carry"
+        # Appended as a tier-3 claim, not assigned over the list, so the tier-1
+        # `pangenome_graph` claim survives and the derivation chain reads the same
+        # as the engine-resolved `-mc-` case. The tier matters: evaluate_claims
+        # defaults a missing tier to 0, which would lose to the tier-1 `pangenome`
+        # claim and undo this refinement once #150 resolves this path from claims.
+        result.field_evidence["data_type"].append({
+            "rule_id": "rgfa_stable_rank_reference",
+            "tier": 3,
+            "reason": (
+                f"{len(rank0)} rGFA {phrase} stable rank 0 "
+                f"(SR:i:0) on {preview} — graph defines a reference "
+                f"coordinate system"
+            ),
+            "value": "pangenome.reference",
+        })
+        # Still set imperatively rather than resolved from the claims above;
+        # conflict detection for data_type is bypassed here (see #150).
+        result.set_field("data_type", "pangenome.reference")
+
+    return result.to_output_dict()
 
 
 def _get_ref_chrom_names() -> set[str]:

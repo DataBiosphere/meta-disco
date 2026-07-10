@@ -120,7 +120,12 @@ file_format (extension)
 
 **data_type**: `pangenome`, `pangenome.reference`
 
-`data_type` describes structure: linear sequence (FASTA — `sequence`, refining to `assembly`/`assembly.reference`) versus a sequence graph (nodes/edges/haplotype paths), which is `pangenome`. The reference-graph case — an HPRC minigraph-cactus (`mc`) graph used as the alignment coordinate system — refines to `pangenome.reference`. PGGB and single-sample assembly graphs stay `pangenome`.
+`data_type` describes structure: linear sequence (FASTA — `sequence`, refining to `assembly`/`assembly.reference`) versus a sequence graph (nodes/edges/haplotype paths), which is `pangenome`. The reference-graph case — a graph used as the alignment coordinate system — refines to `pangenome.reference`, detected two ways:
+
+- **From file content (preferred)** — an rGFA whose segments carry stable rank 0 (`SR:i:0`) plus a stable name (`SN:Z:`) defines a reference backbone. `fetch_gfa_segment_tags` reads the S-line tags from the head of the file and `classify_from_gfa_segment_tags` emits `rgfa_stable_rank_reference`. When those tags are in the head the signal is exact; if they are not, no content claim is made and detection falls back to the filename. This catches the HPRC `minigraph` graphs (#148).
+- **From filename** — HPRC minigraph-cactus graphs match the `-mc-` token (tier-2 `pangenome_reference_mc`). Their GFA segments carry no tags, and the PanSN `P`/`W` path lines that identify them sit after every segment line — ~11 GB into the file — so content inspection is not economical.
+
+PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_modality**: `genomic` ← extension (all graph formats)
 
@@ -128,9 +133,9 @@ file_format (extension)
 
 **platform**: `not_applicable` (a graph is an assembled product, not raw reads)
 
-**reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system)
+**reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system). Not derived from graph content: no sequence lengths are parsed, so contig-length detection cannot run, and the stable names in the fetched head (`chr1`) are shared between GRCh38 and CHM13.
 
-**Coverage**: Extension-driven, so all listed formats classify. `pangenome.reference` detection keys on the `-mc-` filename token. Auxiliary vg indices (`.min`, `.dist`, `.snarls`, `.gg`) are out of scope (issue #144).
+**Coverage**: Extension-driven, so all listed formats classify. Content inspection covers the text GFA formats (`.gfa`, `.gfa.gz`, `.rgfa`, `.rgfa.gz`); the binary vg/GBWT formats (`.gbz`, `.vg`, `.gbwt`, `.xg`) classify from extension and filename alone. Auxiliary vg indices (`.min`, `.dist`, `.snarls`, `.gg`) are out of scope (issue #144). Single- vs multi-sample graph distinction is deferred (issue #147).
 
 ---
 
