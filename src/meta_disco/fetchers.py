@@ -19,15 +19,19 @@ S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
 
 class FetchError(Exception):
-    """A fetcher could not read or parse a file's content.
+    """A file's content could not be read or parsed.
 
-    Raised instead of returning None so the caller can emit a not_classified
-    record carrying the reason, rather than dropping the file from the output
-    entirely. `reason` is a short human-readable cause, safe to store as
-    classification evidence.
+    Raised instead of returning None so the caller can keep the file in the
+    output — classified as far as its filename allows — with `reason` recorded
+    as evidence. `reason` is a short human-readable cause, safe to store as
+    classification evidence, and should name the actual failure (an HTTP status,
+    an exception type), not merely that something went wrong.
 
-    Only `fetch_gfa_segment_tags` raises this today; the other fetchers still
-    return None on failure and their records are still dropped (see #155).
+    Raised by `_fetch_range` on any non-2xx response, and by
+    `fetch_gfa_segment_tags` around its parse. The other three range-based
+    fetchers (vcf, fastq, fasta) catch it in their `except Exception` and still
+    return None, so their records are still dropped (see #155).
+    `fetch_bam_header` shells out to samtools and never produces one.
     """
 
     def __init__(self, reason: str):
@@ -71,16 +75,24 @@ def _timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes | None:
-    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes or None.
+def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes:
+    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+
+    Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
+    mirror does not hold this md5 — which is not the same as the file not existing,
+    since the catalog entry may still carry a size and a DRS URI. The vcf/fastq/fasta
+    callers swallow it in their `except Exception` and return None (see #155).
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
     resp = requests.get(fetch_url, headers=headers, timeout=timeout)
     if resp.status_code not in [200, 206]:
-        return None
+        raise FetchError(
+            f"HTTP {resp.status_code} from {'source URL' if url else 'AnVIL S3 mirror'} "
+            f"range request"
+        )
     return resp.content
 
 
@@ -217,8 +229,6 @@ def fetch_vcf_header(
 
     try:
         content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -288,8 +298,6 @@ def fetch_fastq_reads(
 
     try:
         content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -353,8 +361,6 @@ def fetch_fasta_headers(
 
     try:
         content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        if content is None:
-            return None
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -478,8 +484,6 @@ def fetch_gfa_segment_tags(
     try:
         # end_byte is inclusive, so 262143 fetches exactly 256KiB.
         content = _fetch_range(md5sum, 262143, timeout=60, url=url)
-        if content is None:
-            raise FetchError("range request returned no content (non-2xx response)")
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)

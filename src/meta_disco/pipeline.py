@@ -13,7 +13,8 @@ from threading import Lock
 from typing import Callable
 
 from .fetchers import FetchError
-from .models import unclassifiable_classifications
+from .header_classifier import classify_without_content
+from .models import CLASSIFICATION_FIELDS
 
 
 @dataclass(frozen=True)
@@ -140,8 +141,12 @@ class ClassifyPipeline:
                 is_gzipped=is_gzipped, use_cache=use_cache,
             )
         except FetchError as e:
-            print(f"Unclassifiable {file_name or md5sum}: {e.reason}")
-            classifications = unclassifiable_classifications(e.reason)
+            print(f"Content unreadable, classifying from filename — "
+                  f"{file_name or md5sum}: {e.reason}")
+            classifications = classify_without_content(
+                e.reason, file_name=file_name, file_size=file_size,
+                file_format=file_format,
+            )
         else:
             if raw_data is None:
                 return None
@@ -238,16 +243,21 @@ class ClassifyPipeline:
         was_cached = self.resume and self._is_cached(md5)
 
         # A fetcher that raises FetchError names its cause, so the file stays in
-        # the output as not_classified. A fetcher that returns None gives no
-        # cause, so its record is still dropped (see #155).
+        # the output, classified as far as its filename allows. A fetcher that
+        # returns None gives no cause, so its record is still dropped (see #155).
         try:
             raw_data = self.config.fetcher(
                 self.evidence_dir, md5, file_name=file_name,
                 is_gzipped=is_gzipped, use_cache=self.resume,
             )
         except FetchError as e:
-            print(f"Unclassifiable {file_name or md5}: {e.reason}")
-            return self._build_record(record, unclassifiable_classifications(e.reason)), was_cached
+            print(f"Content unreadable, classifying from filename — "
+                  f"{file_name or md5}: {e.reason}")
+            classifications = classify_without_content(
+                e.reason, file_name=file_name, file_size=file_size,
+                file_format=file_format,
+            )
+            return self._build_record(record, classifications), was_cached
 
         if raw_data is None:
             return None, was_cached
@@ -272,12 +282,31 @@ class ClassifyPipeline:
             "entry_id": record.get("entry_id"),
         }
 
+    @staticmethod
+    def _content_was_unreadable(classifications: dict) -> bool:
+        """True if any dimension carries a `fetch_failed` note.
+
+        Checked across every dimension, not just one: `classify_without_content`
+        annotates only the dimensions the filename could not settle, so a `.gfa`
+        whose content failed still has a classified `data_type` and carries the
+        note on `reference_assembly` alone.
+
+        Iterates CLASSIFICATION_FIELDS rather than every key, because some
+        classifiers add non-dimension keys to the dict (e.g. fastq's `paired_end`).
+        """
+        return any(
+            e.get("rule_id") == "fetch_failed"
+            for fld in CLASSIFICATION_FIELDS
+            for e in classifications.get(fld, {}).get("evidence", [])
+        )
+
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
         failed = 0
         from_cache = 0
         processed = 0
+        unreadable = 0
         lock = Lock()
         total = len(records)
 
@@ -285,7 +314,7 @@ class ClassifyPipeline:
 
         with NdjsonWriter(self.output_path) as writer:
             def update_progress(result, was_cached, file_name):
-                nonlocal successful, failed, from_cache, processed
+                nonlocal successful, failed, from_cache, processed, unreadable
                 with lock:
                     processed += 1
                     if result:
@@ -293,6 +322,8 @@ class ClassifyPipeline:
                         successful += 1
                         if was_cached:
                             from_cache += 1
+                        elif self._content_was_unreadable(result["classifications"]):
+                            unreadable += 1
                     else:
                         failed += 1
                     cache_indicator = "[cached] " if was_cached else ""
@@ -322,8 +353,9 @@ class ClassifyPipeline:
 
         print(f"\n\nSuccessfully classified: {successful}")
         print(f"  From cache: {from_cache}")
-        print(f"  New fetches: {successful - from_cache}")
-        print(f"Failed to fetch header: {failed}")
+        print(f"  New fetches: {successful - from_cache - unreadable}")
+        print(f"  Content unreadable, classified from filename: {unreadable}")
+        print(f"Dropped (fetcher gave no cause): {failed}")
         classifications = self._save_final(total, successful, failed, from_cache)
 
         print(f"\nSaved to {self.output_path}")

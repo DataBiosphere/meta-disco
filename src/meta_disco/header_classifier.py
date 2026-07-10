@@ -329,6 +329,48 @@ _TRANSCRIPT_PATTERN = re.compile(
 )
 
 
+def classify_without_content(
+    reason: str,
+    *,
+    file_name: str | None = None,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a file whose content could not be read, from its name alone.
+
+    Keeps the file in the output with a stated cause instead of dropping its row
+    — a missing record is indistinguishable from a file that was never seen.
+
+    Runs the tier-1/2 (extension and filename) rules only, so everything knowable
+    without reading bytes is still classified: a `.gfa` is still `pangenome`,
+    still `genomic`, still `not_applicable` for platform and assay. Only the
+    dimensions that remain not_classified — the ones content might have settled —
+    are annotated with ``reason``, so the evidence says why they are unresolved
+    rather than blanking answers the filename already gave.
+
+    ``reason`` should name the cause (e.g. ``"HTTPError: 404 ..."``).
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    filename = file_name or (f"file{file_format}" if file_format else "")
+    file_info = ExtendedFileInfo(
+        filename=filename,
+        file_size=file_size,
+        file_size_gb=file_size / 1e9 if file_size is not None else None,
+    )
+    result = _get_engine().classify_extended(file_info, include_tier3=False)
+
+    output = result.to_output_dict()
+    for entry in output.values():
+        if entry["status"] == NOT_CLASSIFIED:
+            entry["evidence"].append({
+                "rule_id": "fetch_failed",
+                "reason": reason,
+                "status": NOT_CLASSIFIED,
+            })
+    return output
+
+
 def classify_from_gfa_segment_tags(
     segment_tags: list[dict],
     *,
