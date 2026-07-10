@@ -469,20 +469,29 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             tags, file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
         )
-        assert record["data_type"]["value"] == "pangenome.reference"
+        assert get_val(record, "data_type") == "pangenome.reference"
         # reference_assembly still comes from the filename rules, not content
-        assert record["reference_assembly"]["value"] == "GRCh38"
+        assert get_val(record, "reference_assembly") == "GRCh38"
         evidence = record["data_type"]["evidence"]
         assert any(e["rule_id"] == "rgfa_stable_rank_reference" for e in evidence)
 
     def test_content_claim_is_appended_not_clobbered(self):
         """The tier-1 `pangenome_graph` claim must survive the content refinement,
-        so the evidence chain matches the engine-resolved `-mc-` case."""
+        so the evidence chain matches the engine-resolved `-mc-` case.
+
+        Asserts the tier-1 claim is present and precedes the content claim, rather
+        than pinning the exact list: #147 will add graph `data_type` rules, and an
+        exact-match assertion would fail for a change unrelated to this behavior.
+        """
         record = classify_from_gfa_segment_tags(
             [{"SN": "chr1", "SR": "0"}], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
         )
         rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
-        assert rules == ["pangenome_graph", "rgfa_stable_rank_reference"]
+        assert "pangenome_graph" in rules, "the tier-1 claim was clobbered"
+        assert "rgfa_stable_rank_reference" in rules
+        assert rules.index("pangenome_graph") < rules.index("rgfa_stable_rank_reference"), (
+            "the content claim must be appended after the base claim, not prepended"
+        )
 
     def test_content_claim_carries_tier_3(self):
         """evaluate_claims defaults a missing tier to 0, which would lose to the
@@ -503,14 +512,14 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             tags, file_name="some-graph.gfa.gz"
         )
-        assert record["data_type"]["value"] == "pangenome"
+        assert get_val(record, "data_type") == "pangenome"
 
     def test_untagged_gfa_stays_pangenome(self):
         """A plain GFA (pggb) carries no rGFA tags, so parsing yields no segments."""
         record = classify_from_gfa_segment_tags(
             [], file_name="chr1.hprc-v1.0-pggb.gfa.gz"
         )
-        assert record["data_type"]["value"] == "pangenome"
+        assert get_val(record, "data_type") == "pangenome"
 
     def test_no_segments_falls_back_to_filename_rules(self):
         """No content claim must not downgrade the tier-1/2 result.
@@ -519,15 +528,15 @@ class TestRgfaContentClassification:
         is what keeps this a reference graph.
         """
         record = classify_from_gfa_segment_tags([], file_name="hprc-v1.0-mc-grch38.gfa.gz")
-        assert record["data_type"]["value"] == "pangenome.reference"
-        assert record["reference_assembly"]["value"] == "GRCh38"
+        assert get_val(record, "data_type") == "pangenome.reference"
+        assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_rank0_without_stable_name_is_not_a_reference_claim(self):
         """SR without SN is malformed rGFA — no contig to anchor the claim."""
         record = classify_from_gfa_segment_tags(
             [{"SR": "0"}], file_name="some-graph.gfa"
         )
-        assert record["data_type"]["value"] == "pangenome"
+        assert get_val(record, "data_type") == "pangenome"
 
     def test_empty_file_name_falls_back_to_file_format(self):
         """The pipeline selects records on file_format OR file_name, so file_name
@@ -535,7 +544,7 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             [], file_name="", file_format=".rgfa.gz"
         )
-        assert record["data_type"]["value"] == "pangenome"
+        assert get_val(record, "data_type") == "pangenome"
         rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
         assert "pangenome_graph" in rules
 
@@ -544,8 +553,8 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             [], file_name="hprc-v1.0-mc-grch38.gfa.gz", file_format=".gfa"
         )
-        assert record["data_type"]["value"] == "pangenome.reference"
-        assert record["reference_assembly"]["value"] == "GRCh38"
+        assert get_val(record, "data_type") == "pangenome.reference"
+        assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_extensionless_file_name_keeps_its_tokens_and_gains_the_extension(self):
         """A selected record's file_name may carry no extension. Appending
@@ -555,15 +564,15 @@ class TestRgfaContentClassification:
         record = classify_from_gfa_segment_tags(
             [], file_name="hprc-v1.0-mc-grch38", file_format=".gfa.gz"
         )
-        assert record["data_type"]["value"] == "pangenome.reference"
-        assert record["reference_assembly"]["value"] == "GRCh38"
+        assert get_val(record, "data_type") == "pangenome.reference"
+        assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_extensionless_file_name_still_classifies_as_a_graph(self):
         record = classify_from_gfa_segment_tags(
             [], file_name="graph", file_format=".gfa"
         )
-        assert record["data_type"]["value"] == "pangenome"
-        assert record["data_modality"]["value"] == "genomic"
+        assert get_val(record, "data_type") == "pangenome"
+        assert get_val(record, "data_modality") == "genomic"
 
 
 class TestFilenameForRules:
@@ -629,13 +638,13 @@ class TestGfaContentClaimCoherence:
             [{"SN": "chr1", "SR": "0"}],
             file_name="hprc-graph.tar.gz", file_format=".gfa.gz",
         )
-        assert record["data_type"]["value"] == "pangenome.reference"
-        assert record["data_modality"]["value"] == "genomic"
-        assert record["platform"]["status"] == NOT_APPLICABLE
+        assert get_val(record, "data_type") == "pangenome.reference"
+        assert get_val(record, "data_modality") == "genomic"
+        assert field_status(record, "platform") == NOT_APPLICABLE
 
     def test_no_file_name_or_format_still_classifies_as_graph(self):
         record = classify_from_gfa_segment_tags([])
-        assert record["data_type"]["value"] == "pangenome"
+        assert get_val(record, "data_type") == "pangenome"
 
     def test_evidence_reason_is_singular_for_one_segment(self):
         record = classify_from_gfa_segment_tags(
