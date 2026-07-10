@@ -349,14 +349,20 @@ class ClassifyPipeline:
                     else:
                         dropped += 1
                     cache_indicator = "[cached] " if was_cached else ""
-                    print(f"\r[{processed}/{total}] {cache_indicator}{file_name[:45]:<52}",
+                    # `or ""`: a record may carry an explicit null file_name, and
+                    # `.get(key, "")` returns None for a present-but-null key. Both
+                    # callers normalize, but this print is the crash site — and in the
+                    # parallel path a raise here would land in the executor's
+                    # `except Exception`, discarding a record that classified fine.
+                    label = (file_name or "")[:45]
+                    print(f"\r[{processed}/{total}] {cache_indicator}{label:<52}",
                           end="", flush=True)
 
             if self.workers == 1:
                 for record in records:
                     result, was_cached, content_unreadable = self._process_single_record(record)
                     update_progress(result, was_cached, content_unreadable,
-                                    record.get("file_name", ""))
+                                    record.get("file_name") or "")
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
                     future_to_record = {
@@ -368,7 +374,7 @@ class ClassifyPipeline:
                         try:
                             result, was_cached, content_unreadable = future.result()
                             update_progress(result, was_cached, content_unreadable,
-                                            record.get("file_name", ""))
+                                            record.get("file_name") or "")
                         except Exception as e:
                             print(f"\nError processing {record.get('file_name')}: {e}")
                             with lock:

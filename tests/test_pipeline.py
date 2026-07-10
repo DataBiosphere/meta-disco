@@ -156,6 +156,32 @@ class TestPipelineRun:
             data = json.load(f)
         assert data["metadata"]["failed"] == 2
 
+    @pytest.mark.parametrize("workers", [1, 2])
+    def test_null_file_name_does_not_crash_or_lose_the_record(self, tmp_path, workers):
+        """`record.get("file_name", "")` returns None for a present-but-null key, and
+        _filter_records admits such a record when its file_format matches.
+
+        Sequentially that aborted the run. In the parallel path it was worse: the
+        raise landed in the executor's `except Exception`, so a record that had
+        classified successfully was counted as errored and never written.
+        """
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "n1", "file_name": None, "file_format": ".test"},
+        ]}))
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(
+            config, input_path, output,
+            evidence_base=tmp_path / "evidence", workers=workers,
+        ).run()
+
+        assert len(results) == 1, "the record must be classified, not dropped"
+        meta = json.loads(output.read_text())["metadata"]
+        assert meta["successful"] == 1
+        assert meta["errored"] == 0
+        assert meta["failed"] == 0
+
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"
