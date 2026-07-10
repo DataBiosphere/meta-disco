@@ -1,11 +1,11 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
-import pytest
 from pathlib import Path
 
-from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
+import pytest
 
+from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 
 # --- Test fixtures ---
 

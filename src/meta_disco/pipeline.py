@@ -12,6 +12,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Callable
 
+from .metadata_schema import validate_pipeline_records
+
 
 @dataclass(frozen=True)
 class FileTypeConfig:
@@ -153,21 +155,35 @@ class ClassifyPipeline:
     # --- Internal ---
 
     def _load_input(self) -> list[dict]:
-        """Load NDJSON or JSON input, extracting records array."""
+        """Load NDJSON or JSON input, extract the records array, and validate it.
+
+        Validates only the fields this pipeline reads (``validate_pipeline_records``),
+        not the full AnVIL record: a derived input may legitimately carry a subset.
+        Raises rather than dropping the offenders — a dropped record is
+        indistinguishable from a file that was never seen (see #155).
+        """
         with open(self.input_path) as f:
             if self.input_path.suffix == ".ndjson":
-                return [json.loads(line) for line in f if line.strip()]
-            data = json.load(f)
-            if not isinstance(data, dict):
-                raise TypeError(
-                    f"Expected JSON object with 'results' key, got {type(data).__name__}"
-                )
-            records = data.get("results") or data.get("files")
-            if records is None:
-                raise ValueError(
-                    "JSON object must contain a 'results' or 'files' key"
-                )
-            return records
+                records = [json.loads(line) for line in f if line.strip()]
+            else:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    raise TypeError(
+                        f"Expected JSON object with 'results' key, got {type(data).__name__}"
+                    )
+                records = data.get("results") or data.get("files")
+                if records is None:
+                    raise ValueError(
+                        "JSON object must contain a 'results' or 'files' key"
+                    )
+
+        report = validate_pipeline_records(records)
+        if not report.is_valid:
+            raise ValueError(
+                f"{self.input_path} holds records this pipeline cannot read.\n"
+                f"{report.summary()}"
+            )
+        return records
 
     def _filter_records(self, records: list[dict]) -> list[dict]:
         """Filter to records matching file_type.extensions with valid MD5."""
