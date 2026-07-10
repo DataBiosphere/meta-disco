@@ -1,18 +1,18 @@
 # meta-disco
 
 ## Introduction
-Meta-disco is a project focused on metadata discovery for biological data files, using natural language processing and large language models to extract and validate clinical and experimental sequencing data for the AnVIL Explorer and Terra Data Repository.
+Meta-disco is a project focused on metadata discovery for biological data files, using a deterministic tiered rule engine to classify and validate clinical and experimental sequencing data for the AnVIL Explorer and Terra Data Repository.
 
 ## Project Components
 
 The meta-disco project consists of two main components:
 
-1. **LLM Component**: Responsible for running the Large Language Models to extract metadata from biological data files.
-2. **Schema Validation Component**: Responsible for validating the extracted metadata against LinkML schemas.
+1. **Classification**: A deterministic tiered rule engine (`src/meta_disco/`, `rules/unified_rules.yaml`) that classifies biological data files across five metadata dimensions from their names, extensions, and headers.
+2. **Schema Validation Component**: Responsible for validating the classification output against LinkML schemas.
 
-### LLM Component
+### Classification
 
-The LLM component uses Conda for environment management and Ollama for running the LLM models. Setup instructions can be found in the "Terra Jupyter Ollama Setup" section below.
+The rule engine runs from the repo root (Python 3.10+). See the [Makefile](Makefile) for the `classify`, `test`, and `lint` targets. An earlier LLM-based approach (Ollama) was removed — see "Why This Approach" below.
 
 ### Schema Validation Component
 
@@ -32,12 +32,12 @@ The schema defines the structure and constraints for metadata, including:
 - **Filenames**: Names of the data files
 
 These schemas serve two critical purposes:
-1. They provide a structured format that can be used in prompt creation for LLMs/AI models
-2. They enable syntactic validation of the metadata predictions
+1. They define the controlled vocabulary the rule engine classifies into
+2. They enable syntactic validation of the classification output
 
 ### LinkML Validator
 
-Meta-disco uses the LinkML validation framework to perform syntactic validation of metadata. This ensures that the metadata inferred by AI models or manually entered adheres to the defined schema constraints.
+Meta-disco uses the LinkML validation framework to perform syntactic validation of metadata. This ensures that the classification output, or manually entered metadata, adheres to the defined schema constraints.
 
 The validator checks:
 - Required fields are present
@@ -75,7 +75,7 @@ cd schema
 poetry run python scripts/validate_outputs.py path/to/metadata.yaml
 ```
 
-This validation is crucial for ensuring that metadata inferred by AI models is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
+This validation is crucial for ensuring that the classification output is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
 
 ## Why This Approach
 
@@ -97,7 +97,7 @@ But there are real problems with "just ask Claude":
 3. **Validation** — "does this classification make sense?" as a sanity check
 4. **One-off analysis** — like when we explored the HPRC catalog
 
-The original `metadisco-inference.py` in this repo used Ollama to classify files. The rule engine replaced it because the LLM was slow, non-deterministic, and hard to debug. But the LLM was good at bootstrapping — figuring out what the rules should be in the first place.
+An earlier `metadisco-inference.py` (since removed) used Ollama to classify files. The rule engine replaced it because the LLM was slow, non-deterministic, and hard to debug. But the LLM was good at bootstrapping — figuring out what the rules should be in the first place.
 
 The ideal workflow is what we've been doing: **LLM designs rules, rule engine executes them, LLM reviews results and suggests improvements.** Claude as the architect, rules as the execution engine.
 
@@ -108,6 +108,7 @@ The ideal workflow is what we've been doing: **LLM designs rules, rule engine ex
 - `schema/`: Contains the LinkML schema validation component
   - `src/meta_disco/schema/`: LinkML schema definitions
   - `scripts/`: Validation scripts
-- `src/meta_disco/`: Main project source code
-- `scripts/`: Utility scripts for metadata inference
+- `src/meta_disco/`: Rule engine, classifiers, and pipeline
+- `rules/`: The tiered classification rules (`unified_rules.yaml`)
+- `scripts/`: Classification, metadata download, and reporting scripts
 
