@@ -17,6 +17,10 @@ import requests
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
+# Bytes read from the head of a GFA file. rGFA tags sit on the leading
+# segments, well inside this.
+HEAD_BYTES = 262144  # 256KiB
+
 
 class FetchError(Exception):
     """A file's content could not be read or parsed.
@@ -85,7 +89,9 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
     mirror does not hold this md5 — which is not the same as the file not existing,
     since the catalog entry may still carry a size and a DRS URI. The vcf/fastq/fasta
-    callers swallow it in their `except Exception` and return None (see #155).
+    callers catch it in an explicit `except FetchError` and return None silently,
+    so their records are still dropped without a cause (see #155). That clause must
+    precede their `except Exception`, or a non-2xx would be reported as an error.
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
@@ -100,13 +106,25 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
 
 def _decompress_if_gzipped(content: bytes, is_gzipped: bool) -> bytes:
     """Decompress gzipped content, returning original if not gzipped or on error."""
+    return _decompress_head(content, is_gzipped)[0]
+
+
+def _decompress_head(content: bytes, is_gzipped: bool) -> tuple[bytes, bool]:
+    """Decompress, and report whether the decompressed text ends the stream.
+
+    Returns ``(bytes, stream_complete)``. ``stream_complete`` is False when more
+    compressed data follows what was decoded — either the gzip stream was cut off,
+    or it is BGZF and only the first member was read (see #149). Non-gzipped input
+    is trivially complete: the bytes are exactly what was fetched.
+    """
     if is_gzipped and content[:2] == b'\x1f\x8b':
         try:
             decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
-            return decompressor.decompress(content)
+            out = decompressor.decompress(content)
+            return out, decompressor.eof and not decompressor.unused_data
         except zlib.error:
-            pass
-    return content
+            return content, False
+    return content, True
 
 
 def _decode_bytes(content: bytes) -> str:
@@ -420,7 +438,7 @@ def fetch_fasta_headers(
 # GFA FETCHER
 # =============================================================================
 
-def parse_gfa_segment_tags(text: str) -> list[dict]:
+def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
     """Parse rGFA stable-sequence tags from the S (segment) lines of GFA text.
 
     Returns one dict per segment that carries at least one of `SN:Z:` (stable
@@ -433,12 +451,17 @@ def parse_gfa_segment_tags(text: str) -> list[dict]:
     it. Splitting `text` into lines does copy each sequence once; the tag scan
     below avoids copying it a second time.
 
-    `text` is expected to be the head of a file, so the final line is usually
-    truncated mid-record; it is dropped unless `text` ends with a newline. A
-    complete final line that happens to lack a trailing newline is dropped too.
+    ``truncated`` says whether `text` was cut short — the usual case, since the
+    fetcher reads only a head. An unterminated final line is then a partial record
+    and is dropped. The caller must tell us: a byte-range cut can land exactly on a
+    tag boundary, so a truncated line may be *syntactically complete* and no
+    inspection of the text can distinguish the two. When `text` is the whole file
+    (``truncated=False``), an unterminated final line is a real record and is
+    parsed — otherwise a small newline-less rGFA would lose its last segment's
+    tags, and with them the reference signal.
     """
     lines = text.split("\n")
-    if not text.endswith("\n"):
+    if truncated and not text.endswith("\n"):
         lines.pop()  # partial trailing record from the byte-range cut
 
     segments = []
@@ -499,6 +522,10 @@ def fetch_gfa_segment_tags(
 
     On graphs of that scale the head does not reach GFA `P`/`W` path lines,
     which follow every segment line.
+
+    When the fetch returns the whole file and the gzip stream ends, the text is not
+    truncated and its final line is parsed even without a trailing newline — so a
+    small complete rGFA keeps its last segment's tags.
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -506,14 +533,21 @@ def fetch_gfa_segment_tags(
             return cached["gfa_segment_tags"]
 
     try:
-        # end_byte is inclusive, so 262143 fetches exactly 256KiB.
-        content = _fetch_range(md5sum, 262143, timeout=60, url=url)
+        # end_byte is inclusive, so 262143 fetches exactly HEAD_BYTES.
+        content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
         raw_bytes = len(content)
 
-        content = _decompress_if_gzipped(content, is_gzipped)
+        # Fewer bytes than we asked for means we hold the whole file; a gzip stream
+        # that ends with nothing after it means we decoded all of it. Only when both
+        # hold is the text complete, so an unterminated final line is a real record.
+        # (BGZF fails the second test: its first member ends but more members follow.)
+        got_whole_file = raw_bytes < HEAD_BYTES
+        content, stream_complete = _decompress_head(content, is_gzipped)
         text = _decode_bytes(content)
 
-        segment_tags = parse_gfa_segment_tags(text)
+        segment_tags = parse_gfa_segment_tags(
+            text, truncated=not (got_whole_file and stream_complete)
+        )
 
         evidence = {
             "md5sum": md5sum,

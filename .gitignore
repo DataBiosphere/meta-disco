@@ -66,3 +66,7 @@ output/
 
 # Classification run outputs (large generated JSON, written at repo root)
 /*_classifications.json
+
+# Literal $TMPDIR dir, created when a script writes to an unexpanded "$TMPDIR"
+${TMPDIR}/
+$TMPDIR/

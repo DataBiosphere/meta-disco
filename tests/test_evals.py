@@ -687,6 +687,25 @@ class TestGfaSegmentTagParsing:
         text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\nS\ts2\tACG\tSN:Z:chr1\tSR"
         assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
 
+    def test_keeps_unterminated_final_line_when_text_is_not_truncated(self):
+        """A small complete rGFA with no trailing newline must keep its last segment.
+
+        The caller has to tell us: a byte-range cut can land exactly on a tag
+        boundary, so a truncated line may be syntactically complete and no
+        inspection of the text alone can tell the two apart.
+        """
+        text = "H\tVN:Z:1.0\nS\ts1\tACGT\tSN:Z:chr1\tSR:i:0"
+        assert parse_gfa_segment_tags(text, truncated=True) == []
+        assert parse_gfa_segment_tags(text, truncated=False) == [{"SN": "chr1", "SR": "0"}]
+
+    def test_a_truncated_line_can_look_complete(self):
+        """Why `truncated` cannot be inferred: this cut lands on a tag boundary."""
+        full = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\tSO:i:5"
+        cut = full[:full.index("\tSO:i:5")]  # a clean, syntactically valid line
+        assert cut == "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0"
+        # Indistinguishable from the complete line in the test above.
+        assert parse_gfa_segment_tags(cut, truncated=False) == [{"SN": "chr1", "SR": "0"}]
+
     def test_keeps_complete_trailing_line_when_newline_terminated(self):
         text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\n"
         assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
