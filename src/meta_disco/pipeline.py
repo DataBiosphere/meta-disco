@@ -14,7 +14,6 @@ from typing import Callable
 
 from .fetchers import FetchError
 from .header_classifier import classify_without_content
-from .models import CLASSIFICATION_FIELDS
 
 
 @dataclass(frozen=True)
@@ -227,8 +226,17 @@ class ClassifyPipeline:
         print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
         return cached_md5s
 
-    def _process_single_record(self, record: dict) -> tuple[dict | None, bool]:
-        """Fetch, classify, and build output for one record."""
+    def _process_single_record(self, record: dict) -> tuple[dict | None, bool, bool]:
+        """Fetch, classify, and build output for one record.
+
+        Returns ``(record_or_None, was_cached, content_unreadable)``.
+
+        ``content_unreadable`` is reported explicitly rather than inferred from
+        the output, because ``classify_without_content`` annotates only the
+        dimensions the filename could not settle. An `-mc-` graph's filename
+        settles all five, so its record carries no ``fetch_failed`` evidence at
+        all even though its content was never read.
+        """
         md5 = record.get("file_md5sum")
         file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
@@ -257,17 +265,17 @@ class ClassifyPipeline:
                 e.reason, file_name=file_name, file_size=file_size,
                 file_format=file_format,
             )
-            return self._build_record(record, classifications), was_cached
+            return self._build_record(record, classifications), was_cached, True
 
         if raw_data is None:
-            return None, was_cached
+            return None, was_cached, False
 
         classifications = self.config.classifier(
             raw_data, file_name=file_name, file_size=file_size,
             file_format=file_format,
         )
 
-        return self._build_record(record, classifications), was_cached
+        return self._build_record(record, classifications), was_cached, False
 
     @staticmethod
     def _build_record(record: dict, classifications: dict) -> dict:
@@ -282,28 +290,6 @@ class ClassifyPipeline:
             "entry_id": record.get("entry_id"),
         }
 
-    @staticmethod
-    def _content_was_unreadable(classifications: dict) -> bool:
-        """True if any dimension carries a `fetch_failed` note.
-
-        Checked across every dimension, not just one: `classify_without_content`
-        annotates only the dimensions the filename could not settle, so a `.gfa`
-        whose content failed still has a classified `data_type` and carries the
-        note on `reference_assembly` alone.
-
-        Iterates CLASSIFICATION_FIELDS rather than every key, because some
-        classifiers add non-dimension keys whose values are scalars, not
-        `{value, status, evidence}` entries — the fastq classifier adds
-        `is_paired_end`, `instrument_model`, `instrument_hint`,
-        `archive_accession` and `archive_source`. Iterating `.values()` would
-        call `.get` on a bool or None.
-        """
-        return any(
-            e.get("rule_id") == "fetch_failed"
-            for fld in CLASSIFICATION_FIELDS
-            for e in classifications.get(fld, {}).get("evidence", [])
-        )
-
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
@@ -317,7 +303,7 @@ class ClassifyPipeline:
         print(f"Using {self.workers} parallel workers")
 
         with NdjsonWriter(self.output_path) as writer:
-            def update_progress(result, was_cached, file_name):
+            def update_progress(result, was_cached, content_unreadable, file_name):
                 nonlocal successful, failed, from_cache, processed, unreadable
                 with lock:
                     processed += 1
@@ -326,7 +312,7 @@ class ClassifyPipeline:
                         successful += 1
                         if was_cached:
                             from_cache += 1
-                        elif self._content_was_unreadable(result["classifications"]):
+                        elif content_unreadable:
                             unreadable += 1
                     else:
                         failed += 1
@@ -336,8 +322,9 @@ class ClassifyPipeline:
 
             if self.workers == 1:
                 for record in records:
-                    result, was_cached = self._process_single_record(record)
-                    update_progress(result, was_cached, record.get("file_name", ""))
+                    result, was_cached, content_unreadable = self._process_single_record(record)
+                    update_progress(result, was_cached, content_unreadable,
+                                    record.get("file_name", ""))
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
                     future_to_record = {
@@ -347,8 +334,9 @@ class ClassifyPipeline:
                     for future in as_completed(future_to_record):
                         record = future_to_record[future]
                         try:
-                            result, was_cached = future.result()
-                            update_progress(result, was_cached, record.get("file_name", ""))
+                            result, was_cached, content_unreadable = future.result()
+                            update_progress(result, was_cached, content_unreadable,
+                                            record.get("file_name", ""))
                         except Exception as e:
                             print(f"\nError processing {record.get('file_name')}: {e}")
                             with lock:

@@ -31,7 +31,8 @@ class FetchError(Exception):
     `fetch_gfa_segment_tags` around its parse. The other three range-based
     fetchers (vcf, fastq, fasta) catch it in their `except Exception` and still
     return None, so their records are still dropped (see #155).
-    `fetch_bam_header` shells out to samtools and never produces one.
+    `fetch_bam_header` never raises FetchError: it shells out to samtools rather
+    than calling `_fetch_range`.
     """
 
     def __init__(self, reason: str):

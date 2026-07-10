@@ -267,6 +267,46 @@ class TestFileTypeConfigs:
         assert cls["data_type"]["value"] == "pangenome.reference"
         assert cls["reference_assembly"]["value"] == "GRCh38"
 
+    def test_unreadable_is_reported_even_when_no_fetch_failed_evidence_exists(self, tmp_path):
+        """An `-mc-` graph's filename settles all five dimensions, so its record
+        carries no `fetch_failed` evidence at all. The unreadable flag must come
+        from the FetchError branch, not be inferred from the output — otherwise
+        the summary silently under-reports."""
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [{
+            "file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+            "file_format": ".gfa.gz", "file_size": 10,
+        }]}))
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1, resume=False,
+        )
+        record, was_cached, content_unreadable = pipeline._process_single_record(
+            {"file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
+             "file_format": ".gfa.gz", "file_size": 10}
+        )
+
+        # No dimension is not_classified, so no fetch_failed note is anywhere.
+        cls = record["classifications"]
+        assert all(cls[f]["status"] != NOT_CLASSIFIED for f in CLASSIFICATION_FIELDS)
+        notes = [e for f in CLASSIFICATION_FIELDS for e in cls[f]["evidence"]
+                 if e["rule_id"] == "fetch_failed"]
+        assert notes == []
+
+        # ...yet the flag still says the content was never read.
+        assert content_unreadable is True
+
     def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
         """Unchanged for the fetchers that give no cause (see #155)."""
         import dataclasses
