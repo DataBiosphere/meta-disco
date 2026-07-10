@@ -329,6 +329,36 @@ _TRANSCRIPT_PATTERN = re.compile(
 )
 
 
+def filename_for_rules(
+    file_name: str | None,
+    file_format: str | None,
+    default: str,
+) -> str:
+    """The filename to hand the rule engine, which reads the extension from it.
+
+    ``ClassifyPipeline._filter_records`` selects a record when *either* its
+    ``file_name`` or its ``file_format`` carries a matching extension, so a
+    selected record's ``file_name`` may not carry one. The engine derives
+    ``file_format`` strictly from the filename (``UnifiedRules.extract_extension``),
+    so an extensionless name silently disables every extension-scoped rule — and
+    worse, ``extract_extension("hprc-v1.0-mc-grch38")`` returns ``".0-mc-grch38"``,
+    a nonsense suffix taken from the last dot.
+
+    So: keep ``file_name`` when it already yields a *known* extension, otherwise
+    append ``file_format`` to it, preserving the filename tokens the tier-2 rules
+    match (``-mc-``, ``grch38``). Testing "already known" rather than "ends with
+    file_format" matters: 5,227 corpus records are named ``*.fastq.gz`` while
+    declaring ``file_format: ".fastq"``, and appending there would produce
+    ``*.fastq.gz.fastq``.
+    """
+    rules = _get_engine().rules
+    if file_name and rules.extract_extension(file_name) in rules.extension_map:
+        return file_name
+    if file_format:
+        return f"{file_name or 'file'}{file_format}"
+    return file_name or default
+
+
 def classify_without_content(
     reason: str,
     *,
@@ -352,7 +382,7 @@ def classify_without_content(
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = file_name or (f"file{file_format}" if file_format else "")
+    filename = filename_for_rules(file_name, file_format, default="")
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
@@ -398,7 +428,8 @@ def classify_from_gfa_segment_tags(
         segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags
         file_name: Optional filename for extension/filename rules
         file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
-            extension rules when file_name is empty
+            extension rules when file_name carries no known extension
+            (see filename_for_rules)
         file_size: Unused. Accepted because ClassifyPipeline calls every
             classifier with the same keyword arguments (pipeline.py:242); no
             graph rule keys on file size. Same as the fasta/fastq classifiers.
@@ -408,15 +439,7 @@ def classify_from_gfa_segment_tags(
     """
     from .rule_engine import ExtendedFileInfo
 
-    # The pipeline selects records on file_format OR file_name, so file_name can
-    # be empty on a record with a real extension. Fall back to file_format before
-    # the generic default, or extension-scoped rules would see the wrong suffix.
-    if file_name:
-        filename = file_name
-    elif file_format:
-        filename = f"graph{file_format}"
-    else:
-        filename = "graph.gfa"
+    filename = filename_for_rules(file_name, file_format, default="graph.gfa")
 
     # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
     # and reference_assembly from the filename.

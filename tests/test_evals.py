@@ -25,7 +25,7 @@ from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_vcf_files import classify_single_vcf as classify_vcf
 
 from src.meta_disco.fetchers import parse_gfa_segment_tags
-from src.meta_disco.header_classifier import classify_from_gfa_segment_tags
+from src.meta_disco.header_classifier import classify_from_gfa_segment_tags, filename_for_rules
 from src.meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -546,6 +546,55 @@ class TestRgfaContentClassification:
         )
         assert record["data_type"]["value"] == "pangenome.reference"
         assert record["reference_assembly"]["value"] == "GRCh38"
+
+    def test_extensionless_file_name_keeps_its_tokens_and_gains_the_extension(self):
+        """A selected record's file_name may carry no extension. Appending
+        file_format keeps the `-mc-`/`grch38` tokens the tier-2 rules match;
+        using file_format alone would discard them, and using the bare name would
+        make extract_extension return the junk suffix '.0-mc-grch38'."""
+        record = classify_from_gfa_segment_tags(
+            [], file_name="hprc-v1.0-mc-grch38", file_format=".gfa.gz"
+        )
+        assert record["data_type"]["value"] == "pangenome.reference"
+        assert record["reference_assembly"]["value"] == "GRCh38"
+
+    def test_extensionless_file_name_still_classifies_as_a_graph(self):
+        record = classify_from_gfa_segment_tags(
+            [], file_name="graph", file_format=".gfa"
+        )
+        assert record["data_type"]["value"] == "pangenome"
+        assert record["data_modality"]["value"] == "genomic"
+
+
+class TestFilenameForRules:
+    """The rule engine reads the extension from the filename, so a selected record
+    whose file_name lacks one must have file_format grafted on — without corrupting
+    a name that already has a valid extension."""
+
+    def test_known_extension_is_kept_verbatim(self):
+        assert filename_for_rules("graph.gfa", ".gfa", "x") == "graph.gfa"
+
+    def test_mismatched_but_valid_extension_is_not_appended_to(self):
+        """5,227 corpus records are named *.fastq.gz while declaring file_format
+        '.fastq'. Appending would yield '*.fastq.gz.fastq'."""
+        assert filename_for_rules(
+            "IGVFFI0052MDWT.fastq.gz", ".fastq", "x"
+        ) == "IGVFFI0052MDWT.fastq.gz"
+
+    def test_unknown_extension_gets_file_format_appended(self):
+        assert filename_for_rules(
+            "hprc-v1.0-mc-grch38", ".gfa.gz", "x"
+        ) == "hprc-v1.0-mc-grch38.gfa.gz"
+
+    def test_extensionless_name_gets_file_format_appended(self):
+        assert filename_for_rules("graph", ".gfa", "x") == "graph.gfa"
+
+    def test_no_name_uses_file_format(self):
+        assert filename_for_rules("", ".rgfa.gz", "x") == "file.rgfa.gz"
+
+    def test_no_name_and_no_format_uses_the_default(self):
+        assert filename_for_rules("", "", "graph.gfa") == "graph.gfa"
+        assert filename_for_rules(None, None, "graph.gfa") == "graph.gfa"
 
     def test_no_file_name_or_format_still_classifies_as_graph(self):
         record = classify_from_gfa_segment_tags([])
