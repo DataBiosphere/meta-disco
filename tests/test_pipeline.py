@@ -1,11 +1,11 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
-import pytest
 from pathlib import Path
 
-from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
+import pytest
 
+from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 
 # --- Test fixtures ---
 
@@ -336,6 +336,37 @@ class TestFileTypeConfigs:
         assert meta["content_unreadable"] == 2
         assert meta["from_cache"] == 0
         assert meta["successful"] == 2
+
+    def test_dropped_and_errored_are_counted_separately(self, tmp_path):
+        """`Dropped (fetcher gave no cause)` must not absorb records whose worker
+        raised and printed a cause. `failed` stays the sum, for existing consumers."""
+        import dataclasses
+
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _explode(evidence_dir, md5, **kwargs):
+            if md5 == "boom":
+                raise TypeError("a bug in the parser, not a fetch failure")
+            return None  # silent drop, no cause
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "boom", "file_name": "a.gfa", "file_format": ".gfa"},
+            {"file_md5sum": "quiet", "file_name": "b.gfa", "file_format": ".gfa"},
+        ]}))
+        out_path = tmp_path / "out.json"
+        # workers>1 so the executor's `except Exception` handles the TypeError.
+        ClassifyPipeline(config, input_path, out_path,
+                         evidence_base=tmp_path / "evidence", workers=2,
+                         resume=False).run()
+
+        meta = json.loads(out_path.read_text())["metadata"]
+        assert meta["dropped"] == 1, "the None-returning fetcher"
+        assert meta["errored"] == 1, "the raising fetcher"
+        assert meta["failed"] == 2, "kept as the sum for existing consumers"
+        assert meta["successful"] == 0
 
     def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
         """Unchanged for the fetchers that give no cause (see #155)."""

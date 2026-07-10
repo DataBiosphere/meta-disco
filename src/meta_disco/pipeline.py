@@ -31,6 +31,54 @@ class FileTypeConfig:
     content_fields: tuple[str, ...] = ()
 
 
+def _fetch_and_classify(
+    config: FileTypeConfig,
+    evidence_dir: Path,
+    md5sum: str,
+    *,
+    file_name: str,
+    file_size: int | None,
+    file_format: str | None,
+    is_gzipped: bool,
+    use_cache: bool,
+) -> tuple[dict | None, bool]:
+    """Fetch a file's content and classify it.
+
+    Returns ``(classifications, content_unreadable)``. Three outcomes:
+
+    * content read        -> ``(classifications, False)``
+    * content unreadable  -> ``(filename-only classifications, True)``. The fetcher
+      raised FetchError naming its cause, so the file stays in the output.
+    * fetch returned None -> ``(None, False)``. No cause given, so the caller drops
+      the record (see #155).
+
+    Shared by ``ClassifyPipeline.classify_single`` and ``_process_single_record``
+    so the fallback cannot drift between the single-file and batch paths.
+    """
+    try:
+        raw_data = config.fetcher(
+            evidence_dir, md5sum, file_name=file_name,
+            is_gzipped=is_gzipped, use_cache=use_cache,
+        )
+    except FetchError as e:
+        print(f"Content unreadable, classifying from filename — "
+              f"{file_name or md5sum}: {e.reason}")
+        return classify_without_content(
+            e.reason, file_name=file_name, file_size=file_size,
+            file_format=file_format,
+            allowed_extensions=config.extensions,
+            content_fields=config.content_fields,
+        ), True
+
+    if raw_data is None:
+        return None, False
+
+    return config.classifier(
+        raw_data, file_name=file_name, file_size=file_size,
+        file_format=file_format,
+    ), False
+
+
 class NdjsonWriter:
     """Append-only NDJSON writer for real-time progress monitoring."""
 
@@ -138,27 +186,13 @@ class ClassifyPipeline:
         evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        try:
-            raw_data = config.fetcher(
-                evidence_dir, md5sum, file_name=file_name,
-                is_gzipped=is_gzipped, use_cache=use_cache,
-            )
-        except FetchError as e:
-            print(f"Content unreadable, classifying from filename — "
-                  f"{file_name or md5sum}: {e.reason}")
-            classifications = classify_without_content(
-                e.reason, file_name=file_name, file_size=file_size,
-                file_format=file_format,
-                allowed_extensions=config.extensions,
-                content_fields=config.content_fields,
-            )
-        else:
-            if raw_data is None:
-                return None
-            classifications = config.classifier(
-                raw_data, file_name=file_name, file_size=file_size,
-                file_format=file_format,
-            )
+        classifications, _unreadable = _fetch_and_classify(
+            config, evidence_dir, md5sum,
+            file_name=file_name, file_size=file_size, file_format=file_format,
+            is_gzipped=is_gzipped, use_cache=use_cache,
+        )
+        if classifications is None:
+            return None
         return {
             "file_name": file_name,
             "md5sum": md5sum,
@@ -237,11 +271,11 @@ class ClassifyPipeline:
 
         Returns ``(record_or_None, was_cached, content_unreadable)``.
 
-        ``content_unreadable`` is reported explicitly rather than inferred from
-        the output, because ``classify_without_content`` annotates only the
-        dimensions the filename could not settle. An `-mc-` graph's filename
-        settles all five, so its record carries no ``fetch_failed`` evidence at
-        all even though its content was never read.
+        ``content_unreadable`` is reported explicitly rather than sniffed out of
+        the output: ``classify_without_content`` annotates only the dimensions
+        this file type's *content* can determine, so a type whose
+        ``content_fields`` is empty would leave no ``fetch_failed`` evidence at
+        all. Detection must not depend on evidence that a config may not emit.
         """
         md5 = record.get("file_md5sum")
         file_name = record.get("file_name") or ""
@@ -256,39 +290,23 @@ class ClassifyPipeline:
 
         was_cached = self.resume and self._is_cached(md5)
 
-        # A fetcher that raises FetchError names its cause, so the file stays in
-        # the output, classified as far as its filename allows. A fetcher that
-        # returns None gives no cause, so its record is still dropped (see #155).
-        try:
-            raw_data = self.config.fetcher(
-                self.evidence_dir, md5, file_name=file_name,
-                is_gzipped=is_gzipped, use_cache=self.resume,
-            )
-        except FetchError as e:
-            print(f"Content unreadable, classifying from filename — "
-                  f"{file_name or md5}: {e.reason}")
-            classifications = classify_without_content(
-                e.reason, file_name=file_name, file_size=file_size,
-                file_format=file_format,
-                allowed_extensions=self.config.extensions,
-                content_fields=self.config.content_fields,
-            )
+        classifications, content_unreadable = _fetch_and_classify(
+            self.config, self.evidence_dir, md5,
+            file_name=file_name, file_size=file_size, file_format=file_format,
+            is_gzipped=is_gzipped, use_cache=self.resume,
+        )
+        if classifications is None:
+            return None, was_cached, False
+
+        if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher
             # only raises after its own cache check missed, so it went to the
             # network: report was_cached=False, or a stale/corrupt evidence file
             # would count this record under "From cache" and hide it from the
             # unreadable tally.
-            return self._build_record(record, classifications), False, True
+            was_cached = False
 
-        if raw_data is None:
-            return None, was_cached, False
-
-        classifications = self.config.classifier(
-            raw_data, file_name=file_name, file_size=file_size,
-            file_format=file_format,
-        )
-
-        return self._build_record(record, classifications), was_cached, False
+        return self._build_record(record, classifications), was_cached, content_unreadable
 
     @staticmethod
     def _build_record(record: dict, classifications: dict) -> dict:
@@ -306,7 +324,8 @@ class ClassifyPipeline:
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
-        failed = 0
+        dropped = 0   # fetcher returned None: no cause given
+        errored = 0   # worker raised: a cause was printed
         from_cache = 0
         processed = 0
         unreadable = 0
@@ -317,7 +336,7 @@ class ClassifyPipeline:
 
         with NdjsonWriter(self.output_path) as writer:
             def update_progress(result, was_cached, content_unreadable, file_name):
-                nonlocal successful, failed, from_cache, processed, unreadable
+                nonlocal successful, dropped, from_cache, processed, unreadable
                 with lock:
                     processed += 1
                     if result:
@@ -328,7 +347,7 @@ class ClassifyPipeline:
                         elif content_unreadable:
                             unreadable += 1
                     else:
-                        failed += 1
+                        dropped += 1
                     cache_indicator = "[cached] " if was_cached else ""
                     print(f"\r[{processed}/{total}] {cache_indicator}{file_name[:45]:<52}",
                           end="", flush=True)
@@ -354,28 +373,36 @@ class ClassifyPipeline:
                             print(f"\nError processing {record.get('file_name')}: {e}")
                             with lock:
                                 processed += 1
-                                failed += 1
+                                errored += 1
 
         print(f"\n\nSuccessfully classified: {successful}")
         print(f"  From cache: {from_cache}")
         print(f"  New fetches: {successful - from_cache - unreadable}")
         print(f"  Content unreadable, classified from filename: {unreadable}")
-        print(f"Dropped (fetcher gave no cause): {failed}")
-        classifications = self._save_final(total, successful, failed, from_cache, unreadable)
+        print(f"Dropped (fetcher gave no cause): {dropped}")
+        if errored:
+            print(f"Errored (cause printed above): {errored}")
+        classifications = self._save_final(
+            total, successful, dropped, from_cache, unreadable, errored)
 
         print(f"\nSaved to {self.output_path}")
         print(f"Evidence cached in: {self.evidence_dir}/")
 
         return classifications
 
-    def _save_final(self, total: int, successful: int, failed: int,
-                    from_cache: int, unreadable: int) -> list[dict]:
+    def _save_final(self, total: int, successful: int, dropped: int,
+                    from_cache: int, unreadable: int, errored: int = 0) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
         ``unreadable`` is persisted alongside ``from_cache``: a record classified
         from its filename after a failed fetch is otherwise indistinguishable from
-        one whose content was read, because a filename that settles every dimension
-        leaves no ``fetch_failed`` evidence behind.
+        one whose content was read, because a file type whose ``content_fields``
+        is empty leaves no ``fetch_failed`` evidence behind.
+
+        ``dropped`` (the fetcher returned None, giving no cause) and ``errored``
+        (a worker raised, and the cause was printed) are recorded separately, and
+        ``failed`` is kept as their sum so existing consumers of that key still
+        read the total number of records that produced no row.
         """
         ndjson = self.output_path.with_suffix(".ndjson")
         classifications = []
@@ -390,9 +417,13 @@ class ClassifyPipeline:
             json.dump({
                 "metadata": {
                     "total_to_process": total,
-                    "processed": successful + failed,
+                    "processed": successful + dropped + errored,
                     "successful": successful,
-                    "failed": failed,
+                    # `failed` = every record that produced no row, whether the
+                    # fetcher gave no cause (dropped) or a worker raised (errored).
+                    "failed": dropped + errored,
+                    "dropped": dropped,
+                    "errored": errored,
                     "from_cache": from_cache,
                     "content_unreadable": unreadable,
                     "complete": True,

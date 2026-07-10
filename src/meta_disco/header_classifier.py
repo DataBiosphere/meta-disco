@@ -21,7 +21,6 @@ from .validators.read_name_parsers import (  # noqa: F401 — re-exported for ba
     parse_pacbio_read_name,
 )
 
-
 # Text GFA formats this module can parse. The other graph extensions the
 # `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
 # GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
@@ -465,9 +464,9 @@ def classify_from_gfa_segment_tags(
         file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
             extension rules when file_name carries no known extension
             (see filename_for_rules)
-        file_size: Unused. Accepted because ClassifyPipeline calls every
-            classifier with the same keyword arguments (pipeline.py:242); no
-            graph rule keys on file size. Same as the fasta/fastq classifiers.
+        file_size: Unused. Accepted because ``pipeline._fetch_and_classify`` calls
+            every classifier with the same keyword arguments; no graph rule keys
+            on file size. ``classify_from_fasta_header`` accepts it unused too.
 
     Returns:
         Per-field classification dict (same format as classify_from_fasta_header)

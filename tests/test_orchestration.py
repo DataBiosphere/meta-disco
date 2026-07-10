@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from rerun_all_classifications import NON_HEADER_JOBS, build_parallel_jobs
+from rerun_all_classifications import build_parallel_jobs
 
 from src.meta_disco.file_types import FILE_TYPE_REGISTRY
 from src.meta_disco.output_utils import CLASSIFICATION_FILES
@@ -55,15 +55,23 @@ def test_every_phase1_output_is_read_by_the_reports():
     )
 
 
-def test_non_header_jobs_are_also_read_by_the_reports():
-    outputs = {out for _, out in NON_HEADER_JOBS}
-    assert outputs <= set(CLASSIFICATION_FILES)
+def test_every_registered_file_type_has_a_makefile_target():
+    """`make classify-<type>` is the other entry point, and it is hand-written.
 
-
-def test_phase1_job_output_names_follow_the_registry_convention():
-    """`{type}_classifications.json` — the name the Makefile targets also use."""
-    for _, path, extra in _jobs():
-        if "--type" not in extra:
-            continue
-        ftype = extra[extra.index("--type") + 1]
-        assert path.name == f"{ftype}_classifications.json"
+    Checked against the Makefile text rather than against the same f-string
+    build_parallel_jobs uses — comparing a value to itself proves nothing.
+    """
+    makefile = (Path(__file__).parent.parent / "Makefile").read_text()
+    for ftype in FILE_TYPE_REGISTRY:
+        assert f"\nclassify-{ftype}:" in makefile, (
+            f"No `classify-{ftype}` target in the Makefile for registered type "
+            f"{ftype!r}."
+        )
+        assert f"{ftype}_classifications.json" in makefile, (
+            f"The classify-{ftype} target does not write "
+            f"{ftype}_classifications.json, which CLASSIFICATION_FILES expects."
+        )
+        assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
+            f"classify-{ftype} is defined but not listed as a "
+            "`classify-headers` prerequisite or in .PHONY."
+        )
