@@ -1,4 +1,4 @@
-.PHONY: test lint classify classify-hprc classify-and-report download classify-bam classify-vcf classify-fastq classify-fasta classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test lint classify classify-hprc classify-and-report download classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -13,6 +13,7 @@ help:
 	@echo "  make classify-vcf       Classify VCF files (network required)"
 	@echo "  make classify-fastq     Classify FASTQ files (network required)"
 	@echo "  make classify-fasta     Classify FASTA files (network required)"
+	@echo "  make classify-gfa       Classify GFA/rGFA graph files (network required)"
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
@@ -41,7 +42,7 @@ classify-and-report: classify classify-hprc all-reports
 download:
 	python scripts/download_anvil_metadata.py
 
-classify-headers: classify-bam classify-vcf classify-fastq classify-fasta
+classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa
 
 classify-bam:
 	python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
@@ -54,6 +55,9 @@ classify-fastq:
 
 classify-fasta:
 	python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json -o output/anvil/fasta_classifications.json -w 10
+
+classify-gfa:
+	python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json -o output/anvil/gfa_classifications.json -w 10
 
 classify-bed:
 	python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json

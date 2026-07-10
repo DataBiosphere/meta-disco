@@ -12,6 +12,42 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.meta_disco.file_types import FILE_TYPE_REGISTRY  # noqa: E402
+
+# Phase 1 classifiers that are NOT header-based, so they have their own script
+# rather than a FILE_TYPE_REGISTRY entry.
+NON_HEADER_JOBS = (
+    ("classify_bed_files.py", "bed_classifications.json"),
+    ("classify_images.py", "image_classifications.json"),
+    ("classify_auxiliary_genomic.py", "auxiliary_classifications.json"),
+)
+
+
+def build_parallel_jobs(metadata: Path, output_dir: Path) -> list[tuple]:
+    """Phase 1 jobs: one per header-based file type, plus the non-header scripts.
+
+    The header jobs are derived from FILE_TYPE_REGISTRY rather than hand-listed,
+    so registering a new file type cannot silently skip production. That is what
+    happened to `gfa` in #151: it was added to the registry and to nothing else,
+    so `make classify` never invoked it and graph files fell through to the
+    filename-only Phase 3 catch-all.
+
+    Every output filename here must also appear in output_utils.CLASSIFICATION_FILES
+    or the reports will not read it — pinned by tests/test_orchestration.py.
+    """
+    jobs = [
+        ("classify_headers.py", output_dir / f"{ftype}_classifications.json",
+         ["--type", ftype, "--input", str(metadata)])
+        for ftype in FILE_TYPE_REGISTRY
+    ]
+    jobs += [
+        (script, output_dir / out, ["--metadata", str(metadata)])
+        for script, out in NON_HEADER_JOBS
+    ]
+    return jobs
+
 
 def run_script(script_name: str, output_path: Path, extra_args: list[str] = None):
     """Run a classification script."""
@@ -55,23 +91,7 @@ def main():
     print(f"Re-running classifications with timestamp: {timestamp}")
     print(f"Output directory: {output_dir}")
 
-    # Phase 1: Run independent classifiers in parallel
-    parallel_jobs = [
-        ("classify_headers.py", output_dir / "bam_classifications.json",
-         ["--type", "bam", "--input", str(args.metadata)]),
-        ("classify_headers.py", output_dir / "vcf_classifications.json",
-         ["--type", "vcf", "--input", str(args.metadata)]),
-        ("classify_headers.py", output_dir / "fastq_classifications.json",
-         ["--type", "fastq", "--input", str(args.metadata)]),
-        ("classify_bed_files.py", output_dir / "bed_classifications.json",
-         ["--metadata", str(args.metadata)]),
-        ("classify_images.py", output_dir / "image_classifications.json",
-         ["--metadata", str(args.metadata)]),
-        ("classify_auxiliary_genomic.py", output_dir / "auxiliary_classifications.json",
-         ["--metadata", str(args.metadata)]),
-        ("classify_headers.py", output_dir / "fasta_classifications.json",
-         ["--type", "fasta", "--input", str(args.metadata)]),
-    ]
+    parallel_jobs = build_parallel_jobs(args.metadata, output_dir)
 
     # Track all classification output paths for Phase 3
     all_classification_files = [path for _, path, _ in parallel_jobs]

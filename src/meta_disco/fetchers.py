@@ -18,6 +18,23 @@ import requests
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
 
+class FetchError(Exception):
+    """A fetcher could not read or parse a file's content.
+
+    Raised instead of returning None so the caller can emit a not_classified
+    record carrying the reason, rather than dropping the file from the output
+    entirely. `reason` is a short human-readable cause, safe to store as
+    classification evidence.
+
+    Only `fetch_gfa_segment_tags` raises this today; the other fetchers still
+    return None on failure and their records are still dropped (see #155).
+    """
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 # =============================================================================
 # SHARED EVIDENCE CACHE
 # =============================================================================
@@ -462,7 +479,7 @@ def fetch_gfa_segment_tags(
         # end_byte is inclusive, so 262143 fetches exactly 256KiB.
         content = _fetch_range(md5sum, 262143, timeout=60, url=url)
         if content is None:
-            return None
+            raise FetchError("range request returned no content (non-2xx response)")
         raw_bytes = len(content)
 
         content = _decompress_if_gzipped(content, is_gzipped)
@@ -484,9 +501,13 @@ def fetch_gfa_segment_tags(
 
         return segment_tags
 
-    except requests.Timeout:
-        print(f"Timeout reading GFA for {md5sum}")
-        return None
+    except FetchError:
+        raise  # already carries its reason — don't re-wrap as "FetchError: ..."
+    except requests.Timeout as e:
+        raise FetchError(f"Timeout reading GFA head: {e}") from e
     except Exception as e:
-        print(f"Error reading GFA for {md5sum}: {e}")
-        return None
+        # Wrapped, not swallowed: the caller turns this into a not_classified
+        # record whose evidence names the cause. A programming error in the
+        # parser therefore surfaces as `TypeError: ...` in the output rather
+        # than silently deleting the file's row.
+        raise FetchError(f"{type(e).__name__}: {e}") from e

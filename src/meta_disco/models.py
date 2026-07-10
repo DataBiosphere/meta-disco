@@ -103,6 +103,29 @@ def build_field_entry(value, status=None, evidence=None) -> dict:
     }
 
 
+def unclassifiable_classifications(reason: str, rule_id: str = "fetch_failed") -> dict:
+    """Every dimension not_classified, each carrying ``reason`` as its evidence.
+
+    For a file whose content could not be read or parsed. Emitting this keeps the
+    file in the output with a stated cause, rather than dropping its row — a
+    missing record is indistinguishable from a file that was never seen, which is
+    worse than an honest not_classified (accuracy over coverage).
+
+    ``reason`` should name the cause (e.g. ``"HTTPError: 404 ..."``), not merely
+    that something failed.
+    """
+    return {
+        # A fresh entry per field: build_field_entry stores the list by reference,
+        # so a shared literal would alias one evidence dict across all five.
+        fld: build_field_entry(
+            None,
+            status=NOT_CLASSIFIED,
+            evidence=[{"rule_id": rule_id, "reason": reason, "status": NOT_CLASSIFIED}],
+        )
+        for fld in CLASSIFICATION_FIELDS
+    }
+
+
 def _entry_status(entry) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived.
 

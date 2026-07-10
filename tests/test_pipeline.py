@@ -209,6 +209,62 @@ class TestFileTypeConfigs:
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY
         assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
 
+    def test_fetch_error_yields_unclassifiable_record_not_a_dropped_row(self, tmp_path):
+        """A fetcher that raises FetchError keeps the file in the output, with the
+        cause as evidence. A dropped row is indistinguishable from a file that was
+        never seen, which is worse than an honest not_classified."""
+        import dataclasses
+
+        from src.meta_disco.fetchers import FetchError
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        def _boom(evidence_dir, md5, **kwargs):
+            raise FetchError("HTTPError: 404 Not Found")
+
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
+        record = {
+            "file_md5sum": "deadbeef", "file_name": "graph.gfa",
+            "file_format": ".gfa", "file_size": 10, "entry_id": "e1",
+        }
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [record]}))
+
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1,
+        )
+        results = pipeline.run()
+
+        assert len(results) == 1, "the unreadable file must still appear in the output"
+        cls = results[0]["classifications"]
+        for fld in CLASSIFICATION_FIELDS:
+            assert cls[fld]["status"] == NOT_CLASSIFIED
+            assert cls[fld]["value"] is None
+            reasons = [e["reason"] for e in cls[fld]["evidence"]]
+            assert reasons == ["HTTPError: 404 Not Found"], fld
+
+    def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
+        """Unchanged for the fetchers that give no cause (see #155)."""
+        import dataclasses
+
+        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from src.meta_disco.pipeline import ClassifyPipeline
+
+        config = dataclasses.replace(
+            FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None
+        )
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            {"file_md5sum": "d", "file_name": "graph.gfa", "file_format": ".gfa"}
+        ]}))
+        pipeline = ClassifyPipeline(
+            config, input_path, tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", workers=1,
+        )
+        assert pipeline.run() == []
+
     def test_configs_have_required_fields(self):
         from src.meta_disco.file_types import FILE_TYPE_REGISTRY
         for name, config in FILE_TYPE_REGISTRY.items():

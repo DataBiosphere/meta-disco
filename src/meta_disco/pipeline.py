@@ -12,6 +12,9 @@ from pathlib import Path
 from threading import Lock
 from typing import Callable
 
+from .fetchers import FetchError
+from .models import unclassifiable_classifications
+
 
 @dataclass(frozen=True)
 class FileTypeConfig:
@@ -131,17 +134,21 @@ class ClassifyPipeline:
         evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        raw_data = config.fetcher(
-            evidence_dir, md5sum, file_name=file_name,
-            is_gzipped=is_gzipped, use_cache=use_cache,
-        )
-        if raw_data is None:
-            return None
-
-        classifications = config.classifier(
-            raw_data, file_name=file_name, file_size=file_size,
-            file_format=file_format,
-        )
+        try:
+            raw_data = config.fetcher(
+                evidence_dir, md5sum, file_name=file_name,
+                is_gzipped=is_gzipped, use_cache=use_cache,
+            )
+        except FetchError as e:
+            print(f"Unclassifiable {file_name or md5sum}: {e.reason}")
+            classifications = unclassifiable_classifications(e.reason)
+        else:
+            if raw_data is None:
+                return None
+            classifications = config.classifier(
+                raw_data, file_name=file_name, file_size=file_size,
+                file_format=file_format,
+            )
         return {
             "file_name": file_name,
             "md5sum": md5sum,
@@ -221,7 +228,6 @@ class ClassifyPipeline:
         file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
         file_format = record.get("file_format") or ""
-        entry_id = record.get("entry_id")
 
         has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
         if has_gz_ext:
@@ -231,10 +237,18 @@ class ClassifyPipeline:
 
         was_cached = self.resume and self._is_cached(md5)
 
-        raw_data = self.config.fetcher(
-            self.evidence_dir, md5, file_name=file_name,
-            is_gzipped=is_gzipped, use_cache=self.resume,
-        )
+        # A fetcher that raises FetchError names its cause, so the file stays in
+        # the output as not_classified. A fetcher that returns None gives no
+        # cause, so its record is still dropped (see #155).
+        try:
+            raw_data = self.config.fetcher(
+                self.evidence_dir, md5, file_name=file_name,
+                is_gzipped=is_gzipped, use_cache=self.resume,
+            )
+        except FetchError as e:
+            print(f"Unclassifiable {file_name or md5}: {e.reason}")
+            return self._build_record(record, unclassifiable_classifications(e.reason)), was_cached
+
         if raw_data is None:
             return None, was_cached
 
@@ -243,16 +257,20 @@ class ClassifyPipeline:
             file_format=file_format,
         )
 
-        result = {
-            "file_name": file_name,
-            "md5sum": md5,
-            "file_size": file_size,
-            "file_format": file_format,
+        return self._build_record(record, classifications), was_cached
+
+    @staticmethod
+    def _build_record(record: dict, classifications: dict) -> dict:
+        """Wrap a classifications dict in the output record envelope."""
+        return {
+            "file_name": record.get("file_name") or "",
+            "md5sum": record.get("file_md5sum"),
+            "file_size": record.get("file_size"),
+            "file_format": record.get("file_format") or "",
             "dataset_title": record.get("dataset_title"),
             "classifications": classifications,
-            "entry_id": entry_id,
+            "entry_id": record.get("entry_id"),
         }
-        return result, was_cached
 
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
