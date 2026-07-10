@@ -454,12 +454,16 @@ def fetch_gfa_segment_tags(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> list[dict] | None:
+) -> list[dict]:
     """Read rGFA stable-sequence tags from the S lines at the head of a GFA file.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns a list of tag dicts, one per rGFA-tagged segment (empty for a plain
-    GFA), or None if the file could not be read.
+    Returns a list of tag dicts, one per rGFA-tagged segment — empty for a plain
+    GFA, which is a successful read of a graph that carries no rGFA tags.
+
+    Never returns None. A file that cannot be read or parsed raises FetchError,
+    so the caller can tell "read it, found no tags" from "could not read it" and
+    keep the file in the output with the cause recorded.
 
     Only the first 256KiB is fetched, and for BGZF input only that range's first
     gzip member decompresses — about 64KiB (see #149).
