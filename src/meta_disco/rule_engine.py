@@ -313,15 +313,7 @@ class RuleEngine:
         Args:
             rules_path: Path to unified rules YAML. Defaults to the bundled
                        unified_rules.yaml (package data of meta_disco.rules).
-                       Legacy paths to classification_rules.yaml are automatically
-                       redirected to unified_rules.yaml.
         """
-        # Handle legacy path for backward compatibility
-        if rules_path is not None:
-            rules_path = Path(rules_path)
-            if rules_path.name == "classification_rules.yaml":
-                rules_path = rules_path.parent / "unified_rules.yaml"
-
         self.rules = get_unified_rules(rules_path)
 
     def classify(
