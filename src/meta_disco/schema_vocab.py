@@ -69,10 +69,12 @@ def _load_enums() -> dict[str, frozenset[str]]:
     resource = default_schema_path()
     try:
         text = resource.read_text(encoding="utf-8")
-    except FileNotFoundError as e:
-        # The schema ships as package data of this module's package; a bare errno-2
+    except (FileNotFoundError, KeyError) as e:
+        # The schema ships as package data of this module's package; a missing file
         # here means the build/install dropped it, not that the caller did anything
-        # wrong. Name the package dynamically, matching the {__package__} anchor above.
+        # wrong. (KeyError: a zip-backed resource reports a missing entry that way
+        # rather than as FileNotFoundError.) Name the package dynamically, matching
+        # the {__package__} anchor above.
         raise FileNotFoundError(
             f"Classification schema not found at {resource}. It should ship as "
             f"package data of {__package__}.schema — reinstall/rebuild the package "

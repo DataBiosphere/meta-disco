@@ -21,7 +21,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# src layout; the schema YAML under src/meta_disco/schema/ ships as package data.
+# src layout. The non-.py data files under the package — the schema YAML
+# (src/meta_disco/schema/) and the rules YAML (src/meta_disco/rules/) — ship as
+# package data; both are load-bearing at runtime, so don't add excludes that drop them.
 packages = ["src/meta_disco"]
 
 [tool.ruff]

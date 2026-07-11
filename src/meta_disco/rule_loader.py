@@ -182,8 +182,11 @@ class RuleLoader:
         """
         # Default to the bundled package-data resource; an explicit path stays a
         # filesystem Path. default_rules_resource's docstring covers why load() can
-        # treat both uniformly.
-        self.rules_path = default_rules_resource() if rules_path is None else Path(rules_path)
+        # treat both uniformly. _is_default tailors load()'s not-found message: the
+        # bundled resource missing means a broken install, an explicit path missing
+        # is the caller's path.
+        self._is_default = rules_path is None
+        self.rules_path = default_rules_resource() if self._is_default else Path(rules_path)
         self._rules: UnifiedRules | None = None
 
     def load(self) -> UnifiedRules:
@@ -201,12 +204,18 @@ class RuleLoader:
 
         try:
             text = self.rules_path.read_text(encoding="utf-8")
-        except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"Rules file not found: {self.rules_path}. The default ships as "
-                "package data of meta_disco.rules — reinstall/rebuild the package "
-                "(uv sync), or pass an explicit rules_path."
-            ) from e
+        except (FileNotFoundError, KeyError) as e:
+            # KeyError: a zip-backed resource (zipapp / un-unpacked wheel) reports a
+            # missing entry that way rather than as FileNotFoundError.
+            if self._is_default:
+                hint = (
+                    f" It ships as package data of {__package__}.rules — "
+                    "reinstall/rebuild the package (uv sync), or run from a checkout "
+                    "where src/meta_disco/rules/ is present."
+                )
+            else:
+                hint = ""  # An explicit path was given; the path in the message is enough.
+            raise FileNotFoundError(f"Rules file not found: {self.rules_path}.{hint}") from e
         docs = list(yaml.safe_load_all(text))
 
         if len(docs) < 2:

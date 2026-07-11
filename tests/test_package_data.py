@@ -1,13 +1,18 @@
-"""The rules and schema ship as importable package data (wheel-safe).
+"""The rules and schema are importable package data, loaded via importlib.resources.
 
 Guards #164 (schema) and #166 (rules): both files were moved into the meta_disco
-package and are read via importlib.resources, so `pip install meta_disco` yields a
-package whose RuleEngine and vocabulary load without a source checkout. A build
-config that stops shipping either file — or a regression back to a __file__ walk —
-fails here rather than at first classify in an installed environment.
+package and are read via importlib.resources rather than a __file__ walk. These
+tests run against the source checkout, so they catch a regression back to a
+__file__ walk and either file going missing from the package tree — but NOT a
+wheel-build misconfig (a hatch exclude), since files() resolves to the src tree
+here regardless of packaging. That the built wheel actually ships both files is
+verified out of band (build + install into a clean venv); the guard against the
+build silently dropping them is the pyproject packages/package-data config.
 """
 
-from meta_disco.rule_loader import default_rules_resource, get_unified_rules
+import pytest
+
+from meta_disco.rule_loader import RuleLoader, default_rules_resource, get_unified_rules
 from meta_disco.schema_vocab import default_schema_path, dimension_values
 
 
@@ -32,3 +37,18 @@ def test_rules_load_from_the_bundled_resource():
 
 def test_schema_vocab_loads_from_the_bundled_resource():
     assert "variants" in dimension_values("data_type")
+
+
+def test_missing_explicit_path_error_omits_the_reinstall_hint(tmp_path):
+    """An explicit path the caller supplied points the message at that path only.
+
+    The reinstall/rebuild guidance is for the bundled-default case (a broken
+    install); telling a caller who passed their own path to reinstall the package
+    would be misdirected.
+    """
+    missing = tmp_path / "nope.yaml"
+    with pytest.raises(FileNotFoundError) as exc:
+        RuleLoader(missing).load()
+    msg = str(exc.value)
+    assert str(missing) in msg
+    assert "uv sync" not in msg and "package data" not in msg
