@@ -15,7 +15,7 @@ The project has two main components:
 2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
    - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the five metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
-   - Uses Poetry for dependency management (Python 3.10+)
+   - Uses uv for dependency management (Python 3.10+); its own env, separate from the runtime
 
 > The classification `data_modality`/`reference_assembly` inference was originally
 > LLM-based (Ollama); that path has been removed in favor of the rule engine.
@@ -25,18 +25,18 @@ The project has two main components:
 ### Schema Validation (run from `schema/` directory)
 
 ```bash
-# Setup
-./setup.sh
+# Setup (its own uv env — keeps linkml out of the runtime)
+uv sync
 
 # Validate a metadata file
 make validate INSTANCE=path/to/metadata.yaml
 # or
-poetry run python scripts/validate_outputs.py path/to/metadata.yaml
+uv run python scripts/validate_outputs.py path/to/metadata.yaml
 
 # Run tests
 make test
 # or
-poetry run pytest tests/test_validation.py
+uv run pytest tests/
 ```
 
 ### Classification (run from root directory)
@@ -111,4 +111,4 @@ these, and flag any that overclaim.
 ## Environment
 
 - Classification (root): Python 3.10+, `pyproject.toml`; runtime deps `pyyaml`, `requests`; dev `pytest`, `ruff`
-- Schema (`schema/`): Poetry with Python 3.10+, linkml, linkml-validator
+- Schema (`schema/`): a separate uv project (Python 3.10+) with linkml/linkml-validator; kept out of the runtime env

@@ -26,55 +26,55 @@ help:
 	@echo "  make clean              Remove cached .pyc files"
 
 test:
-	python -m pytest tests/ -v
+	uv run pytest tests/ -v
 
 lint:
-	ruff check src/ scripts/ tests/
+	uv run ruff check src/ scripts/ tests/
 
 classify:
-	python scripts/rerun_all_classifications.py
+	uv run python scripts/rerun_all_classifications.py
 
 classify-hprc:
-	python scripts/classify_hprc_files.py
+	uv run python scripts/classify_hprc_files.py
 
 classify-and-report: classify classify-hprc all-reports
 
 download:
-	python scripts/download_anvil_metadata.py
+	uv run python scripts/download_anvil_metadata.py
 
 classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa
 
 classify-bam:
-	python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
+	uv run python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
 
 classify-vcf:
-	python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json -o output/anvil/vcf_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json -o output/anvil/vcf_classifications.json -w 10
 
 classify-fastq:
-	python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json -o output/anvil/fastq_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json -o output/anvil/fastq_classifications.json -w 10
 
 classify-fasta:
-	python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json -o output/anvil/fasta_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json -o output/anvil/fasta_classifications.json -w 10
 
 classify-gfa:
-	python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json -o output/anvil/gfa_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json -o output/anvil/gfa_classifications.json -w 10
 
 classify-bed:
-	python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json
+	uv run python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json
 
 coverage-report:
-	python scripts/generate_coverage_report.py
+	uv run python scripts/generate_coverage_report.py
 
 validation-report:
-	python scripts/generate_validation_report.py
+	uv run python scripts/generate_validation_report.py
 
 all-reports: validate-hprc coverage-report validation-report
 
 download-hprc:
-	python scripts/download_hprc_catalogs.py
+	uv run python scripts/download_hprc_catalogs.py
 
 validate-hprc:
-	python scripts/validate_against_hprc.py
+	uv run python scripts/validate_against_hprc.py
 
 clean:
 	find . -name '*.pyc' -delete

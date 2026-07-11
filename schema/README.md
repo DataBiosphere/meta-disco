@@ -10,11 +10,11 @@ The schema validation component is responsible for validating classification rec
 
 To set up the schema validation component:
 
-1. Make sure Poetry is installed on your system
-2. Run the setup script:
+1. Make sure [uv](https://docs.astral.sh/uv/) is installed
+2. Sync the tooling environment:
 
 ```bash
-./setup.sh
+uv sync
 ```
 
 ## Usage
@@ -32,8 +32,8 @@ make validate INSTANCE=path/to/metadata.yaml
 # Example with test data
 make validate INSTANCE=tests/test_data/valid_file.yaml
 
-# Or directly with Poetry
-poetry run python scripts/validate_outputs.py path/to/metadata.yaml
+# Or directly with uv
+uv run python scripts/validate_outputs.py path/to/metadata.yaml
 ```
 
 ### Running Tests
@@ -44,8 +44,8 @@ To run the validation tests:
 # Using the Makefile
 make test
 
-# Or directly with Poetry
-poetry run pytest tests/test_validation.py
+# Or directly with uv
+uv run pytest tests/
 ```
 
 ## Directory Structure
@@ -56,7 +56,7 @@ poetry run pytest tests/test_validation.py
 
 ## Dependencies
 
-This component uses Poetry for dependency management and requires Python 3.10 or later. The main dependencies are:
+This component uses uv for dependency management and requires Python 3.10 or later. The main dependencies are:
 
 - linkml-runtime
 - linkml-validator

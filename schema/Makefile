@@ -9,8 +9,8 @@ GEN_DIR = generated
 # These artifacts are gitignored — they are build outputs, not source.
 gen:
 	mkdir -p $(GEN_DIR)
-	poetry run gen-json-schema $(SCHEMA) > $(GEN_DIR)/classification.schema.json.tmp && mv $(GEN_DIR)/classification.schema.json.tmp $(GEN_DIR)/classification.schema.json
-	poetry run gen-pydantic $(SCHEMA) > $(GEN_DIR)/classification_model.py.tmp && mv $(GEN_DIR)/classification_model.py.tmp $(GEN_DIR)/classification_model.py
+	uv run gen-json-schema $(SCHEMA) > $(GEN_DIR)/classification.schema.json.tmp && mv $(GEN_DIR)/classification.schema.json.tmp $(GEN_DIR)/classification.schema.json
+	uv run gen-pydantic $(SCHEMA) > $(GEN_DIR)/classification_model.py.tmp && mv $(GEN_DIR)/classification_model.py.tmp $(GEN_DIR)/classification_model.py
 	@echo "Generated $(GEN_DIR)/classification.schema.json and classification_model.py"
 
 validate:
@@ -18,7 +18,7 @@ validate:
 		echo "Usage: make validate INSTANCE=path/to/file.yaml"; \
 		exit 1; \
 	fi
-	poetry run python scripts/validate_outputs.py $(INSTANCE)
+	uv run python scripts/validate_outputs.py $(INSTANCE)
 
 test:
-	poetry run pytest tests/
+	uv run pytest tests/

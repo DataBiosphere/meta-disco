@@ -23,8 +23,8 @@ tolerated. Modeling those and tightening to ``closed=True`` is a #134 follow-up.
 (Evidence's ``value``/``status``/``tier`` are modeled, so they are validated, not
 merely tolerated.)
 
-Runs in the schema/ Poetry component, which has linkml installed (the root
-component does not).
+Runs in the schema/ uv project, which has linkml installed (the runtime
+does not).
 """
 
 import json

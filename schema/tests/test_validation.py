@@ -9,7 +9,7 @@ def test_valid_file():
     schema_dir = os.path.dirname(test_dir)  # Parent directory of tests
     
     result = subprocess.run(
-        ["poetry", "run", "python", os.path.join(schema_dir, "scripts/validate_outputs.py"), 
+        ["uv", "run", "python", os.path.join(schema_dir, "scripts/validate_outputs.py"), 
          os.path.join(test_dir, "test_data/valid_file.yaml")],
         capture_output=True, text=True,
         cwd=schema_dir  # Run from the schema directory
@@ -22,7 +22,7 @@ def test_invalid_file():
     schema_dir = os.path.dirname(test_dir)  # Parent directory of tests
     
     result = subprocess.run(
-        ["poetry", "run", "python", os.path.join(schema_dir, "scripts/validate_outputs.py"), 
+        ["uv", "run", "python", os.path.join(schema_dir, "scripts/validate_outputs.py"), 
          os.path.join(test_dir, "test_data/invalid_file.yaml")],
         capture_output=True, text=True,
         cwd=schema_dir  # Run from the schema directory
