@@ -70,11 +70,12 @@ def _load_enums() -> dict[str, frozenset[str]]:
     try:
         text = resource.read_text(encoding="utf-8")
     except FileNotFoundError as e:
-        # The schema ships as package data of meta_disco.schema; a bare errno-2 here
-        # means the build/install dropped it, not that the caller did anything wrong.
+        # The schema ships as package data of this module's package; a bare errno-2
+        # here means the build/install dropped it, not that the caller did anything
+        # wrong. Name the package dynamically, matching the {__package__} anchor above.
         raise FileNotFoundError(
             f"Classification schema not found at {resource}. It should ship as "
-            "package data of meta_disco.schema — reinstall/rebuild the package "
+            f"package data of {__package__}.schema — reinstall/rebuild the package "
             "(uv sync), or run from a checkout where src/meta_disco/schema/ is present."
         ) from e
     schema = yaml.safe_load(text)

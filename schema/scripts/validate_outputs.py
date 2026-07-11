@@ -16,6 +16,13 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
             print(f"File not found: {instance_file}")
             return False
 
+        # Callers can pass an explicit schema path now, so a wrong one would
+        # otherwise fall into the broad handler as a generic "Exception during
+        # validation" — check it here for a clear message.
+        if not os.path.exists(schema_file):
+            print(f"Schema not found: {schema_file}")
+            return False
+
         # Load the YAML file contents first
         try:
             with open(instance_file, 'r') as f:
