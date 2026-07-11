@@ -1,18 +1,27 @@
-[tool.poetry]
+[project]
 name = "meta-disco-schema"
 version = "0.1.0"
-description = "LinkML schema validation component for meta-disco"
-authors = ["Dave Rogers <dave@clevercanary.com>"]
+description = "LinkML schema tooling for meta-disco: generation and validation of the classification schema"
+authors = [{ name = "Dave Rogers", email = "dave@clevercanary.com" }]
 readme = "README.md"
-packages = [{ include = "meta_disco", from = "src" }]
+requires-python = ">=3.10"
+# The canonical schema lives in the root meta_disco package
+# (../src/meta_disco/schema/classification.yaml, #164). This project is the
+# LinkML tooling that maintains and validates it: it is not imported by the
+# runtime, and keeping it separate holds linkml's heavy dependency tree out of
+# the runtime's lockfile.
+dependencies = [
+    "linkml>=1.9.1",
+    "linkml-runtime>=1.9.1",
+    "linkml-validator>=0.4.5",
+    "pyyaml>=6.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-linkml-runtime = "^1.9.1"
-linkml-validator = "^0.4.5"
-linkml = "^1.9.1"
-pyyaml = "^6.0"
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+# Tooling project: manages a dev environment, not a built/installed package.
+package = false
