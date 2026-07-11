@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
+from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 
 # --- Test fixtures ---
 
@@ -232,15 +232,15 @@ class TestPipelineRun:
 
 class TestFileTypeConfigs:
     def test_all_configs_exist(self):
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
         assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
 
     def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
         import dataclasses
 
-        from src.meta_disco.fetchers import FetchError
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.pipeline import ClassifyPipeline
+        from meta_disco.fetchers import FetchError
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.pipeline import ClassifyPipeline
 
         def _boom(evidence_dir, md5, **kwargs):
             raise FetchError("HTTPError: 404 Not Found")
@@ -261,7 +261,7 @@ class TestFileTypeConfigs:
         blanking every dimension is also wrong: `pangenome` is knowable from the
         extension without reading a byte. Only content-dependent fields go
         not_classified, annotated with the cause."""
-        from src.meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
+        from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
 
         results = self._run_with_failing_fetcher(tmp_path, "graph.gfa", ".gfa")
         assert len(results) == 1, "the unreadable file must still appear in the output"
@@ -301,9 +301,9 @@ class TestFileTypeConfigs:
         still be reported unreadable rather than tallied under 'From cache'."""
         import dataclasses
 
-        from src.meta_disco.fetchers import FetchError, get_evidence_path
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.pipeline import ClassifyPipeline
+        from meta_disco.fetchers import FetchError, get_evidence_path
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.pipeline import ClassifyPipeline
 
         def _boom(evidence_dir, md5, **kwargs):
             raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
@@ -339,9 +339,9 @@ class TestFileTypeConfigs:
         a filename-only fallback from a real content read."""
         import dataclasses
 
-        from src.meta_disco.fetchers import FetchError
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.pipeline import ClassifyPipeline
+        from meta_disco.fetchers import FetchError
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.pipeline import ClassifyPipeline
 
         def _boom(evidence_dir, md5, **kwargs):
             raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
@@ -368,8 +368,8 @@ class TestFileTypeConfigs:
         raised and printed a cause. `failed` stays the sum, for existing consumers."""
         import dataclasses
 
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.pipeline import ClassifyPipeline
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.pipeline import ClassifyPipeline
 
         def _explode(evidence_dir, md5, **kwargs):
             if md5 == "boom":
@@ -398,8 +398,8 @@ class TestFileTypeConfigs:
         """Unchanged for the fetchers that give no cause (see #155)."""
         import dataclasses
 
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-        from src.meta_disco.pipeline import ClassifyPipeline
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.pipeline import ClassifyPipeline
 
         config = dataclasses.replace(
             FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None
@@ -415,7 +415,7 @@ class TestFileTypeConfigs:
         assert pipeline.run() == []
 
     def test_configs_have_required_fields(self):
-        from src.meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
         for name, config in FILE_TYPE_REGISTRY.items():
             assert config.name == name
             assert len(config.extensions) > 0

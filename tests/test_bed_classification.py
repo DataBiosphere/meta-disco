@@ -6,17 +6,15 @@ from pathlib import Path
 import pytest
 
 # Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.header_classifier import classify_from_bed_signals
-from src.meta_disco.models import (
+from meta_disco.header_classifier import classify_from_bed_signals
+from meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     FileInfo,
     field_status,
     field_value,
 )
-from src.meta_disco.rule_engine import RuleEngine
+from meta_disco.rule_engine import RuleEngine
 
 # Create a shared engine instance
 engine = RuleEngine()

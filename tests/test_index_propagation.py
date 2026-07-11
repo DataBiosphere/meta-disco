@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
-from src.meta_disco.models import CLASSIFIED, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import CLASSIFIED, NOT_CLASSIFIED, field_status, field_value
 
 
 class TestParentCandidateGeneration:

@@ -14,13 +14,12 @@ These tests pin the three together.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from rerun_all_classifications import build_parallel_jobs
 
-from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-from src.meta_disco.output_utils import CLASSIFICATION_FILES
+from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.output_utils import CLASSIFICATION_FILES
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
 OUTPUT_DIR = Path("output/anvil/20260101_000000")

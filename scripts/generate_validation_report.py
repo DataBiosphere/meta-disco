@@ -17,10 +17,8 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.models import field_label
-from src.meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.models import field_label
+from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
 

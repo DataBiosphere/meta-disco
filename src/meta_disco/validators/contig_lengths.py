@@ -14,7 +14,7 @@ Data loaded from rules/unified_rules.yaml (single source of truth).
 
 import re
 
-from src.meta_disco.rule_loader import get_unified_rules
+from ..rule_loader import get_unified_rules
 
 
 def _load_contig_lengths() -> dict[str, dict[str, int]]:

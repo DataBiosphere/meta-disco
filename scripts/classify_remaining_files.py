@@ -12,14 +12,11 @@ Usage:
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.models import FileInfo
-from src.meta_disco.rule_engine import RuleEngine
+from meta_disco.models import FileInfo
+from meta_disco.rule_engine import RuleEngine
 
 
 def load_already_classified(classification_paths: list[Path]) -> set[str]:

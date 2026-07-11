@@ -12,7 +12,6 @@ Evidence is cached in data/evidence/anvil/bed/ for resumability and audit trail.
 
 import argparse
 import json
-import sys
 import time
 import zlib
 from collections import defaultdict
@@ -21,12 +20,10 @@ from pathlib import Path
 from threading import Lock
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import requests
 
-from src.meta_disco.header_classifier import classify_from_bed_signals
-from src.meta_disco.models import field_label
+from meta_disco.header_classifier import classify_from_bed_signals
+from meta_disco.models import field_label
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 EVIDENCE_DIR = Path("data/evidence/anvil/bed")

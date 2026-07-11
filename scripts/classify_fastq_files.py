@@ -7,13 +7,10 @@ This wrapper is kept for backward compatibility.
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.file_types import FASTQ_CONFIG
-from src.meta_disco.pipeline import ClassifyPipeline
+from meta_disco.file_types import FASTQ_CONFIG
+from meta_disco.pipeline import ClassifyPipeline
 
 
 def classify_single_fastq(
@@ -53,7 +50,7 @@ def main():
     args = parser.parse_args()
 
     if args.docs:
-        from src.meta_disco.header_classifier import get_rules_documentation
+        from meta_disco.header_classifier import get_rules_documentation
         print(get_rules_documentation())
         return
 

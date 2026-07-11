@@ -12,7 +12,6 @@ Output saved to: output/anvil/ena_validation_results.json
 
 import argparse
 import json
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -20,8 +19,7 @@ from pathlib import Path
 import requests
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.header_classifier import classify_from_fastq_header
+from meta_disco.header_classifier import classify_from_fastq_header
 
 ENA_API = "https://www.ebi.ac.uk/ena/portal/api/filereport"
 FIELDS = "run_accession,instrument_platform,library_strategy,library_source"

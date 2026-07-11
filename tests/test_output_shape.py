@@ -52,10 +52,10 @@ from pathlib import Path
 
 import pytest
 
-from src.meta_disco import schema_vocab
-from src.meta_disco.file_types import FILE_TYPE_REGISTRY
-from src.meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
-from src.meta_disco.pipeline import ClassifyPipeline
+from meta_disco import schema_vocab
+from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
+from meta_disco.pipeline import ClassifyPipeline
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"

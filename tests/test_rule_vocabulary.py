@@ -15,8 +15,8 @@ Together they keep the rules and the schema from drifting apart.
 import pytest
 import yaml
 
-from src.meta_disco import schema_vocab
-from src.meta_disco.rule_loader import RuleLoader, get_unified_rules
+from meta_disco import schema_vocab
+from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 
 def _when_value_violations(rules):

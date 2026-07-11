@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 # Import the actual script functions
@@ -24,16 +23,16 @@ from classify_fasta_files import classify_single_fasta as classify_fasta
 from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_vcf_files import classify_single_vcf as classify_vcf
 
-from src.meta_disco.fetchers import parse_gfa_segment_tags
-from src.meta_disco.header_classifier import classify_from_gfa_segment_tags, filename_for_rules
-from src.meta_disco.models import (
+from meta_disco.fetchers import parse_gfa_segment_tags
+from meta_disco.header_classifier import classify_from_gfa_segment_tags, filename_for_rules
+from meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     FileInfo,
     field_status,
     field_value,
 )
-from src.meta_disco.rule_engine import RuleEngine, evaluate_claims
+from meta_disco.rule_engine import RuleEngine, evaluate_claims
 
 engine = RuleEngine()
 

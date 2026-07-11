@@ -13,14 +13,12 @@ Output saved to: output/anvil/reference_validation_results.json
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import requests
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+from meta_disco.validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
 ENSEMBL_API = "https://rest.ensembl.org/info/assembly"
 

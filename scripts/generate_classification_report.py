@@ -2,16 +2,14 @@
 """Generate classification coverage report with charts."""
 
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_label
-from src.meta_disco.models import field_value as _val
+from meta_disco.models import field_label
+from meta_disco.models import field_value as _val
 
 # =============================================================================
 # FILE FORMAT CATEGORY RULES

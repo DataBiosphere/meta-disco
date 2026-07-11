@@ -13,14 +13,11 @@ Uses rules from rules/unified_rules.yaml for:
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 # Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.header_classifier import classify_from_bed_signals
-from src.meta_disco.models import CLASSIFIED, field_label, field_status
+from meta_disco.header_classifier import classify_from_bed_signals
+from meta_disco.models import CLASSIFIED, field_label, field_status
 
 EVIDENCE_DIR = Path("data/evidence/anvil/bed")
 

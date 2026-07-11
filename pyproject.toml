@@ -44,8 +44,5 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Kept until the src.meta_disco imports are renamed to the installed package
-# (increment 3 of #164); removed then.
-pythonpath = ["."]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

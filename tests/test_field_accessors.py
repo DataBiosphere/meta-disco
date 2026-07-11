@@ -10,7 +10,7 @@ producer writes ``status`` yet, so only these tests exercise that path).
 
 import pytest
 
-from src.meta_disco.models import (
+from meta_disco.models import (
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
