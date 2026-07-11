@@ -301,7 +301,7 @@ We align with established ontologies where possible:
 
 ### 6.1 Hierarchical Rule Engine
 
-All 147 classification rules are defined in `src/meta_disco/rules/unified_rules.yaml` and executed by `src/meta_disco/rule_engine.py`.
+All classification rules are defined in `src/meta_disco/rules/unified_rules.yaml` and executed by `src/meta_disco/rule_engine.py`.
 
 Process files through tiers of increasing complexity/cost:
 
