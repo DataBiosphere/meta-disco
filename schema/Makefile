@@ -1,6 +1,8 @@
 # Makefile for meta-disco schema validation component
 
-SCHEMA = src/meta_disco/schema/classification.yaml
+# The canonical schema is package data of the root meta_disco package; this
+# tooling project references it from there (issue #164).
+SCHEMA = ../src/meta_disco/schema/classification.yaml
 GEN_DIR = generated
 
 # Regenerate JSON Schema + Pydantic from the canonical LinkML schema.

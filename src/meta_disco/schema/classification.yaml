@@ -1,4 +1,4 @@
-id: https://github.com/DataBiosphere/meta-disco/blob/main/schema/src/meta_disco/schema/classification.yaml
+id: https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml
 name: meta_disco_classification
 title: Meta-Disco File Classification Model
 description: >-
