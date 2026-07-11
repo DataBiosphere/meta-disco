@@ -23,9 +23,13 @@ def _run(instance):
 
 def test_valid_file():
     result = _run("valid_file.yaml")
+    assert result.returncode == 0, result.stderr
     assert "✅" in result.stdout and "INVALID" not in result.stdout
 
 
 def test_invalid_file():
     result = _run("invalid_file.yaml")
+    # validate_outputs.py exits non-zero on a schema violation; assert that too, so
+    # a subprocess that errored before printing can't pass on the substring alone.
+    assert result.returncode != 0
     assert "INVALID" in result.stdout
