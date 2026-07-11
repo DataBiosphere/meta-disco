@@ -103,10 +103,11 @@ The ideal workflow is what we've been doing: **LLM designs rules, rule engine ex
 
 ## Project Structure
 
-- `schema/`: Contains the LinkML schema validation component
-  - `src/meta_disco/schema/`: LinkML schema definitions
-  - `scripts/`: Validation scripts
 - `src/meta_disco/`: Rule engine, classifiers, and pipeline
+  - `schema/classification.yaml`: the canonical LinkML schema (package data)
 - `rules/`: The tiered classification rules (`unified_rules.yaml`)
 - `scripts/`: Classification, metadata download, and reporting scripts
+- `schema/`: LinkML tooling that maintains and validates the schema
+  - `scripts/`: Validation scripts
+  - `tests/`: Schema validation tests
 

@@ -13,13 +13,13 @@ requires-python = ">=3.10"
 dependencies = [
     "linkml>=1.9.1",
     "linkml-runtime>=1.9.1",
-    "linkml-validator>=0.4.5",
     "pyyaml>=6.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.9",
 ]
 
 [tool.uv]

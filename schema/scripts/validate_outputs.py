@@ -1,10 +1,10 @@
 # scripts/validate_outputs.py
 
-import sys
-import os
 import logging
-import yaml
+import os
+import sys
 
+import yaml
 from linkml.validator import Validator
 from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidationPlugin
 
@@ -15,7 +15,7 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
         if not os.path.exists(instance_file):
             print(f"File not found: {instance_file}")
             return False
-        
+
         # Load the YAML file contents first
         try:
             with open(instance_file, 'r') as f:
@@ -24,15 +24,15 @@ def validate_instance(instance_file: str, schema_file: str) -> bool:
             print(f"❌ {instance_file}: INVALID (YAML parsing error)")
             print(f"  - Error: {e}")
             return False
-            
+
         validator = Validator(
             schema=schema_file,
             validation_plugins=[PydanticValidationPlugin(closed=False)]
         )
-        
+
         # Validate the loaded data, not the file path
         report = validator.validate(instance_data)
-        
+
         # Check if validation passed (no errors in results)
         if not report.results:
             print(f"✅ {instance_file}: VALID")

@@ -1,10 +1,12 @@
-.PHONY: test lint classify classify-hprc classify-and-report download classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all classify classify-hprc classify-and-report download classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
 	@echo ""
-	@echo "  make test               Run all tests"
-	@echo "  make lint               Run ruff linter"
+	@echo "  make test               Run the classification (root) test suite"
+	@echo "  make test-all           Run root + schema test suites (use before pushing)"
+	@echo "  make lint               Run ruff on the root project"
+	@echo "  make lint-all           Run ruff on root + schema projects"
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
 	@echo "  make classify-and-report Run classify + regenerate all reports"
 	@echo "  make download           Download fresh AnVIL metadata from API"
@@ -28,8 +30,21 @@ help:
 test:
 	uv run pytest tests/ -v
 
+# Runs the schema tooling project's own suite (its own uv env, has linkml).
+test-schema:
+	$(MAKE) -C schema test
+
+# Both projects — use this before pushing; the schema gate does not run under
+# plain `make test` (the two are independent uv projects, #164).
+test-all: test test-schema
+
 lint:
 	uv run ruff check src/ scripts/ tests/
+
+lint-schema:
+	$(MAKE) -C schema lint
+
+lint-all: lint lint-schema
 
 classify:
 	uv run python scripts/rerun_all_classifications.py

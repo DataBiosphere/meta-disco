@@ -57,8 +57,8 @@ def default_schema_path():
     schema in error messages.
 
     Anchored on this module's own package (``{__package__}.schema``) rather than a
-    hard-coded ``"meta_disco.schema"``, so it keeps resolving under whatever name
-    the package is imported as, without hard-coding the distribution name.
+    hard-coded ``"meta_disco.schema"``, so it keeps resolving under whatever
+    (import) package name the code is loaded under.
     """
     return files(f"{__package__}.schema") / "classification.yaml"
 
