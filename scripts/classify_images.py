@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Classify image files using RuleEngine.
 
-Uses rules from rules/unified_rules.yaml for:
+Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
 - .svs -> imaging.histology (Aperio whole-slide images)
 - .png -> derived visualizations (QC plots)
 """

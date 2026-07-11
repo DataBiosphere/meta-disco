@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Classify BED files using RuleEngine + coordinate-based reference detection.
 
-Uses rules from rules/unified_rules.yaml for:
+Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
 - modbam2bed/cpg/methylation -> epigenomic.methylation
 - TMM/TPM/counts/leafcutter/TSS -> transcriptomic
 - peak/summit/chip/atac -> epigenomic.chromatin_accessibility

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Classify auxiliary genomic files using RuleEngine.
 
-Uses rules from rules/unified_rules.yaml for:
+Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
 - .fast5, .pod5 -> genomic.raw_signal (ONT raw signal data)
 - .pvar, .psam, .pgen -> genomic.genotypes (PLINK2 genotype data)
 """
