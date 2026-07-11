@@ -50,7 +50,7 @@ uv run pytest tests/
 
 ## Directory Structure
 
-- `src/meta_disco/schema/` - Contains the LinkML schema definitions
+- `../src/meta_disco/schema/` - the canonical LinkML schema (in the root package)
 - `scripts/` - Contains validation scripts
 - `tests/` - Test files and test data
 

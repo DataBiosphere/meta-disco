@@ -1,7 +1,5 @@
 """Tests for HPRC validation mappings and helpers."""
 
-import sys
-from pathlib import Path
 
 import pytest
 

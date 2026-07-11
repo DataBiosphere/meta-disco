@@ -1,11 +1,7 @@
 """Tests for BED file classification patterns using RuleEngine."""
 
-import sys
-from pathlib import Path
-
 import pytest
 
-# Add project root to path for imports
 from meta_disco.header_classifier import classify_from_bed_signals
 from meta_disco.models import (
     NOT_APPLICABLE,
