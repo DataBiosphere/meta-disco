@@ -301,7 +301,7 @@ We align with established ontologies where possible:
 
 ### 6.1 Hierarchical Rule Engine
 
-All 147 classification rules are defined in `rules/unified_rules.yaml` and executed by `src/meta_disco/rule_engine.py`.
+All 147 classification rules are defined in `src/meta_disco/rules/unified_rules.yaml` and executed by `src/meta_disco/rule_engine.py`.
 
 Process files through tiers of increasing complexity/cost:
 
@@ -383,7 +383,7 @@ Image files are classified by extension using domain-specific rules.
 | `.svs`    | imaging.histology | N/A       | 95%        | Aperio whole-slide histology images |
 | `.png`    | N/A               | N/A       | 90%        | Derived visualizations (QC plots) |
 
-**Implementation**: `scripts/classify_images.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_images.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 **Results** (33,757 image files):
 - SVS: 25,708 files (GTEx tissue slides) → `imaging.histology`
@@ -404,7 +404,7 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 
 *Reference inferred from dataset context (ANVIL_1000G_PRIMED uses GRCh38).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 **Results** (20,956 files):
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
@@ -424,7 +424,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 Reference inferred from filename patterns (hg38, chm13) or dataset context (T2T → CHM13).
 
-**Implementation**: `scripts/classify_bed_files.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_bed_files.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 **Results** (13,660 files):
 - 8,560 with data_modality (62.7%)

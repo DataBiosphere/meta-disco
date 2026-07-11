@@ -700,7 +700,7 @@ Image files are classified by extension using domain-specific rules.
 - **SVS files**: Aperio whole-slide histology images used for pathology analysis. All from GTEx public dataset containing tissue slide images.
 - **PNG files**: Derived visualizations (QC plots, assembly graphs) - not primary experimental data. Excluded from `data_modality` assignment as they are derived artifacts, not primary data files.
 
-**Implementation**: `scripts/classify_images.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_images.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 ### 5.7 Auxiliary Genomic File Classification Results
 
@@ -722,7 +722,7 @@ FAST5 and PLINK files are classified by extension with dataset-based reference i
 - **FAST5**: Extension-based. Raw nanopore signal data from ANVIL_NIA_CARD_Coriell_Cell_Lines_Open dataset.
 - **PLINK**: Extension-based modality + dataset-based reference. All from ANVIL_1000G_PRIMED_data_model (1000 Genomes Project uses GRCh38).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 ### 5.8 BED File Classification Results
 
@@ -754,7 +754,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs marked as N/A.
 
-**Implementation**: `scripts/classify_bed_files.py` (rules in `rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_bed_files.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 ---
 
@@ -899,7 +899,7 @@ The [HPRC Data Explorer catalog](https://github.com/human-pangenomics/hprc-data-
 
 ## Appendix A: Rule Statistics
 
-All rules are defined in `rules/unified_rules.yaml`.
+All rules are defined in `src/meta_disco/rules/unified_rules.yaml`.
 
 | Category                 | Rule Count |
 | ------------------------ | ---------- |

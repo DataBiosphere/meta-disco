@@ -485,7 +485,7 @@ that's supposed to constrain our slot values.
 
 The single most useful finding from verification: **we are not inventing these
 content types from scratch.** The `extension_map` document in
-`rules/unified_rules.yaml` already sorts every extension into a category, and
+`src/meta_disco/rules/unified_rules.yaml` already sorts every extension into a category, and
 several of those categories *are* descriptive-content types:
 
 | Existing `extension_map` category | Extensions | Becomes `data_type` (descriptive class) |
@@ -641,7 +641,7 @@ permissible slot values:
   `classification.yaml`, which models all five dimensions, the full vocabulary, and
   `classification_status_enum`; whole records now validate against it.
 - The **de-facto vocabulary** therefore lives, unenforced, in the `then:` blocks
-  of `rules/unified_rules.yaml` (plus partial external mappings in
+  of `src/meta_disco/rules/unified_rules.yaml` (plus partial external mappings in
   `validation_maps.py`). Nothing checks that a rule emits a value the schema knows
   about.
 
