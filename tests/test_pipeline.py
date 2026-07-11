@@ -214,6 +214,16 @@ class TestPipelineRun:
         assert meta["successful"] == 1
         assert results[0]["classifications"]["data_modality"]["value"] == "genomic"
 
+    @pytest.mark.parametrize("md5", [None, "", 123])
+    def test_is_cached_returns_false_for_invalid_md5_instead_of_raising(self, tmp_path, md5):
+        """A non-string/empty md5 has no evidence path; the cache check must return
+        False, not raise on ``md5[:2]`` — so a validation_failed record stays safe."""
+        pipeline = ClassifyPipeline(
+            _make_config(), tmp_path / "in.json", tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+        )
+        assert pipeline._is_cached(md5) is False
+
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"

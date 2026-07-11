@@ -273,8 +273,16 @@ class ClassifyPipeline:
 
         return [r for r in records if matches(r)]
 
-    def _is_cached(self, md5sum: str) -> bool:
-        """Check if evidence is cached (cheap file-existence check, no JSON parse)."""
+    def _is_cached(self, md5sum) -> bool:
+        """Check if evidence is cached (cheap file-existence check, no JSON parse).
+
+        A non-string or empty md5 has no evidence path (``get_evidence_path`` slices
+        ``md5sum[:2]``), so it cannot be cached — return False rather than letting a
+        null md5 raise. This keeps the cache check safe for a record headed to the
+        ``validation_failed`` path, independently of what ``_filter_records`` admits.
+        """
+        if not isinstance(md5sum, str) or not md5sum:
+            return False
         from .fetchers import get_evidence_path
         return get_evidence_path(self.evidence_dir, md5sum).exists()
 
