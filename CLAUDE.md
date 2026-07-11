@@ -42,6 +42,10 @@ uv run pytest tests/
 ### Classification (run from root directory)
 
 ```bash
+# Validate a freshly downloaded metadata file against the input contract before
+# a long run (issue #161). Non-zero exit + grouped summary on any shape violation.
+make validate-metadata
+
 # Full pipeline over all file types, in parallel
 make classify
 

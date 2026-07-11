@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all classify classify-hprc classify-and-report download classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -10,6 +10,7 @@ help:
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
 	@echo "  make classify-and-report Run classify + regenerate all reports"
 	@echo "  make download           Download fresh AnVIL metadata from API"
+	@echo "  make validate-metadata  Check a downloaded metadata file's shape before classifying"
 	@echo ""
 	@echo "  make classify-bam       Classify BAM/CRAM files (network required)"
 	@echo "  make classify-vcf       Classify VCF files (network required)"
@@ -56,6 +57,11 @@ classify-and-report: classify classify-hprc all-reports
 
 download:
 	uv run python scripts/download_anvil_metadata.py
+
+# Pre-run gate: validate a downloaded metadata file against the input contract
+# (issue #161). Non-zero exit on any shape violation. Run after `make download`.
+validate-metadata:
+	uv run python scripts/validate_metadata.py
 
 classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
+from tests.metadata_fixtures import valid_record as _valid_record
 
 # --- Test fixtures ---
 
@@ -25,12 +26,12 @@ def _make_config(**overrides):
 def input_file(tmp_path):
     """Create a test input JSON file with records."""
     records = [
-        {"file_md5sum": "abc123", "file_name": "sample.test", "file_size": 1000,
-         "file_format": ".test", "entry_id": "e1"},
-        {"file_md5sum": "def456", "file_name": "sample2.test", "file_size": 2000,
-         "file_format": ".test", "entry_id": "e2"},
-        {"file_md5sum": "ghi789", "file_name": "other.bam", "file_size": 3000,
-         "file_format": ".bam", "entry_id": "e3"},
+        _valid_record(file_md5sum="a" * 32, file_name="sample.test",
+                      file_format=".test", entry_id="e1"),
+        _valid_record(file_md5sum="b" * 32, file_name="sample2.test",
+                      file_format=".test", entry_id="e2"),
+        _valid_record(file_md5sum="c" * 32, file_name="other.bam",
+                      file_format=".bam", entry_id="e3"),
     ]
     path = tmp_path / "input.json"
     path.write_text(json.dumps({"results": records}))
@@ -157,18 +158,19 @@ class TestPipelineRun:
         assert data["metadata"]["failed"] == 2
 
     @pytest.mark.parametrize("workers", [1, 2])
-    def test_null_file_name_does_not_crash_or_lose_the_record(self, tmp_path, workers):
-        """`record.get("file_name", "")` returns None for a present-but-null key, and
-        _filter_records admits such a record when its file_format matches.
+    def test_null_file_name_is_written_as_validation_failed_not_lost(self, tmp_path, workers):
+        """A present-but-null file_name is a contract violation (issue #161): the
+        record is diverted to validation_failed and written, never dropped and never
+        crashing the run.
 
-        Sequentially that aborted the run. In the parallel path it was worse: the
-        raise landed in the executor's `except Exception`, so a record that had
-        classified successfully was counted as errored and never written.
+        This is the same protection #151 gave — the record survives in both the
+        sequential and parallel paths (a raise in the parallel path had landed in the
+        executor's `except Exception` and discarded the record) — now via validation.
         """
         config = _make_config()
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [
-            {"file_md5sum": "n1", "file_name": None, "file_format": ".test"},
+            _valid_record(file_name=None, file_format=".test"),
         ]}))
         output = tmp_path / "out.json"
         results = ClassifyPipeline(
@@ -176,11 +178,41 @@ class TestPipelineRun:
             evidence_base=tmp_path / "evidence", workers=workers,
         ).run()
 
-        assert len(results) == 1, "the record must be classified, not dropped"
+        assert len(results) == 1, "the record must be written, not dropped"
         meta = json.loads(output.read_text())["metadata"]
-        assert meta["successful"] == 1
+        assert meta["validation_failed"] == 1
+        assert meta["processed"] == 1
+        assert meta["successful"] == 0
         assert meta["errored"] == 0
         assert meta["failed"] == 0
+        # Written with every dimension not_classified, carrying the reason.
+        cls = results[0]["classifications"]
+        assert all(cls[f]["status"] == "not_classified" for f in cls)
+        reasons = [e["reason"] for e in cls["data_modality"]["evidence"]]
+        assert any("file_name" in r for r in reasons)
+
+    @pytest.mark.parametrize("workers", [1, 2])
+    def test_bad_classifier_irrelevant_field_still_classifies(self, tmp_path, workers):
+        """A contract violation on a field the classifier never reads (here a
+        non-boolean is_supplementary) must NOT divert the record — it classifies
+        normally. Only classifier-relevant violations block (issue #161 split)."""
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            _valid_record(file_name="ok.test", file_format=".test",
+                          is_supplementary="not-a-bool"),
+        ]}))
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(
+            config, input_path, output,
+            evidence_base=tmp_path / "evidence", workers=workers,
+        ).run()
+
+        assert len(results) == 1
+        meta = json.loads(output.read_text())["metadata"]
+        assert meta["validation_failed"] == 0
+        assert meta["successful"] == 1
+        assert results[0]["classifications"]["data_modality"]["value"] == "genomic"
 
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
@@ -214,8 +246,8 @@ class TestPipelineRun:
             extensions=(".test", ".test.gz"),
         )
         records = [
-            {"file_md5sum": "a", "file_name": "x.test.gz", "file_format": ".test"},
-            {"file_md5sum": "b", "file_name": "y.test", "file_format": ".test"},
+            _valid_record(file_md5sum="a" * 32, file_name="x.test.gz", file_format=".test"),
+            _valid_record(file_md5sum="b" * 32, file_name="y.test", file_format=".test"),
         ]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
@@ -247,10 +279,10 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [{
-            "file_md5sum": "deadbeef", "file_name": file_name,
-            "file_format": file_format, "file_size": 10, "entry_id": "e1",
-        }]}))
+        input_path.write_text(json.dumps({"results": [_valid_record(
+            file_md5sum="d" * 32, file_name=file_name,
+            file_format=file_format, file_size=10, entry_id="e1",
+        )]}))
         return ClassifyPipeline(
             config, input_path, tmp_path / "out.json",
             evidence_base=tmp_path / "evidence", workers=1,
@@ -309,8 +341,9 @@ class TestFileTypeConfigs:
             raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
-        record = {"file_md5sum": "deadbeef", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
-                  "file_format": ".gfa.gz", "file_size": 10}
+        record = _valid_record(
+            file_md5sum="d" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz",
+            file_format=".gfa.gz", file_size=10)
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [record]}))
 
@@ -320,11 +353,12 @@ class TestFileTypeConfigs:
         )
         # A corrupt evidence file: _is_cached() sees it, load_cached_evidence() cannot
         # read it, so the fetcher re-fetches and fails.
-        stale = get_evidence_path(pipeline.evidence_dir, "deadbeef")
+        stale = get_evidence_path(pipeline.evidence_dir, "d" * 32)
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("{ not json")
 
-        out, was_cached, content_unreadable = pipeline._process_single_record(record)
+        out, was_cached, content_unreadable, _validation_failed = \
+            pipeline._process_single_record(record)
 
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
@@ -349,9 +383,10 @@ class TestFileTypeConfigs:
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [
-            {"file_md5sum": "a1", "file_name": "hprc-v1.0-mc-grch38.gfa.gz",
-             "file_format": ".gfa.gz"},
-            {"file_md5sum": "b2", "file_name": "HG002.hap1.p_ctg.gfa", "file_format": ".gfa"},
+            _valid_record(file_md5sum="a" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz",
+                          file_format=".gfa.gz"),
+            _valid_record(file_md5sum="b" * 32, file_name="HG002.hap1.p_ctg.gfa",
+                          file_format=".gfa"),
         ]}))
         out_path = tmp_path / "out.json"
         ClassifyPipeline(config, input_path, out_path,
@@ -371,16 +406,18 @@ class TestFileTypeConfigs:
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.pipeline import ClassifyPipeline
 
+        boom_md5 = "a" * 32
+
         def _explode(evidence_dir, md5, **kwargs):
-            if md5 == "boom":
+            if md5 == boom_md5:
                 raise TypeError("a bug in the parser, not a fetch failure")
             return None  # silent drop, no cause
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [
-            {"file_md5sum": "boom", "file_name": "a.gfa", "file_format": ".gfa"},
-            {"file_md5sum": "quiet", "file_name": "b.gfa", "file_format": ".gfa"},
+            _valid_record(file_md5sum=boom_md5, file_name="a.gfa", file_format=".gfa"),
+            _valid_record(file_md5sum="b" * 32, file_name="b.gfa", file_format=".gfa"),
         ]}))
         out_path = tmp_path / "out.json"
         # workers>1 so the executor's `except Exception` handles the TypeError.
@@ -406,7 +443,7 @@ class TestFileTypeConfigs:
         )
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [
-            {"file_md5sum": "d", "file_name": "graph.gfa", "file_format": ".gfa"}
+            _valid_record(file_md5sum="d" * 32, file_name="graph.gfa", file_format=".gfa")
         ]}))
         pipeline = ClassifyPipeline(
             config, input_path, tmp_path / "out.json",

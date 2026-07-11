@@ -10,10 +10,60 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from .fetchers import FetchError
 from .header_classifier import classify_without_content
+from .metadata_schema import (
+    classification_blocking_reasons,
+    validation_failed_classifications,
+)
+
+
+def load_records(input_path: Path) -> list[dict]:
+    """Load the record list from an input file's envelope.
+
+    A ``.ndjson`` file is one record per line; otherwise a JSON object with a
+    ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
+    ``validate_metadata`` gate so the envelope handling lives in one place.
+    """
+    with open(input_path) as f:
+        if input_path.suffix == ".ndjson":
+            return [json.loads(line) for line in f if line.strip()]
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise TypeError(
+            f"Expected JSON object with 'results' or 'files' key, got {type(data).__name__}"
+        )
+    # Check key presence explicitly rather than `results or files`: a present but
+    # empty `results: []` is a valid empty corpus, not a missing key — the truthy
+    # fallback would misreport it as "must contain a key".
+    for key in ("results", "files"):
+        if key in data:
+            records = data[key]
+            if not isinstance(records, list):
+                raise TypeError(
+                    f"'{key}' must be a list of records, got {type(records).__name__}"
+                )
+            return records
+    raise ValueError("JSON object must contain a 'results' or 'files' key")
+
+
+class RecordOutcome(NamedTuple):
+    """The outcome of processing one record, tallied by ``_run_parallel``.
+
+    ``result`` is the output record, or ``None`` when the fetcher gave no cause to
+    keep the row (a drop). The three flags are mutually exclusive and only one, at
+    most, is set: a record is written as ``validation_failed`` (failed the input
+    contract), ``was_cached`` (evidence already on disk), ``content_unreadable``
+    (fetch failed, classified from the filename), or none of these (a fresh fetch).
+    Named so the four fields cannot be transposed at the unpack sites.
+    """
+
+    result: dict | None
+    was_cached: bool
+    content_unreadable: bool
+    validation_failed: bool
 
 
 @dataclass(frozen=True)
@@ -204,21 +254,8 @@ class ClassifyPipeline:
     # --- Internal ---
 
     def _load_input(self) -> list[dict]:
-        """Load NDJSON or JSON input, extracting records array."""
-        with open(self.input_path) as f:
-            if self.input_path.suffix == ".ndjson":
-                return [json.loads(line) for line in f if line.strip()]
-            data = json.load(f)
-            if not isinstance(data, dict):
-                raise TypeError(
-                    f"Expected JSON object with 'results' key, got {type(data).__name__}"
-                )
-            records = data.get("results") or data.get("files")
-            if records is None:
-                raise ValueError(
-                    "JSON object must contain a 'results' or 'files' key"
-                )
-            return records
+        """Load NDJSON or JSON input, extracting the records array."""
+        return load_records(self.input_path)
 
     def _filter_records(self, records: list[dict]) -> list[dict]:
         """Filter to records matching file_type.extensions with valid MD5."""
@@ -266,10 +303,19 @@ class ClassifyPipeline:
         print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
         return cached_md5s
 
-    def _process_single_record(self, record: dict) -> tuple[dict | None, bool, bool]:
+    def _process_single_record(self, record: dict) -> RecordOutcome:
         """Fetch, classify, and build output for one record.
 
-        Returns ``(record_or_None, was_cached, content_unreadable)``.
+        Scope: this runs on records that already passed ``_filter_records`` (this
+        file type's extensions, with a truthy md5). A record whose *classifier-
+        relevant* fields violate the input-metadata contract (issue #161) is neither
+        fetched nor classified: it is built with every dimension ``not_classified``
+        and the blocking reasons as evidence, and flagged ``validation_failed`` so
+        the run tallies it. It is still written — a missing row is indistinguishable
+        from a file that was never seen (issue #155). A contract violation on a field
+        the classifier does not read does *not* divert the record; that drift is
+        surfaced by the whole-corpus ``validate_metadata`` gate, not here (as are
+        records ``_filter_records`` dropped, e.g. an empty md5).
 
         ``content_unreadable`` is reported explicitly rather than sniffed out of
         the output: ``classify_without_content`` annotates only the dimensions
@@ -277,6 +323,13 @@ class ClassifyPipeline:
         ``content_fields`` is empty would leave no ``fetch_failed`` evidence at
         all. Detection must not depend on evidence that a config may not emit.
         """
+        reasons = classification_blocking_reasons(record)
+        if reasons:
+            classifications = validation_failed_classifications(reasons)
+            return RecordOutcome(self._build_record(record, classifications),
+                                 was_cached=False, content_unreadable=False,
+                                 validation_failed=True)
+
         md5 = record.get("file_md5sum")
         file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
@@ -296,7 +349,8 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped, use_cache=self.resume,
         )
         if classifications is None:
-            return None, was_cached, False
+            return RecordOutcome(None, was_cached, content_unreadable=False,
+                                 validation_failed=False)
 
         if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher
@@ -306,7 +360,8 @@ class ClassifyPipeline:
             # unreadable tally.
             was_cached = False
 
-        return self._build_record(record, classifications), was_cached, content_unreadable
+        return RecordOutcome(self._build_record(record, classifications),
+                             was_cached, content_unreadable, validation_failed=False)
 
     @staticmethod
     def _build_record(record: dict, classifications: dict) -> dict:
@@ -326,6 +381,7 @@ class ClassifyPipeline:
         successful = 0
         dropped = 0   # fetcher returned None: no cause given
         errored = 0   # worker raised: a cause was printed
+        invalid = 0   # failed input validation: written, classified as nothing (#161)
         from_cache = 0
         processed = 0
         unreadable = 0
@@ -335,20 +391,23 @@ class ClassifyPipeline:
         print(f"Using {self.workers} parallel workers")
 
         with NdjsonWriter(self.output_path) as writer:
-            def update_progress(result, was_cached, content_unreadable, file_name):
-                nonlocal successful, dropped, from_cache, processed, unreadable
+            def update_progress(outcome: RecordOutcome, file_name):
+                nonlocal successful, dropped, from_cache, processed, unreadable, invalid
                 with lock:
                     processed += 1
-                    if result:
-                        writer.write(result)
-                        successful += 1
-                        if was_cached:
-                            from_cache += 1
-                        elif content_unreadable:
-                            unreadable += 1
+                    if outcome.result:
+                        writer.write(outcome.result)
+                        if outcome.validation_failed:
+                            invalid += 1
+                        else:
+                            successful += 1
+                            if outcome.was_cached:
+                                from_cache += 1
+                            elif outcome.content_unreadable:
+                                unreadable += 1
                     else:
                         dropped += 1
-                    cache_indicator = "[cached] " if was_cached else ""
+                    cache_indicator = "[cached] " if outcome.was_cached else ""
                     # `or ""`: a record may carry an explicit null file_name, and
                     # `.get(key, "")` returns None for a present-but-null key. Both
                     # callers normalize, but this print is the crash site — and in the
@@ -360,9 +419,8 @@ class ClassifyPipeline:
 
             if self.workers == 1:
                 for record in records:
-                    result, was_cached, content_unreadable = self._process_single_record(record)
-                    update_progress(result, was_cached, content_unreadable,
-                                    record.get("file_name") or "")
+                    outcome = self._process_single_record(record)
+                    update_progress(outcome, record.get("file_name") or "")
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
                     future_to_record = {
@@ -372,9 +430,8 @@ class ClassifyPipeline:
                     for future in as_completed(future_to_record):
                         record = future_to_record[future]
                         try:
-                            result, was_cached, content_unreadable = future.result()
-                            update_progress(result, was_cached, content_unreadable,
-                                            record.get("file_name") or "")
+                            outcome = future.result()
+                            update_progress(outcome, record.get("file_name") or "")
                         except Exception as e:
                             print(f"\nError processing {record.get('file_name')}: {e}")
                             with lock:
@@ -388,8 +445,11 @@ class ClassifyPipeline:
         print(f"Dropped (fetcher gave no cause): {dropped}")
         if errored:
             print(f"Errored (cause printed above): {errored}")
+        if invalid:
+            print(f"Failed input validation (written, classified as nothing): {invalid}")
         classifications = self._save_final(
-            total, successful, dropped, from_cache, unreadable, errored)
+            total, successful, dropped, from_cache=from_cache, unreadable=unreadable,
+            errored=errored, validation_failed=invalid)
 
         print(f"\nSaved to {self.output_path}")
         print(f"Evidence cached in: {self.evidence_dir}/")
@@ -397,7 +457,8 @@ class ClassifyPipeline:
         return classifications
 
     def _save_final(self, total: int, successful: int, dropped: int,
-                    from_cache: int, unreadable: int, errored: int = 0) -> list[dict]:
+                    from_cache: int, unreadable: int, errored: int = 0,
+                    validation_failed: int = 0) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
         ``unreadable`` is persisted alongside ``from_cache``: a record classified
@@ -409,6 +470,10 @@ class ClassifyPipeline:
         (a worker raised, and the cause was printed) are recorded separately, and
         ``failed`` is kept as their sum so existing consumers of that key still
         read the total number of records that produced no row.
+
+        ``validation_failed`` (the record failed the input contract, issue #161)
+        produced a row — every dimension ``not_classified`` — so it is counted
+        neither in ``successful`` nor in ``failed``; it is persisted on its own key.
         """
         ndjson = self.output_path.with_suffix(".ndjson")
         classifications = []
@@ -423,13 +488,14 @@ class ClassifyPipeline:
             json.dump({
                 "metadata": {
                     "total_to_process": total,
-                    "processed": successful + dropped + errored,
+                    "processed": successful + dropped + errored + validation_failed,
                     "successful": successful,
                     # `failed` = every record that produced no row, whether the
                     # fetcher gave no cause (dropped) or a worker raised (errored).
                     "failed": dropped + errored,
                     "dropped": dropped,
                     "errored": errored,
+                    "validation_failed": validation_failed,
                     "from_cache": from_cache,
                     "content_unreadable": unreadable,
                     "complete": True,

@@ -65,7 +65,7 @@
         "file_format": ".bam",
         "file_name": "sample.rnaseq.bam",
         "file_size": 12345678,
-        "md5sum": "golden_bam_rnaseq"
+        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
     ],
     "metadata": {
@@ -77,7 +77,8 @@
       "from_cache": 0,
       "processed": 1,
       "successful": 1,
-      "total_to_process": 1
+      "total_to_process": 1,
+      "validation_failed": 0
     }
   },
   "fasta": {
@@ -174,7 +175,7 @@
         "file_format": ".fasta",
         "file_name": "hapdup_contigs.hap1.fasta",
         "file_size": 2974881710,
-        "md5sum": "golden_fasta_assembly"
+        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     ],
     "metadata": {
@@ -186,7 +187,8 @@
       "from_cache": 0,
       "processed": 1,
       "successful": 1,
-      "total_to_process": 1
+      "total_to_process": 1,
+      "validation_failed": 0
     }
   },
   "fastq": {
@@ -262,7 +264,7 @@
         "file_format": ".fastq.gz",
         "file_name": "sample.fastq.gz",
         "file_size": 8000,
-        "md5sum": "golden_fastq"
+        "md5sum": "dddddddddddddddddddddddddddddddd"
       }
     ],
     "metadata": {
@@ -274,7 +276,8 @@
       "from_cache": 0,
       "processed": 1,
       "successful": 1,
-      "total_to_process": 1
+      "total_to_process": 1,
+      "validation_failed": 0
     }
   },
   "gfa": {
@@ -353,7 +356,7 @@
         "file_format": ".gfa.gz",
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
         "file_size": 848467761,
-        "md5sum": "golden_gfa_rgfa"
+        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       }
     ],
     "metadata": {
@@ -365,7 +368,8 @@
       "from_cache": 0,
       "processed": 1,
       "successful": 1,
-      "total_to_process": 1
+      "total_to_process": 1,
+      "validation_failed": 0
     }
   },
   "vcf": {
@@ -435,7 +439,7 @@
         "file_format": ".vcf.gz",
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
-        "md5sum": "golden_vcf"
+        "md5sum": "cccccccccccccccccccccccccccccccc"
       }
     ],
     "metadata": {
@@ -447,7 +451,8 @@
       "from_cache": 0,
       "processed": 1,
       "successful": 1,
-      "total_to_process": 1
+      "total_to_process": 1,
+      "validation_failed": 0
     }
   }
 }
