@@ -245,6 +245,26 @@ class TestPipelineRun:
         reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
         assert any("file_md5sum" in r for r in reasons)
 
+    @pytest.mark.parametrize("workers", [1, 2])
+    def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
+        """A non-string file_name (drift, e.g. an int) routes by its matching format,
+        becomes validation_failed, and must not crash the progress label's slice."""
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            _valid_record(file_name=123, file_format=".test"),
+        ]}))
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(
+            config, input_path, output,
+            evidence_base=tmp_path / "evidence", workers=workers,
+        ).run()
+
+        assert len(results) == 1
+        meta = json.loads(output.read_text())["metadata"]
+        assert meta["validation_failed"] == 1
+        assert meta["errored"] == 0
+
     @pytest.mark.parametrize("md5", [None, "", 123])
     def test_is_cached_returns_false_for_invalid_md5_instead_of_raising(self, tmp_path, md5):
         """A non-string/empty md5 has no evidence path; the cache check must return

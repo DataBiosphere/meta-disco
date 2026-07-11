@@ -274,8 +274,10 @@ class ClassifyPipeline:
                 return False
             if r.get("skip"):
                 return False
-            fmt = r.get("file_format") or ""
-            name = r.get("file_name") or ""
+            # str(): a non-string file_format/file_name (drift) must not raise here,
+            # before validation can convert the record into a structured failure.
+            fmt = str(r.get("file_format") or "")
+            name = str(r.get("file_name") or "")
             return (any(fmt.endswith(ext) for ext in exts)
                     or any(name.endswith(ext) for ext in exts))
 
@@ -322,16 +324,17 @@ class ClassifyPipeline:
     def _process_single_record(self, record: dict) -> RecordOutcome:
         """Fetch, classify, and build output for one record.
 
-        Scope: this runs on records that already passed ``_filter_records`` (this
-        file type's extensions, with a truthy md5). A record whose *classifier-
-        relevant* fields violate the input-metadata contract (issue #161) is neither
-        fetched nor classified: it is built with every dimension ``not_classified``
-        and the blocking reasons as evidence, and flagged ``validation_failed`` so
-        the run tallies it. It is still written — a missing row is indistinguishable
-        from a file that was never seen (issue #155). A contract violation on a field
-        the classifier does not read does *not* divert the record; that drift is
-        surfaced by the whole-corpus ``validate_metadata`` gate, not here (as are
-        records ``_filter_records`` dropped, e.g. an empty md5).
+        Scope: this runs on records ``_filter_records`` routed to this file type by
+        extension (md5 is *not* a routing condition). A record whose *classifier-
+        relevant* fields — including ``file_md5sum`` — violate the input-metadata
+        contract (issue #161) is neither fetched nor classified: it is built with
+        every dimension ``not_classified`` and the blocking reasons as evidence, and
+        flagged ``validation_failed`` so the run tallies it. It is still written — a
+        missing row is indistinguishable from a file that was never seen (issue
+        #155). A contract violation on a field the classifier does not read does
+        *not* divert the record; that drift is surfaced by the whole-corpus
+        ``validate_metadata`` gate, not here (as are records ``_filter_records``
+        does not route: a non-matching extension, a ``skip`` flag, or a non-dict).
 
         ``content_unreadable`` is reported explicitly rather than sniffed out of
         the output: ``classify_without_content`` annotates only the dimensions
@@ -424,12 +427,12 @@ class ClassifyPipeline:
                     else:
                         dropped += 1
                     cache_indicator = "[cached] " if outcome.was_cached else ""
-                    # `or ""`: a record may carry an explicit null file_name, and
-                    # `.get(key, "")` returns None for a present-but-null key. Both
-                    # callers normalize, but this print is the crash site — and in the
-                    # parallel path a raise here would land in the executor's
-                    # `except Exception`, discarding a record that classified fine.
-                    label = (file_name or "")[:45]
+                    # str(... or ""): a record may carry a null file_name (present-but-
+                    # null → None) or a non-string one (drift, e.g. an int). This print
+                    # is the crash site — a raise here aborts the sequential run, and in
+                    # the parallel path lands in the executor's `except Exception`,
+                    # discarding a record (often a validation_failed one) already written.
+                    label = str(file_name or "")[:45]
                     print(f"\r[{processed}/{total}] {cache_indicator}{label:<52}",
                           end="", flush=True)
 
