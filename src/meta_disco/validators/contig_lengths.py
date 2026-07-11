@@ -9,7 +9,7 @@ Sources:
 - GRCh37: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.13
 - CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
 
-Data loaded from rules/unified_rules.yaml (single source of truth).
+Data loaded from src/meta_disco/rules/unified_rules.yaml (single source of truth).
 """
 
 import re

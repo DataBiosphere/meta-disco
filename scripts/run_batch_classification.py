@@ -183,8 +183,8 @@ def main():
                         help="Input metadata file (JSON or NDJSON)")
     parser.add_argument("--output", "-o", type=str, default="output/anvil",
                         help="Output directory")
-    parser.add_argument("--rules", "-r", type=str, default="rules/unified_rules.yaml",
-                        help="Path to rules file")
+    parser.add_argument("--rules", "-r", type=str, default=None,
+                        help="Path to rules file (default: the bundled unified_rules.yaml)")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -199,7 +199,7 @@ def main():
     files = load_metadata(input_path)
     print(f"Loaded {len(files):,} files")
 
-    print(f"\nLoading rules from {args.rules}...")
+    print(f"\nLoading rules from {args.rules or 'the bundled unified_rules.yaml'}...")
     engine = RuleEngine(args.rules)
 
     print("\nRunning classification...")

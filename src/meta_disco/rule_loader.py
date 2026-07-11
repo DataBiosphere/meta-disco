@@ -1,12 +1,25 @@
 """Loader for unified classification rules from YAML."""
 
 from dataclasses import dataclass, field
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
+
+
+def default_rules_resource():
+    """The bundled ``unified_rules.yaml``, as a package-data resource.
+
+    Anchored on this module's own package (``{__package__}.rules``), so it resolves
+    whether ``meta_disco`` is installed as a wheel or run from a checkout (#166),
+    mirroring ``schema_vocab.default_schema_path``. Returns an ``importlib.resources``
+    traversable; both it and ``pathlib.Path`` support ``.read_text()`` and ``str()``,
+    so it and an explicitly-passed filesystem path are handled uniformly.
+    """
+    return files(f"{__package__}.rules") / "unified_rules.yaml"
 
 
 @dataclass
@@ -164,17 +177,13 @@ class RuleLoader:
         """Initialize the rule loader.
 
         Args:
-            rules_path: Path to the unified rules YAML file.
-                       Defaults to rules/unified_rules.yaml relative to project root.
+            rules_path: Path to the unified rules YAML file. Defaults to the bundled
+                ``unified_rules.yaml`` shipped as package data of ``meta_disco.rules``.
         """
-        if rules_path is None:
-            # Default to rules/unified_rules.yaml relative to this file. Unlike the
-            # schema (now package data, read via importlib.resources), the rules file
-            # still lives at the repo root, so this only resolves from a checkout —
-            # the deliberately-deferred other half of #164, tracked in #166. Not an
-            # intentional "rules are checkout-only" design.
-            rules_path = Path(__file__).parent.parent.parent / "rules" / "unified_rules.yaml"
-        self.rules_path = Path(rules_path)
+        # Default to the bundled package-data resource; an explicit path stays a
+        # filesystem Path. default_rules_resource's docstring covers why load() can
+        # treat both uniformly.
+        self.rules_path = default_rules_resource() if rules_path is None else Path(rules_path)
         self._rules: UnifiedRules | None = None
 
     def load(self) -> UnifiedRules:
@@ -190,11 +199,15 @@ class RuleLoader:
         if self._rules is not None:
             return self._rules
 
-        if not self.rules_path.exists():
-            raise FileNotFoundError(f"Rules file not found: {self.rules_path}")
-
-        with open(self.rules_path, encoding="utf-8") as f:
-            docs = list(yaml.safe_load_all(f))
+        try:
+            text = self.rules_path.read_text(encoding="utf-8")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(
+                f"Rules file not found: {self.rules_path}. The default ships as "
+                "package data of meta_disco.rules — reinstall/rebuild the package "
+                "(uv sync), or pass an explicit rules_path."
+            ) from e
+        docs = list(yaml.safe_load_all(text))
 
         if len(docs) < 2:
             raise ValueError("Rules file must have at least 2 YAML documents")

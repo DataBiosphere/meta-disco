@@ -311,7 +311,8 @@ class RuleEngine:
         """Initialize the rule engine.
 
         Args:
-            rules_path: Path to unified rules YAML. Defaults to rules/unified_rules.yaml.
+            rules_path: Path to unified rules YAML. Defaults to the bundled
+                       unified_rules.yaml (package data of meta_disco.rules).
                        Legacy paths to classification_rules.yaml are automatically
                        redirected to unified_rules.yaml.
         """

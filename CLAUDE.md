@@ -10,7 +10,7 @@ Meta-disco extracts and validates metadata from biological data files (BAM, CRAM
 
 The project has two main components:
 
-1. **Classification** (`src/meta_disco/`, `rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
+1. **Classification** (`src/meta_disco/`, `src/meta_disco/rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
 
 2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
    - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the five metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
