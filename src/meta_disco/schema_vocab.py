@@ -66,17 +66,20 @@ def default_schema_path():
 @lru_cache(maxsize=None)
 def _load_enums() -> dict[str, frozenset[str]]:
     """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
-    resource = default_schema_path()
+    resource = None
     try:
+        resource = default_schema_path()
         text = resource.read_text(encoding="utf-8")
-    except (FileNotFoundError, KeyError) as e:
+    except (FileNotFoundError, KeyError, ModuleNotFoundError) as e:
         # The schema ships as package data of this module's package; a missing file
         # here means the build/install dropped it, not that the caller did anything
-        # wrong. (KeyError: a zip-backed resource reports a missing entry that way
-        # rather than as FileNotFoundError.) Name the package dynamically, matching
-        # the {__package__} anchor above.
+        # wrong. KeyError: a zip-backed resource reports a missing entry that way
+        # rather than as FileNotFoundError. ModuleNotFoundError: files() raises it if
+        # the meta_disco.schema package was dropped entirely, leaving resource None.
+        # Name the package dynamically, matching the {__package__} anchor above.
+        location = resource if resource is not None else f"the {__package__}.schema package"
         raise FileNotFoundError(
-            f"Classification schema not found at {resource}. It should ship as "
+            f"Classification schema not found at {location}. It should ship as "
             f"package data of {__package__}.schema — reinstall/rebuild the package "
             "(uv sync), or run from a checkout where src/meta_disco/schema/ is present."
         ) from e

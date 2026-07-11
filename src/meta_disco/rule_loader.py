@@ -180,13 +180,13 @@ class RuleLoader:
             rules_path: Path to the unified rules YAML file. Defaults to the bundled
                 ``unified_rules.yaml`` shipped as package data of ``meta_disco.rules``.
         """
-        # Default to the bundled package-data resource; an explicit path stays a
-        # filesystem Path. default_rules_resource's docstring covers why load() can
-        # treat both uniformly. _is_default tailors load()'s not-found message: the
-        # bundled resource missing means a broken install, an explicit path missing
-        # is the caller's path.
+        # The default (bundled) resource resolves lazily in load(), so a missing
+        # meta_disco.rules package (ModuleNotFoundError from files()) and a missing
+        # YAML both surface through load()'s one friendly error. An explicit path is
+        # a plain filesystem Path. _is_default tailors that message: a missing bundled
+        # resource means a broken install, a missing explicit path is the caller's.
         self._is_default = rules_path is None
-        self.rules_path = default_rules_resource() if self._is_default else Path(rules_path)
+        self.rules_path = None if self._is_default else Path(rules_path)
         self._rules: UnifiedRules | None = None
 
     def load(self) -> UnifiedRules:
@@ -203,19 +203,25 @@ class RuleLoader:
             return self._rules
 
         try:
-            text = self.rules_path.read_text(encoding="utf-8")
-        except (FileNotFoundError, KeyError) as e:
-            # KeyError: a zip-backed resource (zipapp / un-unpacked wheel) reports a
-            # missing entry that way rather than as FileNotFoundError.
             if self._is_default:
+                self.rules_path = default_rules_resource()
+            text = self.rules_path.read_text(encoding="utf-8")
+        except (FileNotFoundError, KeyError, ModuleNotFoundError) as e:
+            # KeyError: a zip-backed resource (zipapp / un-unpacked wheel) reports a
+            # missing entry that way rather than as FileNotFoundError. ModuleNotFoundError:
+            # files() raises it if the meta_disco.rules package was dropped entirely, in
+            # which case rules_path is still None — name the package instead.
+            if self._is_default:
+                location = self.rules_path or f"the {__package__}.rules package"
                 hint = (
                     f" It ships as package data of {__package__}.rules — "
                     "reinstall/rebuild the package (uv sync), or run from a checkout "
                     "where src/meta_disco/rules/ is present."
                 )
             else:
+                location = self.rules_path
                 hint = ""  # An explicit path was given; the path in the message is enough.
-            raise FileNotFoundError(f"Rules file not found: {self.rules_path}.{hint}") from e
+            raise FileNotFoundError(f"Rules file not found: {location}.{hint}") from e
         docs = list(yaml.safe_load_all(text))
 
         if len(docs) < 2:

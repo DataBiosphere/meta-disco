@@ -29,10 +29,15 @@ def test_schema_resource_is_readable_package_data():
 
 
 def test_rules_load_from_the_bundled_resource():
-    """The engine's default path resolves the package resource, not a repo walk."""
+    """The engine's default path resolves the package resource, not a repo walk.
+
+    Asserts the rules and extension_map parsed (both non-empty) rather than a rule
+    count, so a legitimate rule refactor (merge/split/removal) doesn't fail this
+    package-data guard; rule content is covered by the rule-specific test modules.
+    """
     rules = get_unified_rules()
-    assert len(rules.rules) > 100
-    assert rules.extension_map  # extension_map document loaded
+    assert rules.rules  # rules document parsed
+    assert rules.extension_map  # extension_map document parsed
 
 
 def test_schema_vocab_loads_from_the_bundled_resource():
@@ -52,3 +57,19 @@ def test_missing_explicit_path_error_omits_the_reinstall_hint(tmp_path):
     msg = str(exc.value)
     assert str(missing) in msg
     assert "uv sync" not in msg and "package data" not in msg
+
+
+def test_missing_rules_package_raises_friendly_error(monkeypatch):
+    """If the whole meta_disco.rules package is dropped, files() raises
+    ModuleNotFoundError; load() should still surface the friendly install guidance
+    naming the package, not a bare ModuleNotFoundError."""
+    import meta_disco.rule_loader as rl
+
+    def boom():
+        raise ModuleNotFoundError("No module named 'meta_disco.rules'")
+
+    monkeypatch.setattr(rl, "default_rules_resource", boom)
+    with pytest.raises(FileNotFoundError) as exc:
+        rl.RuleLoader().load()
+    msg = str(exc.value)
+    assert "meta_disco.rules" in msg and "uv sync" in msg
