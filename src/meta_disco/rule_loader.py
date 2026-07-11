@@ -210,19 +210,18 @@ class RuleLoader:
             # KeyError: a zip-backed resource (zipapp / un-unpacked wheel) reports a
             # missing entry that way rather than as FileNotFoundError. ModuleNotFoundError:
             # files() raises it if the meta_disco.rules package was dropped entirely, in
-            # which case rules_path is still None — name the package instead.
-            if self._is_default:
-                location = self.rules_path or f"the {__package__}.rules package"
-                # Trailing period ends the sentence before the guidance follows.
-                hint = (
-                    f". It ships as package data of {__package__}.rules — "
-                    "reinstall/rebuild the package (uv sync), or run from a checkout "
-                    "where src/meta_disco/rules/ is present."
-                )
-            else:
-                location = self.rules_path
-                hint = ""  # An explicit path was given; the path alone is the message.
-            raise FileNotFoundError(f"Rules file not found: {location}{hint}") from e
+            # which case rules_path is still None — name the package instead of a path.
+            if not self._is_default:
+                raise FileNotFoundError(f"Rules file not found at {self.rules_path}") from e
+            lead = (
+                f"Rules file not found at {self.rules_path}" if self.rules_path is not None
+                else f"Rules not found in the {__package__}.rules package"
+            )
+            raise FileNotFoundError(
+                f"{lead}. It ships as package data of {__package__}.rules — "
+                "reinstall/rebuild the package (uv sync), or run from a checkout "
+                "where src/meta_disco/rules/ is present."
+            ) from e
         docs = list(yaml.safe_load_all(text))
 
         if len(docs) < 2:

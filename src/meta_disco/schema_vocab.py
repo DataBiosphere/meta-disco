@@ -77,11 +77,14 @@ def _load_enums() -> dict[str, frozenset[str]]:
         # rather than as FileNotFoundError. ModuleNotFoundError: files() raises it if
         # the meta_disco.schema package was dropped entirely, leaving resource None.
         # Name the package dynamically, matching the {__package__} anchor above.
-        location = resource if resource is not None else f"the {__package__}.schema package"
+        lead = (
+            f"Classification schema not found at {resource}" if resource is not None
+            else f"Classification schema not found in the {__package__}.schema package"
+        )
         raise FileNotFoundError(
-            f"Classification schema not found at {location}. It should ship as "
-            f"package data of {__package__}.schema — reinstall/rebuild the package "
-            "(uv sync), or run from a checkout where src/meta_disco/schema/ is present."
+            f"{lead}. It should ship as package data of {__package__}.schema — "
+            "reinstall/rebuild the package (uv sync), or run from a checkout where "
+            "src/meta_disco/schema/ is present."
         ) from e
     schema = yaml.safe_load(text)
     return {
