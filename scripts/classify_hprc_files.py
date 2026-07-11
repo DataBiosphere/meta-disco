@@ -14,24 +14,21 @@ Catalogs handled:
 import argparse
 import hashlib
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.fetchers import (
+from meta_disco.fetchers import (
     fetch_bam_header,
     fetch_fasta_headers,
     fetch_fastq_reads,
 )
-from src.meta_disco.header_classifier import (
+from meta_disco.header_classifier import (
     classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_header,
 )
-from src.meta_disco.models import FileInfo
-from src.meta_disco.rule_engine import RuleEngine
+from meta_disco.models import FileInfo
+from meta_disco.rule_engine import RuleEngine
 
 
 def s3_to_https(s3_path: str) -> str:

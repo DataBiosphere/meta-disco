@@ -16,7 +16,7 @@ The rule engine runs from the repo root (Python 3.10+). See the [Makefile](Makef
 
 ### Schema Validation Component
 
-The Schema Validation component is now located in the `schema/` directory and uses Poetry for dependency management. For setup and usage instructions, see the README in the `schema/` directory.
+The Schema Validation component is now located in the `schema/` directory and uses uv for dependency management. For setup and usage instructions, see the README in the `schema/` directory.
 
 ## Schema and Validation
 
@@ -49,18 +49,19 @@ The validator checks:
 
 ### Installation
 
-This project has two separate setup processes:
+The classification runtime and the schema tooling are two independent
+[uv](https://docs.astral.sh/uv/) projects:
 
 ```bash
-# Clone the repository
 git clone https://github.com/DataBiosphere/meta-disco.git
 cd meta-disco
-```
 
-```bash
-# Set up the Schema Validation component
-cd schema
-./setup.sh
+# Classification runtime (root): rule engine, pipeline, tests
+uv sync
+
+# Schema tooling (schema/): LinkML generation and validation — kept separate so
+# linkml stays out of the runtime's environment
+cd schema && uv sync
 ```
 
 ### Validation Command
@@ -68,11 +69,8 @@ cd schema
 The `validate` command checks if metadata files conform to the schema:
 
 ```bash
-# Navigate to the schema directory
 cd schema
-
-# Using Poetry
-poetry run python scripts/validate_outputs.py path/to/metadata.yaml
+uv run python scripts/validate_outputs.py path/to/metadata.yaml
 ```
 
 This validation is crucial for ensuring that the classification output is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
@@ -105,10 +103,11 @@ The ideal workflow is what we've been doing: **LLM designs rules, rule engine ex
 
 ## Project Structure
 
-- `schema/`: Contains the LinkML schema validation component
-  - `src/meta_disco/schema/`: LinkML schema definitions
-  - `scripts/`: Validation scripts
 - `src/meta_disco/`: Rule engine, classifiers, and pipeline
+  - `src/meta_disco/schema/classification.yaml`: the canonical LinkML schema (package data of the `meta_disco` package)
 - `rules/`: The tiered classification rules (`unified_rules.yaml`)
 - `scripts/`: Classification, metadata download, and reporting scripts
+- `schema/`: LinkML tooling that maintains and validates the schema
+  - `scripts/`: Validation scripts
+  - `tests/`: Schema validation tests
 

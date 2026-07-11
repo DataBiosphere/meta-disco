@@ -8,14 +8,11 @@ Uses rules from rules/unified_rules.yaml for:
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 # Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.models import FileInfo, field_label
-from src.meta_disco.rule_engine import RuleEngine
+from meta_disco.models import FileInfo, field_label
+from meta_disco.rule_engine import RuleEngine
 
 
 def classify_images(metadata_path: Path, output_path: Path):

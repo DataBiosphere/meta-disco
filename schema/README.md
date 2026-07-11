@@ -4,17 +4,17 @@ This directory contains the LinkML schema validation component for the Meta-Disc
 
 ## Overview
 
-The schema validation component is responsible for validating classification records against the LinkML schema defined in `src/meta_disco/schema/classification.yaml` (the `ClassificationRecord` model).
+The schema validation component is responsible for validating classification records against the `ClassificationRecord` model in the LinkML schema at `../src/meta_disco/schema/classification.yaml` (package data of the root `meta_disco` package).
 
 ## Setup
 
 To set up the schema validation component:
 
-1. Make sure Poetry is installed on your system
-2. Run the setup script:
+1. Make sure [uv](https://docs.astral.sh/uv/) is installed
+2. Sync the tooling environment:
 
 ```bash
-./setup.sh
+uv sync
 ```
 
 ## Usage
@@ -32,8 +32,8 @@ make validate INSTANCE=path/to/metadata.yaml
 # Example with test data
 make validate INSTANCE=tests/test_data/valid_file.yaml
 
-# Or directly with Poetry
-poetry run python scripts/validate_outputs.py path/to/metadata.yaml
+# Or directly with uv
+uv run python scripts/validate_outputs.py path/to/metadata.yaml
 ```
 
 ### Running Tests
@@ -44,19 +44,19 @@ To run the validation tests:
 # Using the Makefile
 make test
 
-# Or directly with Poetry
-poetry run pytest tests/test_validation.py
+# Or directly with uv
+uv run pytest tests/
 ```
 
 ## Directory Structure
 
-- `src/meta_disco/schema/` - Contains the LinkML schema definitions
+- `../src/meta_disco/schema/` - the canonical LinkML schema (in the root package)
 - `scripts/` - Contains validation scripts
 - `tests/` - Test files and test data
 
 ## Dependencies
 
-This component uses Poetry for dependency management and requires Python 3.10 or later. The main dependencies are:
+This component uses uv for dependency management and requires Python 3.10 or later. The main dependencies are:
 
 - linkml-runtime
 - linkml-validator

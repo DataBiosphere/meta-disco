@@ -168,7 +168,11 @@ class RuleLoader:
                        Defaults to rules/unified_rules.yaml relative to project root.
         """
         if rules_path is None:
-            # Default to rules/unified_rules.yaml relative to this file
+            # Default to rules/unified_rules.yaml relative to this file. Unlike the
+            # schema (now package data, read via importlib.resources), the rules file
+            # still lives at the repo root, so this only resolves from a checkout —
+            # the deliberately-deferred other half of #164, tracked in #166. Not an
+            # intentional "rules are checkout-only" design.
             rules_path = Path(__file__).parent.parent.parent / "rules" / "unified_rules.yaml"
         self.rules_path = Path(rules_path)
         self._rules: UnifiedRules | None = None

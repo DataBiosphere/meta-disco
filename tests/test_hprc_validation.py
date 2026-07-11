@@ -1,14 +1,10 @@
 """Tests for HPRC validation mappings and helpers."""
 
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.models import field_value
-from src.meta_disco.validation_maps import (
+from meta_disco.models import field_value
+from meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
     HPRC_CATALOG_NAMES,
     HPRC_LIBRARY_SOURCE_MAP,

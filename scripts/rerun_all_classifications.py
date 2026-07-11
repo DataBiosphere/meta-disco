@@ -12,9 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco.file_types import FILE_TYPE_REGISTRY  # noqa: E402
+from meta_disco.file_types import FILE_TYPE_REGISTRY
 
 # Phase 1 classifiers that are NOT header-based, so they have their own script
 # rather than a FILE_TYPE_REGISTRY entry.

@@ -23,8 +23,8 @@ tolerated. Modeling those and tightening to ``closed=True`` is a #134 follow-up.
 (Evidence's ``value``/``status``/``tier`` are modeled, so they are validated, not
 merely tolerated.)
 
-Runs in the schema/ Poetry component, which has linkml installed (the root
-component does not).
+Runs in the schema/ uv project, which has linkml installed (the runtime
+does not).
 """
 
 import json
@@ -40,7 +40,7 @@ from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidati
 # the component boundary — it expects a repo checkout, not a standalone install of
 # the schema package. test_golden_present fails loudly if the golden is missing.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SCHEMA = Path(__file__).resolve().parents[1] / "src/meta_disco/schema/classification.yaml"
+_SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 
 

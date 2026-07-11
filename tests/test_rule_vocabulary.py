@@ -6,7 +6,7 @@ Two layers of protection:
    typo'd condition/effect names that would otherwise be silently ignored.
 2. This module checks that every classification *value* a rule emits is a member
    of the matching enum in the canonical LinkML schema
-   (``schema/src/meta_disco/schema/classification.yaml``) — catching typos, stale
+   (``src/meta_disco/schema/classification.yaml``) — catching typos, stale
    values, and new values introduced without updating the schema.
 
 Together they keep the rules and the schema from drifting apart.
@@ -15,8 +15,8 @@ Together they keep the rules and the schema from drifting apart.
 import pytest
 import yaml
 
-from src.meta_disco import schema_vocab
-from src.meta_disco.rule_loader import RuleLoader, get_unified_rules
+from meta_disco import schema_vocab
+from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 
 def _when_value_violations(rules):

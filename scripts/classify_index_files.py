@@ -7,12 +7,10 @@ reference_assembly from their parent files (.bam, .vcf.gz, .cram).
 
 import argparse
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import (
+from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     NOT_APPLICABLE,
     build_field_entry,

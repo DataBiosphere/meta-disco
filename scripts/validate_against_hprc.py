@@ -23,10 +23,9 @@ from pathlib import Path
 
 import requests
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.meta_disco.models import field_label, field_value
-from src.meta_disco.output_utils import find_latest_run
-from src.meta_disco.validation_maps import (
+from meta_disco.models import field_label, field_value
+from meta_disco.output_utils import find_latest_run
+from meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
     HPRC_CATALOG_NAMES,
     HPRC_LIBRARY_SOURCE_MAP,

@@ -698,7 +698,7 @@ fix is wiring a drift check into CI, which is needed regardless of tool.
    load-bearing so it cannot rot again, and is the actual fix for what went wrong.
 
 A working prototype of step 1 lives at
-`schema/src/meta_disco/schema/classification.yaml`; `make gen` (in `schema/`)
+`src/meta_disco/schema/classification.yaml`; `make gen` (in `schema/`)
 regenerates the JSON Schema and Pydantic from it (both gitignored as build
 outputs). The rule drift check (step 3) lives in `tests/test_rule_vocabulary.py`
 and reads the LinkML enums directly.

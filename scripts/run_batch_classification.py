@@ -4,15 +4,12 @@
 import argparse
 import csv
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 
 # Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.meta_disco import FileInfo, RuleEngine
-from src.meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
+from meta_disco import FileInfo, RuleEngine
+from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
 
 _SENTINEL_VALUES = {NOT_CLASSIFIED, NOT_APPLICABLE}
 

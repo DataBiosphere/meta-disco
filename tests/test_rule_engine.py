@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.meta_disco.models import (
+from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     NOT_APPLICABLE,
@@ -10,7 +10,7 @@ from src.meta_disco.models import (
     ClassificationResult,
     FileInfo,
 )
-from src.meta_disco.rule_engine import (
+from meta_disco.rule_engine import (
     ExtendedClassificationResult,
     ExtendedFileInfo,
     RuleEngine,

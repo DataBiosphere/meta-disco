@@ -1,14 +1,16 @@
 """Read the controlled classification vocabulary from the LinkML schema.
 
-The LinkML schema at ``schema/src/meta_disco/schema/classification.yaml`` is the
-canonical source of truth for the permissible values of each classification
-dimension. This module loads the enum ``permissible_values`` so the rule engine's
-emitted values can be validated against them (see
+The LinkML schema ``classification.yaml`` is the canonical source of truth for the
+permissible values of each classification dimension. It ships as package data of
+``meta_disco.schema`` — it lives with the runtime that reads it — so this loads it
+via ``importlib.resources`` and works whether installed as a wheel or run from a
+checkout. The rule engine's emitted values are validated against these enums (see
 ``tests/test_rule_vocabulary.py``), keeping the rules and the schema in lockstep.
+The ``schema/`` project is the LinkML tooling that maintains and validates it.
 """
 
 from functools import lru_cache
-from pathlib import Path
+from importlib.resources import files
 
 import yaml
 
@@ -47,25 +49,36 @@ ENUM_BACKED_ASSAY_CONDITIONS = {
 }
 
 
-def default_schema_path() -> Path:
-    """Path to the canonical LinkML classification schema."""
-    return (
-        Path(__file__).parent.parent.parent
-        / "schema" / "src" / "meta_disco" / "schema" / "classification.yaml"
-    )
+def default_schema_path():
+    """The canonical LinkML classification schema, as a package-data resource.
+
+    Returns an ``importlib.resources`` traversable (a filesystem path for a
+    source/editable install), suitable for ``.read_text()`` and for naming the
+    schema in error messages.
+
+    Anchored on this module's own package (``{__package__}.schema``) rather than a
+    hard-coded ``"meta_disco.schema"``, so it keeps resolving under whatever
+    (import) package name the code is loaded under.
+    """
+    return files(f"{__package__}.schema") / "classification.yaml"
 
 
 @lru_cache(maxsize=None)
 def _load_enums() -> dict[str, frozenset[str]]:
     """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
-    path = default_schema_path()
-    if not path.exists():
+    resource = default_schema_path()
+    try:
+        text = resource.read_text(encoding="utf-8")
+    except FileNotFoundError as e:
+        # The schema ships as package data of this module's package; a bare errno-2
+        # here means the build/install dropped it, not that the caller did anything
+        # wrong. Name the package dynamically, matching the {__package__} anchor above.
         raise FileNotFoundError(
-            f"LinkML classification schema not found at {path}. schema_vocab expects "
-            "to run from a repo checkout with the schema/ directory present."
-        )
-    with open(path, encoding="utf-8") as f:
-        schema = yaml.safe_load(f)
+            f"Classification schema not found at {resource}. It should ship as "
+            f"package data of {__package__}.schema — reinstall/rebuild the package "
+            "(uv sync), or run from a checkout where src/meta_disco/schema/ is present."
+        ) from e
+    schema = yaml.safe_load(text)
     return {
         name: frozenset(((defn or {}).get("permissible_values") or {}).keys())
         for name, defn in schema.get("enums", {}).items()
