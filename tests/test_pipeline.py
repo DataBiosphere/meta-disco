@@ -86,14 +86,25 @@ class TestFilterRecords:
         filtered = pipeline._filter_records(pipeline._load_input())
         assert len(filtered) == 1
 
-    def test_skips_without_md5(self, tmp_path):
+    def test_missing_md5_is_routed_not_dropped(self, tmp_path):
+        # md5 is classifier-relevant: an extension-matching record with no md5 must
+        # reach processing (to be written as validation_failed), not be filtered out.
         records = [{"file_name": "foo.test", "file_format": ".test"}]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
         config = _make_config()
         pipeline = ClassifyPipeline(config, path, tmp_path / "out.json")
         filtered = pipeline._filter_records(pipeline._load_input())
-        assert len(filtered) == 0
+        assert len(filtered) == 1
+
+    def test_non_dict_record_is_filtered_out_without_crashing(self, tmp_path):
+        records = ["a bare string", None, {"file_name": "ok.test", "file_format": ".test"}]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        config = _make_config()
+        pipeline = ClassifyPipeline(config, path, tmp_path / "out.json")
+        filtered = pipeline._filter_records(pipeline._load_input())
+        assert filtered == [{"file_name": "ok.test", "file_format": ".test"}]
 
     def test_skips_flagged(self, tmp_path):
         records = [{"file_md5sum": "x", "file_name": "foo.test", "skip": True}]
@@ -213,6 +224,26 @@ class TestPipelineRun:
         assert meta["validation_failed"] == 0
         assert meta["successful"] == 1
         assert results[0]["classifications"]["data_modality"]["value"] == "genomic"
+
+    def test_missing_md5_record_is_written_as_validation_failed(self, tmp_path):
+        """A record routed by extension but missing md5 (classifier-relevant) is
+        written as validation_failed through a full run, not dropped (#155/#161)."""
+        config = _make_config()
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [
+            _valid_record(file_name="x.test", file_format=".test", file_md5sum=None),
+        ]}))
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(
+            config, input_path, output, evidence_base=tmp_path / "evidence",
+        ).run()
+
+        assert len(results) == 1
+        meta = json.loads(output.read_text())["metadata"]
+        assert meta["validation_failed"] == 1
+        assert meta["successful"] == 0
+        reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
+        assert any("file_md5sum" in r for r in reasons)
 
     @pytest.mark.parametrize("md5", [None, "", 123])
     def test_is_cached_returns_false_for_invalid_md5_instead_of_raising(self, tmp_path, md5):

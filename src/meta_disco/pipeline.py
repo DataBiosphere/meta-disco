@@ -258,11 +258,19 @@ class ClassifyPipeline:
         return load_records(self.input_path)
 
     def _filter_records(self, records: list[dict]) -> list[dict]:
-        """Filter to records matching file_type.extensions with valid MD5."""
+        """Filter to records routed to this file type by extension.
+
+        Routing is by ``file_format``/``file_name`` extension only. A missing or
+        invalid ``file_md5sum`` is *not* filtered out: md5 is classifier-relevant, so
+        such a record reaches ``_process_single_record`` and is written as
+        ``validation_failed`` rather than silently dropped (issues #155/#161). A
+        non-dict element cannot be routed by extension and cannot crash the filter;
+        the whole-corpus ``validate_metadata`` gate reports it.
+        """
         exts = self.config.extensions
 
-        def matches(r: dict) -> bool:
-            if not r.get("file_md5sum"):
+        def matches(r) -> bool:
+            if not isinstance(r, dict):
                 return False
             if r.get("skip"):
                 return False
