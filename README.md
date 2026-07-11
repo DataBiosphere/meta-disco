@@ -7,7 +7,7 @@ Meta-disco is a project focused on metadata discovery for biological data files,
 
 The meta-disco project consists of two main components:
 
-1. **Classification**: A deterministic tiered rule engine (`src/meta_disco/`, `src/meta_disco/rules/unified_rules.yaml`) that classifies biological data files across five metadata dimensions from their names, extensions, and headers.
+1. **Classification**: A deterministic tiered rule engine (`src/meta_disco/`, with rules bundled as package data in `meta_disco.rules`) that classifies biological data files across five metadata dimensions from their names, extensions, and headers.
 2. **Schema Validation Component**: Responsible for validating the classification output against LinkML schemas.
 
 ### Classification

@@ -1,8 +1,8 @@
 """BAM/CRAM, VCF, FASTQ, FASTA, and BED header-based classification.
 
 This module provides functions to classify sequencing files based on their headers.
-The actual classification rules are defined in src/meta_disco/rules/unified_rules.yaml (package data) and executed
-by the RuleEngine. This module provides:
+The actual classification rules are defined in the bundled unified_rules.yaml
+(package data of meta_disco.rules) and executed by the RuleEngine. This module provides:
 
 1. Public API functions (classify_from_header, classify_from_vcf_header, etc.)
 2. Re-exports of read name parsers from validators.read_name_parsers
@@ -846,7 +846,7 @@ def get_rules_documentation() -> str:
 
 ## Overview
 
-Classification rules are defined in `src/meta_disco/rules/unified_rules.yaml` (package data).
+Classification rules are defined in the bundled `unified_rules.yaml` (package data of `meta_disco.rules`).
 
 This file contains all rules organized by:
 - **Tier 1**: Extension-based rules (fastest)
@@ -867,7 +867,7 @@ Each rule has:
 ## Viewing Rules
 
 To view the full rules, see:
-- `src/meta_disco/rules/unified_rules.yaml` - All classification rules (package data)
+- `unified_rules.yaml`, package data of `meta_disco.rules` (at `src/meta_disco/rules/` in a source checkout) - All classification rules
 - The documentation header in that file explains the rule engine
 
 """
