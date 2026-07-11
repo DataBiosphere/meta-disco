@@ -4,7 +4,7 @@ This directory contains the LinkML schema validation component for the Meta-Disc
 
 ## Overview
 
-The schema validation component is responsible for validating classification records against the LinkML schema defined in `../src/meta_disco/schema/classification.yaml` (in the root `meta_disco` package) (the `ClassificationRecord` model).
+The schema validation component is responsible for validating classification records against the `ClassificationRecord` model in the LinkML schema at `../src/meta_disco/schema/classification.yaml` (package data of the root `meta_disco` package).
 
 ## Setup
 

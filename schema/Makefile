@@ -18,7 +18,7 @@ validate:
 		echo "Usage: make validate INSTANCE=path/to/file.yaml"; \
 		exit 1; \
 	fi
-	uv run python scripts/validate_outputs.py $(INSTANCE)
+	uv run python scripts/validate_outputs.py $(INSTANCE) $(SCHEMA)
 
 test:
 	uv run pytest tests/
