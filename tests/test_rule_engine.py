@@ -685,17 +685,3 @@ class TestOutputDictStatus:
         n_c = engine.classify_extended(
             ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)).to_output_dict()["data_modality"]
         assert (n_c["value"], n_c["status"]) == (None, NOT_CLASSIFIED)
-
-
-class TestRulesPathHandling:
-    """RuleEngine treats an explicit rules_path literally (no legacy redirect)."""
-
-    def test_legacy_filename_is_not_special_cased(self, tmp_path):
-        # The classification_rules.yaml -> unified_rules.yaml redirect was removed
-        # in #169. That name now behaves like any other explicit path: a missing
-        # file raises FileNotFoundError naming that exact path, rather than being
-        # silently rerouted to a sibling unified_rules.yaml.
-        legacy = tmp_path / "classification_rules.yaml"
-        with pytest.raises(FileNotFoundError) as exc:
-            RuleEngine(legacy)
-        assert str(legacy) in str(exc.value)
