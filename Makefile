@@ -48,7 +48,9 @@ lint:
 lint-schema:
 	$(MAKE) -C schema lint
 
-lint-all: lint lint-schema type
+# Root-project checks (ruff, then pyright) run before the separate schema/
+# sub-make, so the pyright gate still runs even while lint-schema is red (#190).
+lint-all: lint type lint-schema
 
 # Pyright type checker (standard mode, separate from Ruff — issue #179). Resolves
 # the meta_disco package + imports from the active uv venv. No path args: the
