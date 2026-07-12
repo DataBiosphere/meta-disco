@@ -75,5 +75,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["F401", "E402"]  # unused imports ok in tests; E402 for helper functions defined before imports
 
+# Ruff's black-compatible formatter is the single authority on layout (make
+# format / format-check). docstring-code-format reformats code examples inside
+# docstrings too; every other setting stays at ruff's black-compatible default.
+[tool.ruff.format]
+docstring-code-format = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

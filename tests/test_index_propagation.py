@@ -126,19 +126,25 @@ class TestLoadClassifications:
     def test_loads_from_single_file(self, tmp_path):
         """Load classifications from one JSON file."""
         cls_file = tmp_path / "bam.json"
-        cls_file.write_text(json.dumps({
-            "classifications": [{
-                "md5sum": "abc123",
-                "file_name": "sample.bam",
-                "classifications": {
-                    "data_modality": {"value": "genomic", "evidence": []},
-                    "data_type": {"value": "alignments", "evidence": []},
-                    "platform": {"value": "ILLUMINA", "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "evidence": []},
-                    "assay_type": {"value": "WGS", "evidence": []},
-                },
-            }],
-        }))
+        cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "abc123",
+                            "file_name": "sample.bam",
+                            "classifications": {
+                                "data_modality": {"value": "genomic", "evidence": []},
+                                "data_type": {"value": "alignments", "evidence": []},
+                                "platform": {"value": "ILLUMINA", "evidence": []},
+                                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                                "assay_type": {"value": "WGS", "evidence": []},
+                            },
+                        }
+                    ],
+                }
+            )
+        )
         result = load_classifications(cls_file)
         assert "abc123" in result
         assert result["abc123"]["data_modality"] == "genomic"
@@ -147,33 +153,45 @@ class TestLoadClassifications:
     def test_loads_from_multiple_files(self, tmp_path):
         """Load classifications from BAM + BED files."""
         bam_file = tmp_path / "bam.json"
-        bam_file.write_text(json.dumps({
-            "classifications": [{
-                "md5sum": "bam_md5",
-                "file_name": "sample.bam",
-                "classifications": {
-                    "data_modality": {"value": "genomic", "evidence": []},
-                    "data_type": {"value": "alignments", "evidence": []},
-                    "platform": {"value": "ILLUMINA", "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "evidence": []},
-                    "assay_type": {"value": "WGS", "evidence": []},
-                },
-            }],
-        }))
+        bam_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bam_md5",
+                            "file_name": "sample.bam",
+                            "classifications": {
+                                "data_modality": {"value": "genomic", "evidence": []},
+                                "data_type": {"value": "alignments", "evidence": []},
+                                "platform": {"value": "ILLUMINA", "evidence": []},
+                                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                                "assay_type": {"value": "WGS", "evidence": []},
+                            },
+                        }
+                    ],
+                }
+            )
+        )
         bed_file = tmp_path / "bed.json"
-        bed_file.write_text(json.dumps({
-            "classifications": [{
-                "md5sum": "bed_md5",
-                "file_name": "sample.regions.bed.gz",
-                "classifications": {
-                    "data_modality": {"value": "genomic", "evidence": []},
-                    "data_type": {"value": "annotations", "evidence": []},
-                    "platform": {"value": "not_classified", "evidence": []},
-                    "reference_assembly": {"value": "GRCh38", "evidence": []},
-                    "assay_type": {"value": "not_classified", "evidence": []},
-                },
-            }],
-        }))
+        bed_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bed_md5",
+                            "file_name": "sample.regions.bed.gz",
+                            "classifications": {
+                                "data_modality": {"value": "genomic", "evidence": []},
+                                "data_type": {"value": "annotations", "evidence": []},
+                                "platform": {"value": "not_classified", "evidence": []},
+                                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                                "assay_type": {"value": "not_classified", "evidence": []},
+                            },
+                        }
+                    ],
+                }
+            )
+        )
         result = load_classifications(bam_file, bed_file)
         assert "bam_md5" in result
         assert "bed_md5" in result
@@ -192,40 +210,50 @@ class TestLoadClassifications:
         not loaded, so .csi files for .bed.gz parents got None for all fields."""
         # Create metadata with a BED parent and its CSI index in the same dataset
         metadata_file = tmp_path / "metadata.json"
-        metadata_file.write_text(json.dumps([
-            {
-                "file_name": "HG03652.regions.bed.gz",
-                "file_format": ".bed.gz",
-                "file_md5sum": "bed_parent_md5",
-                "dataset_id": "ds1",
-                "dataset_title": "test_dataset",
-                "entry_id": "entry_bed",
-            },
-            {
-                "file_name": "HG03652.regions.bed.gz.csi",
-                "file_format": ".csi",
-                "file_md5sum": "csi_child_md5",
-                "dataset_id": "ds1",
-                "dataset_title": "test_dataset",
-                "entry_id": "entry_csi",
-            },
-        ]))
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "file_name": "HG03652.regions.bed.gz",
+                        "file_format": ".bed.gz",
+                        "file_md5sum": "bed_parent_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test_dataset",
+                        "entry_id": "entry_bed",
+                    },
+                    {
+                        "file_name": "HG03652.regions.bed.gz.csi",
+                        "file_format": ".csi",
+                        "file_md5sum": "csi_child_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test_dataset",
+                        "entry_id": "entry_csi",
+                    },
+                ]
+            )
+        )
 
         # Create BED classification output
         bed_cls_file = tmp_path / "bed_classifications.json"
-        bed_cls_file.write_text(json.dumps({
-            "classifications": [{
-                "md5sum": "bed_parent_md5",
-                "file_name": "HG03652.regions.bed.gz",
-                "classifications": {
-                    "data_modality": {"value": "genomic", "evidence": []},
-                    "data_type": {"value": "annotations", "evidence": []},
-                    "platform": {"value": "not_classified", "evidence": []},
-                    "reference_assembly": {"value": "CHM13", "evidence": []},
-                    "assay_type": {"value": "not_classified", "evidence": []},
-                },
-            }],
-        }))
+        bed_cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bed_parent_md5",
+                            "file_name": "HG03652.regions.bed.gz",
+                            "classifications": {
+                                "data_modality": {"value": "genomic", "evidence": []},
+                                "data_type": {"value": "annotations", "evidence": []},
+                                "platform": {"value": "not_classified", "evidence": []},
+                                "reference_assembly": {"value": "CHM13", "evidence": []},
+                                "assay_type": {"value": "not_classified", "evidence": []},
+                            },
+                        }
+                    ],
+                }
+            )
+        )
 
         # Run propagation with BED as a source
         output_file = tmp_path / "index_output.json"
@@ -251,25 +279,48 @@ class TestLoadClassifications:
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
         """End-to-end: a .tbi index inherits from its .vcf.gz parent."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_file.write_text(json.dumps([
-            {"file_name": "sample.vcf.gz", "file_format": ".vcf.gz",
-             "file_md5sum": "vcf_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e1"},
-            {"file_name": "sample.vcf.gz.tbi", "file_format": ".tbi",
-             "file_md5sum": "tbi_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e2"},
-        ]))
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "file_name": "sample.vcf.gz",
+                        "file_format": ".vcf.gz",
+                        "file_md5sum": "vcf_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e1",
+                    },
+                    {
+                        "file_name": "sample.vcf.gz.tbi",
+                        "file_format": ".tbi",
+                        "file_md5sum": "tbi_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e2",
+                    },
+                ]
+            )
+        )
         vcf_cls = tmp_path / "vcf.json"
-        vcf_cls.write_text(json.dumps({"classifications": [{
-            "md5sum": "vcf_md5", "file_name": "sample.vcf.gz",
-            "classifications": {
-                "data_modality": {"value": "genomic", "evidence": []},
-                "data_type": {"value": "variants.germline", "evidence": []},
-                "platform": {"value": "not_classified", "evidence": []},
-                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                "assay_type": {"value": "not_classified", "evidence": []},
-            },
-        }]}))
+        vcf_cls.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "vcf_md5",
+                            "file_name": "sample.vcf.gz",
+                            "classifications": {
+                                "data_modality": {"value": "genomic", "evidence": []},
+                                "data_type": {"value": "variants.germline", "evidence": []},
+                                "platform": {"value": "not_classified", "evidence": []},
+                                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                                "assay_type": {"value": "not_classified", "evidence": []},
+                            },
+                        }
+                    ]
+                }
+            )
+        )
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [vcf_cls], output_file)
         with open(output_file) as f:
@@ -283,25 +334,48 @@ class TestLoadClassifications:
     def test_bai_inherits_from_bam_parent(self, tmp_path):
         """End-to-end: a .bai index inherits from its .bam parent."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_file.write_text(json.dumps([
-            {"file_name": "sample.bam", "file_format": ".bam",
-             "file_md5sum": "bam_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e1"},
-            {"file_name": "sample.bam.bai", "file_format": ".bai",
-             "file_md5sum": "bai_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e2"},
-        ]))
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "file_name": "sample.bam",
+                        "file_format": ".bam",
+                        "file_md5sum": "bam_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e1",
+                    },
+                    {
+                        "file_name": "sample.bam.bai",
+                        "file_format": ".bai",
+                        "file_md5sum": "bai_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e2",
+                    },
+                ]
+            )
+        )
         bam_cls = tmp_path / "bam.json"
-        bam_cls.write_text(json.dumps({"classifications": [{
-            "md5sum": "bam_md5", "file_name": "sample.bam",
-            "classifications": {
-                "data_modality": {"value": "transcriptomic.bulk", "evidence": []},
-                "data_type": {"value": "alignments", "evidence": []},
-                "platform": {"value": "ILLUMINA", "evidence": []},
-                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                "assay_type": {"value": "RNA-seq", "evidence": []},
-            },
-        }]}))
+        bam_cls.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bam_md5",
+                            "file_name": "sample.bam",
+                            "classifications": {
+                                "data_modality": {"value": "transcriptomic.bulk", "evidence": []},
+                                "data_type": {"value": "alignments", "evidence": []},
+                                "platform": {"value": "ILLUMINA", "evidence": []},
+                                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                                "assay_type": {"value": "RNA-seq", "evidence": []},
+                            },
+                        }
+                    ]
+                }
+            )
+        )
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [bam_cls], output_file)
         with open(output_file) as f:
@@ -315,11 +389,20 @@ class TestLoadClassifications:
     def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
         """Index file with no parent in metadata goes to unmatched_files, not classifications."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_file.write_text(json.dumps([
-            {"file_name": "orphan.bam.bai", "file_format": ".bai",
-             "file_md5sum": "orphan_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e1"},
-        ]))
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "file_name": "orphan.bam.bai",
+                        "file_format": ".bai",
+                        "file_md5sum": "orphan_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e1",
+                    },
+                ]
+            )
+        )
         # No classifications to load — empty file
         empty_cls = tmp_path / "empty.json"
         empty_cls.write_text(json.dumps({"classifications": []}))
@@ -335,14 +418,28 @@ class TestLoadClassifications:
     def test_parent_found_but_not_classified(self, tmp_path):
         """Parent exists in metadata but has no classification — index gets not_classified."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_file.write_text(json.dumps([
-            {"file_name": "sample.bam", "file_format": ".bam",
-             "file_md5sum": "bam_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e1"},
-            {"file_name": "sample.bam.bai", "file_format": ".bai",
-             "file_md5sum": "bai_md5", "dataset_id": "ds1",
-             "dataset_title": "test", "entry_id": "e2"},
-        ]))
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "file_name": "sample.bam",
+                        "file_format": ".bam",
+                        "file_md5sum": "bam_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e1",
+                    },
+                    {
+                        "file_name": "sample.bam.bai",
+                        "file_format": ".bai",
+                        "file_md5sum": "bai_md5",
+                        "dataset_id": "ds1",
+                        "dataset_title": "test",
+                        "entry_id": "e2",
+                    },
+                ]
+            )
+        )
         # Parent exists in metadata but not in classifications
         empty_cls = tmp_path / "empty.json"
         empty_cls.write_text(json.dumps({"classifications": []}))

@@ -55,11 +55,14 @@ def print_bam_summary(classifications: list[dict]):
     _print_field_table("Reference Assemblies", references)
     _print_field_table("Platforms", platforms)
 
-    _print_sample_evidence(classifications, [
-        ("Modality", "data_modality"),
-        ("Reference", "reference_assembly"),
-        ("Platform", "platform"),
-    ])
+    _print_sample_evidence(
+        classifications,
+        [
+            ("Modality", "data_modality"),
+            ("Reference", "reference_assembly"),
+            ("Platform", "platform"),
+        ],
+    )
 
 
 def print_vcf_summary(classifications: list[dict]):
@@ -92,11 +95,14 @@ def print_vcf_summary(classifications: list[dict]):
     _print_field_table("Data Types", data_types, width=40)
     _print_field_table("Reference Assemblies", references, width=40)
 
-    _print_sample_evidence(classifications, [
-        ("Modality", "data_modality"),
-        ("Data Type", "data_type"),
-        ("Reference", "reference_assembly"),
-    ])
+    _print_sample_evidence(
+        classifications,
+        [
+            ("Modality", "data_modality"),
+            ("Data Type", "data_type"),
+            ("Reference", "reference_assembly"),
+        ],
+    )
 
 
 def print_fastq_summary(classifications: list[dict]):
@@ -148,10 +154,13 @@ def print_fastq_summary(classifications: list[dict]):
     if archive_sources:
         _print_field_table("Archive Sources", archive_sources, width=30)
 
-    _print_sample_evidence(classifications, [
-        ("Platform", "platform"),
-        ("Modality", "data_modality"),
-        ("Paired-end", "is_paired_end"),
-        ("Instrument", "instrument_model"),
-        ("Archive", "archive_accession"),
-    ])
+    _print_sample_evidence(
+        classifications,
+        [
+            ("Platform", "platform"),
+            ("Modality", "data_modality"),
+            ("Paired-end", "is_paired_end"),
+            ("Instrument", "instrument_model"),
+            ("Archive", "archive_accession"),
+        ],
+    )

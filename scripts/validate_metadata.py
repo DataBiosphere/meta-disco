@@ -27,7 +27,10 @@ DEFAULT_INPUT = Path("data/anvil/anvil_files_metadata.json")
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--input", "-i", type=Path, default=DEFAULT_INPUT,
+        "--input",
+        "-i",
+        type=Path,
+        default=DEFAULT_INPUT,
         help=f"Metadata file to validate (default: {DEFAULT_INPUT})",
     )
     args = parser.parse_args(argv)

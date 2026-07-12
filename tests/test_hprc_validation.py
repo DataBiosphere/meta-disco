@@ -1,6 +1,5 @@
 """Tests for HPRC validation mappings and helpers."""
 
-
 import pytest
 
 from meta_disco.models import field_value

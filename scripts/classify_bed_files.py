@@ -110,16 +110,18 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             stats["with_reference"] += 1
         stats["by_reference"][reference_label] = stats["by_reference"].get(reference_label, 0) + 1
 
-        results.append({
-            "file_name": name,
-            "file_format": f.get("file_format"),
-            "md5sum": md5,
-            "file_size": f.get("file_size"),
-            "entry_id": f.get("entry_id"),
-            "dataset_id": f.get("dataset_id"),
-            "dataset_title": dataset_title,
-            "classifications": classifications,
-        })
+        results.append(
+            {
+                "file_name": name,
+                "file_format": f.get("file_format"),
+                "md5sum": md5,
+                "file_size": f.get("file_size"),
+                "entry_id": f.get("entry_id"),
+                "dataset_id": f.get("dataset_id"),
+                "dataset_title": dataset_title,
+                "classifications": classifications,
+            }
+        )
 
     # Print summary
     print("\n" + "=" * 70)
@@ -128,8 +130,8 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 
     print(f"\nTotal BED files: {stats['total']:,}")
     if stats["total"] > 0:
-        print(f"With data_modality: {stats['with_modality']:,} ({stats['with_modality']/stats['total']*100:.1f}%)")
-        print(f"With reference: {stats['with_reference']:,} ({stats['with_reference']/stats['total']*100:.1f}%)")
+        print(f"With data_modality: {stats['with_modality']:,} ({stats['with_modality'] / stats['total'] * 100:.1f}%)")
+        print(f"With reference: {stats['with_reference']:,} ({stats['with_reference'] / stats['total'] * 100:.1f}%)")
 
     print("\nBy modality:")
     for mod, count in sorted(stats["by_modality"].items(), key=lambda x: -x[1]):
@@ -142,17 +144,21 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_files": stats["total"],
-                "with_data_modality": stats["with_modality"],
-                "with_reference_assembly": stats["with_reference"],
-                "by_modality": stats["by_modality"],
-                "by_reference": stats["by_reference"],
-                "complete": True,
+        json.dump(
+            {
+                "metadata": {
+                    "total_files": stats["total"],
+                    "with_data_modality": stats["with_modality"],
+                    "with_reference_assembly": stats["with_reference"],
+                    "by_modality": stats["by_modality"],
+                    "by_reference": stats["by_reference"],
+                    "complete": True,
+                },
+                "classifications": results,
             },
-            "classifications": results,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nSaved {len(results):,} classifications to {output_path}")
 
@@ -160,13 +166,15 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
 def main():
     parser = argparse.ArgumentParser(description="Classify BED files")
     parser.add_argument(
-        "--metadata", "-m",
+        "--metadata",
+        "-m",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/bed_classifications.json"),
         help="Output path for classifications",

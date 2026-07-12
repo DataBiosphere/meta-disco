@@ -40,9 +40,12 @@ def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, s
         - remainder: The text after the accession (original read name), or full input if no accession
     """
     archive_sources = {
-        "ERR": "ENA", "ERS": "ENA",
-        "SRR": "SRA", "SRS": "SRA",
-        "DRR": "DDBJ", "DRS": "DDBJ",
+        "ERR": "ENA",
+        "ERS": "ENA",
+        "SRR": "SRA",
+        "SRS": "SRA",
+        "DRR": "DDBJ",
+        "DRS": "DDBJ",
     }
     pattern = re.compile(r"^@?(ERR|ERS|SRR|SRS|DRR|DRS)(\d+)(?:\.\d+)?\s*(.*)$")
 
@@ -91,12 +94,12 @@ def detect_paired_end_indicators(text: str) -> bool:
         True if paired-end indicators found
     """
     patterns = [
-        r"[/\s][12]$",       # /1 or /2 at end
-        r"[/\s][12]:",       # /1: or /2:
-        r"_R[12]_",          # _R1_ or _R2_
-        r"_R[12]\.",         # _R1. or _R2.
-        r"\.R[12]\.",        # .R1. or .R2.
-        r"_[12]\.fastq",     # _1.fastq or _2.fastq
+        r"[/\s][12]$",  # /1 or /2 at end
+        r"[/\s][12]:",  # /1: or /2:
+        r"_R[12]_",  # _R1_ or _R2_
+        r"_R[12]\.",  # _R1. or _R2.
+        r"\.R[12]\.",  # .R1. or .R2.
+        r"_[12]\.fastq",  # _1.fastq or _2.fastq
     ]
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
@@ -146,21 +149,21 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
             "instrument_model": infer_illumina_instrument_model(instrument_id),
         }
         if groups[7]:  # Optional second part
-            result.update({
-                "read": int(groups[7]),
-                "filtered": groups[8] == "Y",
-                "control": int(groups[9]),
-                "index": groups[10],
-            })
+            result.update(
+                {
+                    "read": int(groups[7]),
+                    "filtered": groups[8] == "Y",
+                    "control": int(groups[9]),
+                    "index": groups[10],
+                }
+            )
         if accession:
             result["archive_accession"] = accession
             result["archive_source"] = source
         return result
 
     # Legacy Illumina format: instrument:lane:tile:x:y#index/read
-    legacy_pattern = re.compile(
-        r"^([A-Z0-9-]+):(\d+):(\d+):(\d+):(\d+)#([^/]+)/(\d)$"
-    )
+    legacy_pattern = re.compile(r"^([A-Z0-9-]+):(\d+):(\d+):(\d+):(\d+)#([^/]+)/(\d)$")
     match = legacy_pattern.match(name)
     if match:
         groups = match.groups()
@@ -281,9 +284,7 @@ def parse_ont_read_name(read_name: str) -> dict | None:
     name = read_name.lstrip("@")
 
     # UUID pattern: 8-4-4-4-12 hex characters
-    uuid_pattern = re.compile(
-        r"^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\s*(.*)$"
-    )
+    uuid_pattern = re.compile(r"^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\s*(.*)$")
     match = uuid_pattern.match(name)
     if match:
         result = {
@@ -317,9 +318,7 @@ def parse_mgi_read_name(read_name: str) -> dict | None:
     name = read_name.lstrip("@")
 
     # MGI pattern: V350012345L1C001R0010000001/1
-    mgi_pattern = re.compile(
-        r"^([A-Z]\d+)L(\d+)C(\d+)R(\d+)(\d+)(?:/(\d))?$"
-    )
+    mgi_pattern = re.compile(r"^([A-Z]\d+)L(\d+)C(\d+)R(\d+)(\d+)(?:/(\d))?$")
     match = mgi_pattern.match(name)
     if match:
         groups = match.groups()

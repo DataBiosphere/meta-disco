@@ -10,6 +10,7 @@ from tests.metadata_fixtures import valid_record as _valid_record
 
 # --- Test fixtures ---
 
+
 def _make_config(**overrides):
     """Create a FileTypeConfig with test defaults."""
     defaults = {
@@ -26,12 +27,9 @@ def _make_config(**overrides):
 def input_file(tmp_path):
     """Create a test input JSON file with records."""
     records = [
-        _valid_record(file_md5sum="a" * 32, file_name="sample.test",
-                      file_format=".test", entry_id="e1"),
-        _valid_record(file_md5sum="b" * 32, file_name="sample2.test",
-                      file_format=".test", entry_id="e2"),
-        _valid_record(file_md5sum="c" * 32, file_name="other.bam",
-                      file_format=".bam", entry_id="e3"),
+        _valid_record(file_md5sum="a" * 32, file_name="sample.test", file_format=".test", entry_id="e1"),
+        _valid_record(file_md5sum="b" * 32, file_name="sample2.test", file_format=".test", entry_id="e2"),
+        _valid_record(file_md5sum="c" * 32, file_name="other.bam", file_format=".bam", entry_id="e3"),
     ]
     path = tmp_path / "input.json"
     path.write_text(json.dumps({"results": records}))
@@ -51,6 +49,7 @@ def ndjson_input(tmp_path):
 
 # --- NdjsonWriter tests ---
 
+
 class TestNdjsonWriter:
     def test_write_and_close(self, tmp_path):
         output = tmp_path / "out.json"
@@ -67,6 +66,7 @@ class TestNdjsonWriter:
 
 
 # --- Pipeline filter tests ---
+
 
 class TestFilterRecords:
     def test_filters_by_extension(self, input_file, tmp_path):
@@ -124,12 +124,15 @@ class TestFilterRecords:
 
 # --- Pipeline run tests ---
 
+
 class TestPipelineRun:
     def test_full_run(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"
         pipeline = ClassifyPipeline(
-            config, input_file, output,
+            config,
+            input_file,
+            output,
             evidence_base=tmp_path / "evidence",
         )
         results = pipeline.run()
@@ -147,7 +150,10 @@ class TestPipelineRun:
         config = _make_config()
         output = tmp_path / "out.json"
         pipeline = ClassifyPipeline(
-            config, input_file, output, limit=1,
+            config,
+            input_file,
+            output,
+            limit=1,
             evidence_base=tmp_path / "evidence",
         )
         results = pipeline.run()
@@ -158,7 +164,9 @@ class TestPipelineRun:
         config = _make_config(fetcher=lambda evidence_dir, md5, **kw: None)
         output = tmp_path / "out.json"
         pipeline = ClassifyPipeline(
-            config, input_file, output,
+            config,
+            input_file,
+            output,
             evidence_base=tmp_path / "evidence",
         )
         results = pipeline.run()
@@ -180,13 +188,22 @@ class TestPipelineRun:
         """
         config = _make_config()
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_name=None, file_format=".test"),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_name=None, file_format=".test"),
+                    ]
+                }
+            )
+        )
         output = tmp_path / "out.json"
         results = ClassifyPipeline(
-            config, input_path, output,
-            evidence_base=tmp_path / "evidence", workers=workers,
+            config,
+            input_path,
+            output,
+            evidence_base=tmp_path / "evidence",
+            workers=workers,
         ).run()
 
         assert len(results) == 1, "the record must be written, not dropped"
@@ -209,14 +226,22 @@ class TestPipelineRun:
         normally. Only classifier-relevant violations block (issue #161 split)."""
         config = _make_config()
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_name="ok.test", file_format=".test",
-                          is_supplementary="not-a-bool"),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_name="ok.test", file_format=".test", is_supplementary="not-a-bool"),
+                    ]
+                }
+            )
+        )
         output = tmp_path / "out.json"
         results = ClassifyPipeline(
-            config, input_path, output,
-            evidence_base=tmp_path / "evidence", workers=workers,
+            config,
+            input_path,
+            output,
+            evidence_base=tmp_path / "evidence",
+            workers=workers,
         ).run()
 
         assert len(results) == 1
@@ -230,12 +255,21 @@ class TestPipelineRun:
         written as validation_failed through a full run, not dropped (#155/#161)."""
         config = _make_config()
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_name="x.test", file_format=".test", file_md5sum=None),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_name="x.test", file_format=".test", file_md5sum=None),
+                    ]
+                }
+            )
+        )
         output = tmp_path / "out.json"
         results = ClassifyPipeline(
-            config, input_path, output, evidence_base=tmp_path / "evidence",
+            config,
+            input_path,
+            output,
+            evidence_base=tmp_path / "evidence",
         ).run()
 
         assert len(results) == 1
@@ -248,8 +282,7 @@ class TestPipelineRun:
     def test_build_record_coerces_file_name_and_format_to_str(self):
         # A validation_failed row echoes identity from a possibly-drifted record;
         # the output types must stay stable for downstream consumers.
-        out = ClassifyPipeline._build_record(
-            {"file_name": 123, "file_format": None, "file_md5sum": "x"}, {})
+        out = ClassifyPipeline._build_record({"file_name": 123, "file_format": None, "file_md5sum": "x"}, {})
         assert out["file_name"] == "123"
         assert out["file_format"] == ""
         assert isinstance(out["file_name"], str) and isinstance(out["file_format"], str)
@@ -260,13 +293,22 @@ class TestPipelineRun:
         becomes validation_failed, and must not crash the progress label's slice."""
         config = _make_config()
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_name=123, file_format=".test"),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_name=123, file_format=".test"),
+                    ]
+                }
+            )
+        )
         output = tmp_path / "out.json"
         results = ClassifyPipeline(
-            config, input_path, output,
-            evidence_base=tmp_path / "evidence", workers=workers,
+            config,
+            input_path,
+            output,
+            evidence_base=tmp_path / "evidence",
+            workers=workers,
         ).run()
 
         assert len(results) == 1
@@ -274,16 +316,25 @@ class TestPipelineRun:
         assert meta["validation_failed"] == 1
         assert meta["errored"] == 0
 
-    @pytest.mark.parametrize("md5", [
-        None, "", 123,          # non-string / empty: no evidence path, must not raise
-        "ABC", "0" * 31,        # too short / wrong shape
-        "g" * 32, "A" * 32,     # non-hex / uppercase — not a contractual md5
-    ])
+    @pytest.mark.parametrize(
+        "md5",
+        [
+            None,
+            "",
+            123,  # non-string / empty: no evidence path, must not raise
+            "ABC",
+            "0" * 31,  # too short / wrong shape
+            "g" * 32,
+            "A" * 32,  # non-hex / uppercase — not a contractual md5
+        ],
+    )
     def test_is_cached_returns_false_for_non_md5(self, tmp_path, md5):
         """Only a well-formed lowercase-hex md5 can be cached. A null/non-string value
         must not raise on ``md5[:2]``; a non-md5 string must not be treated as cached."""
         pipeline = ClassifyPipeline(
-            _make_config(), tmp_path / "in.json", tmp_path / "out.json",
+            _make_config(),
+            tmp_path / "in.json",
+            tmp_path / "out.json",
             evidence_base=tmp_path / "evidence",
         )
         assert pipeline._is_cached(md5) is False
@@ -292,11 +343,14 @@ class TestPipelineRun:
         """A dropped row (fetcher returned None) carries no outcome flags, even if its
         md5 was cached — otherwise the progress line mislabels it '[cached]'."""
         from meta_disco.fetchers import get_evidence_path
+
         md5 = "a" * 32
         pipeline = ClassifyPipeline(
             _make_config(fetcher=lambda evidence_dir, md5, **kw: None),
-            tmp_path / "in.json", tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence", resume=True,
+            tmp_path / "in.json",
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            resume=True,
         )
         ev = get_evidence_path(pipeline.evidence_dir, md5)
         ev.parent.mkdir(parents=True, exist_ok=True)
@@ -304,7 +358,8 @@ class TestPipelineRun:
         assert pipeline._is_cached(md5) is True
 
         outcome = pipeline._process_single_record(
-            _valid_record(file_md5sum=md5, file_name="x.test", file_format=".test"))
+            _valid_record(file_md5sum=md5, file_name="x.test", file_format=".test")
+        )
         assert outcome.result is None
         assert outcome.was_cached is False
 
@@ -312,7 +367,10 @@ class TestPipelineRun:
         config = _make_config()
         output = tmp_path / "out.json"
         pipeline = ClassifyPipeline(
-            config, input_file, output, workers=2,
+            config,
+            input_file,
+            output,
+            workers=2,
             evidence_base=tmp_path / "evidence",
         )
         results = pipeline.run()
@@ -321,7 +379,9 @@ class TestPipelineRun:
     def test_classify_single(self, tmp_path):
         config = _make_config()
         result = ClassifyPipeline.classify_single(
-            config, "test_md5", file_name="sample.test",
+            config,
+            "test_md5",
+            file_name="sample.test",
             evidence_base=tmp_path / "evidence",
         )
         assert result is not None
@@ -331,6 +391,7 @@ class TestPipelineRun:
     def test_gzip_detection(self, tmp_path):
         """When extensions include .gz variants, is_gzipped is inferred from filename."""
         calls = []
+
         def tracking_fetcher(evidence_dir, md5, is_gzipped=True, **kw):
             calls.append(is_gzipped)
             return "header"
@@ -346,19 +407,23 @@ class TestPipelineRun:
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
         pipeline = ClassifyPipeline(
-            config, path, tmp_path / "out.json",
+            config,
+            path,
+            tmp_path / "out.json",
             evidence_base=tmp_path / "evidence",
         )
         pipeline.run()
-        assert True in calls   # .gz file
+        assert True in calls  # .gz file
         assert False in calls  # non-.gz file
 
 
 # --- File type config tests ---
 
+
 class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY
+
         assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
 
     def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
@@ -373,13 +438,27 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [_valid_record(
-            file_md5sum="d" * 32, file_name=file_name,
-            file_format=file_format, file_size=10, entry_id="e1",
-        )]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(
+                            file_md5sum="d" * 32,
+                            file_name=file_name,
+                            file_format=file_format,
+                            file_size=10,
+                            entry_id="e1",
+                        )
+                    ]
+                }
+            )
+        )
         return ClassifyPipeline(
-            config, input_path, tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence", workers=1,
+            config,
+            input_path,
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            workers=1,
         ).run()
 
     def test_fetch_error_keeps_the_row_and_what_the_filename_already_gave(self, tmp_path):
@@ -409,14 +488,11 @@ class TestFileTypeConfigs:
         # are parsed), so a note there would say a re-fetch could resolve an
         # assembly only the filename can supply.
         assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
-        assert not [e for e in cls["reference_assembly"]["evidence"]
-                    if e["rule_id"] == "fetch_failed"]
+        assert not [e for e in cls["reference_assembly"]["evidence"] if e["rule_id"] == "fetch_failed"]
 
     def test_fetch_error_on_mc_graph_keeps_the_filename_refinement(self, tmp_path):
         """The `-mc-` token still refines data_type even though content is unreadable."""
-        results = self._run_with_failing_fetcher(
-            tmp_path, "hprc-v1.0-mc-grch38.gfa.gz", ".gfa.gz"
-        )
+        results = self._run_with_failing_fetcher(tmp_path, "hprc-v1.0-mc-grch38.gfa.gz", ".gfa.gz")
         cls = results[0]["classifications"]
         assert cls["data_type"]["value"] == "pangenome.reference"
         assert cls["reference_assembly"]["value"] == "GRCh38"
@@ -436,14 +512,18 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         record = _valid_record(
-            file_md5sum="d" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz",
-            file_format=".gfa.gz", file_size=10)
+            file_md5sum="d" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz", file_format=".gfa.gz", file_size=10
+        )
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [record]}))
 
         pipeline = ClassifyPipeline(
-            config, input_path, tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence", workers=1, resume=True,
+            config,
+            input_path,
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            workers=1,
+            resume=True,
         )
         # A corrupt evidence file: _is_cached() sees it, load_cached_evidence() cannot
         # read it, so the fetcher re-fetches and fails.
@@ -451,15 +531,13 @@ class TestFileTypeConfigs:
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("{ not json")
 
-        out, was_cached, content_unreadable, _validation_failed = \
-            pipeline._process_single_record(record)
+        out, was_cached, content_unreadable, _validation_failed = pipeline._process_single_record(record)
 
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
         # The note is on data_type (what content refines), not on the four others.
         cls = out["classifications"]
-        noted = [f for f in cls
-                 if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
+        noted = [f for f in cls if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
         assert noted == ["data_type"]
 
     def test_unreadable_count_is_persisted_in_run_metadata(self, tmp_path):
@@ -476,16 +554,22 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_boom)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_md5sum="a" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz",
-                          file_format=".gfa.gz"),
-            _valid_record(file_md5sum="b" * 32, file_name="HG002.hap1.p_ctg.gfa",
-                          file_format=".gfa"),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(
+                            file_md5sum="a" * 32, file_name="hprc-v1.0-mc-grch38.gfa.gz", file_format=".gfa.gz"
+                        ),
+                        _valid_record(file_md5sum="b" * 32, file_name="HG002.hap1.p_ctg.gfa", file_format=".gfa"),
+                    ]
+                }
+            )
+        )
         out_path = tmp_path / "out.json"
-        ClassifyPipeline(config, input_path, out_path,
-                         evidence_base=tmp_path / "evidence", workers=1,
-                         resume=False).run()
+        ClassifyPipeline(
+            config, input_path, out_path, evidence_base=tmp_path / "evidence", workers=1, resume=False
+        ).run()
 
         meta = json.loads(out_path.read_text())["metadata"]
         assert meta["content_unreadable"] == 2
@@ -509,15 +593,21 @@ class TestFileTypeConfigs:
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_md5sum=boom_md5, file_name="a.gfa", file_format=".gfa"),
-            _valid_record(file_md5sum="b" * 32, file_name="b.gfa", file_format=".gfa"),
-        ]}))
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_md5sum=boom_md5, file_name="a.gfa", file_format=".gfa"),
+                        _valid_record(file_md5sum="b" * 32, file_name="b.gfa", file_format=".gfa"),
+                    ]
+                }
+            )
+        )
         out_path = tmp_path / "out.json"
         # workers>1 so the executor's `except Exception` handles the TypeError.
-        ClassifyPipeline(config, input_path, out_path,
-                         evidence_base=tmp_path / "evidence", workers=2,
-                         resume=False).run()
+        ClassifyPipeline(
+            config, input_path, out_path, evidence_base=tmp_path / "evidence", workers=2, resume=False
+        ).run()
 
         meta = json.loads(out_path.read_text())["metadata"]
         assert meta["dropped"] == 1, "the None-returning fetcher"
@@ -532,21 +622,23 @@ class TestFileTypeConfigs:
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.pipeline import ClassifyPipeline
 
-        config = dataclasses.replace(
-            FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None
-        )
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None)
         input_path = tmp_path / "in.json"
-        input_path.write_text(json.dumps({"results": [
-            _valid_record(file_md5sum="d" * 32, file_name="graph.gfa", file_format=".gfa")
-        ]}))
+        input_path.write_text(
+            json.dumps({"results": [_valid_record(file_md5sum="d" * 32, file_name="graph.gfa", file_format=".gfa")]})
+        )
         pipeline = ClassifyPipeline(
-            config, input_path, tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence", workers=1,
+            config,
+            input_path,
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            workers=1,
         )
         assert pipeline.run() == []
 
     def test_configs_have_required_fields(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY
+
         for name, config in FILE_TYPE_REGISTRY.items():
             assert config.name == name
             assert len(config.extensions) > 0

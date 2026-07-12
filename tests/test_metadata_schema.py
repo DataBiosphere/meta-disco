@@ -28,8 +28,7 @@ class TestValidRecords:
         assert validate_record(_valid(data_modality=None, reference_assembly=None)) == []
 
     def test_nullable_declarations_may_carry_a_value(self):
-        assert validate_record(_valid(data_modality="genomic",
-                                      reference_assembly="GRCh38")) == []
+        assert validate_record(_valid(data_modality="genomic", reference_assembly="GRCh38")) == []
 
     def test_extra_keys_are_tolerated(self):
         # The download script also emits organism_type / phenotypic_sex, absent from
@@ -38,18 +37,34 @@ class TestValidRecords:
 
 
 class TestFieldConstraints:
-    @pytest.mark.parametrize("field", [
-        "entry_id", "file_id", "file_name", "file_format",
-        "file_md5sum", "drs_uri", "dataset_id", "dataset_title",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "entry_id",
+            "file_id",
+            "file_name",
+            "file_format",
+            "file_md5sum",
+            "drs_uri",
+            "dataset_id",
+            "dataset_title",
+        ],
+    )
     def test_required_string_field_rejects_null(self, field):
         reasons = validate_record(_valid(**{field: None}))
         assert any(field in r for r in reasons)
 
-    @pytest.mark.parametrize("field", [
-        "entry_id", "file_id", "file_name", "file_format",
-        "dataset_id", "dataset_title",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "entry_id",
+            "file_id",
+            "file_name",
+            "file_format",
+            "dataset_id",
+            "dataset_title",
+        ],
+    )
     def test_string_field_rejects_empty(self, field):
         reasons = validate_record(_valid(**{field: ""}))
         assert any(field in r for r in reasons)
@@ -63,27 +78,24 @@ class TestFieldConstraints:
     def test_stringified_file_size_fails_not_coerced(self):
         # A drift where file_size arrives as a JSON string must fail, not silently
         # coerce to int — strict validation is the whole point.
-        assert validate_record(_valid(file_size="1000")) == [
-            "file_size: expected an integer"]
+        assert validate_record(_valid(file_size="1000")) == ["file_size: expected an integer"]
 
     def test_negative_file_size_fails(self):
         assert validate_record(_valid(file_size=-1)) == ["file_size: must be >= 0"]
 
     def test_bad_md5_fails(self):
-        assert validate_record(_valid(file_md5sum="NOTHEX")) == [
-            "file_md5sum: does not match the required format"]
+        assert validate_record(_valid(file_md5sum="NOTHEX")) == ["file_md5sum: does not match the required format"]
 
     def test_uppercase_md5_fails(self):
         assert validate_record(_valid(file_md5sum="0" * 31 + "A")) == [
-            "file_md5sum: does not match the required format"]
+            "file_md5sum: does not match the required format"
+        ]
 
     def test_non_drs_uri_fails(self):
-        assert validate_record(_valid(drs_uri="s3://bucket/key")) == [
-            "drs_uri: does not match the required format"]
+        assert validate_record(_valid(drs_uri="s3://bucket/key")) == ["drs_uri: does not match the required format"]
 
     def test_non_boolean_is_supplementary_fails(self):
-        assert validate_record(_valid(is_supplementary="true")) == [
-            "is_supplementary: expected a boolean"]
+        assert validate_record(_valid(is_supplementary="true")) == ["is_supplementary: expected a boolean"]
 
     def test_non_dict_record_fails_gracefully(self):
         assert validate_record("garbage") == ["<record>: expected an object"]
@@ -124,11 +136,13 @@ class TestValidationReport:
         assert "+45 more" in summary
 
     def test_separate_kinds_are_counted_separately(self):
-        report = validate_records([
-            _valid(file_size="x"),
-            _valid(file_md5sum="bad"),
-            _valid(drs_uri="nope"),
-        ])
+        report = validate_records(
+            [
+                _valid(file_size="x"),
+                _valid(file_md5sum="bad"),
+                _valid(drs_uri="nope"),
+            ]
+        )
         assert report.invalid == 3
         assert len(report.kinds) == 3
 
@@ -148,7 +162,6 @@ class TestValidationReport:
         assert "<empty>" in samples
         assert "<unknown>" not in samples
 
-
     def test_a_fresh_empty_report_is_ok(self):
         report = ValidationReport()
         assert report.ok
@@ -166,16 +179,19 @@ class TestClassificationBlockingReasons:
         assert reasons and all(field in r for r in reasons)
 
     # Values that violate the full contract on a classifier-irrelevant field.
-    @pytest.mark.parametrize("field,bad", [
-        ("drs_uri", "s3://not-drs"),      # fails the drs:// pattern
-        ("is_supplementary", "not-a-bool"),  # fails the bool type
-        ("file_id", None),                # fails required non-null string
-        ("dataset_id", None),
-    ])
+    @pytest.mark.parametrize(
+        "field,bad",
+        [
+            ("drs_uri", "s3://not-drs"),  # fails the drs:// pattern
+            ("is_supplementary", "not-a-bool"),  # fails the bool type
+            ("file_id", None),  # fails required non-null string
+            ("dataset_id", None),
+        ],
+    )
     def test_classifier_irrelevant_violation_does_not_block(self, field, bad):
         # These fields violate the full contract (validate_record flags them) but
         # the classifier never reads them, so they must not divert the record.
-        assert validate_record(_valid(**{field: bad}))          # full contract fails
+        assert validate_record(_valid(**{field: bad}))  # full contract fails
         assert classification_blocking_reasons(_valid(**{field: bad})) == []
 
     def test_only_relevant_reasons_returned_when_both_present(self):
@@ -195,8 +211,7 @@ class TestValidationFailedClassifications:
         for entry in cls.values():
             assert entry["value"] is None
             assert entry["status"] == NOT_CLASSIFIED
-            assert entry["evidence"] == [
-                {"rule_id": VALIDATION_RULE_ID, "reason": reasons[0]}]
+            assert entry["evidence"] == [{"rule_id": VALIDATION_RULE_ID, "reason": reasons[0]}]
 
     def test_all_reasons_are_carried_as_evidence(self):
         reasons = ["file_size: expected an integer", "file_name: expected a string"]

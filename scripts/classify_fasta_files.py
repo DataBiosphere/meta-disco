@@ -22,36 +22,41 @@ def classify_single_fasta(
 ) -> dict | None:
     """Backward-compat: classify a single FASTA file by MD5."""
     return ClassifyPipeline.classify_single(
-        FASTA_CONFIG, md5sum, file_name=file_name, file_size=file_size,
-        is_gzipped=is_gzipped, use_cache=use_cache,
+        FASTA_CONFIG,
+        md5sum,
+        file_name=file_name,
+        file_size=file_size,
+        is_gzipped=is_gzipped,
+        use_cache=use_cache,
     )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch FASTA contig names and classify")
-    parser.add_argument("--input", "-i", type=str,
-                        help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/anvil/fasta_classifications.json",
-                        help="Output file for classifications")
-    parser.add_argument("--limit", "-l", type=int, default=None,
-                        help="Limit number of files to process")
-    parser.add_argument("--md5", type=str,
-                        help="Classify a single file by MD5 hash")
-    parser.add_argument("--filename", type=str,
-                        help="Classify a single file by filename (with --md5)")
-    parser.add_argument("--no-resume", action="store_true",
-                        help="Don't use cached headers, re-fetch all")
-    parser.add_argument("--workers", "-w", type=int, default=10,
-                        help="Number of parallel workers (default: 10)")
-    parser.add_argument("--skip-complete", action="store_true",
-                        help="Skip if output file already has all files classified")
-    parser.add_argument("--skip-cached", action="store_true",
-                        help="Skip files entirely if header is already cached")
+    parser.add_argument("--input", "-i", type=str, help="Input file (classification JSON or metadata NDJSON)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="output/anvil/fasta_classifications.json",
+        help="Output file for classifications",
+    )
+    parser.add_argument("--limit", "-l", type=int, default=None, help="Limit number of files to process")
+    parser.add_argument("--md5", type=str, help="Classify a single file by MD5 hash")
+    parser.add_argument("--filename", type=str, help="Classify a single file by filename (with --md5)")
+    parser.add_argument("--no-resume", action="store_true", help="Don't use cached headers, re-fetch all")
+    parser.add_argument("--workers", "-w", type=int, default=10, help="Number of parallel workers (default: 10)")
+    parser.add_argument(
+        "--skip-complete", action="store_true", help="Skip if output file already has all files classified"
+    )
+    parser.add_argument("--skip-cached", action="store_true", help="Skip files entirely if header is already cached")
     args = parser.parse_args()
 
     if args.md5:
         result = ClassifyPipeline.classify_single(
-            FASTA_CONFIG, args.md5, file_name=args.filename or "",
+            FASTA_CONFIG,
+            args.md5,
+            file_name=args.filename or "",
             use_cache=not args.no_resume,
         )
         if result:

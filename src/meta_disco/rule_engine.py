@@ -67,14 +67,12 @@ class ExtendedClassificationResult:
     reference_assembly: str | None = None
     assay_type: str | None = None
     platform: str | None = None
-    field_evidence: dict[str, list[dict]] = field(
-        default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
+    field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /
     # not_classified) lives here, never in a value slot. Defaults to
     # not_classified (no statement made) until a value or status is set.
-    field_status: dict[str, str] = field(
-        default_factory=lambda: {fld: NOT_CLASSIFIED for fld in CLASSIFICATION_FIELDS})
+    field_status: dict[str, str] = field(default_factory=lambda: {fld: NOT_CLASSIFIED for fld in CLASSIFICATION_FIELDS})
 
     def set_field(self, fld: str, value: str | None = None, status: str | None = None) -> None:
         """Set a dimension's value and status coherently.
@@ -189,7 +187,8 @@ class ExtendedClassificationResult:
         for fld in self._CLASSIFICATION_FIELDS:
             evidence = self.field_evidence.get(fld, [])
             classifications[fld] = build_field_entry(
-                getattr(self, fld), status=self.field_status[fld], evidence=evidence)
+                getattr(self, fld), status=self.field_status[fld], evidence=evidence
+            )
         return classifications
 
     # Classification field names (single source of truth: models.CLASSIFICATION_FIELDS)
@@ -205,8 +204,7 @@ def _claim_declaration(claim: dict) -> str | None:
     return value if value is not None else claim.get("status")
 
 
-def _resolved(declaration: str | None, reason: str,
-              is_conflict: bool = False, competing: list | None = None) -> dict:
+def _resolved(declaration: str | None, reason: str, is_conflict: bool = False, competing: list | None = None) -> dict:
     """Package a winning declaration as ``{value, status, ...}``: a real declaration
     becomes value with status CLASSIFIED; a status declaration becomes that status
     with value None — so a sentinel never lands in ``value``."""
@@ -247,9 +245,7 @@ def evaluate_claims(claims: list[dict]) -> dict:
     """
     # Drop the synthetic not_classified placeholder and empty claims, but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
-    real_claims = [c for c in claims
-                   if _claim_declaration(c) is not None
-                   and c.get("rule_id") != "not_classified"]
+    real_claims = [c for c in claims if _claim_declaration(c) is not None and c.get("rule_id") != "not_classified"]
 
     # Assertive = real-value declarations; a not_classified status means
     # "I looked but can't determine" and doesn't assert a value.
@@ -261,16 +257,14 @@ def evaluate_claims(claims: list[dict]) -> dict:
     # Only not_classified declarations present → resolve as not_classified
     # (the rule's rationale is preserved in field_evidence, not in this return value)
     if not assertive_claims:
-        return _resolved(NOT_CLASSIFIED,
-                         "single_claim" if len(real_claims) == 1 else "unanimous")
+        return _resolved(NOT_CLASSIFIED, "single_claim" if len(real_claims) == 1 else "unanimous")
 
     # Check if all assertive declarations agree
     declarations = {_claim_declaration(c) for c in assertive_claims}
 
     if len(declarations) == 1:
         # Unanimous — every assertive claim declares the same value
-        return _resolved(next(iter(declarations)),
-                         "unanimous" if len(assertive_claims) > 1 else "single_claim")
+        return _resolved(next(iter(declarations)), "unanimous" if len(assertive_claims) > 1 else "single_claim")
 
     # Assertive declarations disagree — check tiers
     max_tier = max(c.get("tier", 0) for c in assertive_claims)
@@ -288,8 +282,7 @@ def evaluate_claims(claims: list[dict]) -> dict:
         return _resolved(top_tier_decls.pop(), "higher_specificity_override")
 
     # Same tier, different values — conflict
-    return _resolved(NOT_CLASSIFIED, "conflict",
-                     is_conflict=True, competing=sorted(top_tier_decls))
+    return _resolved(NOT_CLASSIFIED, "conflict", is_conflict=True, competing=sorted(top_tier_decls))
 
 
 class RuleEngine:
@@ -316,11 +309,7 @@ class RuleEngine:
         """
         self.rules = get_unified_rules(rules_path)
 
-    def classify(
-        self,
-        file_info: FileInfo | ExtendedFileInfo,
-        include_tier3: bool = False
-    ) -> ClassificationResult:
+    def classify(self, file_info: FileInfo | ExtendedFileInfo, include_tier3: bool = False) -> ClassificationResult:
         """Classify a file based on its metadata.
 
         Args:
@@ -335,9 +324,7 @@ class RuleEngine:
         return result.to_classification_result()
 
     def classify_extended(
-        self,
-        file_info: FileInfo | ExtendedFileInfo,
-        include_tier3: bool = False
+        self, file_info: FileInfo | ExtendedFileInfo, include_tier3: bool = False
     ) -> ExtendedClassificationResult:
         """Classify a file and return extended result with all fields.
 
@@ -392,26 +379,26 @@ class RuleEngine:
             result.set_field(fld, evaluation["value"], evaluation["status"])
 
             if evaluation["is_conflict"]:
-                result.field_evidence[fld].append({
-                    "rule_id": f"conflicting_{fld}_rules",
-                    "reason": (f"Conflicting {fld}: {evaluation['competing_values']}"
-                               " — ambiguous"),
-                    "status": NOT_CLASSIFIED,
-                    "competing_values": evaluation["competing_values"],
-                    "is_conflict": True,
-                })
+                result.field_evidence[fld].append(
+                    {
+                        "rule_id": f"conflicting_{fld}_rules",
+                        "reason": (f"Conflicting {fld}: {evaluation['competing_values']} — ambiguous"),
+                        "status": NOT_CLASSIFIED,
+                        "competing_values": evaluation["competing_values"],
+                        "is_conflict": True,
+                    }
+                )
             elif evaluation["reason"] == "no_claims":
-                result.field_evidence[fld].append({
-                    "rule_id": "not_classified",
-                    "reason": f"No rule determined a value for {fld}",
-                    "status": NOT_CLASSIFIED,
-                })
+                result.field_evidence[fld].append(
+                    {
+                        "rule_id": "not_classified",
+                        "reason": f"No rule determined a value for {fld}",
+                        "status": NOT_CLASSIFIED,
+                    }
+                )
 
     def _rule_matches(
-        self,
-        rule: UnifiedRule,
-        file_info: ExtendedFileInfo,
-        current: ExtendedClassificationResult
+        self, rule: UnifiedRule, file_info: ExtendedFileInfo, current: ExtendedClassificationResult
     ) -> bool:
         """Check if a unified rule's conditions match."""
         when = rule.when
@@ -461,15 +448,21 @@ class RuleEngine:
         # definitive declaration (a real value or an explicit not_applicable; a
         # not_classified declaration does not count as "set").
         if when.get("modality_not_set"):
-            declared = [c for c in current.field_evidence.get("data_modality", [])
-                        if _claim_declaration(c) not in (None, NOT_CLASSIFIED)]
+            declared = [
+                c
+                for c in current.field_evidence.get("data_modality", [])
+                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
+            ]
             if declared:
                 return False
 
         # Check reference_not_set — same "definitive declaration" test as above.
         if when.get("reference_not_set"):
-            declared = [c for c in current.field_evidence.get("reference_assembly", [])
-                        if _claim_declaration(c) not in (None, NOT_CLASSIFIED)]
+            declared = [
+                c
+                for c in current.field_evidence.get("reference_assembly", [])
+                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
+            ]
             if declared:
                 return False
 
@@ -495,11 +488,7 @@ class RuleEngine:
 
         return True
 
-    def _match_bam_header(
-        self,
-        when: dict[str, Any],
-        file_info: ExtendedFileInfo
-    ) -> bool:
+    def _match_bam_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against BAM header content."""
         if file_info.bam_header is None:
             return False
@@ -514,15 +503,11 @@ class RuleEngine:
         # Parse BAM header once and cache on the file_info object
         from .validators.header_extractors import match_sam_header_pattern, parse_sam_header
 
-        if not hasattr(file_info, '_parsed_bam_header'):
+        if not hasattr(file_info, "_parsed_bam_header"):
             file_info._parsed_bam_header = parse_sam_header(file_info.bam_header)
         return match_sam_header_pattern(file_info._parsed_bam_header, section, field_name, pattern)
 
-    def _match_vcf_header(
-        self,
-        when: dict[str, Any],
-        file_info: ExtendedFileInfo
-    ) -> bool:
+    def _match_vcf_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against VCF header content."""
         if file_info.vcf_header is None:
             return False
@@ -536,15 +521,11 @@ class RuleEngine:
         # Parse VCF header once and cache on the file_info object
         from .validators.header_extractors import match_vcf_header_pattern, parse_vcf_header
 
-        if not hasattr(file_info, '_parsed_vcf_header'):
+        if not hasattr(file_info, "_parsed_vcf_header"):
             file_info._parsed_vcf_header = parse_vcf_header(file_info.vcf_header)
         return match_vcf_header_pattern(file_info._parsed_vcf_header, header_type, pattern)
 
-    def _match_fastq_header(
-        self,
-        when: dict[str, Any],
-        file_info: ExtendedFileInfo
-    ) -> bool:
+    def _match_fastq_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against FASTQ read name."""
         if file_info.fastq_first_read is None:
             return False
@@ -555,27 +536,20 @@ class RuleEngine:
 
         return bool(re.search(pattern, file_info.fastq_first_read, re.IGNORECASE))
 
-    def _check_header_absent(
-        self,
-        when: dict[str, Any],
-        file_info: ExtendedFileInfo
-    ) -> bool:
+    def _check_header_absent(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Check if a header section is absent (for unaligned detection)."""
         section = when.get("header_section", "")
 
         if section == "@SQ" and file_info.bam_header is not None:
             # Check if @SQ section is missing
             from .validators.header_extractors import has_sam_section, parse_sam_header
+
             header = parse_sam_header(file_info.bam_header)
             return not has_sam_section(header, section)
 
         return False
 
-    def _apply_rule(
-        self,
-        rule: UnifiedRule,
-        result: ExtendedClassificationResult
-    ) -> None:
+    def _apply_rule(self, rule: UnifiedRule, result: ExtendedClassificationResult) -> None:
         """Collect claims from a rule without setting classification fields.
 
         A rule authors each field either as a real value (``then``) or as a
@@ -600,11 +574,7 @@ class RuleEngine:
             elif status is not None:
                 result.field_evidence[fld].append({**evidence_entry, "status": status})
 
-    def infer_assay_type(
-        self,
-        result: ExtendedClassificationResult,
-        file_info: ExtendedFileInfo
-    ) -> None:
+    def infer_assay_type(self, result: ExtendedClassificationResult, file_info: ExtendedFileInfo) -> None:
         """Infer assay type from other classification signals.
 
         Sets result.assay_type and appends evidence when a matching
@@ -672,14 +642,15 @@ class RuleEngine:
             result.set_field("assay_type", assay_rule.assay_type)
             # Remove stale not_classified placeholder if _finalize_result ran first
             result.field_evidence["assay_type"] = [
-                e for e in result.field_evidence["assay_type"]
-                if e.get("rule_id") != "not_classified"
+                e for e in result.field_evidence["assay_type"] if e.get("rule_id") != "not_classified"
             ]
-            result.field_evidence["assay_type"].append({
-                "rule_id": "infer_assay_type",
-                "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
-                "value": assay_rule.assay_type,
-            })
+            result.field_evidence["assay_type"].append(
+                {
+                    "rule_id": "infer_assay_type",
+                    "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                    "value": assay_rule.assay_type,
+                }
+            )
             return
 
     def classify_with_bam_header(

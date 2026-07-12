@@ -145,11 +145,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     sizes = list(categories_for_pie.values())
 
     wedges, texts, autotexts = ax1.pie(
-        sizes,
-        labels=None,
-        autopct=lambda p: f'{p:.1f}%' if p > 3 else '',
-        colors=colors[:len(sizes)],
-        startangle=90
+        sizes, labels=None, autopct=lambda p: f"{p:.1f}%" if p > 3 else "", colors=colors[: len(sizes)], startangle=90
     )
     ax1.set_title(f"Input Files by Category\n(Total: {total_files:,})", fontweight="bold")
 
@@ -166,12 +162,14 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
         source_count = source_categories.get(category, 0)
         classified_count = classified_counts.get(category, 0)
         if source_count > 0:
-            coverage_data.append({
-                "category": category,
-                "source": source_count,
-                "classified": classified_count,
-                "coverage": classified_count / source_count * 100 if source_count > 0 else 0
-            })
+            coverage_data.append(
+                {
+                    "category": category,
+                    "source": source_count,
+                    "classified": classified_count,
+                    "coverage": classified_count / source_count * 100 if source_count > 0 else 0,
+                }
+            )
 
     # Sort by source count
     coverage_data.sort(key=lambda x: x["source"], reverse=True)
@@ -192,7 +190,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     # Add coverage percentages
     for i, d in enumerate(coverage_data):
-        ax2.text(d["source"] + 1000, i, f'{d["coverage"]:.1f}%', va="center", fontsize=9)
+        ax2.text(d["source"] + 1000, i, f"{d['coverage']:.1f}%", va="center", fontsize=9)
 
     ax2.set_xlim(0, max(source_counts) * 1.15)
 
@@ -210,7 +208,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     mod_values = [m[1] for m in modality_sorted]
 
     y_pos = np.arange(len(mod_labels))
-    ax3.barh(y_pos, mod_values, color=colors[:len(mod_labels)])
+    ax3.barh(y_pos, mod_values, color=colors[: len(mod_labels)])
     ax3.set_yticks(y_pos)
     ax3.set_yticklabels(mod_labels, fontsize=9)
     ax3.set_xlabel("Number of Files")
@@ -219,7 +217,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
 
     # Add counts
     for i, v in enumerate(mod_values):
-        ax3.text(v + 500, i, f'{v:,}', va="center", fontsize=8)
+        ax3.text(v + 500, i, f"{v:,}", va="center", fontsize=8)
 
     # === Panel 4: reference_assembly distribution ===
     ax4 = fig.add_subplot(4, 2, 4)
@@ -234,7 +232,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ref_values = [r[1] for r in ref_sorted]
 
     y_pos = np.arange(len(ref_labels))
-    ax4.barh(y_pos, ref_values, color=["#2ecc71", "#e74c3c", "#3498db", "#95a5a6", "#9b59b6"][:len(ref_labels)])
+    ax4.barh(y_pos, ref_values, color=["#2ecc71", "#e74c3c", "#3498db", "#95a5a6", "#9b59b6"][: len(ref_labels)])
     ax4.set_yticks(y_pos)
     ax4.set_yticklabels(ref_labels)
     ax4.set_xlabel("Number of Files")
@@ -242,7 +240,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax4.invert_yaxis()
 
     for i, v in enumerate(ref_values):
-        ax4.text(v + 500, i, f'{v:,}', va="center", fontsize=8)
+        ax4.text(v + 500, i, f"{v:,}", va="center", fontsize=8)
 
     # === Panel 5: platform distribution ===
     ax5 = fig.add_subplot(4, 2, 5)
@@ -257,7 +255,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     plat_values = [p[1] for p in plat_sorted]
 
     y_pos = np.arange(len(plat_labels))
-    ax5.barh(y_pos, plat_values, color=colors[:len(plat_labels)])
+    ax5.barh(y_pos, plat_values, color=colors[: len(plat_labels)])
     ax5.set_yticks(y_pos)
     ax5.set_yticklabels(plat_labels)
     ax5.set_xlabel("Number of Files")
@@ -265,7 +263,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax5.invert_yaxis()
 
     for i, v in enumerate(plat_values):
-        ax5.text(v + 500, i, f'{v:,}', va="center", fontsize=8)
+        ax5.text(v + 500, i, f"{v:,}", va="center", fontsize=8)
 
     # === Panel 6: data_type distribution ===
     ax6 = fig.add_subplot(4, 2, 6)
@@ -300,7 +298,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     dtype_values = [d[1] for d in dtype_sorted]
 
     y_pos = np.arange(len(dtype_labels))
-    ax6.barh(y_pos, dtype_values, color=colors[:len(dtype_labels)])
+    ax6.barh(y_pos, dtype_values, color=colors[: len(dtype_labels)])
     ax6.set_yticks(y_pos)
     ax6.set_yticklabels(dtype_labels)
     ax6.set_xlabel("Number of Files")
@@ -308,7 +306,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax6.invert_yaxis()
 
     for i, v in enumerate(dtype_values):
-        ax6.text(v + 500, i, f'{v:,}', va="center", fontsize=8)
+        ax6.text(v + 500, i, f"{v:,}", va="center", fontsize=8)
 
     # === Panel 7: assay_type distribution ===
     ax7 = fig.add_subplot(4, 2, 7)
@@ -338,7 +336,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     assay_values = [a[1] for a in assay_sorted]
 
     y_pos = np.arange(len(assay_labels))
-    ax7.barh(y_pos, assay_values, color=colors[:len(assay_labels)])
+    ax7.barh(y_pos, assay_values, color=colors[: len(assay_labels)])
     ax7.set_yticks(y_pos)
     ax7.set_yticklabels(assay_labels)
     ax7.set_xlabel("Number of Files")
@@ -346,7 +344,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax7.invert_yaxis()
 
     for i, v in enumerate(assay_values):
-        ax7.text(v + 500, i, f'{v:,}', va="center", fontsize=8)
+        ax7.text(v + 500, i, f"{v:,}", va="center", fontsize=8)
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
@@ -360,12 +358,12 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     print("CLASSIFICATION SUMMARY")
     print("=" * 70)
     print(f"\nTotal source files: {total_files:,}")
-    print(f"Total classified:   {total_classified:,} ({total_classified/total_files*100:.1f}%)")
+    print(f"Total classified:   {total_classified:,} ({total_classified / total_files * 100:.1f}%)")
 
     skipped = source_categories.get("Skipped", 0) + source_categories.get("Other", 0)
     classifiable = total_files - skipped
-    print(f"Classifiable files: {classifiable:,} ({classifiable/total_files*100:.1f}%)")
-    print(f"Skipped/Other:      {skipped:,} ({skipped/total_files*100:.1f}%)")
+    print(f"Classifiable files: {classifiable:,} ({classifiable / total_files * 100:.1f}%)")
+    print(f"Skipped/Other:      {skipped:,} ({skipped / total_files * 100:.1f}%)")
 
     print("\n--- Coverage by Axis ---")
 
@@ -377,14 +375,20 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     with_modality = sum(1 for item in all_classified if _val(item, "data_modality"))
     with_ref = sum(1 for item in all_classified if _val(item, "reference_assembly"))
     with_platform = sum(1 for item in all_classified if _val(item, "platform"))
-    with_dtype = sum(1 for item in all_classified if _val(item, "data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"])
+    with_dtype = sum(
+        1 for item in all_classified if _val(item, "data_type") or item.get("_source") in ["BAM/CRAM", "VCF", "FASTQ"]
+    )
     with_assay = sum(1 for item in all_classified if _val(item, "assay_type"))
 
-    print(f"data_modality:      {with_modality:,} / {total_classified:,} ({with_modality/total_classified*100:.1f}%)")
-    print(f"reference_assembly: {with_ref:,} / {total_classified:,} ({with_ref/total_classified*100:.1f}%)")
-    print(f"platform:           {with_platform:,} / {total_classified:,} ({with_platform/total_classified*100:.1f}%)")
-    print(f"data_type:          {with_dtype:,} / {total_classified:,} ({with_dtype/total_classified*100:.1f}%)")
-    print(f"assay_type:         {with_assay:,} / {total_classified:,} ({with_assay/total_classified*100:.1f}%)")
+    print(
+        f"data_modality:      {with_modality:,} / {total_classified:,} ({with_modality / total_classified * 100:.1f}%)"
+    )
+    print(f"reference_assembly: {with_ref:,} / {total_classified:,} ({with_ref / total_classified * 100:.1f}%)")
+    print(
+        f"platform:           {with_platform:,} / {total_classified:,} ({with_platform / total_classified * 100:.1f}%)"
+    )
+    print(f"data_type:          {with_dtype:,} / {total_classified:,} ({with_dtype / total_classified * 100:.1f}%)")
+    print(f"assay_type:         {with_assay:,} / {total_classified:,} ({with_assay / total_classified * 100:.1f}%)")
 
     return fig
 
@@ -394,19 +398,22 @@ def main():
 
     parser = argparse.ArgumentParser(description="Generate classification report")
     parser.add_argument(
-        "--source", "-s",
+        "--source",
+        "-s",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Source metadata file",
     )
     parser.add_argument(
-        "--output-dir", "-d",
+        "--output-dir",
+        "-d",
         type=Path,
         default=Path("output/anvil"),
         help="Directory containing classification outputs",
     )
     parser.add_argument(
-        "--report", "-r",
+        "--report",
+        "-r",
         type=Path,
         default=Path("output/anvil/classification_report.png"),
         help="Output report path",

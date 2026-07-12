@@ -46,7 +46,9 @@ def extract_file_record(hit: dict) -> dict:
         "file_size": file_data.get("file_size"),
         "file_md5sum": file_data.get("file_md5sum"),  # Needed for S3 mirror access
         "data_modality": file_data.get("data_modality", [None])[0] if file_data.get("data_modality") else None,
-        "reference_assembly": file_data.get("reference_assembly", [None])[0] if file_data.get("reference_assembly") else None,
+        "reference_assembly": file_data.get("reference_assembly", [None])[0]
+        if file_data.get("reference_assembly")
+        else None,
         "is_supplementary": file_data.get("is_supplementary"),
         "drs_uri": file_data.get("drs_uri"),
         "dataset_id": dataset.get("dataset_id", [None])[0] if dataset.get("dataset_id") else None,
@@ -61,6 +63,7 @@ def get_search_after_from_url(next_url: str) -> list | None:
     if not next_url or "search_after=" not in next_url:
         return None
     import urllib.parse
+
     parsed = urllib.parse.urlparse(next_url)
     params = urllib.parse.parse_qs(parsed.query)
     if "search_after" in params:
@@ -82,12 +85,15 @@ def save_checkpoint(output_dir: Path, page: int, total_fetched: int, search_afte
     """Save checkpoint for resume."""
     checkpoint_path = output_dir / "checkpoint.json"
     with open(checkpoint_path, "w") as f:
-        json.dump({
-            "page": page,
-            "total_fetched": total_fetched,
-            "search_after": search_after,
-            "timestamp": datetime.now().isoformat(),
-        }, f)
+        json.dump(
+            {
+                "page": page,
+                "total_fetched": total_fetched,
+                "search_after": search_after,
+                "timestamp": datetime.now().isoformat(),
+            },
+            f,
+        )
 
 
 def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pages: int | None = None):
@@ -124,7 +130,11 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
                 break
 
             try:
-                print(f"\rPage {page_num}: {total_fetched:,}/{total_files:,} ({100*total_fetched/total_files:.1f}%)", end="", flush=True)
+                print(
+                    f"\rPage {page_num}: {total_fetched:,}/{total_files:,} ({100 * total_fetched / total_files:.1f}%)",
+                    end="",
+                    flush=True,
+                )
 
                 data = fetch_page(search_after=search_after, size=DEFAULT_PAGE_SIZE)
                 hits = data.get("hits", [])
@@ -158,7 +168,12 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
 
             except requests.exceptions.RequestException as e:
                 print(f"\nError on page {page_num}: {e}")
-                save_checkpoint(output_dir, page_num - 1, total_fetched - len(hits) if 'hits' in dir() else total_fetched, search_after)
+                save_checkpoint(
+                    output_dir,
+                    page_num - 1,
+                    total_fetched - len(hits) if "hits" in dir() else total_fetched,
+                    search_after,
+                )
                 print("Checkpoint saved. Run again to resume.")
                 break
 
@@ -176,7 +191,7 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
 
     print(f"\n\nDownloaded {total_fetched:,} files to {ndjson_path}")
     if duration > 0:
-        print(f"Rate: {total_fetched/duration:.1f} files/sec")
+        print(f"Rate: {total_fetched / duration:.1f} files/sec")
 
     # Clean up checkpoint if complete
     checkpoint_path = output_dir / "checkpoint.json"
@@ -208,14 +223,18 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
 
 def main():
     parser = argparse.ArgumentParser(description="Download AnVIL file metadata (supports resume)")
-    parser.add_argument("--output", "-o", type=str, default="data/anvil",
-                        help="Output directory (default: data/anvil)")
-    parser.add_argument("--delay", "-d", type=float, default=DEFAULT_DELAY,
-                        help=f"Delay between requests in seconds (default: {DEFAULT_DELAY})")
-    parser.add_argument("--max-pages", "-m", type=int, default=None,
-                        help="Maximum number of pages to fetch (default: all)")
-    parser.add_argument("--restart", action="store_true",
-                        help="Ignore checkpoint and start fresh")
+    parser.add_argument("--output", "-o", type=str, default="data/anvil", help="Output directory (default: data/anvil)")
+    parser.add_argument(
+        "--delay",
+        "-d",
+        type=float,
+        default=DEFAULT_DELAY,
+        help=f"Delay between requests in seconds (default: {DEFAULT_DELAY})",
+    )
+    parser.add_argument(
+        "--max-pages", "-m", type=int, default=None, help="Maximum number of pages to fetch (default: all)"
+    )
+    parser.add_argument("--restart", action="store_true", help="Ignore checkpoint and start fresh")
     args = parser.parse_args()
 
     output_dir = Path(args.output)

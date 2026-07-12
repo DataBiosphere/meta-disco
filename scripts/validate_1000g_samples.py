@@ -161,7 +161,10 @@ def validate_against_igsr(
             c["sample_id"] = sample_id
             sample_files[sample_id].append(c)
 
-    print(f"Found {len(sample_files):,} unique sample IDs across {sum(len(v) for v in sample_files.values()):,} files", flush=True)
+    print(
+        f"Found {len(sample_files):,} unique sample IDs across {sum(len(v) for v in sample_files.values()):,} files",
+        flush=True,
+    )
 
     if limit:
         # Limit by number of samples, not files
@@ -213,7 +216,11 @@ def validate_against_igsr(
             if completed_samples % 50 == 0 or completed_samples == total_samples:
                 elapsed = time.time() - start_time
                 rate = completed_samples / elapsed if elapsed > 0 else 0
-                print(f"\r  Fetched {completed_samples:,}/{total_samples:,} samples ({rate:.1f}/sec)   ", end="", flush=True)
+                print(
+                    f"\r  Fetched {completed_samples:,}/{total_samples:,} samples ({rate:.1f}/sec)   ",
+                    end="",
+                    flush=True,
+                )
 
     print()
     print("Validating classifications...", flush=True)
@@ -225,11 +232,13 @@ def validate_against_igsr(
         if not igsr_data:
             results["api_errors"] += len(files)
             for f in files:
-                api_errors.append({
-                    "sample_id": sample_id,
-                    "file": f.get("file_name"),
-                    "reason": "api_failed",
-                })
+                api_errors.append(
+                    {
+                        "sample_id": sample_id,
+                        "file": f.get("file_name"),
+                        "reason": "api_failed",
+                    }
+                )
             continue
 
         results["total_samples_validated"] += 1
@@ -247,13 +256,15 @@ def validate_against_igsr(
                     results["platform_match"] += 1
                 else:
                     results["platform_mismatch"] += 1
-                    mismatches.append({
-                        "sample_id": sample_id,
-                        "file": f.get("file_name"),
-                        "type": "platform",
-                        "ours": our_platform,
-                        "expected": list(expected_platforms),
-                    })
+                    mismatches.append(
+                        {
+                            "sample_id": sample_id,
+                            "file": f.get("file_name"),
+                            "type": "platform",
+                            "ours": our_platform,
+                            "expected": list(expected_platforms),
+                        }
+                    )
 
             # Modality validation
             # Check if our modality matches or is a prefix of any expected modality
@@ -278,13 +289,15 @@ def validate_against_igsr(
                 pass
             else:
                 results["modality_mismatch"] += 1
-                mismatches.append({
-                    "sample_id": sample_id,
-                    "file": f.get("file_name"),
-                    "type": "modality",
-                    "ours": our_modality,
-                    "expected": list(expected_modalities),
-                })
+                mismatches.append(
+                    {
+                        "sample_id": sample_id,
+                        "file": f.get("file_name"),
+                        "type": "modality",
+                        "ours": our_modality,
+                        "expected": list(expected_modalities),
+                    }
+                )
 
     elapsed = time.time() - start_time
     n_files = results["total_files_validated"]
@@ -339,18 +352,22 @@ def validate_against_igsr(
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_samples": total_samples,
-                "validated_samples": n_samples,
-                "validated_files": n_files,
-                "api_errors": results["api_errors"],
-                "elapsed_seconds": elapsed,
+        json.dump(
+            {
+                "metadata": {
+                    "total_samples": total_samples,
+                    "validated_samples": n_samples,
+                    "validated_files": n_files,
+                    "api_errors": results["api_errors"],
+                    "elapsed_seconds": elapsed,
+                },
+                "results": results,
+                "mismatches": mismatches[:100],  # Limit to first 100
+                "api_errors": api_errors[:100],
             },
-            "results": results,
-            "mismatches": mismatches[:100],  # Limit to first 100
-            "api_errors": api_errors[:100],
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nResults saved to: {output_path}")
 
@@ -358,11 +375,10 @@ def validate_against_igsr(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate classifications against 1000 Genomes IGSR metadata"
-    )
+    parser = argparse.ArgumentParser(description="Validate classifications against 1000 Genomes IGSR metadata")
     parser.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         type=Path,
         nargs="+",
         default=[
@@ -372,19 +388,22 @@ def main():
         help="Input classification files",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/1000g_validation_results.json"),
         help="Output validation results file",
     )
     parser.add_argument(
-        "--limit", "-l",
+        "--limit",
+        "-l",
         type=int,
         default=None,
         help="Limit number of samples to validate (for testing)",
     )
     parser.add_argument(
-        "--workers", "-w",
+        "--workers",
+        "-w",
         type=int,
         default=10,
         help="Number of parallel workers (default: 10)",

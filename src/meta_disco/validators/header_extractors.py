@@ -141,12 +141,7 @@ def extract_sam_field(header: SAMHeader, section: str, field: str) -> list[str]:
     return values
 
 
-def match_sam_header_pattern(
-    header: SAMHeader,
-    section: str,
-    field: str,
-    pattern: str
-) -> bool:
+def match_sam_header_pattern(header: SAMHeader, section: str, field: str, pattern: str) -> bool:
     """
     Check if any value in a SAM header field matches a regex pattern.
 
@@ -199,10 +194,10 @@ def parse_vcf_header_line(line: str) -> dict[str, str] | None:
         Dict of parsed fields or None if not parseable
     """
     # Match ##TYPE=<...> format
-    match = re.match(r'^##(\w+)=<(.*)>$', line)
+    match = re.match(r"^##(\w+)=<(.*)>$", line)
     if not match:
         # Handle simple key=value format like ##fileformat=VCFv4.2
-        simple_match = re.match(r'^##(\w+)=(.*)$', line)
+        simple_match = re.match(r"^##(\w+)=(.*)$", line)
         if simple_match:
             return {"_type": simple_match.group(1), "_value": simple_match.group(2)}
         return None
@@ -282,11 +277,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     return header
 
 
-def match_vcf_header_pattern(
-    header: VCFHeader,
-    header_type: str,
-    pattern: str
-) -> bool:
+def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) -> bool:
     """
     Check if any VCF header line of a given type matches a pattern.
 

@@ -51,18 +51,19 @@ def save_evidence(md5sum: str, file_name: str, evidence: dict):
     path = get_evidence_path(md5sum)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    evidence.update({
-        "md5sum": md5sum,
-        "file_name": file_name,
-        "fetch_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    })
+    evidence.update(
+        {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "fetch_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    )
 
     with open(path, "w") as f:
         json.dump(evidence, f, indent=2)
 
 
-def fetch_bed_signals(md5sum: str, is_gzipped: bool = True,
-                      file_size: int | None = None) -> dict | None:
+def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | None = None) -> dict | None:
     """Fetch BED data from S3 and extract reference signals in one pass.
 
     Instead of storing all lines, we stream through and track only:
@@ -101,12 +102,12 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True,
         content = resp.content
 
         # Decompress if gzipped (handle bgzip: multiple concatenated gzip blocks)
-        if is_gzipped and content[:2] == b'\x1f\x8b':
+        if is_gzipped and content[:2] == b"\x1f\x8b":
             try:
                 decompressed = bytearray()
                 pos = 0
                 while pos < len(content):
-                    if content[pos:pos+2] != b'\x1f\x8b':
+                    if content[pos : pos + 2] != b"\x1f\x8b":
                         break
                     decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
                     try:
@@ -121,12 +122,12 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True,
                 pass
 
         try:
-            text = content.decode('utf-8')
+            text = content.decode("utf-8")
         except UnicodeDecodeError:
-            text = content.decode('latin-1')
+            text = content.decode("latin-1")
 
         # Extract signals in one pass — no line storage
-        return extract_bed_signals(text.split('\n'))
+        return extract_bed_signals(text.split("\n"))
 
     except requests.Timeout:
         return None
@@ -150,10 +151,10 @@ def extract_bed_signals(lines: list[str]) -> dict:
 
     for line in lines:
         line = line.strip()
-        if not line or line.startswith('#') or line.startswith('track') or line.startswith('browser'):
+        if not line or line.startswith("#") or line.startswith("track") or line.startswith("browser"):
             continue
 
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) < 3:
             continue
 
@@ -168,7 +169,7 @@ def extract_bed_signals(lines: list[str]) -> dict:
         except ValueError:
             continue
 
-    has_chr_prefix = any(c.startswith('chr') for c in chromosomes)
+    has_chr_prefix = any(c.startswith("chr") for c in chromosomes)
 
     return {
         "chromosomes": sorted(chromosomes),
@@ -178,8 +179,9 @@ def extract_bed_signals(lines: list[str]) -> dict:
     }
 
 
-def classify_bed_file(md5sum: str, file_name: str, file_size: int | None = None,
-                      is_gzipped: bool = True, use_cache: bool = True) -> dict | None:
+def classify_bed_file(
+    md5sum: str, file_name: str, file_size: int | None = None, is_gzipped: bool = True, use_cache: bool = True
+) -> dict | None:
     """Fetch BED lines and infer reference assembly.
 
     Args:
@@ -213,7 +215,9 @@ def classify_bed_file(md5sum: str, file_name: str, file_size: int | None = None,
 
     # Classify using the unified classifier
     classifications = classify_from_bed_signals(
-        signals, file_name=file_name, file_size=file_size,
+        signals,
+        file_name=file_name,
+        file_size=file_size,
     )
 
     return {
@@ -226,8 +230,9 @@ def classify_bed_file(md5sum: str, file_name: str, file_size: int | None = None,
     }
 
 
-def process_bed_files(input_path: Path, output_path: Path, limit: int | None = None,
-                      resume: bool = True, workers: int = 10):
+def process_bed_files(
+    input_path: Path, output_path: Path, limit: int | None = None, resume: bool = True, workers: int = 10
+):
     """Process BED files that need reference detection.
 
     Args:
@@ -243,7 +248,8 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
 
     # Filter to BED files with MD5
     bed_files = [
-        f for f in files
+        f
+        for f in files
         if f.get("file_md5sum")
         and (f.get("file_name", "").endswith(".bed") or f.get("file_name", "").endswith(".bed.gz"))
     ]
@@ -277,8 +283,7 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
         is_gzipped = file_name.endswith(".gz")
         was_cached = load_cached_evidence(md5) is not None
 
-        result = classify_bed_file(md5, file_name, file_size=file_size,
-                                   is_gzipped=is_gzipped, use_cache=resume)
+        result = classify_bed_file(md5, file_name, file_size=file_size, is_gzipped=is_gzipped, use_cache=resume)
         if result:
             result["dataset_title"] = record.get("dataset_title")
             result["entry_id"] = record.get("entry_id")
@@ -295,14 +300,10 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
                     from_cache += 1
             else:
                 failed += 1
-            print(f"\r[{processed}/{len(bed_files)}] {record.get('file_name', '')[:50]:<55}",
-                  end="", flush=True)
+            print(f"\r[{processed}/{len(bed_files)}] {record.get('file_name', '')[:50]:<55}", end="", flush=True)
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_record = {
-                executor.submit(process_one, record): record
-                for record in bed_files
-            }
+            future_to_record = {executor.submit(process_one, record): record for record in bed_files}
             for future in as_completed(future_to_record):
                 record = future_to_record[future]
                 try:
@@ -316,8 +317,11 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
                                 from_cache += 1
                         else:
                             failed += 1
-                        print(f"\r[{processed}/{len(bed_files)}] {record.get('file_name', '')[:50]:<55}",
-                              end="", flush=True)
+                        print(
+                            f"\r[{processed}/{len(bed_files)}] {record.get('file_name', '')[:50]:<55}",
+                            end="",
+                            flush=True,
+                        )
                 except Exception as e:
                     with lock:
                         processed += 1
@@ -332,16 +336,20 @@ def process_bed_files(input_path: Path, output_path: Path, limit: int | None = N
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_to_process": len(bed_files),
-                "processed": processed,
-                "successful": successful,
-                "failed": failed,
-                "from_cache": from_cache,
+        json.dump(
+            {
+                "metadata": {
+                    "total_to_process": len(bed_files),
+                    "processed": processed,
+                    "successful": successful,
+                    "failed": failed,
+                    "from_cache": from_cache,
+                },
+                "classifications": classifications,
             },
-            "classifications": classifications,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"Saved to {output_path}")
 
@@ -366,25 +374,23 @@ def print_summary(classifications: list[dict]):
     print(f"\nTotal: {len(classifications)}")
     print("\nReference assemblies:")
     for ref, count in sorted(refs.items(), key=lambda x: -x[1]):
-        print(f"  {ref:<20} {count:>6} ({100*count/len(classifications):.1f}%)")
+        print(f"  {ref:<20} {count:>6} ({100 * count / len(classifications):.1f}%)")
 
     print("=" * 70)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch BED file headers for reference detection")
-    parser.add_argument("--input", "-i", type=str, default="data/anvil/anvil_files_metadata.json",
-                        help="Input metadata file")
-    parser.add_argument("--output", "-o", type=str, default="output/anvil/bed_reference_detection.json",
-                        help="Output file for results")
-    parser.add_argument("--limit", "-l", type=int, default=None,
-                        help="Limit number of files")
-    parser.add_argument("--md5", type=str,
-                        help="Classify a single file by MD5")
-    parser.add_argument("--no-resume", action="store_true",
-                        help="Don't use cached evidence")
-    parser.add_argument("--workers", "-w", type=int, default=10,
-                        help="Parallel workers (default: 10)")
+    parser.add_argument(
+        "--input", "-i", type=str, default="data/anvil/anvil_files_metadata.json", help="Input metadata file"
+    )
+    parser.add_argument(
+        "--output", "-o", type=str, default="output/anvil/bed_reference_detection.json", help="Output file for results"
+    )
+    parser.add_argument("--limit", "-l", type=int, default=None, help="Limit number of files")
+    parser.add_argument("--md5", type=str, help="Classify a single file by MD5")
+    parser.add_argument("--no-resume", action="store_true", help="Don't use cached evidence")
+    parser.add_argument("--workers", "-w", type=int, default=10, help="Parallel workers (default: 10)")
     args = parser.parse_args()
 
     if args.md5:

@@ -81,16 +81,12 @@ class TestRuleMatching:
 
     def test_rna_filename_sets_modality_regardless_of_size(self, engine):
         """RNA filename indicator should set transcriptomic modality."""
-        result = engine.classify(
-            FileInfo(filename="sample_RNA_aligned.bam", file_size=60_000_000_000)
-        )
+        result = engine.classify(FileInfo(filename="sample_RNA_aligned.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_star_aligner_indicates_rnaseq(self, engine):
         """STAR aligner output pattern should indicate RNA-seq."""
-        result = engine.classify(
-            FileInfo(filename="sample.Aligned.sortedByCoord.out.bam")
-        )
+        result = engine.classify(FileInfo(filename="sample.Aligned.sortedByCoord.out.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
 
@@ -119,20 +115,30 @@ class TestThenStatus:
 
     def _engine_with_rule(self, tmp_path, then):
         import yaml
+
         path = tmp_path / "rules.yaml"
         with open(path, "w", encoding="utf-8") as f:
-            yaml.safe_dump_all([
-                {"extension_map": {".foo": "foo"}},
-                {"rules": [{
-                    "id": "foo_rule", "tier": 1, "scope": "extension",
-                    "when": {"extensions": [".foo"]}, "then": then,
-                }]},
-            ], f)
+            yaml.safe_dump_all(
+                [
+                    {"extension_map": {".foo": "foo"}},
+                    {
+                        "rules": [
+                            {
+                                "id": "foo_rule",
+                                "tier": 1,
+                                "scope": "extension",
+                                "when": {"extensions": [".foo"]},
+                                "then": then,
+                            }
+                        ]
+                    },
+                ],
+                f,
+            )
         return RuleEngine(path)
 
     def test_status_only_field_is_not_applicable(self, tmp_path):
-        engine = self._engine_with_rule(
-            tmp_path, {"status": {"reference_assembly": "not_applicable"}})
+        engine = self._engine_with_rule(tmp_path, {"status": {"reference_assembly": "not_applicable"}})
         out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
         assert out["reference_assembly"]["value"] is None
@@ -140,10 +146,13 @@ class TestThenStatus:
     def test_real_value_and_status_coexist_in_one_rule(self, tmp_path):
         # The mixed case (e.g. nanopore_fast5): a real value and a status in the
         # same then-clause resolve independently and correctly.
-        engine = self._engine_with_rule(tmp_path, {
-            "data_type": "raw_signal",
-            "status": {"reference_assembly": "not_applicable"},
-        })
+        engine = self._engine_with_rule(
+            tmp_path,
+            {
+                "data_type": "raw_signal",
+                "status": {"reference_assembly": "not_applicable"},
+            },
+        )
         out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
         assert out["data_type"]["status"] == CLASSIFIED
         assert out["data_type"]["value"] == "raw_signal"
@@ -316,9 +325,7 @@ class TestIntegration:
 
     def test_hifi_bam(self, engine):
         """HiFi reads BAM file."""
-        result = engine.classify(
-            FileInfo(filename="m64043_210211_005516.hifi_reads.bam")
-        )
+        result = engine.classify(FileInfo(filename="m64043_210211_005516.hifi_reads.bam"))
         assert result.data_modality == "genomic"
 
     def test_vcf_with_chr(self, engine):
@@ -421,38 +428,46 @@ class TestEvaluateClaims:
 
     def test_single_claim(self):
         """Single claim → use it."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "tier": 2},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "genomic", "tier": 2},
+            ]
+        )
         assert result["value"] == "genomic"
         assert result["reason"] == "single_claim"
         assert result["is_conflict"] is False
 
     def test_two_claims_agree(self):
         """Two claims with same value → unanimous."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "tier": 2},
-            {"rule_id": "r2", "value": "genomic", "tier": 3},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "genomic", "tier": 2},
+                {"rule_id": "r2", "value": "genomic", "tier": 3},
+            ]
+        )
         assert result["value"] == "genomic"
         assert result["reason"] == "unanimous"
 
     def test_disagree_different_tiers(self):
         """Higher tier wins when claims disagree."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "value": "sequence", "tier": 1},
-            {"rule_id": "r2", "value": "assembly", "tier": 2},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "sequence", "tier": 1},
+                {"rule_id": "r2", "value": "assembly", "tier": 2},
+            ]
+        )
         assert result["value"] == "assembly"
         assert result["reason"] == "higher_specificity_override"
         assert result["is_conflict"] is False
 
     def test_disagree_same_tier(self):
         """Same tier, different values → conflict (not_classified status, no value)."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "value": "GRCh38", "tier": 2},
-            {"rule_id": "r2", "value": "CHM13", "tier": 2},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "GRCh38", "tier": 2},
+                {"rule_id": "r2", "value": "CHM13", "tier": 2},
+            ]
+        )
         assert result["status"] == NOT_CLASSIFIED
         assert result["value"] is None
         assert result["is_conflict"] is True
@@ -461,39 +476,47 @@ class TestEvaluateClaims:
 
     def test_three_claims_conflict_at_top_tier(self):
         """Lower tier agrees but top tier has conflict → conflict wins."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "value": "genomic", "tier": 1},
-            {"rule_id": "r2", "value": "genomic", "tier": 3},
-            {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "genomic", "tier": 1},
+                {"rule_id": "r2", "value": "genomic", "tier": 3},
+                {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
+            ]
+        )
         assert result["status"] == NOT_CLASSIFIED
         assert result["value"] is None
         assert result["is_conflict"] is True
 
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_CLASSIFIED},
-            {"rule_id": "r2", "value": "genomic", "tier": 2},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "status": NOT_CLASSIFIED},
+                {"rule_id": "r2", "value": "genomic", "tier": 2},
+            ]
+        )
         assert result["value"] == "genomic"
         assert result["reason"] == "single_claim"
 
     def test_not_applicable_status_declaration(self):
         """A not_applicable status claim resolves to status not_applicable, value None."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
+            ]
+        )
         assert result["status"] == NOT_APPLICABLE
         assert result["value"] is None
         assert result["reason"] == "single_claim"
 
     def test_not_applicable_wins_over_real_value_same_tier(self):
         """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
-        result = evaluate_claims([
-            {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
-            {"rule_id": "r2", "value": "genomic", "tier": 1},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
+                {"rule_id": "r2", "value": "genomic", "tier": 1},
+            ]
+        )
         assert result["status"] == NOT_APPLICABLE
         assert result["value"] is None
         assert result["is_conflict"] is False
@@ -501,11 +524,16 @@ class TestEvaluateClaims:
 
     def test_rule_authored_not_classified_is_not_no_claims(self):
         """A rule that intentionally declares not_classified is a real claim, not no_claims."""
-        result = evaluate_claims([
-            {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
-             "tier": 3,
-             "reason": "FASTQ modality cannot be determined from reads alone"},
-        ])
+        result = evaluate_claims(
+            [
+                {
+                    "rule_id": "fastq_modality_unknown",
+                    "status": NOT_CLASSIFIED,
+                    "tier": 3,
+                    "reason": "FASTQ modality cannot be determined from reads alone",
+                },
+            ]
+        )
         assert result["status"] == NOT_CLASSIFIED
         assert result["value"] is None
         assert result["reason"] == "single_claim"
@@ -514,20 +542,18 @@ class TestEvaluateClaims:
 
     def test_rule_authored_not_classified_does_not_conflict_with_real(self):
         """A rule's not_classified declaration shouldn't conflict with a real value claim."""
-        result = evaluate_claims([
-            {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED,
-             "tier": 3},
-            {"rule_id": "some_rule", "value": "genomic",
-             "tier": 3},
-        ])
+        result = evaluate_claims(
+            [
+                {"rule_id": "fastq_modality_unknown", "status": NOT_CLASSIFIED, "tier": 3},
+                {"rule_id": "some_rule", "value": "genomic", "tier": 3},
+            ]
+        )
         assert result["value"] == "genomic"
         assert result["is_conflict"] is False
 
     def test_rule_authored_not_classified_in_evidence(self, engine):
         """fastq_modality_unknown rationale should appear in evidence, not generic placeholder."""
-        result = engine.classify_extended(
-            FileInfo(filename="sample_R1.fastq.gz"), include_tier3=True
-        )
+        result = engine.classify_extended(FileInfo(filename="sample_R1.fastq.gz"), include_tier3=True)
         dm_evidence = result.field_evidence.get("data_modality", [])
         rule_ids = [e["rule_id"] for e in dm_evidence]
         # Should have the rule's ID, not the generic "not_classified" placeholder
@@ -541,8 +567,10 @@ class TestAssayTypeInference:
     def test_inferred_assay_type_has_evidence(self, engine):
         """Inferred assay_type should have evidence from the infer_assay_type rule."""
         file_info = ExtendedFileInfo(
-            filename="sample.bam", file_size=60_000_000_000,
-            file_size_gb=60.0, file_format=".bam",
+            filename="sample.bam",
+            file_size=60_000_000_000,
+            file_size_gb=60.0,
+            file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
         # Set conditions that trigger WGS inference (via set_field to stay coherent)
@@ -559,18 +587,22 @@ class TestAssayTypeInference:
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
         """Inference should remove stale not_classified placeholder evidence."""
         file_info = ExtendedFileInfo(
-            filename="sample.bam", file_size=60_000_000_000,
-            file_size_gb=60.0, file_format=".bam",
+            filename="sample.bam",
+            file_size=60_000_000_000,
+            file_size_gb=60.0,
+            file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
         result.set_field("data_modality", "genomic")
         result.set_field("platform", "ILLUMINA")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
-        result.field_evidence["assay_type"] = [{
-            "rule_id": "not_classified",
-            "reason": "No rule determined a value for assay_type",
-            "status": NOT_CLASSIFIED,
-        }]
+        result.field_evidence["assay_type"] = [
+            {
+                "rule_id": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": NOT_CLASSIFIED,
+            }
+        ]
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
         rule_ids = [e["rule_id"] for e in result.field_evidence["assay_type"]]
@@ -619,8 +651,7 @@ class TestSentinelValues:
             evidence = result.field_evidence[fld]
             nc_evidence = [e for e in evidence if e["rule_id"] == "not_classified"]
             assert nc_evidence, f"Expected not_classified evidence for {fld}"
-            assert fld in nc_evidence[0]["reason"], \
-                f"Expected '{fld}' in reason, got: {nc_evidence[0]['reason']}"
+            assert fld in nc_evidence[0]["reason"], f"Expected '{fld}' in reason, got: {nc_evidence[0]['reason']}"
             checked += 1
         assert checked == 5
 
@@ -644,9 +675,7 @@ class TestSentinelValues:
 
     def test_bam_without_header_not_classified(self, engine):
         """BAM without header should leave modality as not_classified."""
-        result = engine.classify_extended(
-            ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)
-        )
+        result = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0))
         # No header = no modality evidence, even for large files
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
@@ -674,14 +703,15 @@ class TestOutputDictStatus:
     def test_status_pins_each_sentinel_state(self, engine):
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives
         # in `status` with `value` nulled out — no sentinels in `value`.
-        classified = engine.classify_extended(
-            FileInfo(filename="sample_WGS_aligned.bam")).to_output_dict()["data_modality"]
+        classified = engine.classify_extended(FileInfo(filename="sample_WGS_aligned.bam")).to_output_dict()[
+            "data_modality"
+        ]
         assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)
 
-        n_a = engine.classify_extended(
-            FileInfo(filename="plot.png")).to_output_dict()["reference_assembly"]
+        n_a = engine.classify_extended(FileInfo(filename="plot.png")).to_output_dict()["reference_assembly"]
         assert (n_a["value"], n_a["status"]) == (None, NOT_APPLICABLE)
 
-        n_c = engine.classify_extended(
-            ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)).to_output_dict()["data_modality"]
+        n_c = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)).to_output_dict()[
+            "data_modality"
+        ]
         assert (n_c["value"], n_c["status"]) == (None, NOT_CLASSIFIED)

@@ -32,15 +32,15 @@ def _get_engine():
     """Get a cached RuleEngine instance (avoids re-parsing YAML on every call)."""
     if not hasattr(_get_engine, "_instance"):
         from .rule_engine import RuleEngine
+
         _get_engine._instance = RuleEngine()
     return _get_engine._instance
-
-
 
 
 # =============================================================================
 # PUBLIC API FUNCTIONS
 # =============================================================================
+
 
 def classify_from_header(
     header_text: str,
@@ -85,6 +85,7 @@ def classify_from_header(
     sq_lines = [line for line in lines if line.startswith("@SQ")]
 
     from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
+
     contig_ref = None
     contig_matches = 0
     if sq_lines:
@@ -98,19 +99,23 @@ def classify_from_header(
     if contig_ref:
         result.set_field("reference_assembly", contig_ref)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"] = [{
-            "rule_id": "contig_length_detection",
-            "reason": reason,
-            "value": contig_ref,
-        }]
+        result.field_evidence["reference_assembly"] = [
+            {
+                "rule_id": "contig_length_detection",
+                "reason": reason,
+                "value": contig_ref,
+            }
+        ]
         # Aligned to a known reference genome = genomic data
         if not result.is_declared("data_modality"):
             result.set_field("data_modality", "genomic")
-            result.field_evidence["data_modality"] = [{
-                "rule_id": "aligned_to_reference",
-                "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
-                "value": "genomic",
-            }]
+            result.field_evidence["data_modality"] = [
+                {
+                    "rule_id": "aligned_to_reference",
+                    "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
+                    "value": "genomic",
+                }
+            ]
 
     # Infer assay type
     engine.infer_assay_type(result, file_info)
@@ -174,11 +179,13 @@ def classify_from_vcf_header(
     if contig_ref:
         result.set_field("reference_assembly", contig_ref)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"] = [{
-            "rule_id": "vcf_contig_length",
-            "reason": reason,
-            "value": contig_ref,
-        }]
+        result.field_evidence["reference_assembly"] = [
+            {
+                "rule_id": "vcf_contig_length",
+                "reason": reason,
+                "value": contig_ref,
+            }
+        ]
 
     return result.to_output_dict()
 
@@ -270,8 +277,9 @@ def classify_from_fastq_header(
             # declaration has data_modality=None, so a truthiness check would drop it.
             result.set_field("platform", result_stripped.platform)
             if result_stripped.is_declared("data_modality"):
-                result.set_field("data_modality", result_stripped.data_modality,
-                                 result_stripped.status_of("data_modality"))
+                result.set_field(
+                    "data_modality", result_stripped.data_modality, result_stripped.status_of("data_modality")
+                )
             # Merge per-field evidence
             for fld, entries in result_stripped.field_evidence.items():
                 result.field_evidence[fld].extend(entries)
@@ -325,14 +333,11 @@ def classify_from_fastq_header(
 
 # Pre-compiled patterns for FASTA contig classification
 _ASSEMBLER_PATTERN = re.compile(
-    r'(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)'
-    r'|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)',
-    re.IGNORECASE
+    r"(^|#\d#)(h[12]tg|ptg|utg|ctg|tig\d|utig)"
+    r"|^(scaffold[_.]|contig[_.]|asm\d|haplotype\d|mat-|pat-|unassigned-)",
+    re.IGNORECASE,
 )
-_TRANSCRIPT_PATTERN = re.compile(
-    r'^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)',
-    re.IGNORECASE
-)
+_TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNORECASE)
 
 
 def filename_for_rules(
@@ -414,9 +419,7 @@ def classify_without_content(
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = filename_for_rules(
-        file_name, file_format, default="", allowed_extensions=allowed_extensions
-    )
+    filename = filename_for_rules(file_name, file_format, default="", allowed_extensions=allowed_extensions)
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
@@ -427,11 +430,13 @@ def classify_without_content(
     output = result.to_output_dict()
     for fld in content_fields:
         if fld in output:
-            output[fld]["evidence"].append({
-                "rule_id": "fetch_failed",
-                "reason": reason,
-                "status": NOT_CLASSIFIED,
-            })
+            output[fld]["evidence"].append(
+                {
+                    "rule_id": "fetch_failed",
+                    "reason": reason,
+                    "status": NOT_CLASSIFIED,
+                }
+            )
     return output
 
 
@@ -474,7 +479,9 @@ def classify_from_gfa_segment_tags(
     from .rule_engine import ExtendedFileInfo
 
     filename = filename_for_rules(
-        file_name, file_format, default="graph.gfa",
+        file_name,
+        file_format,
+        default="graph.gfa",
         allowed_extensions=GRAPH_TEXT_EXTENSIONS,
     )
 
@@ -494,16 +501,18 @@ def classify_from_gfa_segment_tags(
         # as the engine-resolved `-mc-` case. The tier matters: evaluate_claims
         # defaults a missing tier to 0, which would lose to the tier-1 `pangenome`
         # claim and undo this refinement once #150 resolves this path from claims.
-        result.field_evidence["data_type"].append({
-            "rule_id": "rgfa_stable_rank_reference",
-            "tier": 3,
-            "reason": (
-                f"{len(rank0)} rGFA {phrase} stable rank 0 "
-                f"(SR:i:0) on {preview} — graph defines a reference "
-                f"coordinate system"
-            ),
-            "value": "pangenome.reference",
-        })
+        result.field_evidence["data_type"].append(
+            {
+                "rule_id": "rgfa_stable_rank_reference",
+                "tier": 3,
+                "reason": (
+                    f"{len(rank0)} rGFA {phrase} stable rank 0 "
+                    f"(SR:i:0) on {preview} — graph defines a reference "
+                    f"coordinate system"
+                ),
+                "value": "pangenome.reference",
+            }
+        )
         # Still set imperatively rather than resolved from the claims above;
         # conflict detection for data_type is bypassed here (see #150).
         result.set_field("data_type", "pangenome.reference")
@@ -515,6 +524,7 @@ def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""
     if not hasattr(_get_ref_chrom_names, "_cache"):
         from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+
         names = set()
         for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
             names.update(ref_contigs.keys())
@@ -579,16 +589,20 @@ def classify_from_fasta_header(
         result.set_field("data_type", "sequence")
         if not result.is_declared("reference_assembly"):
             result.set_field("reference_assembly", status=NOT_CLASSIFIED)
-        result.field_evidence["data_modality"] = [{
-            "rule_id": "fasta_transcript_contigs",
-            "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
-            "value": "transcriptomic.bulk",
-        }]
-        result.field_evidence["data_type"] = [{
-            "rule_id": "fasta_transcript_contigs",
-            "reason": "Transcript sequences in FASTA",
-            "value": "sequence",
-        }]
+        result.field_evidence["data_modality"] = [
+            {
+                "rule_id": "fasta_transcript_contigs",
+                "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
+                "value": "transcriptomic.bulk",
+            }
+        ]
+        result.field_evidence["data_type"] = [
+            {
+                "rule_id": "fasta_transcript_contigs",
+                "reason": "Transcript sequences in FASTA",
+                "value": "sequence",
+            }
+        ]
         return result.to_output_dict()
 
     # 2. Contigs match a known reference set → reference genome
@@ -620,7 +634,7 @@ def classify_from_fasta_header(
             ref_entry = {
                 "rule_id": "fasta_reference_contigs",
                 "reason": f"Matched {best_count} contigs to reference chromosomes"
-                          + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
+                + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
             }
             if best_ref:
                 result.set_field("reference_assembly", best_ref)
@@ -629,16 +643,20 @@ def classify_from_fasta_header(
                 result.set_field("reference_assembly", status=NOT_CLASSIFIED)
                 ref_entry["status"] = NOT_CLASSIFIED
             result.field_evidence["reference_assembly"] = [ref_entry]
-            result.field_evidence["data_modality"] = [{
-                "rule_id": "fasta_reference_contigs",
-                "reason": "Contig names match known reference genome",
-                "value": "genomic",
-            }]
-            result.field_evidence["data_type"] = [{
-                "rule_id": "fasta_reference_contigs",
-                "reason": "FASTA contains reference genome sequences",
-                "value": "assembly.reference",
-            }]
+            result.field_evidence["data_modality"] = [
+                {
+                    "rule_id": "fasta_reference_contigs",
+                    "reason": "Contig names match known reference genome",
+                    "value": "genomic",
+                }
+            ]
+            result.field_evidence["data_type"] = [
+                {
+                    "rule_id": "fasta_reference_contigs",
+                    "reason": "FASTA contains reference genome sequences",
+                    "value": "assembly.reference",
+                }
+            ]
             return result.to_output_dict()
 
     # 3. Assembler output contigs → de novo assembly
@@ -647,21 +665,27 @@ def classify_from_fasta_header(
         result.set_field("data_type", "assembly")
         result.set_field("reference_assembly", status=NOT_APPLICABLE)
         sample = assembler_contigs[0]
-        result.field_evidence["data_modality"] = [{
-            "rule_id": "fasta_assembler_contigs",
-            "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
-            "value": "genomic",
-        }]
-        result.field_evidence["data_type"] = [{
-            "rule_id": "fasta_assembler_contigs",
-            "reason": "Contig names indicate assembler output",
-            "value": "assembly",
-        }]
-        result.field_evidence["reference_assembly"] = [{
-            "rule_id": "fasta_assembler_contigs",
-            "reason": "De novo assembly — no reference genome applicable",
-            "status": NOT_APPLICABLE,
-        }]
+        result.field_evidence["data_modality"] = [
+            {
+                "rule_id": "fasta_assembler_contigs",
+                "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
+                "value": "genomic",
+            }
+        ]
+        result.field_evidence["data_type"] = [
+            {
+                "rule_id": "fasta_assembler_contigs",
+                "reason": "Contig names indicate assembler output",
+                "value": "assembly",
+            }
+        ]
+        result.field_evidence["reference_assembly"] = [
+            {
+                "rule_id": "fasta_assembler_contigs",
+                "reason": "De novo assembly — no reference genome applicable",
+                "status": NOT_APPLICABLE,
+            }
+        ]
         return result.to_output_dict()
 
     # 4. Many non-standard contigs → likely de novo assembly
@@ -669,39 +693,49 @@ def classify_from_fasta_header(
         result.set_field("data_modality", "genomic")
         result.set_field("data_type", "assembly")
         result.set_field("reference_assembly", status=NOT_APPLICABLE)
-        result.field_evidence["data_modality"] = [{
-            "rule_id": "fasta_many_contigs",
-            "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
-            "value": "genomic",
-        }]
-        result.field_evidence["data_type"] = [{
-            "rule_id": "fasta_many_contigs",
-            "reason": "High contig count suggests assembly",
-            "value": "assembly",
-        }]
-        result.field_evidence["reference_assembly"] = [{
-            "rule_id": "fasta_many_contigs",
-            "reason": "De novo assembly — no reference genome applicable",
-            "status": NOT_APPLICABLE,
-        }]
+        result.field_evidence["data_modality"] = [
+            {
+                "rule_id": "fasta_many_contigs",
+                "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
+                "value": "genomic",
+            }
+        ]
+        result.field_evidence["data_type"] = [
+            {
+                "rule_id": "fasta_many_contigs",
+                "reason": "High contig count suggests assembly",
+                "value": "assembly",
+            }
+        ]
+        result.field_evidence["reference_assembly"] = [
+            {
+                "rule_id": "fasta_many_contigs",
+                "reason": "De novo assembly — no reference genome applicable",
+                "status": NOT_APPLICABLE,
+            }
+        ]
         return result.to_output_dict()
 
     # 5. Default: preserve rule engine results if they set modality/type,
     #    otherwise fall back to genomic/sequence
     if not result.is_declared("data_modality"):
         result.set_field("data_modality", "genomic")
-        result.field_evidence["data_modality"] = [{
-            "rule_id": "fasta_default_genomic",
-            "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
-            "value": "genomic",
-        }]
+        result.field_evidence["data_modality"] = [
+            {
+                "rule_id": "fasta_default_genomic",
+                "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
+                "value": "genomic",
+            }
+        ]
     if not result.is_declared("data_type"):
         result.set_field("data_type", "sequence")
-        result.field_evidence["data_type"] = [{
-            "rule_id": "fasta_default_genomic",
-            "reason": "Unable to determine specific FASTA type from headers",
-            "value": "sequence",
-        }]
+        result.field_evidence["data_type"] = [
+            {
+                "rule_id": "fasta_default_genomic",
+                "reason": "Unable to determine specific FASTA type from headers",
+                "value": "sequence",
+            }
+        ]
     return result.to_output_dict()
 
 
@@ -709,7 +743,7 @@ def classify_from_fasta_header(
 # BED COORDINATE-BASED CLASSIFICATION
 # =============================================================================
 
-_STANDARD_CHROM_PATTERN = re.compile(r'^(chr)?(\d{1,2}|X|Y|M|MT)$', re.IGNORECASE)
+_STANDARD_CHROM_PATTERN = re.compile(r"^(chr)?(\d{1,2}|X|Y|M|MT)$", re.IGNORECASE)
 
 
 def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
@@ -727,12 +761,10 @@ def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
     if not max_coords:
         return None, "No coordinates found"
 
-    standard_chroms = [c for c in signals.get("chromosomes", [])
-                       if _STANDARD_CHROM_PATTERN.match(c)]
+    standard_chroms = [c for c in signals.get("chromosomes", []) if _STANDARD_CHROM_PATTERN.match(c)]
 
     if not standard_chroms:
-        return None, ("Non-standard chromosome names — likely de novo assembly, "
-                      "not aligned to a standard reference")
+        return None, ("Non-standard chromosome names — likely de novo assembly, not aligned to a standard reference")
 
     if not has_chr_prefix:
         return "GRCh37", "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
@@ -752,9 +784,7 @@ def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
             ref_length = chrom_lengths[chrom_key]
             if max_coord > ref_length + tolerance:
                 ruled_out.add(assembly)
-                evidence_details.append(
-                    f"{chrom}:{max_coord} exceeds {assembly} {chrom_key} length {ref_length}"
-                )
+                evidence_details.append(f"{chrom}:{max_coord} exceeds {assembly} {chrom_key} length {ref_length}")
                 break
 
     candidates = [a for a in ref_lengths if a not in ruled_out]
@@ -774,8 +804,7 @@ def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
         # chromosome lengths differ, so we genuinely can't tell them apart. Return
         # "can't tell" (None) rather than guessing a closest match: an undefined
         # coordinate result must not override a filename-based reference.
-        return None, (f"Cannot distinguish between {', '.join(candidates)} — "
-                      "coordinates fit multiple references")
+        return None, (f"Cannot distinguish between {', '.join(candidates)} — coordinates fit multiple references")
 
 
 def classify_from_bed_signals(
@@ -824,18 +853,22 @@ def classify_from_bed_signals(
             # not overturn an existing not_applicable — that is a positive
             # determination ("no reference applies"), not a filename guess.
             result.set_field("reference_assembly", coord_ref)
-            result.field_evidence["reference_assembly"] = [{
-                "rule_id": "bed_coordinate_reference",
-                "reason": coord_rationale,
-                "value": coord_ref,
-            }]
+            result.field_evidence["reference_assembly"] = [
+                {
+                    "rule_id": "bed_coordinate_reference",
+                    "reason": coord_rationale,
+                    "value": coord_ref,
+                }
+            ]
         elif "Non-standard chromosome" in coord_rationale:
             result.set_field("reference_assembly", status=NOT_APPLICABLE)
-            result.field_evidence["reference_assembly"] = [{
-                "rule_id": "bed_nonstandard_contigs",
-                "reason": coord_rationale,
-                "status": NOT_APPLICABLE,
-            }]
+            result.field_evidence["reference_assembly"] = [
+                {
+                    "rule_id": "bed_nonstandard_contigs",
+                    "reason": coord_rationale,
+                    "status": NOT_APPLICABLE,
+                }
+            ]
 
     return result.to_output_dict()
 

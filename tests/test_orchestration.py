@@ -31,11 +31,7 @@ def _jobs():
 
 def test_every_registered_file_type_has_a_phase1_job():
     """Otherwise `make classify` never invokes that type's classifier."""
-    typed = {
-        extra[extra.index("--type") + 1]
-        for _, _, extra in _jobs()
-        if "--type" in extra
-    }
+    typed = {extra[extra.index("--type") + 1] for _, _, extra in _jobs() if "--type" in extra}
     missing = set(FILE_TYPE_REGISTRY) - typed
     assert not missing, (
         f"FILE_TYPE_REGISTRY types with no Phase 1 job: {sorted(missing)}. "
@@ -63,14 +59,12 @@ def test_every_registered_file_type_has_a_makefile_target():
     makefile = (Path(__file__).parent.parent / "Makefile").read_text()
     for ftype in FILE_TYPE_REGISTRY:
         assert f"\nclassify-{ftype}:" in makefile, (
-            f"No `classify-{ftype}` target in the Makefile for registered type "
-            f"{ftype!r}."
+            f"No `classify-{ftype}` target in the Makefile for registered type {ftype!r}."
         )
         assert f"{ftype}_classifications.json" in makefile, (
             f"The classify-{ftype} target does not write "
             f"{ftype}_classifications.json, which CLASSIFICATION_FILES expects."
         )
         assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
-            f"classify-{ftype} is defined but not listed as a "
-            "`classify-headers` prerequisite or in .PHONY."
+            f"classify-{ftype} is defined but not listed as a `classify-headers` prerequisite or in .PHONY."
         )

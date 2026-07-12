@@ -22,41 +22,47 @@ def classify_single_vcf(
 ) -> dict | None:
     """Backward-compat: classify a single VCF file by MD5."""
     return ClassifyPipeline.classify_single(
-        VCF_CONFIG, md5sum, file_name=file_name, file_size=file_size,
-        is_gzipped=is_gzipped, use_cache=use_cache,
+        VCF_CONFIG,
+        md5sum,
+        file_name=file_name,
+        file_size=file_size,
+        is_gzipped=is_gzipped,
+        use_cache=use_cache,
     )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch VCF headers and classify")
-    parser.add_argument("--input", "-i", type=str,
-                        help="Input file (classification JSON or metadata NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/anvil/vcf_classifications.json",
-                        help="Output file for classifications")
-    parser.add_argument("--limit", "-l", type=int, default=None,
-                        help="Limit number of files to process")
-    parser.add_argument("--md5", type=str,
-                        help="Classify a single file by MD5 hash")
-    parser.add_argument("--no-resume", action="store_true",
-                        help="Don't use cached headers, re-fetch all")
-    parser.add_argument("--workers", "-w", type=int, default=10,
-                        help="Number of parallel workers (default: 10)")
-    parser.add_argument("--skip-complete", action="store_true",
-                        help="Skip if output file already has all files classified")
-    parser.add_argument("--skip-cached", action="store_true",
-                        help="Skip files entirely if header is already cached")
-    parser.add_argument("--docs", action="store_true",
-                        help="Print rules documentation and exit")
+    parser.add_argument("--input", "-i", type=str, help="Input file (classification JSON or metadata NDJSON)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="output/anvil/vcf_classifications.json",
+        help="Output file for classifications",
+    )
+    parser.add_argument("--limit", "-l", type=int, default=None, help="Limit number of files to process")
+    parser.add_argument("--md5", type=str, help="Classify a single file by MD5 hash")
+    parser.add_argument("--no-resume", action="store_true", help="Don't use cached headers, re-fetch all")
+    parser.add_argument("--workers", "-w", type=int, default=10, help="Number of parallel workers (default: 10)")
+    parser.add_argument(
+        "--skip-complete", action="store_true", help="Skip if output file already has all files classified"
+    )
+    parser.add_argument("--skip-cached", action="store_true", help="Skip files entirely if header is already cached")
+    parser.add_argument("--docs", action="store_true", help="Print rules documentation and exit")
     args = parser.parse_args()
 
     if args.docs:
         from meta_disco.header_classifier import get_rules_documentation
+
         print(get_rules_documentation())
         return
 
     if args.md5:
         result = ClassifyPipeline.classify_single(
-            VCF_CONFIG, args.md5, use_cache=not args.no_resume,
+            VCF_CONFIG,
+            args.md5,
+            use_cache=not args.no_resume,
         )
         if result:
             print(json.dumps(result, indent=2))

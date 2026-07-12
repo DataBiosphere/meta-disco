@@ -49,6 +49,7 @@ class FetchError(Exception):
 # SHARED EVIDENCE CACHE
 # =============================================================================
 
+
 def get_evidence_path(evidence_dir: Path, md5sum: str) -> Path:
     """Get path for cached evidence file.
 
@@ -97,10 +98,7 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     headers = {"Range": f"bytes=0-{end_byte}"}
     resp = requests.get(fetch_url, headers=headers, timeout=timeout)
     if resp.status_code not in [200, 206]:
-        raise FetchError(
-            f"HTTP {resp.status_code} from {'source URL' if url else 'AnVIL S3 mirror'} "
-            f"range request"
-        )
+        raise FetchError(f"HTTP {resp.status_code} from {'source URL' if url else 'AnVIL S3 mirror'} range request")
     return resp.content
 
 
@@ -117,7 +115,7 @@ def _decompress_head(content: bytes, is_gzipped: bool) -> tuple[bytes, bool]:
     or it is BGZF and only the first member was read (see #149). Non-gzipped input
     is trivially complete: the bytes are exactly what was fetched.
     """
-    if is_gzipped and content[:2] == b'\x1f\x8b':
+    if is_gzipped and content[:2] == b"\x1f\x8b":
         try:
             decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
             out = decompressor.decompress(content)
@@ -130,14 +128,15 @@ def _decompress_head(content: bytes, is_gzipped: bool) -> tuple[bytes, bool]:
 def _decode_bytes(content: bytes) -> str:
     """Decode bytes to string, trying UTF-8 first then Latin-1."""
     try:
-        return content.decode('utf-8')
+        return content.decode("utf-8")
     except UnicodeDecodeError:
-        return content.decode('latin-1')
+        return content.decode("latin-1")
 
 
 # =============================================================================
 # BAM FETCHER
 # =============================================================================
+
 
 def fetch_bam_header(
     evidence_dir: Path,
@@ -174,7 +173,7 @@ def fetch_bam_header(
                 "md5sum": md5sum,
                 "file_name": file_name,
                 "header_text": header_text,
-                "header_line_count": len(header_text.split('\n')),
+                "header_line_count": len(header_text.split("\n")),
                 "fetch_timestamp": _timestamp(),
             }
             if url:
@@ -197,9 +196,8 @@ def fetch_bam_header(
 # VCF FETCHER
 # =============================================================================
 
-def extract_max_positions(
-    variant_lines: list[str], max_variants: int = 100
-) -> dict[str, int]:
+
+def extract_max_positions(variant_lines: list[str], max_variants: int = 100) -> dict[str, int]:
     """Extract max position per chromosome from variant lines.
 
     Used for reference assembly detection when header-based detection fails.
@@ -210,14 +208,14 @@ def extract_max_positions(
     for line in variant_lines:
         if count >= max_variants:
             break
-        if not line or line.startswith('#'):
+        if not line or line.startswith("#"):
             continue
 
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) < 2:
             continue
 
-        chrom = parts[0].replace('chr', '')
+        chrom = parts[0].replace("chr", "")
         try:
             pos = int(parts[1])
             max_positions[chrom] = max(max_positions.get(chrom, 0), pos)
@@ -257,15 +255,15 @@ def fetch_vcf_header(
         header_lines = []
         variant_lines = []
 
-        for line in text.split('\n'):
-            if line.startswith('#'):
+        for line in text.split("\n"):
+            if line.startswith("#"):
                 header_lines.append(line)
             elif line.strip():
                 if len(variant_lines) < 100:
                     variant_lines.append(line)
 
         if header_lines:
-            header_text = '\n'.join(header_lines)
+            header_text = "\n".join(header_lines)
             max_positions = extract_max_positions(variant_lines) if variant_lines else None
             evidence = {
                 "md5sum": md5sum,
@@ -302,6 +300,7 @@ def fetch_vcf_header(
 # FASTQ FETCHER
 # =============================================================================
 
+
 def fetch_fastq_reads(
     evidence_dir: Path,
     md5sum: str,
@@ -329,12 +328,12 @@ def fetch_fastq_reads(
         content = _decompress_if_gzipped(content, is_gzipped)
         text = _decode_bytes(content)
 
-        lines = text.split('\n')
+        lines = text.split("\n")
         read_names = []
         i = 0
         while i < len(lines) and len(read_names) < num_reads:
             line = lines[i].strip()
-            if line.startswith('@'):
+            if line.startswith("@"):
                 read_names.append(line)
                 i += 4  # Skip sequence, +, quality
             else:
@@ -372,6 +371,7 @@ def fetch_fastq_reads(
 # FASTA FETCHER
 # =============================================================================
 
+
 def fetch_fasta_headers(
     evidence_dir: Path,
     md5sum: str,
@@ -399,9 +399,9 @@ def fetch_fasta_headers(
         text = _decode_bytes(content)
 
         contig_names = []
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             line = line.strip()
-            if line.startswith('>'):
+            if line.startswith(">"):
                 name = line[1:].split()[0] if line[1:].strip() else line[1:].strip()
                 if name:
                     contig_names.append(name)
@@ -437,6 +437,7 @@ def fetch_fasta_headers(
 # =============================================================================
 # GFA FETCHER
 # =============================================================================
+
 
 def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
     """Parse rGFA stable-sequence tags from the S (segment) lines of GFA text.
@@ -479,7 +480,7 @@ def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
             continue  # fewer than 4 columns — no tag columns follow the sequence
 
         tags = {}
-        for fld in line[pos + 1:].rstrip("\r").split("\t"):
+        for fld in line[pos + 1 :].rstrip("\r").split("\t"):
             if fld.startswith("SN:Z:"):
                 tags["SN"] = fld[5:]
             elif fld.startswith("SR:i:"):
@@ -545,9 +546,7 @@ def fetch_gfa_segment_tags(
         content, stream_complete = _decompress_head(content, is_gzipped)
         text = _decode_bytes(content)
 
-        segment_tags = parse_gfa_segment_tags(
-            text, truncated=not (got_whole_file and stream_complete)
-        )
+        segment_tags = parse_gfa_segment_tags(text, truncated=not (got_whole_file and stream_complete))
 
         evidence = {
             "md5sum": md5sum,

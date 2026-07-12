@@ -36,7 +36,7 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
 
     for i, file_data in enumerate(files):
         if (i + 1) % 10000 == 0:
-            print(f"\rClassifying... {i+1:,}/{total:,} ({100*(i+1)/total:.1f}%)", end="", flush=True)
+            print(f"\rClassifying... {i + 1:,}/{total:,} ({100 * (i + 1) / total:.1f}%)", end="", flush=True)
 
         file_info = FileInfo(
             filename=file_data.get("file_name", ""),
@@ -46,25 +46,27 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
 
         result = engine.classify_extended(file_info)
 
-        results.append({
-            # Original metadata
-            "entry_id": file_data.get("entry_id"),  # Needed for API lookups
-            "file_id": file_data.get("file_id"),
-            "file_name": file_data.get("file_name"),
-            "file_format": file_data.get("file_format"),
-            "file_size": file_data.get("file_size"),
-            "file_md5sum": file_data.get("file_md5sum"),  # Needed for S3 access
-            "dataset_id": file_data.get("dataset_id"),
-            "dataset_title": file_data.get("dataset_title"),
-            # Original API values
-            "api_data_modality": file_data.get("data_modality"),
-            "api_reference_assembly": file_data.get("reference_assembly"),
-            # Classification results (label = value when classified, else the status)
-            "predicted_modality": result.label("data_modality"),
-            "predicted_reference": result.label("reference_assembly"),
-            "rules_matched": "|".join(result.rules_matched),
-            "reasons": "|".join(result.reasons),
-        })
+        results.append(
+            {
+                # Original metadata
+                "entry_id": file_data.get("entry_id"),  # Needed for API lookups
+                "file_id": file_data.get("file_id"),
+                "file_name": file_data.get("file_name"),
+                "file_format": file_data.get("file_format"),
+                "file_size": file_data.get("file_size"),
+                "file_md5sum": file_data.get("file_md5sum"),  # Needed for S3 access
+                "dataset_id": file_data.get("dataset_id"),
+                "dataset_title": file_data.get("dataset_title"),
+                # Original API values
+                "api_data_modality": file_data.get("data_modality"),
+                "api_reference_assembly": file_data.get("reference_assembly"),
+                # Classification results (label = value when classified, else the status)
+                "predicted_modality": result.label("data_modality"),
+                "predicted_reference": result.label("reference_assembly"),
+                "rules_matched": "|".join(result.rules_matched),
+                "reasons": "|".join(result.reasons),
+            }
+        )
 
     print()
     return results
@@ -126,14 +128,18 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     # Save full results as JSON
     json_path = output_dir / f"classification_results_{timestamp}.json"
     with open(json_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "total_files": len(results),
+        json.dump(
+            {
+                "metadata": {
+                    "timestamp": datetime.now().isoformat(),
+                    "total_files": len(results),
+                },
+                "stats": stats,
+                "results": results,
             },
-            "stats": stats,
-            "results": results,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
     print(f"Saved JSON results to {json_path}")
 
     # Save as TSV for easy viewing
@@ -158,13 +164,21 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     print(f"Total files:                  {stats['total_files']:,}")
     print()
     print("MODALITY CLASSIFICATION:")
-    print(f"  Classified with modality:   {stats['classified_with_modality']:,} ({100*stats['classified_with_modality']/stats['total_files']:.1f}%)")
-    print(f"  API had modality:           {stats['api_had_modality']:,} ({100*stats['api_had_modality']/stats['total_files']:.1f}%)")
+    print(
+        f"  Classified with modality:   {stats['classified_with_modality']:,} ({100 * stats['classified_with_modality'] / stats['total_files']:.1f}%)"
+    )
+    print(
+        f"  API had modality:           {stats['api_had_modality']:,} ({100 * stats['api_had_modality'] / stats['total_files']:.1f}%)"
+    )
     print(f"  Filled missing modality:    {stats['filled_missing_modality']:,}")
     print()
     print("REFERENCE CLASSIFICATION:")
-    print(f"  Classified with reference:  {stats['classified_with_reference']:,} ({100*stats['classified_with_reference']/stats['total_files']:.1f}%)")
-    print(f"  API had reference:          {stats['api_had_reference']:,} ({100*stats['api_had_reference']/stats['total_files']:.1f}%)")
+    print(
+        f"  Classified with reference:  {stats['classified_with_reference']:,} ({100 * stats['classified_with_reference'] / stats['total_files']:.1f}%)"
+    )
+    print(
+        f"  API had reference:          {stats['api_had_reference']:,} ({100 * stats['api_had_reference'] / stats['total_files']:.1f}%)"
+    )
     print(f"  Filled missing reference:   {stats['filled_missing_reference']:,}")
     print()
     print("TOP MODALITIES:")
@@ -179,12 +193,17 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Run batch classification on AnVIL metadata")
-    parser.add_argument("--input", "-i", type=str, default="data/anvil/anvil_files_metadata.json",
-                        help="Input metadata file (JSON or NDJSON)")
-    parser.add_argument("--output", "-o", type=str, default="output/anvil",
-                        help="Output directory")
-    parser.add_argument("--rules", "-r", type=str, default=None,
-                        help="Path to rules file (default: the bundled unified_rules.yaml)")
+    parser.add_argument(
+        "--input",
+        "-i",
+        type=str,
+        default="data/anvil/anvil_files_metadata.json",
+        help="Input metadata file (JSON or NDJSON)",
+    )
+    parser.add_argument("--output", "-o", type=str, default="output/anvil", help="Output directory")
+    parser.add_argument(
+        "--rules", "-r", type=str, default=None, help="Path to rules file (default: the bundled unified_rules.yaml)"
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)

@@ -41,6 +41,7 @@ from meta_disco.header_classifier import (
 # HELPER FUNCTION TESTS
 # =============================================================================
 
+
 class TestExtractArchiveAccession:
     """Test archive accession extraction from FASTQ read names."""
 
@@ -55,35 +56,27 @@ class TestExtractArchiveAccession:
 
     def test_sra_accession(self):
         """Extract SRA (SRR) accession."""
-        accession, source, remainder = extract_archive_accession(
-            "@SRR12345678.1 original_read_name"
-        )
+        accession, source, remainder = extract_archive_accession("@SRR12345678.1 original_read_name")
         assert accession == "SRR12345678"
         assert source == "SRA"
         assert remainder == "original_read_name"
 
     def test_ddbj_accession(self):
         """Extract DDBJ (DRR) accession."""
-        accession, source, remainder = extract_archive_accession(
-            "@DRR000001.1 some_data"
-        )
+        accession, source, remainder = extract_archive_accession("@DRR000001.1 some_data")
         assert accession == "DRR000001"
         assert source == "DDBJ"
 
     def test_no_accession(self):
         """No accession in native read name."""
-        accession, source, remainder = extract_archive_accession(
-            "@A00297:44:HFKH3DSXX:2:1354:30508:28839"
-        )
+        accession, source, remainder = extract_archive_accession("@A00297:44:HFKH3DSXX:2:1354:30508:28839")
         assert accession is None
         assert source is None
         assert remainder == "A00297:44:HFKH3DSXX:2:1354:30508:28839"
 
     def test_without_at_prefix(self):
         """Handle read name without @ prefix."""
-        accession, source, _ = extract_archive_accession(
-            "ERR3242571.1 A00297:44:HFKH3DSXX:2:1354"
-        )
+        accession, source, _ = extract_archive_accession("ERR3242571.1 A00297:44:HFKH3DSXX:2:1354")
         assert accession == "ERR3242571"
         assert source == "ENA"
 
@@ -174,9 +167,7 @@ class TestParseIlluminaReadName:
 
     def test_modern_format_full(self):
         """Parse modern Illumina format with all fields."""
-        result = parse_illumina_read_name(
-            "@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG"
-        )
+        result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG")
         assert result is not None
         assert result["format"] == "modern"
         assert result["instrument"] == "A00297"
@@ -190,18 +181,14 @@ class TestParseIlluminaReadName:
 
     def test_modern_format_minimal(self):
         """Parse modern format without optional second part."""
-        result = parse_illumina_read_name(
-            "@A00297:44:HFKH3DSXX:2:1354:30508:28839"
-        )
+        result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839")
         assert result is not None
         assert result["instrument"] == "A00297"
         assert "read" not in result
 
     def test_legacy_format(self):
         """Parse legacy Illumina format."""
-        result = parse_illumina_read_name(
-            "@HWUSI-EAS100R:6:73:941:1973#ATCACG/1"
-        )
+        result = parse_illumina_read_name("@HWUSI-EAS100R:6:73:941:1973#ATCACG/1")
         assert result is not None
         assert result["format"] == "legacy"
         assert result["instrument"] == "HWUSI-EAS100R"
@@ -211,9 +198,7 @@ class TestParseIlluminaReadName:
 
     def test_archive_reformatted(self):
         """Parse archive-reformatted Illumina read."""
-        result = parse_illumina_read_name(
-            "@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839"
-        )
+        result = parse_illumina_read_name("@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839")
         assert result is not None
         assert result["archive_accession"] == "ERR3242571"
         assert result["archive_source"] == "ENA"
@@ -271,18 +256,14 @@ class TestParseOntReadName:
 
     def test_uuid_format(self):
         """Parse ONT UUID read name."""
-        result = parse_ont_read_name(
-            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        )
+        result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890")
         assert result is not None
         assert result["format"] == "ont"
         assert result["uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
     def test_uuid_with_metadata(self):
         """Parse ONT read name with key=value metadata."""
-        result = parse_ont_read_name(
-            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123 read=456 ch=789"
-        )
+        result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123 read=456 ch=789")
         assert result is not None
         assert result["uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         assert result["runid"] == "abc123"
@@ -298,6 +279,7 @@ class TestParseOntReadName:
 # =============================================================================
 # FASTQ CLASSIFICATION TESTS
 # =============================================================================
+
 
 class TestFastqClassification:
     """Test FASTQ header classification."""
@@ -477,6 +459,7 @@ class TestFastqClassification:
 # VCF CLASSIFICATION TESTS
 # =============================================================================
 
+
 class TestVcfClassification:
     """Test VCF header classification."""
 
@@ -570,6 +553,7 @@ class TestVcfClassification:
 # =============================================================================
 # BAM/CRAM CLASSIFICATION TESTS
 # =============================================================================
+
 
 class TestBamCramClassification:
     """Test BAM/CRAM header classification."""
@@ -719,6 +703,7 @@ class TestBamCramClassification:
 # EDGE CASES
 # =============================================================================
 
+
 class TestContigLengthDetection:
     """Test reference assembly detection from contig lengths.
 
@@ -800,8 +785,10 @@ class TestContigLengthDetection:
         result = classify_from_vcf_header(header)
         # Currently assembly= in contig is matched by vcf_contig_assembly rules
         # The ##reference line is the primary detection path
-        assert (val(result, "reference_assembly") == "GRCh38"
-                or field_status(result, "reference_assembly") == NOT_CLASSIFIED)
+        assert (
+            val(result, "reference_assembly") == "GRCh38"
+            or field_status(result, "reference_assembly") == NOT_CLASSIFIED
+        )
 
     def test_vcf_reference_field(self):
         """VCF reference detection from ##reference= line."""
@@ -832,7 +819,7 @@ class TestEdgeCases:
         """Classify based on first read when multiple platforms present."""
         reads = [
             "@A00297:44:HFKH3DSXX:2:1354:30508:28839",  # Illumina
-            "@m64011_190830_220126/1/ccs",              # PacBio
+            "@m64011_190830_220126/1/ccs",  # PacBio
         ]
         result = classify_from_fastq_header(reads)
         # Should classify based on first read (Illumina)

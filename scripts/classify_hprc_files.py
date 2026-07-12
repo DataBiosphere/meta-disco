@@ -71,27 +71,39 @@ def classify_sequencing_data(
         file_size = rec.get("fileSize")  # not available in sequencing catalog
 
         if (i + 1) % 100 == 0 or i == 0:
-            print(f"  [{i+1}/{len(records)}] {fn[:50]}", flush=True)
+            print(f"  [{i + 1}/{len(records)}] {fn[:50]}", flush=True)
 
         classifications = None
 
         if fn.endswith(".bam") or fn.endswith(".cram"):
             raw_data = fetch_bam_header(
-                bam_evidence, key, file_name=fn, use_cache=True, url=url,
+                bam_evidence,
+                key,
+                file_name=fn,
+                use_cache=True,
+                url=url,
             )
             if raw_data is not None:
                 classifications = classify_from_header(
-                    raw_data, file_name=fn, file_size=file_size,
+                    raw_data,
+                    file_name=fn,
+                    file_size=file_size,
                     file_format=".cram" if fn.endswith(".cram") else ".bam",
                 )
         elif fn.endswith(".fastq.gz") or fn.endswith(".fastq"):
             raw_data = fetch_fastq_reads(
-                fastq_evidence, key, file_name=fn,
-                is_gzipped=fn.endswith(".gz"), use_cache=True, url=url,
+                fastq_evidence,
+                key,
+                file_name=fn,
+                is_gzipped=fn.endswith(".gz"),
+                use_cache=True,
+                url=url,
             )
             if raw_data is not None:
                 classifications = classify_from_fastq_header(
-                    raw_data, file_name=fn, file_size=file_size,
+                    raw_data,
+                    file_name=fn,
+                    file_size=file_size,
                 )
         else:
             # FAST5, POD5, etc. — classify from filename only
@@ -101,13 +113,15 @@ def classify_sequencing_data(
 
         if classifications:
             success += 1
-            results.append({
-                "file_name": fn,
-                "key": key,
-                "file_size": file_size,
-                "classifications": classifications,
-                "catalog": "sequencing-data",
-            })
+            results.append(
+                {
+                    "file_name": fn,
+                    "key": key,
+                    "file_size": file_size,
+                    "classifications": classifications,
+                    "catalog": "sequencing-data",
+                }
+            )
 
     print(f"  Classified: {success}, Skipped/failed: {len(records) - success}")
     return results
@@ -136,25 +150,33 @@ def classify_assemblies(
         file_size = rec.get("fileSize")
 
         if (i + 1) % 100 == 0 or i == 0:
-            print(f"  [{i+1}/{len(records)}] {fn[:50]}", flush=True)
+            print(f"  [{i + 1}/{len(records)}] {fn[:50]}", flush=True)
 
         raw_data = fetch_fasta_headers(
-            fasta_evidence, key, file_name=fn,
-            is_gzipped=fn.endswith(".gz"), use_cache=True, url=url,
+            fasta_evidence,
+            key,
+            file_name=fn,
+            is_gzipped=fn.endswith(".gz"),
+            use_cache=True,
+            url=url,
         )
 
         if raw_data is not None:
             classifications = classify_from_fasta_header(
-                raw_data, file_name=fn, file_size=file_size,
+                raw_data,
+                file_name=fn,
+                file_size=file_size,
             )
             success += 1
-            results.append({
-                "file_name": fn,
-                "key": key,
-                "file_size": file_size,
-                "classifications": classifications,
-                "catalog": "assemblies",
-            })
+            results.append(
+                {
+                    "file_name": fn,
+                    "key": key,
+                    "file_size": file_size,
+                    "classifications": classifications,
+                    "catalog": "assemblies",
+                }
+            )
 
     print(f"  Classified: {success}, Failed: {len(records) - success}")
     return results
@@ -176,13 +198,15 @@ def classify_filename_only(
             continue
         file_size = rec.get("fileSize")
         result = engine.classify_extended(FileInfo(filename=fn, file_size=file_size))
-        results.append({
-            "file_name": fn,
-            "key": filename_key(fn),
-            "file_size": file_size,
-            "classifications": result.to_output_dict(),
-            "catalog": catalog_name,
-        })
+        results.append(
+            {
+                "file_name": fn,
+                "key": filename_key(fn),
+                "file_size": file_size,
+                "classifications": result.to_output_dict(),
+                "catalog": catalog_name,
+            }
+        )
 
     print(f"  Classified: {len(results)}")
     return results
@@ -211,7 +235,8 @@ def main():
         help="Evidence cache base directory",
     )
     parser.add_argument(
-        "--limit", "-l",
+        "--limit",
+        "-l",
         type=int,
         default=None,
         help="Limit files per catalog (for testing)",
@@ -229,9 +254,11 @@ def main():
     output_dir = args.output_dir / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    catalogs_to_run = args.catalogs.split(",") if args.catalogs != "all" else [
-        "sequencing", "assemblies", "alignments", "annotations"
-    ]
+    catalogs_to_run = (
+        args.catalogs.split(",")
+        if args.catalogs != "all"
+        else ["sequencing", "assemblies", "alignments", "annotations"]
+    )
 
     all_results = {}
 
@@ -277,9 +304,9 @@ def main():
                 json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
 
     # Summary
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("HPRC CLASSIFICATION SUMMARY")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     total = 0
     for name, results in all_results.items():
         print(f"  {name}: {len(results)}")
