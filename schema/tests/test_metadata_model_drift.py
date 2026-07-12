@@ -22,7 +22,11 @@ _COMMITTED_MODEL = os.path.join(
 
 # The gen-pydantic console script from the same venv as the test interpreter (the
 # schema env, which has linkml) — hermetic, and exactly what `make gen-metadata` runs.
-_GEN_PYDANTIC = os.path.join(os.path.dirname(sys.executable), "gen-pydantic")
+# On Windows the console script is gen-pydantic.exe.
+_GEN_PYDANTIC = os.path.join(
+    os.path.dirname(sys.executable),
+    "gen-pydantic.exe" if os.name == "nt" else "gen-pydantic",
+)
 
 
 def test_committed_model_matches_schema():

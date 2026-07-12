@@ -440,7 +440,7 @@ class ClassifyPipeline:
                 nonlocal successful, dropped, from_cache, processed, unreadable, invalid
                 with lock:
                     processed += 1
-                    if outcome.result:
+                    if outcome.result is not None:
                         writer.write(outcome.result)
                         if outcome.validation_failed:
                             invalid += 1
