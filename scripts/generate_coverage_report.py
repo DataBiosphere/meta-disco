@@ -66,7 +66,7 @@ def load_records(run_dir: Path) -> list[dict]:
         path = run_dir / fname
         if not path.is_file():
             continue
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             cls = r.get("classifications", r)
@@ -206,7 +206,7 @@ def main():
     metadata_path = Path("data/anvil/anvil_files_metadata.ndjson")
     dataset_counts = Counter()
     if metadata_path.is_file():
-        with open(metadata_path) as f:
+        with metadata_path.open() as f:
             for line in f:
                 r = json.loads(line)
                 dataset_counts[r.get("dataset_title") or "unknown"] += 1
@@ -222,7 +222,7 @@ def main():
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w") as out:
+    with args.output.open("w") as out:
         out.write("# AnVIL Classification Coverage Report\n\n")
         out.write(f"Classification run: **{run_time}**\n\n")
 

@@ -63,7 +63,7 @@ def load_cached_evidence(evidence_dir: Path, md5sum: str) -> dict | None:
     path = get_evidence_path(evidence_dir, md5sum)
     if path.exists():
         try:
-            with open(path) as f:
+            with path.open() as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return None
@@ -74,7 +74,7 @@ def save_evidence(evidence_dir: Path, md5sum: str, evidence: dict) -> None:
     """Save evidence dict to cache."""
     path = get_evidence_path(evidence_dir, md5sum)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    with path.open("w") as f:
         json.dump(evidence, f, indent=2)
 
 

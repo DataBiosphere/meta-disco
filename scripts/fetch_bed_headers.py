@@ -39,7 +39,7 @@ def load_cached_evidence(md5sum: str) -> dict | None:
     path = get_evidence_path(md5sum)
     if path.exists():
         try:
-            with open(path) as f:
+            with path.open() as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return None
@@ -59,7 +59,7 @@ def save_evidence(md5sum: str, file_name: str, evidence: dict):
         }
     )
 
-    with open(path, "w") as f:
+    with path.open("w") as f:
         json.dump(evidence, f, indent=2)
 
 
@@ -242,7 +242,7 @@ def process_bed_files(
         resume: Use cached evidence
         workers: Parallel workers
     """
-    with open(input_path) as f:
+    with input_path.open() as f:
         data = json.load(f)
     files = data if isinstance(data, list) else data.get("files", data)
 
@@ -335,7 +335,7 @@ def process_bed_files(
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

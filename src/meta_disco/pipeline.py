@@ -37,7 +37,7 @@ def load_records(input_path: Path) -> list:
     ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
     ``validate_metadata`` gate so the envelope handling lives in one place.
     """
-    with open(input_path) as f:
+    with input_path.open() as f:
         if input_path.suffix == ".ndjson":
             return [json.loads(line) for line in f if line.strip()]
         data = json.load(f)
@@ -147,7 +147,7 @@ class NdjsonWriter:
     def __init__(self, output_path: Path):
         self.path = output_path.with_suffix(".ndjson")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = open(self.path, "w")
+        self._fh = self.path.open("w")
         self._count = 0
 
     def write(self, record: dict):
@@ -320,7 +320,7 @@ class ClassifyPipeline:
         if not self.skip_complete or not self.output_path.exists():
             return False
         try:
-            with open(self.output_path) as f:
+            with self.output_path.open() as f:
                 existing = json.load(f)
             existing_count = len(existing.get("classifications", []))
             if existing.get("metadata", {}).get("complete") and existing_count >= len(records):
@@ -548,13 +548,13 @@ class ClassifyPipeline:
         ndjson = self.output_path.with_suffix(".ndjson")
         classifications = []
         if ndjson.exists():
-            with open(ndjson) as f:
+            with ndjson.open() as f:
                 for line in f:
                     if line.strip():
                         classifications.append(json.loads(line))
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.output_path, "w") as f:
+        with self.output_path.open("w") as f:
             json.dump(
                 {
                     "metadata": {

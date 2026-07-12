@@ -140,7 +140,7 @@ class TestPipelineRun:
         assert len(results) == 2  # Only .test files, not .bam
         assert output.exists()
 
-        with open(output) as f:
+        with output.open() as f:
             data = json.load(f)
         assert data["metadata"]["successful"] == 2
         assert data["metadata"]["complete"] is True
@@ -172,7 +172,7 @@ class TestPipelineRun:
         results = pipeline.run()
         assert len(results) == 0
 
-        with open(output) as f:
+        with output.open() as f:
             data = json.load(f)
         assert data["metadata"]["failed"] == 2
 

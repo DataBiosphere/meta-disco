@@ -66,7 +66,7 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
         path = run_dir / fname
         if not path.is_file():
             continue
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             rec = {}
@@ -196,7 +196,7 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     dataset_counts = Counter()
     metadata_coverage = Counter()
     truth_records = []
-    with open(metadata_path) as f:
+    with metadata_path.open() as f:
         for line in f:
             r = json.loads(line)
             total_files += 1
@@ -253,7 +253,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     if not hprc_results_path.is_file():
         return {"matched": 0, "unmatched": 0, "dimensions": {}}
 
-    with open(hprc_results_path) as f:
+    with hprc_results_path.open() as f:
         data = json.load(f)
 
     # Handle both old format (results.total_validated) and new format (dimensions.*)
@@ -572,7 +572,7 @@ def main():
 
     # Generate markdown report
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w") as out:
+    with args.output.open("w") as out:
         out.write("# Validation Report\n\n")
         out.write("Comparing meta-disco rule engine classifications against external ground truth.\n")
         out.write(f"Classification run: **{run_time}**\n\n")

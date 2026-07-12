@@ -55,7 +55,7 @@ def validate_against_ena(
 
     # Load classifications
     print(f"Loading classifications from {input_path}...")
-    with open(input_path) as f:
+    with input_path.open() as f:
         data = json.load(f)
 
     classifications = data.get("classifications", data)
@@ -252,7 +252,7 @@ def validate_against_ena(
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

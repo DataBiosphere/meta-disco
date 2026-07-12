@@ -41,7 +41,7 @@ def load_catalog(name: str, catalog_dir: Path | None, fetch: bool) -> list[dict]
     if catalog_dir and not fetch:
         path = catalog_dir / f"{name}.json"
         if path.exists():
-            with open(path) as f:
+            with path.open() as f:
                 data = json.load(f)
             print(f"  {name}: {len(data):,} records (cached)")
             return data
@@ -183,7 +183,7 @@ def validate_against_hprc(
             print(f"  Skipping {input_path} (not found)")
             continue
         print(f"Loading {input_path}...", flush=True)
-        with open(input_path) as f:
+        with input_path.open() as f:
             data = json.load(f)
         classifications = data.get("classifications", data)
         if isinstance(classifications, list):
@@ -310,7 +310,7 @@ def validate_against_hprc(
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

@@ -75,7 +75,7 @@ def load_checkpoint(output_dir: Path) -> tuple[int, int, list | None]:
     """Load checkpoint if it exists. Returns (page_num, total_fetched, search_after)."""
     checkpoint_path = output_dir / "checkpoint.json"
     if checkpoint_path.exists():
-        with open(checkpoint_path) as f:
+        with checkpoint_path.open() as f:
             data = json.load(f)
         return data["page"], data["total_fetched"], data.get("search_after")
     return 0, 0, None
@@ -84,7 +84,7 @@ def load_checkpoint(output_dir: Path) -> tuple[int, int, list | None]:
 def save_checkpoint(output_dir: Path, page: int, total_fetched: int, search_after: list | None):
     """Save checkpoint for resume."""
     checkpoint_path = output_dir / "checkpoint.json"
-    with open(checkpoint_path, "w") as f:
+    with checkpoint_path.open("w") as f:
         json.dump(
             {
                 "page": page,
@@ -107,11 +107,11 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
     if page_num > 0:
         print(f"Resuming from checkpoint: page {page_num}, {total_fetched:,} files already downloaded")
         # Open in append mode
-        ndjson_file = open(ndjson_path, "a")
+        ndjson_file = ndjson_path.open("a")
     else:
         print("Starting fresh download...")
         # Open in write mode (truncate)
-        ndjson_file = open(ndjson_path, "w")
+        ndjson_file = ndjson_path.open("w")
 
     try:
         # Get total count
@@ -202,7 +202,7 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
         # Create final JSON with metadata
         print("Creating final JSON file with metadata...")
         files = []
-        with open(ndjson_path) as f:
+        with ndjson_path.open() as f:
             for line in f:
                 if line.strip():
                     files.append(json.loads(line))
@@ -216,7 +216,7 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
             "files": files,
         }
         json_path = output_dir / "anvil_files_metadata.json"
-        with open(json_path, "w") as f:
+        with json_path.open("w") as f:
             json.dump(final_output, f)
         print(f"Saved {json_path}")
 
