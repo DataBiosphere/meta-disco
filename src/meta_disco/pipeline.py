@@ -6,6 +6,7 @@ which carries extension filters, fetcher, classifier, and summary printer.
 """
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,11 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
+
+# A well-formed md5: lowercase hex, 32 chars — the same shape the input contract
+# (metadata.yaml file_md5sum) requires. Only such a value can key real cached
+# evidence; anything else is headed to validation_failed.
+_MD5_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 def load_records(input_path: Path) -> list:
@@ -291,12 +297,14 @@ class ClassifyPipeline:
     def _is_cached(self, md5sum) -> bool:
         """Check if evidence is cached (cheap file-existence check, no JSON parse).
 
-        A non-string or empty md5 has no evidence path (``get_evidence_path`` slices
-        ``md5sum[:2]``), so it cannot be cached — return False rather than letting a
-        null md5 raise. This keeps the cache check safe for a record headed to the
-        ``validation_failed`` path, independently of what ``_filter_records`` admits.
+        Only a well-formed md5 (lowercase-hex, 32 chars) can key real cached
+        evidence, and ``get_evidence_path`` builds a filesystem path from the md5
+        (``md5sum[:2]`` / ``{md5sum}.json``). A null, non-string, or non-md5 value
+        therefore returns False — it cannot be cached, and this keeps the check safe
+        for a record headed to ``validation_failed`` (md5 is classifier-relevant), so
+        it never depends on what ``_filter_records`` admits.
         """
-        if not isinstance(md5sum, str) or not md5sum:
+        if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
             return False
         from .fetchers import get_evidence_path
         return get_evidence_path(self.evidence_dir, md5sum).exists()

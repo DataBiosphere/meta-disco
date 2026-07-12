@@ -274,10 +274,14 @@ class TestPipelineRun:
         assert meta["validation_failed"] == 1
         assert meta["errored"] == 0
 
-    @pytest.mark.parametrize("md5", [None, "", 123])
-    def test_is_cached_returns_false_for_invalid_md5_instead_of_raising(self, tmp_path, md5):
-        """A non-string/empty md5 has no evidence path; the cache check must return
-        False, not raise on ``md5[:2]`` — so a validation_failed record stays safe."""
+    @pytest.mark.parametrize("md5", [
+        None, "", 123,          # non-string / empty: no evidence path, must not raise
+        "ABC", "0" * 31,        # too short / wrong shape
+        "g" * 32, "A" * 32,     # non-hex / uppercase — not a contractual md5
+    ])
+    def test_is_cached_returns_false_for_non_md5(self, tmp_path, md5):
+        """Only a well-formed lowercase-hex md5 can be cached. A null/non-string value
+        must not raise on ``md5[:2]``; a non-md5 string must not be treated as cached."""
         pipeline = ClassifyPipeline(
             _make_config(), tmp_path / "in.json", tmp_path / "out.json",
             evidence_base=tmp_path / "evidence",
