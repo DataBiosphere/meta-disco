@@ -46,6 +46,12 @@ def main(argv=None) -> int:
         print(f"Could not read {args.input}: {exc}")
         return 1
 
+    if not records:
+        # An empty file is almost always a broken download (an auth failure or a
+        # run that yielded zero files), not a corpus worth a multi-hour classify.
+        print(f"No records found in {args.input} — likely an empty or failed download.")
+        return 1
+
     report = validate_records(records)
     print(report.summary())
     return 0 if report.ok else 1

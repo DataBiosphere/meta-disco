@@ -9,6 +9,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 _SCHEMA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # The path `make gen-metadata` passes to gen-pydantic, verbatim, so the embedded
 # `source_file` line in the output matches the committed file byte-for-byte.
@@ -24,6 +26,11 @@ _GEN_PYDANTIC = os.path.join(os.path.dirname(sys.executable), "gen-pydantic")
 
 
 def test_committed_model_matches_schema():
+    # This needs the schema env's linkml (gen-pydantic). Skip cleanly if run under an
+    # interpreter without it (e.g. an explicit `pytest schema/tests` in the root env),
+    # so it degrades to a skip rather than a FileNotFoundError.
+    if not os.path.exists(_GEN_PYDANTIC):
+        pytest.skip("gen-pydantic not found; run under the schema uv env (make test-schema)")
     # Run from the schema/ dir with the same relative path `make gen-metadata` uses,
     # so the regenerated text (including the embedded source_file) is comparable
     # byte-for-byte.

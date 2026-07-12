@@ -96,6 +96,14 @@ class TestGateExit:
         assert rc == 1
         assert "Could not read" in capsys.readouterr().out
 
+    def test_empty_corpus_exits_one(self, tmp_path, capsys):
+        # An empty-but-valid download is almost always a failed download; the gate
+        # must not green-light a multi-hour classify over zero records.
+        path = _write(tmp_path / "m.json", [])
+        rc = validate_metadata.main(["-i", str(path)])
+        assert rc == 1
+        assert "No records found" in capsys.readouterr().out
+
     def test_missing_input_exits_two(self, tmp_path, capsys):
         rc = validate_metadata.main(["-i", str(tmp_path / "nope.json")])
         assert rc == 2

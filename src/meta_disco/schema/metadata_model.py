@@ -109,7 +109,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class AnvilFileMetadataRecord(ConfiguredBaseModel):
     """
-    One raw AnVIL file metadata record, before classification. Every slot but the nullable AnVIL declarations (`data_modality`, `reference_assembly`) is required and non-empty.
+    One raw AnVIL file metadata record, before classification. Every slot but the nullable AnVIL declarations (`data_modality`, `reference_assembly`) is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
          'tree_root': True})

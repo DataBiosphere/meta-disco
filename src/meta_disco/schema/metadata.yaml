@@ -44,7 +44,8 @@ classes:
     description: >-
       One raw AnVIL file metadata record, before classification. Every slot but
       the nullable AnVIL declarations (`data_modality`, `reference_assembly`) is
-      required and non-empty.
+      required; the string slots are additionally non-empty (`file_size` allows 0
+      and `is_supplementary` is a plain required boolean).
     slots:
       - entry_id
       - file_id

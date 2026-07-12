@@ -354,6 +354,8 @@ class ClassifyPipeline:
                                  was_cached=False, content_unreadable=False,
                                  validation_failed=True)
 
+        # The fields the fetch/classify path consumes — keep this set in sync with
+        # metadata_schema.CLASSIFIER_RELEVANT_FIELDS (which decides what blocks).
         md5 = record.get("file_md5sum")
         file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
@@ -391,11 +393,13 @@ class ClassifyPipeline:
     def _build_record(record: dict, classifications: dict) -> dict:
         """Wrap a classifications dict in the output record envelope.
 
-        ``file_name``/``file_format`` are coerced to ``str``: on the
-        ``validation_failed`` path these are echoed from a record whose fields may
-        have drifted to non-string types, and the output row's types must stay
-        stable for downstream consumers. (A follow-up will parse records into a
-        typed model so this holds by construction rather than per-field.)
+        ``file_name``/``file_format`` are coerced to ``str`` because on the
+        ``validation_failed`` path they are echoed from a record whose fields may
+        have drifted to non-string types, and downstream consumers do string
+        operations on these two (path building, extension checks). The other echoed
+        identity fields (``md5sum``/``file_size``/``dataset_title``/``entry_id``) are
+        passed through as-is — a drifted ``validation_failed`` row can still carry
+        their raw types; normalizing the whole row by construction is #172's job.
         """
         return {
             "file_name": str(record.get("file_name") or ""),

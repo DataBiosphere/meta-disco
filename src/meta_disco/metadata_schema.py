@@ -41,9 +41,17 @@ _RECORD_LOC = "<record>"
 # contract field is real drift the standalone gate reports, but does not by itself
 # stop this record from classifying (issue #161 review: the run marks only what it
 # genuinely cannot classify, the whole-corpus gate flags the rest).
+#
+# Keep in sync with the fields ClassifyPipeline._process_single_record reads and
+# passes to _fetch_and_classify. A field the run consumes but omitted here would
+# let a record bad on that field fetch instead of divert to validation_failed.
 CLASSIFIER_RELEVANT_FIELDS = frozenset({
     "file_md5sum", "file_name", "file_size", "file_format",
 })
+
+# A violation blocks classification when it is on a classifier-relevant field or is
+# a whole-record type error (a non-dict where an object was expected).
+_BLOCKING_FIELDS = CLASSIFIER_RELEVANT_FIELDS | {_RECORD_LOC}
 
 
 class _ValidatedRecord(AnvilFileMetadataRecord):
@@ -87,8 +95,7 @@ def classification_blocking_reasons(record) -> list[str]:
     standalone ``validate_metadata`` gate over the whole corpus, not here.
     """
     return [r for r in validate_record(record)
-            if _reason_field(r) in CLASSIFIER_RELEVANT_FIELDS
-            or _reason_field(r) == _RECORD_LOC]
+            if _reason_field(r) in _BLOCKING_FIELDS]
 
 
 # Value-independent description per pydantic error ``type``. Authored here rather
