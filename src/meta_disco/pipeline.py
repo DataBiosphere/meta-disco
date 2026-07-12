@@ -20,8 +20,12 @@ from .metadata_schema import (
 )
 
 
-def load_records(input_path: Path) -> list[dict]:
+def load_records(input_path: Path) -> list:
     """Load the record list from an input file's envelope.
+
+    Elements are not guaranteed to be dicts — an NDJSON line or a JSON array entry
+    may be any JSON value; ``_filter_records`` tolerates non-dicts. Hence ``list``,
+    not ``list[dict]``.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
     ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
@@ -253,11 +257,12 @@ class ClassifyPipeline:
 
     # --- Internal ---
 
-    def _load_input(self) -> list[dict]:
-        """Load NDJSON or JSON input, extracting the records array."""
+    def _load_input(self) -> list:
+        """Load NDJSON or JSON input, extracting the records array (elements may be
+        non-dict; see ``load_records``)."""
         return load_records(self.input_path)
 
-    def _filter_records(self, records: list[dict]) -> list[dict]:
+    def _filter_records(self, records: list) -> list[dict]:
         """Filter to records routed to this file type by extension.
 
         Routing is by ``file_format``/``file_name`` extension only. A missing or
