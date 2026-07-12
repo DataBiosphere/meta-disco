@@ -222,7 +222,17 @@ def validate_records(records) -> ValidationReport:
         reasons = validate_record(record)
         if reasons:
             report.invalid += 1
-            entry_id = record.get("entry_id") if isinstance(record, dict) else None
+            sample = _sample_label(record)
             for reason in reasons:
-                report._record_problem(reason, entry_id or "<unknown>")
+                report._record_problem(reason, sample)
     return report
+
+
+def _sample_label(record) -> str:
+    """A record's entry_id for the report sample, distinguishing the states that a
+    truthy-or default would conflate: a missing key vs a present-but-empty/null
+    entry_id (itself a contract violation worth seeing in drift diagnosis)."""
+    if not isinstance(record, dict) or "entry_id" not in record:
+        return "<unknown>"
+    entry_id = record["entry_id"]
+    return entry_id if entry_id not in (None, "") else "<empty>"

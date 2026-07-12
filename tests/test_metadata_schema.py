@@ -132,12 +132,21 @@ class TestValidationReport:
         assert report.invalid == 3
         assert len(report.kinds) == 3
 
-    def test_missing_entry_id_falls_back_to_placeholder(self):
+    def test_missing_entry_id_sampled_as_unknown(self):
         rec = _valid(file_size="x")
         del rec["entry_id"]
         report = validate_records([rec])
         samples = {s for k in report.kinds.values() for s in k.sample_entry_ids}
         assert "<unknown>" in samples
+
+    @pytest.mark.parametrize("empty", ["", None])
+    def test_present_but_empty_entry_id_sampled_as_empty_not_unknown(self, empty):
+        # A present-but-empty entry_id is a distinct violation from a missing key;
+        # the sample must not conflate the two into "<unknown>".
+        report = validate_records([_valid(entry_id=empty, file_size="x")])
+        samples = {s for k in report.kinds.values() for s in k.sample_entry_ids}
+        assert "<empty>" in samples
+        assert "<unknown>" not in samples
 
 
     def test_a_fresh_empty_report_is_ok(self):
