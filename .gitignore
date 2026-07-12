@@ -70,3 +70,6 @@ output/
 # Literal $TMPDIR dir, created when a script writes to an unexpanded "$TMPDIR"
 ${TMPDIR}/
 $TMPDIR/
+
+# Claude Code personal overrides — never shared
+.claude/settings.local.json

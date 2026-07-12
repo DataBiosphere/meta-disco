@@ -107,8 +107,10 @@ Validate at trust boundaries only, and trust everything inside them.
 1. Create a GitHub issue for every change, with a definition-of-done
    checklist. The issue is the record the result is checked against.
 2. Create a feature branch `noopdog/{issue#}-short-description`.
-3. Implement with tests. Run `make test-all` before committing (the schema
-   suite does not run under plain `make test`).
+3. Implement with tests. Run `make test-all` before committing. It is the
+   root-level aggregator that runs both the root suite and the schema
+   suite. Plain `make test` runs the root suite only, so it is not
+   sufficient before pushing.
 4. When the code is complete, announce it and run `/cc:auto-review`. That
    skill runs the local reviews, has you triage the findings, stops at a
    push gate, opens the PR, and drives the Copilot feedback rounds to
@@ -152,8 +154,11 @@ silently.
   review history is preserved. Force pushing is allowed only for the
   structural rebase a stacked pull request needs: when the branch it was
   based on merges, rebase onto the new `main` and push with
-  `--force-with-lease`. This moves the branch onto a new base; it does not
-  rewrite reviewed commits, which is why it is fine and amending is not.
+  `--force-with-lease`. A rebase does rewrite commit SHAs, so re-request
+  review afterward if the branch was already reviewed. The reason it is
+  allowed and amending is not: it replays the same reviewed changes onto a
+  new base, rather than altering the content of a commit that is under
+  review.
 
 ## Code Change Discipline
 
