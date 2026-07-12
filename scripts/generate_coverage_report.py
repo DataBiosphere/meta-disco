@@ -185,7 +185,7 @@ def main():
         run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     print(f"Loading from: {run_dir}")
 
     records = load_records(run_dir)

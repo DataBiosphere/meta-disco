@@ -47,7 +47,7 @@ def build_parallel_jobs(metadata: Path, output_dir: Path) -> list[tuple]:
     return jobs
 
 
-def run_script(script_name: str, output_path: Path, extra_args: list[str] = None):
+def run_script(script_name: str, output_path: Path, extra_args: list[str] | None = None):
     """Run a classification script."""
     cmd = [sys.executable, f"scripts/{script_name}", "--output", str(output_path)]
     if extra_args:

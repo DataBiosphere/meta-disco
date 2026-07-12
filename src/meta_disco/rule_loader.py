@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 
@@ -89,7 +89,7 @@ class UnifiedRules:
     reference_contig_lengths: dict[str, dict[str, int]]
 
     # Compound extensions in priority order (longest first)
-    COMPOUND_EXTENSIONS = [
+    COMPOUND_EXTENSIONS: ClassVar[list[str]] = [
         ".g.vcf.gz",  # Must come before .vcf.gz
         ".gvcf.gz",
         ".vcf.gz",
@@ -141,14 +141,14 @@ class UnifiedRules:
 class RuleLoader:
     """Loader for unified classification rules."""
 
-    VALID_SCOPES = {"extension", "filename", "header", "vcf_header", "fastq_header", "file_size"}
-    VALID_TIERS = {1, 2, 3}
+    VALID_SCOPES: ClassVar[set[str]] = {"extension", "filename", "header", "vcf_header", "fastq_header", "file_size"}
+    VALID_TIERS: ClassVar[set[int]] = {1, 2, 3}
 
     # Condition keys the engine interprets. Keep in sync with
     # rule_engine.RuleEngine._rule_matches() and its _match_* helpers — a key not
     # listed here is silently ignored at match time, so an unrecognized key is
     # almost always a typo (e.g. "filename_patern").
-    VALID_WHEN_KEYS = {
+    VALID_WHEN_KEYS: ClassVar[set[str]] = {
         "always",
         "extensions",
         "filename_pattern",
@@ -171,19 +171,19 @@ class RuleLoader:
     # fields (real-value effects) plus the reserved `status` key, whose value is a
     # sub-map of {field: status} for fields a rule declares non-classified (#133).
     # A key not listed here would never be applied, so it is treated as an error.
-    THEN_STATUS_KEY = "status"
-    VALID_THEN_KEYS = set(CLASSIFICATION_FIELDS) | {THEN_STATUS_KEY}
+    THEN_STATUS_KEY: ClassVar[str] = "status"
+    VALID_THEN_KEYS: ClassVar[set[str]] = set(CLASSIFICATION_FIELDS) | {THEN_STATUS_KEY}
 
     # Statuses a rule may author in a `then.status` sub-map. `classified` is
     # implied by a real value and `conflict` is engine-derived, so neither may be
     # written by a rule (mirrors schema_vocab's antecedent/emitted split).
-    AUTHORABLE_STATUSES = {NOT_APPLICABLE, NOT_CLASSIFIED}
+    AUTHORABLE_STATUSES: ClassVar[set[str]] = {NOT_APPLICABLE, NOT_CLASSIFIED}
 
     # assay_type_rules condition keys that infer_assay_type() treats as iterables
     # (`x not in platform_in`, `any(r in ... for r in matched_rules_any)`). A
     # scalar string here silently becomes a per-character membership test, so it
     # must be a list. Keep in sync with rule_engine.RuleEngine.infer_assay_type().
-    LIST_VALUED_ASSAY_CONDITIONS = {"platform_in", "matched_rules_any"}
+    LIST_VALUED_ASSAY_CONDITIONS: ClassVar[set[str]] = {"platform_in", "matched_rules_any"}
 
     def __init__(self, rules_path: str | Path | None = None):
         """Initialize the rule loader.

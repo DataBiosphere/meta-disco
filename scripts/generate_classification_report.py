@@ -150,7 +150,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     ax1.set_title(f"Input Files by Category\n(Total: {total_files:,})", fontweight="bold")
 
     # Add legend
-    legend_labels = [f"{label}: {s:,}" for label, s in zip(labels, sizes)]
+    legend_labels = [f"{label}: {s:,}" for label, s in zip(labels, sizes, strict=True)]
     ax1.legend(wedges, legend_labels, loc="center left", bbox_to_anchor=(1, 0.5), fontsize=8)
 
     # === Panel 2: Classification Coverage (horizontal bar) ===
