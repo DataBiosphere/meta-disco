@@ -38,14 +38,37 @@ line-length = 120
 extend-exclude = ["src/meta_disco/schema/metadata_model.py"]
 
 [tool.ruff.lint]
+# Shared Clever Canary rule set (cc-claude-tools templates/pyproject.ruff.template.toml).
 select = [
-    "F",     # pyflakes (unused imports, undefined names, etc.)
-    "E",     # pycodestyle errors
-    "W",     # pycodestyle warnings
-    "I",     # isort (import ordering)
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes: unused imports and variables, undefined names
+    "I",        # isort: import ordering
+    "UP",       # pyupgrade: modern syntax for the target version
+    "B",        # flake8-bugbear: real bug patterns
+    "SIM",      # flake8-simplify
+    "C4",       # flake8-comprehensions
+    "PIE",      # flake8-pie
+    "RET",      # flake8-return
+    "PTH",      # flake8-use-pathlib
+    "RUF",      # Ruff's own rules
 ]
 ignore = [
-    "E501",  # line too long (we use line-length=120 but don't enforce strictly)
+    "E501",  # line length: the formatter targets 120 best-effort, not hard-capped
+    # Formatter-incompatible rules; the formatter is the single authority on layout.
+    "E111", "E114", "E117", "W191",
+    # --- Burn-down list: rules turned on but not yet cleaned up. Each has an
+    #     open issue; remove the codes as each issue lands. Every OTHER rule in
+    #     these families is already live and protects new code. Fixes are made
+    #     in the burn-down PRs, with tests, not by a blanket `ruff --fix` here:
+    #     several of these autofixes change behavior or strip re-export noqas. ---
+    "PTH123",                                          # pathlib migration (#176)
+    "B904", "B905", "RUF012", "RUF013",                # correctness (#177)
+    # readability (#178)
+    "SIM102", "SIM108", "SIM115", "SIM118", "SIM300",
+    "RET501", "RET504", "RET505", "RET508",
+    "PIE810", "C416", "C420", "B007",
+    "UP024", "UP033", "UP035",
+    "RUF015", "RUF022", "RUF043", "RUF059", "RUF100",
 ]
 
 [tool.ruff.lint.per-file-ignores]
