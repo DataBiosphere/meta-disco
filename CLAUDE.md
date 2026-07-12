@@ -143,8 +143,17 @@ silently.
 
 ## Git Discipline
 
-- **Never amend commits** — use separate commits for each fix round. Amending rewrites history and requires force pushes, which loses review context.
-- **Never force push** — each push should add commits, not rewrite them.
+- **Never amend commits.** Use a separate commit for each fix round.
+  Amending rewrites commits a reviewer already read, which loses the
+  review context. This is the behavior to avoid; adding commits is how
+  review history stays intact.
+- **Never force push `main`.**
+- **On a feature branch, prefer adding commits over force pushing**, so
+  review history is preserved. Force pushing is allowed only for the
+  structural rebase a stacked pull request needs: when the branch it was
+  based on merges, rebase onto the new `main` and push with
+  `--force-with-lease`. This moves the branch onto a new base; it does not
+  rewrite reviewed commits, which is why it is fine and amending is not.
 
 ## Code Change Discipline
 
