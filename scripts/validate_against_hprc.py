@@ -374,7 +374,7 @@ def main():
         except FileNotFoundError as exc:
             print(exc, file=sys.stderr)
             print("Run 'make classify-hprc' first.", file=sys.stderr)
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         print(f"Using HPRC run directory: {hprc_run_dir}")
         input_paths = [f for f in sorted(hprc_run_dir.glob("*_classifications.json"))]
 
