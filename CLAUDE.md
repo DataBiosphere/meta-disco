@@ -105,7 +105,7 @@ Validate at trust boundaries only, and trust everything inside them.
 ## Workflow
 
 1. Create a GitHub issue for every change, with a definition-of-done
-   checklist. The issue is the record the result is checked against.
+   checklist. The issue is the record that the result is checked against.
 2. Create a feature branch `noopdog/{issue#}-short-description`.
 3. Implement with tests. Run `make test-all` from the repo root before
    committing. It is the root-level aggregator that runs both the root
