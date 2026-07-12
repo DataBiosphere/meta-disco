@@ -172,13 +172,13 @@ def has_sam_section(header: SAMHeader, section: str) -> bool:
     """
     if section == "@HD":
         return header.hd is not None
-    elif section == "@SQ":
+    if section == "@SQ":
         return header.sq is not None and len(header.sq) > 0
-    elif section == "@RG":
+    if section == "@RG":
         return header.rg is not None and len(header.rg) > 0
-    elif section == "@PG":
+    if section == "@PG":
         return header.pg is not None and len(header.pg) > 0
-    elif section == "@CO":
+    if section == "@CO":
         return header.co is not None and len(header.co) > 0
     return False
 
@@ -293,12 +293,12 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
 
     if header_type == "##reference" and header.reference:
         return bool(compiled.search(header.reference))
-    elif header_type == "##source" and header.source:
+    if header_type == "##source" and header.source:
         return bool(compiled.search(header.source))
-    elif header_type == "##contig" and header.contigs:
+    if header_type == "##contig" and header.contigs:
         for contig in header.contigs:
             # Check all fields in the contig line
-            for key, value in contig.items():
+            for _key, value in contig.items():
                 if compiled.search(str(value)):
                     return True
     elif header_type == "##INFO" and header.info_fields:

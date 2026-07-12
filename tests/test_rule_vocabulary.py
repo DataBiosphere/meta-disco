@@ -366,7 +366,7 @@ def test_loader_rejects_unknown_then_status_field(tmp_path):
             "then": {"status": {"data_modalty": "not_applicable"}},  # typo
         },
     )
-    with pytest.raises(ValueError, match="unknown 'then.status' field"):
+    with pytest.raises(ValueError, match=r"unknown 'then\.status' field"):
         RuleLoader(path).load()
 
 
@@ -384,7 +384,7 @@ def test_loader_rejects_non_authorable_then_status_value(tmp_path, bad_status):
             "then": {"status": {"data_modality": bad_status}},
         },
     )
-    with pytest.raises(ValueError, match="'then.status' values must be one of"):
+    with pytest.raises(ValueError, match=r"'then\.status' values must be one of"):
         RuleLoader(path).load()
 
 
@@ -419,7 +419,7 @@ def test_loader_rejects_non_mapping_then_status(tmp_path, bad_status_block):
             "then": {"status": bad_status_block},
         },
     )
-    with pytest.raises(ValueError, match="'then.status' must be a mapping"):
+    with pytest.raises(ValueError, match=r"'then\.status' must be a mapping"):
         RuleLoader(path).load()
 
 

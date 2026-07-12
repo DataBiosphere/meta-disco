@@ -35,7 +35,7 @@ def classify_images(metadata_path: Path, output_path: Path):
 
         # Check if this is an image file
         is_image = False
-        for ext in stats.keys():
+        for ext in stats:
             if fmt == ext or name_lower.endswith(ext):
                 is_image = True
                 stats[ext]["total"] = stats[ext].get("total", 0) + 1

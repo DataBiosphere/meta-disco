@@ -206,7 +206,7 @@ def validate_against_igsr(
     # Fetch all sample metadata in parallel
     print("Fetching IGSR metadata...", flush=True)
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(fetch_sample, sid): sid for sid in sample_files.keys()}
+        futures = {executor.submit(fetch_sample, sid): sid for sid in sample_files}
 
         for future in as_completed(futures):
             completed_samples += 1
@@ -276,7 +276,7 @@ def validate_against_igsr(
                     if our_modality == exp_mod:
                         modality_match = True
                         break
-                    elif our_modality.startswith(exp_mod.split(".")[0]) or exp_mod.startswith(our_modality):
+                    if our_modality.startswith(exp_mod.split(".")[0]) or exp_mod.startswith(our_modality):
                         modality_partial = True
 
             if modality_match:

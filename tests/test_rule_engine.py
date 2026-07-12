@@ -402,7 +402,7 @@ class TestConflictingClassificationFields:
         not the value slot) and the structured competing_values field."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
-        conflict = [e for e in evidence if "conflicting_" in e["rule_id"]][0]
+        conflict = next(e for e in evidence if "conflicting_" in e["rule_id"])
         assert conflict["status"] == NOT_CLASSIFIED
         assert "value" not in conflict
         assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
@@ -411,7 +411,7 @@ class TestConflictingClassificationFields:
         """Every evidence entry should include the value that was set."""
         result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bed"))
         evidence = result.field_evidence.get("reference_assembly", [])
-        ref_entry = [e for e in evidence if e["rule_id"] == "filename_ref_grch38"][0]
+        ref_entry = next(e for e in evidence if e["rule_id"] == "filename_ref_grch38")
         assert ref_entry["value"] == "GRCh38"
 
 

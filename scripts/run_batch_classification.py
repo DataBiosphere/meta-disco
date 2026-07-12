@@ -23,10 +23,9 @@ def load_metadata(input_path: Path) -> list[dict]:
                 if line.strip():
                     files.append(json.loads(line))
         return files
-    else:
-        with input_path.open() as f:
-            data = json.load(f)
-        return data.get("files", data)
+    with input_path.open() as f:
+        data = json.load(f)
+    return data.get("files", data)
 
 
 def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:

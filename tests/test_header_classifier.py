@@ -63,7 +63,7 @@ class TestExtractArchiveAccession:
 
     def test_ddbj_accession(self):
         """Extract DDBJ (DRR) accession."""
-        accession, source, remainder = extract_archive_accession("@DRR000001.1 some_data")
+        accession, source, _remainder = extract_archive_accession("@DRR000001.1 some_data")
         assert accession == "DRR000001"
         assert source == "DDBJ"
 

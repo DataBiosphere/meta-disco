@@ -144,7 +144,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
     labels = list(categories_for_pie.keys())
     sizes = list(categories_for_pie.values())
 
-    wedges, texts, autotexts = ax1.pie(
+    wedges, _texts, _autotexts = ax1.pie(
         sizes, labels=None, autopct=lambda p: f"{p:.1f}%" if p > 3 else "", colors=colors[: len(sizes)], startangle=90
     )
     ax1.set_title(f"Input Files by Category\n(Total: {total_files:,})", fontweight="bold")
@@ -279,10 +279,7 @@ def generate_report(source_path: Path, output_dir: Path, report_path: Path):
                 dtype = "alignments"
             elif source == "VCF":
                 vtype = item.get("variant_type", "")
-                if vtype in ["structural", "cnv"]:
-                    dtype = "structural_variants"
-                else:
-                    dtype = "variant_calls"
+                dtype = "structural_variants" if vtype in ["structural", "cnv"] else "variant_calls"
             elif source == "FASTQ":
                 dtype = "reads"
             elif source == "Images":

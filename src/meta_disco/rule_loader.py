@@ -499,6 +499,5 @@ def reload_rules(rules_path: str | Path | None = None) -> UnifiedRules:
     if rules_path is None:
         _default_loader = RuleLoader()
         return _default_loader.load()
-    else:
-        loader = RuleLoader(rules_path)
-        return loader.load()
+    loader = RuleLoader(rules_path)
+    return loader.load()

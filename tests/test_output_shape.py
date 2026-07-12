@@ -259,7 +259,7 @@ def test_output_structural_contract(output):
             )
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
-                assert EVIDENCE_KEYS <= set(ev), f"{ftype}.{field} evidence: {set(ev)}"
+                assert set(ev) >= EVIDENCE_KEYS, f"{ftype}.{field} evidence: {set(ev)}"
 
 
 def test_output_values_in_vocabulary(output):

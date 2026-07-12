@@ -12,12 +12,12 @@ import re
 from dataclasses import replace
 
 from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
-from .validators.read_name_parsers import (  # noqa: F401 — re-exported for backward compat
+from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
-    infer_illumina_instrument_model,
+    infer_illumina_instrument_model,  # noqa: F401  re-exported for backward compat
     parse_illumina_read_name,
-    parse_ont_read_name,
+    parse_ont_read_name,  # noqa: F401  re-exported for backward compat
     parse_pacbio_read_name,
 )
 
@@ -796,15 +796,14 @@ def _infer_bed_reference(signals: dict) -> tuple[str | None, str]:
     if len(candidates) == 1:
         rationale = f"Only {candidates[0]} not ruled out. {'; '.join(evidence_details)}"
         return candidates[0], rationale
-    elif len(candidates) == 0:
+    if len(candidates) == 0:
         return None, f"All references ruled out: {'; '.join(evidence_details)}"
-    else:
-        # More than one reference is still consistent with these coordinates —
-        # the file's coordinates don't reach into regions where the candidates'
-        # chromosome lengths differ, so we genuinely can't tell them apart. Return
-        # "can't tell" (None) rather than guessing a closest match: an undefined
-        # coordinate result must not override a filename-based reference.
-        return None, (f"Cannot distinguish between {', '.join(candidates)} — coordinates fit multiple references")
+    # More than one reference is still consistent with these coordinates —
+    # the file's coordinates don't reach into regions where the candidates'
+    # chromosome lengths differ, so we genuinely can't tell them apart. Return
+    # "can't tell" (None) rather than guessing a closest match: an undefined
+    # coordinate result must not override a filename-based reference.
+    return None, (f"Cannot distinguish between {', '.join(candidates)} — coordinates fit multiple references")
 
 
 def classify_from_bed_signals(

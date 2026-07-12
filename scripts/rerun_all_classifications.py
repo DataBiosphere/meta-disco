@@ -100,7 +100,7 @@ def main():
     with ThreadPoolExecutor(max_workers=len(parallel_jobs)) as executor:
         futures = {executor.submit(run_script, name, path, extra): name for name, path, extra in parallel_jobs}
         for future in as_completed(futures):
-            script_name, ok = future.result()
+            _script_name, ok = future.result()
             success &= ok
 
     # Phase 2: Index classification (inherits from parent file classifications)

@@ -7,11 +7,12 @@ which carries extension filters, fetcher, classifier, and summary printer.
 
 import json
 import re
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Callable, NamedTuple
+from typing import NamedTuple
 
 from .fetchers import FetchError
 from .header_classifier import classify_without_content
@@ -326,7 +327,7 @@ class ClassifyPipeline:
             if existing.get("metadata", {}).get("complete") and existing_count >= len(records):
                 print(f"Output already complete with {existing_count} classifications. Skipping.")
                 return True
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
         return False
 
@@ -378,10 +379,7 @@ class ClassifyPipeline:
         file_format = record.get("file_format") or ""
 
         has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
-        if has_gz_ext:
-            is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz")
-        else:
-            is_gzipped = True
+        is_gzipped = (file_name.endswith(".gz") or file_format.endswith(".gz")) if has_gz_ext else True
 
         was_cached = self.resume and self._is_cached(md5)
 
