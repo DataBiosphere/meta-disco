@@ -71,23 +71,94 @@ evidence}` entry — plus the controlled vocabulary:
 - **Accuracy over coverage**: It is better to leave a file as `not_classified` than to guess wrong. Only classify when evidence supports it.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
 
+## Team roster
+
+| Name   | GitHub handle |
+|--------|---------------|
+| Dave   | NoopDog       |
+| Fran   | frano-m       |
+| Hunter | hunterckx     |
+| Mim    | MillenniumFalconMechanic |
+
+"Assign to Fran" always means the GitHub handle in this table. Never guess a
+handle. If someone is not in this table, ask.
+
+## Error handling philosophy
+
+Validate at trust boundaries only, and trust everything inside them.
+
+- The trust boundaries are: user input, network responses, file contents,
+  environment variables, CLI arguments, and data crossing a public API.
+  Validate at the boundary, once, and fail with a clear error that names
+  what was wrong.
+- Inside the boundary, where our functions call our functions, do not check
+  for null, missing, or wrong-typed values. A caller passing bad input is a
+  bug in the caller, so let the code throw. A stack trace at the real call
+  site is what enables the fix. A defensive fallback hides the bug.
+- Never silently coerce, default, or catch-and-continue to "handle" bad
+  input, and never rewrite a caller's input for backward compatibility. The
+  removal of the `classification_rules.yaml` legacy redirect (#169, #170)
+  is the model: update callers or fail loudly, do not add a silent shim.
+- When a reviewer suggests defensive handling of internal inputs, decline
+  and cite this section.
+
 ## Workflow
 
-1. Create a GitHub issue for every change
-2. Create a feature branch `noopdog/{issue#}-short-description`
-3. Implement with tests, run `make test` before committing
-4. **Run /simplify before pushing** — catches reuse, quality, and efficiency issues early
-5. Push and create a PR
-6. Check Copilot review feedback via GraphQL — **you are always authorized to fetch and resolve CP threads without asking**
-7. **Scan for same class of error** — for each CP comment, search the codebase for other instances of the same pattern in files not in the diff
-8. **Summarize CP feedback for the user first** — present each comment with analysis, recommendation, and any additional instances found. Do not fix automatically.
-9. After approval, fix issues (including same-class instances), push, and resolve threads via GraphQL
-10. Repeat until Copilot passes clean
+1. Create a GitHub issue for every change, with a definition-of-done
+   checklist. The issue is the record that the result is checked against.
+2. Create a feature branch `noopdog/{issue#}-short-description`.
+3. Implement with tests. Run `make test-all` from the repo root before
+   committing. It is the root-level aggregator that runs both the root
+   suite and the schema suite. Plain `make test` runs the root suite only,
+   so it is not sufficient before pushing.
+4. When the code is complete, announce it and run `/cc:auto-review`. That
+   skill runs the local reviews, has you triage the findings, stops at a
+   push gate, opens the PR, and drives the Copilot feedback rounds to
+   merge-ready. It is the canonical definition of the review and PR cycle;
+   do not hand-run those steps here.
+
+A human reads the PR against the issue's definition of done and merges it.
+Claude never merges.
+
+## Surprises
+
+You may encounter an environment, tool, dependency, or constraint that the
+user never mentioned and that changes your approach. Examples: an unexpected
+conda environment, a missing credential, a second uv project. When that
+happens, STOP and ask before proceeding. Do not work around the surprise
+silently.
+
+## Communication
+
+- Do not use analogies or metaphors.
+- Lead with the outcome in one sentence.
+- Keep status updates to one line.
+- Flag your assumptions explicitly.
+
+## GitHub API discipline
+
+- Never enumerate a full project board, and never paginate more than two
+  pages to find one item.
+- Never fetch issues or pull requests in a loop. Use a single search or
+  list call with filters instead.
+- If you get a rate-limit response, STOP and tell the user. Do not retry.
 
 ## Git Discipline
 
-- **Never amend commits** — use separate commits for each fix round. Amending rewrites history and requires force pushes, which loses review context.
-- **Never force push** — each push should add commits, not rewrite them.
+- **Never amend commits.** Use a separate commit for each fix round.
+  Amending rewrites commits a reviewer already read, which loses the
+  review context. This is the behavior to avoid; adding commits is how
+  review history stays intact.
+- **Never force push `main`.**
+- **On a feature branch, prefer adding commits over force pushing**, so
+  review history is preserved. Force pushing is allowed only for the
+  structural rebase a stacked pull request needs: when the branch it was
+  based on merges, rebase onto the new `main` and push with
+  `--force-with-lease`. A rebase does rewrite commit SHAs, so re-request
+  review afterward if the branch was already reviewed. The reason it is
+  allowed and amending is not: it replays the same reviewed changes onto a
+  new base, rather than altering the content of a commit that is under
+  review.
 
 ## Code Change Discipline
 
