@@ -40,6 +40,7 @@ class UnifiedRule:
     then: dict[str, Any]
     rationale: str
     then_status: dict[str, str] = field(default_factory=dict)
+
     def matches_extension(self, extension: str) -> bool:
         """Check if this rule applies to a given file extension."""
         if "extensions" not in self.when:
@@ -101,7 +102,7 @@ class UnifiedRules:
         ".rgfa.gz",
         ".gfa.gz",
         ".fast5.tar.gz",  # Must come before .tar.gz
-        ".fast5.tar",     # Must come before .tar
+        ".fast5.tar",  # Must come before .tar
         ".tar.gz",
         ".mtx.gz",
     ]
@@ -149,11 +150,22 @@ class RuleLoader:
     # almost always a typo (e.g. "filename_patern").
     VALID_WHEN_KEYS = {
         "always",
-        "extensions", "filename_pattern", "dataset_pattern", "file_format",
-        "file_size_min_gb", "file_size_max_gb",
-        "platform", "modality_not_set", "reference_not_set",
-        "header_section", "header_field", "header_pattern", "header_absent",
-        "vcf_header_type", "vcf_pattern", "fastq_pattern",
+        "extensions",
+        "filename_pattern",
+        "dataset_pattern",
+        "file_format",
+        "file_size_min_gb",
+        "file_size_max_gb",
+        "platform",
+        "modality_not_set",
+        "reference_not_set",
+        "header_section",
+        "header_field",
+        "header_pattern",
+        "header_absent",
+        "vcf_header_type",
+        "vcf_pattern",
+        "fastq_pattern",
     }
     # Effect keys _apply_rule() reads from a `then` block: the classification
     # fields (real-value effects) plus the reserved `status` key, whose value is a
@@ -214,7 +226,8 @@ class RuleLoader:
             if not self._is_default:
                 raise FileNotFoundError(f"Rules file not found at {self.rules_path}") from e
             lead = (
-                f"Rules file not found at {self.rules_path}" if self.rules_path is not None
+                f"Rules file not found at {self.rules_path}"
+                if self.rules_path is not None
                 else f"Rules not found in the {__package__}.rules package"
             )
             raise FileNotFoundError(
@@ -247,9 +260,7 @@ class RuleLoader:
         # Fifth document: illumina instruments (optional)
         illumina_instruments = []
         if len(docs) > 4 and docs[4]:
-            illumina_instruments = self._parse_illumina_instruments(
-                docs[4].get("illumina_instruments", [])
-            )
+            illumina_instruments = self._parse_illumina_instruments(docs[4].get("illumina_instruments", []))
 
         # Sixth document: reference contig lengths (optional)
         reference_contig_lengths = {}
@@ -305,9 +316,7 @@ class RuleLoader:
             if when is None:
                 when = {}
             if not isinstance(when, dict):
-                raise ValueError(
-                    f"Rule {rule_id}: 'when' must be a mapping, got {type(when).__name__}"
-                )
+                raise ValueError(f"Rule {rule_id}: 'when' must be a mapping, got {type(when).__name__}")
             unknown_when = set(when) - self.VALID_WHEN_KEYS
             if unknown_when:
                 raise ValueError(
@@ -319,9 +328,7 @@ class RuleLoader:
             if then is None:
                 then = {}
             if not isinstance(then, dict):
-                raise ValueError(
-                    f"Rule {rule_id}: 'then' must be a mapping, got {type(then).__name__}"
-                )
+                raise ValueError(f"Rule {rule_id}: 'then' must be a mapping, got {type(then).__name__}")
             unknown_then = set(then) - self.VALID_THEN_KEYS
             if unknown_then:
                 raise ValueError(
@@ -329,25 +336,23 @@ class RuleLoader:
                     f"valid keys are {sorted(self.VALID_THEN_KEYS)}"
                 )
             then_values = {k: v for k, v in then.items() if k != self.THEN_STATUS_KEY}
-            then_status = self._parse_then_status(
-                rule_id, then.get(self.THEN_STATUS_KEY), then_values
-            )
+            then_status = self._parse_then_status(rule_id, then.get(self.THEN_STATUS_KEY), then_values)
 
-            rules.append(UnifiedRule(
-                id=rule_id,
-                tier=tier,
-                scope=scope,
-                when=when,
-                then=then_values,
-                rationale=rule_data.get("rationale", ""),
-                then_status=then_status,
-            ))
+            rules.append(
+                UnifiedRule(
+                    id=rule_id,
+                    tier=tier,
+                    scope=scope,
+                    when=when,
+                    then=then_values,
+                    rationale=rule_data.get("rationale", ""),
+                    then_status=then_status,
+                )
+            )
 
         return rules
 
-    def _parse_then_status(
-        self, rule_id: str, raw: Any, then_values: dict[str, Any]
-    ) -> dict[str, str]:
+    def _parse_then_status(self, rule_id: str, raw: Any, then_values: dict[str, Any]) -> dict[str, str]:
         """Validate and return a rule's ``then.status`` sub-map ({field: status}).
 
         ``raw`` is the value of the ``then.status`` key (``None`` if the block has
@@ -360,9 +365,7 @@ class RuleLoader:
         if raw is None:
             return {}
         if not isinstance(raw, dict):
-            raise ValueError(
-                f"Rule {rule_id}: 'then.status' must be a mapping, got {type(raw).__name__}"
-            )
+            raise ValueError(f"Rule {rule_id}: 'then.status' must be a mapping, got {type(raw).__name__}")
         unknown_fields = set(raw) - set(CLASSIFICATION_FIELDS)
         if unknown_fields:
             raise ValueError(
@@ -372,8 +375,7 @@ class RuleLoader:
         bad = sorted(f"{k}={v!r}" for k, v in raw.items() if v not in self.AUTHORABLE_STATUSES)
         if bad:
             raise ValueError(
-                f"Rule {rule_id}: 'then.status' values must be one of "
-                f"{sorted(self.AUTHORABLE_STATUSES)}; got {bad}"
+                f"Rule {rule_id}: 'then.status' values must be one of {sorted(self.AUTHORABLE_STATUSES)}; got {bad}"
             )
         conflicting = set(raw) & set(then_values)
         if conflicting:
@@ -414,8 +416,7 @@ class RuleLoader:
                 conditions = {}
             if not isinstance(conditions, dict):
                 raise ValueError(
-                    f"Assay type rule {assay_id}: 'conditions' must be a mapping, "
-                    f"got {type(conditions).__name__}"
+                    f"Assay type rule {assay_id}: 'conditions' must be a mapping, got {type(conditions).__name__}"
                 )
 
             # List-typed condition keys must be lists; a scalar string would be
@@ -428,12 +429,14 @@ class RuleLoader:
                         f"list, got {type(conditions[key]).__name__}"
                     )
 
-            rules.append(AssayTypeRule(
-                id=assay_id,
-                priority=rule_data.get("priority", 0),
-                conditions=conditions,
-                assay_type=rule_data.get("assay_type", ""),
-            ))
+            rules.append(
+                AssayTypeRule(
+                    id=assay_id,
+                    priority=rule_data.get("priority", 0),
+                    conditions=conditions,
+                    assay_type=rule_data.get("assay_type", ""),
+                )
+            )
 
         # Sort by priority (highest first)
         rules.sort(key=lambda r: r.priority, reverse=True)

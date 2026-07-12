@@ -52,16 +52,18 @@ def classify_images(metadata_path: Path, output_path: Path):
         )
         result = engine.classify_extended(file_info)
 
-        results.append({
-            "file_name": name,
-            "file_format": fmt,
-            "md5sum": f.get("file_md5sum"),
-            "file_size": f.get("file_size"),
-            "entry_id": f.get("entry_id"),
-            "dataset_id": f.get("dataset_id"),
-            "dataset_title": f.get("dataset_title"),
-            "classifications": result.to_output_dict(),
-        })
+        results.append(
+            {
+                "file_name": name,
+                "file_format": fmt,
+                "md5sum": f.get("file_md5sum"),
+                "file_size": f.get("file_size"),
+                "entry_id": f.get("entry_id"),
+                "dataset_id": f.get("dataset_id"),
+                "dataset_title": f.get("dataset_title"),
+                "classifications": result.to_output_dict(),
+            }
+        )
 
     # Print summary
     print("\n" + "=" * 70)
@@ -91,14 +93,18 @@ def classify_images(metadata_path: Path, output_path: Path):
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_images": total_all,
-                "by_extension": {ext: stats[ext]["total"] for ext in stats if stats[ext]["total"] > 0},
-                "complete": True,
+        json.dump(
+            {
+                "metadata": {
+                    "total_images": total_all,
+                    "by_extension": {ext: stats[ext]["total"] for ext in stats if stats[ext]["total"] > 0},
+                    "complete": True,
+                },
+                "classifications": results,
             },
-            "classifications": results,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nSaved {len(results):,} image classifications to {output_path}")
 
@@ -106,13 +112,15 @@ def classify_images(metadata_path: Path, output_path: Path):
 def main():
     parser = argparse.ArgumentParser(description="Classify image files")
     parser.add_argument(
-        "--metadata", "-m",
+        "--metadata",
+        "-m",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/image_classifications.json"),
         help="Output path for image classifications",

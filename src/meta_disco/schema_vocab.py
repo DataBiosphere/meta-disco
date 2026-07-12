@@ -78,7 +78,8 @@ def _load_enums() -> dict[str, frozenset[str]]:
         # the meta_disco.schema package was dropped entirely, leaving resource None.
         # Name the package dynamically, matching the {__package__} anchor above.
         lead = (
-            f"Classification schema not found at {resource}" if resource is not None
+            f"Classification schema not found at {resource}"
+            if resource is not None
             else f"Classification schema not found in the {__package__}.schema package"
         )
         raise FileNotFoundError(
@@ -101,17 +102,11 @@ def dimension_values(field: str) -> frozenset[str]:
     drift fails with a diagnosable message rather than a bare lookup error.
     """
     if field not in DIMENSION_ENUMS:
-        raise ValueError(
-            f"Unknown classification dimension {field!r}; "
-            f"expected one of {sorted(DIMENSION_ENUMS)}"
-        )
+        raise ValueError(f"Unknown classification dimension {field!r}; expected one of {sorted(DIMENSION_ENUMS)}")
     enum_name = DIMENSION_ENUMS[field]
     enums = _load_enums()
     if enum_name not in enums:
-        raise KeyError(
-            f"Schema at {default_schema_path()} is missing enum {enum_name!r} "
-            f"for dimension {field!r}"
-        )
+        raise KeyError(f"Schema at {default_schema_path()} is missing enum {enum_name!r} for dimension {field!r}")
     return enums[enum_name]
 
 
@@ -125,9 +120,7 @@ def status_values() -> frozenset[str]:
     """
     enums = _load_enums()
     if STATUS_ENUM not in enums:
-        raise KeyError(
-            f"Schema at {default_schema_path()} is missing enum {STATUS_ENUM!r}"
-        )
+        raise KeyError(f"Schema at {default_schema_path()} is missing enum {STATUS_ENUM!r}")
     return enums[STATUS_ENUM]
 
 

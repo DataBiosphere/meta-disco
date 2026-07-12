@@ -6,10 +6,7 @@ external values to our internal classification values.
 
 HPRC_CATALOG_NAMES = ["sequencing-data", "alignments", "annotations", "assemblies"]
 
-HPRC_CATALOG_BASE_URL = (
-    "https://raw.githubusercontent.com/human-pangenomics/hprc-data-explorer/"
-    "main/catalog/output"
-)
+HPRC_CATALOG_BASE_URL = "https://raw.githubusercontent.com/human-pangenomics/hprc-data-explorer/main/catalog/output"
 
 HPRC_PLATFORM_MAP = {
     "PACBIO_SMRT": "PACBIO",
@@ -47,6 +44,8 @@ _ANNOTATION_REF_PATTERNS: dict[str, str] = {
     "Reference Mappings GRCh38": "GRCh38",
     "ChromAlias T2T": "CHM13",
 }
+
+
 def extract_ref_from_annotation_type(annotation_type: str) -> str | None:
     """Extract reference assembly from an HPRC annotation type string.
 

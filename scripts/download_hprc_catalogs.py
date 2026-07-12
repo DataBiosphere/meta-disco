@@ -36,9 +36,7 @@ def download_catalog(name: str, output_dir: Path) -> int:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Download HPRC Data Explorer catalogs"
-    )
+    parser = argparse.ArgumentParser(description="Download HPRC Data Explorer catalogs")
     parser.add_argument(
         "--output-dir",
         type=Path,

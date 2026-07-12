@@ -26,16 +26,22 @@ DIMENSIONS = [
     ("data_modality", "Data Modality", ""),
     ("data_type", "Data Type", ""),
     ("reference_assembly", "Reference Assembly", ""),
-    ("platform", "Platform",
-     "**Note**: Platform is inherently unknowable for most derived formats "
-     "(VCF, BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ "
-     "(via read name patterns) can encode platform. The high not-classified "
-     "rate is expected."),
-    ("assay_type", "Assay Type",
-     "**Note**: Like platform, assay type is inherently unknowable for most "
-     "derived formats. Only BAM/CRAM (via `@PG` programs and file size "
-     "heuristics) and filename patterns can determine assay. The high "
-     "not-classified rate is expected."),
+    (
+        "platform",
+        "Platform",
+        "**Note**: Platform is inherently unknowable for most derived formats "
+        "(VCF, BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ "
+        "(via read name patterns) can encode platform. The high not-classified "
+        "rate is expected.",
+    ),
+    (
+        "assay_type",
+        "Assay Type",
+        "**Note**: Like platform, assay type is inherently unknowable for most "
+        "derived formats. Only BAM/CRAM (via `@PG` programs and file size "
+        "heuristics) and filename patterns can determine assay. The high "
+        "not-classified rate is expected.",
+    ),
 ]
 
 
@@ -85,6 +91,7 @@ def _normalize_reason(reason: str) -> str:
     don't create thousands of unique reasons that each count as 1.
     """
     import re
+
     reason = re.sub(
         r"Parent file .+ had no value for (this field|\w+)",
         r"Parent file had no value for \1",
@@ -115,8 +122,7 @@ def get_nc_reasons(records: list[dict], field_name: str) -> dict[str, Counter]:
     return reasons_by_ext
 
 
-def build_section(records: list[dict], field_name: str,
-                  label: str, extra_notes: str = "") -> tuple[str, int, int]:
+def build_section(records: list[dict], field_name: str, label: str, extra_notes: str = "") -> tuple[str, int, int]:
     total = len(records)
     by_ext = defaultdict(Counter)
     totals = Counter()
@@ -170,8 +176,9 @@ def build_section(records: list[dict], field_name: str,
 def main():
     parser = argparse.ArgumentParser(description="Generate classification coverage report")
     parser.add_argument("--run-dir", type=Path, help="Path to classification run directory")
-    parser.add_argument("--output", type=Path, default=Path("docs/anvil-coverage-report.md"),
-                        help="Output markdown file")
+    parser.add_argument(
+        "--output", type=Path, default=Path("docs/anvil-coverage-report.md"), help="Output markdown file"
+    )
     args = parser.parse_args()
 
     try:
@@ -211,8 +218,7 @@ def main():
         section, classified, nc = build_section(records, field, label, notes)
         sections.append(section)
         summary_rows.append(
-            f"| **{label}** | {classified:,} ({100 * classified / total:.1f}%) "
-            f"| {nc:,} ({100 * nc / total:.1f}%) |"
+            f"| **{label}** | {classified:,} ({100 * classified / total:.1f}%) | {nc:,} ({100 * nc / total:.1f}%) |"
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -224,8 +230,10 @@ def main():
             n_datasets = len(dataset_counts)
             n_files = sum(dataset_counts.values())
             unprocessed = n_files - total
-            out.write(f"Source: **{n_files:,}** files across **{n_datasets}** open-access datasets "
-                      f"on [explore.anvilproject.org](https://explore.anvilproject.org/).\n")
+            out.write(
+                f"Source: **{n_files:,}** files across **{n_datasets}** open-access datasets "
+                f"on [explore.anvilproject.org](https://explore.anvilproject.org/).\n"
+            )
             out.write(f"Processed **{total:,}** files")
             if unprocessed > 0:
                 out.write(f" ({unprocessed:,} not yet handled by any classifier)")
@@ -257,13 +265,12 @@ def main():
     print(f"Written to {html_output}")
 
 
-def generate_html_dashboard(records: list[dict],
-                            run_time: str, dataset_counts: Counter,
-                            output_path: Path):
+def generate_html_dashboard(records: list[dict], run_time: str, dataset_counts: Counter, output_path: Path):
     """Generate HTML dashboard with embedded chart data."""
     total = len(records)
-    datasets = [{"name": name, "count": count}
-                for name, count in dataset_counts.most_common()] if dataset_counts else []
+    datasets = (
+        [{"name": name, "count": count} for name, count in dataset_counts.most_common()] if dataset_counts else []
+    )
     dashboard_data = {
         "total": total,
         "run_time": run_time,
@@ -283,8 +290,7 @@ def generate_html_dashboard(records: list[dict],
         nc = totals.get("not_classified", 0) + totals.get("None", 0)
 
         values = [
-            {"name": val, "count": count,
-             "extensions": [{"ext": e, "count": c} for e, c in by_ext[val].most_common()]}
+            {"name": val, "count": count, "extensions": [{"ext": e, "count": c} for e, c in by_ext[val].most_common()]}
             for val, count in totals.most_common()
         ]
 
@@ -296,15 +302,17 @@ def generate_html_dashboard(records: list[dict],
             top_reason = ext_reasons.most_common(1)[0][0] if ext_reasons else "No reason recorded"
             nc_breakdown.append({"ext": ext, "count": count, "why": top_reason})
 
-        dashboard_data["dimensions"].append({
-            "field": field,
-            "label": label,
-            "classified": classified,
-            "not_classified": nc,
-            "values": values,
-            "not_classified_breakdown": nc_breakdown,
-            "notes": notes,
-        })
+        dashboard_data["dimensions"].append(
+            {
+                "field": field,
+                "label": label,
+                "classified": classified,
+                "not_classified": nc,
+                "values": values,
+                "not_classified_breakdown": nc_breakdown,
+                "notes": notes,
+            }
+        )
 
     project_root = Path(__file__).parent.parent
     template_path = project_root / "docs" / "coverage-dashboard-template.html"

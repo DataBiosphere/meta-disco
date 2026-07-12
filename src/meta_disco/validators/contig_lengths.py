@@ -62,10 +62,7 @@ CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
 }
 
 
-def detect_reference_from_contig_lengths(
-    contig_lines: list[str],
-    tolerance: int = 1000
-) -> tuple[str | None, int]:
+def detect_reference_from_contig_lengths(contig_lines: list[str], tolerance: int = 1000) -> tuple[str | None, int]:
     """
     Detect reference assembly from contig lengths in VCF ##contig lines or BAM @SQ lines.
 
@@ -86,11 +83,11 @@ def detect_reference_from_contig_lengths(
 
     # VCF contig fields can appear in any order: ##contig=<ID=chr1,length=248387497>
     # or ##contig=<ID=chr1,assembly=GRCh38,length=248387497>
-    vcf_id_pattern = r'ID=([^,>]+)'
-    vcf_len_pattern = r'length=(\d+)'
+    vcf_id_pattern = r"ID=([^,>]+)"
+    vcf_len_pattern = r"length=(\d+)"
     # BAM @SQ tags can appear in any order, so match SN and LN independently
-    bam_sn_pattern = r'SN:([^\t]+)'
-    bam_ln_pattern = r'LN:(\d+)'
+    bam_sn_pattern = r"SN:([^\t]+)"
+    bam_ln_pattern = r"LN:(\d+)"
 
     for line in contig_lines:
         contig = None

@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -7,6 +7,8 @@ help:
 	@echo "  make test-all           Run root + schema test suites (use before pushing)"
 	@echo "  make lint               Run ruff on the root project"
 	@echo "  make lint-all           Run ruff on root + schema projects"
+	@echo "  make format             Reformat root project with ruff formatter"
+	@echo "  make format-check       Check formatting without writing (CI)"
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
 	@echo "  make classify-and-report Run classify + regenerate all reports"
 	@echo "  make download           Download fresh AnVIL metadata from API"
@@ -46,6 +48,14 @@ lint-schema:
 	$(MAKE) -C schema lint
 
 lint-all: lint lint-schema
+
+# Ruff formatter (layout authority). `format` rewrites in place; `format-check`
+# verifies without writing (used by CI, #180).
+format:
+	uv run ruff format src/ scripts/ tests/
+
+format-check:
+	uv run ruff format --check src/ scripts/ tests/
 
 classify:
 	uv run python scripts/rerun_all_classifications.py

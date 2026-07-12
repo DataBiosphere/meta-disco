@@ -82,11 +82,13 @@ def validate_internal_mappings() -> dict:
             if ensembl_length == our_length:
                 results["GRCh38"]["matches"] += 1
             elif ensembl_length:
-                results["GRCh38"]["mismatches"].append({
-                    "contig": contig,
-                    "ours": our_length,
-                    "ensembl": ensembl_length,
-                })
+                results["GRCh38"]["mismatches"].append(
+                    {
+                        "contig": contig,
+                        "ours": our_length,
+                        "ensembl": ensembl_length,
+                    }
+                )
 
         if not results["GRCh38"]["mismatches"]:
             results["GRCh38"]["status"] = "valid"
@@ -113,11 +115,13 @@ def validate_internal_mappings() -> dict:
             if ensembl_length == our_length:
                 results["GRCh37"]["matches"] += 1
             elif ensembl_length:
-                results["GRCh37"]["mismatches"].append({
-                    "contig": contig,
-                    "ours": our_length,
-                    "ensembl": ensembl_length,
-                })
+                results["GRCh37"]["mismatches"].append(
+                    {
+                        "contig": contig,
+                        "ours": our_length,
+                        "ensembl": ensembl_length,
+                    }
+                )
 
         if not results["GRCh37"]["mismatches"]:
             results["GRCh37"]["status"] = "valid"
@@ -133,7 +137,7 @@ def validate_internal_mappings() -> dict:
     # Source: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
     print("\nValidating CHM13 against T2T consortium values...", flush=True)
     _chm13_official = {  # noqa: F841
-        "1": 248387328,   # Note: slight difference from our value
+        "1": 248387328,  # Note: slight difference from our value
         "2": 242696752,
         "3": 201105948,
         "10": 134758134,
@@ -156,11 +160,13 @@ def validate_internal_mappings() -> dict:
         if expected == our_length:
             results["CHM13"]["matches"] += 1
         elif expected:
-            results["CHM13"]["mismatches"].append({
-                "contig": contig,
-                "ours": our_length,
-                "expected": expected,
-            })
+            results["CHM13"]["mismatches"].append(
+                {
+                    "contig": contig,
+                    "ours": our_length,
+                    "expected": expected,
+                }
+            )
 
     if not results["CHM13"]["mismatches"]:
         results["CHM13"]["status"] = "valid"
@@ -216,18 +222,18 @@ def validate_classified_files(sample_size: int = 0) -> dict:
         print(f"  Error loading BAM: {e}")
 
     # Summary
-    vcf_total = results['vcf']['total']
+    vcf_total = results["vcf"]["total"]
     print(f"\nVCF files: {vcf_total:,}")
     if vcf_total > 0:
-        print(f"  With reference: {results['vcf']['with_ref']:,} ({100*results['vcf']['with_ref']/vcf_total:.1f}%)")
+        print(f"  With reference: {results['vcf']['with_ref']:,} ({100 * results['vcf']['with_ref'] / vcf_total:.1f}%)")
     for ref, count in sorted(results["vcf"]["by_assembly"].items(), key=lambda x: -x[1]):
         pct = 100 * count / results["vcf"]["with_ref"] if results["vcf"]["with_ref"] else 0
         print(f"    {ref}: {count:,} ({pct:.1f}%)")
 
-    bam_total = results['bam']['total']
+    bam_total = results["bam"]["total"]
     print(f"\nBAM/CRAM files: {bam_total:,}")
     if bam_total > 0:
-        print(f"  With reference: {results['bam']['with_ref']:,} ({100*results['bam']['with_ref']/bam_total:.1f}%)")
+        print(f"  With reference: {results['bam']['with_ref']:,} ({100 * results['bam']['with_ref'] / bam_total:.1f}%)")
     for ref, count in sorted(results["bam"]["by_assembly"].items(), key=lambda x: -x[1]):
         pct = 100 * count / results["bam"]["with_ref"] if results["bam"]["with_ref"] else 0
         print(f"    {ref}: {count:,} ({pct:.1f}%)")
@@ -236,17 +242,17 @@ def validate_classified_files(sample_size: int = 0) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate reference assembly classifications"
-    )
+    parser = argparse.ArgumentParser(description="Validate reference assembly classifications")
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/reference_validation_results.json"),
         help="Output file",
     )
     parser.add_argument(
-        "--sample", "-s",
+        "--sample",
+        "-s",
         type=int,
         default=0,
         help="Number of files to spot-check (0 = skip)",
@@ -294,15 +300,19 @@ def main():
     # Save results
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as f:
-        json.dump({
-            "mapping_validation": mapping_results,
-            "file_classification": file_results,
-            "summary": {
-                "mappings_valid": all_valid,
-                "total_files_with_ref": total_files,
-                "assemblies": all_assemblies,
-            }
-        }, f, indent=2)
+        json.dump(
+            {
+                "mapping_validation": mapping_results,
+                "file_classification": file_results,
+                "summary": {
+                    "mappings_valid": all_valid,
+                    "total_files_with_ref": total_files,
+                    "assemblies": all_assemblies,
+                },
+            },
+            f,
+            indent=2,
+        )
 
     print(f"\nResults saved to: {args.output}")
 

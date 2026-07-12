@@ -30,8 +30,7 @@ BAM_CONFIG = FileTypeConfig(
     classifier=classify_from_header,
     summary_printer=print_bam_summary,
     # @SQ contig lengths, @RG platform; assay_type is inferred from those.
-    content_fields=("data_modality", "data_type", "reference_assembly",
-                    "platform", "assay_type"),
+    content_fields=("data_modality", "data_type", "reference_assembly", "platform", "assay_type"),
 )
 
 VCF_CONFIG = FileTypeConfig(

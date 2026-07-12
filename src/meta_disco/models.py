@@ -14,7 +14,11 @@ NOT_CLASSIFIED = "not_classified"
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.
 CLASSIFICATION_FIELDS = (
-    "data_modality", "data_type", "platform", "reference_assembly", "assay_type",
+    "data_modality",
+    "data_type",
+    "platform",
+    "reference_assembly",
+    "assay_type",
 )
 
 
@@ -67,11 +71,9 @@ def _assert_coherent(value, status) -> None:
     """
     value_is_real = status_for_value(value) == CLASSIFIED
     if status == CLASSIFIED and not value_is_real:
-        raise ValueError(
-            f"incoherent entry: CLASSIFIED status requires a real value, got {value!r}")
+        raise ValueError(f"incoherent entry: CLASSIFIED status requires a real value, got {value!r}")
     if status != CLASSIFIED and value_is_real:
-        raise ValueError(
-            f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
+        raise ValueError(f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
 def build_field_entry(value, status=None, evidence=None) -> dict:

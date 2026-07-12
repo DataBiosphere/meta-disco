@@ -36,14 +36,14 @@ def build_parallel_jobs(metadata: Path, output_dir: Path) -> list[tuple]:
     or the reports will not read it — pinned by tests/test_orchestration.py.
     """
     jobs = [
-        ("classify_headers.py", output_dir / f"{ftype}_classifications.json",
-         ["--type", ftype, "--input", str(metadata)])
+        (
+            "classify_headers.py",
+            output_dir / f"{ftype}_classifications.json",
+            ["--type", ftype, "--input", str(metadata)],
+        )
         for ftype in FILE_TYPE_REGISTRY
     ]
-    jobs += [
-        (script, output_dir / out, ["--metadata", str(metadata)])
-        for script, out in NON_HEADER_JOBS
-    ]
+    jobs += [(script, output_dir / out, ["--metadata", str(metadata)]) for script, out in NON_HEADER_JOBS]
     return jobs
 
 
@@ -55,8 +55,7 @@ def run_script(script_name: str, output_path: Path, extra_args: list[str] = None
 
     print(f"  Starting: {script_name}")
 
-    result = subprocess.run(cmd, cwd=Path(__file__).parent.parent,
-                            capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd=Path(__file__).parent.parent, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  ERROR: {script_name} failed with code {result.returncode}")
         if result.stderr:
@@ -69,13 +68,15 @@ def run_script(script_name: str, output_path: Path, extra_args: list[str] = None
 def main():
     parser = argparse.ArgumentParser(description="Re-run all classification scripts")
     parser.add_argument(
-        "--output-dir", "-o",
+        "--output-dir",
+        "-o",
         type=Path,
         default=Path("output/anvil"),
         help="Output directory for results",
     )
     parser.add_argument(
-        "--metadata", "-m",
+        "--metadata",
+        "-m",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Source metadata file (JSON format)",
@@ -97,10 +98,7 @@ def main():
     print(f"\nPhase 1: Running {len(parallel_jobs)} classifiers in parallel...")
     success = True
     with ThreadPoolExecutor(max_workers=len(parallel_jobs)) as executor:
-        futures = {
-            executor.submit(run_script, name, path, extra): name
-            for name, path, extra in parallel_jobs
-        }
+        futures = {executor.submit(run_script, name, path, extra): name for name, path, extra in parallel_jobs}
         for future in as_completed(futures):
             script_name, ok = future.result()
             success &= ok
@@ -115,10 +113,11 @@ def main():
             "classify_index_files.py",
             index_output,
             [
-                "--metadata", str(args.metadata),
+                "--metadata",
+                str(args.metadata),
                 "--classifications",
                 *[str(p) for p in all_classification_files],
-            ]
+            ],
         )
         success &= ok
         all_classification_files.append(index_output)
@@ -132,20 +131,21 @@ def main():
             "classify_remaining_files.py",
             output_dir / "remaining_classifications.json",
             [
-                "--metadata", str(args.metadata),
+                "--metadata",
+                str(args.metadata),
                 "--classifications",
                 *[str(p) for p in all_classification_files],
-            ]
+            ],
         )
         success &= ok
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     if success:
         print("All classifications complete!")
         print(f"Results saved to: {output_dir}/")
     else:
         print("Some classifications failed - check output above")
-    print("="*70)
+    print("=" * 70)
 
     # List output files
     print("\nOutput files:")

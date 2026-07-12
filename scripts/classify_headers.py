@@ -23,25 +23,29 @@ def main():
         description="Classify files by header inspection",
     )
     parser.add_argument(
-        "--type", "-t",
+        "--type",
+        "-t",
         required=True,
         choices=list(FILE_TYPE_REGISTRY.keys()),
         help="File type to classify",
     )
     parser.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Input metadata file (JSON or NDJSON)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=None,
         help="Output classification file (required in batch mode)",
     )
     parser.add_argument(
-        "--limit", "-l",
+        "--limit",
+        "-l",
         type=int,
         default=None,
         help="Maximum number of files to process",
@@ -58,7 +62,8 @@ def main():
         help="Re-fetch headers even if cached",
     )
     parser.add_argument(
-        "--workers", "-w",
+        "--workers",
+        "-w",
         type=int,
         default=None,
         help="Number of parallel workers",
@@ -80,7 +85,9 @@ def main():
     # Single-file mode
     if args.md5:
         result = ClassifyPipeline.classify_single(
-            config, args.md5, use_cache=not args.no_resume,
+            config,
+            args.md5,
+            use_cache=not args.no_resume,
         )
         if result:
             print(json.dumps(result, indent=2))

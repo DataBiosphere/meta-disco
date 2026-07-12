@@ -28,6 +28,7 @@ def _wrapped(field, entry):
 
 # --- field_value -----------------------------------------------------------
 
+
 class TestFieldValue:
     def test_classified_wrapped(self):
         assert field_value(_wrapped("data_modality", {"value": "genomic"}), "data_modality") == "genomic"
@@ -63,6 +64,7 @@ class TestFieldValue:
 
 
 # --- field_status ----------------------------------------------------------
+
 
 class TestFieldStatus:
     def test_classified(self):
@@ -100,6 +102,7 @@ class TestFieldStatus:
 
 
 # --- field_label -----------------------------------------------------------
+
 
 class TestFieldLabel:
     def test_classified_returns_value(self):
@@ -139,12 +142,16 @@ class TestFieldLabel:
 
 # --- consistency across the three accessors --------------------------------
 
-@pytest.mark.parametrize("value,exp_status,exp_label", [
-    ("genomic", CLASSIFIED, "genomic"),
-    (NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE),
-    (NOT_CLASSIFIED, NOT_CLASSIFIED, NOT_CLASSIFIED),
-    (None, NOT_CLASSIFIED, NOT_CLASSIFIED),
-])
+
+@pytest.mark.parametrize(
+    "value,exp_status,exp_label",
+    [
+        ("genomic", CLASSIFIED, "genomic"),
+        (NOT_APPLICABLE, NOT_APPLICABLE, NOT_APPLICABLE),
+        (NOT_CLASSIFIED, NOT_CLASSIFIED, NOT_CLASSIFIED),
+        (None, NOT_CLASSIFIED, NOT_CLASSIFIED),
+    ],
+)
 def test_accessor_consistency_today(value, exp_status, exp_label):
     rec = _wrapped("data_modality", {"value": value})
     assert field_value(rec, "data_modality") == value
@@ -153,6 +160,7 @@ def test_accessor_consistency_today(value, exp_status, exp_label):
 
 
 # --- coherence guard (#129): reject status=classified with a null value --------
+
 
 class TestCoherenceGuard:
     def test_field_status_raises_on_classified_none(self):
@@ -205,11 +213,11 @@ class TestCoherenceGuard:
 
 # --- build_field_entry: the single producer shape/invariant --------------------
 
+
 class TestBuildFieldEntry:
     def test_classified_keeps_value(self):
         e = build_field_entry("genomic", evidence=[{"x": 1}])
-        assert e == {"value": "genomic", "status": CLASSIFIED,
-                     "evidence": [{"x": 1}]}
+        assert e == {"value": "genomic", "status": CLASSIFIED, "evidence": [{"x": 1}]}
 
     def test_derived_sentinel_nulls_value(self):
         # Sentinel-carrying value with no explicit status → status derived, value nulled.

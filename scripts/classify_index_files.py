@@ -40,7 +40,7 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     parent_exts = INDEX_TO_PARENT.get(index_ext, [])
 
     if index_name.endswith(index_ext):
-        base = index_name[:-len(index_ext)]
+        base = index_name[: -len(index_ext)]
 
         # Pattern 1: index ext appended to parent (sample.bam.bai -> sample.bam)
         # This is the most common pattern
@@ -163,17 +163,19 @@ def propagate_to_index_files(
             if not parent_md5:
                 # Track the failure with diagnostic info
                 stats[index_ext]["unmatched"] += 1
-                unmatched.append({
-                    "file_name": name,
-                    "file_format": fmt,
-                    "file_md5sum": f.get("file_md5sum"),
-                    "entry_id": f.get("entry_id"),
-                    "dataset_id": ds,
-                    "dataset_title": f.get("dataset_title"),
-                    "index_extension": index_ext,
-                    "candidates_tried": parent_candidates,
-                    "reason": "no_matching_parent_in_dataset",
-                })
+                unmatched.append(
+                    {
+                        "file_name": name,
+                        "file_format": fmt,
+                        "file_md5sum": f.get("file_md5sum"),
+                        "entry_id": f.get("entry_id"),
+                        "dataset_id": ds,
+                        "dataset_title": f.get("dataset_title"),
+                        "index_extension": index_ext,
+                        "candidates_tried": parent_candidates,
+                        "reason": "no_matching_parent_in_dataset",
+                    }
+                )
                 continue
 
             stats[index_ext]["matched"] += 1
@@ -240,10 +242,10 @@ def propagate_to_index_files(
     print("TOTAL:")
     print(f"  Index files:        {total_all:>7,}")
     if total_all > 0:
-        print(f"  Matched to parent:  {matched_all:>7,} ({matched_all/total_all*100:.1f}%)")
-        print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all/total_all*100:.1f}%)")
-        print(f"  With data_modality: {modality_all:>7,} ({modality_all/total_all*100:.1f}%)")
-        print(f"  With reference:     {ref_all:>7,} ({ref_all/total_all*100:.1f}%)")
+        print(f"  Matched to parent:  {matched_all:>7,} ({matched_all / total_all * 100:.1f}%)")
+        print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all / total_all * 100:.1f}%)")
+        print(f"  With data_modality: {modality_all:>7,} ({modality_all / total_all * 100:.1f}%)")
+        print(f"  With reference:     {ref_all:>7,} ({ref_all / total_all * 100:.1f}%)")
     else:
         print("  No index files found")
     print("=" * 70)
@@ -264,9 +266,13 @@ def propagate_to_index_files(
     def inherited_evidence(field_name, field_val, parent):
         """Build evidence entry for an inherited classification field."""
         if field_val and field_val not in _sentinels:
-            return [{"rule_id": "inherited_from_parent",
-                     "reason": f"Inherited from parent file: {parent}",
-                     "value": field_val}]
+            return [
+                {
+                    "rule_id": "inherited_from_parent",
+                    "reason": f"Inherited from parent file: {parent}",
+                    "value": field_val,
+                }
+            ]
         status = status_for_value(field_val)
         # An explicit not_applicable parent isn't "no value" — the field is
         # determined (not applicable). Keep "had no value" for the not_classified /
@@ -275,9 +281,7 @@ def propagate_to_index_files(
             reason = f"Parent file {parent} marks {field_name} not applicable"
         else:
             reason = f"Parent file {parent} had no value for {field_name}"
-        return [{"rule_id": "inherited_from_parent",
-                 "reason": reason,
-                 "status": status}]
+        return [{"rule_id": "inherited_from_parent", "reason": reason, "status": status}]
 
     standard_results = []
     for r in results:
@@ -289,32 +293,38 @@ def propagate_to_index_files(
             value = r.get(fld)
             evidence = inherited_evidence(fld, value, parent)
             classifications[fld] = build_field_entry(value, evidence=evidence)
-        standard_results.append({
-            "file_name": r["file_name"],
-            "file_format": r["file_format"],
-            "md5sum": r.get("file_md5sum"),
-            "file_size": r.get("file_size"),
-            "entry_id": r["entry_id"],
-            "dataset_id": r["dataset_id"],
-            "dataset_title": r["dataset_title"],
-            "parent_file": parent,
-            "parent_md5sum": r["parent_md5sum"],
-            "classifications": classifications,
-        })
+        standard_results.append(
+            {
+                "file_name": r["file_name"],
+                "file_format": r["file_format"],
+                "md5sum": r.get("file_md5sum"),
+                "file_size": r.get("file_size"),
+                "entry_id": r["entry_id"],
+                "dataset_id": r["dataset_id"],
+                "dataset_title": r["dataset_title"],
+                "parent_file": parent,
+                "parent_md5sum": r["parent_md5sum"],
+                "classifications": classifications,
+            }
+        )
 
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_index_files": total_all,
-                "matched_to_parent": matched_all,
-                "unmatched": unmatched_all,
-                "with_data_modality": modality_all,
-                "with_reference_assembly": ref_all,
-                "complete": True,
+        json.dump(
+            {
+                "metadata": {
+                    "total_index_files": total_all,
+                    "matched_to_parent": matched_all,
+                    "unmatched": unmatched_all,
+                    "with_data_modality": modality_all,
+                    "with_reference_assembly": ref_all,
+                    "complete": True,
+                },
+                "classifications": standard_results,
+                "unmatched_files": unmatched,
             },
-            "classifications": standard_results,
-            "unmatched_files": unmatched,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nSaved {len(standard_results):,} matched + {len(unmatched):,} unmatched index files to {output_path}")
 
@@ -322,26 +332,37 @@ def propagate_to_index_files(
 def main():
     parser = argparse.ArgumentParser(description="Propagate metadata to index files")
     parser.add_argument(
-        "--metadata", "-m",
+        "--metadata",
+        "-m",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
         help="Path to source metadata JSON",
     )
     parser.add_argument(
-        "--classifications", "-c",
+        "--classifications",
+        "-c",
         type=Path,
         nargs="+",
         help="Paths to classification JSON files (BAM, VCF, BED, FASTQ, FASTA, etc.)",
     )
     # Backwards-compatible args (default to standard output paths)
-    parser.add_argument("--bam", "-b", type=Path,
-                        default=Path("output/anvil/bam_classifications.json"),
-                        help="Path to BAM classifications (used when --classifications not provided)")
-    parser.add_argument("--vcf", "-v", type=Path,
-                        default=Path("output/anvil/vcf_classifications.json"),
-                        help="Path to VCF classifications (used when --classifications not provided)")
     parser.add_argument(
-        "--output", "-o",
+        "--bam",
+        "-b",
+        type=Path,
+        default=Path("output/anvil/bam_classifications.json"),
+        help="Path to BAM classifications (used when --classifications not provided)",
+    )
+    parser.add_argument(
+        "--vcf",
+        "-v",
+        type=Path,
+        default=Path("output/anvil/vcf_classifications.json"),
+        help="Path to VCF classifications (used when --classifications not provided)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/index_classifications.json"),
         help="Output path for index classifications",

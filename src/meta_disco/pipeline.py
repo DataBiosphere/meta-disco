@@ -42,9 +42,7 @@ def load_records(input_path: Path) -> list:
             return [json.loads(line) for line in f if line.strip()]
         data = json.load(f)
     if not isinstance(data, dict):
-        raise TypeError(
-            f"Expected JSON object with 'results' or 'files' key, got {type(data).__name__}"
-        )
+        raise TypeError(f"Expected JSON object with 'results' or 'files' key, got {type(data).__name__}")
     # Check key presence explicitly rather than `results or files`: a present but
     # empty `results: []` is a valid empty corpus, not a missing key — the truthy
     # fallback would misreport it as "must contain a key".
@@ -52,9 +50,7 @@ def load_records(input_path: Path) -> list:
         if key in data:
             records = data[key]
             if not isinstance(records, list):
-                raise TypeError(
-                    f"'{key}' must be a list of records, got {type(records).__name__}"
-                )
+                raise TypeError(f"'{key}' must be a list of records, got {type(records).__name__}")
             return records
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
@@ -117,14 +113,18 @@ def _fetch_and_classify(
     """
     try:
         raw_data = config.fetcher(
-            evidence_dir, md5sum, file_name=file_name,
-            is_gzipped=is_gzipped, use_cache=use_cache,
+            evidence_dir,
+            md5sum,
+            file_name=file_name,
+            is_gzipped=is_gzipped,
+            use_cache=use_cache,
         )
     except FetchError as e:
-        print(f"Content unreadable, classifying from filename — "
-              f"{file_name or md5sum}: {e.reason}")
+        print(f"Content unreadable, classifying from filename — {file_name or md5sum}: {e.reason}")
         return classify_without_content(
-            e.reason, file_name=file_name, file_size=file_size,
+            e.reason,
+            file_name=file_name,
+            file_size=file_size,
             file_format=file_format,
             allowed_extensions=config.extensions,
             content_fields=config.content_fields,
@@ -134,7 +134,9 @@ def _fetch_and_classify(
         return None, False
 
     return config.classifier(
-        raw_data, file_name=file_name, file_size=file_size,
+        raw_data,
+        file_name=file_name,
+        file_size=file_size,
         file_format=file_format,
     ), False
 
@@ -211,12 +213,11 @@ class ClassifyPipeline:
         cached_md5s = self._print_cache_stats(records)
 
         if self.skip_cached and cached_md5s:
-            records = [r for r in records
-                       if r.get("file_md5sum") not in cached_md5s]
+            records = [r for r in records if r.get("file_md5sum") not in cached_md5s]
             print(f"  Skipping cached files, processing only {len(records)} new files")
 
         if self.limit:
-            records = records[:self.limit]
+            records = records[: self.limit]
             print(f"Processing first {self.limit} files")
 
         if not records:
@@ -247,9 +248,14 @@ class ClassifyPipeline:
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
         classifications, _unreadable = _fetch_and_classify(
-            config, evidence_dir, md5sum,
-            file_name=file_name, file_size=file_size, file_format=file_format,
-            is_gzipped=is_gzipped, use_cache=use_cache,
+            config,
+            evidence_dir,
+            md5sum,
+            file_name=file_name,
+            file_size=file_size,
+            file_format=file_format,
+            is_gzipped=is_gzipped,
+            use_cache=use_cache,
         )
         if classifications is None:
             return None
@@ -289,8 +295,7 @@ class ClassifyPipeline:
             # before validation can convert the record into a structured failure.
             fmt = str(r.get("file_format") or "")
             name = str(r.get("file_name") or "")
-            return (any(fmt.endswith(ext) for ext in exts)
-                    or any(name.endswith(ext) for ext in exts))
+            return any(fmt.endswith(ext) for ext in exts) or any(name.endswith(ext) for ext in exts)
 
         return [r for r in records if matches(r)]
 
@@ -307,6 +312,7 @@ class ClassifyPipeline:
         if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
             return False
         from .fetchers import get_evidence_path
+
         return get_evidence_path(self.evidence_dir, md5sum).exists()
 
     def _should_skip_complete(self, records: list[dict]) -> bool:
@@ -328,8 +334,7 @@ class ClassifyPipeline:
         """Print how many files are already cached. Returns set of cached MD5s."""
         name = self.config.name.upper()
         print(f"Found {len(records)} {name} files with MD5 for header inspection")
-        cached_md5s = {r.get("file_md5sum") for r in records
-                       if self._is_cached(r.get("file_md5sum"))}
+        cached_md5s = {r.get("file_md5sum") for r in records if self._is_cached(r.get("file_md5sum"))}
         print(f"  Already cached: {len(cached_md5s)}")
         print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
         return cached_md5s
@@ -358,9 +363,12 @@ class ClassifyPipeline:
         reasons = classification_blocking_reasons(record)
         if reasons:
             classifications = validation_failed_classifications(reasons)
-            return RecordOutcome(self._build_record(record, classifications),
-                                 was_cached=False, content_unreadable=False,
-                                 validation_failed=True)
+            return RecordOutcome(
+                self._build_record(record, classifications),
+                was_cached=False,
+                content_unreadable=False,
+                validation_failed=True,
+            )
 
         # The fields the fetch/classify path consumes — keep this set in sync with
         # metadata_schema.CLASSIFIER_RELEVANT_FIELDS (which decides what blocks).
@@ -378,15 +386,19 @@ class ClassifyPipeline:
         was_cached = self.resume and self._is_cached(md5)
 
         classifications, content_unreadable = _fetch_and_classify(
-            self.config, self.evidence_dir, md5,
-            file_name=file_name, file_size=file_size, file_format=file_format,
-            is_gzipped=is_gzipped, use_cache=self.resume,
+            self.config,
+            self.evidence_dir,
+            md5,
+            file_name=file_name,
+            file_size=file_size,
+            file_format=file_format,
+            is_gzipped=is_gzipped,
+            use_cache=self.resume,
         )
         if classifications is None:
             # A dropped row (no result) carries no outcome flags — was_cached would
             # otherwise mislabel the dropped record as "[cached]" in the progress line.
-            return RecordOutcome(None, was_cached=False, content_unreadable=False,
-                                 validation_failed=False)
+            return RecordOutcome(None, was_cached=False, content_unreadable=False, validation_failed=False)
 
         if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher
@@ -396,8 +408,9 @@ class ClassifyPipeline:
             # unreadable tally.
             was_cached = False
 
-        return RecordOutcome(self._build_record(record, classifications),
-                             was_cached, content_unreadable, validation_failed=False)
+        return RecordOutcome(
+            self._build_record(record, classifications), was_cached, content_unreadable, validation_failed=False
+        )
 
     @staticmethod
     def _build_record(record: dict, classifications: dict) -> dict:
@@ -424,9 +437,9 @@ class ClassifyPipeline:
     def _run_parallel(self, records: list[dict]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
-        dropped = 0   # fetcher returned None: no cause given
-        errored = 0   # worker raised: a cause was printed
-        invalid = 0   # failed input validation: written, classified as nothing (#161)
+        dropped = 0  # fetcher returned None: no cause given
+        errored = 0  # worker raised: a cause was printed
+        invalid = 0  # failed input validation: written, classified as nothing (#161)
         from_cache = 0
         processed = 0
         unreadable = 0
@@ -436,6 +449,7 @@ class ClassifyPipeline:
         print(f"Using {self.workers} parallel workers")
 
         with NdjsonWriter(self.output_path) as writer:
+
             def update_progress(outcome: RecordOutcome, file_name):
                 nonlocal successful, dropped, from_cache, processed, unreadable, invalid
                 with lock:
@@ -459,8 +473,7 @@ class ClassifyPipeline:
                     # the parallel path lands in the executor's `except Exception`,
                     # discarding a record (often a validation_failed one) already written.
                     label = str(file_name or "")[:45]
-                    print(f"\r[{processed}/{total}] {cache_indicator}{label:<52}",
-                          end="", flush=True)
+                    print(f"\r[{processed}/{total}] {cache_indicator}{label:<52}", end="", flush=True)
 
             if self.workers == 1:
                 for record in records:
@@ -469,8 +482,7 @@ class ClassifyPipeline:
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
                     future_to_record = {
-                        executor.submit(self._process_single_record, record): record
-                        for record in records
+                        executor.submit(self._process_single_record, record): record for record in records
                     }
                     for future in as_completed(future_to_record):
                         record = future_to_record[future]
@@ -493,17 +505,30 @@ class ClassifyPipeline:
         if invalid:
             print(f"Failed input validation (written, classified as nothing): {invalid}")
         classifications = self._save_final(
-            total, successful, dropped, from_cache=from_cache, unreadable=unreadable,
-            errored=errored, validation_failed=invalid)
+            total,
+            successful,
+            dropped,
+            from_cache=from_cache,
+            unreadable=unreadable,
+            errored=errored,
+            validation_failed=invalid,
+        )
 
         print(f"\nSaved to {self.output_path}")
         print(f"Evidence cached in: {self.evidence_dir}/")
 
         return classifications
 
-    def _save_final(self, total: int, successful: int, dropped: int,
-                    from_cache: int, unreadable: int, errored: int = 0,
-                    validation_failed: int = 0) -> list[dict]:
+    def _save_final(
+        self,
+        total: int,
+        successful: int,
+        dropped: int,
+        from_cache: int,
+        unreadable: int,
+        errored: int = 0,
+        validation_failed: int = 0,
+    ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
         ``unreadable`` is persisted alongside ``from_cache``: a record classified
@@ -530,23 +555,27 @@ class ClassifyPipeline:
 
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_path, "w") as f:
-            json.dump({
-                "metadata": {
-                    "total_to_process": total,
-                    "processed": successful + dropped + errored + validation_failed,
-                    "successful": successful,
-                    # `failed` = every record that produced no row, whether the
-                    # fetcher gave no cause (dropped) or a worker raised (errored).
-                    "failed": dropped + errored,
-                    "dropped": dropped,
-                    "errored": errored,
-                    "validation_failed": validation_failed,
-                    "from_cache": from_cache,
-                    "content_unreadable": unreadable,
-                    "complete": True,
+            json.dump(
+                {
+                    "metadata": {
+                        "total_to_process": total,
+                        "processed": successful + dropped + errored + validation_failed,
+                        "successful": successful,
+                        # `failed` = every record that produced no row, whether the
+                        # fetcher gave no cause (dropped) or a worker raised (errored).
+                        "failed": dropped + errored,
+                        "dropped": dropped,
+                        "errored": errored,
+                        "validation_failed": validation_failed,
+                        "from_cache": from_cache,
+                        "content_unreadable": unreadable,
+                        "complete": True,
+                    },
+                    "classifications": classifications,
                 },
-                "classifications": classifications,
-            }, f, indent=2)
+                f,
+                indent=2,
+            )
 
         if ndjson.exists():
             ndjson.unlink()

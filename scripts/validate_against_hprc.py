@@ -60,9 +60,7 @@ def load_catalog(name: str, catalog_dir: Path | None, fetch: bool) -> list[dict]
     return data
 
 
-def load_all_catalogs(
-    catalog_dir: Path | None, fetch: bool
-) -> dict[str, list[dict]]:
+def load_all_catalogs(catalog_dir: Path | None, fetch: bool) -> dict[str, list[dict]]:
     """Load all HPRC catalogs."""
     print("Loading HPRC catalogs...")
     catalogs = {}
@@ -221,16 +219,12 @@ def validate_against_hprc(
                 file_mismatches["platform"] = m
 
             our_modality = field_label(c, "data_modality")
-            m = validate_dimension(
-                our_modality, meta["data_modality"], counters, "data_modality"
-            )
+            m = validate_dimension(our_modality, meta["data_modality"], counters, "data_modality")
             if m:
                 file_mismatches["data_modality"] = m
 
             our_assay = field_label(c, "assay_type")
-            m = validate_dimension(
-                our_assay, meta["assay_type"], counters, "assay_type"
-            )
+            m = validate_dimension(our_assay, meta["assay_type"], counters, "assay_type")
             if m:
                 file_mismatches["assay_type"] = m
 
@@ -320,10 +314,7 @@ def validate_against_hprc(
         json.dump(
             {
                 "metadata": {
-                    "catalogs_loaded": {
-                        name: len(catalogs.get(name, []))
-                        for name in HPRC_CATALOG_NAMES
-                    },
+                    "catalogs_loaded": {name: len(catalogs.get(name, [])) for name in HPRC_CATALOG_NAMES},
                     "source": HPRC_CATALOG_BASE_URL,
                 },
                 "by_catalog": catalog_stats,
@@ -339,9 +330,7 @@ def validate_against_hprc(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate classifications against HPRC catalogs"
-    )
+    parser = argparse.ArgumentParser(description="Validate classifications against HPRC catalogs")
     parser.add_argument(
         "--input",
         "-i",
@@ -389,9 +378,7 @@ def main():
         print(f"Using HPRC run directory: {hprc_run_dir}")
         input_paths = [f for f in sorted(hprc_run_dir.glob("*_classifications.json"))]
 
-    validate_against_hprc(
-        input_paths, args.output, args.catalog_dir, args.fetch, args.limit
-    )
+    validate_against_hprc(input_paths, args.output, args.catalog_dir, args.fetch, args.limit)
 
 
 if __name__ == "__main__":

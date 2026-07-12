@@ -53,6 +53,7 @@ ANVIL_REFERENCE_MAP = {
 # Load our classifications keyed by MD5 and filename
 # =============================================================================
 
+
 def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
     """Load classifications keyed by both md5 and filename.
 
@@ -111,9 +112,9 @@ def compare_field(our_value, truth_value) -> str:
     return "discrepancy"
 
 
-def compare_source(our_by_key: dict, truth_records: list[dict],
-                   key_field: str, field_mappings: dict[str, dict],
-                   dimensions: list[str]) -> dict:
+def compare_source(
+    our_by_key: dict, truth_records: list[dict], key_field: str, field_mappings: dict[str, dict], dimensions: list[str]
+) -> dict:
     """Compare our classifications against a ground truth source.
 
     Args:
@@ -188,6 +189,7 @@ def compare_source(our_by_key: dict, truth_records: list[dict],
 # AnVIL comparison
 # =============================================================================
 
+
 def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     """Compare against AnVIL Azul metadata."""
     total_files = 0
@@ -204,12 +206,14 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
                 if r.get(dim):
                     metadata_coverage[dim] += 1
             if r.get("data_modality") or r.get("reference_assembly"):
-                truth_records.append({
-                    "md5": r.get("file_md5sum"),
-                    "file_name": r.get("file_name"),
-                    "data_modality": r.get("data_modality"),
-                    "reference_assembly": r.get("reference_assembly"),
-                })
+                truth_records.append(
+                    {
+                        "md5": r.get("file_md5sum"),
+                        "file_name": r.get("file_name"),
+                        "data_modality": r.get("data_modality"),
+                        "reference_assembly": r.get("reference_assembly"),
+                    }
+                )
 
     field_mappings = {
         "data_modality": {
@@ -223,8 +227,11 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
     }
 
     result = compare_source(
-        our_by_md5, truth_records, "md5",
-        field_mappings, ["data_modality", "reference_assembly"],
+        our_by_md5,
+        truth_records,
+        "md5",
+        field_mappings,
+        ["data_modality", "reference_assembly"],
     )
     result["total_source_files"] = total_files
     result["metadata_coverage"] = metadata_coverage
@@ -235,6 +242,7 @@ def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
 # =============================================================================
 # HPRC comparison — load pre-computed results from validate_against_hprc.py
 # =============================================================================
+
 
 def load_hprc_results(hprc_results_path: Path) -> dict:
     """Load pre-computed HPRC validation results and convert to report format.
@@ -306,11 +314,13 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     catalog_summary = []
     for cat_name, cat_total in catalogs_loaded.items():
         matched = by_catalog.get(cat_name, {}).get("matched", 0)
-        catalog_summary.append({
-            "name": cat_name,
-            "total": cat_total,
-            "matched": matched,
-        })
+        catalog_summary.append(
+            {
+                "name": cat_name,
+                "total": cat_total,
+                "matched": matched,
+            }
+        )
 
     # Which dimensions each catalog provides
     catalog_dimensions = {
@@ -339,6 +349,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
 # =============================================================================
 # Report generation
 # =============================================================================
+
 
 def escape_md_cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
@@ -403,7 +414,9 @@ def build_source_section(name: str, results: dict) -> str:
     if metadata_coverage:
         lines.append("### Metadata Overview")
         lines.append("")
-        lines.append(f"{source_label}'s open-access datasets currently populate the following genomic metadata dimensions:")
+        lines.append(
+            f"{source_label}'s open-access datasets currently populate the following genomic metadata dimensions:"
+        )
         lines.append("")
         lines.append(f"| Dimension | Files with dimension in {source_label} |")
         lines.append("|---|---:|")
@@ -417,8 +430,14 @@ def build_source_section(name: str, results: dict) -> str:
         lines.append("No dimensions to compare.")
         return "\n".join(lines)
 
-    EMPTY_DIM = {"agree": 0, "discrepancy": 0, "we_inferred": 0,
-                 "not_classified": 0, "no_truth": 0, "discrepancy_categories": {}}
+    EMPTY_DIM = {
+        "agree": 0,
+        "discrepancy": 0,
+        "we_inferred": 0,
+        "not_classified": 0,
+        "no_truth": 0,
+        "discrepancy_categories": {},
+    }
 
     # Per-dimension summary
     for dim in DIMENSIONS:
@@ -434,12 +453,10 @@ def build_source_section(name: str, results: dict) -> str:
 
         lines.append(f"### {label} Validation")
         lines.append("")
-        lines.append(f"- **{available:,}** files available from {source_label} "
-                     f"with ground truth {label}")
+        lines.append(f"- **{available:,}** files available from {source_label} with ground truth {label}")
         lines.append(f"- **{comparable:,}** files comparable (both source and rule engine have values)")
         lines.append(f"- **{stats['not_classified']:,}** files not classified by rule engine")
-        lines.append(f"- **{stats['agree']:,}** inferred {label_lower} values "
-                     f"match {source_label}")
+        lines.append(f"- **{stats['agree']:,}** inferred {label_lower} values match {source_label}")
         lines.append(f"- **{stats['discrepancy']:,}** discrepancies")
         lines.append(f"- **{accuracy}** accuracy")
         lines.append("")
@@ -462,8 +479,7 @@ def build_source_section(name: str, results: dict) -> str:
                 )
             lines.append("")
         else:
-            lines.append(f"{source_label} does not currently provide ground truth "
-                         f"for {label_lower}.")
+            lines.append(f"{source_label} does not currently provide ground truth for {label_lower}.")
             lines.append("")
 
         # Discrepancy categories ordered by count
@@ -498,11 +514,7 @@ def generate_html_dashboard(all_results: dict, run_time: str, output_path: Path)
     dashboard_data = {
         "run_time": run_time,
         "sources": all_results,
-        "source_descriptions": {
-            name: source_desc_html(name)
-            for name in all_results
-            if source_desc_html(name)
-        },
+        "source_descriptions": {name: source_desc_html(name) for name in all_results if source_desc_html(name)},
     }
     json_data = json.dumps(dashboard_data).replace("</", r"<\/")
     html = template.replace("VALIDATION_DATA_PLACEHOLDER", json_data)
@@ -512,15 +524,16 @@ def generate_html_dashboard(all_results: dict, run_time: str, output_path: Path)
 def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
     parser.add_argument("--run-dir", type=Path, help="Classification run directory")
-    parser.add_argument("--metadata", type=Path,
-                        default=Path("data/anvil/anvil_files_metadata.ndjson"),
-                        help="AnVIL metadata NDJSON")
-    parser.add_argument("--hprc-results", type=Path,
-                        default=Path("output/hprc/hprc_validation_results.json"),
-                        help="Pre-computed HPRC validation results")
-    parser.add_argument("--output", type=Path,
-                        default=Path("docs/validation-report.md"),
-                        help="Output markdown file")
+    parser.add_argument(
+        "--metadata", type=Path, default=Path("data/anvil/anvil_files_metadata.ndjson"), help="AnVIL metadata NDJSON"
+    )
+    parser.add_argument(
+        "--hprc-results",
+        type=Path,
+        default=Path("output/hprc/hprc_validation_results.json"),
+        help="Pre-computed HPRC validation results",
+    )
+    parser.add_argument("--output", type=Path, default=Path("docs/validation-report.md"), help="Output markdown file")
     args = parser.parse_args()
 
     try:
@@ -545,15 +558,13 @@ def main():
         print("Comparing against AnVIL metadata...")
         anvil_results = compare_anvil(our_by_md5, args.metadata)
         all_results["AnVIL (Azul metadata)"] = anvil_results
-        print(f"  Matched: {anvil_results['matched']:,}, "
-              f"Unmatched: {anvil_results['unmatched']:,}")
+        print(f"  Matched: {anvil_results['matched']:,}, Unmatched: {anvil_results['unmatched']:,}")
 
     if args.hprc_results.is_file():
         print("Loading HPRC validation results...")
         hprc_results = load_hprc_results(args.hprc_results)
         all_results["HPRC"] = hprc_results
-        print(f"  Matched: {hprc_results['matched']:,}, "
-              f"Unmatched: {hprc_results['unmatched']:,}")
+        print(f"  Matched: {hprc_results['matched']:,}, Unmatched: {hprc_results['unmatched']:,}")
 
     if not all_results:
         print("No validation sources found", file=sys.stderr)

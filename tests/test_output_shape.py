@@ -88,24 +88,27 @@ def _golden_record(md5_seed: str, **fields):
 
 GOLDEN_INPUTS = {
     "fasta": [
-        _golden_record("a", file_name="hapdup_contigs.hap1.fasta",
-                       file_size=2974881710, file_format=".fasta", entry_id="g-fasta-1"),
+        _golden_record(
+            "a", file_name="hapdup_contigs.hap1.fasta", file_size=2974881710, file_format=".fasta", entry_id="g-fasta-1"
+        ),
     ],
     "bam": [
-        _golden_record("b", file_name="sample.rnaseq.bam",
-                       file_size=12345678, file_format=".bam", entry_id="g-bam-1"),
+        _golden_record("b", file_name="sample.rnaseq.bam", file_size=12345678, file_format=".bam", entry_id="g-bam-1"),
     ],
     "vcf": [
-        _golden_record("c", file_name="sample.vcf.gz",
-                       file_size=5000, file_format=".vcf.gz", entry_id="g-vcf-1"),
+        _golden_record("c", file_name="sample.vcf.gz", file_size=5000, file_format=".vcf.gz", entry_id="g-vcf-1"),
     ],
     "fastq": [
-        _golden_record("d", file_name="sample.fastq.gz",
-                       file_size=8000, file_format=".fastq.gz", entry_id="g-fastq-1"),
+        _golden_record("d", file_name="sample.fastq.gz", file_size=8000, file_format=".fastq.gz", entry_id="g-fastq-1"),
     ],
     "gfa": [
-        _golden_record("e", file_name="hprc-v1.0-minigraph-grch38.gfa.gz",
-                       file_size=848467761, file_format=".gfa.gz", entry_id="g-gfa-1"),
+        _golden_record(
+            "e",
+            file_name="hprc-v1.0-minigraph-grch38.gfa.gz",
+            file_size=848467761,
+            file_format=".gfa.gz",
+            entry_id="g-gfa-1",
+        ),
     ],
 }
 
@@ -124,8 +127,13 @@ STUB_PAYLOADS = {
 EVIDENCE_KEYS = {"rule_id", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}
 RECORD_KEYS = {
-    "file_name", "md5sum", "file_size", "file_format",
-    "dataset_title", "classifications", "entry_id",
+    "file_name",
+    "md5sum",
+    "file_size",
+    "file_format",
+    "dataset_title",
+    "classifications",
+    "entry_id",
 }
 
 
@@ -161,8 +169,11 @@ def build_output(tmp_path: Path) -> dict:
         # which is nondeterministic) — keeps the deep-equal golden stable even if
         # an input list ever grows beyond one record.
         pipeline = ClassifyPipeline(
-            config, input_path, tmp_path / f"{ftype}_out.json",
-            evidence_base=tmp_path / "evidence", workers=1,
+            config,
+            input_path,
+            tmp_path / f"{ftype}_out.json",
+            evidence_base=tmp_path / "evidence",
+            workers=1,
         )
         results = pipeline.run()
         # run() returns [] (and writes no output file) if every record was filtered
@@ -213,8 +224,7 @@ def test_stub_payloads_cover_all_file_types():
 def test_output_matches_golden(output):
     """The real pipeline output must deep-equal the committed golden fixture."""
     assert GOLDEN_PATH.exists(), (
-        f"Golden fixture missing at {GOLDEN_PATH}. Regenerate with "
-        "`python -m tests.test_output_shape`."
+        f"Golden fixture missing at {GOLDEN_PATH}. Regenerate with `python -m tests.test_output_shape`."
     )
     expected = json.loads(GOLDEN_PATH.read_text())
     assert output == expected, (
@@ -243,10 +253,10 @@ def test_output_structural_contract(output):
             # Stage 3 (#116) coherence: status is a schema-defined value (incl.
             # conflict, #88); sentinels live only in `status`; `value` is non-null
             # iff the field is CLASSIFIED.
-            assert entry["status"] in schema_vocab.status_values(), \
-                f"{ftype}.{field}: status={entry['status']!r}"
-            assert (entry["status"] == CLASSIFIED) == (entry["value"] is not None), \
+            assert entry["status"] in schema_vocab.status_values(), f"{ftype}.{field}: status={entry['status']!r}"
+            assert (entry["status"] == CLASSIFIED) == (entry["value"] is not None), (
                 f"{ftype}.{field}: incoherent value={entry['value']!r} status={entry['status']!r}"
+            )
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
                 assert EVIDENCE_KEYS <= set(ev), f"{ftype}.{field} evidence: {set(ev)}"
@@ -268,8 +278,7 @@ def test_output_values_in_vocabulary(output):
             if not schema_vocab.value_in_vocabulary(field, value):
                 violations.append(f"{ftype}: {field}={value!r}")
     assert not violations, (
-        "Pipeline output emits dimension values not in the LinkML schema vocabulary:\n  "
-        + "\n  ".join(violations)
+        "Pipeline output emits dimension values not in the LinkML schema vocabulary:\n  " + "\n  ".join(violations)
     )
 
 

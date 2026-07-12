@@ -45,9 +45,14 @@ _RECORD_LOC = "<record>"
 # Keep in sync with the fields ClassifyPipeline._process_single_record reads and
 # passes to _fetch_and_classify. A field the run consumes but omitted here would
 # let a record bad on that field fetch instead of divert to validation_failed.
-CLASSIFIER_RELEVANT_FIELDS = frozenset({
-    "file_md5sum", "file_name", "file_size", "file_format",
-})
+CLASSIFIER_RELEVANT_FIELDS = frozenset(
+    {
+        "file_md5sum",
+        "file_name",
+        "file_size",
+        "file_format",
+    }
+)
 
 # A violation blocks classification when it is on a classifier-relevant field or is
 # a whole-record type error (a non-dict where an object was expected).
@@ -94,8 +99,7 @@ def classification_blocking_reasons(record) -> list[str]:
     classify it. The other violations are real drift — surfaced loudly by the
     standalone ``validate_metadata`` gate over the whole corpus, not here.
     """
-    return [r for r in validate_record(record)
-            if _reason_field(r) in _BLOCKING_FIELDS]
+    return [r for r in validate_record(record) if _reason_field(r) in _BLOCKING_FIELDS]
 
 
 # Value-independent description per pydantic error ``type``. Authored here rather
@@ -149,16 +153,14 @@ def validation_failed_classifications(reasons: list[str]) -> dict:
     a contract violation means the record's provenance is untrusted wholesale, so
     it is marked uniformly unclassifiable rather than partly classified.
     """
+
     # A fresh evidence list (and fresh dicts) per field: sharing one list across
     # all five dimensions would alias them, so a later in-place edit of one field's
     # evidence would silently mutate all five.
     def _evidence():
         return [{"rule_id": VALIDATION_RULE_ID, "reason": reason} for reason in reasons]
 
-    return {
-        fld: build_field_entry(None, status=NOT_CLASSIFIED, evidence=_evidence())
-        for fld in CLASSIFICATION_FIELDS
-    }
+    return {fld: build_field_entry(None, status=NOT_CLASSIFIED, evidence=_evidence()) for fld in CLASSIFICATION_FIELDS}
 
 
 @dataclass
@@ -201,10 +203,7 @@ class ValidationReport:
         if self.ok:
             lines.append("OK — no problems.")
             return "\n".join(lines)
-        lines.append(
-            f"FAIL — {len(self.kinds)} problem kind(s), "
-            f"{self.invalid:,} record(s) affected:"
-        )
+        lines.append(f"FAIL — {len(self.kinds)} problem kind(s), {self.invalid:,} record(s) affected:")
         for kind in sorted(self.kinds.values(), key=lambda k: (-k.count, k.reason)):
             lines.append(f"  {kind.reason}    {kind.count:,} record(s)")
             sample = ", ".join(str(e) for e in kind.sample_entry_ids)

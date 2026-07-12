@@ -117,10 +117,11 @@ def validate_against_ena(
 
         # Validate
         platform_match = our_platform == ena_platform
-        expected_modality = "transcriptomic" if (
-            ena_source == "TRANSCRIPTOMIC" or
-            ena_strategy in ["RNA-Seq", "FL-cDNA"]
-        ) else "genomic"
+        expected_modality = (
+            "transcriptomic"
+            if (ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"])
+            else "genomic"
+        )
         modality_match = our_modality and our_modality.startswith(expected_modality)
 
         result = {
@@ -161,11 +162,13 @@ def validate_against_ena(
 
             if result.get("error"):
                 results["api_errors"] += 1
-                api_errors.append({
-                    "accession": result.get("accession"),
-                    "file": result.get("file"),
-                    "reason": result.get("reason"),
-                })
+                api_errors.append(
+                    {
+                        "accession": result.get("accession"),
+                        "file": result.get("file"),
+                        "reason": result.get("reason"),
+                    }
+                )
             else:
                 results["total_validated"] += 1
                 if result["platform_match"]:
@@ -217,7 +220,7 @@ def validate_against_ena(
     print(f"Total files with ENA accession: {len(with_acc):,}")
     print(f"Successfully validated:         {n:,}")
     print(f"API errors (no data):           {results['api_errors']:,}")
-    print(f"Time elapsed:                   {elapsed:.1f}s ({len(with_acc)/elapsed:.1f} files/sec)")
+    print(f"Time elapsed:                   {elapsed:.1f}s ({len(with_acc) / elapsed:.1f} files/sec)")
     print()
 
     if n > 0:
@@ -250,17 +253,21 @@ def validate_against_ena(
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
-        json.dump({
-            "metadata": {
-                "total_files": len(with_acc),
-                "validated": n,
-                "api_errors": results["api_errors"],
-                "elapsed_seconds": elapsed,
+        json.dump(
+            {
+                "metadata": {
+                    "total_files": len(with_acc),
+                    "validated": n,
+                    "api_errors": results["api_errors"],
+                    "elapsed_seconds": elapsed,
+                },
+                "results": results,
+                "mismatches": mismatches,
+                "api_errors": api_errors,
             },
-            "results": results,
-            "mismatches": mismatches,
-            "api_errors": api_errors,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     print(f"\nResults saved to: {output_path}")
 
@@ -268,29 +275,31 @@ def validate_against_ena(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate FASTQ classifications against ENA metadata"
-    )
+    parser = argparse.ArgumentParser(description="Validate FASTQ classifications against ENA metadata")
     parser.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         type=Path,
         default=Path("output/anvil/fastq_classifications.json"),
         help="Input FASTQ classifications file",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("output/anvil/ena_validation_results.json"),
         help="Output validation results file",
     )
     parser.add_argument(
-        "--limit", "-l",
+        "--limit",
+        "-l",
         type=int,
         default=None,
         help="Limit number of files to validate (for testing)",
     )
     parser.add_argument(
-        "--workers", "-w",
+        "--workers",
+        "-w",
         type=int,
         default=10,
         help="Number of parallel workers (default: 10)",
