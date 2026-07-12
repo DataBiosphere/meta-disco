@@ -383,7 +383,9 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped, use_cache=self.resume,
         )
         if classifications is None:
-            return RecordOutcome(None, was_cached, content_unreadable=False,
+            # A dropped row (no result) carries no outcome flags — was_cached would
+            # otherwise mislabel the dropped record as "[cached]" in the progress line.
+            return RecordOutcome(None, was_cached=False, content_unreadable=False,
                                  validation_failed=False)
 
         if content_unreadable:

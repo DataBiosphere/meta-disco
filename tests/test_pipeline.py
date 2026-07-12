@@ -288,6 +288,26 @@ class TestPipelineRun:
         )
         assert pipeline._is_cached(md5) is False
 
+    def test_dropped_record_is_not_flagged_cached(self, tmp_path):
+        """A dropped row (fetcher returned None) carries no outcome flags, even if its
+        md5 was cached — otherwise the progress line mislabels it '[cached]'."""
+        from meta_disco.fetchers import get_evidence_path
+        md5 = "a" * 32
+        pipeline = ClassifyPipeline(
+            _make_config(fetcher=lambda evidence_dir, md5, **kw: None),
+            tmp_path / "in.json", tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence", resume=True,
+        )
+        ev = get_evidence_path(pipeline.evidence_dir, md5)
+        ev.parent.mkdir(parents=True, exist_ok=True)
+        ev.write_text("{}")
+        assert pipeline._is_cached(md5) is True
+
+        outcome = pipeline._process_single_record(
+            _valid_record(file_md5sum=md5, file_name="x.test", file_format=".test"))
+        assert outcome.result is None
+        assert outcome.was_cached is False
+
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"
