@@ -379,7 +379,7 @@ class ClassifyPipeline:
         file_format = record.get("file_format") or ""
 
         has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
-        is_gzipped = file_name.endswith(".gz") or file_format.endswith(".gz") if has_gz_ext else True
+        is_gzipped = (file_name.endswith(".gz") or file_format.endswith(".gz")) if has_gz_ext else True
 
         was_cached = self.resume and self._is_cached(md5)
 
