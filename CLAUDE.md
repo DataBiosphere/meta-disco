@@ -107,10 +107,10 @@ Validate at trust boundaries only, and trust everything inside them.
 1. Create a GitHub issue for every change, with a definition-of-done
    checklist. The issue is the record the result is checked against.
 2. Create a feature branch `noopdog/{issue#}-short-description`.
-3. Implement with tests. Run `make test-all` before committing. It is the
-   root-level aggregator that runs both the root suite and the schema
-   suite. Plain `make test` runs the root suite only, so it is not
-   sufficient before pushing.
+3. Implement with tests. Run `make test-all` from the repo root before
+   committing. It is the root-level aggregator that runs both the root
+   suite and the schema suite. Plain `make test` runs the root suite only,
+   so it is not sufficient before pushing.
 4. When the code is complete, announce it and run `/cc:auto-review`. That
    skill runs the local reviews, has you triage the findings, stops at a
    push gate, opens the PR, and drives the Copilot feedback rounds to
