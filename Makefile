@@ -51,9 +51,11 @@ lint-schema:
 lint-all: lint lint-schema type
 
 # Pyright type checker (standard mode, separate from Ruff — issue #179). Resolves
-# the meta_disco package + imports from the active uv venv.
+# the meta_disco package + imports from the active uv venv. No path args: the
+# checked paths come from [tool.pyright].include so they stay a single source
+# of truth.
 type:
-	uv run pyright src/ scripts/ tests/
+	uv run pyright
 
 # Ruff formatter (layout authority). `format` rewrites in place; `format-check`
 # verifies without writing (used by CI, #180).

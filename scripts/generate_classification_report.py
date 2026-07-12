@@ -5,10 +5,11 @@ import json
 from collections import Counter
 from pathlib import Path
 
-# Optional plotting deps: this standalone report script is not wired into any
-# make target and is the only user of matplotlib/numpy, so they are not base
-# dependencies. Suppress the resolve error rather than pull heavy deps into the
-# type-check env; reportMissingImports stays a hard error everywhere else.
+# matplotlib/numpy are required at runtime by this standalone report script but
+# are not declared (base) dependencies — it is the repo's only user of them and
+# no make target runs it. The ignore is only for static analysis (this file is
+# still type-checked via the scripts/ glob); reportMissingImports stays a hard
+# error everywhere else, and we avoid pulling heavy deps into the type-check env.
 import matplotlib.pyplot as plt  # pyright: ignore[reportMissingImports]
 import numpy as np  # pyright: ignore[reportMissingImports]
 
