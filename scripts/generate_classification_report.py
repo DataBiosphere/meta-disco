@@ -42,7 +42,7 @@ FORMAT_CATEGORY_RULES = [
 
 def load_source_metadata(path: Path) -> list[dict]:
     """Load source metadata file."""
-    with open(path) as f:
+    with path.open() as f:
         data = json.load(f)
     return data if isinstance(data, list) else data.get("files", data.get("results", []))
 
@@ -64,7 +64,7 @@ def load_classifications(output_dir: Path) -> dict[str, list[dict]]:
     for name, filename in files_to_load.items():
         path = output_dir / filename
         if path.exists():
-            with open(path) as f:
+            with path.open() as f:
                 data = json.load(f)
             classifications[name] = data.get("classifications", [])
         else:

@@ -25,7 +25,7 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
     for path in classification_paths:
         if not path.is_file():
             continue
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             name = r.get("file_name", "")
@@ -37,7 +37,7 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
 def classify_remaining(metadata_path: Path, output_path: Path, classification_paths: list[Path]):
     """Classify files not handled by other classifiers."""
 
-    with open(metadata_path) as f:
+    with metadata_path.open() as f:
         data = json.load(f)
 
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
@@ -84,7 +84,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         print(f"  .{ext}: {count:,}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as out:
+    with output_path.open("w") as out:
         json.dump(
             {
                 "metadata": {

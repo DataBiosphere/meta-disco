@@ -148,7 +148,7 @@ def validate_against_igsr(
     # Load classifications from all input files
     for input_path in input_paths:
         print(f"Loading classifications from {input_path}...", flush=True)
-        with open(input_path) as f:
+        with input_path.open() as f:
             data = json.load(f)
         classifications = data.get("classifications", data)
         all_classifications.extend(classifications)
@@ -351,7 +351,7 @@ def validate_against_igsr(
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

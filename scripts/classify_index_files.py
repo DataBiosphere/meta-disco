@@ -69,7 +69,7 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
     for path in paths:
         if not path.is_file():
             continue
-        with open(path) as f:
+        with path.open() as f:
             data = json.load(f)
         for c in data.get("classifications", []):
             md5 = c.get("md5sum")
@@ -94,7 +94,7 @@ def propagate_to_index_files(
     """Propagate metadata from parent files to index files."""
 
     # Load source metadata
-    with open(metadata_path) as f:
+    with metadata_path.open() as f:
         data = json.load(f)
 
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
@@ -308,7 +308,7 @@ def propagate_to_index_files(
             }
         )
 
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

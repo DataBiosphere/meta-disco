@@ -18,13 +18,13 @@ def load_metadata(input_path: Path) -> list[dict]:
     """Load metadata from JSON or NDJSON file."""
     if input_path.suffix == ".ndjson":
         files = []
-        with open(input_path) as f:
+        with input_path.open() as f:
             for line in f:
                 if line.strip():
                     files.append(json.loads(line))
         return files
     else:
-        with open(input_path) as f:
+        with input_path.open() as f:
             data = json.load(f)
         return data.get("files", data)
 
@@ -127,7 +127,7 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
 
     # Save full results as JSON
     json_path = output_dir / f"classification_results_{timestamp}.json"
-    with open(json_path, "w") as f:
+    with json_path.open("w") as f:
         json.dump(
             {
                 "metadata": {
@@ -145,7 +145,7 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
     # Save as TSV for easy viewing
     tsv_path = output_dir / f"classification_results_{timestamp}.tsv"
     if results:
-        with open(tsv_path, "w", newline="") as f:
+        with tsv_path.open("w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=results[0].keys(), delimiter="\t")
             writer.writeheader()
             writer.writerows(results)
@@ -153,7 +153,7 @@ def save_results(results: list[dict], stats: dict, output_dir: Path):
 
     # Save stats summary
     stats_path = output_dir / f"classification_stats_{timestamp}.json"
-    with open(stats_path, "w") as f:
+    with stats_path.open("w") as f:
         json.dump(stats, f, indent=2)
     print(f"Saved stats to {stats_path}")
 

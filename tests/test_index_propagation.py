@@ -260,7 +260,7 @@ class TestLoadClassifications:
         propagate_to_index_files(metadata_file, [bed_cls_file], output_file)
 
         # Verify the CSI index inherited from the BED parent
-        with open(output_file) as f:
+        with output_file.open() as f:
             output = json.load(f)
         index_cls = output["classifications"]
         assert len(index_cls) == 1
@@ -323,7 +323,7 @@ class TestLoadClassifications:
         )
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [vcf_cls], output_file)
-        with open(output_file) as f:
+        with output_file.open() as f:
             output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
@@ -378,7 +378,7 @@ class TestLoadClassifications:
         )
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [bam_cls], output_file)
-        with open(output_file) as f:
+        with output_file.open() as f:
             output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
@@ -408,7 +408,7 @@ class TestLoadClassifications:
         empty_cls.write_text(json.dumps({"classifications": []}))
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
-        with open(output_file) as f:
+        with output_file.open() as f:
             output = json.load(f)
         assert len(output["classifications"]) == 0
         assert len(output["unmatched_files"]) == 1
@@ -445,7 +445,7 @@ class TestLoadClassifications:
         empty_cls.write_text(json.dumps({"classifications": []}))
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
-        with open(output_file) as f:
+        with output_file.open() as f:
             output = json.load(f)
         # Parent filename matched but md5 not in classifications → not_classified
         assert len(output["classifications"]) == 1

@@ -18,7 +18,7 @@ from meta_disco.rule_engine import RuleEngine
 def classify_images(metadata_path: Path, output_path: Path):
     """Classify image files using RuleEngine."""
 
-    with open(metadata_path) as f:
+    with metadata_path.open() as f:
         data = json.load(f)
 
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
@@ -92,7 +92,7 @@ def classify_images(metadata_path: Path, output_path: Path):
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

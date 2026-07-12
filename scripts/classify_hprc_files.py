@@ -266,41 +266,41 @@ def main():
     if "sequencing" in catalogs_to_run:
         catalog_path = args.catalog_dir / "sequencing-data.json"
         if catalog_path.exists():
-            with open(catalog_path) as f:
+            with catalog_path.open() as f:
                 catalog = json.load(f)
             results = classify_sequencing_data(catalog, args.evidence_base, limit=args.limit)
             all_results["sequencing"] = results
-            with open(output_dir / "sequencing_classifications.json", "w") as f:
+            with (output_dir / "sequencing_classifications.json").open("w") as f:
                 json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
 
     if "assemblies" in catalogs_to_run:
         catalog_path = args.catalog_dir / "assemblies.json"
         if catalog_path.exists():
-            with open(catalog_path) as f:
+            with catalog_path.open() as f:
                 catalog = json.load(f)
             results = classify_assemblies(catalog, args.evidence_base, limit=args.limit)
             all_results["assemblies"] = results
-            with open(output_dir / "assembly_classifications.json", "w") as f:
+            with (output_dir / "assembly_classifications.json").open("w") as f:
                 json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
 
     if "alignments" in catalogs_to_run:
         catalog_path = args.catalog_dir / "alignments.json"
         if catalog_path.exists():
-            with open(catalog_path) as f:
+            with catalog_path.open() as f:
                 catalog = json.load(f)
             results = classify_filename_only(catalog, "alignments")
             all_results["alignments"] = results
-            with open(output_dir / "alignment_classifications.json", "w") as f:
+            with (output_dir / "alignment_classifications.json").open("w") as f:
                 json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
 
     if "annotations" in catalogs_to_run:
         catalog_path = args.catalog_dir / "annotations.json"
         if catalog_path.exists():
-            with open(catalog_path) as f:
+            with catalog_path.open() as f:
                 catalog = json.load(f)
             results = classify_filename_only(catalog, "annotations")
             all_results["annotations"] = results
-            with open(output_dir / "annotation_classifications.json", "w") as f:
+            with (output_dir / "annotation_classifications.json").open("w") as f:
                 json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
 
     # Summary

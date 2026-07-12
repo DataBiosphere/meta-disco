@@ -162,7 +162,7 @@ def test_assay_type_condition_values_in_vocabulary():
 def test_assay_condition_check_rejects_bogus_platform(tmp_path):
     """The assay-condition drift check catches a typo'd enum-backed value (#113)."""
     path = tmp_path / "rules.yaml"
-    with open(path, "w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump_all(
             [
                 {"extension_map": {}},
@@ -188,7 +188,7 @@ def test_assay_condition_check_rejects_bogus_platform(tmp_path):
 def _write_assay_rules_file(tmp_path, assay_rule):
     """Write a rules file whose fourth document holds a single assay_type_rule."""
     path = tmp_path / "rules.yaml"
-    with open(path, "w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump_all(
             [
                 {"extension_map": {}},
@@ -298,7 +298,7 @@ def test_value_in_vocabulary_rejects_all_statuses():
 def _write_rules_file(tmp_path, rule):
     """Write a minimal two-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"
-    with open(path, "w", encoding="utf-8") as f:
+    with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump_all([{"extension_map": {}}, {"rules": [rule]}], f)
     return path
 

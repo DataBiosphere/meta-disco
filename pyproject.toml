@@ -62,7 +62,6 @@ ignore = [
     #     these families is already live and protects new code. Fixes are made
     #     in the burn-down PRs, with tests, not by a blanket `ruff --fix` here:
     #     several of these autofixes change behavior or strip re-export noqas. ---
-    "PTH123",                                          # pathlib migration (#176)
     "B904", "B905", "RUF012", "RUF013",                # correctness (#177)
     # readability (#178)
     "SIM102", "SIM108", "SIM115", "SIM118", "SIM300",

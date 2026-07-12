@@ -21,7 +21,7 @@ AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     """Classify auxiliary genomic files using RuleEngine."""
 
-    with open(metadata_path) as f:
+    with metadata_path.open() as f:
         data = json.load(f)
 
     files = data if isinstance(data, list) else data.get("files", data.get("results", []))
@@ -119,7 +119,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
 
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(
             {
                 "metadata": {

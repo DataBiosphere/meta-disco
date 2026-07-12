@@ -117,7 +117,7 @@ class TestThenStatus:
         import yaml
 
         path = tmp_path / "rules.yaml"
-        with open(path, "w", encoding="utf-8") as f:
+        with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump_all(
                 [
                     {"extension_map": {".foo": "foo"}},

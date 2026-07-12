@@ -192,7 +192,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load VCF classifications
     print("\nLoading VCF classifications...", flush=True)
     try:
-        with open("output/anvil/vcf_classifications.json") as f:
+        with Path("output/anvil/vcf_classifications.json").open() as f:
             data = json.load(f)
         vcf_files = data.get("classifications", data)
         results["vcf"]["total"] = len(vcf_files)
@@ -208,7 +208,7 @@ def validate_classified_files(sample_size: int = 0) -> dict:
     # Load BAM classifications
     print("Loading BAM classifications...", flush=True)
     try:
-        with open("output/anvil/bam_classifications.json") as f:
+        with Path("output/anvil/bam_classifications.json").open() as f:
             data = json.load(f)
         bam_files = data.get("classifications", data)
         results["bam"]["total"] = len(bam_files)
@@ -299,7 +299,7 @@ def main():
 
     # Save results
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w") as f:
+    with args.output.open("w") as f:
         json.dump(
             {
                 "mapping_validation": mapping_results,
