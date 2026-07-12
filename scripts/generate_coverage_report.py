@@ -102,12 +102,11 @@ def _normalize_reason(reason: str) -> str:
         r"Parent file marks \1 not applicable",
         reason,
     )
-    reason = re.sub(
+    return re.sub(
         r"Inherited from parent file: .+",
         "Inherited from parent file",
         reason,
     )
-    return reason
 
 
 def get_nc_reasons(records: list[dict], field_name: str) -> dict[str, Counter]:

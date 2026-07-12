@@ -65,7 +65,7 @@ def load_cached_evidence(evidence_dir: Path, md5sum: str) -> dict | None:
         try:
             with path.open() as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return None
     return None
 
@@ -258,9 +258,8 @@ def fetch_vcf_header(
         for line in text.split("\n"):
             if line.startswith("#"):
                 header_lines.append(line)
-            elif line.strip():
-                if len(variant_lines) < 100:
-                    variant_lines.append(line)
+            elif line.strip() and len(variant_lines) < 100:
+                variant_lines.append(line)
 
         if header_lines:
             header_text = "\n".join(header_lines)

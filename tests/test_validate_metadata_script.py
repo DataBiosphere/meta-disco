@@ -8,9 +8,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-import validate_metadata  # noqa: E402
+import validate_metadata
 
-from tests.metadata_fixtures import valid_record as _valid  # noqa: E402
+from tests.metadata_fixtures import valid_record as _valid
 
 
 def _write(path, records, key="files"):

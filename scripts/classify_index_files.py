@@ -138,7 +138,7 @@ def propagate_to_index_files(
 
             # Check if this is an index file
             index_ext = None
-            for ext in INDEX_TO_PARENT.keys():
+            for ext in INDEX_TO_PARENT:
                 if fmt == ext or name.endswith(ext):
                     index_ext = ext
                     break
@@ -218,7 +218,7 @@ def propagate_to_index_files(
     modality_all = 0
     ref_all = 0
 
-    for ext in INDEX_TO_PARENT.keys():
+    for ext in INDEX_TO_PARENT:
         s = stats[ext]
         if s["total"] > 0:
             match_pct = s["matched"] / s["total"] * 100
@@ -370,10 +370,7 @@ def main():
     args = parser.parse_args()
 
     # Build list of classification paths (deduplicated)
-    if args.classifications:
-        cls_paths = list(dict.fromkeys(args.classifications))
-    else:
-        cls_paths = [args.bam, args.vcf]
+    cls_paths = list(dict.fromkeys(args.classifications)) if args.classifications else [args.bam, args.vcf]
 
     propagate_to_index_files(
         args.metadata,

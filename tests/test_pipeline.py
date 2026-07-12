@@ -589,7 +589,7 @@ class TestFileTypeConfigs:
         def _explode(evidence_dir, md5, **kwargs):
             if md5 == boom_md5:
                 raise TypeError("a bug in the parser, not a fetch failure")
-            return None  # silent drop, no cause
+            return  # silent drop, no cause
 
         config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
         input_path = tmp_path / "in.json"

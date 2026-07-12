@@ -75,7 +75,7 @@ def classify_sequencing_data(
 
         classifications = None
 
-        if fn.endswith(".bam") or fn.endswith(".cram"):
+        if fn.endswith((".bam", ".cram")):
             raw_data = fetch_bam_header(
                 bam_evidence,
                 key,
@@ -90,7 +90,7 @@ def classify_sequencing_data(
                     file_size=file_size,
                     file_format=".cram" if fn.endswith(".cram") else ".bam",
                 )
-        elif fn.endswith(".fastq.gz") or fn.endswith(".fastq"):
+        elif fn.endswith((".fastq.gz", ".fastq")):
             raw_data = fetch_fastq_reads(
                 fastq_evidence,
                 key,

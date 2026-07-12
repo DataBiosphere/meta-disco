@@ -9,7 +9,7 @@ checkout. The rule engine's emitted values are validated against these enums (se
 The ``schema/`` project is the LinkML tooling that maintains and validates it.
 """
 
-from functools import lru_cache
+from functools import cache
 from importlib.resources import files
 
 import yaml
@@ -63,7 +63,7 @@ def default_schema_path():
     return files(f"{__package__}.schema") / "classification.yaml"
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_enums() -> dict[str, frozenset[str]]:
     """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
     resource = None

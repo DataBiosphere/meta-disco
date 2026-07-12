@@ -72,7 +72,7 @@ class ExtendedClassificationResult:
     # above hold a real value or None only — the sentinel (not_applicable /
     # not_classified) lives here, never in a value slot. Defaults to
     # not_classified (no statement made) until a value or status is set.
-    field_status: dict[str, str] = field(default_factory=lambda: {fld: NOT_CLASSIFIED for fld in CLASSIFICATION_FIELDS})
+    field_status: dict[str, str] = field(default_factory=lambda: dict.fromkeys(CLASSIFICATION_FIELDS, NOT_CLASSIFIED))
 
     def set_field(self, fld: str, value: str | None = None, status: str | None = None) -> None:
         """Set a dimension's value and status coherently.
@@ -337,10 +337,7 @@ class RuleEngine:
             ExtendedClassificationResult with classification and metadata
         """
         # Convert to ExtendedFileInfo if needed
-        if isinstance(file_info, FileInfo):
-            ext_info = ExtendedFileInfo.from_file_info(file_info)
-        else:
-            ext_info = file_info
+        ext_info = ExtendedFileInfo.from_file_info(file_info) if isinstance(file_info, FileInfo) else file_info
 
         # Extract extension
         extension = self.rules.extract_extension(ext_info.filename)
@@ -408,14 +405,12 @@ class RuleEngine:
             return True
 
         # Check extension filter
-        if "extensions" in when:
-            if file_info.file_format not in [e.lower() for e in when["extensions"]]:
-                return False
+        if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
+            return False
 
         # Check filename pattern
-        if pattern := when.get("filename_pattern"):
-            if not re.search(pattern, file_info.filename, re.IGNORECASE):
-                return False
+        if (pattern := when.get("filename_pattern")) and not re.search(pattern, file_info.filename, re.IGNORECASE):
+            return False
 
         # Check dataset pattern
         if pattern := when.get("dataset_pattern"):
@@ -425,13 +420,15 @@ class RuleEngine:
                 return False
 
         # Check file size constraints
-        if min_gb := when.get("file_size_min_gb"):
-            if file_info.file_size_gb is None or file_info.file_size_gb < min_gb:
-                return False
+        if (min_gb := when.get("file_size_min_gb")) and (
+            file_info.file_size_gb is None or file_info.file_size_gb < min_gb
+        ):
+            return False
 
-        if max_gb := when.get("file_size_max_gb"):
-            if file_info.file_size_gb is None or file_info.file_size_gb > max_gb:
-                return False
+        if (max_gb := when.get("file_size_max_gb")) and (
+            file_info.file_size_gb is None or file_info.file_size_gb > max_gb
+        ):
+            return False
 
         # Check platform constraint — check claims since fields aren't set until evaluation
         if platform := when.get("platform"):
@@ -440,9 +437,8 @@ class RuleEngine:
                 return False
 
         # Check file format constraint
-        if file_format := when.get("file_format"):
-            if file_info.file_format != file_format:
-                return False
+        if (file_format := when.get("file_format")) and file_info.file_format != file_format:
+            return False
 
         # Check modality_not_set — true unless data_modality already has a
         # definitive declaration (a real value or an explicit not_applicable; a
@@ -467,24 +463,27 @@ class RuleEngine:
                 return False
 
         # Check header section (tier 3) — skip if checking for absence
-        if rule.scope == "header" and when.get("header_section") and not when.get("header_absent"):
-            if not self._match_bam_header(when, file_info):
-                return False
+        if (
+            rule.scope == "header"
+            and when.get("header_section")
+            and not when.get("header_absent")
+            and not self._match_bam_header(when, file_info)
+        ):
+            return False
 
         # Check VCF header (tier 3)
-        if rule.scope == "vcf_header" and when.get("vcf_header_type"):
-            if not self._match_vcf_header(when, file_info):
-                return False
+        if rule.scope == "vcf_header" and when.get("vcf_header_type") and not self._match_vcf_header(when, file_info):
+            return False
 
         # Check FASTQ header (tier 3)
-        if rule.scope == "fastq_header" and when.get("fastq_pattern"):
-            if not self._match_fastq_header(when, file_info):
-                return False
+        if rule.scope == "fastq_header" and when.get("fastq_pattern") and not self._match_fastq_header(when, file_info):
+            return False
 
-        # Check header absence (for unaligned detection)
-        if when.get("header_absent"):
-            if not self._check_header_absent(when, file_info):
-                return False
+        # Check header absence (for unaligned detection). Kept as a guard clause
+        # (if ... : return False) to match the preceding checks rather than folding
+        # into `return not (...)`, which reads worse in this run of guards.
+        if when.get("header_absent") and not self._check_header_absent(when, file_info):  # noqa: SIM103
+            return False
 
         return True
 
@@ -592,9 +591,10 @@ class RuleEngine:
             conditions = assay_rule.conditions
 
             # Check matched_rules_any condition
-            if matched_any := conditions.get("matched_rules_any"):
-                if not any(r in result.rules_matched for r in matched_any):
-                    continue
+            if (matched_any := conditions.get("matched_rules_any")) and not any(
+                r in result.rules_matched for r in matched_any
+            ):
+                continue
 
             # Check data_modality_contains condition
             if modality_contains := conditions.get("data_modality_contains"):
@@ -604,39 +604,36 @@ class RuleEngine:
                     continue
 
             # Check data_modality exact match condition
-            if modality := conditions.get("data_modality"):
-                if result.data_modality != modality:
-                    continue
+            if (modality := conditions.get("data_modality")) and result.data_modality != modality:
+                continue
 
             # Check platform condition
-            if platform := conditions.get("platform"):
-                if result.platform != platform:
-                    continue
+            if (platform := conditions.get("platform")) and result.platform != platform:
+                continue
 
             # Check platform_in condition
-            if platform_in := conditions.get("platform_in"):
-                if result.platform not in platform_in:
-                    continue
+            if (platform_in := conditions.get("platform_in")) and result.platform not in platform_in:
+                continue
 
             # Check file_format condition
-            if file_format := conditions.get("file_format"):
-                if file_info.file_format != file_format:
-                    continue
+            if (file_format := conditions.get("file_format")) and file_info.file_format != file_format:
+                continue
 
             # Check file_format_not condition
-            if file_format_not := conditions.get("file_format_not"):
-                if file_info.file_format == file_format_not:
-                    continue
+            if (file_format_not := conditions.get("file_format_not")) and file_info.file_format == file_format_not:
+                continue
 
             # Check file_size_gb_gt condition
-            if size_gt := conditions.get("file_size_gb_gt"):
-                if file_info.file_size_gb is None or file_info.file_size_gb <= size_gt:
-                    continue
+            if (size_gt := conditions.get("file_size_gb_gt")) and (
+                file_info.file_size_gb is None or file_info.file_size_gb <= size_gt
+            ):
+                continue
 
             # Check file_size_gb_lt condition
-            if size_lt := conditions.get("file_size_gb_lt"):
-                if file_info.file_size_gb is None or file_info.file_size_gb >= size_lt:
-                    continue
+            if (size_lt := conditions.get("file_size_gb_lt")) and (
+                file_info.file_size_gb is None or file_info.file_size_gb >= size_lt
+            ):
+                continue
 
             # All conditions passed — apply and record evidence
             result.set_field("assay_type", assay_rule.assay_type)

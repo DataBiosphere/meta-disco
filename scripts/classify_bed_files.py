@@ -43,7 +43,7 @@ def load_bed_reference_evidence() -> dict[str, dict]:
                 md5 = evi.get("md5sum")
                 if md5:
                     evidence[md5] = evi
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 continue
 
     return evidence
@@ -63,7 +63,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     for f in files:
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
-        if name.endswith(".bed") or name.endswith(".bed.gz") or fmt in [".bed", ".bed.gz"]:
+        if name.endswith((".bed", ".bed.gz")) or fmt in [".bed", ".bed.gz"]:
             bed_files.append(f)
 
     print(f"Found {len(bed_files):,} BED files")

@@ -376,7 +376,7 @@ def main():
             print("Run 'make classify-hprc' first.", file=sys.stderr)
             raise SystemExit(1) from None
         print(f"Using HPRC run directory: {hprc_run_dir}")
-        input_paths = [f for f in sorted(hprc_run_dir.glob("*_classifications.json"))]
+        input_paths = sorted(hprc_run_dir.glob("*_classifications.json"))
 
     validate_against_hprc(input_paths, args.output, args.catalog_dir, args.fetch, args.limit)
 

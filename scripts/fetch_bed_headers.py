@@ -41,7 +41,7 @@ def load_cached_evidence(md5sum: str) -> dict | None:
         try:
             with path.open() as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return None
     return None
 
@@ -85,10 +85,7 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | Non
     """
     # Adaptive fetch size: small files get fetched whole, large ones get 10MB
     # HTTP Range end offset is inclusive, so bytes=0-N fetches N+1 bytes
-    if file_size and file_size <= 10_000_000:
-        fetch_bytes = file_size - 1
-    else:
-        fetch_bytes = 10_485_759  # 10MB (inclusive end)
+    fetch_bytes = file_size - 1 if file_size and file_size <= 10_000_000 else 10_485_759  # 10MB (inclusive end)
 
     url = f"{S3_MIRROR_URL}/{md5sum}.md5"
 
@@ -151,7 +148,7 @@ def extract_bed_signals(lines: list[str]) -> dict:
 
     for line in lines:
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("track") or line.startswith("browser"):
+        if not line or line.startswith(("#", "track", "browser")):
             continue
 
         parts = line.split("\t")

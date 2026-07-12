@@ -62,12 +62,11 @@ ignore = [
     #     these families is already live and protects new code. Fixes are made
     #     in the burn-down PRs, with tests, not by a blanket `ruff --fix` here:
     #     several of these autofixes change behavior or strip re-export noqas. ---
-    # readability (#178)
-    "SIM102", "SIM108", "SIM115", "SIM118", "SIM300",
-    "RET501", "RET504", "RET505", "RET508",
-    "PIE810", "C416", "C420", "B007",
-    "UP024", "UP033", "UP035",
-    "RUF015", "RUF022", "RUF043", "RUF059", "RUF100",
+    # RUF022 kept ignored on purpose (#178): both __all__ lists use intentional,
+    # non-alphabetical ordering that RUF022's sort would degrade — src/meta_disco/
+    # __init__.py groups exports by source module, and validators/__init__.py has
+    # explicit comment-grouped sections (# Contig length validators, etc.).
+    "RUF022",
 ]
 
 [tool.ruff.lint.per-file-ignores]
