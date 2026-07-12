@@ -5,8 +5,12 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
+# Optional plotting deps: this standalone report script is not wired into any
+# make target and is the only user of matplotlib/numpy, so they are not base
+# dependencies. Suppress the resolve error rather than pull heavy deps into the
+# type-check env; reportMissingImports stays a hard error everywhere else.
+import matplotlib.pyplot as plt  # pyright: ignore[reportMissingImports]
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 from meta_disco.models import field_label
 from meta_disco.models import field_value as _val
