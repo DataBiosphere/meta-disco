@@ -245,6 +245,15 @@ class TestPipelineRun:
         reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
         assert any("file_md5sum" in r for r in reasons)
 
+    def test_build_record_coerces_file_name_and_format_to_str(self):
+        # A validation_failed row echoes identity from a possibly-drifted record;
+        # the output types must stay stable for downstream consumers.
+        out = ClassifyPipeline._build_record(
+            {"file_name": 123, "file_format": None, "file_md5sum": "x"}, {})
+        assert out["file_name"] == "123"
+        assert out["file_format"] == ""
+        assert isinstance(out["file_name"], str) and isinstance(out["file_format"], str)
+
     @pytest.mark.parametrize("workers", [1, 2])
     def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
         """A non-string file_name (drift, e.g. an int) routes by its matching format,

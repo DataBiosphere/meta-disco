@@ -87,6 +87,15 @@ class TestGateExit:
         assert rc == 1
         assert "Could not read" in capsys.readouterr().out
 
+    def test_io_error_exits_one_without_traceback(self, tmp_path, capsys):
+        # A path that exists but can't be read as a file (here, a directory) raises
+        # OSError from open(); the gate must report it, not crash.
+        path = tmp_path / "a_directory"
+        path.mkdir()
+        rc = validate_metadata.main(["-i", str(path)])
+        assert rc == 1
+        assert "Could not read" in capsys.readouterr().out
+
     def test_missing_input_exits_two(self, tmp_path, capsys):
         rc = validate_metadata.main(["-i", str(tmp_path / "nope.json")])
         assert rc == 2

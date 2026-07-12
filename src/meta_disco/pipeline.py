@@ -384,12 +384,19 @@ class ClassifyPipeline:
 
     @staticmethod
     def _build_record(record: dict, classifications: dict) -> dict:
-        """Wrap a classifications dict in the output record envelope."""
+        """Wrap a classifications dict in the output record envelope.
+
+        ``file_name``/``file_format`` are coerced to ``str``: on the
+        ``validation_failed`` path these are echoed from a record whose fields may
+        have drifted to non-string types, and the output row's types must stay
+        stable for downstream consumers. (A follow-up will parse records into a
+        typed model so this holds by construction rather than per-field.)
+        """
         return {
-            "file_name": record.get("file_name") or "",
+            "file_name": str(record.get("file_name") or ""),
             "md5sum": record.get("file_md5sum"),
             "file_size": record.get("file_size"),
-            "file_format": record.get("file_format") or "",
+            "file_format": str(record.get("file_format") or ""),
             "dataset_title": record.get("dataset_title"),
             "classifications": classifications,
             "entry_id": record.get("entry_id"),

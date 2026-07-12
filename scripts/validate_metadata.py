@@ -39,9 +39,10 @@ def main(argv=None) -> int:
     print(f"Validating {args.input} …")
     try:
         records = load_records(args.input)
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        # A truncated or wrong-shaped download is exactly what this gate exists to
-        # catch — report it as a failure, not an uncaught traceback.
+    except (json.JSONDecodeError, TypeError, ValueError, OSError) as exc:
+        # A truncated or wrong-shaped download — or an unreadable file (OSError) — is
+        # exactly what this gate exists to catch: report it as a failure, not an
+        # uncaught traceback.
         print(f"Could not read {args.input}: {exc}")
         return 1
 
