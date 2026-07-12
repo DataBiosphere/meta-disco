@@ -1,0 +1,121 @@
+id: https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml
+name: meta_disco_input_metadata
+title: Meta-Disco AnVIL Input Metadata Model
+description: >-
+  The contract for a raw AnVIL file metadata record — one entry in the `files`
+  array of `data/anvil/anvil_files_metadata.json`, as produced by
+  `scripts/download_anvil_metadata.py` from the AnVIL Explorer API.
+
+  This is the *input* to classification, distinct from `classification.yaml`
+  which models the classified *output*. Kept in a separate schema so the input
+  contract does not entangle with the output's narrowed dimension ranges
+  (`data_modality` / `reference_assembly` are plain nullable strings here — the
+  values AnVIL itself declared — but object ranges in the output model).
+
+  Authoring source of truth. `make gen-metadata` (schema/ project) generates the
+  Pydantic model `src/meta_disco/schema/metadata_model.py` from this file via
+  `gen-pydantic`. Unlike the output model, that generated module is committed and
+  shipped as package data because the runtime imports it: `metadata_schema.py`
+  validates every record against it at load (issue #161). The field constraints
+  below are the measured contract of the current corpus (758,658 records):
+  `file_size >= 0` (three zero-size files), `data_modality` / `reference_assembly`
+  nullable by design (~99% null), md5 lowercase-hex, drs_uri `drs://`-prefixed.
+
+  Records may carry keys beyond those modeled here (e.g. the download script also
+  emits `organism_type` / `phenotypic_sex`); the runtime validator tolerates them
+  (validates with `extra="ignore"`), so an unmodeled column never fails a record.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  anvil: https://github.com/DataBiosphere/meta-disco/schema/
+default_prefix: anvil
+default_range: string
+
+imports:
+  - linkml:types
+
+# =============================================================================
+# CLASSES
+# =============================================================================
+classes:
+
+  AnvilFileMetadataRecord:
+    tree_root: true
+    description: >-
+      One raw AnVIL file metadata record, before classification. Every slot but
+      the nullable AnVIL declarations (`data_modality`, `reference_assembly`) is
+      required; the string slots are additionally non-empty (`file_size` allows 0
+      and `is_supplementary` is a plain required boolean).
+    slots:
+      - entry_id
+      - file_id
+      - file_name
+      - file_format
+      - file_size
+      - file_md5sum
+      - drs_uri
+      - dataset_id
+      - dataset_title
+      - is_supplementary
+      - data_modality
+      - reference_assembly
+
+# =============================================================================
+# SLOTS
+# =============================================================================
+slots:
+  entry_id:
+    description: The AnVIL Explorer catalog entry identifier.
+    required: true
+    pattern: "^.+$"
+  file_id:
+    description: The file identifier within the entry.
+    required: true
+    pattern: "^.+$"
+  file_name:
+    description: The file name.
+    required: true
+    pattern: "^.+$"
+  file_format:
+    description: >-
+      File extension / format label (e.g. bam, vcf.gz). 62 distinct values in the
+      current corpus, including the literal "Other".
+    required: true
+    pattern: "^.+$"
+  file_size:
+    description: File size in bytes. Zero is valid (three zero-size files exist).
+    range: integer
+    required: true
+    minimum_value: 0
+  file_md5sum:
+    description: MD5 checksum of the file, lowercase hex.
+    required: true
+    pattern: "^[0-9a-f]{32}$"
+  drs_uri:
+    description: DRS URI for the file, used for S3 mirror access.
+    required: true
+    pattern: "^drs://"
+  dataset_id:
+    description: Identifier of the dataset the file belongs to.
+    required: true
+    pattern: "^.+$"
+  dataset_title:
+    description: Title of the dataset the file belongs to.
+    required: true
+    pattern: "^.+$"
+  is_supplementary:
+    description: Whether AnVIL flags the file as supplementary.
+    range: boolean
+    required: true
+  data_modality:
+    description: >-
+      AnVIL's own declared data modality, or null. Nullable by design — absent for
+      most files (~99% of the corpus).
+    range: string
+    required: false
+  reference_assembly:
+    description: >-
+      AnVIL's own declared reference assembly, or null. Nullable by design — absent
+      for most files (~99% of the corpus).
+    range: string
+    required: false

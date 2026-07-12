@@ -56,6 +56,7 @@ from meta_disco import schema_vocab
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
+from tests.metadata_fixtures import valid_record
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"
@@ -65,31 +66,46 @@ GOLDEN_PATH = FIXTURES / "expected_output.json"
 # across runs; a stub fetcher supplies a fixed header so no network is touched.
 # Chosen to span the shape surface: a classified value (fasta assembly), sentinels
 # (not_applicable / not_classified), and multi-evidence fields.
+#
+# Each record satisfies the input-metadata contract (issue #161) — the run path
+# validates every routed record and diverts a classifier-relevant violation to
+# validation_failed before classifying — so the md5s are lowercase-hex and the
+# contract's other required fields are present (via _golden_record).
+
+
+def _golden_record(md5_seed: str, **fields):
+    """A contract-valid golden input: real classifier-facing fields plus the
+    contract's other required fields, which do not appear in the output record."""
+    return valid_record(
+        file_md5sum=md5_seed * 32,  # lowercase-hex, per the contract
+        file_id="g-file",
+        drs_uri="drs://golden/fixture",
+        dataset_id="g-dataset",
+        dataset_title="GOLDEN_FIXTURE",
+        **fields,
+    )
+
+
 GOLDEN_INPUTS = {
     "fasta": [
-        {"file_md5sum": "golden_fasta_assembly", "file_name": "hapdup_contigs.hap1.fasta",
-         "file_size": 2974881710, "file_format": ".fasta", "entry_id": "g-fasta-1",
-         "dataset_title": "GOLDEN_FIXTURE"},
+        _golden_record("a", file_name="hapdup_contigs.hap1.fasta",
+                       file_size=2974881710, file_format=".fasta", entry_id="g-fasta-1"),
     ],
     "bam": [
-        {"file_md5sum": "golden_bam_rnaseq", "file_name": "sample.rnaseq.bam",
-         "file_size": 12345678, "file_format": ".bam", "entry_id": "g-bam-1",
-         "dataset_title": "GOLDEN_FIXTURE"},
+        _golden_record("b", file_name="sample.rnaseq.bam",
+                       file_size=12345678, file_format=".bam", entry_id="g-bam-1"),
     ],
     "vcf": [
-        {"file_md5sum": "golden_vcf", "file_name": "sample.vcf.gz",
-         "file_size": 5000, "file_format": ".vcf.gz", "entry_id": "g-vcf-1",
-         "dataset_title": "GOLDEN_FIXTURE"},
+        _golden_record("c", file_name="sample.vcf.gz",
+                       file_size=5000, file_format=".vcf.gz", entry_id="g-vcf-1"),
     ],
     "fastq": [
-        {"file_md5sum": "golden_fastq", "file_name": "sample.fastq.gz",
-         "file_size": 8000, "file_format": ".fastq.gz", "entry_id": "g-fastq-1",
-         "dataset_title": "GOLDEN_FIXTURE"},
+        _golden_record("d", file_name="sample.fastq.gz",
+                       file_size=8000, file_format=".fastq.gz", entry_id="g-fastq-1"),
     ],
     "gfa": [
-        {"file_md5sum": "golden_gfa_rgfa", "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
-         "file_size": 848467761, "file_format": ".gfa.gz", "entry_id": "g-gfa-1",
-         "dataset_title": "GOLDEN_FIXTURE"},
+        _golden_record("e", file_name="hprc-v1.0-minigraph-grch38.gfa.gz",
+                       file_size=848467761, file_format=".gfa.gz", entry_id="g-gfa-1"),
     ],
 }
 
