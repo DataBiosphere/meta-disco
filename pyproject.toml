@@ -53,8 +53,9 @@ select = [
     "RUF",      # Ruff's own rules
 ]
 ignore = [
-    "E501",  # line length: the formatter targets 120 best-effort, not hard-capped
-    # Formatter-incompatible rules; the formatter is the single authority on layout.
+    "E501",  # line length: not hard-capped; the formatter (arrives in #181) targets 120 best-effort
+    # Rules that conflict with the ruff formatter (arrives in #181), ignored
+    # now so they never fight the formatter once it is the layout authority.
     "E111", "E114", "E117", "W191",
     # --- Burn-down list: rules turned on but not yet cleaned up. Each has an
     #     open issue; remove the codes as each issue lands. Every OTHER rule in
