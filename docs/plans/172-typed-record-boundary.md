@@ -1,5 +1,15 @@
 # Plan — #172: Parse AnVIL records into a typed model at the load boundary
 
+> **As shipped (see PR #201):** this is the original plan; two details changed
+> during implementation. (1) The invalid stream is a single `InvalidRecord`
+> dataclass carrying the coerced identity fields *and* the reasons — the separate
+> `LenientIdentityView` the plan describes was merged into it during `/simplify`,
+> so there is no `(LenientIdentityView, reasons)` tuple. (2) `ClassifierRecord.file_size`
+> is `int` (a missing/null `file_size` is classifier-relevant and diverts), not
+> `int | None`. (3) `_process_single_record` takes the `ClassifierRecord | InvalidRecord`
+> union and dispatches on it, rather than handling only the valid stream. The
+> sections below retain the original wording.
+
 **Outcome:** the pipeline stops passing raw `dict`s around and re-deriving field
 safety at every consumer. Records become typed at the boundary — a valid record's
 classifier fields are `str`/`int` by construction — so the scattered
