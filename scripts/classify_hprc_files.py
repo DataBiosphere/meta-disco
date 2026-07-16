@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.fetchers import (
+    FetchError,
     fetch_bam_header,
     fetch_fasta_headers,
     fetch_fastq_reads,
@@ -76,35 +77,41 @@ def classify_sequencing_data(
         classifications = None
 
         if fn.endswith((".bam", ".cram")):
-            raw_data = fetch_bam_header(
-                bam_evidence,
-                key,
-                file_name=fn,
-                use_cache=True,
-                url=url,
-            )
-            if raw_data is not None:
+            # A FetchError (unreadable content) skips the file, as the pre-#155
+            # None return did; a missing-samtools FileNotFoundError still propagates.
+            try:
+                raw_data = fetch_bam_header(
+                    bam_evidence,
+                    key,
+                    file_name=fn,
+                    use_cache=True,
+                    url=url,
+                )
                 classifications = classify_from_header(
                     raw_data,
                     file_name=fn,
                     file_size=file_size,
                     file_format=".cram" if fn.endswith(".cram") else ".bam",
                 )
+            except FetchError:
+                pass
         elif fn.endswith((".fastq.gz", ".fastq")):
-            raw_data = fetch_fastq_reads(
-                fastq_evidence,
-                key,
-                file_name=fn,
-                is_gzipped=fn.endswith(".gz"),
-                use_cache=True,
-                url=url,
-            )
-            if raw_data is not None:
+            try:
+                raw_data = fetch_fastq_reads(
+                    fastq_evidence,
+                    key,
+                    file_name=fn,
+                    is_gzipped=fn.endswith(".gz"),
+                    use_cache=True,
+                    url=url,
+                )
                 classifications = classify_from_fastq_header(
                     raw_data,
                     file_name=fn,
                     file_size=file_size,
                 )
+            except FetchError:
+                pass
         else:
             # FAST5, POD5, etc. — classify from filename only
             skipped += 1
@@ -152,31 +159,34 @@ def classify_assemblies(
         if (i + 1) % 100 == 0 or i == 0:
             print(f"  [{i + 1}/{len(records)}] {fn[:50]}", flush=True)
 
-        raw_data = fetch_fasta_headers(
-            fasta_evidence,
-            key,
-            file_name=fn,
-            is_gzipped=fn.endswith(".gz"),
-            use_cache=True,
-            url=url,
-        )
-
-        if raw_data is not None:
-            classifications = classify_from_fasta_header(
-                raw_data,
+        try:
+            raw_data = fetch_fasta_headers(
+                fasta_evidence,
+                key,
                 file_name=fn,
-                file_size=file_size,
+                is_gzipped=fn.endswith(".gz"),
+                use_cache=True,
+                url=url,
             )
-            success += 1
-            results.append(
-                {
-                    "file_name": fn,
-                    "key": key,
-                    "file_size": file_size,
-                    "classifications": classifications,
-                    "catalog": "assemblies",
-                }
-            )
+        except FetchError:
+            # Unreadable content skips the file, as the pre-#155 None return did.
+            continue
+
+        classifications = classify_from_fasta_header(
+            raw_data,
+            file_name=fn,
+            file_size=file_size,
+        )
+        success += 1
+        results.append(
+            {
+                "file_name": fn,
+                "key": key,
+                "file_size": file_size,
+                "classifications": classifications,
+                "catalog": "assemblies",
+            }
+        )
 
     print(f"  Classified: {success}, Failed: {len(records) - success}")
     return results

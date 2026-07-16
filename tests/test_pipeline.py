@@ -160,22 +160,24 @@ class TestPipelineRun:
         results = pipeline.run()
         assert len(results) == 1
 
-    def test_fetcher_returns_none(self, input_file, tmp_path):
-        """Files where fetcher returns None are counted as failures."""
-        config = _make_config(fetcher=lambda evidence_dir, md5, **kw: None)
-        output = tmp_path / "out.json"
-        pipeline = ClassifyPipeline(
-            config,
-            input_file,
-            output,
-            evidence_base=tmp_path / "evidence",
-        )
-        results = pipeline.run()
-        assert len(results) == 0
+    def test_fetch_failure_writes_not_classified_row_never_dropped(self, input_file, tmp_path):
+        """A fetcher that raises FetchError keeps the record as a content_unreadable
+        row (classified from the filename), never dropped (#155)."""
+        from meta_disco.fetchers import FetchError
 
-        with output.open() as f:
-            data = json.load(f)
-        assert data["metadata"]["failed"] == 2
+        def _boom(evidence_dir, md5, **kw):
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+
+        config = _make_config(fetcher=_boom)
+        output = tmp_path / "out.json"
+        pipeline = ClassifyPipeline(config, input_file, output, evidence_base=tmp_path / "evidence")
+        results = pipeline.run()
+        assert len(results) == 2  # both .test files written, none dropped
+
+        data = json.loads(output.read_text())
+        assert data["metadata"]["dropped"] == 0
+        assert data["metadata"]["failed"] == 0
+        assert data["metadata"]["content_unreadable"] == 2
 
     @pytest.mark.parametrize("workers", [1, 2])
     def test_null_file_name_is_written_as_validation_failed_not_lost(self, tmp_path, workers):
@@ -398,30 +400,6 @@ class TestPipelineRun:
         )
         assert pipeline._is_cached(md5) is False
 
-    def test_dropped_record_is_not_flagged_cached(self, tmp_path):
-        """A dropped row (fetcher returned None) carries no outcome flags, even if its
-        md5 was cached — otherwise the progress line mislabels it '[cached]'."""
-        from meta_disco.fetchers import get_evidence_path
-
-        md5 = "a" * 32
-        pipeline = ClassifyPipeline(
-            _make_config(fetcher=lambda evidence_dir, md5, **kw: None),
-            tmp_path / "in.json",
-            tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence",
-            resume=True,
-        )
-        ev = get_evidence_path(pipeline.evidence_dir, md5)
-        ev.parent.mkdir(parents=True, exist_ok=True)
-        ev.write_text("{}")
-        assert pipeline._is_cached(md5) is True
-
-        outcome = pipeline._process_single_record(
-            ClassifierRecord.from_record(_valid_record(file_md5sum=md5, file_name="x.test", file_format=".test"))
-        )
-        assert outcome.result is None
-        assert outcome.was_cached is False
-
     def test_parallel_workers(self, input_file, tmp_path):
         config = _make_config()
         output = tmp_path / "out.json"
@@ -638,28 +616,30 @@ class TestFileTypeConfigs:
         assert meta["from_cache"] == 0
         assert meta["successful"] == 2
 
-    def test_dropped_and_errored_are_counted_separately(self, tmp_path):
-        """`Dropped (fetcher gave no cause)` must not absorb records whose worker
-        raised and printed a cause. `failed` stays the sum, for existing consumers."""
+    def test_fetcherror_is_unreadable_row_but_a_bug_is_errored(self, tmp_path):
+        """A FetchError keeps the record as a content_unreadable row; a non-FetchError
+        bug in a fetcher surfaces as errored (no row), not a silent drop. `dropped` is
+        0 now that fetch failures are never dropped (#155); `failed` = dropped + errored."""
         import dataclasses
 
+        from meta_disco.fetchers import FetchError
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.pipeline import ClassifyPipeline
 
-        boom_md5 = "a" * 32
+        bug_md5 = "a" * 32
 
-        def _explode(evidence_dir, md5, **kwargs):
-            if md5 == boom_md5:
+        def _fetch(evidence_dir, md5, **kwargs):
+            if md5 == bug_md5:
                 raise TypeError("a bug in the parser, not a fetch failure")
-            return  # silent drop, no cause
+            raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
 
-        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_explode)
+        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=_fetch)
         input_path = tmp_path / "in.json"
         input_path.write_text(
             json.dumps(
                 {
                     "results": [
-                        _valid_record(file_md5sum=boom_md5, file_name="a.gfa", file_format=".gfa"),
+                        _valid_record(file_md5sum=bug_md5, file_name="a.gfa", file_format=".gfa"),
                         _valid_record(file_md5sum="b" * 32, file_name="b.gfa", file_format=".gfa"),
                     ]
                 }
@@ -672,31 +652,11 @@ class TestFileTypeConfigs:
         ).run()
 
         meta = json.loads(out_path.read_text())["metadata"]
-        assert meta["dropped"] == 1, "the None-returning fetcher"
-        assert meta["errored"] == 1, "the raising fetcher"
-        assert meta["failed"] == 2, "kept as the sum for existing consumers"
-        assert meta["successful"] == 0
-
-    def test_fetcher_returning_none_still_drops_the_row(self, tmp_path):
-        """Unchanged for the fetchers that give no cause (see #155)."""
-        import dataclasses
-
-        from meta_disco.file_types import FILE_TYPE_REGISTRY
-        from meta_disco.pipeline import ClassifyPipeline
-
-        config = dataclasses.replace(FILE_TYPE_REGISTRY["gfa"], fetcher=lambda evidence_dir, md5, **kw: None)
-        input_path = tmp_path / "in.json"
-        input_path.write_text(
-            json.dumps({"results": [_valid_record(file_md5sum="d" * 32, file_name="graph.gfa", file_format=".gfa")]})
-        )
-        pipeline = ClassifyPipeline(
-            config,
-            input_path,
-            tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence",
-            workers=1,
-        )
-        assert pipeline.run() == []
+        assert meta["dropped"] == 0, "fetch failures are no longer dropped (#155)"
+        assert meta["errored"] == 1, "the TypeError bug — no row"
+        assert meta["content_unreadable"] == 1, "the FetchError — written as not_classified"
+        assert meta["successful"] == 1, "the content_unreadable row counts as written"
+        assert meta["failed"] == 1, "dropped(0) + errored(1)"
 
     def test_configs_have_required_fields(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY

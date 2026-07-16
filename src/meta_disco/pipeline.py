@@ -60,15 +60,16 @@ def load_records(input_path: Path) -> list:
 class RecordOutcome(NamedTuple):
     """The outcome of processing one record, tallied by ``_run_parallel``.
 
-    ``result`` is the output record, or ``None`` when the fetcher gave no cause to
-    keep the row (a drop). The three flags are mutually exclusive and only one, at
-    most, is set: a record is written as ``validation_failed`` (failed the input
-    contract), ``was_cached`` (evidence already on disk), ``content_unreadable``
-    (fetch failed, classified from the filename), or none of these (a fresh fetch).
-    Named so the four fields cannot be transposed at the unpack sites.
+    ``result`` is always the output record — every record produces a row now that
+    fetchers raise ``FetchError`` instead of returning ``None`` (#155). The three
+    flags are mutually exclusive and only one, at most, is set: a record is written
+    as ``validation_failed`` (failed the input contract), ``was_cached`` (evidence
+    already on disk), ``content_unreadable`` (fetch failed, classified from the
+    filename), or none of these (a fresh fetch). Named so the four fields cannot be
+    transposed at the unpack sites.
     """
 
-    result: dict | None
+    result: dict
     was_cached: bool
     content_unreadable: bool
     validation_failed: bool
@@ -99,19 +100,20 @@ def _fetch_and_classify(
     file_format: str | None,
     is_gzipped: bool,
     use_cache: bool,
-) -> tuple[dict | None, bool]:
+) -> tuple[dict, bool]:
     """Fetch a file's content and classify it.
 
-    Returns ``(classifications, content_unreadable)``. Three outcomes:
+    Returns ``(classifications, content_unreadable)``. Two outcomes:
 
     * content read        -> ``(classifications, False)``
     * content unreadable  -> ``(filename-only classifications, True)``. The fetcher
-      raised FetchError naming its cause, so the file stays in the output.
-    * fetch returned None -> ``(None, False)``. No cause given, so the caller drops
-      the record (see #155).
+      raised FetchError naming its cause, so the file stays in the output as a
+      ``not_classified`` row rather than vanishing (#155).
 
-    Shared by ``ClassifyPipeline.classify_single`` and ``_process_single_record``
-    so the fallback cannot drift between the single-file and batch paths.
+    Every record therefore yields a row — a fetcher signals failure by raising, never
+    by returning ``None``. Shared by ``ClassifyPipeline.classify_single`` and
+    ``_process_single_record`` so the fallback cannot drift between the single-file
+    and batch paths.
     """
     try:
         raw_data = config.fetcher(
@@ -131,9 +133,6 @@ def _fetch_and_classify(
             allowed_extensions=config.extensions,
             content_fields=config.content_fields,
         ), True
-
-    if raw_data is None:
-        return None, False
 
     return config.classifier(
         raw_data,
@@ -258,8 +257,13 @@ class ClassifyPipeline:
         is_gzipped: bool = True,
         use_cache: bool = True,
         evidence_base: Path = Path("data/evidence/anvil"),
-    ) -> dict | None:
-        """Classify a single file by MD5. Does not require a full pipeline instance."""
+    ) -> dict:
+        """Classify a single file by MD5. Does not require a full pipeline instance.
+
+        Always returns a record: a fetch failure yields filename-only
+        ``not_classified`` classifications (the fetcher raises ``FetchError``), never
+        ``None`` (#155).
+        """
         evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
@@ -273,8 +277,6 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped,
             use_cache=use_cache,
         )
-        if classifications is None:
-            return None
         return {
             "file_name": file_name,
             "md5sum": md5sum,
@@ -433,11 +435,6 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped,
             use_cache=self.resume,
         )
-        if classifications is None:
-            # A dropped row (no result) carries no outcome flags — was_cached would
-            # otherwise mislabel the dropped record as "[cached]" in the progress line.
-            return RecordOutcome(None, was_cached=False, content_unreadable=False, validation_failed=False)
-
         if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher
             # only raises after its own cache check missed, so it went to the
@@ -475,7 +472,9 @@ class ClassifyPipeline:
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
-        dropped = 0  # fetcher returned None: no cause given
+        # Fetch failures now surface as content_unreadable rows, never as dropped
+        # records (#155); kept as a constant 0 for output-schema stability.
+        dropped = 0
         errored = 0  # worker raised: a cause was printed
         invalid = 0  # failed input validation: written, classified as nothing (#161)
         from_cache = 0
@@ -489,21 +488,18 @@ class ClassifyPipeline:
         with NdjsonWriter(self.output_path) as writer:
 
             def update_progress(outcome: RecordOutcome, file_name: str):
-                nonlocal successful, dropped, from_cache, processed, unreadable, invalid
+                nonlocal successful, from_cache, processed, unreadable, invalid
                 with lock:
                     processed += 1
-                    if outcome.result is not None:
-                        writer.write(outcome.result)
-                        if outcome.validation_failed:
-                            invalid += 1
-                        else:
-                            successful += 1
-                            if outcome.was_cached:
-                                from_cache += 1
-                            elif outcome.content_unreadable:
-                                unreadable += 1
+                    writer.write(outcome.result)
+                    if outcome.validation_failed:
+                        invalid += 1
                     else:
-                        dropped += 1
+                        successful += 1
+                        if outcome.was_cached:
+                            from_cache += 1
+                        elif outcome.content_unreadable:
+                            unreadable += 1
                     cache_indicator = "[cached] " if outcome.was_cached else ""
                     # file_name is a str on both work streams (ClassifierRecord types it,
                     # InvalidRecord coerces it), so the slice cannot raise.

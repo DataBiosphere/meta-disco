@@ -31,13 +31,15 @@ class FetchError(Exception):
     classification evidence, and should name the actual failure (an HTTP status,
     an exception type), not merely that something went wrong.
 
-    Raised by `_fetch_range` on any non-2xx response, and by
-    `fetch_gfa_segment_tags` around its parse. The other three range-based
-    fetchers (vcf, fastq, fasta) catch it and return None *silently*, so their
-    records are still dropped without a stated cause (see #155) — and so a
-    corpus-wide run is not flooded with one line per missing mirror object
-    (#156). `fetch_bam_header` never raises FetchError: it shells out to samtools
-    rather than calling `_fetch_range`.
+    Raised by `_fetch_range` on any non-2xx response, and by every header fetcher
+    (bam/vcf/fastq/fasta/gfa) when the content cannot be read or parsed — each
+    propagates it (rather than returning None), so its record is written as a
+    `not_classified` row naming the cause instead of vanishing (#155). One
+    exception: `fetch_bam_header` lets a `FileNotFoundError` (samtools not
+    installed) propagate as itself, since a missing tool is an environment failure
+    for every BAM record, not unreadable content for one. Each failure prints one
+    line via `_fetch_and_classify`; the mirror missing an unknown number of objects
+    is tracked separately (#156).
     """
 
     def __init__(self, reason: str):
@@ -90,9 +92,10 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
     mirror does not hold this md5 — which is not the same as the file not existing,
     since the catalog entry may still carry a size and a DRS URI. The vcf/fastq/fasta
-    callers catch it in an explicit `except FetchError` and return None silently,
-    so their records are still dropped without a cause (see #155). That clause must
-    precede their `except Exception`, or a non-2xx would be reported as an error.
+    callers re-raise it in an explicit `except FetchError: raise`, so the record
+    becomes a `not_classified` row with the HTTP status as its reason (#155). That
+    clause must precede their `except Exception`, or a non-2xx would be re-wrapped as
+    a generic error.
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
@@ -145,11 +148,18 @@ def fetch_bam_header(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> str | None:
+) -> str:
     """Read BAM/CRAM header from S3 using samtools.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns raw SAM header text or None.
+    Returns raw SAM header text (possibly empty for a readable header-less file).
+
+    Raises ``FetchError`` naming the cause when the header cannot be read (samtools
+    exits non-zero, times out, or the parse fails), so the record is kept as a
+    ``not_classified`` row instead of vanishing (#155). ``samtools`` being absent is
+    *not* a ``FetchError``: it is an environment failure affecting every BAM record,
+    so the ``FileNotFoundError`` propagates rather than masquerading as unreadable
+    content (it surfaces as an errored record, or crashes the sequential path).
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -165,7 +175,7 @@ def fetch_bam_header(
             timeout=120,
         )
         if result.returncode != 0:
-            return None
+            raise FetchError(f"samtools view -H exited {result.returncode}: {result.stderr.strip() or 'no stderr'}")
 
         header_text = result.stdout
         if header_text:
@@ -181,15 +191,16 @@ def fetch_bam_header(
             save_evidence(evidence_dir, md5sum, evidence)
 
         return header_text
-    except subprocess.TimeoutExpired:
-        print(f"Timeout reading header for {md5sum}")
-        return None
+    except subprocess.TimeoutExpired as e:
+        raise FetchError(f"Timeout reading BAM header: {e}") from e
     except FileNotFoundError:
-        print("Error: samtools not found. Please install samtools.")
-        return None
+        # samtools missing is an environment failure affecting every BAM record —
+        # let it propagate (not a FetchError) so it does not become not_classified data.
+        raise
+    except FetchError:
+        raise  # already carries its reason — don't re-wrap as "FetchError: ..."
     except Exception as e:
-        print(f"Error reading header for {md5sum}: {e}")
-        return None
+        raise FetchError(f"{type(e).__name__}: {e}") from e
 
 
 # =============================================================================
@@ -234,11 +245,13 @@ def fetch_vcf_header(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> str | None:
+) -> str:
     """Read VCF header from S3 via range request.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns header text (lines starting with #) or None.
+    Returns header text (lines starting with #). Raises ``FetchError`` naming the
+    cause when the range request fails or no header is found, so the record is kept
+    as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -279,20 +292,14 @@ def fetch_vcf_header(
             save_evidence(evidence_dir, md5sum, evidence)
             return header_text
 
-        return None
+        raise FetchError("no VCF header lines (no '#' lines) in first 1MB")
 
     except FetchError:
-        # A non-2xx response. Silent, as before FetchError existed: this fetcher
-        # drops the record rather than reporting a cause (see #155). Printing per
-        # file would flood the run — the mirror is missing an unknown number of
-        # objects (#156).
-        return None
-    except requests.Timeout:
-        print(f"Timeout reading header for {md5sum}")
-        return None
+        raise  # propagate its reason (a non-2xx from _fetch_range, or the check above)
+    except requests.Timeout as e:
+        raise FetchError(f"Timeout reading VCF header: {e}") from e
     except Exception as e:
-        print(f"Error reading header for {md5sum}: {e}")
-        return None
+        raise FetchError(f"{type(e).__name__}: {e}") from e
 
 
 # =============================================================================
@@ -309,11 +316,13 @@ def fetch_fastq_reads(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> list[str] | None:
+) -> list[str]:
     """Read first N read names from a FASTQ file on S3.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns list of read name lines (starting with @) or None.
+    Returns list of read name lines (starting with @). Raises ``FetchError`` naming
+    the cause when the range request fails or no read names are found, so the record
+    is kept as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -349,21 +358,16 @@ def fetch_fastq_reads(
             if url:
                 evidence["source_url"] = url
             save_evidence(evidence_dir, md5sum, evidence)
+            return read_names
 
-        return read_names if read_names else None
+        raise FetchError("no FASTQ read names (no '@' lines) in first 256KB")
 
     except FetchError:
-        # A non-2xx response. Silent, as before FetchError existed: this fetcher
-        # drops the record rather than reporting a cause (see #155). Printing per
-        # file would flood the run — the mirror is missing an unknown number of
-        # objects (#156).
-        return None
-    except requests.Timeout:
-        print(f"Timeout reading FASTQ for {md5sum}")
-        return None
+        raise  # propagate its reason (a non-2xx from _fetch_range, or the check above)
+    except requests.Timeout as e:
+        raise FetchError(f"Timeout reading FASTQ: {e}") from e
     except Exception as e:
-        print(f"Error reading FASTQ for {md5sum}: {e}")
-        return None
+        raise FetchError(f"{type(e).__name__}: {e}") from e
 
 
 # =============================================================================
@@ -379,11 +383,14 @@ def fetch_fasta_headers(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> list[str] | None:
+) -> list[str]:
     """Read contig names from a FASTA file on S3.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns list of contig names (from > header lines, without >) or None.
+    Returns list of contig names (from > header lines, without >); an empty list when
+    the fetched head holds no contig line is a readable result, not a failure. Raises
+    ``FetchError`` naming the cause when the range request itself fails, so the record
+    is kept as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -420,17 +427,11 @@ def fetch_fasta_headers(
         return contig_names
 
     except FetchError:
-        # A non-2xx response. Silent, as before FetchError existed: this fetcher
-        # drops the record rather than reporting a cause (see #155). Printing per
-        # file would flood the run — the mirror is missing an unknown number of
-        # objects (#156).
-        return None
-    except requests.Timeout:
-        print(f"Timeout reading FASTA for {md5sum}")
-        return None
+        raise  # propagate its reason (a non-2xx from _fetch_range)
+    except requests.Timeout as e:
+        raise FetchError(f"Timeout reading FASTA: {e}") from e
     except Exception as e:
-        print(f"Error reading FASTA for {md5sum}: {e}")
-        return None
+        raise FetchError(f"{type(e).__name__}: {e}") from e
 
 
 # =============================================================================
