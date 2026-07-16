@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -6,7 +6,8 @@ help:
 	@echo "  make test               Run the classification (root) test suite"
 	@echo "  make test-all           Run root + schema test suites (use before pushing)"
 	@echo "  make lint               Run ruff on the root project"
-	@echo "  make lint-all           Run ruff on root + schema projects"
+	@echo "  make lint-all           Run ruff (root + schema) + pyright type check"
+	@echo "  make type               Run pyright type checking on the root project"
 	@echo "  make format             Reformat root project with ruff formatter"
 	@echo "  make format-check       Check formatting without writing (CI)"
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
@@ -47,7 +48,16 @@ lint:
 lint-schema:
 	$(MAKE) -C schema lint
 
-lint-all: lint lint-schema
+# Root-project checks (ruff, then pyright) run before the separate schema/
+# sub-make, so the pyright gate still runs even while lint-schema is red (#190).
+lint-all: lint type lint-schema
+
+# Pyright type checker (standard mode, separate from Ruff — issue #179). Resolves
+# the meta_disco package + imports from the active uv venv. No path args: the
+# checked paths come from [tool.pyright].include so they stay a single source
+# of truth.
+type:
+	uv run pyright
 
 # Ruff formatter (layout authority). `format` rewrites in place; `format-check`
 # verifies without writing (used by CI, #180).

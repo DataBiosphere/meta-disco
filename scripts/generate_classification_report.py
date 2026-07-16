@@ -5,8 +5,14 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
+# matplotlib/numpy are required at runtime by this standalone report script but
+# are not declared (base) dependencies — it is the repo's only user of them and
+# no make target runs it. The ignore is only for static analysis (this file is
+# still type-checked, since [tool.pyright].include lists scripts);
+# reportMissingImports stays a hard error everywhere else, and we avoid pulling
+# heavy deps into the type-check env.
+import matplotlib.pyplot as plt  # pyright: ignore[reportMissingImports]
+import numpy as np  # pyright: ignore[reportMissingImports]
 
 from meta_disco.models import field_label
 from meta_disco.models import field_value as _val
