@@ -43,9 +43,9 @@ _RECORD_LOC = "<record>"
 # stop this record from classifying (issue #161 review: the run marks only what it
 # genuinely cannot classify, the whole-corpus gate flags the rest).
 #
-# Keep in sync with the fields ClassifyPipeline._process_single_record reads and
-# passes to _fetch_and_classify. A field the run consumes but omitted here would
-# let a record bad on that field fetch instead of divert to validation_failed.
+# Keep in sync with the fields ClassifierRecord exposes to the fetch/classify path
+# (records.py). A field the run consumes but omitted here would let a record bad on
+# that field build a ClassifierRecord and fetch, instead of divert to validation_failed.
 CLASSIFIER_RELEVANT_FIELDS = frozenset(
     {
         "file_md5sum",
