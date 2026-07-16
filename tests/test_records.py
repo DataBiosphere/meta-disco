@@ -36,11 +36,18 @@ class TestInvalidRecord:
         assert inv.file_name == expected
         assert isinstance(inv.file_name, str)
 
-    @pytest.mark.parametrize("raw,expected", [(None, ""), (0, ""), (".bam", ".bam")])
+    @pytest.mark.parametrize("raw,expected", [(None, ""), (0, "0"), (".bam", ".bam")])
     def test_coerces_file_format_to_str(self, raw, expected):
         inv = InvalidRecord.from_record({"file_format": raw}, [])
         assert inv.file_format == expected
         assert isinstance(inv.file_format, str)
+
+    @pytest.mark.parametrize("raw,expected", [(None, ""), (0, "0"), (False, "False"), ("", "")])
+    def test_only_null_becomes_empty_falsy_values_are_preserved(self, raw, expected):
+        # Only None (absent/null) maps to ""; a falsy-but-present drift like 0/False
+        # is stringified, not erased (a str(x or "") would collapse both to "").
+        inv = InvalidRecord.from_record({"file_name": raw}, [])
+        assert inv.file_name == expected
 
     def test_passes_other_identity_fields_through_raw(self):
         # md5/size/title/entry_id are echoed as-is on the validation_failed path —

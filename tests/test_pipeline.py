@@ -280,6 +280,40 @@ class TestPipelineRun:
         reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
         assert any("file_md5sum" in r for r in reasons)
 
+    def test_skip_cached_keeps_invalid_records_and_tolerates_unhashable_md5(self, tmp_path):
+        """skip_cached must not drop validation_failed records (they are never cached)
+        and must not crash on an InvalidRecord whose md5 drifted to an unhashable
+        type — only classifiable records are skip-filtered against the cached set."""
+        from meta_disco.fetchers import get_evidence_path
+
+        cached_md5 = "a" * 32
+        valid = _valid_record(file_md5sum=cached_md5, file_name="v.test", file_format=".test")
+        # Blocking drift (non-int file_size) + an unhashable md5 (a list).
+        invalid = _valid_record(file_name="i.test", file_format=".test", file_size="big", file_md5sum=["x"])
+        input_path = tmp_path / "in.json"
+        input_path.write_text(json.dumps({"results": [valid, invalid]}))
+
+        pipeline = ClassifyPipeline(
+            _make_config(),
+            input_path,
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            resume=True,
+            skip_cached=True,
+            workers=1,
+        )
+        ev = get_evidence_path(pipeline.evidence_dir, cached_md5)
+        ev.parent.mkdir(parents=True, exist_ok=True)
+        ev.write_text("{}")
+
+        results = pipeline.run()  # must not raise on the unhashable md5
+
+        names = [r["file_name"] for r in results]
+        assert "v.test" not in names  # cached classifiable record is skipped
+        assert "i.test" in names  # validation_failed record is still written
+        meta = json.loads((tmp_path / "out.json").read_text())["metadata"]
+        assert meta["validation_failed"] == 1
+
     def test_partition_routes_by_classifier_relevant_fields(self, tmp_path):
         """The load-boundary split (#172) preserves #161's divert rule: a contract
         violation only on a field the classifier never reads (drs_uri) still yields a

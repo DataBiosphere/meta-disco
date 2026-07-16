@@ -32,6 +32,17 @@ from dataclasses import dataclass
 from typing import Any
 
 
+def _coerce_identity(value: Any) -> str:
+    """Stringify a drifted identity value for echo; null (``None``) becomes ``""``.
+
+    Distinguishes null from a falsy-but-present value on purpose: a ``str(value or
+    "")`` would collapse ``0``/``False`` to ``""`` and lose the drifted value, so a
+    ``file_name`` of ``0`` here becomes ``"0"``, not ``""``. Only genuine ``None``
+    (absent/null) maps to the empty string.
+    """
+    return "" if value is None else str(value)
+
+
 @dataclass(frozen=True)
 class ClassifierRecord:
     """A filtered record whose classifier-relevant fields passed the input contract.
@@ -102,14 +113,15 @@ class InvalidRecord:
     def from_record(cls, record: dict, reasons: list[str]) -> InvalidRecord:
         """Build from a raw record whose classifier-relevant fields may be drifted.
 
-        ``str(... or "")``: ``file_name``/``file_format`` may be null (present-but-
-        None) or a drifted non-string (an int); coercing them here — the sole
-        coercion site the #171 point fixes are replaced by — means neither can raise
-        in the downstream path/extension operations or the progress-label slice.
+        ``file_name``/``file_format`` may be null (present-but-None) or a drifted
+        non-string (an int); ``_coerce_identity`` maps null to ``""`` and stringifies
+        any other value — the sole coercion site the #171 point fixes are replaced
+        by — so neither can raise in the downstream path/extension operations or the
+        progress-label slice.
         """
         return cls(
-            file_name=str(record.get("file_name") or ""),
-            file_format=str(record.get("file_format") or ""),
+            file_name=_coerce_identity(record.get("file_name")),
+            file_format=_coerce_identity(record.get("file_format")),
             file_md5sum=record.get("file_md5sum"),
             file_size=record.get("file_size"),
             dataset_title=record.get("dataset_title"),

@@ -225,7 +225,11 @@ class ClassifyPipeline:
         cached_md5s = self._print_cache_stats(work)
 
         if self.skip_cached and cached_md5s:
-            work = [w for w in work if w.file_md5sum not in cached_md5s]
+            # Only classifiable records can be cached, so only they are skip-filtered.
+            # An InvalidRecord is never fetched or cached and must still be written as
+            # validation_failed (#155/#161); it is kept unconditionally, which also
+            # avoids hashing its raw (possibly unhashable) file_md5sum against the set.
+            work = [w for w in work if isinstance(w, InvalidRecord) or w.file_md5sum not in cached_md5s]
             print(f"  Skipping cached files, processing only {len(work)} new files")
 
         if self.limit:
