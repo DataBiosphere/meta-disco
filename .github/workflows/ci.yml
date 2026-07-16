@@ -1,0 +1,58 @@
+# Continuous integration: enforce the same lint/format/type/test gates on every
+# PR that were previously local-only make targets (issue #180).
+#
+# CI is a thin wrapper over the Makefile so the checks never drift from what a
+# developer runs locally:
+#   make lint-all     -> ruff check (root + schema) + pyright
+#   make format-check -> ruff format --check (root)
+#   make test-all     -> pytest (root + schema, two independent uv projects)
+#
+# Python is pinned to 3.10 — the project's requires-python floor and the
+# [tool.pyright] pythonVersion — so CI exercises the minimum we claim to support.
+#
+# NOTE FOR WHOEVER ADDS release-please (or the shared clevercanary/.github
+# workflows, see issue #180): give release-please a GitHub App token or PAT, not
+# the default GITHUB_TOKEN. Events raised by GITHUB_TOKEN do not trigger further
+# workflow runs (GitHub loop-prevention), so release-please's release PR would
+# never trigger this CI. If this CI is a *required* status check, that release PR
+# would sit at "Expected — waiting for status" forever and could never merge.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel a superseded run when new commits land on the same PR/branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv (with Python 3.10)
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      # Two independent uv projects (root + schema/), each with its own lockfile.
+      - name: Sync root project
+        run: uv sync --locked
+      - name: Sync schema project
+        run: uv sync --locked --directory schema
+
+      - name: Lint + type check (ruff check + pyright)
+        run: make lint-all
+      - name: Format check (ruff format --check)
+        run: make format-check
+      - name: Tests (root + schema)
+        run: make test-all

@@ -112,3 +112,10 @@ reportOptionalSubscript = "warning"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    # End-to-end eval tests that read real fetched headers from the local
+    # evidence cache (data/evidence/anvil/, gitignored). tests/conftest.py
+    # auto-skips them when that cache is absent — e.g. in CI, where a miss would
+    # otherwise fall through to a live S3 + samtools fetch. See issue #180.
+    "e2e: needs the local evidence cache; auto-skipped when it is absent",
+]

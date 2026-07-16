@@ -9,7 +9,6 @@ For rule-engine-only classifiers (BED, images, auxiliary), the input
 is a FileInfo and the output is an ExtendedClassificationResult.
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -65,6 +64,7 @@ def assert_output_format(record):
 # =============================================================================
 
 
+@pytest.mark.e2e
 class TestBamE2E:
     """End-to-end BAM classification from cached headers."""
 
@@ -167,6 +167,7 @@ class TestBamE2E:
 # =============================================================================
 
 
+@pytest.mark.e2e
 class TestVcfE2E:
     """End-to-end VCF classification from cached headers."""
 
@@ -218,6 +219,7 @@ class TestVcfE2E:
 # =============================================================================
 
 
+@pytest.mark.e2e
 class TestFastqE2E:
     """End-to-end FASTQ classification from cached read names."""
 
@@ -716,6 +718,7 @@ class TestGfaSegmentTagParsing:
 # =============================================================================
 
 
+@pytest.mark.e2e
 class TestFastaE2E:
     """End-to-end FASTA classification from cached contig names."""
 
