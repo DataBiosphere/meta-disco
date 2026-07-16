@@ -199,9 +199,12 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
     if duration > 0:
         print(f"Rate: {total_fetched / duration:.1f} files/sec")
 
-    # Clean up checkpoint if complete
+    # Clean up checkpoint if complete. total_files > 0 gates out the case where the
+    # count fetch never succeeded (e.g. an interrupt before it ran leaves total_files
+    # at its 0 initializer): a 0 total must not read as "complete" and delete the
+    # resume checkpoint.
     checkpoint_path = output_dir / "checkpoint.json"
-    if total_fetched >= total_files and checkpoint_path.exists():
+    if total_files > 0 and total_fetched >= total_files and checkpoint_path.exists():
         checkpoint_path.unlink()
         print("Download complete. Checkpoint removed.")
 
