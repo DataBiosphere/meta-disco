@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from pydantic import ConfigDict, ValidationError
+from pydantic_core import ErrorDetails
 
 from .models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED, build_field_entry
 from .schema.metadata_model import AnvilFileMetadataRecord
@@ -120,7 +121,7 @@ _TYPE_DESCRIPTIONS = {
 }
 
 
-def _format_error(err: dict) -> str:
+def _format_error(err: ErrorDetails) -> str:
     """Render one pydantic error dict as a value-independent ``"<field>: <why>"``.
 
     For every error type this schema can raise, the description comes from

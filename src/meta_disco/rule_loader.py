@@ -198,7 +198,9 @@ class RuleLoader:
         # a plain filesystem Path. _is_default tailors that message: a missing bundled
         # resource means a broken install, a missing explicit path is the caller's.
         self._is_default = rules_path is None
-        self.rules_path = None if self._is_default else Path(rules_path)
+        # Narrow on rules_path directly (not self._is_default, which pyright can't
+        # correlate with rules_path's None-ness) so the Path() call type-checks.
+        self.rules_path = None if rules_path is None else Path(rules_path)
         self._rules: UnifiedRules | None = None
 
     def load(self) -> UnifiedRules:
@@ -215,9 +217,14 @@ class RuleLoader:
             return self._rules
 
         try:
-            if self._is_default:
-                self.rules_path = default_rules_resource()
-            text = self.rules_path.read_text(encoding="utf-8")
+            # rules_path is None only for the default (unresolved) case; resolve it
+            # to the bundled resource here. Binding to a local lets pyright narrow
+            # away None for the read_text() call below.
+            resource = self.rules_path
+            if resource is None:
+                resource = default_rules_resource()
+                self.rules_path = resource
+            text = resource.read_text(encoding="utf-8")
         except (FileNotFoundError, KeyError, ModuleNotFoundError) as e:
             # KeyError: a zip-backed resource (zipapp / un-unpacked wheel) reports a
             # missing entry that way rather than as FileNotFoundError. ModuleNotFoundError:

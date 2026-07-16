@@ -99,8 +99,6 @@ exclude = ["src/meta_disco/schema/metadata_model.py", "**/__pycache__"]
 #     the Ruff burn-down. See #189 for the live per-rule site list. ---
 reportPossiblyUnboundVariable = "warning"
 reportArgumentType = "warning"
-reportReturnType = "warning"
-reportOptionalMemberAccess = "warning"
 reportOperatorIssue = "warning"
 reportOptionalSubscript = "warning"
 
