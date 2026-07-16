@@ -1,14 +1,12 @@
 # tests/test_validation.py
 
-import os
 import subprocess
 import sys
+from pathlib import Path
 
-_VALIDATE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "scripts/validate_outputs.py",
-)
-_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
+_HERE = Path(__file__).resolve().parent
+_VALIDATE = _HERE.parent / "scripts" / "validate_outputs.py"
+_DATA = _HERE / "test_data"
 
 
 def _run(instance):
@@ -16,7 +14,7 @@ def _run(instance):
     # than `uv run` — keeps the test hermetic and off an external uv binary, and
     # avoids nesting a uv invocation inside the uv run that already launched pytest.
     return subprocess.run(
-        [sys.executable, _VALIDATE, os.path.join(_DATA, instance)],
+        [sys.executable, _VALIDATE, _DATA / instance],
         capture_output=True, text=True,
     )
 

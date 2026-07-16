@@ -8,24 +8,22 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-_SCHEMA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SCHEMA_ROOT = Path(__file__).resolve().parent.parent
 # The path `make gen-metadata` passes to gen-pydantic, verbatim, so the embedded
 # `source_file` line in the output matches the committed file byte-for-byte.
 _REL_SCHEMA = "../src/meta_disco/schema/metadata.yaml"
-_COMMITTED_MODEL = os.path.join(
-    _SCHEMA_ROOT, "..", "src", "meta_disco", "schema", "metadata_model.py"
-)
+_COMMITTED_MODEL = _SCHEMA_ROOT.parent / "src" / "meta_disco" / "schema" / "metadata_model.py"
 
 
 # The gen-pydantic console script from the same venv as the test interpreter (the
 # schema env, which has linkml) — hermetic, and exactly what `make gen-metadata` runs.
 # On Windows the console script is gen-pydantic.exe.
-_GEN_PYDANTIC = os.path.join(
-    os.path.dirname(sys.executable),
-    "gen-pydantic.exe" if os.name == "nt" else "gen-pydantic",
+_GEN_PYDANTIC = Path(sys.executable).parent / (
+    "gen-pydantic.exe" if os.name == "nt" else "gen-pydantic"
 )
 
 
@@ -33,7 +31,7 @@ def test_committed_model_matches_schema():
     # This needs the schema env's linkml (gen-pydantic). Skip cleanly if run under an
     # interpreter without it (e.g. an explicit `pytest schema/tests` in the root env),
     # so it degrades to a skip rather than a FileNotFoundError.
-    if not os.path.exists(_GEN_PYDANTIC):
+    if not _GEN_PYDANTIC.is_file():
         pytest.skip("gen-pydantic not found; run under the schema uv env (make test-schema)")
     # Run from the schema/ dir with the same relative path `make gen-metadata` uses,
     # so the regenerated text (including the embedded source_file) is comparable
@@ -43,7 +41,7 @@ def test_committed_model_matches_schema():
         cwd=_SCHEMA_ROOT, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
-    with open(_COMMITTED_MODEL) as f:
+    with _COMMITTED_MODEL.open() as f:
         committed = f.read()
     # Byte-for-byte: the comparison is reproducible because schema/uv.lock pins the
     # linkml version (the generated header carries linkml's metamodel_version). If a
