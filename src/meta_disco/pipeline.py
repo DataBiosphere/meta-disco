@@ -275,9 +275,11 @@ class ClassifyPipeline:
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
-        Always returns a record: a fetch failure yields filename-only
-        ``not_classified`` classifications (the fetcher raises ``FetchError``), never
-        ``None`` (#155).
+        Never returns ``None`` (#155): a fetch failure surfaces as a ``FetchError``,
+        which yields filename-only ``not_classified`` classifications. It does not
+        catch everything, though — an environment error (missing samtools raises
+        ``FileNotFoundError``) or an unexpected exception from the fetcher/classifier
+        propagates rather than returning a record.
         """
         evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
