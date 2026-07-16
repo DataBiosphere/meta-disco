@@ -280,7 +280,9 @@ def evaluate_claims(claims: list[dict]) -> dict:
     # Assertive declarations disagree — check tiers
     max_tier = max(c.get("tier", 0) for c in assertive_claims)
     top_tier_claims = [c for c in assertive_claims if c.get("tier", 0) == max_tier]
-    top_tier_decls = {_claim_declaration(c) for c in top_tier_claims}
+    # Declarations are non-None here (real_claims already dropped None ones); the
+    # explicit filter restates that so the set is set[str] and sorted() type-checks.
+    top_tier_decls = {d for c in top_tier_claims if (d := _claim_declaration(c)) is not None}
 
     # NOT_APPLICABLE is a terminal declaration — it wins over real values
     # at the same tier without triggering a conflict (e.g., text_stats

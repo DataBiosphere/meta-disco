@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import NamedTuple
+from typing import NamedTuple, TypeGuard
 
 from .fetchers import FetchError
 from .header_classifier import classify_without_content
@@ -300,7 +300,7 @@ class ClassifyPipeline:
 
         return [r for r in records if matches(r)]
 
-    def _is_cached(self, md5sum) -> bool:
+    def _is_cached(self, md5sum) -> TypeGuard[str]:
         """Check if evidence is cached (cheap file-existence check, no JSON parse).
 
         Only a well-formed md5 (lowercase-hex, 32 chars) can key real cached
@@ -335,7 +335,7 @@ class ClassifyPipeline:
         """Print how many files are already cached. Returns set of cached MD5s."""
         name = self.config.name.upper()
         print(f"Found {len(records)} {name} files with MD5 for header inspection")
-        cached_md5s = {r.get("file_md5sum") for r in records if self._is_cached(r.get("file_md5sum"))}
+        cached_md5s = {md5 for r in records if self._is_cached(md5 := r.get("file_md5sum"))}
         print(f"  Already cached: {len(cached_md5s)}")
         print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
         return cached_md5s
@@ -374,6 +374,10 @@ class ClassifyPipeline:
         # The fields the fetch/classify path consumes — keep this set in sync with
         # metadata_schema.CLASSIFIER_RELEVANT_FIELDS (which decides what blocks).
         md5 = record.get("file_md5sum")
+        # Guaranteed a valid md5 string: file_md5sum is classifier-relevant, so the
+        # blocking-reasons guard above diverted the record if it were missing or
+        # mistyped. This asserts that contract post-condition for _fetch_and_classify.
+        assert isinstance(md5, str)
         file_name = record.get("file_name") or ""
         file_size = record.get("file_size")
         file_format = record.get("file_format") or ""
