@@ -509,9 +509,7 @@ class ClassifyPipeline:
                     update_progress(outcome, item.file_name)
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                    future_to_item = {
-                        executor.submit(self._process_single_record, item): item for item in work
-                    }
+                    future_to_item = {executor.submit(self._process_single_record, item): item for item in work}
                     for future in as_completed(future_to_item):
                         item = future_to_item[future]
                         try:
