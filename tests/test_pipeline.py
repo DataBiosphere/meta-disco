@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
+from meta_disco.records import ClassifierRecord, InvalidRecord
 from tests.metadata_fixtures import valid_record as _valid_record
 
 # --- Test fixtures ---
@@ -279,10 +280,34 @@ class TestPipelineRun:
         reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
         assert any("file_md5sum" in r for r in reasons)
 
-    def test_build_record_coerces_file_name_and_format_to_str(self):
-        # A validation_failed row echoes identity from a possibly-drifted record;
-        # the output types must stay stable for downstream consumers.
-        out = ClassifyPipeline._build_record({"file_name": 123, "file_format": None, "file_md5sum": "x"}, {})
+    def test_partition_routes_by_classifier_relevant_fields(self, tmp_path):
+        """The load-boundary split (#172) preserves #161's divert rule: a contract
+        violation only on a field the classifier never reads (drs_uri) still yields a
+        ClassifierRecord and classifies; a violation on a classifier-relevant field
+        (file_size) yields an InvalidRecord diverted to validation_failed."""
+        pipeline = ClassifyPipeline(
+            _make_config(),
+            tmp_path / "in.json",
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+        )
+        good = _valid_record(file_name="a.test", file_format=".test")
+        non_classifier_drift = _valid_record(file_name="b.test", file_format=".test", drs_uri=123)
+        classifier_drift = _valid_record(file_name="c.test", file_format=".test", file_size="big")
+
+        work = pipeline._partition_records([good, non_classifier_drift, classifier_drift])
+
+        assert isinstance(work[0], ClassifierRecord)
+        assert isinstance(work[1], ClassifierRecord)  # drs_uri drift is not blocking
+        assert isinstance(work[2], InvalidRecord)  # file_size drift is blocking
+        assert any("file_size" in reason for reason in work[2].reasons)
+
+    def test_build_record_echoes_typed_item_identity(self):
+        # _build_record reads identity off the typed work item. On the
+        # validation_failed path that is an InvalidRecord, which has already coerced
+        # file_name/file_format to str, so the output types stay stable.
+        item = InvalidRecord.from_record({"file_name": 123, "file_format": None, "file_md5sum": "x"}, [])
+        out = ClassifyPipeline._build_record(item, {})
         assert out["file_name"] == "123"
         assert out["file_format"] == ""
         assert isinstance(out["file_name"], str) and isinstance(out["file_format"], str)
@@ -358,7 +383,7 @@ class TestPipelineRun:
         assert pipeline._is_cached(md5) is True
 
         outcome = pipeline._process_single_record(
-            _valid_record(file_md5sum=md5, file_name="x.test", file_format=".test")
+            ClassifierRecord.from_record(_valid_record(file_md5sum=md5, file_name="x.test", file_format=".test"))
         )
         assert outcome.result is None
         assert outcome.was_cached is False
@@ -531,7 +556,9 @@ class TestFileTypeConfigs:
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("{ not json")
 
-        out, was_cached, content_unreadable, _validation_failed = pipeline._process_single_record(record)
+        out, was_cached, content_unreadable, _validation_failed = pipeline._process_single_record(
+            ClassifierRecord.from_record(record)
+        )
 
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"

@@ -16,7 +16,8 @@ description: >-
   (schema/tests/test_output_validation.py, run closed=False, so any unmodeled key is
   tolerated; in practice the pipeline's only such extras are the fastq scalar hints
   inside `classifications` — modeling them is a #134 follow-up).
-  Adopting the generated Pydantic records in the pipeline is a planned follow-up (#33).
+  Adopting typed records in the pipeline is done: `run()` parses each routed record
+  into a typed view at the load boundary (`src/meta_disco/records.py`, #172).
 
 prefixes:
   linkml: https://w3id.org/linkml/

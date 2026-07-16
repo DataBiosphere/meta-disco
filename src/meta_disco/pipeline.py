@@ -20,6 +20,7 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
+from .records import ClassifierRecord, InvalidRecord
 
 # A well-formed md5: lowercase hex, 32 chars — the same shape the input contract
 # (metadata.yaml file_md5sum) requires. Only such a value can key real cached
@@ -200,7 +201,13 @@ class ClassifyPipeline:
         self.skip_cached = skip_cached
 
     def run(self) -> list[dict]:
-        """Execute the full pipeline: load -> filter -> fetch+classify -> write."""
+        """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
+
+        After routing, records are parsed into typed work items at the load boundary
+        (#172): a ``ClassifierRecord`` per valid record and an ``InvalidRecord`` per
+        record whose classifier-relevant fields violate the input contract (#161).
+        Everything downstream reads typed attributes, not raw ``dict`` keys.
+        """
         records = self._load_input()
         records = self._filter_records(records)
 
@@ -208,24 +215,28 @@ class ClassifyPipeline:
             print(f"No {self.config.name.upper()} files found matching extensions {self.config.extensions}")
             return []
 
+        # Skip-complete only needs the record count, so it runs before parsing: on an
+        # already-complete resume run this returns without validating any record.
         if self._should_skip_complete(records):
             return []
 
-        cached_md5s = self._print_cache_stats(records)
+        work = self._partition_records(records)
+
+        cached_md5s = self._print_cache_stats(work)
 
         if self.skip_cached and cached_md5s:
-            records = [r for r in records if r.get("file_md5sum") not in cached_md5s]
-            print(f"  Skipping cached files, processing only {len(records)} new files")
+            work = [w for w in work if w.file_md5sum not in cached_md5s]
+            print(f"  Skipping cached files, processing only {len(work)} new files")
 
         if self.limit:
-            records = records[: self.limit]
+            work = work[: self.limit]
             print(f"Processing first {self.limit} files")
 
-        if not records:
+        if not work:
             return []
 
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
-        classifications = self._run_parallel(records)
+        classifications = self._run_parallel(work)
 
         if self.config.summary_printer:
             self.config.summary_printer(classifications)
@@ -300,6 +311,28 @@ class ClassifyPipeline:
 
         return [r for r in records if matches(r)]
 
+    def _partition_records(self, records: list[dict]) -> list[ClassifierRecord | InvalidRecord]:
+        """Parse routed records into typed work items at the load boundary (#172).
+
+        Each record becomes either a ``ClassifierRecord`` (no classifier-relevant
+        contract violation — it will be fetched and classified) or an
+        ``InvalidRecord`` (a classifier-relevant field violates the input contract —
+        diverted straight to a ``validation_failed`` row, never fetched, per #161).
+        The split criterion is ``classification_blocking_reasons``, so a record that
+        violates the contract only on a field the classifier never reads is *not*
+        diverted here; that drift is surfaced by the whole-corpus ``validate_metadata``
+        gate. Input order is preserved so the combined work list keeps the ordering
+        the progress and ``limit`` steps assume.
+        """
+        work: list[ClassifierRecord | InvalidRecord] = []
+        for record in records:
+            reasons = classification_blocking_reasons(record)
+            if reasons:
+                work.append(InvalidRecord.from_record(record, reasons))
+            else:
+                work.append(ClassifierRecord.from_record(record))
+        return work
+
     def _is_cached(self, md5sum) -> TypeGuard[str]:
         """Check if evidence is cached (cheap file-existence check, no JSON parse).
 
@@ -331,29 +364,37 @@ class ClassifyPipeline:
             pass
         return False
 
-    def _print_cache_stats(self, records: list[dict]) -> set[str]:
-        """Print how many files are already cached. Returns set of cached MD5s."""
+    def _print_cache_stats(self, work: list[ClassifierRecord | InvalidRecord]) -> set[str]:
+        """Print how many files are already cached. Returns set of cached MD5s.
+
+        Reads ``file_md5sum`` off both streams: a ``ClassifierRecord``'s is a valid
+        md5 by construction, an ``InvalidRecord``'s is the raw (possibly non-string)
+        value — which is why ``_is_cached`` keeps its own type/format guard.
+        """
         name = self.config.name.upper()
-        print(f"Found {len(records)} {name} files with MD5 for header inspection")
-        cached_md5s = {md5 for r in records if self._is_cached(md5 := r.get("file_md5sum"))}
+        print(f"Found {len(work)} {name} files with MD5 for header inspection")
+        cached_md5s = {w.file_md5sum for w in work if self._is_cached(w.file_md5sum)}
         print(f"  Already cached: {len(cached_md5s)}")
-        print(f"  Remaining to fetch: {len(records) - len(cached_md5s)}")
+        print(f"  Remaining to fetch: {len(work) - len(cached_md5s)}")
         return cached_md5s
 
-    def _process_single_record(self, record: dict) -> RecordOutcome:
-        """Fetch, classify, and build output for one record.
+    def _process_single_record(self, item: ClassifierRecord | InvalidRecord) -> RecordOutcome:
+        """Fetch, classify, and build output for one parsed work item.
 
-        Scope: this runs on records ``_filter_records`` routed to this file type by
-        extension (md5 is *not* a routing condition). A record whose *classifier-
-        relevant* fields — including ``file_md5sum`` — violate the input-metadata
-        contract (issue #161) is neither fetched nor classified: it is built with
-        every dimension ``not_classified`` and the blocking reasons as evidence, and
+        An ``InvalidRecord`` (a classifier-relevant field violated the input
+        contract, issue #161) is neither fetched nor classified: it is built with
+        every dimension ``not_classified`` and its blocking reasons as evidence, and
         flagged ``validation_failed`` so the run tallies it. It is still written — a
         missing row is indistinguishable from a file that was never seen (issue
-        #155). A contract violation on a field the classifier does not read does
-        *not* divert the record; that drift is surfaced by the whole-corpus
-        ``validate_metadata`` gate, not here (as are records ``_filter_records``
-        does not route: a non-matching extension, a ``skip`` flag, or a non-dict).
+        #155). The valid/invalid split happened at the load boundary
+        (``_partition_records``); a record that violates the contract only on a field
+        the classifier does not read was never diverted, and drift on records
+        ``_filter_records`` did not route is surfaced by the whole-corpus
+        ``validate_metadata`` gate, not here.
+
+        A ``ClassifierRecord`` reads typed attributes — ``file_md5sum`` is a valid
+        md5 ``str``, ``file_name``/``file_format`` are ``str``, ``file_size`` an
+        ``int`` — by construction, so this path carries no per-field type guards.
 
         ``content_unreadable`` is reported explicitly rather than sniffed out of
         the output: ``classify_without_content`` annotates only the dimensions
@@ -361,39 +402,27 @@ class ClassifyPipeline:
         ``content_fields`` is empty would leave no ``fetch_failed`` evidence at
         all. Detection must not depend on evidence that a config may not emit.
         """
-        reasons = classification_blocking_reasons(record)
-        if reasons:
-            classifications = validation_failed_classifications(reasons)
+        if isinstance(item, InvalidRecord):
+            classifications = validation_failed_classifications(item.reasons)
             return RecordOutcome(
-                self._build_record(record, classifications),
+                self._build_record(item, classifications),
                 was_cached=False,
                 content_unreadable=False,
                 validation_failed=True,
             )
 
-        # The fields the fetch/classify path consumes — keep this set in sync with
-        # metadata_schema.CLASSIFIER_RELEVANT_FIELDS (which decides what blocks).
-        md5 = record.get("file_md5sum")
-        # Guaranteed a valid md5 string: file_md5sum is classifier-relevant, so the
-        # blocking-reasons guard above diverted the record if it were missing or
-        # mistyped. This asserts that contract post-condition for _fetch_and_classify.
-        assert isinstance(md5, str)
-        file_name = record.get("file_name") or ""
-        file_size = record.get("file_size")
-        file_format = record.get("file_format") or ""
-
         has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
-        is_gzipped = (file_name.endswith(".gz") or file_format.endswith(".gz")) if has_gz_ext else True
+        is_gzipped = (item.file_name.endswith(".gz") or item.file_format.endswith(".gz")) if has_gz_ext else True
 
-        was_cached = self.resume and self._is_cached(md5)
+        was_cached = self.resume and self._is_cached(item.file_md5sum)
 
         classifications, content_unreadable = _fetch_and_classify(
             self.config,
             self.evidence_dir,
-            md5,
-            file_name=file_name,
-            file_size=file_size,
-            file_format=file_format,
+            item.file_md5sum,
+            file_name=item.file_name,
+            file_size=item.file_size,
+            file_format=item.file_format,
             is_gzipped=is_gzipped,
             use_cache=self.resume,
         )
@@ -411,32 +440,32 @@ class ClassifyPipeline:
             was_cached = False
 
         return RecordOutcome(
-            self._build_record(record, classifications), was_cached, content_unreadable, validation_failed=False
+            self._build_record(item, classifications), was_cached, content_unreadable, validation_failed=False
         )
 
     @staticmethod
-    def _build_record(record: dict, classifications: dict) -> dict:
+    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> dict:
         """Wrap a classifications dict in the output record envelope.
 
-        ``file_name``/``file_format`` are coerced to ``str`` because on the
-        ``validation_failed`` path they are echoed from a record whose fields may
-        have drifted to non-string types, and downstream consumers do string
-        operations on these two (path building, extension checks). The other echoed
-        identity fields (``md5sum``/``file_size``/``dataset_title``/``entry_id``) are
-        passed through as-is — a drifted ``validation_failed`` row can still carry
-        their raw types; normalizing the whole row by construction is #172's job.
+        Reads identity off the typed work item (a ``ClassifierRecord`` on the success
+        path, an ``InvalidRecord`` on the ``validation_failed`` path). Both guarantee
+        ``file_name``/``file_format`` are ``str`` — the two fields downstream
+        consumers do string operations on (path building, extension checks) — so no
+        coercion happens here. The other identity fields are echoed as the item
+        carries them: typed on the success path, the raw (possibly drifted) values on
+        the ``validation_failed`` path.
         """
         return {
-            "file_name": str(record.get("file_name") or ""),
-            "md5sum": record.get("file_md5sum"),
-            "file_size": record.get("file_size"),
-            "file_format": str(record.get("file_format") or ""),
-            "dataset_title": record.get("dataset_title"),
+            "file_name": item.file_name,
+            "md5sum": item.file_md5sum,
+            "file_size": item.file_size,
+            "file_format": item.file_format,
+            "dataset_title": item.dataset_title,
             "classifications": classifications,
-            "entry_id": record.get("entry_id"),
+            "entry_id": item.entry_id,
         }
 
-    def _run_parallel(self, records: list[dict]) -> list[dict]:
+    def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
         dropped = 0  # fetcher returned None: no cause given
@@ -446,13 +475,13 @@ class ClassifyPipeline:
         processed = 0
         unreadable = 0
         lock = Lock()
-        total = len(records)
+        total = len(work)
 
         print(f"Using {self.workers} parallel workers")
 
         with NdjsonWriter(self.output_path) as writer:
 
-            def update_progress(outcome: RecordOutcome, file_name):
+            def update_progress(outcome: RecordOutcome, file_name: str):
                 nonlocal successful, dropped, from_cache, processed, unreadable, invalid
                 with lock:
                     processed += 1
@@ -469,30 +498,27 @@ class ClassifyPipeline:
                     else:
                         dropped += 1
                     cache_indicator = "[cached] " if outcome.was_cached else ""
-                    # str(... or ""): a record may carry a null file_name (present-but-
-                    # null → None) or a non-string one (drift, e.g. an int). This print
-                    # is the crash site — a raise here aborts the sequential run, and in
-                    # the parallel path lands in the executor's `except Exception`,
-                    # discarding a record (often a validation_failed one) already written.
-                    label = str(file_name or "")[:45]
+                    # file_name is a str on both work streams (ClassifierRecord types it,
+                    # InvalidRecord coerces it), so the slice cannot raise.
+                    label = file_name[:45]
                     print(f"\r[{processed}/{total}] {cache_indicator}{label:<52}", end="", flush=True)
 
             if self.workers == 1:
-                for record in records:
-                    outcome = self._process_single_record(record)
-                    update_progress(outcome, record.get("file_name") or "")
+                for item in work:
+                    outcome = self._process_single_record(item)
+                    update_progress(outcome, item.file_name)
             else:
                 with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                    future_to_record = {
-                        executor.submit(self._process_single_record, record): record for record in records
+                    future_to_item = {
+                        executor.submit(self._process_single_record, item): item for item in work
                     }
-                    for future in as_completed(future_to_record):
-                        record = future_to_record[future]
+                    for future in as_completed(future_to_item):
+                        item = future_to_item[future]
                         try:
                             outcome = future.result()
-                            update_progress(outcome, record.get("file_name") or "")
+                            update_progress(outcome, item.file_name)
                         except Exception as e:
-                            print(f"\nError processing {record.get('file_name')}: {e}")
+                            print(f"\nError processing {item.file_name}: {e}")
                             with lock:
                                 processed += 1
                                 errored += 1
