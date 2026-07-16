@@ -12,14 +12,14 @@ logging.basicConfig(level=logging.ERROR)
 
 def validate_instance(instance_file: str, schema_file: str) -> bool:
     try:
-        if not Path(instance_file).exists():
+        if not Path(instance_file).is_file():
             print(f"File not found: {instance_file}")
             return False
 
         # Callers can pass an explicit schema path now, so a wrong one would
         # otherwise fall into the broad handler as a generic "Exception during
         # validation" — check it here for a clear message.
-        if not Path(schema_file).exists():
+        if not Path(schema_file).is_file():
             print(f"Schema not found: {schema_file}")
             return False
 

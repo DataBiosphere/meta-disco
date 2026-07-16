@@ -31,7 +31,7 @@ def test_committed_model_matches_schema():
     # This needs the schema env's linkml (gen-pydantic). Skip cleanly if run under an
     # interpreter without it (e.g. an explicit `pytest schema/tests` in the root env),
     # so it degrades to a skip rather than a FileNotFoundError.
-    if not _GEN_PYDANTIC.exists():
+    if not _GEN_PYDANTIC.is_file():
         pytest.skip("gen-pydantic not found; run under the schema uv env (make test-schema)")
     # Run from the schema/ dir with the same relative path `make gen-metadata` uses,
     # so the regenerated text (including the embedded source_file) is comparable
