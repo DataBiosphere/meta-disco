@@ -10,6 +10,8 @@ The actual classification rules are defined in the bundled unified_rules.yaml
 
 import re
 from dataclasses import replace
+from functools import cache
+from typing import TYPE_CHECKING
 
 from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from .validators.read_name_parsers import (
@@ -21,6 +23,9 @@ from .validators.read_name_parsers import (
     parse_pacbio_read_name,
 )
 
+if TYPE_CHECKING:
+    from .rule_engine import RuleEngine
+
 # Text GFA formats this module can parse. The other graph extensions the
 # `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
 # GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
@@ -28,13 +33,12 @@ from .validators.read_name_parsers import (
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
 
 
-def _get_engine():
+@cache
+def _get_engine() -> "RuleEngine":
     """Get a cached RuleEngine instance (avoids re-parsing YAML on every call)."""
-    if not hasattr(_get_engine, "_instance"):
-        from .rule_engine import RuleEngine
+    from .rule_engine import RuleEngine
 
-        _get_engine._instance = RuleEngine()
-    return _get_engine._instance
+    return RuleEngine()
 
 
 # =============================================================================
@@ -520,16 +524,15 @@ def classify_from_gfa_segment_tags(
     return result.to_output_dict()
 
 
+@cache
 def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""
-    if not hasattr(_get_ref_chrom_names, "_cache"):
-        from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+    from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
-        names = set()
-        for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
-            names.update(ref_contigs.keys())
-        _get_ref_chrom_names._cache = names
-    return _get_ref_chrom_names._cache
+    names = set()
+    for ref_contigs in REFERENCE_CONTIG_LENGTHS.values():
+        names.update(ref_contigs.keys())
+    return names
 
 
 def classify_from_fasta_header(

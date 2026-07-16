@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -17,6 +17,9 @@ from .models import (
     status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
+
+if TYPE_CHECKING:
+    from .validators.header_extractors import SAMHeader, VCFHeader
 
 
 @dataclass
@@ -37,6 +40,14 @@ class ExtendedFileInfo:
 
     # Derived/cached fields
     platform: str | None = None
+
+    # Lazily-parsed header caches, memoized on first use by the tier-3 matchers
+    # (_match_bam_header/_match_vcf_header). init=False with no default preserves
+    # the hasattr()-guarded lazy init — the attribute stays absent until the
+    # first parse — while declaring the type for the checker. repr/compare are
+    # excluded so an unset cache never trips repr()/==.
+    _parsed_bam_header: "SAMHeader" = field(init=False, repr=False, compare=False)
+    _parsed_vcf_header: "VCFHeader" = field(init=False, repr=False, compare=False)
 
     @classmethod
     def from_file_info(cls, file_info: FileInfo) -> "ExtendedFileInfo":
