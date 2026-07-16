@@ -113,14 +113,20 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
         # Open in write mode (truncate)
         ndjson_file = ndjson_path.open("w")
 
+    # Initialized before the try so the except (KeyboardInterrupt) and the
+    # post-loop summary stay bound even if the interrupt lands before the count
+    # fetch below assigns them. start_time is stamped here so it times the whole
+    # operation, including the count fetch.
+    total_files = 0
+    start_time = datetime.now()
+    hits = []
+
     try:
         # Get total count
         print("Fetching total count...")
         first_page = fetch_page(size=1)
         total_files = first_page.get("pagination", {}).get("total", 0)
         print(f"Total files available: {total_files:,}")
-
-        start_time = datetime.now()
 
         while True:
             page_num += 1
@@ -171,7 +177,7 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
                 save_checkpoint(
                     output_dir,
                     page_num - 1,
-                    total_fetched - len(hits) if "hits" in dir() else total_fetched,
+                    total_fetched - len(hits),
                     search_after,
                 )
                 print("Checkpoint saved. Run again to resume.")
@@ -193,9 +199,12 @@ def download_all_metadata(output_dir: Path, delay: float = DEFAULT_DELAY, max_pa
     if duration > 0:
         print(f"Rate: {total_fetched / duration:.1f} files/sec")
 
-    # Clean up checkpoint if complete
+    # Clean up checkpoint if complete. total_files > 0 gates out the case where the
+    # count fetch never succeeded (e.g. an interrupt before it ran leaves total_files
+    # at its 0 initializer): a 0 total must not read as "complete" and delete the
+    # resume checkpoint.
     checkpoint_path = output_dir / "checkpoint.json"
-    if total_fetched >= total_files and checkpoint_path.exists():
+    if total_files > 0 and total_fetched >= total_files and checkpoint_path.exists():
         checkpoint_path.unlink()
         print("Download complete. Checkpoint removed.")
 

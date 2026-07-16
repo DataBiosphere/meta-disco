@@ -489,7 +489,8 @@ class TestVcfClassification:
         result = classify_from_vcf_header(header)
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants.germline"
-        assert "vcf_gatk_haplotypecaller" in val(result, "matched_rules")
+        matched = val(result, "matched_rules")
+        assert matched is not None and "vcf_gatk_haplotypecaller" in matched
 
     def test_deepvariant_germline(self):
         """Detect DeepVariant as germline."""
