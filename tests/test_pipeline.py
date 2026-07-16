@@ -316,6 +316,21 @@ class TestPipelineRun:
         meta = json.loads((tmp_path / "out.json").read_text())["metadata"]
         assert meta["validation_failed"] == 1
 
+    def test_preflight_aborts_before_processing(self, input_file, tmp_path):
+        """A failing preflight (e.g. a missing external tool) aborts run() before the
+        worker pool, so no output is written — a missing dependency fails fast instead
+        of every record failing and vanishing (#155)."""
+
+        def _boom():
+            raise RuntimeError("samtools not found")
+
+        config = _make_config(preflight=_boom)
+        output = tmp_path / "out.json"
+        pipeline = ClassifyPipeline(config, input_file, output, evidence_base=tmp_path / "evidence")
+        with pytest.raises(RuntimeError, match="samtools not found"):
+            pipeline.run()
+        assert not output.exists()
+
     def test_partition_routes_by_classifier_relevant_fields(self, tmp_path):
         """The load-boundary split (#172) preserves #161's divert rule: a contract
         violation only on a field the classifier never reads (drs_uri) still yields a

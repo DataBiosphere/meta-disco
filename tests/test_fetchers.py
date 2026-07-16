@@ -15,6 +15,7 @@ from meta_disco.fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_vcf_header,
+    require_samtools,
 )
 
 MD5 = "a" * 32
@@ -107,3 +108,14 @@ class TestBamFetcher:
             lambda *a, **k: subprocess.CompletedProcess(a, returncode=0, stdout="@HD\tVN:1.6\n", stderr=""),
         )
         assert fetch_bam_header(evidence_dir, MD5, use_cache=False) == "@HD\tVN:1.6\n"
+
+
+class TestRequireSamtools:
+    def test_raises_when_missing(self, monkeypatch):
+        monkeypatch.setattr(fetchers.shutil, "which", lambda _: None)
+        with pytest.raises(RuntimeError, match="samtools not found"):
+            require_samtools()
+
+    def test_ok_when_present(self, monkeypatch):
+        monkeypatch.setattr(fetchers.shutil, "which", lambda _: "/usr/bin/samtools")
+        require_samtools()  # must not raise

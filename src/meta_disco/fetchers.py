@@ -7,7 +7,9 @@ Shared evidence cache helpers are parameterized by evidence_dir so the
 same logic works for all file types.
 """
 
+import functools
 import json
+import shutil
 import subprocess
 import time
 import zlib
@@ -45,6 +47,39 @@ class FetchError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+def wrap_as_fetch_error(label: str, passthrough: tuple[type[BaseException], ...] = ()):
+    """Decorate a fetcher so any read/parse failure surfaces as ``FetchError``.
+
+    Centralizes the wrapping policy every fetcher shares (#155), so the ordering
+    rule lives in one place instead of a hand-copied ``except`` tail per fetcher:
+
+    * a ``FetchError`` raised in the body passes through unchanged — its ``reason``
+      is already specific (e.g. the HTTP status from ``_fetch_range`` or an
+      empty-content message);
+    * exception types in ``passthrough`` propagate as themselves — for an
+      *environment* failure (``fetch_bam_header`` passes ``FileNotFoundError`` when
+      samtools is absent) that must not become one file's unreadable content;
+    * everything else becomes ``FetchError(f"{label}: {type(e).__name__}: {e}")``,
+      so the record is kept as a ``not_classified`` row naming the cause.
+    """
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except FetchError:
+                raise
+            except passthrough:
+                raise
+            except Exception as e:
+                raise FetchError(f"{label}: {type(e).__name__}: {e}") from e
+
+        return wrapper
+
+    return decorator
 
 
 # =============================================================================
@@ -91,11 +126,9 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
 
     Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
     mirror does not hold this md5 — which is not the same as the file not existing,
-    since the catalog entry may still carry a size and a DRS URI. The vcf/fastq/fasta
-    callers re-raise it in an explicit `except FetchError: raise`, so the record
-    becomes a `not_classified` row with the HTTP status as its reason (#155). That
-    clause must precede their `except Exception`, or a non-2xx would be re-wrapped as
-    a generic error.
+    since the catalog entry may still carry a size and a DRS URI. `@wrap_as_fetch_error`
+    lets this FetchError pass through unchanged, so the record becomes a
+    `not_classified` row with the HTTP status as its reason (#155).
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes=0-{end_byte}"}
@@ -141,6 +174,22 @@ def _decode_bytes(content: bytes) -> str:
 # =============================================================================
 
 
+def require_samtools() -> None:
+    """Abort the run if samtools is not on PATH (FileTypeConfig.preflight for BAM).
+
+    Run once before the worker pool: a missing tool then fails fast with one clear
+    message, instead of every BAM record's ``samtools`` call raising
+    ``FileNotFoundError`` and the records vanishing — the disappearance #155 exists
+    to prevent. The per-record ``FileNotFoundError`` passthrough in
+    ``fetch_bam_header`` remains as a backstop for a tool removed mid-run.
+    """
+    if shutil.which("samtools") is None:
+        raise RuntimeError(
+            "samtools not found on PATH — required to read BAM/CRAM headers. Install samtools and retry."
+        )
+
+
+@wrap_as_fetch_error("BAM header", passthrough=(FileNotFoundError,))
 def fetch_bam_header(
     evidence_dir: Path,
     md5sum: str,
@@ -157,9 +206,9 @@ def fetch_bam_header(
     Raises ``FetchError`` naming the cause when the header cannot be read (samtools
     exits non-zero, times out, or the parse fails), so the record is kept as a
     ``not_classified`` row instead of vanishing (#155). ``samtools`` being absent is
-    *not* a ``FetchError``: it is an environment failure affecting every BAM record,
-    so the ``FileNotFoundError`` propagates rather than masquerading as unreadable
-    content (it surfaces as an errored record, or crashes the sequential path).
+    *not* a ``FetchError`` (see ``passthrough`` on the decorator): it is an
+    environment failure affecting every BAM record, so the ``FileNotFoundError``
+    propagates rather than masquerading as unreadable content.
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -167,40 +216,29 @@ def fetch_bam_header(
             return cached["header_text"]
 
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
-    try:
-        result = subprocess.run(
-            ["samtools", "view", "-H", fetch_url],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            raise FetchError(f"samtools view -H exited {result.returncode}: {result.stderr.strip() or 'no stderr'}")
+    result = subprocess.run(
+        ["samtools", "view", "-H", fetch_url],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise FetchError(f"samtools view -H exited {result.returncode}: {result.stderr.strip() or 'no stderr'}")
 
-        header_text = result.stdout
-        if header_text:
-            evidence = {
-                "md5sum": md5sum,
-                "file_name": file_name,
-                "header_text": header_text,
-                "header_line_count": len(header_text.split("\n")),
-                "fetch_timestamp": _timestamp(),
-            }
-            if url:
-                evidence["source_url"] = url
-            save_evidence(evidence_dir, md5sum, evidence)
+    header_text = result.stdout
+    if header_text:
+        evidence = {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "header_text": header_text,
+            "header_line_count": len(header_text.split("\n")),
+            "fetch_timestamp": _timestamp(),
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
 
-        return header_text
-    except subprocess.TimeoutExpired as e:
-        raise FetchError(f"Timeout reading BAM header: {e}") from e
-    except FileNotFoundError:
-        # samtools missing is an environment failure affecting every BAM record —
-        # let it propagate (not a FetchError) so it does not become not_classified data.
-        raise
-    except FetchError:
-        raise  # already carries its reason — don't re-wrap as "FetchError: ..."
-    except Exception as e:
-        raise FetchError(f"{type(e).__name__}: {e}") from e
+    return header_text
 
 
 # =============================================================================
@@ -237,6 +275,7 @@ def extract_max_positions(variant_lines: list[str], max_variants: int = 100) -> 
     return max_positions
 
 
+@wrap_as_fetch_error("VCF header")
 def fetch_vcf_header(
     evidence_dir: Path,
     md5sum: str,
@@ -258,48 +297,40 @@ def fetch_vcf_header(
         if cached and cached.get("header_text"):
             return cached["header_text"]
 
-    try:
-        content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
-        raw_bytes = len(content)
+    content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
+    raw_bytes = len(content)
 
-        content = _decompress_if_gzipped(content, is_gzipped)
-        text = _decode_bytes(content)
+    content = _decompress_if_gzipped(content, is_gzipped)
+    text = _decode_bytes(content)
 
-        header_lines = []
-        variant_lines = []
+    header_lines = []
+    variant_lines = []
 
-        for line in text.split("\n"):
-            if line.startswith("#"):
-                header_lines.append(line)
-            elif line.strip() and len(variant_lines) < 100:
-                variant_lines.append(line)
+    for line in text.split("\n"):
+        if line.startswith("#"):
+            header_lines.append(line)
+        elif line.strip() and len(variant_lines) < 100:
+            variant_lines.append(line)
 
-        if header_lines:
-            header_text = "\n".join(header_lines)
-            max_positions = extract_max_positions(variant_lines) if variant_lines else None
-            evidence = {
-                "md5sum": md5sum,
-                "file_name": file_name,
-                "header_text": header_text,
-                "header_line_count": len(header_lines),
-                "raw_bytes_fetched": raw_bytes,
-                "fetch_timestamp": _timestamp(),
-            }
-            if max_positions:
-                evidence["max_positions"] = max_positions
-            if url:
-                evidence["source_url"] = url
-            save_evidence(evidence_dir, md5sum, evidence)
-            return header_text
+    if header_lines:
+        header_text = "\n".join(header_lines)
+        max_positions = extract_max_positions(variant_lines) if variant_lines else None
+        evidence = {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "header_text": header_text,
+            "header_line_count": len(header_lines),
+            "raw_bytes_fetched": raw_bytes,
+            "fetch_timestamp": _timestamp(),
+        }
+        if max_positions:
+            evidence["max_positions"] = max_positions
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
+        return header_text
 
-        raise FetchError("no VCF header lines (no '#' lines) in first 1MB")
-
-    except FetchError:
-        raise  # propagate its reason (a non-2xx from _fetch_range, or the check above)
-    except requests.Timeout as e:
-        raise FetchError(f"Timeout reading VCF header: {e}") from e
-    except Exception as e:
-        raise FetchError(f"{type(e).__name__}: {e}") from e
+    raise FetchError("no VCF header lines (no '#' lines) in first 1MB")
 
 
 # =============================================================================
@@ -307,6 +338,7 @@ def fetch_vcf_header(
 # =============================================================================
 
 
+@wrap_as_fetch_error("FASTQ")
 def fetch_fastq_reads(
     evidence_dir: Path,
     md5sum: str,
@@ -329,45 +361,37 @@ def fetch_fastq_reads(
         if cached and cached.get("read_names"):
             return cached["read_names"]
 
-    try:
-        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        raw_bytes = len(content)
+    content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
+    raw_bytes = len(content)
 
-        content = _decompress_if_gzipped(content, is_gzipped)
-        text = _decode_bytes(content)
+    content = _decompress_if_gzipped(content, is_gzipped)
+    text = _decode_bytes(content)
 
-        lines = text.split("\n")
-        read_names = []
-        i = 0
-        while i < len(lines) and len(read_names) < num_reads:
-            line = lines[i].strip()
-            if line.startswith("@"):
-                read_names.append(line)
-                i += 4  # Skip sequence, +, quality
-            else:
-                i += 1
+    lines = text.split("\n")
+    read_names = []
+    i = 0
+    while i < len(lines) and len(read_names) < num_reads:
+        line = lines[i].strip()
+        if line.startswith("@"):
+            read_names.append(line)
+            i += 4  # Skip sequence, +, quality
+        else:
+            i += 1
 
-        if read_names:
-            evidence = {
-                "md5sum": md5sum,
-                "file_name": file_name,
-                "read_names": read_names,
-                "raw_bytes_fetched": raw_bytes,
-                "fetch_timestamp": _timestamp(),
-            }
-            if url:
-                evidence["source_url"] = url
-            save_evidence(evidence_dir, md5sum, evidence)
-            return read_names
+    if read_names:
+        evidence = {
+            "md5sum": md5sum,
+            "file_name": file_name,
+            "read_names": read_names,
+            "raw_bytes_fetched": raw_bytes,
+            "fetch_timestamp": _timestamp(),
+        }
+        if url:
+            evidence["source_url"] = url
+        save_evidence(evidence_dir, md5sum, evidence)
+        return read_names
 
-        raise FetchError("no FASTQ read names (no '@' lines) in first 256KB")
-
-    except FetchError:
-        raise  # propagate its reason (a non-2xx from _fetch_range, or the check above)
-    except requests.Timeout as e:
-        raise FetchError(f"Timeout reading FASTQ: {e}") from e
-    except Exception as e:
-        raise FetchError(f"{type(e).__name__}: {e}") from e
+    raise FetchError("no FASTQ read names (no '@' lines) in first 256KB")
 
 
 # =============================================================================
@@ -375,6 +399,7 @@ def fetch_fastq_reads(
 # =============================================================================
 
 
+@wrap_as_fetch_error("FASTA")
 def fetch_fasta_headers(
     evidence_dir: Path,
     md5sum: str,
@@ -397,41 +422,33 @@ def fetch_fasta_headers(
         if cached and "contig_names" in cached:
             return cached["contig_names"]
 
-    try:
-        content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
-        raw_bytes = len(content)
+    content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
+    raw_bytes = len(content)
 
-        content = _decompress_if_gzipped(content, is_gzipped)
-        text = _decode_bytes(content)
+    content = _decompress_if_gzipped(content, is_gzipped)
+    text = _decode_bytes(content)
 
-        contig_names = []
-        for line in text.split("\n"):
-            line = line.strip()
-            if line.startswith(">"):
-                name = line[1:].split()[0] if line[1:].strip() else line[1:].strip()
-                if name:
-                    contig_names.append(name)
+    contig_names = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith(">"):
+            name = line[1:].split()[0] if line[1:].strip() else line[1:].strip()
+            if name:
+                contig_names.append(name)
 
-        evidence = {
-            "md5sum": md5sum,
-            "file_name": file_name,
-            "contig_names": contig_names,
-            "contig_count": len(contig_names),
-            "raw_bytes_fetched": raw_bytes,
-            "fetch_timestamp": _timestamp(),
-        }
-        if url:
-            evidence["source_url"] = url
-        save_evidence(evidence_dir, md5sum, evidence)
+    evidence = {
+        "md5sum": md5sum,
+        "file_name": file_name,
+        "contig_names": contig_names,
+        "contig_count": len(contig_names),
+        "raw_bytes_fetched": raw_bytes,
+        "fetch_timestamp": _timestamp(),
+    }
+    if url:
+        evidence["source_url"] = url
+    save_evidence(evidence_dir, md5sum, evidence)
 
-        return contig_names
-
-    except FetchError:
-        raise  # propagate its reason (a non-2xx from _fetch_range)
-    except requests.Timeout as e:
-        raise FetchError(f"Timeout reading FASTA: {e}") from e
-    except Exception as e:
-        raise FetchError(f"{type(e).__name__}: {e}") from e
+    return contig_names
 
 
 # =============================================================================
@@ -490,6 +507,7 @@ def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
     return segments
 
 
+@wrap_as_fetch_error("GFA head")
 def fetch_gfa_segment_tags(
     evidence_dir: Path,
     md5sum: str,
@@ -533,42 +551,33 @@ def fetch_gfa_segment_tags(
         if cached and "gfa_segment_tags" in cached:
             return cached["gfa_segment_tags"]
 
-    try:
-        # end_byte is inclusive, so 262143 fetches exactly HEAD_BYTES.
-        content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
-        raw_bytes = len(content)
+    # end_byte is inclusive, so 262143 fetches exactly HEAD_BYTES. A read/parse
+    # failure — including a programming error in parse_gfa_segment_tags — is wrapped
+    # as FetchError by @wrap_as_fetch_error, so it surfaces as a not_classified row
+    # naming the cause rather than silently deleting the file's row.
+    content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
+    raw_bytes = len(content)
 
-        # Fewer bytes than we asked for means we hold the whole file; a gzip stream
-        # that ends with nothing after it means we decoded all of it. Only when both
-        # hold is the text complete, so an unterminated final line is a real record.
-        # (BGZF fails the second test: its first member ends but more members follow.)
-        got_whole_file = raw_bytes < HEAD_BYTES
-        content, stream_complete = _decompress_head(content, is_gzipped)
-        text = _decode_bytes(content)
+    # Fewer bytes than we asked for means we hold the whole file; a gzip stream
+    # that ends with nothing after it means we decoded all of it. Only when both
+    # hold is the text complete, so an unterminated final line is a real record.
+    # (BGZF fails the second test: its first member ends but more members follow.)
+    got_whole_file = raw_bytes < HEAD_BYTES
+    content, stream_complete = _decompress_head(content, is_gzipped)
+    text = _decode_bytes(content)
 
-        segment_tags = parse_gfa_segment_tags(text, truncated=not (got_whole_file and stream_complete))
+    segment_tags = parse_gfa_segment_tags(text, truncated=not (got_whole_file and stream_complete))
 
-        evidence = {
-            "md5sum": md5sum,
-            "file_name": file_name,
-            "gfa_segment_tags": segment_tags,
-            "tagged_segment_count": len(segment_tags),
-            "raw_bytes_fetched": raw_bytes,
-            "fetch_timestamp": _timestamp(),
-        }
-        if url:
-            evidence["source_url"] = url
-        save_evidence(evidence_dir, md5sum, evidence)
+    evidence = {
+        "md5sum": md5sum,
+        "file_name": file_name,
+        "gfa_segment_tags": segment_tags,
+        "tagged_segment_count": len(segment_tags),
+        "raw_bytes_fetched": raw_bytes,
+        "fetch_timestamp": _timestamp(),
+    }
+    if url:
+        evidence["source_url"] = url
+    save_evidence(evidence_dir, md5sum, evidence)
 
-        return segment_tags
-
-    except FetchError:
-        raise  # already carries its reason — don't re-wrap as "FetchError: ..."
-    except requests.Timeout as e:
-        raise FetchError(f"Timeout reading GFA head: {e}") from e
-    except Exception as e:
-        # Wrapped, not swallowed: the caller turns this into a not_classified
-        # record whose evidence names the cause. A programming error in the
-        # parser therefore surfaces as `TypeError: ...` in the output rather
-        # than silently deleting the file's row.
-        raise FetchError(f"{type(e).__name__}: {e}") from e
+    return segment_tags

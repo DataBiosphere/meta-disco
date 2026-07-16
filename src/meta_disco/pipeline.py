@@ -88,6 +88,10 @@ class FileTypeConfig:
     # fetch failure to the answers the unread bytes would have informed — never
     # to dimensions only the filename can supply.
     content_fields: tuple[str, ...] = ()
+    # Environment check run once before the worker pool (e.g. an external tool
+    # must be installed). Raises to abort the run fast, instead of letting every
+    # record fail the same way and vanish. None means no check.
+    preflight: Callable | None = None
 
 
 def _fetch_and_classify(
@@ -237,6 +241,12 @@ class ClassifyPipeline:
 
         if not work:
             return []
+
+        # Fail fast on a missing environment dependency (e.g. samtools for BAM)
+        # before the pool starts, so it aborts once with a clear message instead of
+        # every record failing to read and vanishing.
+        if self.config.preflight is not None:
+            self.config.preflight()
 
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
         classifications = self._run_parallel(work)
@@ -472,9 +482,6 @@ class ClassifyPipeline:
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
         successful = 0
-        # Fetch failures now surface as content_unreadable rows, never as dropped
-        # records (#155); kept as a constant 0 for output-schema stability.
-        dropped = 0
         errored = 0  # worker raised: a cause was printed
         invalid = 0  # failed input validation: written, classified as nothing (#161)
         from_cache = 0
@@ -528,7 +535,6 @@ class ClassifyPipeline:
         print(f"  From cache: {from_cache}")
         print(f"  New fetches: {successful - from_cache - unreadable}")
         print(f"  Content unreadable, classified from filename: {unreadable}")
-        print(f"Dropped (fetcher gave no cause): {dropped}")
         if errored:
             print(f"Errored (cause printed above): {errored}")
         if invalid:
@@ -536,7 +542,6 @@ class ClassifyPipeline:
         classifications = self._save_final(
             total,
             successful,
-            dropped,
             from_cache=from_cache,
             unreadable=unreadable,
             errored=errored,
@@ -552,7 +557,6 @@ class ClassifyPipeline:
         self,
         total: int,
         successful: int,
-        dropped: int,
         from_cache: int,
         unreadable: int,
         errored: int = 0,
@@ -565,10 +569,10 @@ class ClassifyPipeline:
         one whose content was read, because a file type whose ``content_fields``
         is empty leaves no ``fetch_failed`` evidence behind.
 
-        ``dropped`` (the fetcher returned None, giving no cause) and ``errored``
-        (a worker raised, and the cause was printed) are recorded separately, and
-        ``failed`` is kept as their sum so existing consumers of that key still
-        read the total number of records that produced no row.
+        ``errored`` (a worker raised, and the cause was printed) is the only way a
+        record now produces no row, so ``failed`` equals it. ``dropped`` is retired —
+        a fetch failure is written as a ``content_unreadable`` row, never dropped
+        (#155) — but the key is still emitted as ``0`` for output-schema stability.
 
         ``validation_failed`` (the record failed the input contract, issue #161)
         produced a row — every dimension ``not_classified`` — so it is counted
@@ -588,12 +592,13 @@ class ClassifyPipeline:
                 {
                     "metadata": {
                         "total_to_process": total,
-                        "processed": successful + dropped + errored + validation_failed,
+                        "processed": successful + errored + validation_failed,
                         "successful": successful,
-                        # `failed` = every record that produced no row, whether the
-                        # fetcher gave no cause (dropped) or a worker raised (errored).
-                        "failed": dropped + errored,
-                        "dropped": dropped,
+                        # `failed` = every record that produced no row. A fetch failure
+                        # no longer drops a record (#155), so only a raising worker
+                        # (errored) does. `dropped` stays as a constant 0 for consumers.
+                        "failed": errored,
+                        "dropped": 0,
                         "errored": errored,
                         "validation_failed": validation_failed,
                         "from_cache": from_cache,

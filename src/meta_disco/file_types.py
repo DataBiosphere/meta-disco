@@ -11,6 +11,7 @@ from .fetchers import (
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
     fetch_vcf_header,
+    require_samtools,
 )
 from .header_classifier import (
     GRAPH_TEXT_EXTENSIONS,
@@ -31,6 +32,8 @@ BAM_CONFIG = FileTypeConfig(
     summary_printer=print_bam_summary,
     # @SQ contig lengths, @RG platform; assay_type is inferred from those.
     content_fields=("data_modality", "data_type", "reference_assembly", "platform", "assay_type"),
+    # samtools reads BAM/CRAM headers — fail fast if it is not installed.
+    preflight=require_samtools,
 )
 
 VCF_CONFIG = FileTypeConfig(
