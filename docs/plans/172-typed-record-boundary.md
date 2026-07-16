@@ -1,6 +1,6 @@
 # Plan — #172: Parse AnVIL records into a typed model at the load boundary
 
-> **As shipped (see PR #201):** this is the original plan; two details changed
+> **As shipped (see PR #201):** this is the original plan; three details changed
 > during implementation. (1) The invalid stream is a single `InvalidRecord`
 > dataclass carrying the coerced identity fields *and* the reasons — the separate
 > `LenientIdentityView` the plan describes was merged into it during `/simplify`,

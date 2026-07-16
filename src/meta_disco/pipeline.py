@@ -342,10 +342,11 @@ class ClassifyPipeline:
 
         Only a well-formed md5 (lowercase-hex, 32 chars) can key real cached
         evidence, and ``get_evidence_path`` builds a filesystem path from the md5
-        (``md5sum[:2]`` / ``{md5sum}.json``). A null, non-string, or non-md5 value
-        therefore returns False — it cannot be cached, and this keeps the check safe
-        for a record headed to ``validation_failed`` (md5 is classifier-relevant), so
-        it never depends on what ``_filter_records`` admits.
+        (``md5sum[:2]`` / ``{md5sum}.json``). The type/format guard makes that path
+        construction safe regardless of the caller: today every caller passes a
+        ``ClassifierRecord``'s md5 (a valid md5 by construction), but the guard means
+        a null, non-string, or non-md5 value simply returns False rather than
+        building a bogus path.
         """
         if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
             return False
@@ -371,15 +372,17 @@ class ClassifyPipeline:
     def _print_cache_stats(self, work: list[ClassifierRecord | InvalidRecord]) -> set[str]:
         """Print how many files are already cached. Returns set of cached MD5s.
 
-        Reads ``file_md5sum`` off both streams: a ``ClassifierRecord``'s is a valid
-        md5 by construction, an ``InvalidRecord``'s is the raw (possibly non-string)
-        value — which is why ``_is_cached`` keeps its own type/format guard.
+        Counts only the classifiable stream: an ``InvalidRecord`` is never fetched or
+        header-inspected, so including it would inflate "files with MD5" and
+        "Remaining to fetch". Every counted md5 is a ``ClassifierRecord``'s, a valid
+        md5 by construction.
         """
         name = self.config.name.upper()
-        print(f"Found {len(work)} {name} files with MD5 for header inspection")
-        cached_md5s = {w.file_md5sum for w in work if self._is_cached(w.file_md5sum)}
+        classifiable = [w for w in work if isinstance(w, ClassifierRecord)]
+        print(f"Found {len(classifiable)} {name} files with MD5 for header inspection")
+        cached_md5s = {w.file_md5sum for w in classifiable if self._is_cached(w.file_md5sum)}
         print(f"  Already cached: {len(cached_md5s)}")
-        print(f"  Remaining to fetch: {len(work) - len(cached_md5s)}")
+        print(f"  Remaining to fetch: {len(classifiable) - len(cached_md5s)}")
         return cached_md5s
 
     def _process_single_record(self, item: ClassifierRecord | InvalidRecord) -> RecordOutcome:
