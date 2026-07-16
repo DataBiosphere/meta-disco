@@ -1,5 +1,12 @@
 # Makefile for meta-disco schema validation component
 
+# This is a separate uv project (its own schema/.venv with linkml, #164). When
+# invoked with the root project's venv activated — e.g. `make test-all` from the
+# repo root — the inherited VIRTUAL_ENV points at ../.venv and every `uv run`
+# below warns that it does not match schema/.venv before ignoring it. Drop it
+# from the recipe environment so uv silently resolves this project's own env.
+unexport VIRTUAL_ENV
+
 # The canonical schemas are package data of the root meta_disco package; this
 # tooling project references them from there (issue #164).
 SCHEMA = ../src/meta_disco/schema/classification.yaml
