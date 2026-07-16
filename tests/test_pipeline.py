@@ -535,6 +535,7 @@ class TestFileTypeConfigs:
 
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
+        assert out is not None
         # The note is on data_type (what content refines), not on the four others.
         cls = out["classifications"]
         noted = [f for f in cls if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]

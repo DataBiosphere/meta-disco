@@ -112,6 +112,7 @@ class TestBamE2E:
         result = classify_bam(
             "000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam", file_size=239579784536, file_format=".bam"
         )
+        assert result is not None
         cls = result["classifications"]
         ref_evidence = cls["reference_assembly"]["evidence"]
         stale = [e for e in ref_evidence if e["rule_id"] == "not_classified"]
@@ -133,6 +134,7 @@ class TestBamE2E:
         result = classify_bam(
             "000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam", file_size=239579784536, file_format=".bam"
         )
+        assert result is not None
         cls = result["classifications"]
         platform_val = cls["platform"]["value"]
         assert platform_val is not None, f"Platform should be classified, got {platform_val}"
@@ -207,6 +209,7 @@ class TestVcfE2E:
     def test_vcf_no_stale_evidence(self):
         """VCF reference_assembly should not have stale not_classified evidence."""
         result = classify_vcf("0000b1430a498c7774dd33a5a58677ad", "NA21125.chr2.hc.vcf.gz", file_size=443147740)
+        assert result is not None
         cls = result["classifications"]
         ref = cls["reference_assembly"]
         if field_status(result, "reference_assembly") != NOT_CLASSIFIED:
