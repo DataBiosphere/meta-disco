@@ -102,6 +102,16 @@ class TestBamFetcher:
         with pytest.raises(FetchError):
             fetch_bam_header(evidence_dir, MD5, use_cache=False)
 
+    def test_empty_header_raises_fetcherror(self, monkeypatch, evidence_dir):
+        # returncode 0 but no header — a valid BAM always has @HD/@SQ, so an empty
+        # header is a failure, not a readable result.
+        self._patch_run(
+            monkeypatch,
+            lambda *a, **k: subprocess.CompletedProcess(a, returncode=0, stdout="", stderr=""),
+        )
+        with pytest.raises(FetchError, match="empty SAM header"):
+            fetch_bam_header(evidence_dir, MD5, use_cache=False)
+
     def test_success_returns_header(self, monkeypatch, evidence_dir):
         self._patch_run(
             monkeypatch,

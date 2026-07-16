@@ -331,6 +331,48 @@ class TestPipelineRun:
             pipeline.run()
         assert not output.exists()
 
+    def test_preflight_skipped_when_work_is_all_invalid(self, tmp_path):
+        """The preflight guards a fetch-time dependency, so it must not fire when no
+        record will reach the fetcher — e.g. work is entirely validation_failed."""
+
+        def _boom():
+            raise RuntimeError("samtools not found")
+
+        config = _make_config(preflight=_boom)
+        input_path = tmp_path / "in.json"
+        # Drifted file_size -> InvalidRecord, diverted before any fetch.
+        input_path.write_text(
+            json.dumps({"results": [_valid_record(file_name="a.test", file_format=".test", file_size="big")]})
+        )
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(config, input_path, output, evidence_base=tmp_path / "evidence").run()
+        assert len(results) == 1  # written as validation_failed, not aborted
+        assert json.loads(output.read_text())["metadata"]["validation_failed"] == 1
+
+    def test_preflight_skipped_when_all_cached(self, tmp_path):
+        """An all-cached resume run invokes no fetcher, so the preflight must not fire
+        — the case CI hit (cached/stubbed run with no samtools installed)."""
+        from meta_disco.fetchers import get_evidence_path
+
+        def _boom():
+            raise RuntimeError("samtools not found")
+
+        md5 = "a" * 32
+        pipeline = ClassifyPipeline(
+            _make_config(preflight=_boom),
+            tmp_path / "in.json",
+            tmp_path / "out.json",
+            evidence_base=tmp_path / "evidence",
+            resume=True,
+        )
+        (tmp_path / "in.json").write_text(
+            json.dumps({"results": [_valid_record(file_md5sum=md5, file_name="a.test", file_format=".test")]})
+        )
+        ev = get_evidence_path(pipeline.evidence_dir, md5)
+        ev.parent.mkdir(parents=True, exist_ok=True)
+        ev.write_text("{}")
+        assert len(pipeline.run()) == 1  # must not raise despite the raising preflight
+
     def test_partition_routes_by_classifier_relevant_fields(self, tmp_path):
         """The load-boundary split (#172) preserves #161's divert rule: a contract
         violation only on a field the classifier never reads (drs_uri) still yields a

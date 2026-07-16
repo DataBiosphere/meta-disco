@@ -244,8 +244,13 @@ class ClassifyPipeline:
 
         # Fail fast on a missing environment dependency (e.g. samtools for BAM)
         # before the pool starts, so it aborts once with a clear message instead of
-        # every record failing to read and vanishing.
-        if self.config.preflight is not None:
+        # every record failing to read and vanishing. Only when a record will actually
+        # invoke the fetcher: an all-cached resume run reads evidence from disk and
+        # needs no tool, so it must not abort.
+        will_fetch = any(
+            not (self.resume and w.file_md5sum in cached_md5s) for w in work if isinstance(w, ClassifierRecord)
+        )
+        if self.config.preflight is not None and will_fetch:
             self.config.preflight()
 
         self.evidence_dir.mkdir(parents=True, exist_ok=True)

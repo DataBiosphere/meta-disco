@@ -201,14 +201,17 @@ def fetch_bam_header(
     """Read BAM/CRAM header from S3 using samtools.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns raw SAM header text (possibly empty for a readable header-less file).
+    Returns raw (non-empty) SAM header text.
 
     Raises ``FetchError`` naming the cause when the header cannot be read (samtools
-    exits non-zero, times out, or the parse fails), so the record is kept as a
-    ``not_classified`` row instead of vanishing (#155). ``samtools`` being absent is
-    *not* a ``FetchError`` (see ``passthrough`` on the decorator): it is an
-    environment failure affecting every BAM record, so the ``FileNotFoundError``
-    propagates rather than masquerading as unreadable content.
+    exits non-zero, times out, returns an empty header, or the parse fails), so the
+    record is kept as a ``not_classified`` row instead of vanishing (#155). An empty
+    header is a failure, not a readable result — a valid BAM/CRAM always carries at
+    least an ``@HD``/``@SQ`` line — so it raises like the vcf/fastq empty-content
+    cases rather than caching an empty string. ``samtools`` being absent is *not* a
+    ``FetchError`` (see ``passthrough`` on the decorator): it is an environment
+    failure affecting every BAM record, so the ``FileNotFoundError`` propagates
+    rather than masquerading as unreadable content.
     """
     if use_cache:
         cached = load_cached_evidence(evidence_dir, md5sum)
@@ -226,17 +229,19 @@ def fetch_bam_header(
         raise FetchError(f"samtools view -H exited {result.returncode}: {result.stderr.strip() or 'no stderr'}")
 
     header_text = result.stdout
-    if header_text:
-        evidence = {
-            "md5sum": md5sum,
-            "file_name": file_name,
-            "header_text": header_text,
-            "header_line_count": len(header_text.split("\n")),
-            "fetch_timestamp": _timestamp(),
-        }
-        if url:
-            evidence["source_url"] = url
-        save_evidence(evidence_dir, md5sum, evidence)
+    if not header_text:
+        raise FetchError("samtools returned an empty SAM header")
+
+    evidence = {
+        "md5sum": md5sum,
+        "file_name": file_name,
+        "header_text": header_text,
+        "header_line_count": len(header_text.split("\n")),
+        "fetch_timestamp": _timestamp(),
+    }
+    if url:
+        evidence["source_url"] = url
+    save_evidence(evidence_dir, md5sum, evidence)
 
     return header_text
 

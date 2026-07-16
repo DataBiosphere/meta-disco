@@ -161,7 +161,10 @@ def build_output(tmp_path: Path) -> dict:
     """
     out = {}
     for ftype, records in GOLDEN_INPUTS.items():
-        config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_make_stub_fetcher(ftype))
+        # Stub the fetcher (network-free), and drop the config's preflight with it:
+        # the preflight guards the real fetcher's env deps (e.g. samtools), which the
+        # stub does not use, so it must not run here.
+        config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_make_stub_fetcher(ftype), preflight=None)
         input_path = tmp_path / f"{ftype}_input.json"
         input_path.write_text(json.dumps({"results": records}))
         # workers=1 forces sequential processing so the record order in the output
