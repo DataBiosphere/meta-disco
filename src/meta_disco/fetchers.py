@@ -39,9 +39,8 @@ class FetchError(Exception):
     `not_classified` row naming the cause instead of vanishing (#155). One
     exception: `fetch_bam_header` lets a `FileNotFoundError` (samtools not
     installed) propagate as itself, since a missing tool is an environment failure
-    for every BAM record, not unreadable content for one. Each failure prints one
-    line via `_fetch_and_classify`; the mirror missing an unknown number of objects
-    is tracked separately (#156).
+    for every BAM record, not unreadable content for one. The mirror missing an
+    unknown number of objects is tracked separately (#156).
     """
 
     def __init__(self, reason: str):
