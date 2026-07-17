@@ -243,11 +243,14 @@ class ClassifyPipeline:
         if not work:
             return []
 
-        # Fail fast on a missing environment dependency (e.g. samtools for BAM)
-        # before the pool starts, so it aborts once with a clear message instead of
-        # every record failing to read and vanishing. Only when a record will actually
-        # invoke the fetcher: an all-cached resume run reads evidence from disk and
-        # needs no tool, so it must not abort.
+        # Best-effort fast-fail on a missing environment dependency (e.g. samtools
+        # for BAM) before the pool starts, so it aborts once with a clear message
+        # instead of every record failing to read and vanishing. Skipped when every
+        # record is already cached (`_is_cached` = evidence file present), since a
+        # warm resume run serves from disk without the tool. This is keyed on file
+        # existence, not evidence validity: a corrupt/partial evidence file passes
+        # `_is_cached` yet the fetcher re-fetches — for that case the per-record
+        # passthrough (bam's `FileNotFoundError`) is the backstop, not this guard.
         will_fetch = any(
             not (self.resume and w.file_md5sum in cached_md5s) for w in work if isinstance(w, ClassifierRecord)
         )
