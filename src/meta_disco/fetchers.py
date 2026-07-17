@@ -1,21 +1,22 @@
-"""Header fetchers and evidence cache for biological data files.
+"""Header fetchers for biological data files.
 
 Each fetcher retrieves header/metadata from files on S3 (via range requests
 or samtools) and caches the results locally for resumability and audit.
 
-Shared evidence cache helpers are parameterized by evidence_dir so the
-same logic works for all file types.
+The cache records themselves — path layout, save/load, and the per-type
+:class:`~meta_disco.evidence.CachedEvidence` shapes — live in ``evidence.py``;
+each fetcher constructs its typed evidence subclass and calls ``.save``/``.load``.
 """
 
 import functools
-import json
 import shutil
 import subprocess
-import time
 import zlib
 from pathlib import Path
 
 import requests
+
+from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, VcfEvidence
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
@@ -82,40 +83,13 @@ def wrap_as_fetch_error(label: str, passthrough: tuple[type[BaseException], ...]
 
 
 # =============================================================================
-# SHARED EVIDENCE CACHE
+# SHARED FETCH HELPERS
 # =============================================================================
-
-
-def get_evidence_path(evidence_dir: Path, md5sum: str) -> Path:
-    """Get path for cached evidence file.
-
-    Uses first 2 chars of MD5 as subdirectory to avoid too many files in one dir.
-    """
-    return evidence_dir / md5sum[:2] / f"{md5sum}.json"
-
-
-def load_cached_evidence(evidence_dir: Path, md5sum: str) -> dict | None:
-    """Load cached evidence JSON if it exists."""
-    path = get_evidence_path(evidence_dir, md5sum)
-    if path.exists():
-        try:
-            with path.open() as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError):
-            return None
-    return None
-
-
-def save_evidence(evidence_dir: Path, md5sum: str, evidence: dict) -> None:
-    """Save evidence dict to cache."""
-    path = get_evidence_path(evidence_dir, md5sum)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
-        json.dump(evidence, f, indent=2)
-
-
-def _timestamp() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+#
+# The evidence cache itself — its path layout, save/load, and the per-type record
+# shapes — now lives in ``evidence.py`` as :class:`~meta_disco.evidence.CachedEvidence`
+# and its subclasses (#206). ``get_evidence_path`` moved there too; import it from
+# ``meta_disco.evidence``.
 
 
 def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes:
@@ -213,9 +187,9 @@ def fetch_bam_header(
     rather than masquerading as unreadable content.
     """
     if use_cache:
-        cached = load_cached_evidence(evidence_dir, md5sum)
-        if cached and cached.get("header_text"):
-            return cached["header_text"]
+        cached = BamEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
 
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     result = subprocess.run(
@@ -231,16 +205,9 @@ def fetch_bam_header(
     if not header_text:
         raise FetchError("samtools returned an empty SAM header")
 
-    evidence = {
-        "md5sum": md5sum,
-        "file_name": file_name,
-        "header_text": header_text,
-        "header_line_count": len(header_text.splitlines()),
-        "fetch_timestamp": _timestamp(),
-    }
-    if url:
-        evidence["source_url"] = url
-    save_evidence(evidence_dir, md5sum, evidence)
+    # raw_bytes_fetched stays None: samtools reads a stream, so there is no
+    # byte-range count to report for a BAM/CRAM (evidence.py models this).
+    BamEvidence(md5sum=md5sum, file_name=file_name, header_text=header_text, source_url=url).save(evidence_dir)
 
     return header_text
 
@@ -297,9 +264,9 @@ def fetch_vcf_header(
     as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
-        cached = load_cached_evidence(evidence_dir, md5sum)
-        if cached and cached.get("header_text"):
-            return cached["header_text"]
+        cached = VcfEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
 
     content = _fetch_range(md5sum, 1048576, timeout=60, url=url)  # 1MB
     raw_bytes = len(content)
@@ -319,19 +286,14 @@ def fetch_vcf_header(
     if header_lines:
         header_text = "\n".join(header_lines)
         max_positions = extract_max_positions(variant_lines) if variant_lines else None
-        evidence = {
-            "md5sum": md5sum,
-            "file_name": file_name,
-            "header_text": header_text,
-            "header_line_count": len(header_lines),
-            "raw_bytes_fetched": raw_bytes,
-            "fetch_timestamp": _timestamp(),
-        }
-        if max_positions:
-            evidence["max_positions"] = max_positions
-        if url:
-            evidence["source_url"] = url
-        save_evidence(evidence_dir, md5sum, evidence)
+        VcfEvidence(
+            md5sum=md5sum,
+            file_name=file_name,
+            header_text=header_text,
+            max_positions=max_positions,
+            raw_bytes_fetched=raw_bytes,
+            source_url=url,
+        ).save(evidence_dir)
         return header_text
 
     raise FetchError("no VCF header lines (no '#' lines) in first 1MB")
@@ -361,9 +323,9 @@ def fetch_fastq_reads(
     is kept as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
-        cached = load_cached_evidence(evidence_dir, md5sum)
-        if cached and cached.get("read_names"):
-            return cached["read_names"]
+        cached = FastqEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
 
     content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
     raw_bytes = len(content)
@@ -383,16 +345,9 @@ def fetch_fastq_reads(
             i += 1
 
     if read_names:
-        evidence = {
-            "md5sum": md5sum,
-            "file_name": file_name,
-            "read_names": read_names,
-            "raw_bytes_fetched": raw_bytes,
-            "fetch_timestamp": _timestamp(),
-        }
-        if url:
-            evidence["source_url"] = url
-        save_evidence(evidence_dir, md5sum, evidence)
+        FastqEvidence(
+            md5sum=md5sum, file_name=file_name, read_names=read_names, raw_bytes_fetched=raw_bytes, source_url=url
+        ).save(evidence_dir)
         return read_names
 
     raise FetchError("no FASTQ read names (no '@' lines) in first 256KB")
@@ -422,9 +377,9 @@ def fetch_fasta_headers(
     is kept as a ``not_classified`` row instead of vanishing (#155).
     """
     if use_cache:
-        cached = load_cached_evidence(evidence_dir, md5sum)
-        if cached and "contig_names" in cached:
-            return cached["contig_names"]
+        cached = FastaEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
 
     content = _fetch_range(md5sum, 262144, timeout=60, url=url)  # 256KB
     raw_bytes = len(content)
@@ -440,17 +395,9 @@ def fetch_fasta_headers(
             if name:
                 contig_names.append(name)
 
-    evidence = {
-        "md5sum": md5sum,
-        "file_name": file_name,
-        "contig_names": contig_names,
-        "contig_count": len(contig_names),
-        "raw_bytes_fetched": raw_bytes,
-        "fetch_timestamp": _timestamp(),
-    }
-    if url:
-        evidence["source_url"] = url
-    save_evidence(evidence_dir, md5sum, evidence)
+    FastaEvidence(
+        md5sum=md5sum, file_name=file_name, contig_names=contig_names, raw_bytes_fetched=raw_bytes, source_url=url
+    ).save(evidence_dir)
 
     return contig_names
 
@@ -551,9 +498,9 @@ def fetch_gfa_segment_tags(
     small complete rGFA keeps its last segment's tags.
     """
     if use_cache:
-        cached = load_cached_evidence(evidence_dir, md5sum)
-        if cached and "gfa_segment_tags" in cached:
-            return cached["gfa_segment_tags"]
+        cached = GfaEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
 
     # end_byte is inclusive, so 262143 fetches exactly HEAD_BYTES. A read/parse
     # failure — including a programming error in parse_gfa_segment_tags — is wrapped
@@ -572,16 +519,8 @@ def fetch_gfa_segment_tags(
 
     segment_tags = parse_gfa_segment_tags(text, truncated=not (got_whole_file and stream_complete))
 
-    evidence = {
-        "md5sum": md5sum,
-        "file_name": file_name,
-        "gfa_segment_tags": segment_tags,
-        "tagged_segment_count": len(segment_tags),
-        "raw_bytes_fetched": raw_bytes,
-        "fetch_timestamp": _timestamp(),
-    }
-    if url:
-        evidence["source_url"] = url
-    save_evidence(evidence_dir, md5sum, evidence)
+    GfaEvidence(
+        md5sum=md5sum, file_name=file_name, gfa_segment_tags=segment_tags, raw_bytes_fetched=raw_bytes, source_url=url
+    ).save(evidence_dir)
 
     return segment_tags

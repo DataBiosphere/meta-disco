@@ -286,7 +286,7 @@ class TestPipelineRun:
         """skip_cached must not drop validation_failed records (they are never cached)
         and must not crash on an InvalidRecord whose md5 drifted to an unhashable
         type — only classifiable records are skip-filtered against the cached set."""
-        from meta_disco.fetchers import get_evidence_path
+        from meta_disco.evidence import get_evidence_path
 
         cached_md5 = "a" * 32
         valid = _valid_record(file_md5sum=cached_md5, file_name="v.test", file_format=".test")
@@ -352,7 +352,7 @@ class TestPipelineRun:
     def test_preflight_skipped_when_all_cached(self, tmp_path):
         """An all-cached resume run invokes no fetcher, so the preflight must not fire
         — the case CI hit (cached/stubbed run with no samtools installed)."""
-        from meta_disco.fetchers import get_evidence_path
+        from meta_disco.evidence import get_evidence_path
 
         def _boom():
             raise RuntimeError("samtools not found")
@@ -609,7 +609,8 @@ class TestFileTypeConfigs:
         still be reported unreadable rather than tallied under 'From cache'."""
         import dataclasses
 
-        from meta_disco.fetchers import FetchError, get_evidence_path
+        from meta_disco.evidence import get_evidence_path
+        from meta_disco.fetchers import FetchError
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.pipeline import ClassifyPipeline
 
@@ -631,8 +632,8 @@ class TestFileTypeConfigs:
             workers=1,
             resume=True,
         )
-        # A corrupt evidence file: _is_cached() sees it, load_cached_evidence() cannot
-        # read it, so the fetcher re-fetches and fails.
+        # A corrupt evidence file: _is_cached() sees it, GfaEvidence.load() cannot
+        # read it (returns None), so the fetcher re-fetches and fails.
         stale = get_evidence_path(pipeline.evidence_dir, "d" * 32)
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("{ not json")
