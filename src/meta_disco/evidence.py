@@ -63,6 +63,13 @@ class CachedEvidence:
 
     # Set by each subclass to its payload field name; also the on-disk key.
     PAYLOAD_KEY: ClassVar[str]
+    # When True, an empty payload is a cache miss, not a hit: BAM/VCF/FASTQ never
+    # persist an empty payload (they raise FetchError instead), so an empty one on
+    # disk is a corrupt artifact and the fetcher must re-fetch. FASTA/GFA leave this
+    # False — an empty list is a valid read (a plain GFA has no tags; a head may hold
+    # no contig line). This restores the per-type truthiness the pre-#206 cache-hit
+    # guards had.
+    _EMPTY_IS_MISS: ClassVar[bool] = False
 
     md5sum: str
     file_name: str
@@ -107,14 +114,17 @@ class CachedEvidence:
     def from_json(cls, data: object) -> Any:
         """Build from a cached JSON dict, or return ``None`` for a cache miss.
 
-        Returns ``None`` when the top-level JSON is not an object, or when the
-        required identity or payload key is absent — a drifted, partial, or
-        wrong-type file is treated as a miss (the fetcher then re-fetches), which is
-        boundary tolerance over an external artifact, not a defensive default over our
-        own inputs. Optional provenance is read with ``.get``; a dropped count key
-        (pre-#206 files) is simply not read.
+        Structural validation of an external artifact at the cache boundary — not a
+        defensive default over our own inputs. Returns ``None`` (the fetcher then
+        re-fetches) when the top-level JSON is not an object, the required identity or
+        payload key is absent, or the payload is empty for a type that never persists
+        an empty one (``_EMPTY_IS_MISS``). Payload *value types* are not checked;
+        optional provenance is read with ``.get``, and a dropped count key (pre-#206
+        files) is simply not read.
         """
         if not isinstance(data, dict) or "md5sum" not in data or cls.PAYLOAD_KEY not in data:
+            return None
+        if cls._EMPTY_IS_MISS and not data[cls.PAYLOAD_KEY]:
             return None
         return cls(
             md5sum=data["md5sum"],
@@ -136,9 +146,9 @@ class CachedEvidence:
     def load(cls, evidence_dir: Path, md5sum: str) -> Any:
         """Load cached evidence for ``md5sum``, or ``None`` on any miss.
 
-        A missing file, an unreadable/undecodable file, or a file lacking this type's
-        required keys all yield ``None`` so the caller re-fetches — the cache is an
-        optimization, never a trusted source.
+        A missing file, an unreadable file, one that is not valid UTF-8 or not valid
+        JSON, or one lacking this type's required keys all yield ``None`` so the caller
+        re-fetches — the cache is an optimization, never a trusted source.
         """
         path = get_evidence_path(evidence_dir, md5sum)
         if not path.exists():
@@ -146,7 +156,7 @@ class CachedEvidence:
         try:
             with path.open() as f:
                 data = json.load(f)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             return None
         return cls.from_json(data)
 
@@ -162,6 +172,7 @@ class _TextEvidence(CachedEvidence):
     """
 
     PAYLOAD_KEY: ClassVar[str] = "header_text"
+    _EMPTY_IS_MISS: ClassVar[bool] = True  # a valid BAM/VCF always has header lines
 
     header_text: str
 
@@ -207,9 +218,10 @@ class VcfEvidence(_TextEvidence):
 
 @dataclass(frozen=True, kw_only=True)
 class FastqEvidence(CachedEvidence):
-    """Cached FASTQ read-name lines."""
+    """Cached FASTQ read-name lines. Empty is a miss — the fetcher raises without any."""
 
     PAYLOAD_KEY: ClassVar[str] = "read_names"
+    _EMPTY_IS_MISS: ClassVar[bool] = True
 
     read_names: list[str]
 

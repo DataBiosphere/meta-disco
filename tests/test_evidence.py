@@ -1,5 +1,7 @@
 """Tests for the typed cached-evidence records the fetchers persist (#206)."""
 
+import json
+
 from meta_disco.evidence import (
     BamEvidence,
     FastaEvidence,
@@ -89,6 +91,38 @@ class TestEmptyPayloadIsAHit:
         loaded = GfaEvidence.load(tmp_path, "b" * 32)
         assert loaded is not None
         assert loaded.payload == []
+
+
+class TestEmptyPayloadIsAMissForTextAndReads:
+    # BAM/VCF/FASTQ never persist an empty payload (they raise FetchError), so an
+    # empty one on disk is corrupt and must re-fetch — matching the pre-#206 truthy
+    # cache-hit guards, not the bare key-presence check.
+    def _write(self, tmp_path, md5, key, value):
+        path = get_evidence_path(tmp_path, md5)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"md5sum": md5, "file_name": "x", key: value}))
+
+    def test_empty_bam_header_text_is_a_miss(self, tmp_path):
+        self._write(tmp_path, "a" * 32, "header_text", "")
+        assert BamEvidence.load(tmp_path, "a" * 32) is None
+
+    def test_empty_vcf_header_text_is_a_miss(self, tmp_path):
+        self._write(tmp_path, "b" * 32, "header_text", "")
+        assert VcfEvidence.load(tmp_path, "b" * 32) is None
+
+    def test_empty_fastq_read_names_is_a_miss(self, tmp_path):
+        self._write(tmp_path, "c" * 32, "read_names", [])
+        assert FastqEvidence.load(tmp_path, "c" * 32) is None
+
+
+class TestUndecodableUnicodeIsAMiss:
+    def test_invalid_utf8_file_is_a_miss(self, tmp_path):
+        # A cache file with invalid UTF-8 bytes must not leak UnicodeDecodeError out
+        # of load() — the contract is "any miss -> None".
+        path = get_evidence_path(tmp_path, "a" * 32)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{"md5sum": "\xff\xfe not utf-8"}')
+        assert BamEvidence.load(tmp_path, "a" * 32) is None
 
 
 class TestCacheMiss:
