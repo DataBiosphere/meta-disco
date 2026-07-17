@@ -7,6 +7,7 @@ propagate as itself, not masquerade as unreadable content.
 import subprocess
 
 import pytest
+import requests
 
 import meta_disco.fetchers as fetchers
 from meta_disco.fetchers import (
@@ -69,6 +70,16 @@ class TestRangeFetchers:
         # No '>' lines in the fetched head is a readable empty result, not a failure.
         _patch_get(monkeypatch, _Resp(200, b"ACGTACGT\nACGTACGT\n"))
         assert fetch_fasta_headers(evidence_dir, MD5, is_gzipped=False, use_cache=False) == []
+
+    @pytest.mark.parametrize("fetcher", [fetch_vcf_header, fetch_fastq_reads, fetch_fasta_headers])
+    def test_request_timeout_is_wrapped_as_fetcherror(self, monkeypatch, evidence_dir, fetcher):
+        # requests.Timeout must be wrapped (by the decorator), not propagate raw.
+        def _timeout(*a, **k):
+            raise requests.Timeout("read timed out")
+
+        monkeypatch.setattr(fetchers.requests, "get", _timeout)
+        with pytest.raises(FetchError):
+            fetcher(evidence_dir, MD5, use_cache=False)
 
 
 class TestBamFetcher:
