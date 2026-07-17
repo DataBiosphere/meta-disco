@@ -396,14 +396,14 @@ class TestPipelineRun:
         assert any("file_size" in reason for reason in work[2].reasons)
 
     def test_build_record_echoes_typed_item_identity(self):
-        # _build_record reads identity off the typed work item. On the
-        # validation_failed path that is an InvalidRecord, which has already coerced
+        # _build_record reads identity off the typed work item into an OutputRecord. On
+        # the validation_failed path that is an InvalidRecord, which has already coerced
         # file_name/file_format to str, so the output types stay stable.
         item = InvalidRecord.from_record({"file_name": 123, "file_format": None, "file_md5sum": "x"}, [])
         out = ClassifyPipeline._build_record(item, {})
-        assert out["file_name"] == "123"
-        assert out["file_format"] == ""
-        assert isinstance(out["file_name"], str) and isinstance(out["file_format"], str)
+        assert out.file_name == "123"
+        assert out.file_format == ""
+        assert isinstance(out.file_name, str) and isinstance(out.file_format, str)
 
     @pytest.mark.parametrize("workers", [1, 2])
     def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
@@ -481,6 +481,18 @@ class TestPipelineRun:
         assert result is not None
         assert result["md5sum"] == "test_md5"
         assert "classifications" in result
+        # classify_single now emits the same canonical 7-key envelope as the batch path
+        # (#204): dataset_title/entry_id are present (None) on the single-file path.
+        assert set(result) == {
+            "file_name",
+            "md5sum",
+            "file_size",
+            "file_format",
+            "dataset_title",
+            "classifications",
+            "entry_id",
+        }
+        assert result["dataset_title"] is None and result["entry_id"] is None
 
     def test_gzip_detection(self, tmp_path):
         """When extensions include .gz variants, is_gzipped is inferred from filename."""
@@ -633,7 +645,7 @@ class TestFileTypeConfigs:
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
         assert out is not None
         # The note is on data_type (what content refines), not on the four others.
-        cls = out["classifications"]
+        cls = out.classifications
         noted = [f for f in cls if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
         assert noted == ["data_type"]
 

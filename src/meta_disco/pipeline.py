@@ -20,7 +20,7 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
-from .records import ClassifierRecord, InvalidRecord
+from .records import ClassifierRecord, InvalidRecord, OutputRecord
 
 # A well-formed md5: lowercase hex, 32 chars — the same shape the input contract
 # (metadata.yaml file_md5sum) requires. Only such a value can key real cached
@@ -60,16 +60,16 @@ def load_records(input_path: Path) -> list:
 class RecordOutcome(NamedTuple):
     """The outcome of processing one record, tallied by ``_run_parallel``.
 
-    ``result`` is the output record for this item (a ``dict`` — see the field type;
-    a record is only diverted to ``errored`` in ``_run_parallel`` by *raising*, which
-    produces no ``RecordOutcome``). The three flags are mutually exclusive and only
-    one, at most, is set: ``validation_failed`` (failed the input contract),
-    ``was_cached`` (evidence already on disk), ``content_unreadable`` (fetch failed,
-    classified from the filename), or none of these (a fresh fetch). Named so the four
-    fields cannot be transposed at the unpack sites.
+    ``result`` is the ``OutputRecord`` for this item (a record is only diverted to
+    ``errored`` in ``_run_parallel`` by *raising*, which produces no ``RecordOutcome``).
+    The three flags are mutually exclusive and only one, at most, is set:
+    ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
+    on disk), ``content_unreadable`` (fetch failed, classified from the filename), or
+    none of these (a fresh fetch). Named so the four fields cannot be transposed at the
+    unpack sites.
     """
 
-    result: dict
+    result: OutputRecord
     was_cached: bool
     content_unreadable: bool
     validation_failed: bool
@@ -279,6 +279,10 @@ class ClassifyPipeline:
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
+        Returns the canonical seven-key ``OutputRecord`` envelope (#204), the same
+        shape the batch path writes; ``dataset_title``/``entry_id`` are ``None`` here
+        since there is no source record.
+
         Never returns ``None`` (#155): a fetch failure surfaces as a ``FetchError``,
         which yields filename-only ``not_classified`` classifications. It does not
         catch everything, though — an environment error (missing samtools raises
@@ -298,13 +302,13 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped,
             use_cache=use_cache,
         )
-        return {
-            "file_name": file_name,
-            "md5sum": md5sum,
-            "file_size": file_size,
-            "file_format": file_format,
-            "classifications": classifications,
-        }
+        return OutputRecord.from_single(
+            md5sum=md5sum,
+            file_name=file_name,
+            file_size=file_size,
+            file_format=file_format,
+            classifications=classifications,
+        ).to_dict()
 
     # --- Internal ---
 
@@ -469,26 +473,17 @@ class ClassifyPipeline:
         )
 
     @staticmethod
-    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> dict:
-        """Wrap a classifications dict in the output record envelope.
+    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+        """Wrap a classifications dict in the typed output envelope.
 
         Reads identity off the typed work item (a ``ClassifierRecord`` on the success
-        path, an ``InvalidRecord`` on the ``validation_failed`` path). Both guarantee
-        ``file_name``/``file_format`` are ``str`` — the two fields downstream
-        consumers do string operations on (path building, extension checks) — so no
-        coercion happens here. The other identity fields are echoed as the item
-        carries them: typed on the success path, the raw (possibly drifted) values on
-        the ``validation_failed`` path.
+        path, an ``InvalidRecord`` on the ``validation_failed`` path); ``OutputRecord``
+        is serialized to the seven-key dict at the NDJSON write boundary via
+        ``to_dict``. The identity fields are echoed as the item carries them — typed on
+        the success path, the raw (possibly drifted) values on the ``validation_failed``
+        path — matching what ``classify_single`` writes for the single-file path (#204).
         """
-        return {
-            "file_name": item.file_name,
-            "md5sum": item.file_md5sum,
-            "file_size": item.file_size,
-            "file_format": item.file_format,
-            "dataset_title": item.dataset_title,
-            "classifications": classifications,
-            "entry_id": item.entry_id,
-        }
+        return OutputRecord.from_work_item(item, classifications)
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
@@ -509,7 +504,7 @@ class ClassifyPipeline:
                 nonlocal successful, from_cache, processed, unreadable, invalid
                 with lock:
                     processed += 1
-                    writer.write(outcome.result)
+                    writer.write(outcome.result.to_dict())
                     if outcome.validation_failed:
                         invalid += 1
                     else:
