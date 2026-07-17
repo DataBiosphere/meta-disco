@@ -60,13 +60,13 @@ def load_records(input_path: Path) -> list:
 class RecordOutcome(NamedTuple):
     """The outcome of processing one record, tallied by ``_run_parallel``.
 
-    ``result`` is always the output record — every record produces a row now that
-    fetchers raise ``FetchError`` instead of returning ``None`` (#155). The three
-    flags are mutually exclusive and only one, at most, is set: a record is written
-    as ``validation_failed`` (failed the input contract), ``was_cached`` (evidence
-    already on disk), ``content_unreadable`` (fetch failed, classified from the
-    filename), or none of these (a fresh fetch). Named so the four fields cannot be
-    transposed at the unpack sites.
+    ``result`` is the output record for this item (a ``dict`` — see the field type;
+    a record is only diverted to ``errored`` in ``_run_parallel`` by *raising*, which
+    produces no ``RecordOutcome``). The three flags are mutually exclusive and only
+    one, at most, is set: ``validation_failed`` (failed the input contract),
+    ``was_cached`` (evidence already on disk), ``content_unreadable`` (fetch failed,
+    classified from the filename), or none of these (a fresh fetch). Named so the four
+    fields cannot be transposed at the unpack sites.
     """
 
     result: dict
@@ -107,15 +107,16 @@ def _fetch_and_classify(
 ) -> tuple[dict, bool]:
     """Fetch a file's content and classify it.
 
-    Returns ``(classifications, content_unreadable)``. Two outcomes:
+    Returns ``(classifications, content_unreadable)``:
 
     * content read        -> ``(classifications, False)``
-    * content unreadable  -> ``(filename-only classifications, True)``. The fetcher
-      raised FetchError naming its cause, so the file stays in the output as a
+    * content unreadable  -> ``(filename-only classifications, True)``, when the
+      fetcher raised ``FetchError``; the file stays in the output as a
       ``not_classified`` row rather than vanishing (#155).
 
-    Every record therefore yields a row — a fetcher signals failure by raising, never
-    by returning ``None``. Shared by ``ClassifyPipeline.classify_single`` and
+    A fetcher signals failure by raising ``FetchError``, not by returning ``None``.
+    An exception the fetcher does not wrap (e.g. a missing-tool ``FileNotFoundError``)
+    propagates. Shared by ``ClassifyPipeline.classify_single`` and
     ``_process_single_record`` so the fallback cannot drift between the single-file
     and batch paths.
     """

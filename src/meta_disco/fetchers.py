@@ -236,7 +236,7 @@ def fetch_bam_header(
         "md5sum": md5sum,
         "file_name": file_name,
         "header_text": header_text,
-        "header_line_count": len(header_text.split("\n")),
+        "header_line_count": len(header_text.splitlines()),
         "fetch_timestamp": _timestamp(),
     }
     if url:
