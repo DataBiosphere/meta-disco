@@ -9,8 +9,8 @@ fetcher wrote, the per-type element count was named three different ways
 cache-hit read was a bespoke silently-defaulting probe over a per-type payload key —
 a key mismatch just missed the cache and re-fetched.
 
-:class:`CachedEvidence` is the shared core (identity + fetch provenance + the
-save/load persistence boundary); each subclass adds its one typed payload field and
+:class:`CachedEvidence` is the shared core (the ``md5sum`` cache key + fetch provenance
++ the save/load persistence boundary); each subclass adds its one typed payload field and
 names it via the ``PAYLOAD_KEY`` classvar, which drives both the ``.payload`` accessor
 and the on-disk key. The element count is a derived :pyattr:`~CachedEvidence.count`
 property, no longer persisted, so the three-way count-key drift is gone by
@@ -48,17 +48,22 @@ def _timestamp() -> str:
 
 @dataclass(frozen=True, kw_only=True)
 class CachedEvidence:
-    """Shared core of a fetcher's cached evidence: identity, provenance, persistence.
+    """Shared core of a fetcher's cached evidence: the cache key, provenance, persistence.
 
     Subclasses add exactly one typed payload field and set :pyattr:`PAYLOAD_KEY` to
     its name; that classvar is the single source of the on-disk payload key and backs
     the :pyattr:`payload` accessor, so no consumer hard-codes a per-type key.
 
-    ``raw_bytes_fetched`` is the size of the byte range a range-request fetcher read;
-    it is ``None`` for BAM, whose ``samtools`` stream has no such count. ``source_url``
-    is recorded only when the fetch used a direct URL rather than the S3 mirror.
-    ``fetch_timestamp`` defaults to now at construction and is preserved verbatim on a
-    round-trip through :meth:`from_json`.
+    The cache is keyed by ``md5sum`` alone (the on-disk path is ``md5[:2]/md5.json``);
+    a hit needs only ``md5sum`` plus a payload. ``file_name`` is echoed *audit*
+    metadata — no consumer reads it back (the fetcher returns the payload) — so a file
+    missing it still hits rather than forcing an expensive re-fetch over a non-key
+    field. ``raw_bytes_fetched`` is the size of the byte range a range-request fetcher
+    read; it is ``None`` for BAM, whose ``samtools`` stream has no such count.
+    ``source_url`` is recorded only when the fetch used a direct URL rather than the S3
+    mirror. ``fetch_timestamp`` defaults to now at construction and is preserved
+    verbatim on a round-trip through :meth:`from_json`; a file that lacks it loads with
+    ``""`` (unknown fetch time), never a fabricated current timestamp.
     """
 
     # Set by each subclass to its payload field name; also the on-disk key.
@@ -116,11 +121,12 @@ class CachedEvidence:
 
         Structural validation of an external artifact at the cache boundary — not a
         defensive default over our own inputs. Returns ``None`` (the fetcher then
-        re-fetches) when the top-level JSON is not an object, the required identity or
-        payload key is absent, or the payload is empty for a type that never persists
-        an empty one (``_EMPTY_IS_MISS``). Payload *value types* are not checked;
-        optional provenance is read with ``.get``, and a dropped count key (pre-#206
-        files) is simply not read.
+        re-fetches) when the top-level JSON is not an object, the required ``md5sum``
+        (the cache key) or payload key is absent, or the payload is empty for a type
+        that never persists an empty one (``_EMPTY_IS_MISS``). ``file_name`` and the
+        provenance fields are non-key audit metadata, read with ``.get`` and absent-
+        tolerant, so a file missing them still hits; payload *value types* are not
+        checked, and a dropped count key (pre-#206 files) is simply not read.
         """
         if not isinstance(data, dict) or "md5sum" not in data or cls.PAYLOAD_KEY not in data:
             return None
