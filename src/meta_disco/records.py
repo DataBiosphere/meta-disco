@@ -24,6 +24,11 @@ Both classes expose the same six identity attributes (``file_name``,
 ``file_format``, ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``),
 so ``_build_record`` and the work-list steps read them uniformly regardless of
 stream.
+
+The module also holds the two write-side dataclasses the pipeline serializes at
+its output boundary, which follow the same frozen / field-order-is-output-order /
+``to_dict`` discipline: :class:`OutputRecord`, the per-file output envelope (#204),
+and :class:`RunMetadata`, the per-run tally block (#205).
 """
 
 from __future__ import annotations
@@ -213,5 +218,80 @@ class OutputRecord:
         Derived from the dataclass fields (a shallow copy — ``classifications`` is not
         deep-copied), so every field is emitted, in declaration order, and ``to_dict``
         cannot drift from the field list.
+        """
+        return {f.name: getattr(self, f.name) for f in fields(self)}
+
+
+@dataclass(frozen=True)
+class RunMetadata:
+    """The per-run tally block written under ``"metadata"`` in the final JSON output.
+
+    The pipeline used to build this as a 10-key literal in ``_save_final`` whose
+    derived keys carried their invariants only in prose comments. :meth:`from_counts`
+    is now the single site that computes those derived tallies, so the invariants are
+    code, asserted in isolation by ``test_records.py`` (#205):
+
+    * ``dropped`` is retired — a fetch failure is written as a ``content_unreadable``
+      row, never dropped (#155) — but the key is still emitted as ``0`` for
+      output-schema stability.
+    * ``failed`` is every record that produced no row: ``dropped + errored``. Since
+      ``dropped`` is always ``0``, only a raising worker (``errored``) counts, so
+      ``failed == errored``.
+    * ``processed`` is ``successful + errored + validation_failed``: a
+      ``validation_failed`` row (failed the input contract, #161) is counted neither
+      in ``successful`` nor in ``failed``, so it is added in explicitly here.
+    """
+
+    # Field order is the serialized ``metadata`` key order — ``to_dict`` derives the
+    # output dict from these fields, so the two cannot drift. Every field name is also
+    # its output key.
+    total_to_process: int
+    processed: int
+    successful: int
+    failed: int
+    dropped: int
+    errored: int
+    validation_failed: int
+    from_cache: int
+    content_unreadable: int
+    complete: bool
+
+    @classmethod
+    def from_counts(
+        cls,
+        *,
+        total: int,
+        successful: int,
+        from_cache: int,
+        content_unreadable: int,
+        errored: int = 0,
+        validation_failed: int = 0,
+        complete: bool = True,
+    ) -> RunMetadata:
+        """Build a run's metadata from the raw counts, computing the derived tallies once.
+
+        The three derived keys (``dropped``, ``failed``, ``processed``) are computed
+        here and only here (see the class docstring for each invariant), so a caller
+        supplies only the counts it actually measured.
+        """
+        dropped = 0
+        return cls(
+            total_to_process=total,
+            processed=successful + errored + validation_failed,
+            successful=successful,
+            failed=dropped + errored,
+            dropped=dropped,
+            errored=errored,
+            validation_failed=validation_failed,
+            from_cache=from_cache,
+            content_unreadable=content_unreadable,
+            complete=complete,
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize to the ``metadata`` dict (the ten-key shape written to JSON).
+
+        Derived from the dataclass fields, so every field is emitted, in declaration
+        order, and ``to_dict`` cannot drift from the field list.
         """
         return {f.name: getattr(self, f.name) for f in fields(self)}

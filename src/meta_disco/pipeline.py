@@ -20,7 +20,7 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
-from .records import ClassifierRecord, InvalidRecord, OutputRecord
+from .records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 
 # A well-formed md5: lowercase hex, 32 chars — the same shape the input contract
 # (metadata.yaml file_md5sum) requires. Only such a value can key real cached
@@ -575,14 +575,9 @@ class ClassifyPipeline:
         one whose content was read, because a file type whose ``content_fields``
         is empty leaves no ``fetch_failed`` evidence behind.
 
-        ``errored`` (a worker raised, and the cause was printed) is the only way a
-        record now produces no row, so ``failed`` equals it. ``dropped`` is retired —
-        a fetch failure is written as a ``content_unreadable`` row, never dropped
-        (#155) — but the key is still emitted as ``0`` for output-schema stability.
-
-        ``validation_failed`` (the record failed the input contract, issue #161)
-        produced a row — every dimension ``not_classified`` — so it is counted
-        neither in ``successful`` nor in ``failed``; it is persisted on its own key.
+        The ``metadata`` block's derived tallies (``processed``, ``failed``,
+        ``dropped``) are computed in :meth:`RunMetadata.from_counts`, which documents
+        each invariant.
         """
         ndjson = self.output_path.with_suffix(".ndjson")
         classifications = []
@@ -596,21 +591,14 @@ class ClassifyPipeline:
         with self.output_path.open("w") as f:
             json.dump(
                 {
-                    "metadata": {
-                        "total_to_process": total,
-                        "processed": successful + errored + validation_failed,
-                        "successful": successful,
-                        # `failed` = every record that produced no row. A fetch failure
-                        # no longer drops a record (#155), so only a raising worker
-                        # (errored) does. `dropped` stays as a constant 0 for consumers.
-                        "failed": errored,
-                        "dropped": 0,
-                        "errored": errored,
-                        "validation_failed": validation_failed,
-                        "from_cache": from_cache,
-                        "content_unreadable": unreadable,
-                        "complete": True,
-                    },
+                    "metadata": RunMetadata.from_counts(
+                        total=total,
+                        successful=successful,
+                        from_cache=from_cache,
+                        content_unreadable=unreadable,
+                        errored=errored,
+                        validation_failed=validation_failed,
+                    ).to_dict(),
                     "classifications": classifications,
                 },
                 f,
