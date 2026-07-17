@@ -30,6 +30,10 @@ def _field_entry(record: dict, field_name: str):
     - nested:     record[field] -> {"value", ...}
     - flat:       record[field] -> value
     Returns whatever is found at the field (a dict entry, a scalar, or None).
+
+    Pipeline output now guarantees the per-field layout (``OutputRecord``, #204); the
+    nested/flat fallbacks remain for the other producers this reader serves (e.g. the
+    label dicts built in ``classify_index_files``).
     """
     cls = record.get("classifications")
     if isinstance(cls, dict) and field_name in cls:

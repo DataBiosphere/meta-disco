@@ -28,7 +28,7 @@ stream.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 
@@ -128,3 +128,90 @@ class InvalidRecord:
             entry_id=record.get("entry_id"),
             reasons=reasons,
         )
+
+
+@dataclass(frozen=True)
+class OutputRecord:
+    """The per-file output envelope: identity fields wrapping a classifications payload.
+
+    The single shape the pipeline writes per record. Both producers construct it —
+    the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
+    work item) and the single-file path (``classify_single``) — and serialize through
+    ``to_dict``, so the seven-key envelope can no longer drift between them (#204).
+
+    Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
+    on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
+    ``file_format`` is ``str`` on the batch path but ``str | None`` on the single-file
+    path (its argument is optional). The remaining fields — ``md5sum`` (echoed from
+    ``file_md5sum``), ``file_size``, ``dataset_title``, ``entry_id`` — are passed
+    through as carried, so they are ``Any``: the ``validation_failed`` path may carry
+    drifted (non-string) values, and the classifiable path's guarantee already lives
+    upstream in ``ClassifierRecord``. This record does no string operations on the
+    identity fields (``to_dict`` only echoes them), so the looser typing is safe.
+    ``classifications`` is the dimensions payload plus any per-type extras a classifier
+    merged into it (e.g. the fastq scalar hints), which live inside this dict, never as
+    new envelope keys.
+    """
+
+    # Field order is the serialized envelope order — ``to_dict`` derives the output
+    # dict from these fields, so the two cannot drift and a new field is emitted
+    # automatically. Every field name is also its output key.
+    file_name: str
+    md5sum: Any
+    file_size: Any
+    file_format: str | None
+    dataset_title: Any
+    classifications: dict
+    entry_id: Any
+
+    @classmethod
+    def from_work_item(cls, item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+        """Build from a parsed work item and its classifications payload.
+
+        Reads the six identity attributes both streams expose (see the module
+        docstring), so it is agnostic to which stream produced ``item``.
+        """
+        return cls(
+            file_name=item.file_name,
+            file_format=item.file_format,
+            md5sum=item.file_md5sum,
+            file_size=item.file_size,
+            dataset_title=item.dataset_title,
+            entry_id=item.entry_id,
+            classifications=classifications,
+        )
+
+    @classmethod
+    def from_single(
+        cls,
+        *,
+        md5sum: str,
+        file_name: str,
+        file_size: int | None,
+        file_format: str | None,
+        classifications: dict,
+    ) -> OutputRecord:
+        """Build from a standalone ``classify_single`` call (no work item, no source record).
+
+        ``dataset_title``/``entry_id`` have no source here and serialize as ``None`` —
+        the envelope's one canonical shape, which is why the single-file path's output
+        carries the same seven keys as the batch path.
+        """
+        return cls(
+            file_name=file_name,
+            file_format=file_format,
+            md5sum=md5sum,
+            file_size=file_size,
+            dataset_title=None,
+            entry_id=None,
+            classifications=classifications,
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize to the output envelope dict (the seven-key shape written to JSON).
+
+        Derived from the dataclass fields (a shallow copy — ``classifications`` is not
+        deep-copied), so every field is emitted, in declaration order, and ``to_dict``
+        cannot drift from the field list.
+        """
+        return {f.name: getattr(self, f.name) for f in fields(self)}
