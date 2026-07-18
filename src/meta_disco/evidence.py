@@ -145,7 +145,7 @@ class CachedEvidence:
         """Write this evidence to its cache path under ``evidence_dir``."""
         path = get_evidence_path(evidence_dir, self.md5sum)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w") as f:
+        with path.open("w", encoding="utf-8") as f:
             json.dump(self.to_json(), f, indent=2)
 
     @classmethod
@@ -160,7 +160,7 @@ class CachedEvidence:
         if not path.exists():
             return None
         try:
-            with path.open() as f:
+            with path.open(encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             return None
