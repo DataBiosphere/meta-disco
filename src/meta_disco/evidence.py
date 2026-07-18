@@ -241,10 +241,73 @@ class FastaEvidence(CachedEvidence):
     contig_names: list[str]
 
 
+@dataclass(frozen=True)
+class SegmentTag:
+    """The rGFA stable-sequence tags on one GFA segment (S) line (#207).
+
+    In rGFA each segment carries a stable rank ``SR`` naming which sequence it came
+    from — rank ``"0"`` is the reference backbone — and ``SN`` names its contig. Both
+    are kept as the strings they are on disk: ``sr`` is compared as ``"0"`` and ``sn``
+    is sorted as text, so coercing ``sr`` to ``int`` would break the comparison and
+    change the JSON. Either may be absent (``None``); ``parse_gfa_segment_tags`` only
+    emits a tag when at least one is present.
+
+    :pyattr:`is_reference_backbone` moves the "rank 0 ⇒ reference backbone" semantics —
+    which used to live only in the reader — onto the type.
+    """
+
+    sn: str | None = None
+    sr: str | None = None
+
+    @property
+    def is_reference_backbone(self) -> bool:
+        """True when this segment is a named rank-0 (reference-backbone) segment.
+
+        ``bool(self.sn)`` (not ``sn is not None``) preserves the reader's original
+        truthy ``t.get("SN")`` test: a blank ``SN:Z:`` (empty-string name) does not
+        anchor a reference claim, exactly as before #207.
+        """
+        return self.sr == "0" and bool(self.sn)
+
+    def to_json(self) -> dict:
+        """Serialize to the on-disk tag dict, omitting absent keys (``SN`` before ``SR``).
+
+        Reproduces the exact dict ``parse_gfa_segment_tags`` used to build, so the
+        cached ``gfa_segment_tags`` array is byte-identical to the pre-#207 format.
+        """
+        data: dict = {}
+        if self.sn is not None:
+            data["SN"] = self.sn
+        if self.sr is not None:
+            data["SR"] = self.sr
+        return data
+
+    @classmethod
+    def from_json(cls, data: dict) -> SegmentTag:
+        """Build from an on-disk tag dict (absent ``SN``/``SR`` become ``None``)."""
+        return cls(sn=data.get("SN"), sr=data.get("SR"))
+
+
 @dataclass(frozen=True, kw_only=True)
 class GfaEvidence(CachedEvidence):
     """Cached rGFA segment tags. An empty list is a valid hit (a plain GFA carries none)."""
 
     PAYLOAD_KEY: ClassVar[str] = "gfa_segment_tags"
 
-    gfa_segment_tags: list[dict]
+    gfa_segment_tags: list[SegmentTag]
+
+    def to_json(self) -> dict:
+        # The payload is typed SegmentTags; serialize each to its on-disk dict.
+        data = super().to_json()
+        data[self.PAYLOAD_KEY] = [tag.to_json() for tag in self.gfa_segment_tags]
+        return data
+
+    @classmethod
+    def from_json(cls, data: object) -> Any:
+        # Delegate identity/provenance parse + the cache-miss guard to the base, then
+        # rebuild the payload as typed SegmentTags (base built it as raw dicts).
+        base = super().from_json(data)
+        if base is None:
+            return None
+        assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
+        return replace(base, gfa_segment_tags=[SegmentTag.from_json(x) for x in data[cls.PAYLOAD_KEY]])

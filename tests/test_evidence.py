@@ -2,11 +2,14 @@
 
 import json
 
+import pytest
+
 from meta_disco.evidence import (
     BamEvidence,
     FastaEvidence,
     FastqEvidence,
     GfaEvidence,
+    SegmentTag,
     VcfEvidence,
     get_evidence_path,
 )
@@ -69,11 +72,16 @@ class TestRoundTrip:
         assert loaded.count == 3
 
     def test_gfa_round_trips(self, tmp_path):
-        tags = [{"SN": "chr1", "SR": "0"}, {"SN": "chr1", "SR": "1"}]
+        tags = [SegmentTag(sn="chr1", sr="0"), SegmentTag(sn="chr1", sr="1")]
         GfaEvidence(md5sum="f" * 32, file_name="x.gfa.gz", gfa_segment_tags=tags).save(tmp_path)
         loaded = GfaEvidence.load(tmp_path, "f" * 32)
         assert loaded.payload == tags
         assert loaded.count == 2
+        # On disk the tags are the same {"SN":..,"SR":..} dicts as before #207.
+        assert json.loads(get_evidence_path(tmp_path, "f" * 32).read_text())["gfa_segment_tags"] == [
+            {"SN": "chr1", "SR": "0"},
+            {"SN": "chr1", "SR": "1"},
+        ]
 
 
 class TestEmptyPayloadIsAHit:
@@ -196,8 +204,37 @@ class TestPayloadKeyIsTheOnDiskKey:
             (VcfEvidence(md5sum="a" * 32, file_name="f", header_text="#C"), "header_text"),
             (FastqEvidence(md5sum="a" * 32, file_name="f", read_names=["@r"]), "read_names"),
             (FastaEvidence(md5sum="a" * 32, file_name="f", contig_names=["c"]), "contig_names"),
-            (GfaEvidence(md5sum="a" * 32, file_name="f", gfa_segment_tags=[{"SN": "c"}]), "gfa_segment_tags"),
+            (GfaEvidence(md5sum="a" * 32, file_name="f", gfa_segment_tags=[SegmentTag(sn="c")]), "gfa_segment_tags"),
         ]
         for ev, key in cases:
             assert key == ev.PAYLOAD_KEY
             assert key in ev.to_json()
+
+
+class TestSegmentTag:
+    @pytest.mark.parametrize(
+        "sn,sr,expected",
+        [
+            ("chr1", "0", True),  # named rank-0 segment: the reference backbone
+            ("chr1", "1", False),  # rank 1: a sample haplotype, not the backbone
+            (None, "0", False),  # rank 0 but no name to anchor a contig
+            ("", "0", False),  # blank name (SN:Z: with no value) is not a name
+            ("chr1", None, False),  # no rank
+            (None, None, False),
+        ],
+    )
+    def test_is_reference_backbone(self, sn, sr, expected):
+        assert SegmentTag(sn=sn, sr=sr).is_reference_backbone is expected
+
+    def test_to_json_omits_absent_keys(self):
+        assert SegmentTag(sn="chr1", sr="0").to_json() == {"SN": "chr1", "SR": "0"}
+        assert SegmentTag(sn="chr1").to_json() == {"SN": "chr1"}
+        assert SegmentTag(sr="0").to_json() == {"SR": "0"}
+        assert SegmentTag().to_json() == {}
+
+    def test_from_json_round_trips(self):
+        for tag in (SegmentTag(sn="chr1", sr="0"), SegmentTag(sn="chr1"), SegmentTag(sr="0"), SegmentTag()):
+            assert SegmentTag.from_json(tag.to_json()) == tag
+
+    def test_from_json_missing_keys_become_none(self):
+        assert SegmentTag.from_json({}) == SegmentTag(sn=None, sr=None)
