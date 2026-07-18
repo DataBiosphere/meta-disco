@@ -15,6 +15,8 @@ from .contig_lengths import (
 from .header_extractors import (
     SAMHeader,
     VCFHeader,
+    VcfSimpleMeta,
+    VcfStructuredMeta,
     extract_sam_field,
     get_contig_lines,
     has_sam_section,
@@ -48,6 +50,8 @@ __all__ = [
     # Header extractors
     "SAMHeader",
     "VCFHeader",
+    "VcfSimpleMeta",
+    "VcfStructuredMeta",
     "parse_sam_header",
     "parse_vcf_header",
     "extract_sam_field",
