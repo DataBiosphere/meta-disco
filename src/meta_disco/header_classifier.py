@@ -9,7 +9,7 @@ The actual classification rules are defined in the bundled unified_rules.yaml
 """
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, fields, replace
 from functools import cache
 from typing import TYPE_CHECKING
 
@@ -32,6 +32,37 @@ if TYPE_CHECKING:
 # GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
 # the config cannot disagree about which names it may trust.
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
+
+
+@dataclass(frozen=True)
+class FastqReadMetadata:
+    """FASTQ-specific scalar metadata spliced into a classification result.
+
+    The five scalars ``classify_from_fastq_header`` derives while inspecting a
+    file's reads: the paired-end flag (from read names, falling back to the
+    filename), the instrument model (from the Illumina or PacBio read-name
+    parse), the Illumina instrument hint, and the ENA/SRA archive accession and
+    source. Both build sites in that function construct this and call
+    ``merge_into``, so the key set is declared in one place instead of two
+    literals that must be kept in sync.
+    """
+
+    is_paired_end: bool | None = None
+    instrument_model: str | None = None
+    instrument_hint: str | None = None
+    archive_accession: str | None = None
+    archive_source: str | None = None
+
+    def merge_into(self, classifications: dict) -> None:
+        """Splice the fields into ``classifications`` as flat scalar keys.
+
+        Mutates the passed dict (not ``self``). Keys are derived from the field
+        list, so the merged key set cannot drift from the declared fields (the
+        ``records.py`` ``to_dict`` convention). The scalars are stored flat — not
+        as ``{value, status, evidence}`` entries — because that is how
+        ``models.field_value`` reads them and what keeps the output byte-identical.
+        """
+        classifications.update({f.name: getattr(self, f.name) for f in fields(self)})
 
 
 @cache
@@ -237,18 +268,15 @@ def classify_from_fastq_header(
     # (reads are unaligned), matching the non-empty path (#131); the remaining
     # dimensions are not_classified.
     if not reads or not reads[0]:
-        return {
+        entries = {
             "data_modality": build_field_entry(None, status=NOT_CLASSIFIED),
             "data_type": build_field_entry("reads", status=CLASSIFIED),
             "platform": build_field_entry(None, status=NOT_CLASSIFIED),
             "reference_assembly": build_field_entry(None, status=NOT_APPLICABLE),
             "assay_type": build_field_entry(None, status=NOT_CLASSIFIED),
-            "is_paired_end": None,
-            "instrument_model": None,
-            "instrument_hint": None,
-            "archive_accession": None,
-            "archive_source": None,
         }
+        FastqReadMetadata().merge_into(entries)
+        return entries
 
     # Get first read for classification
     first_read = reads[0]
@@ -328,11 +356,13 @@ def classify_from_fastq_header(
             break
 
     classifications = result.to_output_dict()
-    classifications["is_paired_end"] = is_paired_end
-    classifications["instrument_model"] = instrument_model
-    classifications["instrument_hint"] = instrument_hint
-    classifications["archive_accession"] = archive_accession
-    classifications["archive_source"] = archive_source
+    FastqReadMetadata(
+        is_paired_end=is_paired_end,
+        instrument_model=instrument_model,
+        instrument_hint=instrument_hint,
+        archive_accession=archive_accession,
+        archive_source=archive_source,
+    ).merge_into(classifications)
     return classifications
 
 

@@ -24,6 +24,8 @@ def val(result: dict, field: str):
 
 
 from meta_disco.header_classifier import (
+    # Result models
+    FastqReadMetadata,
     # Classification functions
     classify_from_fastq_header,
     classify_from_header,
@@ -280,6 +282,65 @@ class TestParseOntReadName:
 # =============================================================================
 # FASTQ CLASSIFICATION TESTS
 # =============================================================================
+
+
+class TestFastqReadMetadata:
+    """Test the FastqReadMetadata merge into a classification result dict."""
+
+    # The flat scalar keys FastqReadMetadata owns, in the order it writes them.
+    SCALAR_KEYS = (
+        "is_paired_end",
+        "instrument_model",
+        "instrument_hint",
+        "archive_accession",
+        "archive_source",
+    )
+
+    def test_empty_metadata_merges_all_none(self):
+        """A default (all-None) instance splices five None-valued scalar keys."""
+        entries = {"data_type": "reads"}
+        FastqReadMetadata().merge_into(entries)
+        assert list(entries.keys()) == ["data_type", *self.SCALAR_KEYS]
+        for key in self.SCALAR_KEYS:
+            assert entries[key] is None
+
+    def test_populated_metadata_merges_values(self):
+        """A populated instance splices its field values under the flat keys."""
+        entries = {"data_type": "reads"}
+        FastqReadMetadata(
+            is_paired_end=True,
+            instrument_model="NovaSeq 6000",
+            instrument_hint="A00297",
+            archive_accession="ERR3242571",
+            archive_source="ENA",
+        ).merge_into(entries)
+        assert entries == {
+            "data_type": "reads",
+            "is_paired_end": True,
+            "instrument_model": "NovaSeq 6000",
+            "instrument_hint": "A00297",
+            "archive_accession": "ERR3242571",
+            "archive_source": "ENA",
+        }
+
+    def test_empty_input_path_produces_ten_keys_in_order(self):
+        """The empty-reads path returns the five entry keys then the five scalars.
+
+        Asserts insertion order, not just the key set: the output is json-dumped
+        to NDJSON and the PR's contract is byte-identical output, so key order is
+        part of what must not regress.
+        """
+        result = classify_from_fastq_header([])
+        assert list(result.keys()) == [
+            "data_modality",
+            "data_type",
+            "platform",
+            "reference_assembly",
+            "assay_type",
+            *self.SCALAR_KEYS,
+        ]
+        for key in self.SCALAR_KEYS:
+            assert result[key] is None
 
 
 class TestFastqClassification:
