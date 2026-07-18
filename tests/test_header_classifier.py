@@ -36,6 +36,7 @@ from meta_disco.header_classifier import (
     parse_ont_read_name,
     parse_pacbio_read_name,
 )
+from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 # =============================================================================
 # HELPER FUNCTION TESTS
@@ -169,40 +170,40 @@ class TestParseIlluminaReadName:
         """Parse modern Illumina format with all fields."""
         result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG")
         assert result is not None
-        assert result["format"] == "modern"
-        assert result["instrument"] == "A00297"
-        assert result["run_number"] == 44
-        assert result["flowcell"] == "HFKH3DSXX"
-        assert result["lane"] == 2
-        assert result["tile"] == 1354
-        assert result["read"] == 1
-        assert result["filtered"] is False
-        assert result["index"] == "ATCACG"
+        assert result.format is IlluminaFormat.MODERN
+        assert result.instrument == "A00297"
+        assert result.run_number == 44
+        assert result.flowcell == "HFKH3DSXX"
+        assert result.lane == 2
+        assert result.tile == 1354
+        assert result.read == 1
+        assert result.filtered is False
+        assert result.index == "ATCACG"
 
     def test_modern_format_minimal(self):
         """Parse modern format without optional second part."""
         result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839")
         assert result is not None
-        assert result["instrument"] == "A00297"
-        assert "read" not in result
+        assert result.instrument == "A00297"
+        assert result.read is None
 
     def test_legacy_format(self):
         """Parse legacy Illumina format."""
         result = parse_illumina_read_name("@HWUSI-EAS100R:6:73:941:1973#ATCACG/1")
         assert result is not None
-        assert result["format"] == "legacy"
-        assert result["instrument"] == "HWUSI-EAS100R"
-        assert result["lane"] == 6
-        assert result["index"] == "ATCACG"
-        assert result["read"] == 1
+        assert result.format is IlluminaFormat.LEGACY
+        assert result.instrument == "HWUSI-EAS100R"
+        assert result.lane == 6
+        assert result.index == "ATCACG"
+        assert result.read == 1
 
     def test_archive_reformatted(self):
         """Parse archive-reformatted Illumina read."""
         result = parse_illumina_read_name("@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839")
         assert result is not None
-        assert result["archive_accession"] == "ERR3242571"
-        assert result["archive_source"] == "ENA"
-        assert result["instrument"] == "A00297"
+        assert result.archive_accession == "ERR3242571"
+        assert result.archive_source == "ENA"
+        assert result.instrument == "A00297"
 
     def test_non_illumina(self):
         """Return None for non-Illumina format."""
@@ -217,34 +218,34 @@ class TestParsePacbioReadName:
         """Parse CCS/HiFi read name."""
         result = parse_pacbio_read_name("@m64011_190830_220126/1/ccs")
         assert result is not None
-        assert result["format"] == "ccs"
-        assert result["movie"] == "m64011_190830_220126"
-        assert result["zmw"] == 1
-        assert result["read_type"] == "CCS"
+        assert result.format is PacBioFormat.CCS
+        assert result.movie == "m64011_190830_220126"
+        assert result.zmw == 1
+        assert result.read_type == "CCS"
 
     def test_clr_format(self):
         """Parse CLR subread name."""
         result = parse_pacbio_read_name("@m64011_190830_220126/1234/0_5000")
         assert result is not None
-        assert result["format"] == "clr"
-        assert result["movie"] == "m64011_190830_220126"
-        assert result["zmw"] == 1234
-        assert result["start"] == 0
-        assert result["end"] == 5000
-        assert result["read_type"] == "CLR"
+        assert result.format is PacBioFormat.CLR
+        assert result.movie == "m64011_190830_220126"
+        assert result.zmw == 1234
+        assert result.start == 0
+        assert result.end == 5000
+        assert result.read_type == "CLR"
 
     def test_generic_format(self):
         """Parse generic PacBio read name."""
         result = parse_pacbio_read_name("@m64011_190830_220126/1234")
         assert result is not None
-        assert result["format"] == "generic"
-        assert result["zmw"] == 1234
+        assert result.format is PacBioFormat.GENERIC
+        assert result.zmw == 1234
 
     def test_sequel_ii_movie(self):
         """Parse Sequel II movie name (with 'e' suffix)."""
         result = parse_pacbio_read_name("@m64011e_210101_120000/1/ccs")
         assert result is not None
-        assert result["movie"] == "m64011e_210101_120000"
+        assert result.movie == "m64011e_210101_120000"
 
     def test_non_pacbio(self):
         """Return None for non-PacBio format."""
@@ -258,17 +259,17 @@ class TestParseOntReadName:
         """Parse ONT UUID read name."""
         result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890")
         assert result is not None
-        assert result["format"] == "ont"
-        assert result["uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        assert result.format == "ont"
+        assert result.uuid == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
     def test_uuid_with_metadata(self):
         """Parse ONT read name with key=value metadata."""
         result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123 read=456 ch=789")
         assert result is not None
-        assert result["uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        assert result["runid"] == "abc123"
-        assert result["read"] == "456"
-        assert result["ch"] == "789"
+        assert result.uuid == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        assert result.metadata["runid"] == "abc123"
+        assert result.metadata["read"] == "456"
+        assert result.metadata["ch"] == "789"
 
     def test_non_ont(self):
         """Return None for non-ONT format."""

@@ -24,6 +24,12 @@ from .header_extractors import (
     parse_vcf_header,
 )
 from .read_name_parsers import (
+    IlluminaFormat,
+    IlluminaReadName,
+    MgiReadName,
+    OntReadName,
+    PacBioFormat,
+    PacBioReadName,
     detect_paired_end_indicators,
     detect_platform_from_read_name,
     extract_archive_accession,
@@ -50,6 +56,12 @@ __all__ = [
     "has_sam_section",
     "get_contig_lines",
     # Read name parsers
+    "IlluminaFormat",
+    "IlluminaReadName",
+    "PacBioFormat",
+    "PacBioReadName",
+    "OntReadName",
+    "MgiReadName",
     "extract_archive_accession",
     "infer_illumina_instrument_model",
     "parse_illumina_read_name",

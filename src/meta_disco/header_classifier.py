@@ -314,17 +314,17 @@ def classify_from_fastq_header(
         # Try to parse as Illumina
         parsed = parse_illumina_read_name(read)
         if parsed:
-            instrument_model = parsed.get("instrument_model")
-            instrument_hint = parsed.get("instrument")
-            if parsed.get("archive_accession"):
-                archive_accession = parsed["archive_accession"]
-                archive_source = parsed["archive_source"]
+            instrument_model = parsed.instrument_model
+            instrument_hint = parsed.instrument
+            if parsed.archive_accession:
+                archive_accession = parsed.archive_accession
+                archive_source = parsed.archive_source
             break
 
         # Try to parse as PacBio
-        parsed = parse_pacbio_read_name(read)
-        if parsed:
-            instrument_model = parsed.get("instrument_model")
+        pacbio = parse_pacbio_read_name(read)
+        if pacbio:
+            instrument_model = pacbio.instrument_model
             break
 
     classifications = result.to_output_dict()
