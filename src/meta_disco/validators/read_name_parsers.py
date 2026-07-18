@@ -2,9 +2,99 @@
 
 These functions parse FASTQ read names to extract platform-specific
 information like instrument ID, run number, flowcell, ZMW, etc.
+
+Each parser returns a frozen per-platform dataclass (or None if the read
+name does not match that platform), so the fields a branch produces are
+declared in one place instead of assembled ad hoc into a bare dict.
 """
 
+from __future__ import annotations
+
 import re
+from dataclasses import dataclass, field
+from enum import Enum
+
+
+class IlluminaFormat(Enum):
+    """Illumina read-name layout: modern (Casava 1.8+) or legacy."""
+
+    MODERN = "modern"
+    LEGACY = "legacy"
+
+
+class PacBioFormat(Enum):
+    """PacBio read-name layout: CCS/HiFi, CLR subread, or generic."""
+
+    CCS = "ccs"
+    CLR = "clr"
+    GENERIC = "generic"
+
+
+@dataclass(frozen=True)
+class IlluminaReadName:
+    """Parsed Illumina read name.
+
+    Covers both modern and legacy layouts in one type: ``run_number`` and
+    ``flowcell`` are modern-only and stay None for legacy reads; the second
+    modern block (``read``/``filtered``/``control``/``index``) is optional;
+    archive fields are set only for ENA/SRA/DDBJ-reformatted reads.
+    """
+
+    format: IlluminaFormat
+    instrument: str
+    instrument_model: str | None
+    lane: int
+    tile: int
+    x: int
+    y: int
+    run_number: int | None = None
+    flowcell: str | None = None
+    read: int | None = None
+    filtered: bool | None = None
+    control: int | None = None
+    index: str | None = None
+    archive_accession: str | None = None
+    archive_source: str | None = None
+
+
+@dataclass(frozen=True)
+class PacBioReadName:
+    """Parsed PacBio read name; ``start``/``end`` are CLR-only."""
+
+    format: PacBioFormat
+    movie: str
+    zmw: int
+    instrument_model: str | None
+    read_type: str | None = None
+    start: int | None = None
+    end: int | None = None
+
+
+@dataclass(frozen=True)
+class OntReadName:
+    """Parsed Oxford Nanopore read name.
+
+    ``uuid`` is the fixed spine; the arbitrary trailing ``key=value`` pairs
+    are kept under ``metadata`` rather than flattened onto attributes.
+    """
+
+    uuid: str
+    metadata: dict[str, str] = field(default_factory=dict)
+    format: str = "ont"
+
+
+@dataclass(frozen=True)
+class MgiReadName:
+    """Parsed MGI/BGI read name."""
+
+    flowcell: str
+    lane: int
+    column: int
+    row: int
+    read_number: int
+    pair: int | None = None
+    format: str = "mgi"
+
 
 # Illumina instrument ID prefix -> model name mapping
 # Order matters: more specific prefixes (A0, A1, VH) must come before less specific (A, N)
@@ -104,7 +194,7 @@ def detect_paired_end_indicators(text: str) -> bool:
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
 
-def parse_illumina_read_name(read_name: str) -> dict | None:
+def parse_illumina_read_name(read_name: str) -> IlluminaReadName | None:
     """
     Parse an Illumina read name into its components.
 
@@ -118,7 +208,7 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
         read_name: FASTQ read name starting with @
 
     Returns:
-        Dict with parsed fields or None if not Illumina format
+        IlluminaReadName or None if not Illumina format
     """
     # Strip @ prefix if present
     name = read_name.lstrip("@")
@@ -137,30 +227,30 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
     if match:
         groups = match.groups()
         instrument_id = groups[0]
-        result = {
-            "format": "modern",
-            "instrument": instrument_id,
-            "run_number": int(groups[1]),
-            "flowcell": groups[2],
-            "lane": int(groups[3]),
-            "tile": int(groups[4]),
-            "x": int(groups[5]),
-            "y": int(groups[6]),
-            "instrument_model": infer_illumina_instrument_model(instrument_id),
-        }
-        if groups[7]:  # Optional second part
-            result.update(
-                {
-                    "read": int(groups[7]),
-                    "filtered": groups[8] == "Y",
-                    "control": int(groups[9]),
-                    "index": groups[10],
-                }
-            )
-        if accession:
-            result["archive_accession"] = accession
-            result["archive_source"] = source
-        return result
+        # Optional second block: read:filtered:control:index
+        read = filtered = control = index = None
+        if groups[7]:
+            read = int(groups[7])
+            filtered = groups[8] == "Y"
+            control = int(groups[9])
+            index = groups[10]
+        return IlluminaReadName(
+            format=IlluminaFormat.MODERN,
+            instrument=instrument_id,
+            instrument_model=infer_illumina_instrument_model(instrument_id),
+            run_number=int(groups[1]),
+            flowcell=groups[2],
+            lane=int(groups[3]),
+            tile=int(groups[4]),
+            x=int(groups[5]),
+            y=int(groups[6]),
+            read=read,
+            filtered=filtered,
+            control=control,
+            index=index,
+            archive_accession=accession,
+            archive_source=source,
+        )
 
     # Legacy Illumina format: instrument:lane:tile:x:y#index/read
     legacy_pattern = re.compile(r"^([A-Z0-9-]+):(\d+):(\d+):(\d+):(\d+)#([^/]+)/(\d)$")
@@ -168,21 +258,19 @@ def parse_illumina_read_name(read_name: str) -> dict | None:
     if match:
         groups = match.groups()
         instrument_id = groups[0]
-        result = {
-            "format": "legacy",
-            "instrument": instrument_id,
-            "lane": int(groups[1]),
-            "tile": int(groups[2]),
-            "x": int(groups[3]),
-            "y": int(groups[4]),
-            "index": groups[5],
-            "read": int(groups[6]),
-            "instrument_model": infer_illumina_instrument_model(instrument_id),
-        }
-        if accession:
-            result["archive_accession"] = accession
-            result["archive_source"] = source
-        return result
+        return IlluminaReadName(
+            format=IlluminaFormat.LEGACY,
+            instrument=instrument_id,
+            instrument_model=infer_illumina_instrument_model(instrument_id),
+            lane=int(groups[1]),
+            tile=int(groups[2]),
+            x=int(groups[3]),
+            y=int(groups[4]),
+            index=groups[5],
+            read=int(groups[6]),
+            archive_accession=accession,
+            archive_source=source,
+        )
 
     return None
 
@@ -199,7 +287,7 @@ def _infer_pacbio_instrument_model(movie: str) -> str | None:
     return None
 
 
-def parse_pacbio_read_name(read_name: str) -> dict | None:
+def parse_pacbio_read_name(read_name: str) -> PacBioReadName | None:
     """
     Parse a PacBio read name into its components.
 
@@ -213,7 +301,7 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
         read_name: FASTQ read name starting with @
 
     Returns:
-        Dict with parsed fields or None if not PacBio format
+        PacBioReadName or None if not PacBio format
     """
     name = read_name.lstrip("@")
 
@@ -230,45 +318,45 @@ def parse_pacbio_read_name(read_name: str) -> dict | None:
     match = ccs_pattern.match(name)
     if match:
         movie = match.group(1)
-        return {
-            "format": "ccs",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-            "read_type": "CCS",
-            "instrument_model": _infer_pacbio_instrument_model(movie),
-        }
+        return PacBioReadName(
+            format=PacBioFormat.CCS,
+            movie=movie,
+            zmw=int(match.group(2)),
+            read_type="CCS",
+            instrument_model=_infer_pacbio_instrument_model(movie),
+        )
 
     # CLR (subread) format: m64011_190830_220126/1234/0_5000
     clr_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)/(\d+)_(\d+)$")
     match = clr_pattern.match(name)
     if match:
         movie = match.group(1)
-        return {
-            "format": "clr",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-            "start": int(match.group(3)),
-            "end": int(match.group(4)),
-            "read_type": "CLR",
-            "instrument_model": _infer_pacbio_instrument_model(movie),
-        }
+        return PacBioReadName(
+            format=PacBioFormat.CLR,
+            movie=movie,
+            zmw=int(match.group(2)),
+            start=int(match.group(3)),
+            end=int(match.group(4)),
+            read_type="CLR",
+            instrument_model=_infer_pacbio_instrument_model(movie),
+        )
 
     # Generic PacBio: m64011_190830_220126/1234
     generic_pattern = re.compile(rf"^({MOVIE_PATTERN})/(\d+)$")
     match = generic_pattern.match(name)
     if match:
         movie = match.group(1)
-        return {
-            "format": "generic",
-            "movie": movie,
-            "zmw": int(match.group(2)),
-            "instrument_model": _infer_pacbio_instrument_model(movie),
-        }
+        return PacBioReadName(
+            format=PacBioFormat.GENERIC,
+            movie=movie,
+            zmw=int(match.group(2)),
+            instrument_model=_infer_pacbio_instrument_model(movie),
+        )
 
     return None
 
 
-def parse_ont_read_name(read_name: str) -> dict | None:
+def parse_ont_read_name(read_name: str) -> OntReadName | None:
     """
     Parse an Oxford Nanopore read name into its components.
 
@@ -279,7 +367,7 @@ def parse_ont_read_name(read_name: str) -> dict | None:
         read_name: FASTQ read name starting with @
 
     Returns:
-        Dict with parsed fields or None if not ONT format
+        OntReadName or None if not ONT format
     """
     name = read_name.lstrip("@")
 
@@ -287,22 +375,14 @@ def parse_ont_read_name(read_name: str) -> dict | None:
     uuid_pattern = re.compile(r"^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\s*(.*)$")
     match = uuid_pattern.match(name)
     if match:
-        result = {
-            "format": "ont",
-            "uuid": match.group(1),
-        }
-        # Parse key=value pairs if present
-        metadata = match.group(2)
-        if metadata:
-            pairs = re.findall(r"(\w+)=([^\s]+)", metadata)
-            for key, value in pairs:
-                result[key] = value
-        return result
+        # Parse arbitrary key=value pairs if present
+        metadata = dict(re.findall(r"(\w+)=([^\s]+)", match.group(2)))
+        return OntReadName(uuid=match.group(1), metadata=metadata)
 
     return None
 
 
-def parse_mgi_read_name(read_name: str) -> dict | None:
+def parse_mgi_read_name(read_name: str) -> MgiReadName | None:
     """
     Parse an MGI/BGI read name into its components.
 
@@ -313,7 +393,7 @@ def parse_mgi_read_name(read_name: str) -> dict | None:
         read_name: FASTQ read name starting with @
 
     Returns:
-        Dict with parsed fields or None if not MGI format
+        MgiReadName or None if not MGI format
     """
     name = read_name.lstrip("@")
 
@@ -322,17 +402,14 @@ def parse_mgi_read_name(read_name: str) -> dict | None:
     match = mgi_pattern.match(name)
     if match:
         groups = match.groups()
-        result = {
-            "format": "mgi",
-            "flowcell": groups[0],
-            "lane": int(groups[1]),
-            "column": int(groups[2]),
-            "row": int(groups[3]),
-            "read_number": int(groups[4]),
-        }
-        if groups[5]:
-            result["pair"] = int(groups[5])
-        return result
+        return MgiReadName(
+            flowcell=groups[0],
+            lane=int(groups[1]),
+            column=int(groups[2]),
+            row=int(groups[3]),
+            read_number=int(groups[4]),
+            pair=int(groups[5]) if groups[5] else None,
+        )
 
     return None
 
