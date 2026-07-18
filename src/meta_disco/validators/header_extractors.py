@@ -316,7 +316,8 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
 
     Args:
         header: Parsed VCFHeader object
-        header_type: Type of header line (##reference, ##source, ##contig, ##INFO, ##FORMAT)
+        header_type: Type of header line (##reference, ##source, ##contig, ##INFO,
+            ##FORMAT, ##FILTER)
         pattern: Regex pattern to match
 
     Returns:
