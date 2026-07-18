@@ -92,7 +92,9 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         # coordinate inference (has_chr_prefix=False is never read when
         # max_coordinates is empty).
         raw_signals = ref_evidence.get(md5, {}).get("signals") if md5 else None
-        signals = BedSignals.from_evidence(raw_signals) if raw_signals else BedSignals.empty()
+        # None/absent -> genuine no-evidence (filename-only). A present-but-malformed
+        # record goes through from_evidence so its missing keys fail loud.
+        signals = BedSignals.from_evidence(raw_signals) if raw_signals is not None else BedSignals.empty()
 
         # Classify using unified classifier (rule engine + coordinate detection)
         classifications = classify_from_bed_signals(

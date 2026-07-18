@@ -196,7 +196,9 @@ def classify_bed_file(
     from_cache = False
     if use_cache:
         cached = load_cached_evidence(md5sum)
-        if cached and cached.get("signals"):
+        # Test key presence, not truthiness: a present-but-malformed "signals"
+        # goes through from_evidence and fails loud rather than silently refetching.
+        if cached and "signals" in cached:
             signals = BedSignals.from_evidence(cached["signals"])
             from_cache = True
         else:
