@@ -74,14 +74,22 @@ class TestMatchVcfHeaderPattern:
     HEADER = "\n".join(
         [
             "##reference=file:///GRCh38.fa",
+            "##source=MyCaller_v2",
             "##contig=<ID=chr1,length=248956422>",
             "##INFO=<ID=DP,Number=1,Type=Integer>",
+            "##FORMAT=<ID=GT,Number=1,Type=String>",
+            '##FILTER=<ID=LowQual,Description="Low quality">',
+            "##fileDate=20090805",
         ]
     )
 
     def test_reference_pattern_matches(self):
         header = parse_vcf_header(self.HEADER)
         assert match_vcf_header_pattern(header, "##reference", "GRCh38")
+
+    def test_source_pattern_matches(self):
+        header = parse_vcf_header(self.HEADER)
+        assert match_vcf_header_pattern(header, "##source", "MyCaller")
 
     def test_contig_value_pattern_matches(self):
         # Scans each contig field value individually, so this matches a bare
@@ -93,6 +101,20 @@ class TestMatchVcfHeaderPattern:
     def test_info_id_pattern_matches(self):
         header = parse_vcf_header(self.HEADER)
         assert match_vcf_header_pattern(header, "##INFO", "DP")
+
+    def test_format_id_pattern_matches(self):
+        header = parse_vcf_header(self.HEADER)
+        assert match_vcf_header_pattern(header, "##FORMAT", "GT")
+
+    def test_filter_id_pattern_matches(self):
+        header = parse_vcf_header(self.HEADER)
+        assert match_vcf_header_pattern(header, "##FILTER", "LowQual")
+
+    def test_other_meta_fallback_matches_raw_line(self):
+        # An unrecognized ## line lands in other_meta; the fallback branch
+        # matches on the raw line by its ## prefix.
+        header = parse_vcf_header(self.HEADER)
+        assert match_vcf_header_pattern(header, "##fileDate", "20090805")
 
     def test_no_match_returns_false(self):
         header = parse_vcf_header(self.HEADER)
