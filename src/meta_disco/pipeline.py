@@ -377,7 +377,7 @@ class ClassifyPipeline:
         """
         if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
             return False
-        from .fetchers import get_evidence_path
+        from .evidence import get_evidence_path
 
         return get_evidence_path(self.evidence_dir, md5sum).exists()
 
