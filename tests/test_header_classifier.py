@@ -323,17 +323,22 @@ class TestFastqReadMetadata:
             "archive_source": "ENA",
         }
 
-    def test_empty_input_path_produces_ten_keys(self):
-        """The empty-reads path returns the five entry keys plus the five scalars."""
+    def test_empty_input_path_produces_ten_keys_in_order(self):
+        """The empty-reads path returns the five entry keys then the five scalars.
+
+        Asserts insertion order, not just the key set: the output is json-dumped
+        to NDJSON and the PR's contract is byte-identical output, so key order is
+        part of what must not regress.
+        """
         result = classify_from_fastq_header([])
-        assert set(result.keys()) == {
+        assert list(result.keys()) == [
             "data_modality",
             "data_type",
             "platform",
             "reference_assembly",
             "assay_type",
             *self.SCALAR_KEYS,
-        }
+        ]
         for key in self.SCALAR_KEYS:
             assert result[key] is None
 

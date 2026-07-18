@@ -38,10 +38,12 @@ GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
 class FastqReadMetadata:
     """FASTQ-specific scalar metadata spliced into a classification result.
 
-    The five per-read scalars ``classify_from_fastq_header`` derives from read
-    names (paired-end flag, Illumina instrument model/hint, ENA/SRA archive
-    accession and source). Both build sites in that function construct this and
-    call ``merge_into``, so the key set is declared in one place instead of two
+    The five scalars ``classify_from_fastq_header`` derives while inspecting a
+    file's reads: the paired-end flag (from read names, falling back to the
+    filename), the instrument model (from the Illumina or PacBio read-name
+    parse), the Illumina instrument hint, and the ENA/SRA archive accession and
+    source. Both build sites in that function construct this and call
+    ``merge_into``, so the key set is declared in one place instead of two
     literals that must be kept in sync.
     """
 
