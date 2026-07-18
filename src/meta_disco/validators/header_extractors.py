@@ -19,17 +19,48 @@ class SAMHeader:
     co: list[str] | None = None  # @CO comments
 
 
+@dataclass(frozen=True)
+class VcfSimpleMeta:
+    """A ``##key=value`` VCF header line (e.g. ``##fileformat``, ``##reference``).
+
+    ``type`` is the key; ``value`` is everything after the ``=``. Distinct from
+    ``VcfStructuredMeta`` so that ``parse_vcf_header`` can dispatch on the concrete
+    type instead of a reserved ``_type`` key sharing the field namespace.
+    """
+
+    type: str
+    value: str
+
+
+@dataclass(frozen=True)
+class VcfStructuredMeta:
+    """A ``##TYPE=<key=value,...>`` VCF header line (e.g. ``##contig``, ``##INFO``).
+
+    ``type`` is the discriminator (``contig``/``INFO``/``FORMAT``/``FILTER``);
+    ``fields`` holds the parsed inner key=value pairs. Keeping ``fields`` separate
+    from ``type`` isolates the open-ended VCF key space from the discriminator, so
+    readers no longer need to skip reserved keys.
+    """
+
+    type: str
+    fields: dict[str, str]
+
+
+# A single parsed ``##`` VCF header line: a key=value line or a structured ``<...>`` line.
+VcfHeaderLine = VcfSimpleMeta | VcfStructuredMeta
+
+
 @dataclass
 class VCFHeader:
     """Parsed VCF header."""
 
     fileformat: str | None = None  # ##fileformat
     reference: str | None = None  # ##reference
-    contigs: list[dict[str, str]] | None = None  # ##contig lines
+    contigs: list[VcfStructuredMeta] | None = None  # ##contig lines
     source: str | None = None  # ##source
-    info_fields: list[dict[str, str]] | None = None  # ##INFO fields
-    format_fields: list[dict[str, str]] | None = None  # ##FORMAT fields
-    filter_fields: list[dict[str, str]] | None = None  # ##FILTER fields
+    info_fields: list[VcfStructuredMeta] | None = None  # ##INFO fields
+    format_fields: list[VcfStructuredMeta] | None = None  # ##FORMAT fields
+    filter_fields: list[VcfStructuredMeta] | None = None  # ##FILTER fields
     other_meta: list[str] | None = None  # Other ## lines
 
 
@@ -183,15 +214,16 @@ def has_sam_section(header: SAMHeader, section: str) -> bool:
     return False
 
 
-def parse_vcf_header_line(line: str) -> dict[str, str] | None:
+def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
     """
-    Parse a VCF header line with ID=value,Description="..." format.
+    Parse a VCF header line into a typed simple or structured record.
 
     Args:
         line: A VCF header line like ##INFO=<ID=DP,Number=1,Type=Integer,...>
 
     Returns:
-        Dict of parsed fields or None if not parseable
+        A VcfStructuredMeta for ``##TYPE=<...>`` lines, a VcfSimpleMeta for simple
+        ``##key=value`` lines, or None if not parseable.
     """
     # Match ##TYPE=<...> format
     match = re.match(r"^##(\w+)=<(.*)>$", line)
@@ -199,14 +231,14 @@ def parse_vcf_header_line(line: str) -> dict[str, str] | None:
         # Handle simple key=value format like ##fileformat=VCFv4.2
         simple_match = re.match(r"^##(\w+)=(.*)$", line)
         if simple_match:
-            return {"_type": simple_match.group(1), "_value": simple_match.group(2)}
+            return VcfSimpleMeta(type=simple_match.group(1), value=simple_match.group(2))
         return None
 
     header_type = match.group(1)
     content = match.group(2)
 
     # Parse key=value pairs (handling quoted values)
-    fields = {"_type": header_type}
+    fields: dict[str, str] = {}
 
     # Pattern for key=value or key="value with spaces"
     pattern = r'(\w+)=("[^"]*"|[^,]*)'
@@ -216,7 +248,7 @@ def parse_vcf_header_line(line: str) -> dict[str, str] | None:
             value = value[1:-1]
         fields[key] = value
 
-    return fields
+    return VcfStructuredMeta(type=header_type, fields=fields)
 
 
 def parse_vcf_header(header_text: str) -> VCFHeader:
@@ -244,21 +276,22 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         if parsed is None:
             continue
 
-        header_type = parsed.get("_type", "")
-
-        if header_type == "fileformat":
-            header.fileformat = parsed.get("_value")
-        elif header_type == "reference":
-            header.reference = parsed.get("_value")
-        elif header_type == "source":
-            header.source = parsed.get("_value")
-        elif header_type == "contig":
+        if isinstance(parsed, VcfSimpleMeta):
+            if parsed.type == "fileformat":
+                header.fileformat = parsed.value
+            elif parsed.type == "reference":
+                header.reference = parsed.value
+            elif parsed.type == "source":
+                header.source = parsed.value
+            else:
+                other_meta.append(line)
+        elif parsed.type == "contig":
             contigs.append(parsed)
-        elif header_type == "INFO":
+        elif parsed.type == "INFO":
             info_fields.append(parsed)
-        elif header_type == "FORMAT":
+        elif parsed.type == "FORMAT":
             format_fields.append(parsed)
-        elif header_type == "FILTER":
+        elif parsed.type == "FILTER":
             filter_fields.append(parsed)
         else:
             other_meta.append(line)
@@ -298,20 +331,23 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
     if header_type == "##contig" and header.contigs:
         for contig in header.contigs:
             # Check all fields in the contig line
-            for _key, value in contig.items():
-                if compiled.search(str(value)):
+            for value in contig.fields.values():
+                if compiled.search(value):
                     return True
     elif header_type == "##INFO" and header.info_fields:
         for info in header.info_fields:
-            if "ID" in info and compiled.search(info["ID"]):
+            info_id = info.fields.get("ID")
+            if info_id and compiled.search(info_id):
                 return True
     elif header_type == "##FORMAT" and header.format_fields:
         for fmt in header.format_fields:
-            if "ID" in fmt and compiled.search(fmt["ID"]):
+            fmt_id = fmt.fields.get("ID")
+            if fmt_id and compiled.search(fmt_id):
                 return True
     elif header_type == "##FILTER" and header.filter_fields:
         for flt in header.filter_fields:
-            if "ID" in flt and compiled.search(flt["ID"]):
+            flt_id = flt.fields.get("ID")
+            if flt_id and compiled.search(flt_id):
                 return True
     elif header.other_meta:
         # header_type already includes ## prefix (e.g., "##reference")
@@ -338,11 +374,7 @@ def get_contig_lines(header: VCFHeader) -> list[str]:
     lines = []
     for contig in header.contigs:
         # Reconstruct the line
-        parts = []
-        for key, value in contig.items():
-            if key.startswith("_"):
-                continue
-            parts.append(f"{key}={value}")
+        parts = [f"{key}={value}" for key, value in contig.fields.items()]
         lines.append(f"##contig=<{','.join(parts)}>")
 
     return lines
