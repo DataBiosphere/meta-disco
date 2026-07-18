@@ -270,10 +270,14 @@ class SegmentTag:
         return self.sr == "0" and bool(self.sn)
 
     def to_json(self) -> dict:
-        """Serialize to the on-disk tag dict, omitting absent keys (``SN`` before ``SR``).
+        """Serialize to the on-disk tag dict, omitting absent keys, ``SN`` before ``SR``.
 
-        Reproduces the exact dict ``parse_gfa_segment_tags`` used to build, so the
-        cached ``gfa_segment_tags`` array is byte-identical to the pre-#207 format.
+        Emits the same ``{"SN":.., "SR":..}`` dict ``parse_gfa_segment_tags`` used to
+        build. The key order here is canonical ``SN``-then-``SR``; for spec-compliant
+        rGFA (S-line tags ordered ``SN, SO, SR``) that matches the pre-#207 dict, whose
+        keys followed the tags' physical order in the line. A non-conformant line with
+        ``SR`` before ``SN`` would have produced the opposite key order before — a
+        difference in JSON key order only, not in the cached values or their meaning.
         """
         data: dict = {}
         if self.sn is not None:
@@ -310,4 +314,10 @@ class GfaEvidence(CachedEvidence):
         if base is None:
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        return replace(base, gfa_segment_tags=[SegmentTag.from_json(x) for x in data[cls.PAYLOAD_KEY]])
+        payload = data[cls.PAYLOAD_KEY]
+        # This subclass parses each item (unlike the pass-through payloads), so a
+        # corrupt file whose tags are not a list of dicts is a cache miss, not a crash
+        # — keeping load()'s "any miss -> None" contract at the boundary.
+        if not isinstance(payload, list) or not all(isinstance(x, dict) for x in payload):
+            return None
+        return replace(base, gfa_segment_tags=[SegmentTag.from_json(x) for x in payload])

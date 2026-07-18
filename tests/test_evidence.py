@@ -133,6 +133,26 @@ class TestUndecodableUnicodeIsAMiss:
         assert BamEvidence.load(tmp_path, "a" * 32) is None
 
 
+class TestMalformedGfaPayloadIsAMiss:
+    # GfaEvidence parses each tag item, so a corrupt file whose gfa_segment_tags is
+    # not a list of dicts must be a miss (re-fetch), not an AttributeError out of load().
+    def _write(self, tmp_path, md5, payload):
+        path = get_evidence_path(tmp_path, md5)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"md5sum": md5, "file_name": "x", "gfa_segment_tags": payload}))
+
+    @pytest.mark.parametrize("payload", ["oops", 5, {"SN": "chr1"}, ["not-a-dict"], [{"SN": "chr1"}, 7]])
+    def test_non_list_of_dicts_payload_is_a_miss(self, tmp_path, payload):
+        self._write(tmp_path, "a" * 32, payload)
+        assert GfaEvidence.load(tmp_path, "a" * 32) is None
+
+    def test_well_formed_list_of_dicts_still_loads(self, tmp_path):
+        self._write(tmp_path, "b" * 32, [{"SN": "chr1", "SR": "0"}])
+        loaded = GfaEvidence.load(tmp_path, "b" * 32)
+        assert loaded is not None
+        assert loaded.payload == [SegmentTag(sn="chr1", sr="0")]
+
+
 class TestCacheMiss:
     def test_missing_file_is_a_miss(self, tmp_path):
         assert BamEvidence.load(tmp_path, "a" * 32) is None
