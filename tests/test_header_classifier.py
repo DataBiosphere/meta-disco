@@ -288,13 +288,13 @@ class TestFastqReadMetadata:
     """Test the FastqReadMetadata merge into a classification result dict."""
 
     # The flat scalar keys FastqReadMetadata owns, in the order it writes them.
-    SCALAR_KEYS = [
+    SCALAR_KEYS = (
         "is_paired_end",
         "instrument_model",
         "instrument_hint",
         "archive_accession",
         "archive_source",
-    ]
+    )
 
     def test_empty_metadata_merges_all_none(self):
         """A default (all-None) instance splices five None-valued scalar keys."""
