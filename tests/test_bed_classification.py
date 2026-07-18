@@ -2,7 +2,7 @@
 
 import pytest
 
-from meta_disco.header_classifier import classify_from_bed_signals
+from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -274,44 +274,46 @@ class TestBedCoordinateClassification:
 
     def test_grch38_coordinates(self):
         """GRCh38 coordinates with chr prefix should detect GRCh38."""
-        signals = {
-            "chromosomes": ["chr1", "chr2", "chr3"],
-            "has_chr_prefix": True,
+        signals = BedSignals(
+            chromosomes=["chr1", "chr2", "chr3"],
+            has_chr_prefix=True,
             # GRCh38 chr1=248956422; use a value close but under
-            "max_coordinates": {"chr1": 248956000, "chr2": 242193000},
-        }
+            max_coordinates={"chr1": 248956000, "chr2": 242193000},
+        )
         result = classify_from_bed_signals(signals, file_name="sample.regions.bed.gz")
         ref = _get_val(result, "reference_assembly")
         assert ref in ("GRCh38", "CHM13"), f"Expected GRCh38 or CHM13, got {ref}"
 
     def test_no_chr_prefix_grch37(self):
         """No chr prefix on standard chroms -> GRCh37."""
-        signals = {
-            "chromosomes": ["1", "2", "3"],
-            "has_chr_prefix": False,
-            "max_coordinates": {"1": 200000000},
-        }
+        signals = BedSignals(
+            chromosomes=["1", "2", "3"],
+            has_chr_prefix=False,
+            max_coordinates={"1": 200000000},
+        )
         result = classify_from_bed_signals(signals, file_name="sample.bed")
         assert _get_val(result, "reference_assembly") == "GRCh37"
 
     def test_nonstandard_chroms_not_applicable(self):
         """Non-standard chromosome names -> reference is not_applicable."""
-        signals = {
-            "chromosomes": ["HG01106#1#JAHAMC010000001.1", "HG01106#1#JAHAMC010000002.1"],
-            "has_chr_prefix": False,
-            "max_coordinates": {"HG01106#1#JAHAMC010000001.1": 92310948},
-        }
+        signals = BedSignals(
+            chromosomes=["HG01106#1#JAHAMC010000001.1", "HG01106#1#JAHAMC010000002.1"],
+            has_chr_prefix=False,
+            max_coordinates={"HG01106#1#JAHAMC010000001.1": 92310948},
+        )
         result = classify_from_bed_signals(signals, file_name="sample.bed")
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_empty_signals_preserves_filename_classification(self):
         """Empty signals still returns rule engine classification from filename."""
-        result = classify_from_bed_signals({}, file_name="sample.modbam2bed.cpg.bed")
+        signals = BedSignals.empty()
+        result = classify_from_bed_signals(signals, file_name="sample.modbam2bed.cpg.bed")
         assert _get_val(result, "data_modality") == "epigenomic.methylation"
 
     def test_empty_signals_no_reference(self):
         """Empty signals should leave reference as not_classified."""
-        result = classify_from_bed_signals({}, file_name="sample.bed")
+        signals = BedSignals.empty()
+        result = classify_from_bed_signals(signals, file_name="sample.bed")
         assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
 
     def test_coordinates_exceeding_grch38_rule_it_out(self):
@@ -319,21 +321,46 @@ class TestBedCoordinateClassification:
         # CHM13 chr8=146259331, GRCh38 chr8=145138636, GRCh37 chr8=146364022
         # A coordinate of 145500000 exceeds GRCh38 but not CHM13 or GRCh37
         # chr prefix rules out GRCh37
-        signals = {
-            "chromosomes": ["chr8"],
-            "has_chr_prefix": True,
-            "max_coordinates": {"chr8": 145500000},
-        }
+        signals = BedSignals(
+            chromosomes=["chr8"],
+            has_chr_prefix=True,
+            max_coordinates={"chr8": 145500000},
+        )
         result = classify_from_bed_signals(signals, file_name="sample.bed")
         ref = _get_val(result, "reference_assembly")
         assert ref != "GRCh38", f"GRCh38 should be ruled out, got {ref}"
 
     def test_no_coordinates_no_crash(self):
         """Signals with empty max_coordinates should not crash."""
-        signals = {
-            "chromosomes": ["chr1"],
-            "has_chr_prefix": True,
-            "max_coordinates": {},
-        }
+        signals = BedSignals(
+            chromosomes=["chr1"],
+            has_chr_prefix=True,
+            max_coordinates={},
+        )
         result = classify_from_bed_signals(signals, file_name="sample.bed")
         assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
+
+
+class TestBedSignalsFromEvidence:
+    """Test the cached-evidence boundary parse."""
+
+    def test_parses_full_evidence(self):
+        raw = {
+            "chromosomes": ["chr1"],
+            "has_chr_prefix": True,
+            "max_coordinates": {"chr1": 248956000},
+            "line_count": 3,
+        }
+        assert BedSignals.from_evidence(raw) == BedSignals(
+            chromosomes=["chr1"],
+            has_chr_prefix=True,
+            max_coordinates={"chr1": 248956000},
+            line_count=3,
+        )
+
+    def test_missing_has_chr_prefix_raises(self):
+        # The #211 hazard: a missing has_chr_prefix used to default to True and
+        # flip the reference call. It must now raise at the boundary instead.
+        raw = {"chromosomes": ["1"], "max_coordinates": {"1": 200000000}, "line_count": 1}
+        with pytest.raises(KeyError):
+            BedSignals.from_evidence(raw)

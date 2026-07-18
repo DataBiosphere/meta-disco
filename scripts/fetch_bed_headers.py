@@ -16,13 +16,14 @@ import time
 import zlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from pathlib import Path
 from threading import Lock
 
 # Add project root to path
 import requests
 
-from meta_disco.header_classifier import classify_from_bed_signals
+from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import field_label
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -63,7 +64,7 @@ def save_evidence(md5sum: str, file_name: str, evidence: dict):
         json.dump(evidence, f, indent=2)
 
 
-def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | None = None) -> dict | None:
+def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | None = None) -> BedSignals | None:
     """Fetch BED data from S3 and extract reference signals in one pass.
 
     Instead of storing all lines, we stream through and track only:
@@ -133,11 +134,11 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | Non
         return None
 
 
-def extract_bed_signals(lines: list[str]) -> dict:
+def extract_bed_signals(lines: list[str]) -> BedSignals:
     """Extract reference assembly signals from BED lines.
 
-    Returns dict with:
-        - chromosomes: set of chromosome names seen
+    Returns a BedSignals with:
+        - chromosomes: sorted chromosome names seen
         - has_chr_prefix: whether chromosomes use 'chr' prefix
         - max_coordinates: dict of chrom -> max end coordinate
         - line_count: number of lines analyzed
@@ -168,12 +169,12 @@ def extract_bed_signals(lines: list[str]) -> dict:
 
     has_chr_prefix = any(c.startswith("chr") for c in chromosomes)
 
-    return {
-        "chromosomes": sorted(chromosomes),
-        "has_chr_prefix": has_chr_prefix,
-        "max_coordinates": dict(max_coords),
-        "line_count": line_count,
-    }
+    return BedSignals(
+        chromosomes=sorted(chromosomes),
+        has_chr_prefix=has_chr_prefix,
+        max_coordinates=dict(max_coords),
+        line_count=line_count,
+    )
 
 
 def classify_bed_file(
@@ -196,7 +197,7 @@ def classify_bed_file(
     if use_cache:
         cached = load_cached_evidence(md5sum)
         if cached and cached.get("signals"):
-            signals = cached["signals"]
+            signals = BedSignals.from_evidence(cached["signals"])
             from_cache = True
         else:
             signals = None
@@ -206,9 +207,12 @@ def classify_bed_file(
     # Fetch if not cached
     if signals is None:
         signals = fetch_bed_signals(md5sum, is_gzipped=is_gzipped, file_size=file_size)
-        if not signals:
+        if signals is None:
             return None
-        save_evidence(md5sum, file_name, {"signals": signals})
+        signals_dict = asdict(signals)
+        save_evidence(md5sum, file_name, {"signals": signals_dict})
+    else:
+        signals_dict = asdict(signals)
 
     # Classify using the unified classifier
     classifications = classify_from_bed_signals(
@@ -222,7 +226,7 @@ def classify_bed_file(
         "md5sum": md5sum,
         "file_size": file_size,
         "classifications": classifications,
-        "signals": signals,
+        "signals": signals_dict,
         "from_cache": from_cache,
     }
 
