@@ -82,7 +82,7 @@ def fetch_bed_signals(md5sum: str, is_gzipped: bool = True, file_size: int | Non
         file_size: Known file size in bytes (used to pick fetch size)
 
     Returns:
-        Signals dict or None on failure
+        BedSignals or None on failure
     """
     # Adaptive fetch size: small files get fetched whole, large ones get 10MB
     # HTTP Range end offset is inclusive, so bytes=0-N fetches N+1 bytes

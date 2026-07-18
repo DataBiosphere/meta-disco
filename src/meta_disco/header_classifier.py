@@ -818,8 +818,8 @@ class BedSignals:
         """Signals for a BED file with no coordinate evidence (never fetched).
 
         Yields filename-only classification: with empty ``max_coordinates`` the
-        coordinate block is skipped, so ``has_chr_prefix`` here is an unread
-        placeholder and is never consulted.
+        coordinate block that would read ``has_chr_prefix`` is skipped, so its
+        value here is an unread placeholder.
         """
         return cls(chromosomes=[], has_chr_prefix=False, max_coordinates={})
 
