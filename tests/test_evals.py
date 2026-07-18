@@ -22,6 +22,7 @@ from classify_fasta_files import classify_single_fasta as classify_fasta
 from classify_fastq_files import classify_single_fastq as classify_fastq
 from classify_vcf_files import classify_single_vcf as classify_vcf
 
+from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
 from meta_disco.header_classifier import classify_from_gfa_segment_tags, filename_for_rules
 from meta_disco.models import (
@@ -469,7 +470,7 @@ class TestRgfaContentClassification:
 
     def test_rank0_segments_are_pangenome_reference(self):
         """The real signal: minigraph rGFA, all leading segments SR:i:0 on chr1."""
-        tags = [{"SN": "chr1", "SR": "0"} for _ in range(5)]
+        tags = [SegmentTag(sn="chr1", sr="0") for _ in range(5)]
         record = classify_from_gfa_segment_tags(tags, file_name="hprc-v1.0-minigraph-grch38.gfa.gz")
         assert get_val(record, "data_type") == "pangenome.reference"
         # reference_assembly still comes from the filename rules, not content
@@ -486,7 +487,7 @@ class TestRgfaContentClassification:
         exact-match assertion would fail for a change unrelated to this behavior.
         """
         record = classify_from_gfa_segment_tags(
-            [{"SN": "chr1", "SR": "0"}], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+            [SegmentTag(sn="chr1", sr="0")], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
         )
         rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
         assert "pangenome_graph" in rules, "the tier-1 claim was clobbered"
@@ -500,7 +501,7 @@ class TestRgfaContentClassification:
         tier-1 `pangenome` claim. Pin the tier so resolving from claims agrees
         with the value set here."""
         record = classify_from_gfa_segment_tags(
-            [{"SN": "chr1", "SR": "0"}], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+            [SegmentTag(sn="chr1", sr="0")], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
         )
         claims = record["data_type"]["evidence"]
         content = next(c for c in claims if c["rule_id"] == "rgfa_stable_rank_reference")
@@ -510,7 +511,7 @@ class TestRgfaContentClassification:
 
     def test_nonzero_rank_only_stays_pangenome(self):
         """Non-reference haplotype segments (rank >= 1) do not make a reference graph."""
-        tags = [{"SN": "HG002#1#chr1", "SR": "1"}]
+        tags = [SegmentTag(sn="HG002#1#chr1", sr="1")]
         record = classify_from_gfa_segment_tags(tags, file_name="some-graph.gfa.gz")
         assert get_val(record, "data_type") == "pangenome"
 
@@ -531,7 +532,7 @@ class TestRgfaContentClassification:
 
     def test_rank0_without_stable_name_is_not_a_reference_claim(self):
         """SR without SN is malformed rGFA — no contig to anchor the claim."""
-        record = classify_from_gfa_segment_tags([{"SR": "0"}], file_name="some-graph.gfa")
+        record = classify_from_gfa_segment_tags([SegmentTag(sr="0")], file_name="some-graph.gfa")
         assert get_val(record, "data_type") == "pangenome"
 
     def test_empty_file_name_falls_back_to_file_format(self):
@@ -629,7 +630,7 @@ class TestGfaContentClaimCoherence:
         the rGFA claim forced data_type=pangenome.reference on a record whose
         data_modality was not_classified."""
         record = classify_from_gfa_segment_tags(
-            [{"SN": "chr1", "SR": "0"}],
+            [SegmentTag(sn="chr1", sr="0")],
             file_name="hprc-graph.tar.gz",
             file_format=".gfa.gz",
         )
@@ -642,7 +643,7 @@ class TestGfaContentClaimCoherence:
         assert get_val(record, "data_type") == "pangenome"
 
     def test_evidence_reason_is_singular_for_one_segment(self):
-        record = classify_from_gfa_segment_tags([{"SN": "chr1", "SR": "0"}], file_name="some-graph.gfa")
+        record = classify_from_gfa_segment_tags([SegmentTag(sn="chr1", sr="0")], file_name="some-graph.gfa")
         content = next(e for e in record["data_type"]["evidence"] if e["rule_id"] == "rgfa_stable_rank_reference")
         assert "1 rGFA segment carries" in content["reason"]
 
@@ -658,8 +659,8 @@ class TestGfaSegmentTagParsing:
             "L\ts1\t+\ts2\t+\t0M\n"
         )
         assert parse_gfa_segment_tags(text) == [
-            {"SN": "chr1", "SR": "0"},
-            {"SN": "chr1", "SR": "0"},
+            SegmentTag(sn="chr1", sr="0"),
+            SegmentTag(sn="chr1", sr="0"),
         ]
 
     def test_sequence_column_is_never_read_as_a_tag(self):
@@ -668,7 +669,7 @@ class TestGfaSegmentTagParsing:
         A parser that scanned every field would report SN=decoy here.
         """
         text = "S\ts1\tSN:Z:decoy\tSR:i:0\n"
-        assert parse_gfa_segment_tags(text) == [{"SR": "0"}]
+        assert parse_gfa_segment_tags(text) == [SegmentTag(sr="0")]
 
     def test_drops_truncated_trailing_line(self):
         """A byte-range cut leaves a partial final record — it must not be parsed.
@@ -677,7 +678,7 @@ class TestGfaSegmentTagParsing:
         parser would emit a segment whose tags are silently incomplete.
         """
         text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\nS\ts2\tACG\tSN:Z:chr1\tSR"
-        assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
+        assert parse_gfa_segment_tags(text) == [SegmentTag(sn="chr1", sr="0")]
 
     def test_keeps_unterminated_final_line_when_text_is_not_truncated(self):
         """A small complete rGFA with no trailing newline must keep its last segment.
@@ -688,7 +689,7 @@ class TestGfaSegmentTagParsing:
         """
         text = "H\tVN:Z:1.0\nS\ts1\tACGT\tSN:Z:chr1\tSR:i:0"
         assert parse_gfa_segment_tags(text, truncated=True) == []
-        assert parse_gfa_segment_tags(text, truncated=False) == [{"SN": "chr1", "SR": "0"}]
+        assert parse_gfa_segment_tags(text, truncated=False) == [SegmentTag(sn="chr1", sr="0")]
 
     def test_a_truncated_line_can_look_complete(self):
         """Why `truncated` cannot be inferred: this cut lands on a tag boundary."""
@@ -696,11 +697,11 @@ class TestGfaSegmentTagParsing:
         cut = full[: full.index("\tSO:i:5")]  # a clean, syntactically valid line
         assert cut == "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0"
         # Indistinguishable from the complete line in the test above.
-        assert parse_gfa_segment_tags(cut, truncated=False) == [{"SN": "chr1", "SR": "0"}]
+        assert parse_gfa_segment_tags(cut, truncated=False) == [SegmentTag(sn="chr1", sr="0")]
 
     def test_keeps_complete_trailing_line_when_newline_terminated(self):
         text = "S\ts1\tACGT\tSN:Z:chr1\tSR:i:0\n"
-        assert parse_gfa_segment_tags(text) == [{"SN": "chr1", "SR": "0"}]
+        assert parse_gfa_segment_tags(text) == [SegmentTag(sn="chr1", sr="0")]
 
     def test_untagged_segments_are_omitted(self):
         """Plain GFA 1.0 (minigraph-cactus): segments with no optional tags."""

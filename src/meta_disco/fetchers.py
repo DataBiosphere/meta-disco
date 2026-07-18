@@ -16,7 +16,7 @@ from pathlib import Path
 
 import requests
 
-from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, VcfEvidence
+from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, SegmentTag, VcfEvidence
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
@@ -407,13 +407,13 @@ def fetch_fasta_headers(
 # =============================================================================
 
 
-def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
+def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[SegmentTag]:
     """Parse rGFA stable-sequence tags from the S (segment) lines of GFA text.
 
-    Returns one dict per segment that carries at least one of `SN:Z:` (stable
-    sequence name) and `SR:i:` (stable rank). Segments with neither — every
-    segment of a plain GFA, such as a minigraph-cactus graph — are omitted, so
-    a plain GFA yields an empty list.
+    Returns one :class:`~meta_disco.evidence.SegmentTag` per segment that carries at
+    least one of `SN:Z:` (stable sequence name) and `SR:i:` (stable rank). Segments
+    with neither — every segment of a plain GFA, such as a minigraph-cactus graph —
+    are omitted, so a plain GFA yields an empty list.
 
     The sequence column is not sliced out into its own string: in a real graph it
     holds the full segment sequence and dominates the line, while the tags follow
@@ -447,14 +447,14 @@ def parse_gfa_segment_tags(text: str, truncated: bool = True) -> list[dict]:
         if pos == -1:
             continue  # fewer than 4 columns — no tag columns follow the sequence
 
-        tags = {}
+        sn = sr = None
         for fld in line[pos + 1 :].rstrip("\r").split("\t"):
             if fld.startswith("SN:Z:"):
-                tags["SN"] = fld[5:]
+                sn = fld[5:]
             elif fld.startswith("SR:i:"):
-                tags["SR"] = fld[5:]
-        if tags:
-            segments.append(tags)
+                sr = fld[5:]
+        if sn is not None or sr is not None:
+            segments.append(SegmentTag(sn=sn, sr=sr))
     return segments
 
 
@@ -467,11 +467,11 @@ def fetch_gfa_segment_tags(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> list[dict]:
+) -> list[SegmentTag]:
     """Read rGFA stable-sequence tags from the S lines at the head of a GFA file.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns a list of tag dicts, one per rGFA-tagged segment — empty for a plain
+    Returns a list of :class:`SegmentTag`s, one per rGFA-tagged segment — empty for a plain
     GFA, which is a successful read of a graph that carries no rGFA tags.
 
     Never returns None. A file that cannot be read or parsed raises FetchError,

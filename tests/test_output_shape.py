@@ -53,6 +53,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import schema_vocab
+from meta_disco.evidence import SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
@@ -114,7 +115,7 @@ GOLDEN_INPUTS = {
 
 STUB_HEADER = "stub-header-no-network"
 # Real fetchers return str (bam/vcf header text), list[str] (fastq reads / fasta
-# contig names), or list[dict] (gfa segment tags) — see fetchers.py. The stub
+# contig names), or list[SegmentTag] (gfa segment tags) — see fetchers.py. The stub
 # honors each type's contract so the golden exercises realistic classifier input
 # and stays robust if a classifier later type-guards its argument.
 STUB_PAYLOADS = {
@@ -122,7 +123,7 @@ STUB_PAYLOADS = {
     "vcf": STUB_HEADER,
     "fastq": [STUB_HEADER],
     "fasta": [STUB_HEADER],
-    "gfa": [{"SN": "chr1", "SR": "0"}],
+    "gfa": [SegmentTag(sn="chr1", sr="0")],
 }
 EVIDENCE_KEYS = {"rule_id", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}

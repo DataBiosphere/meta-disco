@@ -13,6 +13,7 @@ from dataclasses import replace
 from functools import cache
 from typing import TYPE_CHECKING
 
+from .evidence import SegmentTag
 from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
@@ -445,7 +446,7 @@ def classify_without_content(
 
 
 def classify_from_gfa_segment_tags(
-    segment_tags: list[dict],
+    segment_tags: list[SegmentTag],
     *,
     file_name: str | None = None,
     file_size: int | None = None,
@@ -468,7 +469,7 @@ def classify_from_gfa_segment_tags(
     The assembly is left to the shared filename_ref_* rules.
 
     Args:
-        segment_tags: Per-segment tag dicts from fetchers.parse_gfa_segment_tags
+        segment_tags: Per-segment :class:`SegmentTag`s from fetchers.parse_gfa_segment_tags
         file_name: Optional filename for extension/filename rules
         file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
             extension rules when file_name carries no known extension
@@ -495,9 +496,11 @@ def classify_from_gfa_segment_tags(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=False)
 
-    rank0 = [t for t in segment_tags if t.get("SR") == "0" and t.get("SN")]
+    rank0 = [t for t in segment_tags if t.is_reference_backbone]
     if rank0:
-        contigs = sorted({t["SN"] for t in rank0})
+        # is_reference_backbone guarantees a non-empty sn; the `if t.sn` narrows the
+        # optional type for the checker without changing the runtime set.
+        contigs = sorted({t.sn for t in rank0 if t.sn})
         preview = ", ".join(contigs[:3])
         phrase = "segment carries" if len(rank0) == 1 else "segments carry"
         # Appended as a tier-3 claim, not assigned over the list, so the tier-1
