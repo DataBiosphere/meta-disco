@@ -15,6 +15,7 @@ from meta_disco.rule_engine import (
     ExtendedFileInfo,
     ResolutionReason,
     RuleEngine,
+    _make_claim,
     evaluate_claims,
 )
 
@@ -189,6 +190,65 @@ class TestSetFieldValidation:
         result = ExtendedClassificationResult()
         with pytest.raises(ValueError, match="unknown classification field"):
             getattr(result, accessor)("platfrom")
+
+
+class TestMakeClaim:
+    """_make_claim enforces value-xor-status and a required tier."""
+
+    def test_value_claim_shape(self):
+        claim = _make_claim(rule_id="r", reason="because", tier=2, value="genomic")
+        assert claim == {"rule_id": "r", "reason": "because", "tier": 2, "value": "genomic"}
+        assert "status" not in claim
+
+    def test_status_claim_shape(self):
+        claim = _make_claim(rule_id="r", reason="n/a", tier=1, status=NOT_APPLICABLE)
+        assert claim == {"rule_id": "r", "reason": "n/a", "tier": 1, "status": NOT_APPLICABLE}
+        assert "value" not in claim
+
+    def test_rejects_both_value_and_status(self):
+        with pytest.raises(ValueError, match="exactly one of value/status"):
+            _make_claim(rule_id="r", reason="x", tier=1, value="genomic", status=NOT_APPLICABLE)
+
+    def test_rejects_neither_value_nor_status(self):
+        with pytest.raises(ValueError, match="exactly one of value/status"):
+            _make_claim(rule_id="r", reason="x", tier=1)
+
+    def test_tier_is_required(self):
+        with pytest.raises(TypeError):
+            _make_claim(rule_id="r", reason="x", value="genomic")  # type: ignore[call-arg]
+
+
+class TestAddClaim:
+    """add_claim's own wiring: append accumulates, then the field re-derives from
+    the full list. The tier/unanimity/conflict resolution itself is owned by
+    TestEvaluateClaims — add_claim forwards the whole list to it unchanged, so
+    these test the wrapper, not the resolution rules."""
+
+    def test_single_claim_appends_and_sets_value(self):
+        result = ExtendedClassificationResult()
+        result.add_claim("data_type", rule_id="r1", reason="x", tier=1, value="reads")
+        assert result.data_type == "reads"
+        assert result.status_of("data_type") == CLASSIFIED
+        assert result.field_evidence["data_type"] == [{"rule_id": "r1", "reason": "x", "tier": 1, "value": "reads"}]
+
+    def test_second_claim_accumulates_and_re_resolves(self):
+        # Two calls accumulate (append, not replace) and the field re-derives from
+        # the full list — here a same-tier disagreement resolves to not_classified,
+        # the semantics the wholesale-site migrations will later adopt (not
+        # last-writer-wins). The resolution rule itself is TestEvaluateClaims' job.
+        result = ExtendedClassificationResult()
+        result.add_claim("reference_assembly", rule_id="a", reason="x", tier=2, value="GRCh38")
+        result.add_claim("reference_assembly", rule_id="b", reason="y", tier=2, value="GRCh37")
+        assert len(result.field_evidence["reference_assembly"]) == 2
+        assert result.reference_assembly is None
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+
+    def test_rejects_unknown_field_before_appending(self):
+        # add_claim delegates field validation to _require_field and raises rather
+        # than appending a claim under a typo'd field.
+        result = ExtendedClassificationResult()
+        with pytest.raises(ValueError, match="unknown classification field"):
+            result.add_claim("data_typo", rule_id="a", reason="x", tier=1, value="reads")
 
 
 class TestDerivativeFiles:

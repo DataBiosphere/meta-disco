@@ -533,26 +533,22 @@ def classify_from_gfa_segment_tags(
         contigs = sorted({t.sn for t in rank0 if t.sn})
         preview = ", ".join(contigs[:3])
         phrase = "segment carries" if len(rank0) == 1 else "segments carry"
-        # Appended as a tier-3 claim, not assigned over the list, so the tier-1
-        # `pangenome_graph` claim survives and the derivation chain reads the same
-        # as the engine-resolved `-mc-` case. The tier matters: evaluate_claims
-        # defaults a missing tier to 0, which would lose to the tier-1 `pangenome`
-        # claim and undo this refinement once #150 resolves this path from claims.
-        result.field_evidence["data_type"].append(
-            {
-                "rule_id": "rgfa_stable_rank_reference",
-                "tier": 3,
-                "reason": (
-                    f"{len(rank0)} rGFA {phrase} stable rank 0 "
-                    f"(SR:i:0) on {preview} — graph defines a reference "
-                    f"coordinate system"
-                ),
-                "value": "pangenome.reference",
-            }
+        # Appended as a tier-3 claim (not assigned over the list) so the engine's
+        # tier-1 `pangenome_graph` claim survives and the derivation chain reads the
+        # same as the engine-resolved `-mc-` case; add_claim re-resolves from the
+        # full list so the refinement wins on its own. (See add_claim / _make_claim
+        # for the derive-from-claims and required-tier invariants.)
+        result.add_claim(
+            "data_type",
+            rule_id="rgfa_stable_rank_reference",
+            tier=3,
+            reason=(
+                f"{len(rank0)} rGFA {phrase} stable rank 0 "
+                f"(SR:i:0) on {preview} — graph defines a reference "
+                f"coordinate system"
+            ),
+            value="pangenome.reference",
         )
-        # Still set imperatively rather than resolved from the claims above;
-        # conflict detection for data_type is bypassed here (see #150).
-        result.set_field("data_type", "pangenome.reference")
 
     return result.to_output_dict()
 
