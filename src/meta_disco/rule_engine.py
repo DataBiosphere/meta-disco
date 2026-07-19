@@ -23,6 +23,17 @@ if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
 
 
+# Tiers 1-3 are the rule tiers declared in ``unified_rules.yaml`` (extension /
+# filename / header). Tier 4 is reserved for claims *derived from reading file
+# bytes* (contig lengths, VCF ``##contig`` lengths, FASTA content, GFA segment
+# tags) — a definitive signal that must out-rank even a disagreeing tier-3
+# filename/header rule. ``evaluate_claims`` needs no special case for it: its
+# "highest unique tier wins" rule already lets a tier-4 content claim override
+# lower tiers (issue #226; the migration of the content sites onto ``add_claim``
+# at this tier is #227).
+CONTENT_TIER = 4
+
+
 @dataclass
 class ExtendedFileInfo:
     """Extended file information including header data for tier 3 rules."""
@@ -360,6 +371,13 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
     - Claims disagree, same max tier → conflict (not_classified)
+
+    Tier ladder: tiers 1-3 are the rule tiers (extension / filename / header,
+    declared in ``unified_rules.yaml``); ``CONTENT_TIER`` (4) is reserved for
+    claims derived from reading file bytes. Because it is a unique tier above
+    every rule, the "highest unique tier wins" rule above makes a content claim
+    override a disagreeing tier-3 rule, and a content ``not_applicable`` win via
+    the terminal rule — no special case needed here (issue #226).
 
     Args:
         claims: List of evidence dicts, each with a ``value`` or a ``status`` and

@@ -74,6 +74,15 @@ evidence}` entry — plus the controlled vocabulary:
 - **Accuracy over efficiency**: Always prefer reading actual file content (headers, indices, range requests) over guessing from filenames. If there is an exact method to determine a classification — even if it requires downloading headers or running compute — use it.
 - **Accuracy over coverage**: It is better to leave a file as `not_classified` than to guess wrong. Only classify when evidence supports it.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
+- **Claim tiers**: A classification field's value is resolved from competing
+  claims by tier (`evaluate_claims`, highest unique tier wins). Tiers 1–3 are
+  the rule tiers declared in `unified_rules.yaml` (extension / filename /
+  header). `CONTENT_TIER` (4, in `rule_engine.py`) is reserved for claims
+  *derived from reading file bytes* (contig lengths, VCF `##contig` lengths,
+  FASTA content, GFA segment tags) — the definitive signal from the accuracy
+  principle above, which must out-rank even a disagreeing tier-3 header rule.
+  Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded number
+  (issue #226).
 
 ## Team roster
 

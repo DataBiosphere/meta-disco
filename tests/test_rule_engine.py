@@ -11,6 +11,7 @@ from meta_disco.models import (
     FileInfo,
 )
 from meta_disco.rule_engine import (
+    CONTENT_TIER,
     ExtendedClassificationResult,
     ExtendedFileInfo,
     ResolutionReason,
@@ -636,6 +637,58 @@ class TestEvaluateClaims:
         # Should have the rule's ID, not the generic "not_classified" placeholder
         assert "fastq_modality_unknown" in rule_ids
         assert "not_classified" not in rule_ids
+
+
+class TestContentTier:
+    """The definitive-content tier (issue #226).
+
+    ``CONTENT_TIER`` is a unique tier above the rule tiers (1-3), so
+    ``evaluate_claims`` resolves a byte-derived claim over any disagreeing rule
+    without a special case. These pin the resolution semantics the migration
+    (#227) relies on — that content wins its field, and content ``not_applicable``
+    stays terminal — not the rule tiers themselves.
+    """
+
+    def test_content_tier_is_above_the_rule_tiers(self):
+        """The reserved content tier sits strictly above the tier-3 rule ceiling."""
+        assert CONTENT_TIER > 3
+
+    def test_content_claim_overrides_disagreeing_tier3_rule(self):
+        """A tier-4 content claim beats a disagreeing tier-3 rule (override, not conflict)."""
+        result = evaluate_claims(
+            [
+                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "contig_length_detection", "value": "CHM13", "tier": CONTENT_TIER},
+            ]
+        )
+        assert result.value == "CHM13"
+        assert result.is_conflict is False
+        assert result.reason == ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE
+
+    def test_content_not_applicable_beats_tier3_real_value(self):
+        """A tier-4 content not_applicable wins terminally over a tier-3 real value."""
+        result = evaluate_claims(
+            [
+                {"rule_id": "filename_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "fasta_assembly_no_reference", "status": NOT_APPLICABLE, "tier": CONTENT_TIER},
+            ]
+        )
+        assert result.status == NOT_APPLICABLE
+        assert result.value is None
+        assert result.is_conflict is False
+        assert result.reason == ResolutionReason.NOT_APPLICABLE_TERMINAL
+
+    def test_content_claim_agreeing_with_rule_stays_unanimous(self):
+        """When content agrees with the rule, the field is unanimous, not a conflict."""
+        result = evaluate_claims(
+            [
+                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "contig_length_detection", "value": "GRCh38", "tier": CONTENT_TIER},
+            ]
+        )
+        assert result.value == "GRCh38"
+        assert result.is_conflict is False
+        assert result.reason == ResolutionReason.UNANIMOUS
 
 
 class TestAssayTypeInference:
