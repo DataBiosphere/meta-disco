@@ -908,7 +908,7 @@ def classify_from_bed_signals(
     Returns:
         Per-field classification dict with evidence
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     filename = file_name or "sample.bed"
     max_coordinates = signals.max_coordinates
@@ -927,28 +927,27 @@ def classify_from_bed_signals(
         coord_ref, coord_rationale = _infer_bed_reference(signals)
 
         if coord_ref and result.status_of("reference_assembly") != NOT_APPLICABLE:
-            # Coordinate detection reads the actual file content, so it overrides
-            # a filename-based reference guess (CLAUDE.md design principle: prefer
-            # reading actual file content over guessing from filenames). But it does
-            # not overturn an existing not_applicable — that is a positive
-            # determination ("no reference applies"), not a filename guess.
-            result.set_field("reference_assembly", coord_ref)
-            result.field_evidence["reference_assembly"] = [
-                {
-                    "rule_id": "bed_coordinate_reference",
-                    "reason": coord_rationale,
-                    "value": coord_ref,
-                }
-            ]
+            # Coordinate detection reads the actual file content, so at CONTENT_TIER
+            # it overrides a filename-based reference guess (CLAUDE.md design
+            # principle: prefer reading actual file content over guessing from
+            # filenames). The guard preserves an existing not_applicable — a positive
+            # determination ("no reference applies"), not a filename guess — which a
+            # CONTENT_TIER value claim would otherwise out-rank.
+            result.add_claim(
+                "reference_assembly",
+                rule_id="bed_coordinate_reference",
+                tier=CONTENT_TIER,
+                reason=coord_rationale,
+                value=coord_ref,
+            )
         elif "Non-standard chromosome" in coord_rationale:
-            result.set_field("reference_assembly", status=NOT_APPLICABLE)
-            result.field_evidence["reference_assembly"] = [
-                {
-                    "rule_id": "bed_nonstandard_contigs",
-                    "reason": coord_rationale,
-                    "status": NOT_APPLICABLE,
-                }
-            ]
+            result.add_claim(
+                "reference_assembly",
+                rule_id="bed_nonstandard_contigs",
+                tier=CONTENT_TIER,
+                reason=coord_rationale,
+                status=NOT_APPLICABLE,
+            )
 
     return result.to_output_dict()
 
