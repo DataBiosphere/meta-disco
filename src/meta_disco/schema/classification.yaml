@@ -209,7 +209,7 @@ slots:
   reason:
     description: Human-readable rationale.
   tier:
-    description: The rule tier at which this evidence fired.
+    description: The tier at which this evidence fired.
     range: integer
   source_type:
     description: "Kind of source that produced this evidence (provenance, #90)."

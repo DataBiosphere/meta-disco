@@ -32,7 +32,7 @@ from meta_disco.models import (
     field_status,
     field_value,
 )
-from meta_disco.rule_engine import RuleEngine, evaluate_claims
+from meta_disco.rule_engine import CONTENT_TIER, RuleEngine, evaluate_claims
 
 engine = RuleEngine()
 
@@ -496,16 +496,16 @@ class TestRgfaContentClassification:
             "the content claim must be appended after the base claim, not prepended"
         )
 
-    def test_content_claim_carries_tier_3(self):
-        """evaluate_claims defaults a missing tier to 0, which would lose to the
-        tier-1 `pangenome` claim. Pin the tier so resolving from claims agrees
-        with the value set here."""
+    def test_content_claim_carries_content_tier(self):
+        """The rGFA claim reads segment bytes, so it sits at CONTENT_TIER (#226) —
+        above the tier-1 `pangenome` claim it refines. Pin the tier so resolving
+        from claims agrees with the value set here."""
         record = classify_from_gfa_segment_tags(
             [SegmentTag(sn="chr1", sr="0")], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
         )
         claims = record["data_type"]["evidence"]
         content = next(c for c in claims if c["rule_id"] == "rgfa_stable_rank_reference")
-        assert content["tier"] == 3
+        assert content["tier"] == CONTENT_TIER
         # Resolving the claim list independently must reach the same value.
         assert evaluate_claims(claims).value == "pangenome.reference"
 

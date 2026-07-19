@@ -319,7 +319,7 @@
               {
                 "reason": "1 rGFA segment carries stable rank 0 (SR:i:0) on chr1 \u2014 graph defines a reference coordinate system",
                 "rule_id": "rgfa_stable_rank_reference",
-                "tier": 3,
+                "tier": 4,
                 "value": "pangenome.reference"
               }
             ],

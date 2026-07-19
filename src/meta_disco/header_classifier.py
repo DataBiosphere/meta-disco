@@ -511,7 +511,7 @@ def classify_from_gfa_segment_tags(
     Returns:
         Per-field classification dict (same format as classify_from_fasta_header)
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     filename = filename_for_rules(
         file_name,
@@ -533,15 +533,17 @@ def classify_from_gfa_segment_tags(
         contigs = sorted({t.sn for t in rank0 if t.sn})
         preview = ", ".join(contigs[:3])
         phrase = "segment carries" if len(rank0) == 1 else "segments carry"
-        # Appended as a tier-3 claim (not assigned over the list) so the engine's
-        # tier-1 `pangenome_graph` claim survives and the derivation chain reads the
-        # same as the engine-resolved `-mc-` case; add_claim re-resolves from the
-        # full list so the refinement wins on its own. (See add_claim / _make_claim
-        # for the derive-from-claims and required-tier invariants.)
+        # Appended as a CONTENT_TIER claim (read from the segments' SR/SN tags, not
+        # assigned over the list) so the engine's tier-1 `pangenome_graph` claim
+        # survives and the derivation chain reads the same as the engine-resolved
+        # `-mc-` case; add_claim re-resolves from the full list so the refinement
+        # wins on its own. CONTENT_TIER (above the rule tiers) is the reserved level
+        # for byte-derived claims — see rule_engine (#226). (See add_claim /
+        # _make_claim for the derive-from-claims and required-tier invariants.)
         result.add_claim(
             "data_type",
             rule_id="rgfa_stable_rank_reference",
-            tier=3,
+            tier=CONTENT_TIER,
             reason=(
                 f"{len(rank0)} rGFA {phrase} stable rank 0 "
                 f"(SR:i:0) on {preview} — graph defines a reference "
