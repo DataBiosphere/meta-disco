@@ -237,8 +237,8 @@ class ResolutionReason(str, Enum):
 class ClaimResolution:
     """The resolved outcome of ``evaluate_claims`` for one classification field.
 
-    ``competing_values`` is set only for a conflict; ``is_conflict`` derives from
-    it, so the two can never disagree.
+    ``competing_values`` is non-None only for a conflict (``None`` otherwise);
+    ``is_conflict`` derives from it, so the two can never disagree.
     """
 
     value: str | None
@@ -289,7 +289,7 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
-        competing_values (present iff conflict).
+        competing_values (non-None iff conflict).
     """
     # Drop the synthetic not_classified placeholder and empty claims, but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
