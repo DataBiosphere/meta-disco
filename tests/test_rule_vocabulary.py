@@ -275,6 +275,15 @@ def test_status_values_from_schema():
     assert schema_vocab.status_values() == frozenset({"classified", "not_applicable", "not_classified", "conflict"})
 
 
+def test_marker_constants_match_schema_enum():
+    # rule_engine emits synthetic markers whose `marker` kind must be a member of
+    # the schema's evidence_marker_enum (else LinkML output validation rejects
+    # them). Pin the Python constants to the schema so the two cannot drift (#228).
+    from meta_disco.rule_engine import CONFLICT_MARKER, NOT_CLASSIFIED_MARKER
+
+    assert {NOT_CLASSIFIED_MARKER, CONFLICT_MARKER} == schema_vocab.marker_values()
+
+
 def test_value_in_vocabulary_is_strict_dimension_only():
     # Antecedent/output check: a real dimension value passes; a status does NOT —
     # a status in a when/condition (or an output value) is a bug (#115, Stage 3).

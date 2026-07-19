@@ -133,6 +133,7 @@ classes:
       - value
       - status
       - tier
+      - competing_values
       - source_type
       - authority
       - reference
@@ -224,6 +225,12 @@ slots:
   tier:
     description: The tier at which this evidence fired.
     range: integer
+  competing_values:
+    description: >-
+      On a `conflict` marker, the disagreeing top-tier values that made the field
+      ambiguous. Absent on claims and on the `not_classified` marker.
+    multivalued: true
+    range: string
   source_type:
     description: "Kind of source that produced this evidence (provenance, #90)."
     range: source_type_enum

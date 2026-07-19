@@ -25,6 +25,10 @@ DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 # sentinel→status split): classified / not_applicable / not_classified / conflict.
 STATUS_ENUM = "classification_status_enum"
 
+# The enum defining the permissible synthetic-marker kinds on an evidence entry
+# (issue #228): not_classified / conflict.
+MARKER_ENUM = "evidence_marker_enum"
+
 # ``when`` condition keys whose value must be a member of a dimension enum,
 # mapped to that dimension. The rule engine compares these against enum values at
 # match time, so a typo'd value silently never matches rather than erroring — the
@@ -122,6 +126,20 @@ def status_values() -> frozenset[str]:
     if STATUS_ENUM not in enums:
         raise KeyError(f"Schema at {default_schema_path()} is missing enum {STATUS_ENUM!r}")
     return enums[STATUS_ENUM]
+
+
+def marker_values() -> frozenset[str]:
+    """Return the permissible synthetic-marker kinds from the schema.
+
+    The single source of truth for the evidence ``marker`` vocabulary
+    (not_classified / conflict, issue #228), so ``rule_engine``'s marker constants
+    stay pinned to the schema. Raises KeyError (with the schema path) if the schema
+    is missing the marker enum.
+    """
+    enums = _load_enums()
+    if MARKER_ENUM not in enums:
+        raise KeyError(f"Schema at {default_schema_path()} is missing enum {MARKER_ENUM!r}")
+    return enums[MARKER_ENUM]
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:

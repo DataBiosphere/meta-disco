@@ -123,20 +123,16 @@ def _make_claim(
 # Kinds of synthetic resolution marker ``_sync_markers`` appends to explain an
 # absent or ambiguous answer. These are NOT rules: a marker carries a ``marker``
 # kind and no ``rule_id`` (issue #228 — stop overloading ``rule_id`` to hold a
-# sentinel). ``marker`` is a string so more kinds can be added without a schema
-# migration.
+# sentinel). These must stay in lockstep with the schema's ``evidence_marker_enum``
+# (pinned by tests/test_rule_vocabulary.py); adding a kind means editing both.
 NOT_CLASSIFIED_MARKER = "not_classified"
 CONFLICT_MARKER = "conflict"
 
 
 def _is_synthetic_marker(entry: dict) -> bool:
-    """True if this evidence entry is a synthetic resolution marker rather than a
-    claim from a rule or content classifier.
-
-    A marker is identified by its ``marker`` kind, not by a magic ``rule_id``: a
-    rule-authored ``not_classified`` declaration carries a real ``rule_id`` and no
-    ``marker`` key, so it is a real claim and is not matched here.
-    """
+    """True if this evidence entry is a synthetic resolution marker (carries a
+    ``marker`` kind), not a claim. A rule-authored ``not_classified`` declaration
+    has a real ``rule_id`` and no ``marker``, so it is a claim, not a marker."""
     return "marker" in entry
 
 
@@ -445,8 +441,11 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     the terminal rule — no special case needed here (issue #226).
 
     Args:
-        claims: List of evidence dicts, each with a ``value`` or a ``status`` and
-                optionally ``tier`` / ``rule_id`` / ``reason``.
+        claims: List of evidence dicts, each declaring a ``value`` or a ``status``.
+                An assertive claim that reaches the disagreement path must carry a
+                ``tier`` (raises ``KeyError`` otherwise — #228); ``rule_id`` /
+                ``reason`` are optional here. Synthetic markers (which carry a
+                ``marker`` kind, no tier) are dropped before the tier math.
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
