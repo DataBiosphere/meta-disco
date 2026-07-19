@@ -200,7 +200,7 @@ class ExtendedClassificationResult:
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
-        # A rule just added a claim, so the synthetic "no rule determined a value"
+        # A claim was just added, so the synthetic "no rule determined a value"
         # placeholder _finalize_result may have appended is now false — drop it so
         # the evidence reads as the derivation.
         self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
