@@ -217,6 +217,16 @@ class TestMakeClaim:
         with pytest.raises(TypeError):
             _make_claim(rule_id="r", reason="x", value="genomic")  # type: ignore[call-arg]
 
+    def test_rejects_unknown_status(self):
+        # A status claim declares a non-classified sentinel only; a typo would
+        # otherwise be read as a real value and resolve the field CLASSIFIED to it.
+        with pytest.raises(ValueError, match="unknown status"):
+            _make_claim(rule_id="r", reason="x", tier=1, status="not_classifed")  # typo
+
+    def test_rejects_classified_as_status(self):
+        with pytest.raises(ValueError, match="unknown status"):
+            _make_claim(rule_id="r", reason="x", tier=1, status=CLASSIFIED)
+
 
 class TestAddClaim:
     """add_claim's own wiring: append accumulates, then the field re-derives from

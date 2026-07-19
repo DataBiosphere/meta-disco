@@ -84,11 +84,22 @@ def _make_claim(
     value). Shared construction site for ``_apply_rule`` and
     ``ExtendedClassificationResult.add_claim`` (other producers still hand-build
     claims until they migrate to ``add_claim`` — see #150).
+
+    A ``status`` claim declares a non-classified sentinel only
+    (``not_applicable`` / ``not_classified`` — the authorable statuses, never
+    ``classified``, which is expressed as a ``value`` claim). An unknown status
+    raises here; otherwise ``evaluate_claims`` would read the stray string as a
+    real value and resolve the field CLASSIFIED to it — a silent wrong answer.
     """
     if (value is None) == (status is None):
         raise ValueError(
             f"claim for rule {rule_id!r} must declare exactly one of value/status "
             f"(got value={value!r}, status={status!r})"
+        )
+    if status is not None and status not in (NOT_APPLICABLE, NOT_CLASSIFIED):
+        raise ValueError(
+            f"claim for rule {rule_id!r} has unknown status {status!r} "
+            f"(expected {NOT_APPLICABLE!r} or {NOT_CLASSIFIED!r})"
         )
     claim = {"rule_id": rule_id, "reason": reason, "tier": tier}
     if value is not None:
