@@ -507,7 +507,7 @@ class TestRgfaContentClassification:
         content = next(c for c in claims if c["rule_id"] == "rgfa_stable_rank_reference")
         assert content["tier"] == 3
         # Resolving the claim list independently must reach the same value.
-        assert evaluate_claims(claims)["value"] == "pangenome.reference"
+        assert evaluate_claims(claims).value == "pangenome.reference"
 
     def test_nonzero_rank_only_stays_pangenome(self):
         """Non-reference haplotype segments (rank >= 1) do not make a reference graph."""
