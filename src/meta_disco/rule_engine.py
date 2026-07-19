@@ -801,11 +801,17 @@ class RuleEngine:
             result.field_evidence["assay_type"] = [
                 e for e in result.field_evidence["assay_type"] if e.get("rule_id") != "not_classified"
             ]
+            # tier 3: this inference derives from already-resolved signals (the
+            # header-derived platform is typically tier 3), so it carries a tier
+            # rather than the tier-0 default #228 will forbid. It never competes —
+            # the is_declared guard above means it only fires when no other claim
+            # determined assay_type — so the tier is for consistency, not resolution.
             result.field_evidence["assay_type"].append(
                 {
                     "rule_id": "infer_assay_type",
                     "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
                     "value": assay_rule.assay_type,
+                    "tier": 3,
                 }
             )
             return
