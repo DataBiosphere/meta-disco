@@ -186,17 +186,24 @@ class ExtendedClassificationResult:
         Callers use this *after* ``classify_extended`` has run, so
         ``_finalize_result`` may already have appended a synthetic
         ``not_classified`` / conflict marker to the list. ``evaluate_claims``
-        ignores the ``"not_classified"`` placeholder when resolving, so the value
-        stays correct, but this method neither removes that stale marker nor
-        appends a fresh one — it only re-sets the field. Cleaning up prior markers
-        and emitting them on incremental adds is a follow-up (the ``rule_engine``
-        placeholder-filter revisit under #228).
+        ignores the ``"not_classified"`` placeholder when resolving. Adding any
+        claim makes that "no rule determined a value" placeholder false, so it is
+        dropped here (#227); the field still carries the claim just appended, so
+        its evidence is never emptied. Only the synthetic ``"not_classified"``
+        marker is removed; rule-authored not_classified declarations carry real
+        rule_ids and stay, and a conflict marker is left in place. Emitting *fresh*
+        markers on an incremental add, and requiring ``claim["tier"]`` in
+        ``evaluate_claims``, remain follow-ups (#228).
         """
         self._require_field(fld)
         claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
+        # A claim was just added, so the synthetic "no rule determined a value"
+        # placeholder _finalize_result may have appended is now false — drop it so
+        # the evidence reads as the derivation.
+        self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
 
     def _require_field(self, fld: str) -> None:
         """Raise ValueError for an unknown classification field, so every accessor
@@ -787,18 +794,20 @@ class RuleEngine:
             ):
                 continue
 
-            # All conditions passed — apply and record evidence
-            result.set_field("assay_type", assay_rule.assay_type)
-            # Remove stale not_classified placeholder if _finalize_result ran first
-            result.field_evidence["assay_type"] = [
-                e for e in result.field_evidence["assay_type"] if e.get("rule_id") != "not_classified"
-            ]
-            result.field_evidence["assay_type"].append(
-                {
-                    "rule_id": "infer_assay_type",
-                    "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
-                    "value": assay_rule.assay_type,
-                }
+            # All conditions passed — record the inference as a claim. add_claim
+            # sets the field, drops the synthetic not_classified placeholder, and
+            # enforces _make_claim's value-xor-status invariant. tier 3: the
+            # inference derives from already-resolved signals (the header-derived
+            # platform is typically tier 3), so it carries a tier rather than the
+            # tier-0 default #228 will forbid; it never competes (the is_declared
+            # guard above means it only fires when no other claim determined
+            # assay_type), so the tier is for consistency, not resolution.
+            result.add_claim(
+                "assay_type",
+                rule_id="infer_assay_type",
+                tier=3,
+                reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                value=assay_rule.assay_type,
             )
             return
 
