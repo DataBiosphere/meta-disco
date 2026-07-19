@@ -83,7 +83,7 @@ def _make_claim(
     the silent default that let the #151 rGFA near-miss resolve to the wrong
     value). Shared construction site for ``_apply_rule`` and
     ``ExtendedClassificationResult.add_claim`` (other producers still hand-build
-    claims until they migrate to ``add_claim`` — see #150).
+    claims until they migrate to ``add_claim`` — see #227).
 
     A ``status`` claim declares a non-classified sentinel only
     (``not_applicable`` / ``not_classified`` — the authorable statuses, never
@@ -179,7 +179,7 @@ class ExtendedClassificationResult:
         stays correct, but this method neither removes that stale marker nor
         appends a fresh one — it only re-sets the field. Cleaning up prior markers
         and emitting them on incremental adds is a follow-up (the ``rule_engine``
-        placeholder-filter revisit under #150).
+        placeholder-filter revisit under #228).
         """
         self._require_field(fld)
         claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
