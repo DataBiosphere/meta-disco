@@ -590,7 +590,7 @@ def classify_from_fasta_header(
     Returns:
         Per-field classification dict (same format as classify_from_fastq_header)
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
     from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
     filename = file_name or "sample.fa.gz"
@@ -621,26 +621,29 @@ def classify_from_fasta_header(
 
     # Classification logic
 
-    # 1. Transcript IDs → transcriptomic
+    # 1. Transcript IDs → transcriptomic. Contig names are read from the file, so
+    # these land at CONTENT_TIER; add_claim re-resolves from the full list (the
+    # tier-1 fasta_base data_type=sequence claim agrees and stays in the chain).
     if transcript_contigs and len(transcript_contigs) > len(ref_matches):
-        result.set_field("data_modality", "transcriptomic.bulk")
-        result.set_field("data_type", "sequence")
+        result.add_claim(
+            "data_modality",
+            rule_id="fasta_transcript_contigs",
+            tier=CONTENT_TIER,
+            reason=f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
+            value="transcriptomic.bulk",
+        )
+        result.add_claim(
+            "data_type",
+            rule_id="fasta_transcript_contigs",
+            tier=CONTENT_TIER,
+            reason="Transcript sequences in FASTA",
+            value="sequence",
+        )
+        # No content signal for reference here; assert not_classified only if a
+        # filename rule did not already determine it (asserts no claim, so it stays
+        # a bare set_field rather than an add_claim — issue #227 scope note).
         if not result.is_declared("reference_assembly"):
             result.set_field("reference_assembly", status=NOT_CLASSIFIED)
-        result.field_evidence["data_modality"] = [
-            {
-                "rule_id": "fasta_transcript_contigs",
-                "reason": f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
-                "value": "transcriptomic.bulk",
-            }
-        ]
-        result.field_evidence["data_type"] = [
-            {
-                "rule_id": "fasta_transcript_contigs",
-                "reason": "Transcript sequences in FASTA",
-                "value": "sequence",
-            }
-        ]
         return result.to_output_dict()
 
     # 2. Contigs match a known reference set → reference genome
@@ -667,113 +670,111 @@ def classify_from_fasta_header(
                 # Can't distinguish — contigs match multiple references equally
                 best_ref = None
 
-            result.set_field("data_modality", "genomic")
-            result.set_field("data_type", "assembly.reference")
-            ref_entry = {
-                "rule_id": "fasta_reference_contigs",
-                "reason": f"Matched {best_count} contigs to reference chromosomes"
-                + (f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"),
-            }
+            ref_reason = f"Matched {best_count} contigs to reference chromosomes" + (
+                f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"
+            )
             if best_ref:
-                result.set_field("reference_assembly", best_ref)
-                ref_entry["value"] = best_ref
+                result.add_claim(
+                    "reference_assembly",
+                    rule_id="fasta_reference_contigs",
+                    tier=CONTENT_TIER,
+                    reason=ref_reason,
+                    value=best_ref,
+                )
             else:
-                result.set_field("reference_assembly", status=NOT_CLASSIFIED)
-                ref_entry["status"] = NOT_CLASSIFIED
-            result.field_evidence["reference_assembly"] = [ref_entry]
-            result.field_evidence["data_modality"] = [
-                {
-                    "rule_id": "fasta_reference_contigs",
-                    "reason": "Contig names match known reference genome",
-                    "value": "genomic",
-                }
-            ]
-            result.field_evidence["data_type"] = [
-                {
-                    "rule_id": "fasta_reference_contigs",
-                    "reason": "FASTA contains reference genome sequences",
-                    "value": "assembly.reference",
-                }
-            ]
+                result.add_claim(
+                    "reference_assembly",
+                    rule_id="fasta_reference_contigs",
+                    tier=CONTENT_TIER,
+                    reason=ref_reason,
+                    status=NOT_CLASSIFIED,
+                )
+            result.add_claim(
+                "data_modality",
+                rule_id="fasta_reference_contigs",
+                tier=CONTENT_TIER,
+                reason="Contig names match known reference genome",
+                value="genomic",
+            )
+            result.add_claim(
+                "data_type",
+                rule_id="fasta_reference_contigs",
+                tier=CONTENT_TIER,
+                reason="FASTA contains reference genome sequences",
+                value="assembly.reference",
+            )
             return result.to_output_dict()
 
     # 3. Assembler output contigs → de novo assembly
     if assembler_contigs:
-        result.set_field("data_modality", "genomic")
-        result.set_field("data_type", "assembly")
-        result.set_field("reference_assembly", status=NOT_APPLICABLE)
         sample = assembler_contigs[0]
-        result.field_evidence["data_modality"] = [
-            {
-                "rule_id": "fasta_assembler_contigs",
-                "reason": f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
-                "value": "genomic",
-            }
-        ]
-        result.field_evidence["data_type"] = [
-            {
-                "rule_id": "fasta_assembler_contigs",
-                "reason": "Contig names indicate assembler output",
-                "value": "assembly",
-            }
-        ]
-        result.field_evidence["reference_assembly"] = [
-            {
-                "rule_id": "fasta_assembler_contigs",
-                "reason": "De novo assembly — no reference genome applicable",
-                "status": NOT_APPLICABLE,
-            }
-        ]
+        result.add_claim(
+            "data_modality",
+            rule_id="fasta_assembler_contigs",
+            tier=CONTENT_TIER,
+            reason=f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
+            value="genomic",
+        )
+        result.add_claim(
+            "data_type",
+            rule_id="fasta_assembler_contigs",
+            tier=CONTENT_TIER,
+            reason="Contig names indicate assembler output",
+            value="assembly",
+        )
+        result.add_claim(
+            "reference_assembly",
+            rule_id="fasta_assembler_contigs",
+            tier=CONTENT_TIER,
+            reason="De novo assembly — no reference genome applicable",
+            status=NOT_APPLICABLE,
+        )
         return result.to_output_dict()
 
     # 4. Many non-standard contigs → likely de novo assembly
     if num_contigs > 50 and not ref_matches:
-        result.set_field("data_modality", "genomic")
-        result.set_field("data_type", "assembly")
-        result.set_field("reference_assembly", status=NOT_APPLICABLE)
-        result.field_evidence["data_modality"] = [
-            {
-                "rule_id": "fasta_many_contigs",
-                "reason": f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
-                "value": "genomic",
-            }
-        ]
-        result.field_evidence["data_type"] = [
-            {
-                "rule_id": "fasta_many_contigs",
-                "reason": "High contig count suggests assembly",
-                "value": "assembly",
-            }
-        ]
-        result.field_evidence["reference_assembly"] = [
-            {
-                "rule_id": "fasta_many_contigs",
-                "reason": "De novo assembly — no reference genome applicable",
-                "status": NOT_APPLICABLE,
-            }
-        ]
+        result.add_claim(
+            "data_modality",
+            rule_id="fasta_many_contigs",
+            tier=CONTENT_TIER,
+            reason=f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
+            value="genomic",
+        )
+        result.add_claim(
+            "data_type",
+            rule_id="fasta_many_contigs",
+            tier=CONTENT_TIER,
+            reason="High contig count suggests assembly",
+            value="assembly",
+        )
+        result.add_claim(
+            "reference_assembly",
+            rule_id="fasta_many_contigs",
+            tier=CONTENT_TIER,
+            reason="De novo assembly — no reference genome applicable",
+            status=NOT_APPLICABLE,
+        )
         return result.to_output_dict()
 
     # 5. Default: preserve rule engine results if they set modality/type,
-    #    otherwise fall back to genomic/sequence
+    #    otherwise fall back to genomic/sequence. Guarded so a filename rule that
+    #    already declared the field is not overridden by the content default.
     if not result.is_declared("data_modality"):
-        result.set_field("data_modality", "genomic")
-        result.field_evidence["data_modality"] = [
-            {
-                "rule_id": "fasta_default_genomic",
-                "reason": f"FASTA with {num_contigs} contigs — defaulting to genomic",
-                "value": "genomic",
-            }
-        ]
+        result.add_claim(
+            "data_modality",
+            rule_id="fasta_default_genomic",
+            tier=CONTENT_TIER,
+            reason=f"FASTA with {num_contigs} contigs — defaulting to genomic",
+            value="genomic",
+        )
     if not result.is_declared("data_type"):
-        result.set_field("data_type", "sequence")
-        result.field_evidence["data_type"] = [
-            {
-                "rule_id": "fasta_default_genomic",
-                "reason": "Unable to determine specific FASTA type from headers",
-                "value": "sequence",
-            }
-        ]
+        result.add_claim(
+            "data_type",
+            rule_id="fasta_default_genomic",
+            tier=CONTENT_TIER,
+            reason="Unable to determine specific FASTA type from headers",
+            value="sequence",
+        )
     return result.to_output_dict()
 
 
