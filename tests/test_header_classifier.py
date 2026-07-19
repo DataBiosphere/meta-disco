@@ -17,8 +17,10 @@ def val(result: dict, field: str):
         for fld_val in result.values():
             if isinstance(fld_val, dict) and "evidence" in fld_val:
                 for e in fld_val["evidence"]:
-                    if e.get("rule_id") not in rules:
-                        rules.append(e["rule_id"])
+                    # Synthetic markers carry no rule_id (issue #228); skip them.
+                    rid = e.get("rule_id")
+                    if rid is not None and rid not in rules:
+                        rules.append(rid)
         return rules
     return field_value(result, field)
 

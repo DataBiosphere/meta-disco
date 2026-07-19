@@ -587,14 +587,14 @@ class TestFileTypeConfigs:
 
         # The note lands on the dimension GFA *content* determines (data_type,
         # which the unread rGFA tags might have refined to pangenome.reference).
-        failed = [e for e in cls["data_type"]["evidence"] if e["rule_id"] == "fetch_failed"]
+        failed = [e for e in cls["data_type"]["evidence"] if e.get("rule_id") == "fetch_failed"]
         assert [e["reason"] for e in failed] == ["HTTPError: 404 Not Found"]
 
         # NOT on reference_assembly: GFA content never determines it (no lengths
         # are parsed), so a note there would say a re-fetch could resolve an
         # assembly only the filename can supply.
         assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
-        assert not [e for e in cls["reference_assembly"]["evidence"] if e["rule_id"] == "fetch_failed"]
+        assert not [e for e in cls["reference_assembly"]["evidence"] if e.get("rule_id") == "fetch_failed"]
 
     def test_fetch_error_on_mc_graph_keeps_the_filename_refinement(self, tmp_path):
         """The `-mc-` token still refines data_type even though content is unreadable."""

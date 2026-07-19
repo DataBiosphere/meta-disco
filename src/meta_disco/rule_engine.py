@@ -120,29 +120,30 @@ def _make_claim(
     return claim
 
 
-# Reserved ``rule_id`` for the synthetic "no rule determined a value" placeholder
-# ``_sync_markers`` appends. It is not a real rule id (issue #228 moves this
-# sentinel out of ``rule_id`` in a follow-up commit); the constant keeps the one
-# magic string in one place until then.
+# Kinds of synthetic resolution marker ``_sync_markers`` appends to explain an
+# absent or ambiguous answer. These are NOT rules: a marker carries a ``marker``
+# kind and no ``rule_id`` (issue #228 — stop overloading ``rule_id`` to hold a
+# sentinel). ``marker`` is a string so more kinds can be added without a schema
+# migration.
 NOT_CLASSIFIED_MARKER = "not_classified"
+CONFLICT_MARKER = "conflict"
 
 
 def _is_synthetic_marker(entry: dict) -> bool:
-    """True if this evidence entry is a synthetic resolution marker.
+    """True if this evidence entry is a synthetic resolution marker rather than a
+    claim from a rule or content classifier.
 
-    Two kinds exist, both appended by ``_sync_markers`` to explain an absent or
-    ambiguous answer rather than to assert one: the ``not_classified`` placeholder
-    (no claim was made) and a conflict marker (claims disagreed at the top tier).
-    A rule-authored ``not_classified`` declaration is a real claim, not a marker —
-    it carries a real ``rule_id`` and no ``is_conflict``, so it is not matched here.
+    A marker is identified by its ``marker`` kind, not by a magic ``rule_id``: a
+    rule-authored ``not_classified`` declaration carries a real ``rule_id`` and no
+    ``marker`` key, so it is a real claim and is not matched here.
     """
-    return entry.get("rule_id") == NOT_CLASSIFIED_MARKER or bool(entry.get("is_conflict"))
+    return "marker" in entry
 
 
 def _not_classified_marker(fld: str) -> dict:
     """The synthetic placeholder that keeps a claimless field's evidence non-empty."""
     return {
-        "rule_id": NOT_CLASSIFIED_MARKER,
+        "marker": NOT_CLASSIFIED_MARKER,
         "reason": f"No rule determined a value for {fld}",
         "status": NOT_CLASSIFIED,
     }
@@ -151,11 +152,10 @@ def _not_classified_marker(fld: str) -> dict:
 def _conflict_marker(fld: str, competing: list[str]) -> dict:
     """The synthetic marker recording that top-tier claims disagreed."""
     return {
-        "rule_id": f"conflicting_{fld}_rules",
+        "marker": CONFLICT_MARKER,
         "reason": f"Conflicting {fld}: {competing} — ambiguous",
         "status": NOT_CLASSIFIED,
         "competing_values": competing,
-        "is_conflict": True,
     }
 
 
@@ -287,14 +287,14 @@ class ExtendedClassificationResult:
     def rules_matched(self) -> list[str]:
         """Deduplicated list of all rule identifiers from field evidence.
 
-        Not limited to YAML-defined rule IDs. Two other sources contribute:
-
-        * The engine itself adds ``not_classified``, ``infer_assay_type`` and
-          ``conflicting_{field}_rules``.
-        * The content classifiers in ``header_classifier`` add their own IDs for
-          signals no YAML rule expresses — ``contig_length_detection``,
-          ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
-          ``bed_*`` IDs, ``rgfa_stable_rank_reference``, and ``fetch_failed``.
+        Not limited to YAML-defined rule IDs, and not exhaustive of evidence:
+        synthetic resolution markers (the ``not_classified`` placeholder and
+        conflict markers) carry no ``rule_id`` and are skipped — they are not
+        rules. The content classifiers in ``header_classifier`` do contribute
+        their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
+        ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``, and the
+        engine's ``infer_assay_type``.
 
         So a caller must not assume an ID here names a rule in unified_rules.yaml.
         """
@@ -302,6 +302,8 @@ class ExtendedClassificationResult:
         result = []
         for entries in self.field_evidence.values():
             for e in entries:
+                if _is_synthetic_marker(e):
+                    continue
                 rid = e["rule_id"]
                 if rid not in seen:
                     seen.add(rid)
@@ -314,12 +316,15 @@ class ExtendedClassificationResult:
 
         Deduplication is by ``rule_id``, not by reason text, so two rules that
         happen to share a reason both appear — and one rule contributing to
-        several fields appears once.
+        several fields appears once. Synthetic markers carry no ``rule_id`` and
+        are skipped (they are not rules).
         """
         seen = set()
         result = []
         for entries in self.field_evidence.values():
             for e in entries:
+                if _is_synthetic_marker(e):
+                    continue
                 rid = e["rule_id"]
                 if rid not in seen:
                     seen.add(rid)
@@ -447,9 +452,10 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
         competing_values (non-None iff conflict).
     """
-    # Drop the synthetic not_classified placeholder and empty claims, but keep
-    # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
-    real_claims = [c for c in claims if _claim_declaration(c) is not None and c.get("rule_id") != NOT_CLASSIFIED_MARKER]
+    # Drop synthetic markers (placeholder / conflict) and empty claims, but keep
+    # rule-authored not_classified declarations (e.g., fastq_modality_unknown) —
+    # those are real claims, not markers.
+    real_claims = [c for c in claims if _claim_declaration(c) is not None and not _is_synthetic_marker(c)]
 
     # Assertive = real-value declarations; a not_classified status means
     # "I looked but can't determine" and doesn't assert a value.
@@ -781,7 +787,7 @@ class RuleEngine:
             return
         # Don't infer over conflicts
         assay_evidence = result.field_evidence.get("assay_type", [])
-        if any(e.get("is_conflict") for e in assay_evidence):
+        if any(e.get("marker") == CONFLICT_MARKER for e in assay_evidence):
             return
 
         for assay_rule in self.rules.assay_type_rules:
