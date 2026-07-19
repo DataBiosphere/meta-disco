@@ -227,6 +227,11 @@ class ResolutionReason(str, Enum):
     NOT_APPLICABLE_TERMINAL = "not_applicable_terminal"
     CONFLICT = "conflict"
 
+    def __str__(self) -> str:
+        # Render as the underlying value ("no_claims"), not "ResolutionReason.NO_CLAIMS",
+        # so str()/f-string formatting stays wire-compatible across Python versions.
+        return self.value
+
 
 @dataclass(frozen=True)
 class ClaimResolution:

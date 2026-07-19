@@ -553,6 +553,11 @@ class TestEvaluateClaims:
         assert result.value == "genomic"
         assert result.is_conflict is False
 
+    def test_reason_formats_as_wire_value(self):
+        """str()/f-string render the underlying value, not the Enum repr."""
+        assert str(ResolutionReason.NO_CLAIMS) == "no_claims"
+        assert f"{ResolutionReason.CONFLICT}" == "conflict"
+
     def test_rule_authored_not_classified_in_evidence(self, engine):
         """fastq_modality_unknown rationale should appear in evidence, not generic placeholder."""
         result = engine.classify_extended(FileInfo(filename="sample_R1.fastq.gz"), include_tier3=True)
