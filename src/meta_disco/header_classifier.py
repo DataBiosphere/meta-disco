@@ -639,11 +639,8 @@ def classify_from_fasta_header(
             reason="Transcript sequences in FASTA",
             value="sequence",
         )
-        # No content signal for reference here; assert not_classified only if a
-        # filename rule did not already determine it (asserts no claim, so it stays
-        # a bare set_field rather than an add_claim — issue #227 scope note).
-        if not result.is_declared("reference_assembly"):
-            result.set_field("reference_assembly", status=NOT_CLASSIFIED)
+        # No content signal for reference_assembly; it keeps whatever the filename
+        # rules resolved (a real value, or not_classified when they found none).
         return result.to_output_dict()
 
     # 2. Contigs match a known reference set → reference genome

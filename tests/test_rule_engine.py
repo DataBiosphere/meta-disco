@@ -285,10 +285,11 @@ class TestAddClaim:
         rule_ids = [e["rule_id"] for e in result.field_evidence["data_modality"]]
         assert rule_ids == ["fastq_modality_unknown", "aligned_to_reference"], rule_ids
 
-    def test_keeps_placeholder_when_resolution_stays_not_classified(self):
-        # A non-assertive add (a not_classified status claim) does not resolve the
-        # field, so the placeholder is left untouched — only assertive resolutions
-        # trigger the drop.
+    def test_drops_synthetic_placeholder_even_on_non_assertive_add(self):
+        # Adding any claim makes the synthetic "no rule determined a value"
+        # placeholder false, so it is dropped even when the field stays
+        # not_classified — the field still carries the newly added claim, which
+        # explains the status better than the generic placeholder.
         result = ExtendedClassificationResult()
         result.field_evidence["reference_assembly"].append(
             {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
@@ -296,7 +297,7 @@ class TestAddClaim:
         result.add_claim("reference_assembly", rule_id="looked_but_unsure", reason="?", tier=4, status=NOT_CLASSIFIED)
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
-        assert "not_classified" in rule_ids
+        assert rule_ids == ["looked_but_unsure"], f"synthetic placeholder not dropped: {rule_ids}"
 
     def test_rejects_unknown_field_before_appending(self):
         # add_claim delegates field validation to _require_field and raises rather

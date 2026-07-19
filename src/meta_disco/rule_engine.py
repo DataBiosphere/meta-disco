@@ -186,10 +186,10 @@ class ExtendedClassificationResult:
         Callers use this *after* ``classify_extended`` has run, so
         ``_finalize_result`` may already have appended a synthetic
         ``not_classified`` / conflict marker to the list. ``evaluate_claims``
-        ignores the ``"not_classified"`` placeholder when resolving. When the new
-        claim resolves the field assertively (a real value or not_applicable),
-        that placeholder is now false, so it is dropped here (#227) — the same
-        strip ``infer_assay_type`` does. Only the synthetic ``"not_classified"``
+        ignores the ``"not_classified"`` placeholder when resolving. Adding any
+        claim makes that "no rule determined a value" placeholder false, so it is
+        dropped here (#227); the field still carries the claim just appended, so
+        its evidence is never emptied. Only the synthetic ``"not_classified"``
         marker is removed; rule-authored not_classified declarations carry real
         rule_ids and stay, and a conflict marker is left in place. Emitting *fresh*
         markers on an incremental add, and requiring ``claim["tier"]`` in
@@ -200,11 +200,10 @@ class ExtendedClassificationResult:
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
-        if self.is_declared(fld):
-            # The claim just resolved the field to a real value or not_applicable,
-            # so any synthetic "no rule determined a value" placeholder is now
-            # false — drop it so the evidence reads as the derivation.
-            self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
+        # A rule just added a claim, so the synthetic "no rule determined a value"
+        # placeholder _finalize_result may have appended is now false — drop it so
+        # the evidence reads as the derivation.
+        self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
 
     def _require_field(self, fld: str) -> None:
         """Raise ValueError for an unknown classification field, so every accessor
@@ -795,24 +794,20 @@ class RuleEngine:
             ):
                 continue
 
-            # All conditions passed — apply and record evidence
-            result.set_field("assay_type", assay_rule.assay_type)
-            # Remove stale not_classified placeholder if _finalize_result ran first
-            result.field_evidence["assay_type"] = [
-                e for e in result.field_evidence["assay_type"] if e.get("rule_id") != "not_classified"
-            ]
-            # tier 3: this inference derives from already-resolved signals (the
-            # header-derived platform is typically tier 3), so it carries a tier
-            # rather than the tier-0 default #228 will forbid. It never competes —
-            # the is_declared guard above means it only fires when no other claim
-            # determined assay_type — so the tier is for consistency, not resolution.
-            result.field_evidence["assay_type"].append(
-                {
-                    "rule_id": "infer_assay_type",
-                    "reason": f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
-                    "value": assay_rule.assay_type,
-                    "tier": 3,
-                }
+            # All conditions passed — record the inference as a claim. add_claim
+            # sets the field, drops the synthetic not_classified placeholder, and
+            # enforces _make_claim's value-xor-status invariant. tier 3: the
+            # inference derives from already-resolved signals (the header-derived
+            # platform is typically tier 3), so it carries a tier rather than the
+            # tier-0 default #228 will forbid; it never competes (the is_declared
+            # guard above means it only fires when no other claim determined
+            # assay_type), so the tier is for consistency, not resolution.
+            result.add_claim(
+                "assay_type",
+                rule_id="infer_assay_type",
+                tier=3,
+                reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                value=assay_rule.assay_type,
             )
             return
 
