@@ -101,7 +101,7 @@ def classify_from_header(
             - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     # Determine filename for extension-based rules
     filename = "sample.bam"
@@ -131,27 +131,30 @@ def classify_from_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides everything — definitive signal)
+    # Apply contig-based reference. Read from the @SQ contig lengths, so it lands
+    # at CONTENT_TIER and out-ranks any disagreeing filename/header rule; add_claim
+    # re-resolves from the full list, so a filename_ref rule that agrees stays in
+    # the evidence chain rather than being clobbered (#226/#227).
     if contig_ref:
-        result.set_field("reference_assembly", contig_ref)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"] = [
-            {
-                "rule_id": "contig_length_detection",
-                "reason": reason,
-                "value": contig_ref,
-            }
-        ]
-        # Aligned to a known reference genome = genomic data
+        result.add_claim(
+            "reference_assembly",
+            rule_id="contig_length_detection",
+            tier=CONTENT_TIER,
+            reason=reason,
+            value=contig_ref,
+        )
+        # Aligned to a known reference genome = genomic data. Guarded so a header
+        # rule that already declared a modality (e.g. transcriptomic) is not
+        # overridden by this genomic claim.
         if not result.is_declared("data_modality"):
-            result.set_field("data_modality", "genomic")
-            result.field_evidence["data_modality"] = [
-                {
-                    "rule_id": "aligned_to_reference",
-                    "reason": f"Aligned to {contig_ref} — file contains genomic alignments",
-                    "value": "genomic",
-                }
-            ]
+            result.add_claim(
+                "data_modality",
+                rule_id="aligned_to_reference",
+                tier=CONTENT_TIER,
+                reason=f"Aligned to {contig_ref} — file contains genomic alignments",
+                value="genomic",
+            )
 
     # Infer assay type
     engine.infer_assay_type(result, file_info)
