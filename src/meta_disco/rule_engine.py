@@ -65,6 +65,50 @@ class ExtendedFileInfo:
         )
 
 
+def _make_claim(
+    *,
+    rule_id: str,
+    reason: str,
+    tier: int,
+    value: str | None = None,
+    status: str | None = None,
+) -> dict:
+    """Construct one claim dict for ``field_evidence``, enforcing value-xor-status.
+
+    A claim declares exactly one of a real ``value`` or a ``status`` (the same
+    invariant ``rule_loader`` enforces for a rule's ``then`` vs ``then.status`` —
+    epic #116 / #136); declaring both or neither raises rather than silently
+    picking one. ``tier`` is a required keyword so a claim can never reach
+    ``evaluate_claims`` without one and fall back to its tier-0 default (#150 —
+    the silent default that let the #151 rGFA near-miss resolve to the wrong
+    value). Shared construction site for ``_apply_rule`` and
+    ``ExtendedClassificationResult.add_claim`` (other producers still hand-build
+    claims until they migrate to ``add_claim`` — see #227).
+
+    A ``status`` claim declares a non-classified sentinel only
+    (``not_applicable`` / ``not_classified`` — the authorable statuses, never
+    ``classified``, which is expressed as a ``value`` claim). An unknown status
+    raises here; otherwise ``evaluate_claims`` would read the stray string as a
+    real value and resolve the field CLASSIFIED to it — a silent wrong answer.
+    """
+    if (value is None) == (status is None):
+        raise ValueError(
+            f"claim for rule {rule_id!r} must declare exactly one of value/status "
+            f"(got value={value!r}, status={status!r})"
+        )
+    if status is not None and status not in (NOT_APPLICABLE, NOT_CLASSIFIED):
+        raise ValueError(
+            f"claim for rule {rule_id!r} has unknown status {status!r} "
+            f"(expected {NOT_APPLICABLE!r} or {NOT_CLASSIFIED!r})"
+        )
+    claim = {"rule_id": rule_id, "reason": reason, "tier": tier}
+    if value is not None:
+        claim["value"] = value
+    else:
+        claim["status"] = status
+    return claim
+
+
 @dataclass
 class ExtendedClassificationResult:
     """Extended classification result with additional fields.
@@ -108,6 +152,40 @@ class ExtendedClassificationResult:
         _assert_coherent(value, status)  # single coherence definition (models)
         setattr(self, fld, value if status == CLASSIFIED else None)
         self.field_status[fld] = status
+
+    def add_claim(
+        self,
+        fld: str,
+        *,
+        rule_id: str,
+        reason: str,
+        tier: int,
+        value: str | None = None,
+        status: str | None = None,
+    ) -> None:
+        """Append a claim to a field and re-resolve the field's value from all its claims.
+
+        The claim is built through ``_make_claim`` (value-xor-status, required
+        ``tier``), appended to ``field_evidence[fld]``, and the field is then set
+        from ``evaluate_claims`` over the full list — so the field's value is
+        *derived* from its claims, never written alongside them (#150). A
+        same-tier disagreement therefore resolves to ``not_classified`` here,
+        rather than the last writer silently winning.
+
+        Callers use this *after* ``classify_extended`` has run, so
+        ``_finalize_result`` may already have appended a synthetic
+        ``not_classified`` / conflict marker to the list. ``evaluate_claims``
+        ignores the ``"not_classified"`` placeholder when resolving, so the value
+        stays correct, but this method neither removes that stale marker nor
+        appends a fresh one — it only re-sets the field. Cleaning up prior markers
+        and emitting them on incremental adds is a follow-up (the ``rule_engine``
+        placeholder-filter revisit under #228).
+        """
+        self._require_field(fld)
+        claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
+        self.field_evidence[fld].append(claim)
+        evaluation = evaluate_claims(self.field_evidence[fld])
+        self.set_field(fld, evaluation.value, evaluation.status)
 
     def _require_field(self, fld: str) -> None:
         """Raise ValueError for an unknown classification field, so every accessor
@@ -616,18 +694,18 @@ class RuleEngine:
         """
         then = rule.then
         then_status = rule.then_status
-        evidence_entry = {
-            "rule_id": rule.id,
-            "reason": rule.rationale or "",
-            "tier": rule.tier,
-        }
+        reason = rule.rationale or ""
         for fld in result._CLASSIFICATION_FIELDS:
             value = then.get(fld)
             status = then_status.get(fld) if then_status else None
             if value is not None:
-                result.field_evidence[fld].append({**evidence_entry, "value": value})
+                result.field_evidence[fld].append(
+                    _make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, value=value)
+                )
             elif status is not None:
-                result.field_evidence[fld].append({**evidence_entry, "status": status})
+                result.field_evidence[fld].append(
+                    _make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, status=status)
+                )
 
     def infer_assay_type(self, result: ExtendedClassificationResult, file_info: ExtendedFileInfo) -> None:
         """Infer assay type from other classification signals.
