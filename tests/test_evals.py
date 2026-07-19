@@ -116,8 +116,8 @@ class TestBamE2E:
         assert result is not None
         cls = result["classifications"]
         ref_evidence = cls["reference_assembly"]["evidence"]
-        stale = [e for e in ref_evidence if e["rule_id"] == "not_classified"]
-        assert len(stale) == 0, f"Stale not_classified evidence: {stale}"
+        stale = [e for e in ref_evidence if e.get("marker") == "not_classified"]
+        assert len(stale) == 0, f"Stale not_classified marker: {stale}"
 
     def test_star_rnaseq_bam(self):
         """GM20525-10-2.bam — 6.7 GB STAR-aligned RNA-seq."""
@@ -214,8 +214,8 @@ class TestVcfE2E:
         cls = result["classifications"]
         ref = cls["reference_assembly"]
         if field_status(result, "reference_assembly") != NOT_CLASSIFIED:
-            stale = [e for e in ref["evidence"] if e["rule_id"] == "not_classified"]
-            assert len(stale) == 0, f"Stale evidence: {stale}"
+            stale = [e for e in ref["evidence"] if e.get("marker") == "not_classified"]
+            assert len(stale) == 0, f"Stale marker: {stale}"
 
 
 # =============================================================================

@@ -121,13 +121,19 @@ classes:
         range: platform_enum
 
   Evidence:
-    description: One piece of supporting evidence for a classification value.
+    description: >-
+      One piece of supporting evidence. Either a claim from a rule or content
+      classifier (carries rule_id + tier), or a synthetic resolution marker
+      (carries marker, no rule_id) recording that no claim was made or that
+      claims conflicted.
     slots:
       - rule_id
+      - marker
       - reason
       - value
       - status
       - tier
+      - competing_values
       - source_type
       - authority
       - reference
@@ -205,12 +211,26 @@ slots:
 
   # --- Evidence sub-fields ---
   rule_id:
-    description: Identifier of the rule (or synthetic source) that produced this evidence.
+    description: >-
+      Identifier of the rule or content classifier that produced this evidence.
+      Absent on synthetic resolution markers, which carry `marker` instead.
+  marker:
+    description: >-
+      Kind of synthetic resolution marker, when this entry is not a claim but a
+      note about the outcome: `not_classified` (no rule determined a value) or
+      `conflict` (claims disagreed at the top tier). Absent on real claims.
+    range: evidence_marker_enum
   reason:
     description: Human-readable rationale.
   tier:
     description: The tier at which this evidence fired.
     range: integer
+  competing_values:
+    description: >-
+      On a `conflict` marker, the disagreeing top-tier values that made the field
+      ambiguous. Absent on claims and on the `not_classified` marker.
+    multivalued: true
+    range: string
   source_type:
     description: "Kind of source that produced this evidence (provenance, #90)."
     range: source_type_enum
@@ -359,3 +379,13 @@ enums:
       repository_metadata:
       derivation_inheritance:
       wrangler_annotation:
+
+  evidence_marker_enum:
+    description: >-
+      Kind of synthetic resolution marker on an evidence entry (issue #228): a
+      note that no claim was made or that claims conflicted, rather than a claim.
+    permissible_values:
+      not_classified:
+        description: No rule or content classifier determined a value.
+      conflict:
+        description: Claims disagreed at the top tier, so the field is ambiguous.

@@ -125,7 +125,10 @@ STUB_PAYLOADS = {
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],
 }
-EVIDENCE_KEYS = {"rule_id", "reason"}
+# Every evidence entry has a reason and is either a claim (rule_id) or a synthetic
+# resolution marker (marker); the two are mutually exclusive (issue #228).
+CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
+MARKER_EVIDENCE_KEYS = {"marker", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}
 RECORD_KEYS = {
     "file_name",
@@ -263,7 +266,11 @@ def test_output_structural_contract(output):
             )
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
-                assert set(ev) >= EVIDENCE_KEYS, f"{ftype}.{field} evidence: {set(ev)}"
+                expected = MARKER_EVIDENCE_KEYS if "marker" in ev else CLAIM_EVIDENCE_KEYS
+                assert set(ev) >= expected, f"{ftype}.{field} evidence: {set(ev)}"
+                assert not ("rule_id" in ev and "marker" in ev), (
+                    f"{ftype}.{field} evidence is both claim and marker: {ev}"
+                )
 
 
 def test_output_values_in_vocabulary(output):

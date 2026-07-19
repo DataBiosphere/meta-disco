@@ -6,8 +6,8 @@
           "assay_type": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for assay_type",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -17,8 +17,8 @@
           "data_modality": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for data_modality",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -28,8 +28,8 @@
           "data_type": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for data_type",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -39,8 +39,8 @@
           "platform": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for platform",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -200,8 +200,8 @@
           "assay_type": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for assay_type",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -238,8 +238,8 @@
           "platform": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for platform",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -379,8 +379,8 @@
           "assay_type": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for assay_type",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -414,8 +414,8 @@
           "platform": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for platform",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],
@@ -425,8 +425,8 @@
           "reference_assembly": {
             "evidence": [
               {
+                "marker": "not_classified",
                 "reason": "No rule determined a value for reference_assembly",
-                "rule_id": "not_classified",
                 "status": "not_classified"
               }
             ],

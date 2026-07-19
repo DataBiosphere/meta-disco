@@ -120,6 +120,41 @@ def _make_claim(
     return claim
 
 
+# Kinds of synthetic resolution marker ``_sync_markers`` appends to explain an
+# absent or ambiguous answer. These are NOT rules: a marker carries a ``marker``
+# kind and no ``rule_id`` (issue #228 — stop overloading ``rule_id`` to hold a
+# sentinel). These must stay in lockstep with the schema's ``evidence_marker_enum``
+# (pinned by tests/test_rule_vocabulary.py); adding a kind means editing both.
+NOT_CLASSIFIED_MARKER = "not_classified"
+CONFLICT_MARKER = "conflict"
+
+
+def _is_synthetic_marker(entry: dict) -> bool:
+    """True if this evidence entry is a synthetic resolution marker (carries a
+    ``marker`` kind), not a claim. A rule-authored ``not_classified`` declaration
+    has a real ``rule_id`` and no ``marker``, so it is a claim, not a marker."""
+    return "marker" in entry
+
+
+def _not_classified_marker(fld: str) -> dict:
+    """The synthetic placeholder that keeps a claimless field's evidence non-empty."""
+    return {
+        "marker": NOT_CLASSIFIED_MARKER,
+        "reason": f"No rule determined a value for {fld}",
+        "status": NOT_CLASSIFIED,
+    }
+
+
+def _conflict_marker(fld: str, competing: list[str]) -> dict:
+    """The synthetic marker recording that top-tier claims disagreed."""
+    return {
+        "marker": CONFLICT_MARKER,
+        "reason": f"Conflicting {fld}: {competing} — ambiguous",
+        "status": NOT_CLASSIFIED,
+        "competing_values": competing,
+    }
+
+
 @dataclass
 class ExtendedClassificationResult:
     """Extended classification result with additional fields.
@@ -186,24 +221,38 @@ class ExtendedClassificationResult:
         Callers use this *after* ``classify_extended`` has run, so
         ``_finalize_result`` may already have appended a synthetic
         ``not_classified`` / conflict marker to the list. ``evaluate_claims``
-        ignores the ``"not_classified"`` placeholder when resolving. Adding any
-        claim makes that "no rule determined a value" placeholder false, so it is
-        dropped here (#227); the field still carries the claim just appended, so
-        its evidence is never emptied. Only the synthetic ``"not_classified"``
-        marker is removed; rule-authored not_classified declarations carry real
-        rule_ids and stay, and a conflict marker is left in place. Emitting *fresh*
-        markers on an incremental add, and requiring ``claim["tier"]`` in
-        ``evaluate_claims``, remain follow-ups (#228).
+        ignores those markers when resolving, and ``_sync_markers`` then rewrites
+        them to match the new resolution — so a stale placeholder or conflict
+        marker is dropped when this claim resolves the field, and a fresh conflict
+        marker is emitted if this claim creates one. The field always keeps the
+        claim just appended, so its evidence is never emptied.
         """
         self._require_field(fld)
         claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
-        # A claim was just added, so the synthetic "no rule determined a value"
-        # placeholder _finalize_result may have appended is now false — drop it so
-        # the evidence reads as the derivation.
-        self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
+        self._sync_markers(fld, evaluation)
+
+    def _sync_markers(self, fld: str, evaluation: "ClaimResolution") -> None:
+        """Rewrite a field's synthetic markers to match its current resolution.
+
+        Strips any existing synthetic markers (a placeholder or conflict marker
+        left by a prior resolution) and appends the one that describes the current
+        outcome: a conflict marker when top-tier claims disagree, the
+        ``not_classified`` placeholder when no claim was made at all, or nothing
+        when the field resolved to a real value or ``not_applicable``. Real claims
+        (including rule-authored ``not_classified`` declarations) are untouched.
+        Shared by ``_finalize_result`` (fresh classify — nothing to strip) and
+        ``add_claim`` (incremental re-resolve), so both keep the evidence honest.
+        """
+        self.field_evidence[fld] = [e for e in self.field_evidence[fld] if not _is_synthetic_marker(e)]
+        # competing_values is non-None iff the resolution is a conflict (ClaimResolution
+        # invariant); testing it directly narrows the type without a separate assert.
+        if evaluation.competing_values is not None:
+            self.field_evidence[fld].append(_conflict_marker(fld, evaluation.competing_values))
+        elif evaluation.reason == ResolutionReason.NO_CLAIMS:
+            self.field_evidence[fld].append(_not_classified_marker(fld))
 
     def _require_field(self, fld: str) -> None:
         """Raise ValueError for an unknown classification field, so every accessor
@@ -234,14 +283,14 @@ class ExtendedClassificationResult:
     def rules_matched(self) -> list[str]:
         """Deduplicated list of all rule identifiers from field evidence.
 
-        Not limited to YAML-defined rule IDs. Two other sources contribute:
-
-        * The engine itself adds ``not_classified``, ``infer_assay_type`` and
-          ``conflicting_{field}_rules``.
-        * The content classifiers in ``header_classifier`` add their own IDs for
-          signals no YAML rule expresses — ``contig_length_detection``,
-          ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
-          ``bed_*`` IDs, ``rgfa_stable_rank_reference``, and ``fetch_failed``.
+        Not limited to YAML-defined rule IDs, and not exhaustive of evidence:
+        synthetic resolution markers (the ``not_classified`` placeholder and
+        conflict markers) carry no ``rule_id`` and are skipped — they are not
+        rules. The content classifiers in ``header_classifier`` do contribute
+        their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
+        ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``, and the
+        engine's ``infer_assay_type``.
 
         So a caller must not assume an ID here names a rule in unified_rules.yaml.
         """
@@ -249,6 +298,8 @@ class ExtendedClassificationResult:
         result = []
         for entries in self.field_evidence.values():
             for e in entries:
+                if _is_synthetic_marker(e):
+                    continue
                 rid = e["rule_id"]
                 if rid not in seen:
                     seen.add(rid)
@@ -261,12 +312,15 @@ class ExtendedClassificationResult:
 
         Deduplication is by ``rule_id``, not by reason text, so two rules that
         happen to share a reason both appear — and one rule contributing to
-        several fields appears once.
+        several fields appears once. Synthetic markers carry no ``rule_id`` and
+        are skipped (they are not rules).
         """
         seen = set()
         result = []
         for entries in self.field_evidence.values():
             for e in entries:
+                if _is_synthetic_marker(e):
+                    continue
                 rid = e["rule_id"]
                 if rid not in seen:
                     seen.add(rid)
@@ -387,16 +441,20 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     the terminal rule — no special case needed here (issue #226).
 
     Args:
-        claims: List of evidence dicts, each with a ``value`` or a ``status`` and
-                optionally ``tier`` / ``rule_id`` / ``reason``.
+        claims: List of evidence dicts, each declaring a ``value`` or a ``status``.
+                An assertive claim that reaches the disagreement path must carry a
+                ``tier`` (raises ``KeyError`` otherwise — #228); ``rule_id`` /
+                ``reason`` are optional here. Synthetic markers (which carry a
+                ``marker`` kind, no tier) are dropped before the tier math.
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
         competing_values (non-None iff conflict).
     """
-    # Drop the synthetic not_classified placeholder and empty claims, but keep
-    # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
-    real_claims = [c for c in claims if _claim_declaration(c) is not None and c.get("rule_id") != "not_classified"]
+    # Drop synthetic markers (placeholder / conflict) and empty claims, but keep
+    # rule-authored not_classified declarations (e.g., fastq_modality_unknown) —
+    # those are real claims, not markers.
+    real_claims = [c for c in claims if _claim_declaration(c) is not None and not _is_synthetic_marker(c)]
 
     # Assertive = real-value declarations; a not_classified status means
     # "I looked but can't determine" and doesn't assert a value.
@@ -423,9 +481,11 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
             ResolutionReason.UNANIMOUS if len(assertive_claims) > 1 else ResolutionReason.SINGLE_CLAIM,
         )
 
-    # Assertive declarations disagree — check tiers
-    max_tier = max(c.get("tier", 0) for c in assertive_claims)
-    top_tier_claims = [c for c in assertive_claims if c.get("tier", 0) == max_tier]
+    # Assertive declarations disagree — check tiers. Every assertive claim is built
+    # through _make_claim, which requires a tier, so read it directly: a missing tier
+    # is a bug that should raise here, not silently resolve at a phantom tier 0 (#228).
+    max_tier = max(c["tier"] for c in assertive_claims)
+    top_tier_claims = [c for c in assertive_claims if c["tier"] == max_tier]
     # Declarations are non-None here (real_claims already dropped None ones); the
     # explicit filter restates that so the set is set[str] and sorted() type-checks.
     top_tier_decls = {d for c in top_tier_claims if (d := _claim_declaration(c)) is not None}
@@ -525,33 +585,16 @@ class RuleEngine:
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
         """Evaluate collected claims for each field and set final values.
 
-        Calls evaluate_claims() per field to resolve competing claims
-        into a single value. Appends conflict or not_classified markers
-        to evidence as appropriate.
+        Calls evaluate_claims() per field to resolve competing claims into a single
+        value, then ``_sync_markers`` records the conflict / not_classified marker
+        when the resolution warrants one. On this fresh pass no prior markers exist,
+        so ``_sync_markers`` only appends.
         """
         for fld in result._CLASSIFICATION_FIELDS:
             claims = result.field_evidence.get(fld, [])
             evaluation = evaluate_claims(claims)
             result.set_field(fld, evaluation.value, evaluation.status)
-
-            if evaluation.is_conflict:
-                result.field_evidence[fld].append(
-                    {
-                        "rule_id": f"conflicting_{fld}_rules",
-                        "reason": (f"Conflicting {fld}: {evaluation.competing_values} — ambiguous"),
-                        "status": NOT_CLASSIFIED,
-                        "competing_values": evaluation.competing_values,
-                        "is_conflict": True,
-                    }
-                )
-            elif evaluation.reason == ResolutionReason.NO_CLAIMS:
-                result.field_evidence[fld].append(
-                    {
-                        "rule_id": "not_classified",
-                        "reason": f"No rule determined a value for {fld}",
-                        "status": NOT_CLASSIFIED,
-                    }
-                )
+            result._sync_markers(fld, evaluation)
 
     def _rule_matches(
         self, rule: UnifiedRule, file_info: ExtendedFileInfo, current: ExtendedClassificationResult
@@ -743,7 +786,7 @@ class RuleEngine:
             return
         # Don't infer over conflicts
         assay_evidence = result.field_evidence.get("assay_type", [])
-        if any(e.get("is_conflict") for e in assay_evidence):
+        if any(e.get("marker") == CONFLICT_MARKER for e in assay_evidence):
             return
 
         for assay_rule in self.rules.assay_type_rules:

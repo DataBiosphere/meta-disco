@@ -245,24 +245,29 @@ class TestAddClaim:
     def test_second_claim_accumulates_and_re_resolves(self):
         # Two calls accumulate (append, not replace) and the field re-derives from
         # the full list — here a same-tier disagreement resolves to not_classified,
-        # the semantics the wholesale-site migrations will later adopt (not
-        # last-writer-wins). The resolution rule itself is TestEvaluateClaims' job.
+        # and _sync_markers records a conflict marker explaining why, so add_claim
+        # stays consistent with _finalize_result. The resolution rule itself is
+        # TestEvaluateClaims' job.
         result = ExtendedClassificationResult()
         result.add_claim("reference_assembly", rule_id="a", reason="x", tier=2, value="GRCh38")
         result.add_claim("reference_assembly", rule_id="b", reason="y", tier=2, value="GRCh37")
-        assert len(result.field_evidence["reference_assembly"]) == 2
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        evidence = result.field_evidence["reference_assembly"]
+        assert [e.get("rule_id") for e in evidence[:2]] == ["a", "b"]
+        assert evidence[-1]["marker"] == "conflict"
+        assert "rule_id" not in evidence[-1]
+        assert set(evidence[-1]["competing_values"]) == {"GRCh38", "GRCh37"}
 
     def test_drops_synthetic_not_classified_placeholder_on_assertive_resolution(self):
-        # _finalize_result appends a synthetic {rule_id: "not_classified"} marker
-        # for a field no rule matched. A later content claim that resolves the field
+        # _finalize_result appends a synthetic {marker: "not_classified"} entry for a
+        # field no rule matched. A later content claim that resolves the field
         # assertively makes that "no rule determined a value" marker false, so
         # add_claim drops it (#227) — the evidence reads as the derivation, not a
         # value beside a contradiction.
         result = ExtendedClassificationResult()
         result.field_evidence["reference_assembly"].append(
-            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+            {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
         result.add_claim("reference_assembly", rule_id="vcf_contig_length", reason="contigs", tier=4, value="GRCh38")
         assert result.reference_assembly == "GRCh38"
@@ -270,15 +275,15 @@ class TestAddClaim:
         assert rule_ids == ["vcf_contig_length"], f"stale placeholder not dropped: {rule_ids}"
 
     def test_keeps_rule_authored_not_classified_when_dropping_placeholder(self):
-        # Only the *synthetic* placeholder (rule_id "not_classified") is dropped;
-        # a rule that intentionally declares not_classified carries a real rule_id
-        # and stays in the evidence chain even when a higher-tier claim wins.
+        # Only the *synthetic* placeholder (a marker entry) is dropped; a rule that
+        # intentionally declares not_classified carries a real rule_id and no marker,
+        # so it stays in the evidence chain even when a higher-tier claim wins.
         result = ExtendedClassificationResult()
         result.field_evidence["data_modality"].append(
             {"rule_id": "fastq_modality_unknown", "reason": "unknown", "status": NOT_CLASSIFIED, "tier": 3}
         )
         result.field_evidence["data_modality"].append(
-            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+            {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
         result.add_claim("data_modality", rule_id="aligned_to_reference", reason="aligned", tier=4, value="genomic")
         assert result.data_modality == "genomic"
@@ -292,12 +297,36 @@ class TestAddClaim:
         # explains the status better than the generic placeholder.
         result = ExtendedClassificationResult()
         result.field_evidence["reference_assembly"].append(
-            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+            {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
         result.add_claim("reference_assembly", rule_id="looked_but_unsure", reason="?", tier=4, status=NOT_CLASSIFIED)
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
         assert rule_ids == ["looked_but_unsure"], f"synthetic placeholder not dropped: {rule_ids}"
+
+    def test_drops_stale_conflict_marker_on_assertive_resolution(self):
+        # A field left in conflict by _finalize_result carries a conflict marker; a
+        # later higher-tier claim that resolves it must drop the now-stale marker so
+        # the evidence stops asserting ambiguity.
+        result = ExtendedClassificationResult()
+        result.field_evidence["reference_assembly"].extend(
+            [
+                {"rule_id": "r1", "value": "GRCh38", "tier": 3},
+                {"rule_id": "r2", "value": "GRCh37", "tier": 3},
+                {
+                    "marker": "conflict",
+                    "reason": "Conflicting reference_assembly: ['GRCh37', 'GRCh38'] — ambiguous",
+                    "status": NOT_CLASSIFIED,
+                    "competing_values": ["GRCh37", "GRCh38"],
+                },
+            ]
+        )
+        result.add_claim(
+            "reference_assembly", rule_id="contig_length_detection", reason="contigs", tier=4, value="CHM13"
+        )
+        assert result.reference_assembly == "CHM13"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
+        assert rule_ids == ["r1", "r2", "contig_length_detection"], f"stale conflict marker not dropped: {rule_ids}"
 
     def test_rejects_unknown_field_before_appending(self):
         # add_claim delegates field validation to _require_field and raises rather
@@ -485,11 +514,10 @@ class TestConflictingReferenceRules:
         assert result.reference_assembly == "GRCh38"
 
     def test_conflict_evidence_recorded(self, engine):
-        """Conflict should produce evidence with conflicting_reference_assembly_rules."""
+        """Conflict should produce a conflict marker in reference_assembly evidence."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
         ref_evidence = result.field_evidence.get("reference_assembly", [])
-        rule_ids = [e["rule_id"] for e in ref_evidence]
-        assert "conflicting_reference_assembly_rules" in rule_ids
+        assert any(e.get("marker") == "conflict" for e in ref_evidence)
         # Prior evidence should also be preserved
         assert len(ref_evidence) >= 2
 
@@ -502,24 +530,23 @@ class TestConflictingClassificationFields:
         result = engine.classify_extended(FileInfo(filename="sample_rnaseq_wgs_aligned.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
-        rule_ids = [e["rule_id"] for e in evidence]
-        assert "conflicting_data_modality_rules" in rule_ids
+        assert any(e.get("marker") == "conflict" for e in evidence)
 
     def test_conflict_preserves_prior_evidence(self, engine):
         """Conflict marker is appended to existing evidence, not replaced."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
-        rule_ids = [e["rule_id"] for e in evidence]
+        rule_ids = [e.get("rule_id") for e in evidence]
         # Both the original rule and the conflict marker should be present
         assert "filename_ref_grch38" in rule_ids or "filename_ref_chm13" in rule_ids
-        assert "conflicting_reference_assembly_rules" in rule_ids
+        assert any(e.get("marker") == "conflict" for e in evidence)
 
     def test_conflict_evidence_has_status_and_competing_values(self, engine):
         """Conflict evidence carries a not_classified status (in the status field,
         not the value slot) and the structured competing_values field."""
         result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
-        conflict = next(e for e in evidence if "conflicting_" in e["rule_id"])
+        conflict = next(e for e in evidence if e.get("marker") == "conflict")
         assert conflict["status"] == NOT_CLASSIFIED
         assert "value" not in conflict
         assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
@@ -604,6 +631,17 @@ class TestEvaluateClaims:
         assert result.status == NOT_CLASSIFIED
         assert result.value is None
         assert result.is_conflict is True
+
+    def test_disagreeing_assertive_claim_without_tier_raises(self):
+        """A tier is required to resolve disagreeing assertive claims; a missing one
+        must raise loudly, not silently resolve at a phantom tier 0 (#228)."""
+        with pytest.raises(KeyError):
+            evaluate_claims(
+                [
+                    {"rule_id": "a", "value": "GRCh38"},  # no tier
+                    {"rule_id": "b", "value": "CHM13", "tier": 2},
+                ]
+            )
 
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
@@ -773,15 +811,16 @@ class TestAssayTypeInference:
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = [
             {
-                "rule_id": "not_classified",
+                "marker": "not_classified",
                 "reason": "No rule determined a value for assay_type",
                 "status": NOT_CLASSIFIED,
             }
         ]
         engine.infer_assay_type(result, file_info)
         assert result.assay_type == "WGS"
-        rule_ids = [e["rule_id"] for e in result.field_evidence["assay_type"]]
-        assert "not_classified" not in rule_ids
+        markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
+        assert "not_classified" not in markers
+        rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
         assert "infer_assay_type" in rule_ids
 
 
@@ -824,8 +863,8 @@ class TestSentinelValues:
         checked = 0
         for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
             evidence = result.field_evidence[fld]
-            nc_evidence = [e for e in evidence if e["rule_id"] == "not_classified"]
-            assert nc_evidence, f"Expected not_classified evidence for {fld}"
+            nc_evidence = [e for e in evidence if e.get("marker") == "not_classified"]
+            assert nc_evidence, f"Expected not_classified marker for {fld}"
             assert fld in nc_evidence[0]["reason"], f"Expected '{fld}' in reason, got: {nc_evidence[0]['reason']}"
             checked += 1
         assert checked == 5
