@@ -321,7 +321,10 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
         pattern: Regex pattern to match
 
     Returns:
-        True if any matching header line contains the pattern
+        True if a matching header line satisfies the pattern. What the pattern is
+        tested against depends on the type: the value for ##reference/##source,
+        the ID for ##INFO/##FORMAT/##FILTER, the ``assembly`` subfield for
+        ##contig, and the raw line for any other (##-prefixed) type.
     """
     compiled = re.compile(pattern, re.IGNORECASE)
 
@@ -330,11 +333,12 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
     if header_type == "##source" and header.source:
         return bool(compiled.search(header.source))
     if header_type == "##contig" and header.contigs:
+        # Match the parsed ``assembly`` subfield directly — the value is already
+        # isolated in ``fields``, so the rule pattern is a bare name, not ``assembly=``.
         for contig in header.contigs:
-            # Check all fields in the contig line
-            for value in contig.fields.values():
-                if compiled.search(value):
-                    return True
+            assembly = contig.fields.get("assembly")
+            if assembly and compiled.search(assembly):
+                return True
     elif header_type == "##INFO" and header.info_fields:
         for info in header.info_fields:
             info_id = info.fields.get("ID")

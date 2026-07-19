@@ -75,7 +75,7 @@ class TestMatchVcfHeaderPattern:
         [
             "##reference=file:///GRCh38.fa",
             "##source=MyCaller_v2",
-            "##contig=<ID=chr1,length=248956422>",
+            "##contig=<ID=chr1,length=248956422,assembly=GRCh38>",
             "##INFO=<ID=DP,Number=1,Type=Integer>",
             "##FORMAT=<ID=GT,Number=1,Type=String>",
             '##FILTER=<ID=LowQual,Description="Low quality">',
@@ -91,12 +91,22 @@ class TestMatchVcfHeaderPattern:
         header = parse_vcf_header(self.HEADER)
         assert match_vcf_header_pattern(header, "##source", "MyCaller")
 
-    def test_contig_value_pattern_matches(self):
-        # Scans each contig field value individually, so this matches a bare
-        # value. It does NOT exercise the shipped ``assembly=<name>`` contig
-        # rules, which can't match this scanner (see #221).
+    def test_contig_assembly_pattern_matches(self):
+        # ##contig matches against the parsed ``assembly`` subfield, so the
+        # shipped bare-name rule pattern (no ``assembly=`` prefix) fires (#221).
         header = parse_vcf_header(self.HEADER)
-        assert match_vcf_header_pattern(header, "##contig", "248956422")
+        assert match_vcf_header_pattern(header, "##contig", r"(?i)(grch38|hg38|hs38|GCA_000001405\.15)")
+
+    def test_contig_non_assembly_subfield_does_not_match(self):
+        # Only the assembly subfield is scanned: a bare contig length value is
+        # not matchable, which is what made the pre-#221 scanner unable to see
+        # the ``assembly=`` rules.
+        header = parse_vcf_header(self.HEADER)
+        assert not match_vcf_header_pattern(header, "##contig", "248956422")
+
+    def test_contig_wrong_assembly_does_not_match(self):
+        header = parse_vcf_header(self.HEADER)
+        assert not match_vcf_header_pattern(header, "##contig", r"(?i)(grch37|hg19|hs37|GCA_000001405\.[^5]|b37)")
 
     def test_info_id_pattern_matches(self):
         header = parse_vcf_header(self.HEADER)
