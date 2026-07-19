@@ -254,6 +254,50 @@ class TestAddClaim:
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
+    def test_drops_synthetic_not_classified_placeholder_on_assertive_resolution(self):
+        # _finalize_result appends a synthetic {rule_id: "not_classified"} marker
+        # for a field no rule matched. A later content claim that resolves the field
+        # assertively makes that "no rule determined a value" marker false, so
+        # add_claim drops it (#227) — the evidence reads as the derivation, not a
+        # value beside a contradiction.
+        result = ExtendedClassificationResult()
+        result.field_evidence["reference_assembly"].append(
+            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+        )
+        result.add_claim("reference_assembly", rule_id="vcf_contig_length", reason="contigs", tier=4, value="GRCh38")
+        assert result.reference_assembly == "GRCh38"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
+        assert rule_ids == ["vcf_contig_length"], f"stale placeholder not dropped: {rule_ids}"
+
+    def test_keeps_rule_authored_not_classified_when_dropping_placeholder(self):
+        # Only the *synthetic* placeholder (rule_id "not_classified") is dropped;
+        # a rule that intentionally declares not_classified carries a real rule_id
+        # and stays in the evidence chain even when a higher-tier claim wins.
+        result = ExtendedClassificationResult()
+        result.field_evidence["data_modality"].append(
+            {"rule_id": "fastq_modality_unknown", "reason": "unknown", "status": NOT_CLASSIFIED, "tier": 3}
+        )
+        result.field_evidence["data_modality"].append(
+            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+        )
+        result.add_claim("data_modality", rule_id="aligned_to_reference", reason="aligned", tier=4, value="genomic")
+        assert result.data_modality == "genomic"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["data_modality"]]
+        assert rule_ids == ["fastq_modality_unknown", "aligned_to_reference"], rule_ids
+
+    def test_keeps_placeholder_when_resolution_stays_not_classified(self):
+        # A non-assertive add (a not_classified status claim) does not resolve the
+        # field, so the placeholder is left untouched — only assertive resolutions
+        # trigger the drop.
+        result = ExtendedClassificationResult()
+        result.field_evidence["reference_assembly"].append(
+            {"rule_id": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
+        )
+        result.add_claim("reference_assembly", rule_id="looked_but_unsure", reason="?", tier=4, status=NOT_CLASSIFIED)
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
+        assert "not_classified" in rule_ids
+
     def test_rejects_unknown_field_before_appending(self):
         # add_claim delegates field validation to _require_field and raises rather
         # than appending a claim under a typo'd field.

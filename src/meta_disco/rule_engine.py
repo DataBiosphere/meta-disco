@@ -186,17 +186,25 @@ class ExtendedClassificationResult:
         Callers use this *after* ``classify_extended`` has run, so
         ``_finalize_result`` may already have appended a synthetic
         ``not_classified`` / conflict marker to the list. ``evaluate_claims``
-        ignores the ``"not_classified"`` placeholder when resolving, so the value
-        stays correct, but this method neither removes that stale marker nor
-        appends a fresh one — it only re-sets the field. Cleaning up prior markers
-        and emitting them on incremental adds is a follow-up (the ``rule_engine``
-        placeholder-filter revisit under #228).
+        ignores the ``"not_classified"`` placeholder when resolving. When the new
+        claim resolves the field assertively (a real value or not_applicable),
+        that placeholder is now false, so it is dropped here (#227) — the same
+        strip ``infer_assay_type`` does. Only the synthetic ``"not_classified"``
+        marker is removed; rule-authored not_classified declarations carry real
+        rule_ids and stay, and a conflict marker is left in place. Emitting *fresh*
+        markers on an incremental add, and requiring ``claim["tier"]`` in
+        ``evaluate_claims``, remain follow-ups (#228).
         """
         self._require_field(fld)
         claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
+        if self.is_declared(fld):
+            # The claim just resolved the field to a real value or not_applicable,
+            # so any synthetic "no rule determined a value" placeholder is now
+            # false — drop it so the evidence reads as the derivation.
+            self.field_evidence[fld] = [e for e in self.field_evidence[fld] if e.get("rule_id") != "not_classified"]
 
     def _require_field(self, fld: str) -> None:
         """Raise ValueError for an unknown classification field, so every accessor
