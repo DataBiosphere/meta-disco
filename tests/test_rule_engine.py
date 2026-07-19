@@ -245,14 +245,18 @@ class TestAddClaim:
     def test_second_claim_accumulates_and_re_resolves(self):
         # Two calls accumulate (append, not replace) and the field re-derives from
         # the full list — here a same-tier disagreement resolves to not_classified,
-        # the semantics the wholesale-site migrations will later adopt (not
-        # last-writer-wins). The resolution rule itself is TestEvaluateClaims' job.
+        # and _sync_markers records a conflict marker explaining why, so add_claim
+        # stays consistent with _finalize_result. The resolution rule itself is
+        # TestEvaluateClaims' job.
         result = ExtendedClassificationResult()
         result.add_claim("reference_assembly", rule_id="a", reason="x", tier=2, value="GRCh38")
         result.add_claim("reference_assembly", rule_id="b", reason="y", tier=2, value="GRCh37")
-        assert len(result.field_evidence["reference_assembly"]) == 2
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        evidence = result.field_evidence["reference_assembly"]
+        assert [e["rule_id"] for e in evidence] == ["a", "b", "conflicting_reference_assembly_rules"]
+        assert evidence[-1]["is_conflict"] is True
+        assert set(evidence[-1]["competing_values"]) == {"GRCh38", "GRCh37"}
 
     def test_drops_synthetic_not_classified_placeholder_on_assertive_resolution(self):
         # _finalize_result appends a synthetic {rule_id: "not_classified"} marker
@@ -298,6 +302,31 @@ class TestAddClaim:
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
         assert rule_ids == ["looked_but_unsure"], f"synthetic placeholder not dropped: {rule_ids}"
+
+    def test_drops_stale_conflict_marker_on_assertive_resolution(self):
+        # A field left in conflict by _finalize_result carries a conflict marker; a
+        # later higher-tier claim that resolves it must drop the now-stale marker so
+        # the evidence stops asserting ambiguity.
+        result = ExtendedClassificationResult()
+        result.field_evidence["reference_assembly"].extend(
+            [
+                {"rule_id": "r1", "value": "GRCh38", "tier": 3},
+                {"rule_id": "r2", "value": "GRCh37", "tier": 3},
+                {
+                    "rule_id": "conflicting_reference_assembly_rules",
+                    "reason": "Conflicting reference_assembly: ['GRCh37', 'GRCh38'] — ambiguous",
+                    "status": NOT_CLASSIFIED,
+                    "competing_values": ["GRCh37", "GRCh38"],
+                    "is_conflict": True,
+                },
+            ]
+        )
+        result.add_claim(
+            "reference_assembly", rule_id="contig_length_detection", reason="contigs", tier=4, value="CHM13"
+        )
+        assert result.reference_assembly == "CHM13"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
+        assert rule_ids == ["r1", "r2", "contig_length_detection"], f"stale conflict marker not dropped: {rule_ids}"
 
     def test_rejects_unknown_field_before_appending(self):
         # add_claim delegates field validation to _require_field and raises rather
@@ -604,6 +633,17 @@ class TestEvaluateClaims:
         assert result.status == NOT_CLASSIFIED
         assert result.value is None
         assert result.is_conflict is True
+
+    def test_disagreeing_assertive_claim_without_tier_raises(self):
+        """A tier is required to resolve disagreeing assertive claims; a missing one
+        must raise loudly, not silently resolve at a phantom tier 0 (#228)."""
+        with pytest.raises(KeyError):
+            evaluate_claims(
+                [
+                    {"rule_id": "a", "value": "GRCh38"},  # no tier
+                    {"rule_id": "b", "value": "CHM13", "tier": 2},
+                ]
+            )
 
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
