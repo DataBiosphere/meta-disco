@@ -185,7 +185,7 @@ def classify_from_vcf_header(
             - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     # Determine filename for extension-based rules
     filename = "sample.vcf.gz"
@@ -214,17 +214,18 @@ def classify_from_vcf_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # Apply contig-based reference (overrides everything — definitive signal)
+    # Apply contig-based reference. Read from the ##contig lengths, so it lands at
+    # CONTENT_TIER and out-ranks any disagreeing filename/header rule; add_claim
+    # re-resolves from the full list (#226/#227).
     if contig_ref:
-        result.set_field("reference_assembly", contig_ref)
         reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.field_evidence["reference_assembly"] = [
-            {
-                "rule_id": "vcf_contig_length",
-                "reason": reason,
-                "value": contig_ref,
-            }
-        ]
+        result.add_claim(
+            "reference_assembly",
+            rule_id="vcf_contig_length",
+            tier=CONTENT_TIER,
+            reason=reason,
+            value=contig_ref,
+        )
 
     return result.to_output_dict()
 
