@@ -13,6 +13,7 @@ from meta_disco.models import (
 from meta_disco.rule_engine import (
     ExtendedClassificationResult,
     ExtendedFileInfo,
+    ResolutionReason,
     RuleEngine,
     evaluate_claims,
 )
@@ -421,10 +422,10 @@ class TestEvaluateClaims:
     def test_no_claims(self):
         """No claims → not_classified (status), no value."""
         result = evaluate_claims([])
-        assert result["status"] == NOT_CLASSIFIED
-        assert result["value"] is None
-        assert result["is_conflict"] is False
-        assert result["reason"] == "no_claims"
+        assert result.status == NOT_CLASSIFIED
+        assert result.value is None
+        assert result.is_conflict is False
+        assert result.reason == ResolutionReason.NO_CLAIMS
 
     def test_single_claim(self):
         """Single claim → use it."""
@@ -433,9 +434,9 @@ class TestEvaluateClaims:
                 {"rule_id": "r1", "value": "genomic", "tier": 2},
             ]
         )
-        assert result["value"] == "genomic"
-        assert result["reason"] == "single_claim"
-        assert result["is_conflict"] is False
+        assert result.value == "genomic"
+        assert result.reason == ResolutionReason.SINGLE_CLAIM
+        assert result.is_conflict is False
 
     def test_two_claims_agree(self):
         """Two claims with same value → unanimous."""
@@ -445,8 +446,8 @@ class TestEvaluateClaims:
                 {"rule_id": "r2", "value": "genomic", "tier": 3},
             ]
         )
-        assert result["value"] == "genomic"
-        assert result["reason"] == "unanimous"
+        assert result.value == "genomic"
+        assert result.reason == ResolutionReason.UNANIMOUS
 
     def test_disagree_different_tiers(self):
         """Higher tier wins when claims disagree."""
@@ -456,9 +457,9 @@ class TestEvaluateClaims:
                 {"rule_id": "r2", "value": "assembly", "tier": 2},
             ]
         )
-        assert result["value"] == "assembly"
-        assert result["reason"] == "higher_specificity_override"
-        assert result["is_conflict"] is False
+        assert result.value == "assembly"
+        assert result.reason == ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE
+        assert result.is_conflict is False
 
     def test_disagree_same_tier(self):
         """Same tier, different values → conflict (not_classified status, no value)."""
@@ -468,11 +469,12 @@ class TestEvaluateClaims:
                 {"rule_id": "r2", "value": "CHM13", "tier": 2},
             ]
         )
-        assert result["status"] == NOT_CLASSIFIED
-        assert result["value"] is None
-        assert result["is_conflict"] is True
-        assert result["reason"] == "conflict"
-        assert set(result["competing_values"]) == {"GRCh38", "CHM13"}
+        assert result.status == NOT_CLASSIFIED
+        assert result.value is None
+        assert result.is_conflict is True
+        assert result.reason == ResolutionReason.CONFLICT
+        assert result.competing_values is not None
+        assert set(result.competing_values) == {"GRCh38", "CHM13"}
 
     def test_three_claims_conflict_at_top_tier(self):
         """Lower tier agrees but top tier has conflict → conflict wins."""
@@ -483,9 +485,9 @@ class TestEvaluateClaims:
                 {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
             ]
         )
-        assert result["status"] == NOT_CLASSIFIED
-        assert result["value"] is None
-        assert result["is_conflict"] is True
+        assert result.status == NOT_CLASSIFIED
+        assert result.value is None
+        assert result.is_conflict is True
 
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
@@ -495,8 +497,8 @@ class TestEvaluateClaims:
                 {"rule_id": "r2", "value": "genomic", "tier": 2},
             ]
         )
-        assert result["value"] == "genomic"
-        assert result["reason"] == "single_claim"
+        assert result.value == "genomic"
+        assert result.reason == ResolutionReason.SINGLE_CLAIM
 
     def test_not_applicable_status_declaration(self):
         """A not_applicable status claim resolves to status not_applicable, value None."""
@@ -505,9 +507,9 @@ class TestEvaluateClaims:
                 {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
             ]
         )
-        assert result["status"] == NOT_APPLICABLE
-        assert result["value"] is None
-        assert result["reason"] == "single_claim"
+        assert result.status == NOT_APPLICABLE
+        assert result.value is None
+        assert result.reason == ResolutionReason.SINGLE_CLAIM
 
     def test_not_applicable_wins_over_real_value_same_tier(self):
         """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
@@ -517,10 +519,10 @@ class TestEvaluateClaims:
                 {"rule_id": "r2", "value": "genomic", "tier": 1},
             ]
         )
-        assert result["status"] == NOT_APPLICABLE
-        assert result["value"] is None
-        assert result["is_conflict"] is False
-        assert result["reason"] == "not_applicable_terminal"
+        assert result.status == NOT_APPLICABLE
+        assert result.value is None
+        assert result.is_conflict is False
+        assert result.reason == ResolutionReason.NOT_APPLICABLE_TERMINAL
 
     def test_rule_authored_not_classified_is_not_no_claims(self):
         """A rule that intentionally declares not_classified is a real claim, not no_claims."""
@@ -534,11 +536,11 @@ class TestEvaluateClaims:
                 },
             ]
         )
-        assert result["status"] == NOT_CLASSIFIED
-        assert result["value"] is None
-        assert result["reason"] == "single_claim"
+        assert result.status == NOT_CLASSIFIED
+        assert result.value is None
+        assert result.reason == ResolutionReason.SINGLE_CLAIM
         # The claim should NOT be treated as "no_claims"
-        assert result["reason"] != "no_claims"
+        assert result.reason != ResolutionReason.NO_CLAIMS
 
     def test_rule_authored_not_classified_does_not_conflict_with_real(self):
         """A rule's not_classified declaration shouldn't conflict with a real value claim."""
@@ -548,8 +550,8 @@ class TestEvaluateClaims:
                 {"rule_id": "some_rule", "value": "genomic", "tier": 3},
             ]
         )
-        assert result["value"] == "genomic"
-        assert result["is_conflict"] is False
+        assert result.value == "genomic"
+        assert result.is_conflict is False
 
     def test_rule_authored_not_classified_in_evidence(self, engine):
         """fastq_modality_unknown rationale should appear in evidence, not generic placeholder."""

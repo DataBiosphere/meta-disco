@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -215,23 +216,54 @@ def _claim_declaration(claim: dict) -> str | None:
     return value if value is not None else claim.get("status")
 
 
-def _resolved(declaration: str | None, reason: str, is_conflict: bool = False, competing: list | None = None) -> dict:
-    """Package a winning declaration as ``{value, status, ...}``: a real declaration
+class ResolutionReason(str, Enum):
+    """Why ``evaluate_claims`` reached its result. ``str``-backed so the value is
+    wire-compatible with the pre-#212 magic strings (e.g. ``"no_claims"``)."""
+
+    NO_CLAIMS = "no_claims"
+    SINGLE_CLAIM = "single_claim"
+    UNANIMOUS = "unanimous"
+    HIGHER_SPECIFICITY_OVERRIDE = "higher_specificity_override"
+    NOT_APPLICABLE_TERMINAL = "not_applicable_terminal"
+    CONFLICT = "conflict"
+
+
+@dataclass(frozen=True)
+class ClaimResolution:
+    """The resolved outcome of ``evaluate_claims`` for one classification field.
+
+    ``competing_values`` is set only for a conflict; ``is_conflict`` derives from
+    it, so the two can never disagree.
+    """
+
+    value: str | None
+    status: str
+    reason: ResolutionReason
+    competing_values: list[str] | None = None
+
+    @property
+    def is_conflict(self) -> bool:
+        return self.competing_values is not None
+
+
+def _resolved(
+    declaration: str | None,
+    reason: ResolutionReason,
+    competing: list[str] | None = None,
+) -> ClaimResolution:
+    """Package a winning declaration as a ``ClaimResolution``: a real declaration
     becomes value with status CLASSIFIED; a status declaration becomes that status
     with value None — so a sentinel never lands in ``value``."""
     status = status_for_value(declaration)
-    out = {
-        "value": declaration if status == CLASSIFIED else None,
-        "status": status,
-        "reason": reason,
-        "is_conflict": is_conflict,
-    }
-    if competing is not None:
-        out["competing_values"] = competing
-    return out
+    return ClaimResolution(
+        value=declaration if status == CLASSIFIED else None,
+        status=status,
+        reason=reason,
+        competing_values=competing,
+    )
 
 
-def evaluate_claims(claims: list[dict]) -> dict:
+def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     """Evaluate competing claims for a single classification field.
 
     Each claim *declares* either a real value or a status (not_applicable /
@@ -251,8 +283,8 @@ def evaluate_claims(claims: list[dict]) -> dict:
                 optionally ``tier`` / ``rule_id`` / ``reason``.
 
     Returns:
-        Dict with: value (real or None), status, reason, is_conflict,
-        competing_values (if conflict).
+        ClaimResolution with: value (real or None), status, reason, is_conflict,
+        competing_values (present iff conflict).
     """
     # Drop the synthetic not_classified placeholder and empty claims, but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown).
@@ -263,19 +295,25 @@ def evaluate_claims(claims: list[dict]) -> dict:
     assertive_claims = [c for c in real_claims if _claim_declaration(c) != NOT_CLASSIFIED]
 
     if not real_claims:
-        return _resolved(NOT_CLASSIFIED, "no_claims")
+        return _resolved(NOT_CLASSIFIED, ResolutionReason.NO_CLAIMS)
 
     # Only not_classified declarations present → resolve as not_classified
     # (the rule's rationale is preserved in field_evidence, not in this return value)
     if not assertive_claims:
-        return _resolved(NOT_CLASSIFIED, "single_claim" if len(real_claims) == 1 else "unanimous")
+        return _resolved(
+            NOT_CLASSIFIED,
+            ResolutionReason.SINGLE_CLAIM if len(real_claims) == 1 else ResolutionReason.UNANIMOUS,
+        )
 
     # Check if all assertive declarations agree
     declarations = {_claim_declaration(c) for c in assertive_claims}
 
     if len(declarations) == 1:
         # Unanimous — every assertive claim declares the same value
-        return _resolved(next(iter(declarations)), "unanimous" if len(assertive_claims) > 1 else "single_claim")
+        return _resolved(
+            next(iter(declarations)),
+            ResolutionReason.UNANIMOUS if len(assertive_claims) > 1 else ResolutionReason.SINGLE_CLAIM,
+        )
 
     # Assertive declarations disagree — check tiers
     max_tier = max(c.get("tier", 0) for c in assertive_claims)
@@ -288,14 +326,14 @@ def evaluate_claims(claims: list[dict]) -> dict:
     # at the same tier without triggering a conflict (e.g., text_stats
     # setting not_applicable shouldn't conflict with filename_ref patterns)
     if NOT_APPLICABLE in top_tier_decls:
-        return _resolved(NOT_APPLICABLE, "not_applicable_terminal")
+        return _resolved(NOT_APPLICABLE, ResolutionReason.NOT_APPLICABLE_TERMINAL)
 
     if len(top_tier_decls) == 1:
         # Highest tier is unanimous — override lower tiers
-        return _resolved(top_tier_decls.pop(), "higher_specificity_override")
+        return _resolved(top_tier_decls.pop(), ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE)
 
     # Same tier, different values — conflict
-    return _resolved(NOT_CLASSIFIED, "conflict", is_conflict=True, competing=sorted(top_tier_decls))
+    return _resolved(NOT_CLASSIFIED, ResolutionReason.CONFLICT, competing=sorted(top_tier_decls))
 
 
 class RuleEngine:
@@ -386,19 +424,19 @@ class RuleEngine:
         for fld in result._CLASSIFICATION_FIELDS:
             claims = result.field_evidence.get(fld, [])
             evaluation = evaluate_claims(claims)
-            result.set_field(fld, evaluation["value"], evaluation["status"])
+            result.set_field(fld, evaluation.value, evaluation.status)
 
-            if evaluation["is_conflict"]:
+            if evaluation.is_conflict:
                 result.field_evidence[fld].append(
                     {
                         "rule_id": f"conflicting_{fld}_rules",
-                        "reason": (f"Conflicting {fld}: {evaluation['competing_values']} — ambiguous"),
+                        "reason": (f"Conflicting {fld}: {evaluation.competing_values} — ambiguous"),
                         "status": NOT_CLASSIFIED,
-                        "competing_values": evaluation["competing_values"],
+                        "competing_values": evaluation.competing_values,
                         "is_conflict": True,
                     }
                 )
-            elif evaluation["reason"] == "no_claims":
+            elif evaluation.reason == ResolutionReason.NO_CLAIMS:
                 result.field_evidence[fld].append(
                     {
                         "rule_id": "not_classified",
