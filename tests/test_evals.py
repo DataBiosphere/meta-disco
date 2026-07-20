@@ -317,6 +317,17 @@ class TestRuleEngineE2E:
         result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
+    def test_salmon_quant_sf_is_transcriptomic_quantification(self):
+        """A Salmon quant.sf is a single-sample transcript abundance table (#157)."""
+        result = engine.classify_extended(FileInfo(filename="NUFIP1-BGRSLV04-28_quant.sf"))
+        assert result.data_modality == "transcriptomic.bulk"
+        assert result.data_type == "quantification"
+
+    def test_bare_sf_stays_not_classified(self):
+        """Only quant.sf is Salmon output; a bare .sf must not be over-claimed."""
+        result = engine.classify_extended(FileInfo(filename="something.sf"))
+        assert result.status_of("data_type") == NOT_CLASSIFIED
+
     def test_plink_1000g(self):
         result = engine.classify_extended(
             FileInfo(filename="IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
@@ -611,6 +622,21 @@ class TestFilenameForRules:
             )
             == "hprc-graph.tar.gz.gfa.gz"
         )
+
+    def test_sf_extension_is_kept_over_declared_tsv_format(self):
+        """The 671 Salmon records are named *_quant.sf but declare file_format
+        '.tsv'. .sf is now a known extension, so the real name is kept rather
+        than grafted to '*_quant.sf.tsv' (#157)."""
+        assert filename_for_rules("NUFIP1-BGRSLV04-28_quant.sf", ".tsv", "x") == "NUFIP1-BGRSLV04-28_quant.sf"
+
+    def test_catch_all_routes_salmon_quant_to_quantification(self):
+        """End-to-end of the catch-all shape: file_name with an .sf extension and a
+        declared '.tsv' format classifies as transcriptomic quantification (#157)."""
+        name = "NUFIP1-BGRSLV04-28_quant.sf"
+        filename = filename_for_rules(name, ".tsv", default=name)
+        result = engine.classify_extended(FileInfo(filename=filename))
+        assert result.data_modality == "transcriptomic.bulk"
+        assert result.data_type == "quantification"
 
     def test_allowed_extension_is_trusted_verbatim(self):
         assert (

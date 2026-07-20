@@ -316,6 +316,13 @@ class TestBedCoordinateClassification:
         result = classify_from_bed_signals(signals, file_name="sample.bed")
         assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
 
+    def test_file_format_rescues_name_lacking_bed_extension(self):
+        """A record selected by file_format whose file_name carries no .bed
+        extension still runs the BED filename rules (#157)."""
+        signals = BedSignals.empty()
+        result = classify_from_bed_signals(signals, file_name="sample.modbam2bed.cpg", file_format=".bed")
+        assert _get_val(result, "data_modality") == "epigenomic.methylation"
+
     def test_coordinates_exceeding_grch38_rule_it_out(self):
         """Coordinates exceeding GRCh38 chr lengths should rule out GRCh38."""
         # CHM13 chr8=146259331, GRCh38 chr8=145138636, GRCh37 chr8=146364022

@@ -15,6 +15,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from meta_disco.header_classifier import filename_for_rules
 from meta_disco.models import FileInfo
 from meta_disco.rule_engine import RuleEngine
 
@@ -55,8 +56,14 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         if not name or name in already:
             continue
 
+        # The engine derives the extension from the filename alone, so a record
+        # whose file_name carries no usable extension must fall back to its
+        # file_format (e.g. Salmon *_quant.sf declaring file_format ".tsv").
+        # filename_for_rules encodes that; no allowed_extensions because the
+        # catch-all handles every extension the rules know (issue #157).
+        filename = filename_for_rules(rec.get("file_name"), rec.get("file_format"), default=name)
         file_info = FileInfo(
-            filename=name,
+            filename=filename,
             file_size=rec.get("file_size"),
             dataset_title=rec.get("dataset_title", ""),
         )

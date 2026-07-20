@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 # GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
 # the config cannot disagree about which names it may trust.
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
+BED_EXTENSIONS = (".bed", ".bed.gz")
 
 
 @dataclass(frozen=True)
@@ -890,6 +891,7 @@ def classify_from_bed_signals(
     file_name: str | None = None,
     file_size: int | None = None,
     dataset_title: str | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """Classify BED file based on coordinate signals.
 
@@ -901,13 +903,16 @@ def classify_from_bed_signals(
         file_name: Filename for pattern matching
         file_size: Optional file size in bytes
         dataset_title: Optional dataset title for context rules
+        file_format: Optional extension (e.g. ".bed.gz") used to drive the
+            extension rules when file_name carries no usable BED extension
+            (see filename_for_rules) — issue #157.
 
     Returns:
         Per-field classification dict with evidence
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    filename = file_name or "sample.bed"
+    filename = filename_for_rules(file_name, file_format, default="sample.bed", allowed_extensions=BED_EXTENSIONS)
     max_coordinates = signals.max_coordinates
 
     file_info = ExtendedFileInfo(

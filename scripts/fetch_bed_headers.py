@@ -178,7 +178,12 @@ def extract_bed_signals(lines: list[str]) -> BedSignals:
 
 
 def classify_bed_file(
-    md5sum: str, file_name: str, file_size: int | None = None, is_gzipped: bool = True, use_cache: bool = True
+    md5sum: str,
+    file_name: str,
+    file_size: int | None = None,
+    is_gzipped: bool = True,
+    use_cache: bool = True,
+    file_format: str | None = None,
 ) -> dict | None:
     """Fetch BED lines and infer reference assembly.
 
@@ -188,6 +193,8 @@ def classify_bed_file(
         file_size: File size in bytes
         is_gzipped: Whether file is gzip-compressed
         use_cache: Whether to use cached evidence
+        file_format: Optional extension, used when file_name carries no usable
+            BED extension (passed through to classify_from_bed_signals) — #157
 
     Returns:
         Classification dict or None on failure
@@ -221,6 +228,7 @@ def classify_bed_file(
         signals,
         file_name=file_name,
         file_size=file_size,
+        file_format=file_format,
     )
 
     return {
@@ -286,7 +294,14 @@ def process_bed_files(
         is_gzipped = file_name.endswith(".gz")
         was_cached = load_cached_evidence(md5) is not None
 
-        result = classify_bed_file(md5, file_name, file_size=file_size, is_gzipped=is_gzipped, use_cache=resume)
+        result = classify_bed_file(
+            md5,
+            file_name,
+            file_size=file_size,
+            is_gzipped=is_gzipped,
+            use_cache=resume,
+            file_format=record.get("file_format"),
+        )
         if result:
             result["dataset_title"] = record.get("dataset_title")
             result["entry_id"] = record.get("entry_id")

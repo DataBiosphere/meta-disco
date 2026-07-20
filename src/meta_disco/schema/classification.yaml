@@ -288,7 +288,8 @@ enums:
       "variants.structural":
       "variants.cnv":
       genotypes:
-      expression_matrix:
+      expression_matrix:      # a features × samples abundance matrix
+      quantification:         # a single-sample per-feature abundance table (e.g. Salmon quant.sf); not yet a matrix
       annotations:
       peaks:
       signal:
