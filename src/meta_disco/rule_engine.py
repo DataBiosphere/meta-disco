@@ -558,9 +558,13 @@ class RuleEngine:
         # Convert to ExtendedFileInfo if needed
         ext_info = ExtendedFileInfo.from_file_info(file_info) if isinstance(file_info, FileInfo) else file_info
 
-        # Extract extension
-        extension = self.rules.extract_extension(ext_info.filename)
-        ext_info.file_format = extension
+        # Extract the extension from the real filename when there is one. A
+        # header-only call passes no filename but sets file_format to the known
+        # file-type extension (e.g. ".bam"), so the extension rules still run
+        # without inventing a filename to carry it (#152).
+        if ext_info.filename:
+            ext_info.file_format = self.rules.extract_extension(ext_info.filename)
+        extension = ext_info.file_format or ""
 
         # Initialize result
         result = ExtendedClassificationResult()
