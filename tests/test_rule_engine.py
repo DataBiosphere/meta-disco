@@ -148,6 +148,24 @@ class TestVariantFiles:
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
 
+    @pytest.mark.parametrize(
+        ("header_line", "expected"),
+        [
+            # The GRCh38 accession .15 must NOT also match the GRCh37 rule (whose
+            # old GCA_000001405\.[^5] matched the leading .1), which would resolve
+            # to a GRCh37/GRCh38 conflict. Covers both the ##contig and
+            # ##reference rule families (#221 review).
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.14>", "GRCh37"),
+            ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.14.fa", "GRCh37"),
+        ],
+    )
+    def test_vcf_grch38_accession_not_confused_with_grch37(self, engine, header_line, expected):
+        ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
+        result = engine.classify_extended(ext_info, include_tier3=True)
+        assert result.reference_assembly == expected
+
 
 class TestThenStatus:
     """A rule authoring a non-classified status via `then.status` (#133)."""

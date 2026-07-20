@@ -1341,7 +1341,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##reference"
-      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.[^5]|b37)"
+      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(?!15)\\d+|b37)"
     then:
       reference_assembly: GRCh37
     rationale: "##reference line containing GRCh37, hg19, b37, or earlier accessions indicates variants called against GRCh37"
@@ -1366,7 +1366,7 @@ rules:
       vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.15)"
     then:
       reference_assembly: GRCh38
-    rationale: "##contig assembly subfield naming GRCh38, hg38, or the GRCh38 GenBank accession declares the reference genome"
+    rationale: "##contig assembly subfield naming GRCh38, hg38, hs38, or the GRCh38 GenBank accession declares the reference genome"
 
   - id: vcf_contig_grch37
     tier: 3
@@ -1374,10 +1374,10 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##contig"
-      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.[^5]|b37)"
+      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(?!15)\\d+|b37)"
     then:
       reference_assembly: GRCh37
-    rationale: "##contig assembly subfield naming GRCh37, hg19, b37, or an earlier GenBank accession declares the reference genome"
+    rationale: "##contig assembly subfield naming GRCh37, hg19, hs37, b37, or an earlier GenBank accession declares the reference genome"
 
   - id: vcf_contig_chm13
     tier: 3
@@ -1388,7 +1388,7 @@ rules:
       vcf_pattern: "(?i)(chm13|t2t|hs1)"
     then:
       reference_assembly: CHM13
-    rationale: "##contig assembly subfield naming CHM13 explicitly declares the reference genome"
+    rationale: "##contig assembly subfield naming CHM13, T2T, or hs1 declares the reference genome"
 
   # ---------------------------------------------------------------------------
   # VCF germline variant callers
