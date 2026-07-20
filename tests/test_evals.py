@@ -325,9 +325,14 @@ class TestRuleEngineE2E:
         assert result.assay_type == "RNA-seq"
 
     def test_bare_sf_stays_not_classified(self):
-        """Only quant.sf is Salmon output; a bare .sf must not be over-claimed."""
-        result = engine.classify_extended(FileInfo(filename="something.sf"))
-        assert result.status_of("data_type") == NOT_CLASSIFIED
+        """Only quant.sf is Salmon output; a bare .sf must not be over-claimed.
+
+        The name must end in `quant.sf` at a token boundary — a substring match
+        like `frequant.sf` is not Salmon output and stays not_classified.
+        """
+        for name in ("something.sf", "frequant.sf"):
+            result = engine.classify_extended(FileInfo(filename=name))
+            assert result.status_of("data_type") == NOT_CLASSIFIED, name
 
     def test_plink_1000g(self):
         result = engine.classify_extended(

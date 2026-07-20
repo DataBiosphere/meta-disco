@@ -975,7 +975,7 @@ rules:
     scope: filename
     when:
       extensions: [".sf"]
-      filename_pattern: "(?i)quant\\.sf$"
+      filename_pattern: "(?i)(^|[._])quant\\.sf$"
     then:
       data_modality: transcriptomic.bulk
       data_type: quantification
