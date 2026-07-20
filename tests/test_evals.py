@@ -317,6 +317,24 @@ class TestRuleEngineE2E:
         result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
+    def test_salmon_quant_sf_is_transcriptomic_quantification(self):
+        """A Salmon quant.sf is a single-sample transcript abundance table (#157)."""
+        result = engine.classify_extended(FileInfo(filename="NUFIP1-BGRSLV04-28_quant.sf"))
+        assert result.data_modality == "transcriptomic.bulk"
+        assert result.data_type == "quantification"
+        assert result.assay_type == "RNA-seq"
+
+    def test_bare_sf_stays_not_classified(self):
+        """Only a token-boundary `quant.sf` is treated as Salmon output; any other
+        `.sf` name stays not_classified rather than being over-claimed.
+
+        So `something.sf` (not Salmon) and `frequant.sf` (a substring match, not a
+        token boundary) both stay not_classified.
+        """
+        for name in ("something.sf", "frequant.sf"):
+            result = engine.classify_extended(FileInfo(filename=name))
+            assert result.status_of("data_type") == NOT_CLASSIFIED, name
+
     def test_plink_1000g(self):
         result = engine.classify_extended(
             FileInfo(filename="IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
