@@ -23,7 +23,7 @@ from threading import Lock
 # Add project root to path
 import requests
 
-from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
+from meta_disco.header_classifier import BED_EXTENSIONS, BedSignals, classify_from_bed_signals
 from meta_disco.models import field_label
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -258,12 +258,7 @@ def process_bed_files(
     files = data if isinstance(data, list) else data.get("files", data)
 
     # Filter to BED files with MD5
-    bed_files = [
-        f
-        for f in files
-        if f.get("file_md5sum")
-        and (f.get("file_name", "").endswith(".bed") or f.get("file_name", "").endswith(".bed.gz"))
-    ]
+    bed_files = [f for f in files if f.get("file_md5sum") and f.get("file_name", "").endswith(BED_EXTENSIONS)]
 
     print(f"Found {len(bed_files)} BED files with MD5")
 

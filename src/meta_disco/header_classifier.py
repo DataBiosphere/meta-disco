@@ -113,9 +113,8 @@ def classify_from_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Prefer the real filename (it may carry hifi_reads / rnaseq / assembly
-    # tokens the tier-2 rules key on); fall back to file_format only when the
-    # name yields no usable extension — see filename_for_rules (#152).
+    # Real filename drives the tier-2 rules (hifi_reads / rnaseq / assembly
+    # tokens); falls back to file_format — see filename_for_rules (#152).
     filename = filename_for_rules(file_name, file_format, default="sample.bam", allowed_extensions=BAM_EXTENSIONS)
 
     # Create file info with header
@@ -199,9 +198,8 @@ def classify_from_vcf_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Prefer the real filename (it may carry chm1 / assembly tokens the tier-2
-    # rules key on); fall back to file_format only when the name yields no
-    # usable extension — see filename_for_rules (#152).
+    # Real filename drives the tier-2 rules (chm13 / assembly tokens); falls
+    # back to file_format — see filename_for_rules (#152).
     filename = filename_for_rules(file_name, file_format, default="sample.vcf.gz", allowed_extensions=VCF_EXTENSIONS)
 
     # Create file info with VCF header
@@ -275,10 +273,9 @@ def classify_from_fastq_header(
     """
     from .rule_engine import ExtendedFileInfo
 
-    # Prefer the real filename; fall back to file_format only when the name
-    # yields no usable extension. Testing "usable extension" (not "ends with
-    # file_format") is what keeps a *.fastq.gz name declaring file_format
-    # ".fastq" from becoming *.fastq.gz.fastq — see filename_for_rules (#152).
+    # Real filename drives the tier-2 rules; the helper's "usable extension"
+    # test avoids the *.fastq.gz -> *.fastq.gz.fastq graft — see
+    # filename_for_rules (#152).
     filename = filename_for_rules(
         file_name, file_format, default="sample.fastq.gz", allowed_extensions=FASTQ_EXTENSIONS
     )
@@ -610,8 +607,8 @@ def classify_from_fasta_header(
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
     from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
-    # Prefer the real filename; fall back to file_format only when the name
-    # yields no usable extension — see filename_for_rules (#152).
+    # Real filename drives the tier-2 rules; falls back to file_format — see
+    # filename_for_rules (#152).
     filename = filename_for_rules(file_name, file_format, default="sample.fa.gz", allowed_extensions=FASTA_EXTENSIONS)
 
     # Run rule engine for extension/filename-based rules
