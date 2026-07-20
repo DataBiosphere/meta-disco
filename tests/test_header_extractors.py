@@ -75,7 +75,7 @@ class TestMatchVcfHeaderPattern:
         [
             "##reference=file:///GRCh38.fa",
             "##source=MyCaller_v2",
-            "##contig=<ID=chr1,length=248956422>",
+            "##contig=<ID=chr1,length=248956422,assembly=GRCh38>",
             "##INFO=<ID=DP,Number=1,Type=Integer>",
             "##FORMAT=<ID=GT,Number=1,Type=String>",
             '##FILTER=<ID=LowQual,Description="Low quality">',
@@ -91,12 +91,25 @@ class TestMatchVcfHeaderPattern:
         header = parse_vcf_header(self.HEADER)
         assert match_vcf_header_pattern(header, "##source", "MyCaller")
 
-    def test_contig_value_pattern_matches(self):
-        # Scans each contig field value individually, so this matches a bare
-        # value. It does NOT exercise the shipped ``assembly=<name>`` contig
-        # rules, which can't match this scanner (see #221).
+    def test_contig_matches_against_assembly_subfield(self):
+        # Processor test: ##contig dispatch reads the ``assembly`` subfield
+        # (#221), checked with a representative value. The real rule regexes
+        # (accession ranges, aliases) are exercised against the loaded rules
+        # end-to-end in test_rule_engine.py, not duplicated here.
+        header = parse_vcf_header(self.HEADER)  # contig carries assembly=GRCh38
+        assert match_vcf_header_pattern(header, "##contig", "GRCh38")
+
+    def test_contig_ignores_non_assembly_subfields(self):
+        # Only the ``assembly`` subfield is read: the contig ``length`` value is
+        # not matchable. The pre-#221 code searched every subfield, which is why
+        # the assembly rules could never fire.
         header = parse_vcf_header(self.HEADER)
-        assert match_vcf_header_pattern(header, "##contig", "248956422")
+        assert not match_vcf_header_pattern(header, "##contig", "248956422")
+
+    def test_contig_no_match_when_assembly_value_differs(self):
+        # assembly is GRCh38, so a value that isn't present returns False.
+        header = parse_vcf_header(self.HEADER)
+        assert not match_vcf_header_pattern(header, "##contig", "GRCh37")
 
     def test_info_id_pattern_matches(self):
         header = parse_vcf_header(self.HEADER)

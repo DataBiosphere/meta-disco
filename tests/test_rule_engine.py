@@ -7,7 +7,6 @@ from meta_disco.models import (
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
-    ClassificationResult,
     FileInfo,
 )
 from meta_disco.rule_engine import (
@@ -111,6 +110,66 @@ class TestVariantFiles:
         result = engine.classify(FileInfo(filename="NA19189.chr2.hg38.vcf.gz"))
         assert result.data_modality == "genomic"
         assert result.reference_assembly == "GRCh38"
+
+    def test_vcf_contig_assembly_subfield_sets_reference(self, engine):
+        """A ##contig assembly= subfield sets reference_assembly end-to-end (#221).
+
+        Filename carries no reference token, so GRCh38 can only come from the
+        tier-3 ``vcf_contig_grch38`` rule reading the parsed assembly subfield.
+        """
+        ext_info = ExtendedFileInfo(
+            filename="sample.vcf.gz",
+            vcf_header="##contig=<ID=chr1,length=248956422,assembly=GRCh38>",
+        )
+        result = engine.classify_extended(ext_info, include_tier3=True)
+        assert result.reference_assembly == "GRCh38"
+        rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"] if "rule_id" in e]
+        assert "vcf_contig_grch38" in rule_ids, f"Expected vcf_contig_grch38, got {rule_ids}"
+
+    @pytest.mark.parametrize(
+        ("assembly", "expected"),
+        [
+            ("GRCh38", "GRCh38"),
+            ("hg38", "GRCh38"),
+            ("hs38", "GRCh38"),  # alias aligned with ##reference (#221 follow-up)
+            ("GRCh37", "GRCh37"),
+            ("hs37", "GRCh37"),  # alias aligned with ##reference (#221 follow-up)
+            ("hg19", "GRCh37"),
+            ("CHM13", "CHM13"),
+            ("T2T-CHM13v2.0", "CHM13"),
+        ],
+    )
+    def test_vcf_contig_assembly_aliases_classify(self, engine, assembly, expected):
+        """##contig assembly aliases classify to the same set as ##reference (#221)."""
+        ext_info = ExtendedFileInfo(
+            filename="sample.vcf.gz",
+            vcf_header=f"##contig=<ID=chr1,length=248956422,assembly={assembly}>",
+        )
+        result = engine.classify_extended(ext_info, include_tier3=True)
+        assert result.reference_assembly == expected
+
+    @pytest.mark.parametrize(
+        ("header_line", "expected"),
+        [
+            # GCA_000001405 encodes the assembly in its version: .1-.14 are GRCh37
+            # (frozen at .14), .15+ are GRCh38 (.15 base, .16+ patches). The rules
+            # must split at that boundary, in both the ##contig and ##reference
+            # families (#221 review). In particular .16+ are real GRCh38 patch
+            # accessions and must NOT fall through to GRCh37.
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.14>", "GRCh37"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.16>", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.26>", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.14.fa", "GRCh37"),
+            ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.16.fa", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.26.fa", "GRCh38"),
+        ],
+    )
+    def test_vcf_gca_accession_version_maps_to_correct_assembly(self, engine, header_line, expected):
+        ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
+        result = engine.classify_extended(ext_info, include_tier3=True)
+        assert result.reference_assembly == expected
 
 
 class TestThenStatus:
