@@ -614,6 +614,15 @@ class TestVcfClassification:
         # Should still produce a well-formed result
         assert "data_modality" in result
 
+    def test_real_filename_drives_reference_rule(self):
+        """The real file_name feeds the filename rules — a header with no
+        ##contig lengths still resolves CHM13 from a chm13 token in the name
+        (#152). Before the fix the classifier synthesized `sample.vcf.gz`."""
+        header = """##fileformat=VCFv4.2
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
+        result = classify_from_vcf_header(header, file_name="1kgp.chr20.chm13.vcf.gz", file_format=".vcf.gz")
+        assert val(result, "reference_assembly") == "CHM13"
+
 
 # =============================================================================
 # BAM/CRAM CLASSIFICATION TESTS
@@ -762,6 +771,39 @@ class TestBamCramClassification:
         """Handle empty header — treated as unaligned."""
         result = classify_from_header("")
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_real_filename_drives_tier2_rule(self):
+        """The real file_name feeds the filename rules — a header carrying no
+        modality signal still classifies rnaseq from the name (#152). Before the
+        fix the classifier synthesized `sample.bam` and dropped the name."""
+        header = "@HD\tVN:1.6"
+        result = classify_from_header(header, file_name="sample.rnaseq.bam", file_format=".bam")
+        assert val(result, "data_modality") == "transcriptomic.bulk"
+        assert val(result, "data_type") == "alignments"
+
+    def test_real_filename_recovers_pacbio_platform(self):
+        """A hifi filename recovers platform even when the header names none —
+        the ~110-file platform bucket in #152."""
+        header = "@HD\tVN:1.6"
+        result = classify_from_header(header, file_name="HG02055.paternal.hifi.bam", file_format=".bam")
+        assert val(result, "platform") == "PACBIO"
+
+    def test_file_format_grafted_when_name_lacks_extension(self):
+        """When file_name carries no usable extension, file_format is grafted so
+        the extension-gated filename rules still fire (#152). Without the graft
+        `sample.rnaseq` yields extension `.rnaseq`, and the rnaseq rule — gated on
+        `.bam`/`.cram` — never runs."""
+        header = "@HD\tVN:1.6"
+        result = classify_from_header(header, file_name="sample.rnaseq", file_format=".bam")
+        assert val(result, "data_modality") == "transcriptomic.bulk"
+
+    def test_header_signal_not_clobbered_by_filename(self):
+        """A header aligner signal must still win where the filename is silent —
+        the fix adds filename coverage, it does not displace header rules (#152)."""
+        header = """@HD\tVN:1.6
+@PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
+        result = classify_from_header(header, file_name="sample.bam", file_format=".bam")
+        assert val(result, "data_modality") == "transcriptomic.bulk"
 
 
 # =============================================================================

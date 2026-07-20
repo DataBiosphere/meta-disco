@@ -27,10 +27,18 @@ from .validators.read_name_parsers import (
 if TYPE_CHECKING:
     from .rule_engine import RuleEngine
 
-# Text GFA formats this module can parse. The other graph extensions the
-# `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
-# GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
-# the config cannot disagree about which names it may trust.
+# Each file type's extension tuple is defined here, next to the classifiers that
+# trust it, and imported by file_types.py — so a record's selection set (what
+# ClassifyPipeline._filter_records matches on) and the classifier's trusted set
+# (what filename_for_rules treats as a usable file_name extension) cannot
+# disagree. See classify_from_header et al. (#152).
+BAM_EXTENSIONS = (".bam", ".cram")
+VCF_EXTENSIONS = (".vcf", ".vcf.gz", ".g.vcf.gz", ".gvcf.gz")
+FASTQ_EXTENSIONS = (".fastq", ".fastq.gz", ".fq", ".fq.gz")
+FASTA_EXTENSIONS = (".fasta", ".fasta.gz", ".fa", ".fa.gz")
+BED_EXTENSIONS = (".bed", ".bed.gz")
+# Text GFA only. The other graph extensions the `pangenome` rules cover
+# (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats this module cannot parse.
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
 
 
@@ -93,6 +101,8 @@ def classify_from_header(
 
     Args:
         header_text: Raw SAM/BAM header text (lines starting with @)
+        file_name: Optional real filename; its tokens drive the tier-2
+            filename rules (falls back to file_format — see filename_for_rules)
         file_size: Optional file size in bytes (used for WGS/WES inference)
         file_format: Optional file format string (e.g., ".bam", ".cram")
 
@@ -103,10 +113,10 @@ def classify_from_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Determine filename for extension-based rules
-    filename = "sample.bam"
-    if file_format:
-        filename = f"sample{file_format}"
+    # Prefer the real filename (it may carry hifi_reads / rnaseq / assembly
+    # tokens the tier-2 rules key on); fall back to file_format only when the
+    # name yields no usable extension — see filename_for_rules (#152).
+    filename = filename_for_rules(file_name, file_format, default="sample.bam", allowed_extensions=BAM_EXTENSIONS)
 
     # Create file info with header
     file_info = ExtendedFileInfo(
@@ -177,6 +187,8 @@ def classify_from_vcf_header(
 
     Args:
         header_text: VCF header text (lines starting with ##)
+        file_name: Optional real filename; its tokens drive the tier-2
+            filename rules (falls back to file_format — see filename_for_rules)
         file_size: Optional file size in bytes
         file_format: Optional file format string (e.g., ".vcf", ".vcf.gz")
 
@@ -187,10 +199,10 @@ def classify_from_vcf_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Determine filename for extension-based rules
-    filename = "sample.vcf.gz"
-    if file_format:
-        filename = f"sample{file_format}"
+    # Prefer the real filename (it may carry chm1 / assembly tokens the tier-2
+    # rules key on); fall back to file_format only when the name yields no
+    # usable extension — see filename_for_rules (#152).
+    filename = filename_for_rules(file_name, file_format, default="sample.vcf.gz", allowed_extensions=VCF_EXTENSIONS)
 
     # Create file info with VCF header
     file_info = ExtendedFileInfo(
@@ -263,8 +275,13 @@ def classify_from_fastq_header(
     """
     from .rule_engine import ExtendedFileInfo
 
-    # Use provided filename or generate one
-    filename = file_name or "sample.fastq.gz"
+    # Prefer the real filename; fall back to file_format only when the name
+    # yields no usable extension. Testing "usable extension" (not "ends with
+    # file_format") is what keeps a *.fastq.gz name declaring file_format
+    # ".fastq" from becoming *.fastq.gz.fastq — see filename_for_rules (#152).
+    filename = filename_for_rules(
+        file_name, file_format, default="sample.fastq.gz", allowed_extensions=FASTQ_EXTENSIONS
+    )
 
     # Handle empty input — no reads to classify. Statuses are known directly, so
     # pass them explicitly to build_field_entry (epic #116 Stage 3 shape).
@@ -593,7 +610,9 @@ def classify_from_fasta_header(
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
     from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
-    filename = file_name or "sample.fa.gz"
+    # Prefer the real filename; fall back to file_format only when the name
+    # yields no usable extension — see filename_for_rules (#152).
+    filename = filename_for_rules(file_name, file_format, default="sample.fa.gz", allowed_extensions=FASTA_EXTENSIONS)
 
     # Run rule engine for extension/filename-based rules
     file_info = ExtendedFileInfo(filename=filename)
@@ -890,6 +909,7 @@ def classify_from_bed_signals(
     file_name: str | None = None,
     file_size: int | None = None,
     dataset_title: str | None = None,
+    file_format: str | None = None,
 ) -> dict:
     """Classify BED file based on coordinate signals.
 
@@ -901,13 +921,18 @@ def classify_from_bed_signals(
         file_name: Filename for pattern matching
         file_size: Optional file size in bytes
         dataset_title: Optional dataset title for context rules
+        file_format: Optional extension (e.g. ".bed.gz") used to drive the
+            extension rules when file_name carries no usable BED extension
+            (see filename_for_rules) — #152. Matters because .bed vs
+            .narrowpeak/.broadpeak split across rules, so an empty name would
+            apply bed-only rules to a peak file.
 
     Returns:
         Per-field classification dict with evidence
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    filename = file_name or "sample.bed"
+    filename = filename_for_rules(file_name, file_format, default="sample.bed", allowed_extensions=BED_EXTENSIONS)
     max_coordinates = signals.max_coordinates
 
     file_info = ExtendedFileInfo(

@@ -6,35 +6,38 @@
           "assay_type": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": "not_classified"
+                "reason": "Inferred RNA-seq from platform/modality/file size signals",
+                "rule_id": "infer_assay_type",
+                "tier": 3,
+                "value": "RNA-seq"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": "RNA-seq"
           },
           "data_modality": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_modality",
-                "status": "not_classified"
+                "reason": "Filename contains RNA-seq indicator",
+                "rule_id": "alignment_rnaseq_filename",
+                "tier": 2,
+                "value": "transcriptomic.bulk"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": "transcriptomic.bulk"
           },
           "data_type": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_type",
-                "status": "not_classified"
+                "reason": "Filename contains RNA-seq indicator",
+                "rule_id": "alignment_rnaseq_filename",
+                "tier": 2,
+                "value": "alignments"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": "alignments"
           },
           "platform": {
             "evidence": [
