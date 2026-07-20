@@ -105,8 +105,10 @@ def classify_from_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Use the real filename so its tokens reach the tier-2 filename rules; the
-    # AnVIL file_format adds nothing the name lacks, so it is not consulted (#152).
+    # Use the real filename so its tokens reach the tier-2 filename rules. The
+    # AnVIL file_format is not consulted: it is redundant with the name for
+    # classification (#157), and in the corpus every selected BAM record's
+    # file_name already carries a usable extension (#152).
     filename = file_name or "sample.bam"
 
     # Create file info with header
@@ -190,8 +192,10 @@ def classify_from_vcf_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Use the real filename so its tokens reach the tier-2 filename rules; the
-    # AnVIL file_format adds nothing the name lacks, so it is not consulted (#152).
+    # Use the real filename so its tokens reach the tier-2 filename rules. The
+    # AnVIL file_format is not consulted: it is redundant with the name for
+    # classification (#157), and in the corpus every selected VCF record's
+    # file_name already carries a usable extension (#152).
     filename = file_name or "sample.vcf.gz"
 
     # Create file info with VCF header
