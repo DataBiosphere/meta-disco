@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
-from meta_disco.header_classifier import BED_EXTENSIONS, BedSignals, classify_from_bed_signals
+from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import CLASSIFIED, field_label, field_status
 
 EVIDENCE_DIR = Path("data/evidence/anvil/bed")
@@ -63,7 +63,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     for f in files:
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
-        if name.endswith(BED_EXTENSIONS) or fmt in BED_EXTENSIONS:
+        if name.endswith((".bed", ".bed.gz")) or fmt in [".bed", ".bed.gz"]:
             bed_files.append(f)
 
     print(f"Found {len(bed_files):,} BED files")
@@ -102,7 +102,6 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             file_name=name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
-            file_format=f.get("file_format"),
         )
 
         # Update stats

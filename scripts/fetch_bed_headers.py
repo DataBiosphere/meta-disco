@@ -23,7 +23,7 @@ from threading import Lock
 # Add project root to path
 import requests
 
-from meta_disco.header_classifier import BED_EXTENSIONS, BedSignals, classify_from_bed_signals
+from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import field_label
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -178,12 +178,7 @@ def extract_bed_signals(lines: list[str]) -> BedSignals:
 
 
 def classify_bed_file(
-    md5sum: str,
-    file_name: str,
-    file_size: int | None = None,
-    is_gzipped: bool = True,
-    use_cache: bool = True,
-    file_format: str | None = None,
+    md5sum: str, file_name: str, file_size: int | None = None, is_gzipped: bool = True, use_cache: bool = True
 ) -> dict | None:
     """Fetch BED lines and infer reference assembly.
 
@@ -193,8 +188,6 @@ def classify_bed_file(
         file_size: File size in bytes
         is_gzipped: Whether file is gzip-compressed
         use_cache: Whether to use cached evidence
-        file_format: Optional extension, used when file_name carries no usable
-            BED extension (passed through to classify_from_bed_signals) — #152
 
     Returns:
         Classification dict or None on failure
@@ -228,7 +221,6 @@ def classify_bed_file(
         signals,
         file_name=file_name,
         file_size=file_size,
-        file_format=file_format,
     )
 
     return {
@@ -258,7 +250,12 @@ def process_bed_files(
     files = data if isinstance(data, list) else data.get("files", data)
 
     # Filter to BED files with MD5
-    bed_files = [f for f in files if f.get("file_md5sum") and f.get("file_name", "").endswith(BED_EXTENSIONS)]
+    bed_files = [
+        f
+        for f in files
+        if f.get("file_md5sum")
+        and (f.get("file_name", "").endswith(".bed") or f.get("file_name", "").endswith(".bed.gz"))
+    ]
 
     print(f"Found {len(bed_files)} BED files with MD5")
 
@@ -289,14 +286,7 @@ def process_bed_files(
         is_gzipped = file_name.endswith(".gz")
         was_cached = load_cached_evidence(md5) is not None
 
-        result = classify_bed_file(
-            md5,
-            file_name,
-            file_size=file_size,
-            is_gzipped=is_gzipped,
-            use_cache=resume,
-            file_format=record.get("file_format"),
-        )
+        result = classify_bed_file(md5, file_name, file_size=file_size, is_gzipped=is_gzipped, use_cache=resume)
         if result:
             result["dataset_title"] = record.get("dataset_title")
             result["entry_id"] = record.get("entry_id")
