@@ -11,13 +11,8 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
-from meta_disco.header_classifier import filename_for_rules
 from meta_disco.models import FileInfo, field_label
 from meta_disco.rule_engine import RuleEngine
-
-# Extensions this script classifies; also the set filename_for_rules trusts as
-# "usable" so a name lacking one falls back to file_format (issue #157).
-IMAGE_EXTENSIONS = (".svs", ".tiff", ".tif", ".png", ".jpg")
 
 
 def classify_images(metadata_path: Path, output_path: Path):
@@ -49,11 +44,9 @@ def classify_images(metadata_path: Path, output_path: Path):
         if not is_image:
             continue
 
-        # Classify using RuleEngine. Fall back to file_format when the name
-        # carries no usable image extension (issue #157).
-        filename = filename_for_rules(name, fmt, default=name, allowed_extensions=IMAGE_EXTENSIONS)
+        # Classify using RuleEngine
         file_info = FileInfo(
-            filename=filename,
+            filename=name,
             file_size=f.get("file_size"),
             dataset_title=f.get("dataset_title"),
         )

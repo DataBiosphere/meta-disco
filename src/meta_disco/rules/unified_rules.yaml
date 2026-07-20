@@ -979,6 +979,7 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: quantification
+      assay_type: RNA-seq
     rationale: "Salmon/Sailfish transcript-level quantification (quant.sf)"
 
   # ---------------------------------------------------------------------------

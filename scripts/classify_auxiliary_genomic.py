@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
-from meta_disco.header_classifier import filename_for_rules
 from meta_disco.models import FileInfo, field_label
 from meta_disco.rule_engine import RuleEngine
 
@@ -49,11 +48,9 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         if not matched_ext:
             continue
 
-        # Classify using RuleEngine. Fall back to file_format when the name
-        # carries no usable auxiliary extension (issue #157).
-        filename = filename_for_rules(name, fmt, default=name, allowed_extensions=tuple(AUXILIARY_EXTENSIONS))
+        # Classify using RuleEngine
         file_info = FileInfo(
-            filename=filename,
+            filename=name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
         )

@@ -102,7 +102,6 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
             file_name=name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
-            file_format=f.get("file_format"),
         )
 
         # Update stats
