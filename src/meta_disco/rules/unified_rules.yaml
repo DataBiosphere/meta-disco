@@ -1323,6 +1323,13 @@ rules:
 
   # ---------------------------------------------------------------------------
   # VCF reference detection
+  #
+  # The human primary-assembly GenBank accession GCA_000001405 encodes the
+  # assembly in its version: .1-.14 are GRCh37 (frozen at GRCh37.p13 = .14),
+  # and .15 onward are GRCh38 (.15 base, .16+ are GRCh38 patches). So the
+  # accession sub-patterns below split at that boundary: <=14 -> GRCh37 (a
+  # closed range), >=15 -> GRCh38 (open-ended, to catch future patches). The
+  # durable fix is an accession->assembly deriver (see follow-up issue).
   # ---------------------------------------------------------------------------
   - id: vcf_ref_grch38
     tier: 3
@@ -1330,7 +1337,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##reference"
-      vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.15)"
+      vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.(1[5-9]|[2-9]\\d|\\d{3,}))"
     then:
       reference_assembly: GRCh38
     rationale: "##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession indicates variants called against GRCh38"
@@ -1341,7 +1348,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##reference"
-      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(?!15)\\d+|b37)"
+      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(1[0-4]|[1-9])(?!\\d)|b37)"
     then:
       reference_assembly: GRCh37
     rationale: "##reference line containing GRCh37, hg19, b37, or earlier accessions indicates variants called against GRCh37"
@@ -1363,7 +1370,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##contig"
-      vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.15)"
+      vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.(1[5-9]|[2-9]\\d|\\d{3,}))"
     then:
       reference_assembly: GRCh38
     rationale: "##contig assembly subfield naming GRCh38, hg38, hs38, or the GRCh38 GenBank accession declares the reference genome"
@@ -1374,7 +1381,7 @@ rules:
     when:
       extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
       vcf_header_type: "##contig"
-      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(?!15)\\d+|b37)"
+      vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(1[0-4]|[1-9])(?!\\d)|b37)"
     then:
       reference_assembly: GRCh37
     rationale: "##contig assembly subfield naming GRCh37, hg19, hs37, b37, or an earlier GenBank accession declares the reference genome"

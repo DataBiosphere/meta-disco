@@ -151,17 +151,22 @@ class TestVariantFiles:
     @pytest.mark.parametrize(
         ("header_line", "expected"),
         [
-            # The GRCh38 accession .15 must NOT also match the GRCh37 rule (whose
-            # old GCA_000001405\.[^5] matched the leading .1), which would resolve
-            # to a GRCh37/GRCh38 conflict. Covers both the ##contig and
-            # ##reference rule families (#221 review).
-            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
+            # GCA_000001405 encodes the assembly in its version: .1-.14 are GRCh37
+            # (frozen at .14), .15+ are GRCh38 (.15 base, .16+ patches). The rules
+            # must split at that boundary, in both the ##contig and ##reference
+            # families (#221 review). In particular .16+ are real GRCh38 patch
+            # accessions and must NOT fall through to GRCh37.
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.14>", "GRCh37"),
-            ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.16>", "GRCh38"),
+            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.26>", "GRCh38"),
             ("##reference=file:///ref/GCA_000001405.14.fa", "GRCh37"),
+            ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.16.fa", "GRCh38"),
+            ("##reference=file:///ref/GCA_000001405.26.fa", "GRCh38"),
         ],
     )
-    def test_vcf_grch38_accession_not_confused_with_grch37(self, engine, header_line, expected):
+    def test_vcf_gca_accession_version_maps_to_correct_assembly(self, engine, header_line, expected):
         ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
