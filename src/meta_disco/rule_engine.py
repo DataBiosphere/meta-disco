@@ -582,7 +582,7 @@ class RuleEngine:
         # consistent with matches_extension's own lowering. A header-only call may
         # pass a mixed-case file_format (".CRAM"); parsed_ext is already lower-case
         # (parse_file_name lowers it). Normalizing here means the matchers can
-        # compare directly without each re-lowering (#248).
+        # compare directly without each re-lowering (#243).
         if ext_info.file_format:
             ext_info.file_format = ext_info.file_format.lower()
         extension = ext_info.file_format or ""

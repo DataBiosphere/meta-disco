@@ -208,8 +208,7 @@ class TestFormatMatching:
     def test_present_but_falsy_format_fails_match(self, engine):
         """A present-but-falsy `when.format` (e.g. an authoring slip `format: ""`
         the loader does not value-check) fails the match rather than being
-        silently skipped — the guard keys on presence, not truthiness (Copilot,
-        PR #248)."""
+        silently skipped — the guard keys on presence, not truthiness (#243)."""
         from meta_disco.rule_loader import UnifiedRule
 
         fasta = ExtendedFileInfo(filename="genome.fa", format=Format.FASTA)
@@ -223,8 +222,7 @@ class TestFormatMatching:
     def test_classify_extended_normalizes_file_format_case(self, engine):
         """A mixed-case header-only file_format is lower-cased once at the source,
         so the extensions / when.file_format / assay conditions all match case-
-        insensitively — a `.CRAM` classifies identically to a `.cram` (Copilot,
-        PR #248)."""
+        insensitively — a `.CRAM` classifies identically to a `.cram` (#243)."""
         upper = ExtendedFileInfo(filename="", file_format=".CRAM")
         lower = ExtendedFileInfo(filename="", file_format=".cram")
         r_upper = engine.classify_extended(upper)

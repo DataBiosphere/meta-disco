@@ -394,7 +394,7 @@ def test_format_value_check_rejects_bogus_format(tmp_path):
 @pytest.mark.parametrize("bad", [None, ["FASTA"]])
 def test_format_check_flags_null_and_nonstring(tmp_path, bad):
     """A present `format` that is null or a non-string is flagged, not skipped or
-    crashed on — the scan guards the hash with isinstance (PR #248)."""
+    crashed on — the scan guards the hash with isinstance (#243)."""
     path = _write_rules_file(
         tmp_path,
         {
