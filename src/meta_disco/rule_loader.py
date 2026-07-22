@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 import yaml
 
+from .file_name import FileName
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
 
@@ -107,6 +108,12 @@ class UnifiedRules:
         ".mtx.gz",
     ]
 
+    # Compression and archive suffixes — "wrappers" around the format, not the
+    # format itself (see FileName). Kept as advice; in this foundation they are
+    # informational and may overlap the still-compound extension (the clean
+    # split is #244).
+    WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".gz", ".bgz", ".bz2", ".xz", ".zip", ".tar")
+
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:
         """Get all rules for a given scope."""
         return [r for r in self.rules if r.scope == scope]
@@ -136,6 +143,43 @@ class UnifiedRules:
         if "." in filename:
             return "." + filename.rsplit(".", 1)[-1].lower()
         return ""
+
+    def parse_file_name(self, filename: str) -> "FileName":
+        """Parse ``filename`` into a :class:`FileName` against this vocabulary.
+
+        The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
+        ``extension_map``), so it lives here with the rules rather than on the
+        pure ``FileName`` data type. ``extension`` equals ``extract_extension``
+        for every name with a known extension, so rule routing is unchanged for
+        those; a name with no known extension yields ``None`` rather than the
+        junk suffix ``extract_extension`` returns (which matched no rules anyway).
+        """
+        lower = filename.lower()
+
+        extension = None
+        for ext in self.COMPOUND_EXTENSIONS:
+            if lower.endswith(ext):
+                extension = ext
+                break
+        if extension is None and "." in filename:
+            simple = "." + filename.rsplit(".", 1)[-1].lower()
+            if simple in self.extension_map:
+                extension = simple
+
+        wrappers: list[str] = []
+        rest = lower
+        while True:
+            for suffix in self.WRAPPER_SUFFIXES:
+                if rest.endswith(suffix):
+                    wrappers.append(suffix)
+                    rest = rest[: -len(suffix)]
+                    break
+            else:
+                break
+        wrappers.reverse()  # name order: "x.tar.gz" -> (".tar", ".gz")
+
+        stem = filename[: -len(extension)] if extension else filename
+        return FileName(raw=filename, stem=stem, extension=extension, wrappers=tuple(wrappers))
 
 
 class RuleLoader:

@@ -9,7 +9,7 @@ RULES = RuleEngine().rules
 
 
 def parse(name: str) -> FileName:
-    return FileName.parse(name, RULES)
+    return RULES.parse_file_name(name)
 
 
 class TestExtension:

@@ -6,7 +6,6 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .file_name import FileName
 from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -563,12 +562,12 @@ class RuleEngine:
         ext_info = ExtendedFileInfo.from_file_info(file_info) if isinstance(file_info, FileInfo) else file_info
 
         # Extract the extension from the real filename when it yields a known
-        # one. FileName.parse returns None (not a junk last-dot suffix) for a
+        # one. parse_file_name returns None (not a junk last-dot suffix) for a
         # name with no known extension, so an unknown name leaves the caller's
         # file_format fallback intact — a header-only call sets it to the known
         # file-type extension so the extension rules still run without inventing
         # a filename to carry it (#152/#241).
-        parsed_ext = FileName.parse(ext_info.filename, self.rules).extension if ext_info.filename else None
+        parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
         if parsed_ext:
             ext_info.file_format = parsed_ext
         extension = ext_info.file_format or ""
