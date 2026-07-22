@@ -93,6 +93,8 @@ def classify_from_header(
 
     Args:
         header_text: Raw SAM/BAM header text (lines starting with @)
+        file_name: Optional real filename; its tokens (hifi_reads / rnaseq /
+            assembly) drive the tier-2 filename rules
         file_size: Optional file size in bytes (used for WGS/WES inference)
         file_format: Optional file format string (e.g., ".bam", ".cram")
 
@@ -103,14 +105,13 @@ def classify_from_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Determine filename for extension-based rules
-    filename = "sample.bam"
-    if file_format:
-        filename = f"sample{file_format}"
-
-    # Create file info with header
+    # Use the real filename so its tokens reach the tier-2 filename rules. The
+    # AnVIL file_format is redundant with the name and not consulted (#157). When
+    # there is no name (a header-only call), the engine reads the extension from
+    # the file_format we set — the known ".bam" — instead of a fabricated name.
     file_info = ExtendedFileInfo(
-        filename=filename,
+        filename=file_name or "",
+        file_format=".bam",
         file_size=file_size,
         file_size_gb=file_size / 1e9 if file_size is not None else None,
         bam_header=header_text,
@@ -177,6 +178,8 @@ def classify_from_vcf_header(
 
     Args:
         header_text: VCF header text (lines starting with ##)
+        file_name: Optional real filename; its tokens (e.g. a chm13 assembly
+            hint) drive the tier-2 filename rules
         file_size: Optional file size in bytes
         file_format: Optional file format string (e.g., ".vcf", ".vcf.gz")
 
@@ -187,14 +190,13 @@ def classify_from_vcf_header(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    # Determine filename for extension-based rules
-    filename = "sample.vcf.gz"
-    if file_format:
-        filename = f"sample{file_format}"
-
-    # Create file info with VCF header
+    # Use the real filename so its tokens reach the tier-2 filename rules. The
+    # AnVIL file_format is redundant with the name and not consulted (#157). When
+    # there is no name (a header-only call), the engine reads the extension from
+    # the file_format we set — the known ".vcf.gz" — instead of a fabricated name.
     file_info = ExtendedFileInfo(
-        filename=filename,
+        filename=file_name or "",
+        file_format=".vcf.gz",
         file_size=file_size,
         file_size_gb=file_size / 1e9 if file_size is not None else None,
         vcf_header=header_text,
@@ -263,9 +265,6 @@ def classify_from_fastq_header(
     """
     from .rule_engine import ExtendedFileInfo
 
-    # Use provided filename or generate one
-    filename = file_name or "sample.fastq.gz"
-
     # Handle empty input — no reads to classify. Statuses are known directly, so
     # pass them explicitly to build_field_entry (epic #116 Stage 3 shape).
     # data_type is the classified "reads"; reference_assembly is not_applicable
@@ -289,9 +288,12 @@ def classify_from_fastq_header(
     # Archive-reformatted reads look like: @ERR123.1 A00297:44:...
     accession, source, remainder = extract_archive_accession(first_read)
 
-    # Create file info with FASTQ header - try original first
+    # Create file info with FASTQ header - try original first. The real filename
+    # drives the tier-2 rules; with no name, the engine reads the extension from
+    # the known ".fastq.gz" file_format rather than a fabricated name (#152).
     file_info = ExtendedFileInfo(
-        filename=filename,
+        filename=file_name or "",
+        file_format=".fastq.gz",
         file_size=file_size,
         file_size_gb=file_size / 1e9 if file_size is not None else None,
         fastq_first_read=first_read,
@@ -593,10 +595,10 @@ def classify_from_fasta_header(
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
     from .validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
-    filename = file_name or "sample.fa.gz"
-
-    # Run rule engine for extension/filename-based rules
-    file_info = ExtendedFileInfo(filename=filename)
+    # Run rule engine for extension/filename-based rules. The real filename drives
+    # the tier-2 rules; with no name, the engine reads the extension from the known
+    # ".fa.gz" file_format rather than a fabricated name (#152).
+    file_info = ExtendedFileInfo(filename=file_name or "", file_format=".fa.gz")
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=False)
 
@@ -907,11 +909,13 @@ def classify_from_bed_signals(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    filename = file_name or "sample.bed"
     max_coordinates = signals.max_coordinates
 
+    # The real filename drives the tier-2 rules; with no name, the engine reads the
+    # extension from the known ".bed" file_format rather than a fabricated name (#152).
     file_info = ExtendedFileInfo(
-        filename=filename,
+        filename=file_name or "",
+        file_format=".bed",
         file_size=file_size,
         file_size_gb=file_size / 1e9 if file_size is not None else None,
         dataset_title=dataset_title,
