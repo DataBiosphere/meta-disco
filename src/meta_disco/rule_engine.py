@@ -631,12 +631,14 @@ class RuleEngine:
         if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
             return False
 
-        # Check format filter (#243). `when.format` is a canonical Format value
-        # (a string like "FASTA"); file_info.format is a Format, which is a str
-        # enum, so the equality compares by value. An unresolved (None) or
-        # differing format fails the match — a format-only rule is considered for
-        # every file and skipped for those whose format does not match.
-        if (fmt := when.get("format")) and file_info.format != fmt:
+        # Check format filter (#243), a peer of the extensions filter above and
+        # keyed by presence like it: when `format` is present the rule matches
+        # only a file whose derived format equals it. `when.format` is a Format
+        # value string ("FASTA"); file_info.format is a Format (a str enum), so
+        # equality compares by value. A present-but-non-matching format — an
+        # unresolved (None) format, a different one, or a stray falsy value the
+        # loader does not value-check — fails the match rather than being skipped.
+        if "format" in when and file_info.format != when["format"]:
             return False
 
         # Check filename pattern

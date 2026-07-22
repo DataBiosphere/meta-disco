@@ -205,6 +205,21 @@ class TestFormatMatching:
         engine.classify_extended(ext_info)
         assert ext_info.format is Format.CRAM
 
+    def test_present_but_falsy_format_fails_match(self, engine):
+        """A present-but-falsy `when.format` (e.g. an authoring slip `format: ""`
+        the loader does not value-check) fails the match rather than being
+        silently skipped — the guard keys on presence, not truthiness (Copilot,
+        PR #248)."""
+        from meta_disco.rule_loader import UnifiedRule
+
+        fasta = ExtendedFileInfo(filename="genome.fa", format=Format.FASTA)
+        result = ExtendedClassificationResult()
+        empty_fmt = UnifiedRule(id="x", tier=1, scope="extension", when={"format": ""}, then={}, rationale="")
+        assert engine._rule_matches(empty_fmt, fasta, result) is False
+        # Control: the same rule keyed on the real format still matches.
+        real_fmt = UnifiedRule(id="y", tier=1, scope="extension", when={"format": "FASTA"}, then={}, rationale="")
+        assert engine._rule_matches(real_fmt, fasta, result) is True
+
 
 class TestThenStatus:
     """A rule authoring a non-classified status via `then.status` (#133)."""
