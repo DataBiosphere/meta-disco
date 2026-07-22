@@ -841,7 +841,6 @@ class TestAssayTypeInference:
         file_info = ExtendedFileInfo(
             filename="sample.bam",
             file_size=60_000_000_000,
-            file_size_gb=60.0,
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
@@ -861,7 +860,6 @@ class TestAssayTypeInference:
         file_info = ExtendedFileInfo(
             filename="sample.bam",
             file_size=60_000_000_000,
-            file_size_gb=60.0,
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
@@ -948,7 +946,7 @@ class TestSentinelValues:
 
     def test_bam_without_header_not_classified(self, engine):
         """BAM without header should leave modality as not_classified."""
-        result = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0))
+        result = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size=60_000_000_000))
         # No header = no modality evidence, even for large files
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
@@ -984,7 +982,7 @@ class TestOutputDictStatus:
         n_a = engine.classify_extended(FileInfo(filename="plot.png")).to_output_dict()["reference_assembly"]
         assert (n_a["value"], n_a["status"]) == (None, NOT_APPLICABLE)
 
-        n_c = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size_gb=60.0)).to_output_dict()[
-            "data_modality"
-        ]
+        n_c = engine.classify_extended(
+            ExtendedFileInfo(filename="sample.bam", file_size=60_000_000_000)
+        ).to_output_dict()["data_modality"]
         assert (n_c["value"], n_c["status"]) == (None, NOT_CLASSIFIED)
