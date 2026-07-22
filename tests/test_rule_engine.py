@@ -2,6 +2,7 @@
 
 import pytest
 
+from meta_disco.file_name import Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -170,6 +171,39 @@ class TestVariantFiles:
         ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
+
+
+class TestFormatMatching:
+    """Rules keyed on `format` instead of `extensions` (#243). The FASTA rules
+    were migrated to `format: FASTA`, so these both prove the new keying works
+    and pin the migration as behavior-preserving."""
+
+    @pytest.mark.parametrize("name", ["genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz"])
+    def test_format_keyed_rule_matches_every_spelling(self, engine, name):
+        """One `format: FASTA` rule fires for every FASTA spelling/compression
+        variant — the collapse the extension list used to enumerate by hand."""
+        result = engine.classify_extended(FileInfo(filename=name))
+        assert result.data_type == "sequence"
+
+    def test_format_keyed_filename_rule_still_fires(self, engine):
+        """A tier-2 rule that pairs `format: FASTA` with a filename_pattern still
+        matches on both conditions (fasta_assembly_filename)."""
+        result = engine.classify_extended(FileInfo(filename="HG002.hifiasm.bp.p_ctg.fa"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+
+    def test_format_keyed_rule_skipped_for_other_formats(self, engine):
+        """A format-only rule is considered for every file but must not fire when
+        the format differs — a BAM is not classified as FASTA sequence."""
+        result = engine.classify_extended(FileInfo(filename="sample.bam"))
+        assert result.data_type != "sequence"
+
+    def test_engine_derives_format_from_settled_extension(self, engine):
+        """classify_extended sets file_info.format from the extension it settles
+        on, agreeing with file_format even on a header-only (name-less) call."""
+        ext_info = ExtendedFileInfo(filename="", file_format=".cram")
+        engine.classify_extended(ext_info)
+        assert ext_info.format is Format.CRAM
 
 
 class TestThenStatus:

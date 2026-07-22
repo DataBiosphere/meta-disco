@@ -78,6 +78,10 @@
 # ---------------------------
 # Extension/filename conditions:
 # - extensions: list of file extensions to match (e.g., [".bam", ".cram"])
+# - format: canonical file format to match (e.g., FASTA) — collapses the
+#     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
+#     to a single identity, so key on this instead of re-listing extensions
+#     (see EXTENSION_TO_FORMAT in rule_loader.py; issue #243)
 # - filename_pattern: regex pattern for filename (case-insensitive)
 # - dataset_pattern: regex pattern for dataset title
 # - file_format: required format (.bam, .cram, etc)
@@ -471,7 +475,7 @@ rules:
     tier: 1
     scope: extension
     when:
-      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      format: FASTA
     then:
       data_type: sequence
       status:
@@ -736,7 +740,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      format: FASTA
       filename_pattern: "(?i)(assembly|hifiasm|verkko|flye|canu|wtdbg|hap[12]|diploid|[._](pat|mat)(ernal)?[._])"
     then:
       data_modality: genomic
@@ -749,7 +753,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fasta", ".fa", ".fasta.gz", ".fa.gz"]
+      format: FASTA
       filename_pattern: "(?i)(haplotype|phased|hapdup|purge_dups)"
     then:
       data_modality: genomic

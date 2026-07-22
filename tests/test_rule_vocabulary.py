@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from meta_disco import schema_vocab
+from meta_disco.file_name import Format
 from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 
@@ -33,6 +34,23 @@ def _when_value_violations(rules):
             if value is not None and not schema_vocab.value_in_vocabulary(dimension, value):
                 violations.append(f"{rule.id}: when.{key}={value!r}")
     return violations
+
+
+def _when_format_violations(rules):
+    """`when.format` values that are not real Format members.
+
+    The format counterpart to _when_value_violations. Format is an in-code enum
+    rather than a LinkML schema dimension, so it is checked directly against the
+    enum instead of through schema_vocab (#243) — but it is the same antecedent-
+    value drift check, in the same test layer (the loader validates when *keys*,
+    values are checked here). Shared by the suite-wide and negative tests.
+    """
+    valid = {f.value for f in Format}
+    return [
+        f"{rule.id}: when.format={(rule.when or {})['format']!r}"
+        for rule in rules.rules
+        if (rule.when or {}).get("format") is not None and (rule.when or {})["format"] not in valid
+    ]
 
 
 def test_rule_then_values_in_vocabulary():
@@ -89,6 +107,21 @@ def test_rule_when_values_in_vocabulary():
     assert not violations, (
         "Rules use `when` condition values not in the LinkML schema vocabulary.\n"
         "Add them to classification.yaml or fix the rule:\n  " + "\n  ".join(violations)
+    )
+
+
+def test_rule_when_format_values_valid():
+    """Every `when.format` value must be a real Format member (#243).
+
+    The in-code counterpart to test_rule_when_values_in_vocabulary: `format` is
+    backed by the Format enum, not the schema, so it is drift-checked directly
+    against the enum. Catches a typo'd format (which would silently never match)
+    the same way the platform check catches a typo'd platform.
+    """
+    violations = _when_format_violations(get_unified_rules())
+    assert not violations, (
+        "Rules use `when.format` values that are not real Format members.\n"
+        "Add the format to meta_disco.file_name.Format or fix the rule:\n  " + "\n  ".join(violations)
     )
 
 
@@ -325,6 +358,28 @@ def test_loader_rejects_unknown_when_key(tmp_path):
     )
     with pytest.raises(ValueError, match="unknown 'when' condition key"):
         RuleLoader(path).load()
+
+
+def test_format_value_check_rejects_bogus_format(tmp_path):
+    """The format drift check catches a typo'd Format value (#243).
+
+    The format analogue of test_when_value_check_rejects_bogus_platform. The
+    loader accepts the `format` *key* (it is a valid when key); the *value* gap
+    is closed by the _when_format_violations scan, so this exercises that scan
+    over a rule whose when.format is bogus.
+    """
+    path = _write_rules_file(
+        tmp_path,
+        {
+            "id": "bogus_format",
+            "tier": 1,
+            "scope": "extension",
+            "when": {"format": "FASTAA"},  # typo: should be FASTA
+            "then": {"data_type": "sequence"},
+        },
+    )
+    violations = _when_format_violations(RuleLoader(path).load())
+    assert violations == ["bogus_format: when.format='FASTAA'"]
 
 
 def test_loader_rejects_unknown_then_key(tmp_path):

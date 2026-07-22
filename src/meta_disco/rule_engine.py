@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .file_name import Format
 from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -42,6 +43,11 @@ class ExtendedFileInfo:
     file_size: int | None = None
     dataset_title: str | None = None
     file_format: str | None = None
+    # Canonical file Format derived from the extension (#243). Set by
+    # classify_extended from the extension it settles on, so it always agrees
+    # with file_format; None when that extension maps to no seeded format. Rules
+    # key on it via `when.format`.
+    format: Format | None = None
 
     # Header data (populated when available)
     bam_header: str | None = None
@@ -572,6 +578,11 @@ class RuleEngine:
             ext_info.file_format = parsed_ext
         extension = ext_info.file_format or ""
 
+        # Derive the canonical format from the extension the engine settled on
+        # (parsed name or the caller's file_format fallback), so format and
+        # extension always agree — one funnel through extension_to_format (#243).
+        ext_info.format = self.rules.extension_to_format(extension)
+
         # Initialize result
         result = ExtendedClassificationResult()
 
@@ -618,6 +629,14 @@ class RuleEngine:
 
         # Check extension filter
         if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
+            return False
+
+        # Check format filter (#243). `when.format` is a canonical Format value
+        # (a string like "FASTA"); file_info.format is a Format, which is a str
+        # enum, so the equality compares by value. An unresolved (None) or
+        # differing format fails the match — a format-only rule is considered for
+        # every file and skipped for those whose format does not match.
+        if (fmt := when.get("format")) and file_info.format != fmt:
             return False
 
         # Check filename pattern

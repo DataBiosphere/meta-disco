@@ -1,8 +1,8 @@
-"""Tests for the FileName parsed-filename fact (#241)."""
+"""Tests for the FileName parsed-filename fact (#241, #243)."""
 
 import pytest
 
-from meta_disco.file_name import FileName
+from meta_disco.file_name import FileName, Format, FormatSource
 from meta_disco.rule_engine import RuleEngine
 
 RULES = RuleEngine().rules
@@ -72,6 +72,42 @@ class TestBehaviorPreservation:
     )
     def test_known_extension_matches_extract_extension(self, name):
         assert parse(name).extension == RULES.extract_extension(name)
+
+
+class TestFormat:
+    """The stage-1 derived format (#243): extension -> canonical Format, with
+    the provenance recorded in format_source. Set together or both None."""
+
+    def test_spelling_and_compression_variants_collapse_to_one_format(self):
+        """The point of format: four extensions, one identity."""
+        for name in ("genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz"):
+            fn = parse(name)
+            assert fn.format is Format.FASTA
+            assert fn.format_source is FormatSource.EXTENSION
+
+    def test_distinct_formats_stay_distinct(self):
+        """.bam and .cram are separate identities — the assay rules key on the
+        extension to tell them apart, so format must not collapse them."""
+        assert parse("x.bam").format is Format.BAM
+        assert parse("x.cram").format is Format.CRAM
+
+    def test_compound_extension_resolves_format(self):
+        assert parse("cohort.g.vcf.gz").format is Format.GVCF
+        assert parse("cohort.vcf.gz").format is Format.VCF
+
+    def test_unmapped_extension_has_no_format(self):
+        """A known extension with no seeded format (e.g. an image) is honestly
+        unresolved — format and its source are both None."""
+        fn = parse("slide.svs")
+        assert fn.extension == ".svs"
+        assert fn.format is None
+        assert fn.format_source is None
+
+    def test_absent_extension_has_no_format(self):
+        fn = parse("hprc-v1.0-mc-grch38")
+        assert fn.extension is None
+        assert fn.format is None
+        assert fn.format_source is None
 
 
 class TestWrappers:
