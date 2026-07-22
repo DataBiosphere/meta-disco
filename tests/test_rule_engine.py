@@ -220,6 +220,19 @@ class TestFormatMatching:
         real_fmt = UnifiedRule(id="y", tier=1, scope="extension", when={"format": "FASTA"}, then={}, rationale="")
         assert engine._rule_matches(real_fmt, fasta, result) is True
 
+    def test_extensions_guard_is_case_insensitive(self, engine):
+        """A mixed-case file_format matches an extensions rule, consistent with
+        matches_extension's lower-casing — a rule pre-filtered as applicable is
+        not then rejected on case alone (Copilot, PR #248)."""
+        from meta_disco.rule_loader import UnifiedRule
+
+        result = ExtendedClassificationResult()
+        rule = UnifiedRule(id="z", tier=1, scope="extension", when={"extensions": [".cram"]}, then={}, rationale="")
+        assert engine._rule_matches(rule, ExtendedFileInfo(filename="x", file_format=".CRAM"), result) is True
+        assert engine._rule_matches(rule, ExtendedFileInfo(filename="x", file_format=".cram"), result) is True
+        # A None file_format matches no extension rather than raising on .lower().
+        assert engine._rule_matches(rule, ExtendedFileInfo(filename="x", file_format=None), result) is False
+
 
 class TestThenStatus:
     """A rule authoring a non-classified status via `then.status` (#133)."""

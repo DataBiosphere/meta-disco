@@ -627,8 +627,14 @@ class RuleEngine:
         if when.get("always"):
             return True
 
-        # Check extension filter
-        if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
+        # Check extension filter. Lower-case file_format to match matches_extension's
+        # own normalization — the rule pre-filter lower-cases both sides, so a caller
+        # supplying a mixed-case file_format (e.g. ".CRAM") would otherwise be
+        # pre-filtered as applicable yet rejected here and never match. `or ""` keeps
+        # a None file_format from raising on .lower() (it then matches no extension).
+        if "extensions" in when and (file_info.file_format or "").lower() not in [
+            e.lower() for e in when["extensions"]
+        ]:
             return False
 
         # Check format filter (#243), a peer of the extensions filter above and
