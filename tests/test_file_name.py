@@ -85,3 +85,10 @@ class TestWrappers:
         assert fn.extension is None
         assert fn.wrappers == (".gz",)
         assert fn.stem == "notes.txt"
+
+    def test_bgz_is_not_mis_peeled_as_gz(self):
+        """`.bgz` ends with `.gz`; the wrapper list is ordered longest-first so
+        `.bgz` is captured whole, not mis-peeled as `.gz` leaving a dangling `b`."""
+        fn = parse("notes.txt.bgz")
+        assert fn.wrappers == (".bgz",)
+        assert fn.stem == "notes.txt"

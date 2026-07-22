@@ -111,8 +111,10 @@ class UnifiedRules:
     # Compression and archive suffixes — "wrappers" around the format, not the
     # format itself (see FileName). Kept as advice; in this foundation they are
     # informational and may overlap the still-compound extension (the clean
-    # split is #244).
-    WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".gz", ".bgz", ".bz2", ".xz", ".zip", ".tar")
+    # split is #244). Ordered longest-first (like COMPOUND_EXTENSIONS): the peel
+    # loop takes the first `endswith` match, so `.bgz` must precede `.gz` or a
+    # `.bgz` name would mis-peel as `.gz` and leave a dangling `b` in the stem.
+    WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".bgz", ".bz2", ".zip", ".tar", ".gz", ".xz")
 
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:
         """Get all rules for a given scope."""
