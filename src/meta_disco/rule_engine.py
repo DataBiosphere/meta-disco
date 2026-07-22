@@ -40,7 +40,6 @@ class ExtendedFileInfo:
 
     filename: str
     file_size: int | None = None
-    file_size_gb: float | None = None
     dataset_title: str | None = None
     file_format: str | None = None
 
@@ -61,17 +60,21 @@ class ExtendedFileInfo:
     _parsed_bam_header: "SAMHeader" = field(init=False, repr=False, compare=False)
     _parsed_vcf_header: "VCFHeader" = field(init=False, repr=False, compare=False)
 
+    @property
+    def file_size_gb(self) -> float | None:
+        """Size in decimal GB (not GiB), derived from ``file_size`` bytes.
+
+        Kept as a read-only accessor rather than stored state so bytes are the
+        single source of truth; the assay-size rules author their thresholds in
+        GB and read this (#241)."""
+        return self.file_size / 1e9 if self.file_size is not None else None
+
     @classmethod
     def from_file_info(cls, file_info: FileInfo) -> "ExtendedFileInfo":
         """Create ExtendedFileInfo from a FileInfo object."""
-        file_size_gb = None
-        if file_info.file_size is not None:
-            file_size_gb = file_info.file_size / 1e9  # Use decimal GB, not GiB
-
         return cls(
             filename=file_info.filename,
             file_size=file_info.file_size,
-            file_size_gb=file_size_gb,
             dataset_title=file_info.dataset_title,
         )
 
@@ -558,14 +561,15 @@ class RuleEngine:
         # Convert to ExtendedFileInfo if needed
         ext_info = ExtendedFileInfo.from_file_info(file_info) if isinstance(file_info, FileInfo) else file_info
 
-        # Extract the extension from the real filename when it yields one. A
-        # header-only call (or a name with no usable extension) sets file_format
-        # to the known file-type extension (e.g. ".bam"), so the extension rules
-        # still run without inventing a filename to carry it — the derived
-        # extension only overrides that fallback when it is itself non-empty (#152).
-        derived = self.rules.extract_extension(ext_info.filename) if ext_info.filename else ""
-        if derived:
-            ext_info.file_format = derived
+        # Extract the extension from the real filename when it yields a known
+        # one. parse_file_name returns None (not a junk last-dot suffix) for a
+        # name with no known extension, so an unknown name leaves the caller's
+        # file_format fallback intact — a header-only call sets it to the known
+        # file-type extension so the extension rules still run without inventing
+        # a filename to carry it (#152/#241).
+        parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
+        if parsed_ext:
+            ext_info.file_format = parsed_ext
         extension = ext_info.file_format or ""
 
         # Initialize result
@@ -882,7 +886,6 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size is not None else None,
             bam_header=bam_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -909,7 +912,6 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size is not None else None,
             vcf_header=vcf_header,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -936,7 +938,6 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size is not None else None,
             fastq_first_read=first_read,
         )
         return self.classify_extended(file_info, include_tier3=True)
@@ -965,7 +966,6 @@ class RuleEngine:
         file_info = ExtendedFileInfo(
             filename=filename,
             file_size=file_size,
-            file_size_gb=file_size / 1e9 if file_size is not None else None,
             fasta_contig_names=contig_names,
         )
         return self.classify_extended(file_info, include_tier3=False)

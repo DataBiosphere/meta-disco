@@ -113,7 +113,6 @@ def classify_from_header(
         filename=file_name or "",
         file_format=".bam",
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size is not None else None,
         bam_header=header_text,
     )
 
@@ -198,7 +197,6 @@ def classify_from_vcf_header(
         filename=file_name or "",
         file_format=".vcf.gz",
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size is not None else None,
         vcf_header=header_text,
     )
 
@@ -295,7 +293,6 @@ def classify_from_fastq_header(
         filename=file_name or "",
         file_format=".fastq.gz",
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size is not None else None,
         fastq_first_read=first_read,
     )
 
@@ -464,7 +461,6 @@ def classify_without_content(
     file_info = ExtendedFileInfo(
         filename=filename,
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size is not None else None,
     )
     result = _get_engine().classify_extended(file_info, include_tier3=False)
 
@@ -917,7 +913,6 @@ def classify_from_bed_signals(
         filename=file_name or "",
         file_format=".bed",
         file_size=file_size,
-        file_size_gb=file_size / 1e9 if file_size is not None else None,
         dataset_title=dataset_title,
     )
 
