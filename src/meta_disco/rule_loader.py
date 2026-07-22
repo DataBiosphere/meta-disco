@@ -178,7 +178,15 @@ class UnifiedRules:
                 break
         wrappers.reverse()  # name order: "x.tar.gz" -> (".tar", ".gz")
 
-        stem = filename[: -len(extension)] if extension else filename
+        # The stem carries the name tokens only. Remove the known extension when
+        # there is one (a compound extension already subsumes its wrappers, e.g.
+        # ".vcf.gz"); otherwise strip the trailing wrappers so the stem does not
+        # keep the compression/archive advice ("notes.txt.gz" -> "notes.txt").
+        if extension:
+            stem = filename[: -len(extension)]
+        else:
+            wrapper_len = sum(len(w) for w in wrappers)
+            stem = filename[:-wrapper_len] if wrapper_len else filename
         return FileName(raw=filename, stem=stem, extension=extension, wrappers=tuple(wrappers))
 
 

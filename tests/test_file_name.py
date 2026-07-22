@@ -79,5 +79,9 @@ class TestWrappers:
         assert parse("sample.bam").wrappers == ()
 
     def test_bare_compression_without_format(self):
+        """No known core extension (.txt isn't in the vocabulary), so extension is
+        None; the .gz is captured as a wrapper and stripped from the stem."""
         fn = parse("notes.txt.gz")
+        assert fn.extension is None
         assert fn.wrappers == (".gz",)
+        assert fn.stem == "notes.txt"
