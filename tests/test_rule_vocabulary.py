@@ -44,13 +44,22 @@ def _when_format_violations(rules):
     enum instead of through schema_vocab (#243) — but it is the same antecedent-
     value drift check, in the same test layer (the loader validates when *keys*,
     values are checked here). Shared by the suite-wide and negative tests.
+
+    A present `format` must be a string in the Format vocabulary; anything else
+    is a violation — including ``null`` and non-string types (e.g. a list), which
+    the ``isinstance`` guard reports rather than raising ``TypeError`` on the
+    ``not in`` hash. Mirrors value_in_vocabulary's non-string handling.
     """
     valid = {f.value for f in Format}
-    return [
-        f"{rule.id}: when.format={(rule.when or {})['format']!r}"
-        for rule in rules.rules
-        if (rule.when or {}).get("format") is not None and (rule.when or {})["format"] not in valid
-    ]
+    violations = []
+    for rule in rules.rules:
+        when = rule.when or {}
+        if "format" not in when:
+            continue
+        value = when["format"]
+        if not isinstance(value, str) or value not in valid:
+            violations.append(f"{rule.id}: when.format={value!r}")
+    return violations
 
 
 def test_rule_then_values_in_vocabulary():
@@ -380,6 +389,24 @@ def test_format_value_check_rejects_bogus_format(tmp_path):
     )
     violations = _when_format_violations(RuleLoader(path).load())
     assert violations == ["bogus_format: when.format='FASTAA'"]
+
+
+@pytest.mark.parametrize("bad", [None, ["FASTA"]])
+def test_format_check_flags_null_and_nonstring(tmp_path, bad):
+    """A present `format` that is null or a non-string is flagged, not skipped or
+    crashed on — the scan guards the hash with isinstance (PR #248)."""
+    path = _write_rules_file(
+        tmp_path,
+        {
+            "id": "bad_format",
+            "tier": 1,
+            "scope": "extension",
+            "when": {"format": bad},
+            "then": {"data_type": "sequence"},
+        },
+    )
+    violations = _when_format_violations(RuleLoader(path).load())
+    assert violations == [f"bad_format: when.format={bad!r}"]
 
 
 def test_loader_rejects_unknown_then_key(tmp_path):
