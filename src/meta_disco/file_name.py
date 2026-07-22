@@ -92,8 +92,9 @@ class FileName:
     when the extension maps to no seeded format (or there is no known extension).
     ``format_source`` records how it was derived — ``FormatSource.EXTENSION`` for
     the stage-1 (extension-only) derivation, ``None`` when ``format`` is
-    unresolved. The two move together: ``format`` and ``format_source`` are both
-    set or both ``None``.
+    unresolved. As built by ``UnifiedRules.parse_file_name`` the two move
+    together — both set or both ``None`` — though ``FileName`` itself does not
+    enforce that of a directly-constructed instance.
     """
 
     raw: str
