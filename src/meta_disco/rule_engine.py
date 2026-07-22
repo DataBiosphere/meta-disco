@@ -576,6 +576,15 @@ class RuleEngine:
         parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
         if parsed_ext:
             ext_info.file_format = parsed_ext
+        # Normalize the settled file_format to lower-case once, so every downstream
+        # comparison — the extensions filter, `when.file_format`, and the assay
+        # `file_format`/`file_format_not` conditions — is case-insensitive and
+        # consistent with matches_extension's own lowering. A header-only call may
+        # pass a mixed-case file_format (".CRAM"); parsed_ext is already lower-case
+        # (parse_file_name lowers it). Normalizing here means the matchers can
+        # compare directly without each re-lowering (#248).
+        if ext_info.file_format:
+            ext_info.file_format = ext_info.file_format.lower()
         extension = ext_info.file_format or ""
 
         # Derive the canonical format from the extension the engine settled on
@@ -627,14 +636,10 @@ class RuleEngine:
         if when.get("always"):
             return True
 
-        # Check extension filter. Lower-case file_format to match matches_extension's
-        # own normalization — the rule pre-filter lower-cases both sides, so a caller
-        # supplying a mixed-case file_format (e.g. ".CRAM") would otherwise be
-        # pre-filtered as applicable yet rejected here and never match. `or ""` keeps
-        # a None file_format from raising on .lower() (it then matches no extension).
-        if "extensions" in when and (file_info.file_format or "").lower() not in [
-            e.lower() for e in when["extensions"]
-        ]:
+        # Check extension filter. file_format is already lower-cased by
+        # classify_extended, so this compares consistently with matches_extension's
+        # own lowering (a mixed-case caller file_format was normalized upstream).
+        if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
             return False
 
         # Check format filter (#243), a peer of the extensions filter above and
