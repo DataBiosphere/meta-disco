@@ -26,8 +26,10 @@ class FileName:
     on, or ``None`` when the name carries no known extension — never the junk
     last-dot suffix ``UnifiedRules.extract_extension`` returns
     (``"hprc-v1.0-mc-grch38"`` → ``".0-mc-grch38"``). ``wrappers`` are the
-    trailing compression/archive suffixes, in name order. ``stem`` is the name
-    with the extension removed.
+    trailing compression/archive suffixes, in name order. ``stem`` is the
+    token-carrying part: the name with its known ``extension`` removed, or —
+    when there is none — its trailing ``wrappers`` stripped (an unknown suffix
+    like ``.xyz`` is kept, since it is neither a known extension nor a wrapper).
     """
 
     raw: str
