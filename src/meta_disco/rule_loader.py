@@ -256,8 +256,10 @@ class RuleLoader:
             ) from e
         docs = list(yaml.safe_load_all(text))
 
-        if len(docs) < 1:
-            raise ValueError("Rules file must have at least 1 YAML document")
+        if not docs or not isinstance(docs[0], dict):
+            raise ValueError(
+                "Rules file must have at least one YAML document whose first document is the `rules` mapping"
+            )
 
         # The extension_map is no longer a YAML document — it is in-code in
         # file_name.py since #252, so the rules doc is now first.

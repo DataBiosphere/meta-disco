@@ -28,7 +28,8 @@ class TestPureParse:
         ],
     )
     def test_parse_needs_no_rules_and_matches_delegator(self, name):
-        # Called as a bare classmethod — no RuleEngine / UnifiedRules constructed.
+        # FileName.parse takes no rules instance and needs none — the parse is pure.
+        # (The module-level RULES exists only for the delegator-equivalence check.)
         fn = FileName.parse(name)
         assert isinstance(fn, FileName)
         # The UnifiedRules delegator returns the identical fact.

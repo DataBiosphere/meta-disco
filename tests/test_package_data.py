@@ -20,6 +20,9 @@ def test_rules_resource_is_readable_package_data():
     resource = default_rules_resource()
     text = resource.read_text(encoding="utf-8")  # raises if not shipped
     assert "rules:" in text
+    # The extension_map moved in-code in #252 — it must not be reintroduced as a
+    # YAML document (that would resurrect the two-source-of-truth the move removed).
+    assert "extension_map:" not in text
 
 
 def test_schema_resource_is_readable_package_data():
