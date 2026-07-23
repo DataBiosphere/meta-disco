@@ -2,6 +2,7 @@
 
 import pytest
 
+from meta_disco.file_name import Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -170,6 +171,70 @@ class TestVariantFiles:
         ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
+
+
+class TestFormatMatching:
+    """Rules keyed on `format` instead of `extensions` (#243). The FASTA rules
+    were migrated to `format: FASTA`, so these both prove the new keying works
+    and pin the migration as behavior-preserving."""
+
+    @pytest.mark.parametrize("name", ["genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz"])
+    def test_format_keyed_rule_matches_every_spelling(self, engine, name):
+        """One `format: FASTA` rule fires for every FASTA spelling/compression
+        variant — the collapse the extension list used to enumerate by hand."""
+        result = engine.classify_extended(FileInfo(filename=name))
+        assert result.data_type == "sequence"
+
+    def test_format_keyed_filename_rule_still_fires(self, engine):
+        """A tier-2 rule that pairs `format: FASTA` with a filename_pattern still
+        matches on both conditions (fasta_assembly_filename)."""
+        result = engine.classify_extended(FileInfo(filename="HG002.hifiasm.bp.p_ctg.fa"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "assembly"
+
+    def test_format_keyed_rule_skipped_for_other_formats(self, engine):
+        """A format-only rule is considered for every file but must not fire when
+        the format differs — a BAM is not classified as FASTA sequence."""
+        result = engine.classify_extended(FileInfo(filename="sample.bam"))
+        assert result.data_type != "sequence"
+
+    def test_engine_derives_format_from_settled_extension(self, engine):
+        """classify_extended sets file_info.format from the extension it settles
+        on, agreeing with file_format even on a header-only (name-less) call."""
+        ext_info = ExtendedFileInfo(filename="", file_format=".cram")
+        engine.classify_extended(ext_info)
+        assert ext_info.format is Format.CRAM
+
+    def test_present_but_falsy_format_fails_match(self, engine):
+        """A present-but-falsy `when.format` (e.g. an authoring slip `format: ""`
+        the loader does not value-check) fails the match rather than being
+        silently skipped — the guard keys on presence, not truthiness (#243)."""
+        from meta_disco.rule_loader import UnifiedRule
+
+        fasta = ExtendedFileInfo(filename="genome.fa", format=Format.FASTA)
+        result = ExtendedClassificationResult()
+        empty_fmt = UnifiedRule(id="x", tier=1, scope="extension", when={"format": ""}, then={}, rationale="")
+        assert engine._rule_matches(empty_fmt, fasta, result) is False
+        # Control: the same rule keyed on the real format still matches.
+        real_fmt = UnifiedRule(id="y", tier=1, scope="extension", when={"format": "FASTA"}, then={}, rationale="")
+        assert engine._rule_matches(real_fmt, fasta, result) is True
+
+    def test_classify_extended_normalizes_file_format_case(self, engine):
+        """A mixed-case header-only file_format is lower-cased once at the source,
+        so the extensions / when.file_format / assay conditions all match case-
+        insensitively — a `.CRAM` classifies identically to a `.cram` (#243)."""
+        upper = ExtendedFileInfo(filename="", file_format=".CRAM")
+        lower = ExtendedFileInfo(filename="", file_format=".cram")
+        r_upper = engine.classify_extended(upper)
+        r_lower = engine.classify_extended(lower)
+        assert upper.file_format == ".cram"  # normalized in place
+        assert upper.format is Format.CRAM
+        assert r_upper.data_type == r_lower.data_type  # downstream matching is case-insensitive
+        # A None file_format is left as-is (no crash) and derives no format.
+        none_info = ExtendedFileInfo(filename="", file_format=None)
+        engine.classify_extended(none_info)
+        assert none_info.file_format is None
+        assert none_info.format is None
 
 
 class TestThenStatus:

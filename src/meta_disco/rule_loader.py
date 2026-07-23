@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 import yaml
 
-from .file_name import FileName
+from .file_name import FileName, Format, FormatSource
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
 
@@ -116,6 +116,40 @@ class UnifiedRules:
     # `.bgz` name would mis-peel as `.gz` and leave a dangling `b` in the stem.
     WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".bgz", ".bz2", ".zip", ".tar", ".gz", ".xz")
 
+    # Known extension -> canonical file Format (#243). Collapses the spelling and
+    # compression variants of one format to a single identity (.fa/.fasta/.fa.gz/
+    # .fasta.gz -> FASTA), the stage-1 derivation the rules key on via `format`.
+    # Seeded with the core sequencing formats; extensions with no clean canonical
+    # collapse are absent, so their format is None until a migrating group adds
+    # its identity (see Format). Keys are lower-case: extension_to_format lowers
+    # its argument before the lookup.
+    EXTENSION_TO_FORMAT: ClassVar[dict[str, Format]] = {
+        ".bam": Format.BAM,
+        ".cram": Format.CRAM,
+        ".sam": Format.SAM,
+        ".sam.gz": Format.SAM,
+        ".vcf": Format.VCF,
+        ".vcf.gz": Format.VCF,
+        ".bcf": Format.BCF,
+        ".gvcf": Format.GVCF,
+        ".gvcf.gz": Format.GVCF,
+        ".g.vcf.gz": Format.GVCF,
+        ".fastq": Format.FASTQ,
+        ".fq": Format.FASTQ,
+        ".fastq.gz": Format.FASTQ,
+        ".fq.gz": Format.FASTQ,
+        ".fasta": Format.FASTA,
+        ".fa": Format.FASTA,
+        ".fasta.gz": Format.FASTA,
+        ".fa.gz": Format.FASTA,
+        ".bed": Format.BED,
+        ".bed.gz": Format.BED,
+        ".gfa": Format.GFA,
+        ".gfa.gz": Format.GFA,
+        ".rgfa": Format.RGFA,
+        ".rgfa.gz": Format.RGFA,
+    }
+
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:
         """Get all rules for a given scope."""
         return [r for r in self.rules if r.scope == scope]
@@ -131,6 +165,18 @@ class UnifiedRules:
     def get_file_type(self, extension: str) -> str | None:
         """Get the file type for an extension."""
         return self.extension_map.get(extension.lower())
+
+    def extension_to_format(self, extension: str | None) -> Format | None:
+        """Derive the canonical :class:`Format` for an extension (#243).
+
+        The stage-1 derivation — from the extension alone, no I/O. Returns
+        ``None`` when the extension is ``None`` or maps to no seeded format
+        (``EXTENSION_TO_FORMAT``), so an unmapped or absent extension leaves the
+        format honestly unresolved rather than guessed.
+        """
+        if extension is None:
+            return None
+        return self.EXTENSION_TO_FORMAT.get(extension.lower())
 
     def extract_extension(self, filename: str) -> str:
         """Extract the file extension, handling compound extensions."""
@@ -150,11 +196,14 @@ class UnifiedRules:
         """Parse ``filename`` into a :class:`FileName` against this vocabulary.
 
         The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
-        ``extension_map``), so it lives here with the rules rather than on the
-        pure ``FileName`` data type. ``extension`` equals ``extract_extension``
-        for every name with a known extension, so rule routing is unchanged for
-        those; a name with no known extension yields ``None`` rather than the
-        junk suffix ``extract_extension`` returns (which matched no rules anyway).
+        ``extension_map`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
+        rules rather than on the pure ``FileName`` data type. ``extension`` equals
+        ``extract_extension`` for every name with a known extension, so rule
+        routing is unchanged for those; a name with no known extension yields
+        ``None`` rather than the junk suffix ``extract_extension`` returns (which
+        matched no rules anyway). ``format`` is the stage-1 derivation from that
+        extension (``extension_to_format``), with ``format_source`` recording the
+        provenance — set together or both ``None`` (#243).
         """
         lower = filename.lower()
 
@@ -189,7 +238,17 @@ class UnifiedRules:
         else:
             wrapper_len = sum(len(w) for w in wrappers)
             stem = filename[:-wrapper_len] if wrapper_len else filename
-        return FileName(raw=filename, stem=stem, extension=extension, wrappers=tuple(wrappers))
+
+        fmt = self.extension_to_format(extension)
+        format_source = FormatSource.EXTENSION if fmt is not None else None
+        return FileName(
+            raw=filename,
+            stem=stem,
+            extension=extension,
+            wrappers=tuple(wrappers),
+            format=fmt,
+            format_source=format_source,
+        )
 
 
 class RuleLoader:
@@ -205,6 +264,7 @@ class RuleLoader:
     VALID_WHEN_KEYS: ClassVar[set[str]] = {
         "always",
         "extensions",
+        "format",
         "filename_pattern",
         "dataset_pattern",
         "file_format",

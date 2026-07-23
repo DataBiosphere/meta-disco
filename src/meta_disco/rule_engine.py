@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .file_name import Format
 from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -42,6 +43,11 @@ class ExtendedFileInfo:
     file_size: int | None = None
     dataset_title: str | None = None
     file_format: str | None = None
+    # Canonical file Format derived from the extension (#243). Set by
+    # classify_extended from the extension it settles on, so it always agrees
+    # with file_format; None when that extension maps to no seeded format. Rules
+    # key on it via `when.format`.
+    format: Format | None = None
 
     # Header data (populated when available)
     bam_header: str | None = None
@@ -570,7 +576,21 @@ class RuleEngine:
         parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
         if parsed_ext:
             ext_info.file_format = parsed_ext
+        # Normalize the settled file_format to lower-case once, so every downstream
+        # comparison — the extensions filter, `when.file_format`, and the assay
+        # `file_format`/`file_format_not` conditions — is case-insensitive and
+        # consistent with matches_extension's own lowering. A header-only call may
+        # pass a mixed-case file_format (".CRAM"); parsed_ext is already lower-case
+        # (parse_file_name lowers it). Normalizing here means the matchers can
+        # compare directly without each re-lowering (#243).
+        if ext_info.file_format:
+            ext_info.file_format = ext_info.file_format.lower()
         extension = ext_info.file_format or ""
+
+        # Derive the canonical format from the extension the engine settled on
+        # (parsed name or the caller's file_format fallback), so format and
+        # extension always agree — one funnel through extension_to_format (#243).
+        ext_info.format = self.rules.extension_to_format(extension)
 
         # Initialize result
         result = ExtendedClassificationResult()
@@ -616,8 +636,20 @@ class RuleEngine:
         if when.get("always"):
             return True
 
-        # Check extension filter
+        # Check extension filter. file_format is already lower-cased by
+        # classify_extended, so this compares consistently with matches_extension's
+        # own lowering (a mixed-case caller file_format was normalized upstream).
         if "extensions" in when and file_info.file_format not in [e.lower() for e in when["extensions"]]:
+            return False
+
+        # Check format filter (#243), a peer of the extensions filter above and
+        # keyed by presence like it: when `format` is present the rule matches
+        # only a file whose derived format equals it. `when.format` is a Format
+        # value string ("FASTA"); file_info.format is a Format (a str enum), so
+        # equality compares by value. A present-but-non-matching format — an
+        # unresolved (None) format, a different one, or a stray falsy value the
+        # loader does not value-check — fails the match rather than being skipped.
+        if "format" in when and file_info.format != when["format"]:
             return False
 
         # Check filename pattern

@@ -36,7 +36,10 @@ MARKER_ENUM = "evidence_marker_enum"
 # qualifies today; the other ``when`` keys carry regexes, header field codes,
 # numeric bounds, or booleans, none of which are dimension-enum-backed.
 # ``when.file_format`` is checked against extension_map keys, not a dimension enum
-# (see issue #114). Keep in sync with rule_engine.RuleEngine._rule_matches().
+# (see issue #114). ``when.format`` is backed by the in-code ``Format`` enum
+# rather than a schema dimension, so its value drift is checked directly against
+# that enum in test_rule_vocabulary (not through this registry) — #243. Keep in
+# sync with rule_engine.RuleEngine._rule_matches().
 ENUM_BACKED_WHEN_KEYS = {"platform": "platform"}
 
 # assay_type_rules ``conditions`` keys whose value(s) must be dimension-enum
