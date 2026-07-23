@@ -19,17 +19,37 @@ class TestExtension:
         assert fn.wrappers == ()
         assert fn.stem == "HG00741.final"
 
-    def test_compound_extension_strips_to_stem(self):
+    def test_compound_extension_splits_core_from_wrapper(self):
+        """#244: the compression is split off, so extension is the clean core
+        (``.vcf``) with ``.gz`` recorded as a wrapper."""
         fn = parse("sample.vcf.gz")
-        assert fn.extension == ".vcf.gz"
+        assert fn.extension == ".vcf"
         assert fn.wrappers == (".gz",)
         assert fn.stem == "sample"
 
-    def test_archive_extension(self):
+    def test_archive_extension_keeps_tar_as_core(self):
+        """A gzipped tarball: ``.tar`` is the core extension (an archive is a real
+        file type), ``.gz`` the wrapper — the last token is never peeled away."""
         fn = parse("hprc-graph.tar.gz")
-        assert fn.extension == ".tar.gz"
-        assert fn.wrappers == (".tar", ".gz")
+        assert fn.extension == ".tar"
+        assert fn.wrappers == (".gz",)
         assert fn.stem == "hprc-graph"
+
+    def test_gvcf_keeps_its_own_core(self):
+        """``.g.vcf.gz`` splits to the ``.g.vcf`` core (a distinct gVCF signal),
+        not ``.vcf`` — only the ``.gz`` wrapper is peeled."""
+        fn = parse("HG002.deepvariant.g.vcf.gz")
+        assert fn.extension == ".g.vcf"
+        assert fn.wrappers == (".gz",)
+        assert fn.stem == "HG002.deepvariant"
+
+    def test_double_wrapper_peels_both(self):
+        """``.fast5.tar.gz`` is tar-archived and gzip-compressed around a
+        ``.fast5`` core — both wrappers peel, in name order."""
+        fn = parse("run.fast5.tar.gz")
+        assert fn.extension == ".fast5"
+        assert fn.wrappers == (".tar", ".gz")
+        assert fn.stem == "run"
 
     def test_extensionless_name_is_none_not_junk(self):
         """The bug this fixes: extract_extension returns a junk last-dot suffix
@@ -48,9 +68,11 @@ class TestExtension:
 
 
 class TestBehaviorPreservation:
-    """For every name that has a *known* extension, the parsed extension matches
-    what the engine derived before (extract_extension) — so rule routing is
-    unchanged. Only unknown/absent extensions differ (junk suffix -> None)."""
+    """For every name with a *known* extension, the core extension plus its
+    wrappers reconstruct exactly what the engine derived before (the compound
+    ``extract_extension``) — so #244 changes the *representation*, not *which*
+    names carry an extension. Rule routing is preserved: the core now stands in
+    for the old compound (the rule ``extensions:`` lists were migrated in step)."""
 
     @pytest.mark.parametrize(
         "name",
@@ -68,10 +90,13 @@ class TestBehaviorPreservation:
             "graph.rgfa",
             "NUFIP1_quant.sf",
             "archive.tar.gz",
+            "run.fast5.tar.gz",
         ],
     )
-    def test_known_extension_matches_extract_extension(self, name):
-        assert parse(name).extension == RULES.extract_extension(name)
+    def test_core_plus_wrappers_reconstructs_old_compound(self, name):
+        fn = parse(name)
+        assert fn.extension is not None
+        assert fn.extension + "".join(fn.wrappers) == RULES.extract_extension(name)
 
 
 class TestFormat:
