@@ -2,6 +2,7 @@
 
 import pytest
 
+from meta_disco.file_name import FileName
 from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import (
     NOT_APPLICABLE,
@@ -18,8 +19,8 @@ engine = RuleEngine()
 
 def classify_bed(filename: str, dataset_title: str = "") -> dict:
     """Classify a BED file and return the result as a dict."""
-    file_info = FileInfo(
-        filename=filename,
+    file_info = FileInfo.from_filename(
+        filename,
         dataset_title=dataset_title,
     )
     result = engine.classify_extended(file_info)
@@ -280,7 +281,7 @@ class TestBedCoordinateClassification:
             # GRCh38 chr1=248956422; use a value close but under
             max_coordinates={"chr1": 248956000, "chr2": 242193000},
         )
-        result = classify_from_bed_signals(signals, file_name="sample.regions.bed.gz")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.regions.bed.gz"))
         ref = _get_val(result, "reference_assembly")
         assert ref in ("GRCh38", "CHM13"), f"Expected GRCh38 or CHM13, got {ref}"
 
@@ -291,7 +292,7 @@ class TestBedCoordinateClassification:
             has_chr_prefix=False,
             max_coordinates={"1": 200000000},
         )
-        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         assert _get_val(result, "reference_assembly") == "GRCh37"
 
     def test_nonstandard_chroms_not_applicable(self):
@@ -301,19 +302,19 @@ class TestBedCoordinateClassification:
             has_chr_prefix=False,
             max_coordinates={"HG01106#1#JAHAMC010000001.1": 92310948},
         )
-        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
     def test_empty_signals_preserves_filename_classification(self):
         """Empty signals still returns rule engine classification from filename."""
         signals = BedSignals.empty()
-        result = classify_from_bed_signals(signals, file_name="sample.modbam2bed.cpg.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.modbam2bed.cpg.bed"))
         assert _get_val(result, "data_modality") == "epigenomic.methylation"
 
     def test_empty_signals_no_reference(self):
         """Empty signals should leave reference as not_classified."""
         signals = BedSignals.empty()
-        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
 
     def test_coordinates_exceeding_grch38_rule_it_out(self):
@@ -326,7 +327,7 @@ class TestBedCoordinateClassification:
             has_chr_prefix=True,
             max_coordinates={"chr8": 145500000},
         )
-        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         ref = _get_val(result, "reference_assembly")
         assert ref != "GRCh38", f"GRCh38 should be ruled out, got {ref}"
 
@@ -337,7 +338,7 @@ class TestBedCoordinateClassification:
             has_chr_prefix=True,
             max_coordinates={},
         )
-        result = classify_from_bed_signals(signals, file_name="sample.bed")
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
 
 

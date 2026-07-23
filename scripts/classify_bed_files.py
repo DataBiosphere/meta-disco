@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
+from meta_disco.file_name import FileName
 from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import CLASSIFIED, field_label, field_status
 
@@ -82,7 +83,9 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     }
 
     for f in bed_files:
-        name = f.get("file_name", "")
+        # str(... or ""): a present-but-null or drifted file_name must not raise in
+        # FileName.parse — coerce to "" as the pre-#246 path did.
+        name = str(f.get("file_name") or "")
         dataset_title = f.get("dataset_title", "")
         md5 = f.get("file_md5sum")
         stats["total"] += 1
@@ -99,7 +102,7 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
         # Classify using unified classifier (rule engine + coordinate detection)
         classifications = classify_from_bed_signals(
             signals,
-            file_name=name,
+            name=FileName.parse(name),
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
         )

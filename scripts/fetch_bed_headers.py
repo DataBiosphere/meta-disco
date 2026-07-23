@@ -23,6 +23,7 @@ from threading import Lock
 # Add project root to path
 import requests
 
+from meta_disco.file_name import FileName
 from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import field_label
 
@@ -219,7 +220,7 @@ def classify_bed_file(
     # Classify using the unified classifier
     classifications = classify_from_bed_signals(
         signals,
-        file_name=file_name,
+        name=FileName.parse(file_name),
         file_size=file_size,
     )
 

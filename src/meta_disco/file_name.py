@@ -22,6 +22,7 @@ remaining follow-up threads the parsed ``FileName`` from the load boundary (#246
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import ClassVar
 
 
 class Format(str, Enum):
@@ -138,7 +139,7 @@ EXTENSION_TO_FORMAT: dict[str, Format] = {
 
 # Extension -> file-type category. Hoisted in-code from unified_rules.yaml (#252)
 # — the last YAML-loaded parse vocabulary. Still carries the compound spellings
-# (.vcf.gz, ...) that #249 deferred pruning to #245 (they back filename_for_rules'
+# (.vcf.gz, ...) that #249 deferred pruning to #245 (they back file_name_for_rules'
 # fallback). The parse consumes only its *keys* (via CORE_EXTENSIONS); the
 # category values feed get_file_type and the when.file_format validation (#114).
 EXTENSION_MAP: dict[str, str] = {
@@ -266,9 +267,11 @@ def extract_extension(filename: str) -> str:
     """Extract the file extension, handling compound extensions.
 
     The legacy compound-or-junk extractor (returns the whole compound ``.vcf.gz``,
-    or the junk last-dot suffix for an unknown name). Kept for the record-routing
-    / ``filename_for_rules`` path that still works on raw names; the rule-matching
-    path uses :meth:`FileName.parse` (clean core + wrappers) instead.
+    or the junk last-dot suffix for an unknown name). No longer on the classify
+    path — ``file_name_for_rules`` reconstructs the compound from the parsed
+    ``FileName`` (core + wrappers) since #246, and rule matching uses
+    :meth:`FileName.parse` directly. Retained as the leaf raw-name extractor and
+    the behavior reference its tests pin; retired with #245.
     """
     filename_lower = filename.lower()
 
@@ -329,6 +332,16 @@ class FileName:
     wrappers: tuple[str, ...]
     format: Format | None = None
     format_source: FormatSource | None = None
+
+    # The nameless FileName — a header-only call with no filename. Assigned below the
+    # class; ``raw`` is "" and ``extension`` is None. Its *extension* is None like any
+    # name with no known extension, so extension-based readers (the file_format
+    # fallback in classify_extended) treat "no name" and "unrecognized name"
+    # uniformly. It differs in ``raw``: an unrecognized-but-present name keeps its
+    # truthy raw and still matches filename_pattern rules, whereas the sentinel's ""
+    # matches none — exactly the header-only intent. Threading it as the "no name"
+    # value avoids a ``FileName | None`` branch at every reader.
+    EMPTY: ClassVar["FileName"]
 
     @classmethod
     def parse(cls, filename: str) -> "FileName":
@@ -396,3 +409,6 @@ class FileName:
             format=fmt,
             format_source=format_source,
         )
+
+
+FileName.EMPTY = FileName.parse("")

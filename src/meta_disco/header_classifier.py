@@ -14,6 +14,7 @@ from functools import cache
 from typing import TYPE_CHECKING
 
 from .evidence import SegmentTag
+from .file_name import FileName
 from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
@@ -32,6 +33,12 @@ if TYPE_CHECKING:
 # GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
 # the config cannot disagree about which names it may trust.
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
+
+# Parsed-once graph fallback name for ``file_name_for_rules`` — a module constant so
+# the literal is not re-parsed on every graph classification call (a last resort when
+# the name is empty and no file_format is grafted). The empty-name fallback uses the
+# shared :data:`FileName.EMPTY`.
+_DEFAULT_GRAPH_NAME = FileName.parse("graph.gfa")
 
 
 @dataclass(frozen=True)
@@ -81,7 +88,7 @@ def _get_engine() -> "RuleEngine":
 def classify_from_header(
     header_text: str,
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -93,10 +100,12 @@ def classify_from_header(
 
     Args:
         header_text: Raw SAM/BAM header text (lines starting with @)
-        file_name: Optional real filename; its tokens (hifi_reads / rnaseq /
+        name: Optional parsed :class:`FileName`; its tokens (hifi_reads / rnaseq /
             assembly) drive the tier-2 filename rules
         file_size: Optional file size in bytes (used for WGS/WES inference)
-        file_format: Optional file format string (e.g., ".bam", ".cram")
+        file_format: Optional file format string (e.g., ".bam", ".cram");
+            accepted for call uniformity but not consulted — the extension is
+            hardcoded ".bam" below
 
     Returns:
         Dict with per-field classifications:
@@ -110,7 +119,7 @@ def classify_from_header(
     # there is no name (a header-only call), the engine reads the extension from
     # the file_format we set — the known ".bam" — instead of a fabricated name.
     file_info = ExtendedFileInfo(
-        filename=file_name or "",
+        name=name,
         file_format=".bam",
         file_size=file_size,
         bam_header=header_text,
@@ -165,7 +174,7 @@ def classify_from_header(
 def classify_from_vcf_header(
     header_text: str,
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -177,10 +186,12 @@ def classify_from_vcf_header(
 
     Args:
         header_text: VCF header text (lines starting with ##)
-        file_name: Optional real filename; its tokens (e.g. a chm13 assembly
+        name: Optional parsed :class:`FileName`; its tokens (e.g. a chm13 assembly
             hint) drive the tier-2 filename rules
         file_size: Optional file size in bytes
-        file_format: Optional file format string (e.g., ".vcf", ".vcf.gz")
+        file_format: Optional file format string (e.g., ".vcf", ".vcf.gz");
+            accepted for call uniformity but not consulted — the extension is
+            hardcoded ".vcf.gz" below
 
     Returns:
         Dict with per-field classifications:
@@ -194,7 +205,7 @@ def classify_from_vcf_header(
     # there is no name (a header-only call), the engine reads the extension from
     # the file_format we set — the known ".vcf.gz" — instead of a fabricated name.
     file_info = ExtendedFileInfo(
-        filename=file_name or "",
+        name=name,
         file_format=".vcf.gz",
         file_size=file_size,
         vcf_header=header_text,
@@ -233,7 +244,7 @@ def classify_from_vcf_header(
 def classify_from_fastq_header(
     reads: list[str],
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -245,7 +256,7 @@ def classify_from_fastq_header(
 
     Args:
         reads: List of read name lines (first few reads from file)
-        file_name: Optional filename for pattern matching
+        name: Optional parsed :class:`FileName` for pattern matching
         file_size: Optional file size in bytes
 
     Returns:
@@ -290,7 +301,7 @@ def classify_from_fastq_header(
     # drives the tier-2 rules; with no name, the engine reads the extension from
     # the known ".fastq.gz" file_format rather than a fabricated name (#152).
     file_info = ExtendedFileInfo(
-        filename=file_name or "",
+        name=name,
         file_format=".fastq.gz",
         file_size=file_size,
         fastq_first_read=first_read,
@@ -326,8 +337,8 @@ def classify_from_fastq_header(
         if detect_paired_end_indicators(read):
             is_paired_end = True
             break
-    if is_paired_end is None and file_name:
-        is_paired_end = detect_paired_end_indicators(file_name)
+    if is_paired_end is None and name.raw:
+        is_paired_end = detect_paired_end_indicators(name.raw)
 
     # Extract instrument model and archive info from read names
     instrument_model = None
@@ -378,28 +389,25 @@ _ASSEMBLER_PATTERN = re.compile(
 _TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNORECASE)
 
 
-def filename_for_rules(
-    file_name: str | None,
+def file_name_for_rules(
+    name: FileName,
     file_format: str | None,
-    default: str,
+    default: FileName,
     allowed_extensions: tuple[str, ...] | None = None,
-) -> str:
-    """The filename to hand the rule engine, which reads the extension from it.
+) -> FileName:
+    """The :class:`FileName` to hand the rule engine, which reads its extension.
 
     ``ClassifyPipeline._filter_records`` selects a record when *either* its
     ``file_name`` or its ``file_format`` carries a matching extension, so a
-    selected record's ``file_name`` may not carry one. The engine derives
-    ``file_format`` strictly from the filename (``UnifiedRules.extract_extension``),
-    so an extensionless name silently disables every extension-scoped rule — and
-    worse, ``extract_extension("hprc-v1.0-mc-grch38")`` returns ``".0-mc-grch38"``,
-    a nonsense suffix taken from the last dot.
+    selected record's parsed ``name`` may carry no known extension.
 
-    So: keep ``file_name`` when it already yields a *usable* extension, otherwise
-    append ``file_format`` to it, preserving the filename tokens the tier-2 rules
-    match (``-mc-``, ``grch38``). Testing "already usable" rather than "ends with
-    file_format" matters: 5,227 corpus records are named ``*.fastq.gz`` while
-    declaring ``file_format: ".fastq"``, and appending there would produce
-    ``*.fastq.gz.fastq``.
+    So: keep the parsed ``name`` when it already carries a *usable* extension,
+    otherwise graft ``file_format`` onto its raw string and re-parse — preserving
+    the filename tokens the tier-2 rules match (``-mc-``, ``grch38``). "Usable" is
+    tested against the *compound* spelling (core + wrappers, e.g. ``.gfa.gz``), the
+    same value the old ``extract_extension`` returned, rather than "ends with
+    file_format": 5,227 corpus records are named ``*.fastq.gz`` while declaring
+    ``file_format: ".fastq"``, and grafting there would produce ``*.fastq.gz.fastq``.
 
     ``allowed_extensions`` narrows "usable" to the extensions the caller can
     actually handle. Without it, a graph record named ``graph.tar.gz`` would be
@@ -408,24 +416,33 @@ def filename_for_rules(
     ``data_modality`` is not_classified. Pass the calling config's extensions.
 
     ``file_format`` is only grafted on when it looks like an extension. The
-    corpus carries ``file_format: "Other"`` on ~108k records; appending that
+    corpus carries ``file_format: "Other"`` on ~108k records; grafting that
     would yield ``graphOther``, which matches nothing.
+
+    The threaded ``name`` is *reused* on the usable path — no re-parse — so the raw
+    file_name is parsed exactly once (at the load boundary, #242); only the graft
+    path parses a *different* string (the file_format-extended name). This helper is
+    the sole remaining reader of the compound ``extension_map`` keys and is retired
+    in #245, which pushes the allowed-extension override into the engine.
     """
     rules = _get_engine().rules
-    if file_name:
-        ext = rules.extract_extension(file_name)
-        usable = ext in allowed_extensions if allowed_extensions else ext in rules.extension_map
+    if name.extension is not None:
+        # Reconstruct the compound extension (core + wrappers) the old
+        # ``extract_extension`` returned, and test it exactly as before — against the
+        # caller's allowed set, or the (still compound-keyed) extension_map.
+        compound = name.extension + "".join(name.wrappers)
+        usable = compound in allowed_extensions if allowed_extensions else compound in rules.extension_map
         if usable:
-            return file_name
+            return name
     if file_format and file_format.startswith("."):
-        return f"{file_name or 'file'}{file_format}"
-    return file_name or default
+        return FileName.parse(f"{name.raw or 'file'}{file_format}")
+    return name if name.raw else default
 
 
 def classify_without_content(
     reason: str,
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
     allowed_extensions: tuple[str, ...] | None = None,
@@ -457,9 +474,9 @@ def classify_without_content(
     """
     from .rule_engine import ExtendedFileInfo
 
-    filename = filename_for_rules(file_name, file_format, default="", allowed_extensions=allowed_extensions)
+    rule_name = file_name_for_rules(name, file_format, default=FileName.EMPTY, allowed_extensions=allowed_extensions)
     file_info = ExtendedFileInfo(
-        filename=filename,
+        name=rule_name,
         file_size=file_size,
     )
     result = _get_engine().classify_extended(file_info, include_tier3=False)
@@ -480,7 +497,7 @@ def classify_without_content(
 def classify_from_gfa_segment_tags(
     segment_tags: list[SegmentTag],
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -502,10 +519,10 @@ def classify_from_gfa_segment_tags(
 
     Args:
         segment_tags: Per-segment :class:`SegmentTag`s from fetchers.parse_gfa_segment_tags
-        file_name: Optional filename for extension/filename rules
+        name: Optional parsed :class:`FileName` for extension/filename rules
         file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
-            extension rules when file_name carries no known extension
-            (see filename_for_rules)
+            extension rules when the name carries no known extension
+            (see file_name_for_rules)
         file_size: Unused. Accepted because ``pipeline._fetch_and_classify`` calls
             every classifier with the same keyword arguments; no graph rule keys
             on file size. ``classify_from_fasta_header`` accepts it unused too.
@@ -515,16 +532,16 @@ def classify_from_gfa_segment_tags(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    filename = filename_for_rules(
-        file_name,
+    rule_name = file_name_for_rules(
+        name,
         file_format,
-        default="graph.gfa",
+        default=_DEFAULT_GRAPH_NAME,
         allowed_extensions=GRAPH_TEXT_EXTENSIONS,
     )
 
     # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
     # and reference_assembly from the filename.
-    file_info = ExtendedFileInfo(filename=filename)
+    file_info = ExtendedFileInfo(name=rule_name)
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=False)
 
@@ -571,7 +588,7 @@ def _get_ref_chrom_names() -> set[str]:
 def classify_from_fasta_header(
     contig_names: list[str],
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
@@ -583,7 +600,7 @@ def classify_from_fasta_header(
 
     Args:
         contig_names: List of contig/sequence names (without > prefix)
-        file_name: Optional filename for pattern matching
+        name: Optional parsed :class:`FileName` for pattern matching
 
     Returns:
         Per-field classification dict (same format as classify_from_fastq_header)
@@ -594,7 +611,7 @@ def classify_from_fasta_header(
     # Run rule engine for extension/filename-based rules. The real filename drives
     # the tier-2 rules; with no name, the engine reads the extension from the known
     # ".fa.gz" file_format rather than a fabricated name (#152).
-    file_info = ExtendedFileInfo(filename=file_name or "", file_format=".fa.gz")
+    file_info = ExtendedFileInfo(name=name, file_format=".fa.gz")
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=False)
 
@@ -609,13 +626,13 @@ def classify_from_fasta_header(
     assembler_contigs = []
     transcript_contigs = []
 
-    for name in contig_names:
-        if name in ref_chrom_names:
-            ref_matches.append(name)
-        elif _ASSEMBLER_PATTERN.search(name):
-            assembler_contigs.append(name)
-        elif _TRANSCRIPT_PATTERN.match(name):
-            transcript_contigs.append(name)
+    for contig in contig_names:
+        if contig in ref_chrom_names:
+            ref_matches.append(contig)
+        elif _ASSEMBLER_PATTERN.search(contig):
+            assembler_contigs.append(contig)
+        elif _TRANSCRIPT_PATTERN.match(contig):
+            transcript_contigs.append(contig)
 
     # Classification logic
 
@@ -885,7 +902,7 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
 def classify_from_bed_signals(
     signals: BedSignals,
     *,
-    file_name: str | None = None,
+    name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     dataset_title: str | None = None,
 ) -> dict:
@@ -896,7 +913,7 @@ def classify_from_bed_signals(
 
     Args:
         signals: Typed BED coordinate signals
-        file_name: Filename for pattern matching
+        name: Parsed :class:`FileName` for pattern matching
         file_size: Optional file size in bytes
         dataset_title: Optional dataset title for context rules
 
@@ -910,7 +927,7 @@ def classify_from_bed_signals(
     # The real filename drives the tier-2 rules; with no name, the engine reads the
     # extension from the known ".bed" file_format rather than a fabricated name (#152).
     file_info = ExtendedFileInfo(
-        filename=file_name or "",
+        name=name,
         file_format=".bed",
         file_size=file_size,
         dataset_title=dataset_title,

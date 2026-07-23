@@ -2,6 +2,7 @@
 
 import pytest
 
+from meta_disco.file_name import FileName
 from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
 
 
@@ -489,7 +490,7 @@ class TestFastqClassification:
     def test_paired_end_from_filename(self):
         """Detect paired-end from filename."""
         reads = ["@A00297:44:HFKH3DSXX:2:1354:30508:28839"]
-        result = classify_from_fastq_header(reads, file_name="sample_R1_001.fastq.gz")
+        result = classify_from_fastq_header(reads, name=FileName.parse("sample_R1_001.fastq.gz"))
         assert result["is_paired_end"] is True
 
     def test_empty_input(self):
@@ -620,7 +621,7 @@ class TestVcfClassification:
         (#152). Before the fix the classifier synthesized `sample.vcf.gz`."""
         header = """##fileformat=VCFv4.2
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        result = classify_from_vcf_header(header, file_name="1kgp.chr20.chm13.vcf.gz")
+        result = classify_from_vcf_header(header, name=FileName.parse("1kgp.chr20.chm13.vcf.gz"))
         assert val(result, "reference_assembly") == "CHM13"
 
 
@@ -777,7 +778,7 @@ class TestBamCramClassification:
         modality signal still classifies rnaseq from the name (#152). Before the
         fix the classifier synthesized `sample.bam` and dropped the name."""
         header = "@HD\tVN:1.6"
-        result = classify_from_header(header, file_name="sample.rnaseq.bam")
+        result = classify_from_header(header, name=FileName.parse("sample.rnaseq.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
         assert val(result, "data_type") == "alignments"
 
@@ -785,7 +786,7 @@ class TestBamCramClassification:
         """A hifi filename recovers platform even when the header names none —
         the ~110-file platform bucket in #152."""
         header = "@HD\tVN:1.6"
-        result = classify_from_header(header, file_name="HG02055.paternal.hifi.bam")
+        result = classify_from_header(header, name=FileName.parse("HG02055.paternal.hifi.bam"))
         assert val(result, "platform") == "PACBIO"
 
     def test_header_signal_not_clobbered_by_filename(self):
@@ -793,7 +794,7 @@ class TestBamCramClassification:
         the fix adds filename coverage, it does not displace header rules (#152)."""
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
-        result = classify_from_header(header, file_name="sample.bam")
+        result = classify_from_header(header, name=FileName.parse("sample.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
 
 

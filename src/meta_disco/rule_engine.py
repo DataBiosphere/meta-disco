@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .file_name import Format
+from .file_name import FileName, Format
 from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -37,9 +37,17 @@ CONTENT_TIER = 4
 
 @dataclass
 class ExtendedFileInfo:
-    """Extended file information including header data for tier 3 rules."""
+    """Extended file information including header data for tier 3 rules.
 
-    filename: str
+    Carries the filename as a parsed :class:`FileName` fact (epic #242): the name is
+    parsed once at the load boundary and threaded here, so ``classify_extended``
+    reads the pre-parsed extension and the filename-pattern matcher reads ``name.raw``
+    rather than re-parsing. Defaults to :data:`FileName.EMPTY` for a header-only call
+    with no filename — which reads as an unresolved extension, so the engine falls
+    back to the ``file_format`` the caller set.
+    """
+
+    name: FileName = FileName.EMPTY
     file_size: int | None = None
     dataset_title: str | None = None
     file_format: str | None = None
@@ -77,9 +85,14 @@ class ExtendedFileInfo:
 
     @classmethod
     def from_file_info(cls, file_info: FileInfo) -> "ExtendedFileInfo":
-        """Create ExtendedFileInfo from a FileInfo object."""
+        """Create ExtendedFileInfo from a FileInfo object.
+
+        Copies the parsed :class:`FileName` across as-is — no re-parse — so a name
+        parsed once when the ``FileInfo`` was built is threaded through unchanged
+        (epic #242).
+        """
         return cls(
-            filename=file_info.filename,
+            name=file_info.name,
             file_size=file_info.file_size,
             dataset_title=file_info.dataset_title,
         )
@@ -567,13 +580,13 @@ class RuleEngine:
         # Convert to ExtendedFileInfo if needed
         ext_info = ExtendedFileInfo.from_file_info(file_info) if isinstance(file_info, FileInfo) else file_info
 
-        # Extract the extension from the real filename when it yields a known
-        # one. parse_file_name returns None (not a junk last-dot suffix) for a
-        # name with no known extension, so an unknown name leaves the caller's
-        # file_format fallback intact — a header-only call sets it to the known
-        # file-type extension so the extension rules still run without inventing
-        # a filename to carry it (#152/#241).
-        parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
+        # Read the extension from the pre-parsed FileName (parsed once at the load
+        # boundary, #242) — no re-parse here. FileName.parse yields None (not a junk
+        # last-dot suffix) for a name with no known extension, so an unknown name
+        # leaves the caller's file_format fallback intact — a header-only call
+        # (name is FileName.EMPTY) yields None here too, so file_format sets the
+        # extension and the rules still run without inventing a filename (#152/#241).
+        parsed_ext = ext_info.name.extension
         if parsed_ext:
             # From the real name: already the clean core, lower-cased by the parse.
             ext_info.file_format = parsed_ext
@@ -657,8 +670,10 @@ class RuleEngine:
         if "format" in when and file_info.format != when["format"]:
             return False
 
-        # Check filename pattern
-        if (pattern := when.get("filename_pattern")) and not re.search(pattern, file_info.filename, re.IGNORECASE):
+        # Check filename pattern against the parsed name's raw string (#242). A
+        # header-only call carries FileName.EMPTY (raw ""), so a filename_pattern rule
+        # simply does not match rather than raising.
+        if (pattern := when.get("filename_pattern")) and not re.search(pattern, file_info.name.raw, re.IGNORECASE):
             return False
 
         # Check dataset pattern
@@ -921,7 +936,7 @@ class RuleEngine:
             ExtendedClassificationResult with classification and metadata
         """
         file_info = ExtendedFileInfo(
-            filename=filename,
+            name=FileName.parse(filename),
             file_size=file_size,
             bam_header=bam_header,
         )
@@ -947,7 +962,7 @@ class RuleEngine:
             ExtendedClassificationResult with classification and metadata
         """
         file_info = ExtendedFileInfo(
-            filename=filename,
+            name=FileName.parse(filename),
             file_size=file_size,
             vcf_header=vcf_header,
         )
@@ -973,7 +988,7 @@ class RuleEngine:
             ExtendedClassificationResult with classification and metadata
         """
         file_info = ExtendedFileInfo(
-            filename=filename,
+            name=FileName.parse(filename),
             file_size=file_size,
             fastq_first_read=first_read,
         )
@@ -1001,7 +1016,7 @@ class RuleEngine:
             ExtendedClassificationResult with classification and metadata
         """
         file_info = ExtendedFileInfo(
-            filename=filename,
+            name=FileName.parse(filename),
             file_size=file_size,
             fasta_contig_names=contig_names,
         )

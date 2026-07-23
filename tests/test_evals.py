@@ -24,7 +24,8 @@ from classify_vcf_files import classify_single_vcf as classify_vcf
 
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
-from meta_disco.header_classifier import classify_from_gfa_segment_tags, filename_for_rules
+from meta_disco.file_name import FileName
+from meta_disco.header_classifier import classify_from_gfa_segment_tags, file_name_for_rules
 from meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -283,20 +284,20 @@ class TestRuleEngineE2E:
     """Rule engine classification from filename/metadata only."""
 
     def test_histology_svs(self):
-        result = engine.classify_extended(FileInfo(filename="GTEX-18A6Q-1126.svs"))
+        result = engine.classify_extended(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fast5_raw_signal(self):
-        result = engine.classify_extended(FileInfo(filename="PAK57726.fast5"))
+        result = engine.classify_extended(FileInfo.from_filename("PAK57726.fast5"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_pod5_raw_signal(self):
-        result = engine.classify_extended(FileInfo(filename="sample_run.pod5"))
+        result = engine.classify_extended(FileInfo.from_filename("sample_run.pod5"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_type == "raw_signal"
         assert result.platform == "ONT"
@@ -304,22 +305,22 @@ class TestRuleEngineE2E:
 
     def test_flnc_bam_is_transcriptomic(self):
         """IsoSeq flnc BAM should be transcriptomic, not genomic."""
-        result = engine.classify_extended(FileInfo(filename="HG00097.lymph.m84203_240914_042802_s4.flnc.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("HG00097.lymph.m84203_240914_042802_s4.flnc.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_isoseq_bam_is_transcriptomic(self):
         """BAM with isoseq in filename should be transcriptomic."""
-        result = engine.classify_extended(FileInfo(filename="sample.isoseq.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.isoseq.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_plain_bam_no_modality(self):
         """BAM without header or platform signals should not get genomic modality."""
-        result = engine.classify_extended(FileInfo(filename="sample.reads.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.reads.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_salmon_quant_sf_is_transcriptomic_quantification(self):
         """A Salmon quant.sf is a single-sample transcript abundance table (#157)."""
-        result = engine.classify_extended(FileInfo(filename="NUFIP1-BGRSLV04-28_quant.sf"))
+        result = engine.classify_extended(FileInfo.from_filename("NUFIP1-BGRSLV04-28_quant.sf"))
         assert result.data_modality == "transcriptomic.bulk"
         assert result.data_type == "quantification"
         assert result.assay_type == "RNA-seq"
@@ -332,73 +333,73 @@ class TestRuleEngineE2E:
         token boundary) both stay not_classified.
         """
         for name in ("something.sf", "frequant.sf"):
-            result = engine.classify_extended(FileInfo(filename=name))
+            result = engine.classify_extended(FileInfo.from_filename(name))
             assert result.status_of("data_type") == NOT_CLASSIFIED, name
 
     def test_plink_1000g(self):
         result = engine.classify_extended(
-            FileInfo(filename="IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
+            FileInfo.from_filename("IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
         )
         assert result.data_modality == "genomic"
         assert result.reference_assembly == "GRCh38"
 
     def test_bed_methylation(self):
-        result = engine.classify_extended(FileInfo(filename="sample.modbam2bed.cpg.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.modbam2bed.cpg.bed"))
         assert result.data_modality == "epigenomic.methylation"
 
     def test_bed_assembly_qc(self):
-        result = engine.classify_extended(FileInfo(filename="HG01928.paternal.f1_assembly.hap1.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("HG01928.paternal.f1_assembly.hap1.bed"))
         assert result.data_modality == "genomic"
 
     def test_fastq_rna_filename(self):
-        result = engine.classify_extended(FileInfo(filename="sample_RNA_001.fastq.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample_RNA_001.fastq.gz"))
         assert result.data_modality == "transcriptomic.bulk"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_checksum_not_applicable(self):
-        result = engine.classify_extended(FileInfo(filename="sample.md5"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.md5"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_chunked_upload_not_applicable(self):
-        result = engine.classify_extended(FileInfo(filename="c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"))
+        result = engine.classify_extended(FileInfo.from_filename("c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_timestamp_filename_not_applicable(self):
-        result = engine.classify_extended(FileInfo(filename="2020-11-20T212208.245537Z"))
+        result = engine.classify_extended(FileInfo.from_filename("2020-11-20T212208.245537Z"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_png_derived(self):
-        result = engine.classify_extended(FileInfo(filename="assembly_plot.png"))
+        result = engine.classify_extended(FileInfo.from_filename("assembly_plot.png"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_all_index_types_not_applicable(self):
         for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
-            result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
+            result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
             assert result.status_of("data_modality") == NOT_APPLICABLE, f"{ext} should be not_applicable"
 
     def test_narrowpeak_is_chromatin(self):
-        result = engine.classify_extended(FileInfo(filename="sample.narrowPeak"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.narrowPeak"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
     def test_bigwig_with_chip_keyword(self):
-        result = engine.classify_extended(FileInfo(filename="H3K27ac_ChIP.bw"))
+        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_ChIP.bw"))
         assert result.data_modality == "epigenomic.histone_modification"
 
     def test_bed_reference_from_filename(self):
         """BED file with hg38 in filename should detect GRCh38."""
-        result = engine.classify_extended(FileInfo(filename="sample.hg38.regions.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.hg38.regions.bed"))
         assert result.reference_assembly == "GRCh38"
 
     def test_idat_methylation(self):
         """IDAT file should be epigenomic methylation."""
-        result = engine.classify_extended(FileInfo(filename="200123456789_R01C01.idat"))
+        result = engine.classify_extended(FileInfo.from_filename("200123456789_R01C01.idat"))
         assert result.data_modality == "epigenomic.methylation"
 
     def test_no_crash_on_unknown(self):
         for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
-            result = engine.classify_extended(FileInfo(filename=name))
+            result = engine.classify_extended(FileInfo.from_filename(name))
             # Unknown files don't crash and resolve to a not_classified status
             # (the value stays None — the sentinel lives in status now).
             assert result.status_of("data_modality") == NOT_CLASSIFIED
@@ -406,28 +407,28 @@ class TestRuleEngineE2E:
     def test_fasta_base_rule(self):
         """FASTA files should get base rule classification."""
         for ext in [".fa", ".fasta", ".fa.gz", ".fasta.gz"]:
-            result = engine.classify_extended(FileInfo(filename=f"sample{ext}"))
+            result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
             assert result.data_type == "sequence", f"{ext} should be sequence"
             assert result.status_of("platform") == NOT_APPLICABLE
             assert result.status_of("assay_type") == NOT_APPLICABLE
 
     def test_fasta_assembly_filename(self):
         """FASTA with assembly keyword in filename."""
-        result = engine.classify_extended(FileInfo(filename="HG00673.paternal.f1_assembly_v1.fa.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("HG00673.paternal.f1_assembly_v1.fa.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fasta_haplotype_filename(self):
         """FASTA with haplotype keyword in filename."""
-        result = engine.classify_extended(FileInfo(filename="hapdup_contigs_2.fasta"))
+        result = engine.classify_extended(FileInfo.from_filename("hapdup_contigs_2.fasta"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fasta_verkko_filename(self):
         """FASTA with verkko assembler keyword."""
-        result = engine.classify_extended(FileInfo(filename="HG02300_verkko_gfase_diploid.fasta.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("HG02300_verkko_gfase_diploid.fasta.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
@@ -444,7 +445,7 @@ class TestPangenomeGraphs:
 
     def test_gfa_assembly_graph_is_pangenome(self):
         """A single-sample assembly graph (.gfa) is still a sequence graph."""
-        result = engine.classify_extended(FileInfo(filename="HG002-full-0.14.1.hap1.p_ctg.gfa"))
+        result = engine.classify_extended(FileInfo.from_filename("HG002-full-0.14.1.hap1.p_ctg.gfa"))
         assert result.data_modality == "genomic"
         assert result.data_type == "pangenome"
         assert result.status_of("platform") == NOT_APPLICABLE
@@ -452,26 +453,26 @@ class TestPangenomeGraphs:
 
     def test_pggb_gfa_gz_is_pangenome(self):
         """PGGB pangenome graph (.gfa.gz compound extension) — not an mc reference."""
-        result = engine.classify_extended(FileInfo(filename="chr1.hprc-v1.0-pggb.gfa.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("chr1.hprc-v1.0-pggb.gfa.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "pangenome"
 
     def test_vg_and_xg_are_pangenome(self):
         for name in ("sample.vg", "graph.xg"):
-            result = engine.classify_extended(FileInfo(filename=name))
+            result = engine.classify_extended(FileInfo.from_filename(name))
             assert result.data_type == "pangenome", name
             assert result.data_modality == "genomic", name
 
     def test_mc_gbz_is_pangenome_reference(self):
         """HPRC minigraph-cactus GBZ — the published alignment reference graph."""
-        result = engine.classify_extended(FileInfo(filename="hprc-v1.0-mc-grch38.gbz"))
+        result = engine.classify_extended(FileInfo.from_filename("hprc-v1.0-mc-grch38.gbz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "pangenome.reference"
         # reference_assembly comes from the shared filename_ref_* rules
         assert result.reference_assembly == "GRCh38"
 
     def test_mc_gbwt_chm13_is_pangenome_reference(self):
-        result = engine.classify_extended(FileInfo(filename="hprc-v1.0-mc-chm13.gbwt"))
+        result = engine.classify_extended(FileInfo.from_filename("hprc-v1.0-mc-chm13.gbwt"))
         assert result.data_type == "pangenome.reference"
         assert result.reference_assembly == "CHM13"
 
@@ -489,7 +490,7 @@ class TestRgfaContentClassification:
     def test_rank0_segments_are_pangenome_reference(self):
         """The real signal: minigraph rGFA, all leading segments SR:i:0 on chr1."""
         tags = [SegmentTag(sn="chr1", sr="0") for _ in range(5)]
-        record = classify_from_gfa_segment_tags(tags, file_name="hprc-v1.0-minigraph-grch38.gfa.gz")
+        record = classify_from_gfa_segment_tags(tags, name=FileName.parse("hprc-v1.0-minigraph-grch38.gfa.gz"))
         assert get_val(record, "data_type") == "pangenome.reference"
         # reference_assembly still comes from the filename rules, not content
         assert get_val(record, "reference_assembly") == "GRCh38"
@@ -505,7 +506,7 @@ class TestRgfaContentClassification:
         exact-match assertion would fail for a change unrelated to this behavior.
         """
         record = classify_from_gfa_segment_tags(
-            [SegmentTag(sn="chr1", sr="0")], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+            [SegmentTag(sn="chr1", sr="0")], name=FileName.parse("hprc-v1.0-minigraph-grch38.gfa.gz")
         )
         rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
         assert "pangenome_graph" in rules, "the tier-1 claim was clobbered"
@@ -519,7 +520,7 @@ class TestRgfaContentClassification:
         above the tier-1 `pangenome` claim it refines. Pin the tier so resolving
         from claims agrees with the value set here."""
         record = classify_from_gfa_segment_tags(
-            [SegmentTag(sn="chr1", sr="0")], file_name="hprc-v1.0-minigraph-grch38.gfa.gz"
+            [SegmentTag(sn="chr1", sr="0")], name=FileName.parse("hprc-v1.0-minigraph-grch38.gfa.gz")
         )
         claims = record["data_type"]["evidence"]
         content = next(c for c in claims if c["rule_id"] == "rgfa_stable_rank_reference")
@@ -530,12 +531,12 @@ class TestRgfaContentClassification:
     def test_nonzero_rank_only_stays_pangenome(self):
         """Non-reference haplotype segments (rank >= 1) do not make a reference graph."""
         tags = [SegmentTag(sn="HG002#1#chr1", sr="1")]
-        record = classify_from_gfa_segment_tags(tags, file_name="some-graph.gfa.gz")
+        record = classify_from_gfa_segment_tags(tags, name=FileName.parse("some-graph.gfa.gz"))
         assert get_val(record, "data_type") == "pangenome"
 
     def test_untagged_gfa_stays_pangenome(self):
         """A plain GFA (pggb) carries no rGFA tags, so parsing yields no segments."""
-        record = classify_from_gfa_segment_tags([], file_name="chr1.hprc-v1.0-pggb.gfa.gz")
+        record = classify_from_gfa_segment_tags([], name=FileName.parse("chr1.hprc-v1.0-pggb.gfa.gz"))
         assert get_val(record, "data_type") == "pangenome"
 
     def test_no_segments_falls_back_to_filename_rules(self):
@@ -544,26 +545,28 @@ class TestRgfaContentClassification:
         Minigraph-cactus GFA segments are untagged, so the `-mc-` filename rule
         is what keeps this a reference graph.
         """
-        record = classify_from_gfa_segment_tags([], file_name="hprc-v1.0-mc-grch38.gfa.gz")
+        record = classify_from_gfa_segment_tags([], name=FileName.parse("hprc-v1.0-mc-grch38.gfa.gz"))
         assert get_val(record, "data_type") == "pangenome.reference"
         assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_rank0_without_stable_name_is_not_a_reference_claim(self):
         """SR without SN is malformed rGFA — no contig to anchor the claim."""
-        record = classify_from_gfa_segment_tags([SegmentTag(sr="0")], file_name="some-graph.gfa")
+        record = classify_from_gfa_segment_tags([SegmentTag(sr="0")], name=FileName.parse("some-graph.gfa"))
         assert get_val(record, "data_type") == "pangenome"
 
     def test_empty_file_name_falls_back_to_file_format(self):
         """The pipeline selects records on file_format OR file_name, so file_name
         can be empty on a record with a real extension (pipeline._filter_records)."""
-        record = classify_from_gfa_segment_tags([], file_name="", file_format=".rgfa.gz")
+        record = classify_from_gfa_segment_tags([], name=FileName.parse(""), file_format=".rgfa.gz")
         assert get_val(record, "data_type") == "pangenome"
         rules = [e["rule_id"] for e in record["data_type"]["evidence"]]
         assert "pangenome_graph" in rules
 
     def test_file_name_wins_over_file_format(self):
         """A real filename carries the tokens the tier-2 rules need."""
-        record = classify_from_gfa_segment_tags([], file_name="hprc-v1.0-mc-grch38.gfa.gz", file_format=".gfa")
+        record = classify_from_gfa_segment_tags(
+            [], name=FileName.parse("hprc-v1.0-mc-grch38.gfa.gz"), file_format=".gfa"
+        )
         assert get_val(record, "data_type") == "pangenome.reference"
         assert get_val(record, "reference_assembly") == "GRCh38"
 
@@ -572,12 +575,12 @@ class TestRgfaContentClassification:
         file_format keeps the `-mc-`/`grch38` tokens the tier-2 rules match;
         using file_format alone would discard them, and using the bare name would
         make extract_extension return the junk suffix '.0-mc-grch38'."""
-        record = classify_from_gfa_segment_tags([], file_name="hprc-v1.0-mc-grch38", file_format=".gfa.gz")
+        record = classify_from_gfa_segment_tags([], name=FileName.parse("hprc-v1.0-mc-grch38"), file_format=".gfa.gz")
         assert get_val(record, "data_type") == "pangenome.reference"
         assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_extensionless_file_name_still_classifies_as_a_graph(self):
-        record = classify_from_gfa_segment_tags([], file_name="graph", file_format=".gfa")
+        record = classify_from_gfa_segment_tags([], name=FileName.parse("graph"), file_format=".gfa")
         assert get_val(record, "data_type") == "pangenome"
         assert get_val(record, "data_modality") == "genomic"
 
@@ -585,28 +588,40 @@ class TestRgfaContentClassification:
 class TestFilenameForRules:
     """The rule engine reads the extension from the filename, so a selected record
     whose file_name lacks one must have file_format grafted on — without corrupting
-    a name that already has a valid extension."""
+    a name that already has a valid extension.
+
+    ``file_name_for_rules`` takes a parsed :class:`FileName` (#242) and returns one;
+    ``_rule_name`` wraps the parse/unwrap so the assertions stay in raw-string terms.
+    A ``None`` file_name models a header-only call with no name at all."""
+
+    @staticmethod
+    def _rule_name(file_name, file_format, default, allowed_extensions=None):
+        # A None file_name models a header-only call with no name — FileName.EMPTY.
+        name = FileName.parse(file_name) if file_name is not None else FileName.EMPTY
+        return file_name_for_rules(
+            name, file_format, FileName.parse(default), allowed_extensions=allowed_extensions
+        ).raw
 
     def test_known_extension_is_kept_verbatim(self):
-        assert filename_for_rules("graph.gfa", ".gfa", "x") == "graph.gfa"
+        assert self._rule_name("graph.gfa", ".gfa", "x") == "graph.gfa"
 
     def test_mismatched_but_valid_extension_is_not_appended_to(self):
         """5,227 corpus records are named *.fastq.gz while declaring file_format
         '.fastq'. Appending would yield '*.fastq.gz.fastq'."""
-        assert filename_for_rules("IGVFFI0052MDWT.fastq.gz", ".fastq", "x") == "IGVFFI0052MDWT.fastq.gz"
+        assert self._rule_name("IGVFFI0052MDWT.fastq.gz", ".fastq", "x") == "IGVFFI0052MDWT.fastq.gz"
 
     def test_unknown_extension_gets_file_format_appended(self):
-        assert filename_for_rules("hprc-v1.0-mc-grch38", ".gfa.gz", "x") == "hprc-v1.0-mc-grch38.gfa.gz"
+        assert self._rule_name("hprc-v1.0-mc-grch38", ".gfa.gz", "x") == "hprc-v1.0-mc-grch38.gfa.gz"
 
     def test_extensionless_name_gets_file_format_appended(self):
-        assert filename_for_rules("graph", ".gfa", "x") == "graph.gfa"
+        assert self._rule_name("graph", ".gfa", "x") == "graph.gfa"
 
     def test_no_name_uses_file_format(self):
-        assert filename_for_rules("", ".rgfa.gz", "x") == "file.rgfa.gz"
+        assert self._rule_name("", ".rgfa.gz", "x") == "file.rgfa.gz"
 
     def test_no_name_and_no_format_uses_the_default(self):
-        assert filename_for_rules("", "", "graph.gfa") == "graph.gfa"
-        assert filename_for_rules(None, None, "graph.gfa") == "graph.gfa"
+        assert self._rule_name("", "", "graph.gfa") == "graph.gfa"
+        assert self._rule_name(None, None, "graph.gfa") == "graph.gfa"
 
     def test_non_dotted_file_format_is_not_grafted_on(self):
         """~108k corpus records carry file_format 'Other'; 'graphOther' matches nothing.
@@ -614,14 +629,14 @@ class TestFilenameForRules:
         The name is returned as-is rather than fabricated: nothing is knowable, and
         claiming a `.gfa` we were never told about would be worse than not_classified.
         """
-        assert filename_for_rules("graph", "Other", "graph.gfa") == "graph"
-        assert filename_for_rules("", "Other", "graph.gfa") == "graph.gfa"
+        assert self._rule_name("graph", "Other", "graph.gfa") == "graph"
+        assert self._rule_name("", "Other", "graph.gfa") == "graph.gfa"
 
     def test_known_but_disallowed_extension_is_not_trusted(self):
         """A graph record named *.tar.gz must not be classified off the tar rules
         just because .tar.gz is a known extension somewhere in the map."""
         assert (
-            filename_for_rules(
+            self._rule_name(
                 "hprc-graph.tar.gz",
                 ".gfa.gz",
                 "graph.gfa",
@@ -632,7 +647,7 @@ class TestFilenameForRules:
 
     def test_allowed_extension_is_trusted_verbatim(self):
         assert (
-            filename_for_rules(
+            self._rule_name(
                 "hprc-v1.0-mc-grch38.gfa.gz",
                 ".gfa",
                 "graph.gfa",
@@ -649,7 +664,7 @@ class TestGfaContentClaimCoherence:
         data_modality was not_classified."""
         record = classify_from_gfa_segment_tags(
             [SegmentTag(sn="chr1", sr="0")],
-            file_name="hprc-graph.tar.gz",
+            name=FileName.parse("hprc-graph.tar.gz"),
             file_format=".gfa.gz",
         )
         assert get_val(record, "data_type") == "pangenome.reference"
@@ -661,7 +676,7 @@ class TestGfaContentClaimCoherence:
         assert get_val(record, "data_type") == "pangenome"
 
     def test_evidence_reason_is_singular_for_one_segment(self):
-        record = classify_from_gfa_segment_tags([SegmentTag(sn="chr1", sr="0")], file_name="some-graph.gfa")
+        record = classify_from_gfa_segment_tags([SegmentTag(sn="chr1", sr="0")], name=FileName.parse("some-graph.gfa"))
         content = next(e for e in record["data_type"]["evidence"] if e["rule_id"] == "rgfa_stable_rank_reference")
         assert "1 rGFA segment carries" in content["reason"]
 
@@ -863,20 +878,20 @@ class TestDerivedFileTierPrecedence:
 
     def test_index_with_reference_in_filename(self):
         """Index file with GRCh38 in filename should get reference_assembly=GRCh38."""
-        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.bai"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bam.bai"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.reference_assembly == "GRCh38"
         assert result.status_of("platform") == NOT_APPLICABLE
 
     def test_index_with_chm13_in_filename(self):
         """Index file with CHM13 in filename should get reference_assembly=CHM13."""
-        result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.cram.crai"))
+        result = engine.classify_extended(FileInfo.from_filename("HG01879.CHM13v2.cram.crai"))
         assert result.reference_assembly == "CHM13"
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_index_without_reference_in_filename(self):
         """Index file without reference hint should get reference_assembly=not_classified."""
-        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
@@ -884,7 +899,7 @@ class TestDerivedFileTierPrecedence:
 
     def test_checksum_ignores_filename_reference(self):
         """Checksum file should stay not_applicable even with GRCh38 in filename."""
-        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bam.md5"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bam.md5"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
@@ -892,7 +907,7 @@ class TestDerivedFileTierPrecedence:
 
     def test_log_ignores_filename_reference(self):
         """Log file should stay not_applicable even with hg38 in filename."""
-        result = engine.classify_extended(FileInfo(filename="alignment.hg38.log"))
+        result = engine.classify_extended(FileInfo.from_filename("alignment.hg38.log"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
@@ -900,13 +915,13 @@ class TestDerivedFileTierPrecedence:
 
     def test_svs_ignores_filename_reference(self):
         """SVS histology image should stay not_applicable for reference_assembly."""
-        result = engine.classify_extended(FileInfo(filename="hg38.sample.svs"))
+        result = engine.classify_extended(FileInfo.from_filename("hg38.sample.svs"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.data_modality == "imaging.histology"
 
     def test_png_ignores_filename_reference(self):
         """PNG plot with reference in filename should stay not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="GRCh38_coverage_plot.png"))
+        result = engine.classify_extended(FileInfo.from_filename("GRCh38_coverage_plot.png"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
@@ -914,7 +929,7 @@ class TestDerivedFileTierPrecedence:
 
     def test_fast5_ignores_filename_reference(self):
         """FAST5 raw signal with reference in filename should stay not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="GRCh38_run.fast5"))
+        result = engine.classify_extended(FileInfo.from_filename("GRCh38_run.fast5"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.platform == "ONT"
 
@@ -922,14 +937,14 @@ class TestDerivedFileTierPrecedence:
 
     def test_stats_with_reference_in_filename(self):
         """Stats file with CHM13 in filename should get reference_assembly=CHM13."""
-        result = engine.classify_extended(FileInfo(filename="HG01879.CHM13v2.chrX.samtools.stats.txt"))
+        result = engine.classify_extended(FileInfo.from_filename("HG01879.CHM13v2.chrX.samtools.stats.txt"))
         assert result.reference_assembly == "CHM13"
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.status_of("platform") == NOT_APPLICABLE
 
     def test_stats_without_reference_in_filename(self):
         """Stats file without reference hint should get not_classified, not not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="HG00345.mosdepth.region.dist.txt"))
+        result = engine.classify_extended(FileInfo.from_filename("HG00345.mosdepth.region.dist.txt"))
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
@@ -938,16 +953,16 @@ class TestDerivedFileTierPrecedence:
     def test_assembly_qc_beats_intervals_targets(self):
         """Assembly QC BED (tier 2) should override intervals_targets (tier 1)."""
         result = engine.classify_extended(
-            FileInfo(filename="HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed")
+            FileInfo.from_filename("HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed")
         )
         assert result.data_modality == "genomic"  # not not_applicable
 
     def test_chip_peaks_beat_generic_peaks(self):
         """ChIP-seq peaks (tier 2) should override generic peaks (tier 1)."""
-        result = engine.classify_extended(FileInfo(filename="H3K27ac_chip_peaks.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
         assert result.data_modality == "epigenomic.histone_modification"
 
     def test_capture_targets_not_applicable(self):
         """Capture target BED without competing rules should get not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="exome_capture_targets.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("exome_capture_targets.bed"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
