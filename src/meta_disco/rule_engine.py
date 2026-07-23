@@ -578,24 +578,18 @@ class RuleEngine:
             # From the real name: already the clean core, lower-cased by the parse.
             ext_info.file_format = parsed_ext
         elif ext_info.file_format:
-            # No usable name — normalize the caller's file_format fallback to the
+            # No usable name — normalize the caller's file_format fallback to its
             # clean core suffix, so it matches the core-keyed rules (#244) and is
-            # case-insensitive.
-            token = ext_info.file_format.lower()
-            if token in self.rules.EXTENSION_TO_FORMAT:
-                # Already a known core (e.g. ".g.vcf") — keep it. Re-parsing it as a
-                # name would collapse ".g.vcf" to ".vcf" via the simple-suffix gate,
-                # contradicting EXTENSION_TO_FORMAT[".g.vcf"] = GVCF. EXTENSION_TO_FORMAT
-                # is a sufficient "known core" test here because ".g.vcf" is the only
-                # core the gate mis-resolves; single-dot cores already re-parse to
-                # themselves. #246 will replace this proxy with an explicit core set.
-                ext_info.file_format = token
-            else:
-                # Normalize a compound fallback (".fastq.gz" -> ".fastq", passed by a
-                # header-only call); a non-extension label ("Other") parses to None and
-                # keeps its lower-cased self so it still matches nothing (#152/#243).
-                core = self.rules.parse_file_name(token).extension
-                ext_info.file_format = core if core is not None else token
+            # case-insensitive. Route it through parse_file_name (treating the token
+            # as a degenerate name): a compound fallback (".fastq.gz", passed by a
+            # header-only call) becomes its core (".fastq"), and since #249 the parser
+            # recognizes multi-dot cores directly, so ".g.vcf" stays ".g.vcf"
+            # (Format.GVCF) rather than collapsing to ".vcf" — which is why the #244
+            # known-core short-circuit is no longer needed. A non-extension label
+            # ("Other") parses to None and keeps its lower-cased self, matching
+            # nothing (#152/#243).
+            core = self.rules.parse_file_name(ext_info.file_format).extension
+            ext_info.file_format = core if core is not None else ext_info.file_format.lower()
         extension = ext_info.file_format or ""
 
         # Derive the canonical format from the extension the engine settled on

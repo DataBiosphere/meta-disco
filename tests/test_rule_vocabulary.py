@@ -134,6 +134,63 @@ def test_rule_when_format_values_valid():
     )
 
 
+def test_core_extensions_derivation():
+    """`core_extensions` is the explicit set of producible core extensions (#249).
+
+    Pins the derivation: every compound extension with its wrappers stripped (where
+    the multi-dot core `.g.vcf` comes from), unioned with the single-dot
+    `extension_map` keys and the `EXTENSION_TO_FORMAT` keys, all lower-cased, with
+    no compound left in.
+    """
+    rules = get_unified_rules()
+    core = rules.core_extensions
+    expected = {rules._peel_wrappers(c, keep_last=True)[0] for c in rules.COMPOUND_EXTENSIONS}
+    expected |= {k.lower() for k in rules.extension_map if k.count(".") == 1}
+    expected |= {k.lower() for k in rules.EXTENSION_TO_FORMAT}
+    assert core == expected
+    assert ".g.vcf" in core  # the multi-dot core
+    # No core may carry a compression/archive wrapper: a member that *ends with* a
+    # wrapper but is more than that wrapper (".vcf.gz", ".foo.bz2") is a compound
+    # that leaked in — e.g. from an unfiltered EXTENSION_TO_FORMAT key. ".tar"/".zip"
+    # are themselves archive cores (member == wrapper), so they are exempt.
+    leaked = sorted(c for c in core for w in rules.WRAPPER_SUFFIXES if c.endswith(w) and c != w)
+    assert not leaked, f"compound/wrapper-bearing extensions leaked into the core set: {leaked}"
+
+
+def test_every_format_mapped_extension_is_producible():
+    """Every `EXTENSION_TO_FORMAT` key must be a producible core (#249).
+
+    A format mapping for an extension the parser can never yield is a dead entry:
+    `extension_to_format` would never be reached for it. Pinning this invariant is
+    what makes `.g.vcf`'s format resolution robust — it must not rest on the
+    coincidence that a compressed `.g.vcf.gz` spelling happens to exist.
+    """
+    rules = get_unified_rules()
+    dead = sorted(k for k in rules.EXTENSION_TO_FORMAT if k.lower() not in rules.core_extensions)
+    assert not dead, f"EXTENSION_TO_FORMAT keys not producible by parse_file_name: {dead}"
+
+
+def test_rule_extensions_are_producible_cores():
+    """Every extension a rule keys on must be a member of `core_extensions` (#249).
+
+    A rule listing an extension the parser can never produce (e.g. a leftover
+    compound `.vcf.gz`, or a typo) is a dead condition that silently never matches.
+    This drift check ties the rule vocabulary to what `parse_file_name` yields.
+    """
+    rules = get_unified_rules()
+    core = rules.core_extensions
+    dead = sorted(
+        f"{rule.id}: {ext!r}"
+        for rule in rules.rules
+        for ext in (rule.when.get("extensions") or [])
+        if ext.lower() not in core
+    )
+    assert not dead, (
+        "Rules key on extensions that parse_file_name can never produce "
+        "(dead conditions). Use a core extension or fix the rule:\n  " + "\n  ".join(dead)
+    )
+
+
 def test_when_value_check_rejects_bogus_platform(tmp_path):
     """The when-value drift check catches a typo'd enum-backed value (issue #113).
 

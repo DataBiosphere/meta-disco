@@ -273,10 +273,11 @@ class TestWrapperSplitMatching:
         assert result.data_type == "reads"
 
     def test_known_core_file_format_fallback_not_collapsed(self, engine):
-        """A header-only fallback that is already a known core (".g.vcf") is kept,
-        not re-parsed — re-parsing would collapse it to ".vcf" via the simple-suffix
-        gate and derive Format.VCF, contradicting EXTENSION_TO_FORMAT[".g.vcf"]=GVCF
-        (Copilot review, #244)."""
+        """A header-only fallback that is a multi-dot core (".g.vcf") stays ".g.vcf"
+        (→ Format.GVCF), not collapsed to ".vcf". Before #249 the parser's simple
+        gate collapsed it, and #244 needed a known-core short-circuit to compensate;
+        #249 made the parser recognize ".g.vcf" directly, so the plain normalization
+        keeps it correctly and the short-circuit is gone."""
         ext_info = ExtendedFileInfo(filename="", file_format=".g.vcf")
         engine.classify_extended(ext_info)
         assert ext_info.file_format == ".g.vcf"
