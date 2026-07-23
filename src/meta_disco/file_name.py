@@ -334,10 +334,13 @@ class FileName:
     format_source: FormatSource | None = None
 
     # The nameless FileName — a header-only call with no filename. Assigned below the
-    # class. It reads identically to any name with no known extension (``extension``
-    # is None, ``raw`` is falsy), so downstream code can thread it as the "no name"
-    # value and treat "no name" and "unrecognized name" uniformly, without a
-    # ``FileName | None`` branch at every reader.
+    # class; ``raw`` is "" and ``extension`` is None. Its *extension* is None like any
+    # name with no known extension, so extension-based readers (the file_format
+    # fallback in classify_extended) treat "no name" and "unrecognized name"
+    # uniformly. It differs in ``raw``: an unrecognized-but-present name keeps its
+    # truthy raw and still matches filename_pattern rules, whereas the sentinel's ""
+    # matches none — exactly the header-only intent. Threading it as the "no name"
+    # value avoids a ``FileName | None`` branch at every reader.
     EMPTY: ClassVar["FileName"]
 
     @classmethod
