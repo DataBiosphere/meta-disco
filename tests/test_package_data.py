@@ -19,7 +19,10 @@ from meta_disco.schema_vocab import default_schema_path, dimension_values
 def test_rules_resource_is_readable_package_data():
     resource = default_rules_resource()
     text = resource.read_text(encoding="utf-8")  # raises if not shipped
-    assert "extension_map" in text and "rules:" in text
+    assert "rules:" in text
+    # The extension_map moved in-code in #252 — it must not be reintroduced as a
+    # YAML document (that would resurrect the two-source-of-truth the move removed).
+    assert "extension_map:" not in text
 
 
 def test_schema_resource_is_readable_package_data():
@@ -31,13 +34,14 @@ def test_schema_resource_is_readable_package_data():
 def test_rules_load_from_the_bundled_resource():
     """The engine's default path resolves the package resource, not a repo walk.
 
-    Asserts the rules and extension_map parsed (both non-empty) rather than a rule
-    count, so a legitimate rule refactor (merge/split/removal) doesn't fail this
-    package-data guard; rule content is covered by the rule-specific test modules.
+    Asserts the rules loaded and the extension_map is populated (both non-empty)
+    rather than a rule count, so a legitimate rule refactor (merge/split/removal)
+    doesn't fail this package-data guard; rule content is covered by the
+    rule-specific test modules.
     """
     rules = get_unified_rules()
-    assert rules.rules  # rules document parsed
-    assert rules.extension_map  # extension_map document parsed
+    assert rules.rules  # rules document parsed from the bundled YAML
+    assert rules.extension_map  # in-code extension_map (in file_name.py) since #252
 
 
 def test_schema_vocab_loads_from_the_bundled_resource():

@@ -12,6 +12,30 @@ def parse(name: str) -> FileName:
     return RULES.parse_file_name(name)
 
 
+class TestPureParse:
+    """#252: FileName.parse is pure — no UnifiedRules instance."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "sample.bam",
+            "cohort.vcf.gz",
+            "HG002.g.vcf.gz",
+            "HG002.g.vcf",
+            "reads.fastq.gz",
+            "readme.xyz",
+            "notes.txt.gz",
+        ],
+    )
+    def test_parse_needs_no_rules_and_matches_delegator(self, name):
+        # FileName.parse takes no rules instance and needs none — the parse is pure.
+        # (The module-level RULES exists only for the delegator-equivalence check.)
+        fn = FileName.parse(name)
+        assert isinstance(fn, FileName)
+        # The UnifiedRules delegator returns the identical fact.
+        assert fn == RULES.parse_file_name(name)
+
+
 class TestExtension:
     def test_simple_known_extension(self):
         fn = parse("HG00741.final.cram")

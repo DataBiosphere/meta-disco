@@ -264,7 +264,6 @@ def test_assay_condition_check_rejects_bogus_platform(tmp_path):
     with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump_all(
             [
-                {"extension_map": {}},
                 {"rules": []},
                 {"validators": {}},
                 {
@@ -285,12 +284,11 @@ def test_assay_condition_check_rejects_bogus_platform(tmp_path):
 
 
 def _write_assay_rules_file(tmp_path, assay_rule):
-    """Write a rules file whose fourth document holds a single assay_type_rule."""
+    """Write a rules file whose third document holds a single assay_type_rule."""
     path = tmp_path / "rules.yaml"
     with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump_all(
             [
-                {"extension_map": {}},
                 {"rules": []},
                 {"validators": {}},
                 {"assay_type_rules": [assay_rule]},
@@ -404,10 +402,10 @@ def test_value_in_vocabulary_rejects_all_statuses():
 
 
 def _write_rules_file(tmp_path, rule):
-    """Write a minimal two-document rules file containing a single rule."""
+    """Write a minimal single-document rules file containing a single rule."""
     path = tmp_path / "rules.yaml"
     with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump_all([{"extension_map": {}}, {"rules": [rule]}], f)
+        yaml.safe_dump_all([{"rules": [rule]}], f)
     return path
 
 

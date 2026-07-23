@@ -294,14 +294,15 @@ class TestThenStatus:
         with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump_all(
                 [
-                    {"extension_map": {".foo": "foo"}},
                     {
                         "rules": [
                             {
                                 "id": "foo_rule",
                                 "tier": 1,
                                 "scope": "extension",
-                                "when": {"extensions": [".foo"]},
+                                # A real in-code core extension — the vocabulary is
+                                # in-code since #252, so a rules file can't inject one.
+                                "when": {"extensions": [".bam"]},
                                 "then": then,
                             }
                         ]
@@ -313,7 +314,7 @@ class TestThenStatus:
 
     def test_status_only_field_is_not_applicable(self, tmp_path):
         engine = self._engine_with_rule(tmp_path, {"status": {"reference_assembly": "not_applicable"}})
-        out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
+        out = engine.classify_extended(FileInfo(filename="x.bam")).to_output_dict()
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
         assert out["reference_assembly"]["value"] is None
 
@@ -327,7 +328,7 @@ class TestThenStatus:
                 "status": {"reference_assembly": "not_applicable"},
             },
         )
-        out = engine.classify_extended(FileInfo(filename="x.foo")).to_output_dict()
+        out = engine.classify_extended(FileInfo(filename="x.bam")).to_output_dict()
         assert out["data_type"]["status"] == CLASSIFIED
         assert out["data_type"]["value"] == "raw_signal"
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
