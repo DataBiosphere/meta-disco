@@ -237,6 +237,40 @@ class TestFormatMatching:
         assert none_info.format is None
 
 
+class TestWrapperSplitMatching:
+    """#244: rule `extensions:` are the clean core suffix; compression/archive is
+    split into wrappers at parse time. A core matches both the compressed and
+    uncompressed spelling, so classification is unchanged by whether a file is
+    gzipped."""
+
+    @pytest.mark.parametrize("name", ["cohort.vcf.gz", "reads.fastq.gz", "reads.fq.gz"])
+    def test_core_keyed_rule_matches_compressed_and_uncompressed(self, engine, name):
+        """The extension rules list only the core (".vcf"), yet both sample.vcf and
+        sample.vcf.gz route through it — the compression no longer needs listing."""
+        compressed = engine.classify_extended(FileInfo(filename=name))
+        bare = engine.classify_extended(FileInfo(filename=name.replace(".gz", "")))
+        assert compressed.data_type == bare.data_type
+        assert compressed.data_type is not None
+
+    def test_gvcf_core_keeps_its_distinct_signal(self, engine):
+        """`.g.vcf.gz` splits to the `.g.vcf` core, which derives Format.GVCF and
+        still matches the VCF rules that list `.g.vcf` (behavior-preserved)."""
+        ext_info = ExtendedFileInfo(filename="HG002.deepvariant.g.vcf.gz")
+        result = engine.classify_extended(ext_info)
+        assert ext_info.format is Format.GVCF
+        assert result.data_type == "variants"
+
+    def test_compound_file_format_fallback_normalized_to_core(self, engine):
+        """A header-only call passing a compound file_format (".fastq.gz") with no
+        filename settles to the core (".fastq") so the core-keyed rules still fire
+        — the regression the #244 core-keying would otherwise introduce."""
+        ext_info = ExtendedFileInfo(filename="", file_format=".fastq.gz")
+        result = engine.classify_extended(ext_info)
+        assert ext_info.file_format == ".fastq"
+        assert ext_info.format is Format.FASTQ
+        assert result.data_type == "reads"
+
+
 class TestThenStatus:
     """A rule authoring a non-classified status via `then.status` (#133)."""
 

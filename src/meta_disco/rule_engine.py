@@ -575,16 +575,20 @@ class RuleEngine:
         # a filename to carry it (#152/#241).
         parsed_ext = self.rules.parse_file_name(ext_info.filename).extension if ext_info.filename else None
         if parsed_ext:
+            # From the real name: already the clean core, lower-cased by the parse.
             ext_info.file_format = parsed_ext
-        # Normalize the settled file_format to lower-case once, so every downstream
-        # comparison — the extensions filter, `when.file_format`, and the assay
-        # `file_format`/`file_format_not` conditions — is case-insensitive and
-        # consistent with matches_extension's own lowering. A header-only call may
-        # pass a mixed-case file_format (".CRAM"); parsed_ext is already lower-case
-        # (parse_file_name lowers it). Normalizing here means the matchers can
-        # compare directly without each re-lowering (#243).
-        if ext_info.file_format:
-            ext_info.file_format = ext_info.file_format.lower()
+        elif ext_info.file_format:
+            # No usable name — normalize the caller's file_format fallback to the
+            # clean core suffix, so it matches the core-keyed rules (#244) and is
+            # case-insensitive. Routing it back through parse_file_name (treating the
+            # token as a degenerate name) turns a compound fallback (".fastq.gz",
+            # passed by a header-only call) into its core (".fastq"); a non-extension
+            # label ("Other") parses to None and keeps its lower-cased self so it
+            # still matches nothing, as before (#152/#243). Only the fallback is
+            # normalized: parsed_ext is already core, and re-parsing e.g. ".g.vcf"
+            # as a name would wrongly collapse it to ".vcf" (its simple suffix).
+            core = self.rules.parse_file_name(ext_info.file_format).extension
+            ext_info.file_format = core if core is not None else ext_info.file_format.lower()
         extension = ext_info.file_format or ""
 
         # Derive the canonical format from the extension the engine settled on

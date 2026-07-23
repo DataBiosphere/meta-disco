@@ -8,15 +8,16 @@ string (epic #242).
 
 ``FileName`` is a pure data type; it is built by ``UnifiedRules.parse_file_name``
 (the parse is vocabulary-gated, so it lives with the rules). ``extension`` is
-syntactic — the exact suffix, ``.cram`` distinct from ``.bam`` — while
-``format`` is *derived*: what the file actually is, collapsing spelling and
-compression variants of one format to a single identity (``.fa``/``.fasta`` →
-``FASTA``). This increment (#243) derives the stage-1 format (from the extension
-alone, at parse time, no I/O) and records that provenance in ``format_source``;
-the follow-ups add the later derivation stages — stem/filename pattern
-(``FormatSource.STEM``) and a content/header read (``FormatSource.CONTENT``) —
-split the compression/archive wrappers out of the extension vocabulary (#244),
-and thread the parsed ``FileName`` from the load boundary (#246).
+syntactic — the exact core suffix, ``.cram`` distinct from ``.bam`` — with any
+compression/archive kept apart in ``wrappers`` (#244: ``sample.vcf.gz`` →
+extension ``.vcf`` + wrappers ``(".gz",)``). ``format`` is *derived*: what the
+file actually is, collapsing spelling and compression variants of one format to
+a single identity (``.fa``/``.fasta`` → ``FASTA``). #243 derives the stage-1
+format (from the core extension alone, at parse time, no I/O) and records that
+provenance in ``format_source``; the remaining follow-up adds the later
+derivation stages — stem/filename pattern (``FormatSource.STEM``) and a
+content/header read (``FormatSource.CONTENT``) — and threads the parsed
+``FileName`` from the load boundary (#246).
 """
 
 from dataclasses import dataclass
@@ -79,14 +80,16 @@ class FileName:
     ``raw`` is the name as given. In the pipeline it is never empty — the input
     contract (``^.+$``) diverts a nameless record to ``validation_failed`` before
     it is parsed — though ``FileName`` itself does not re-validate. ``extension``
-    is the known extension the rules key
-    on, or ``None`` when the name carries no known extension — never the junk
-    last-dot suffix ``UnifiedRules.extract_extension`` returns
-    (``"hprc-v1.0-mc-grch38"`` → ``".0-mc-grch38"``). ``wrappers`` are the
-    trailing compression/archive suffixes, in name order. ``stem`` is the
-    token-carrying part: the name with its known ``extension`` removed, or —
-    when there is none — its trailing ``wrappers`` stripped (an unknown suffix
-    like ``.xyz`` is kept, since it is neither a known extension nor a wrapper).
+    is the clean core suffix the rules key on (``.vcf``, not ``.vcf.gz``), or
+    ``None`` when the name carries no known extension — never the junk last-dot
+    suffix ``UnifiedRules.extract_extension`` returns (``"hprc-v1.0-mc-grch38"``
+    → ``".0-mc-grch38"``). ``wrappers`` are the trailing compression/archive
+    suffixes split off that core, in name order (#244: ``sample.vcf.gz`` →
+    extension ``.vcf``, wrappers ``(".gz",)``). ``stem`` is the token-carrying
+    part: the name with its whole recognized extension (core + wrappers) removed,
+    or — when there is none — its trailing ``wrappers`` stripped (an unknown
+    suffix like ``.xyz`` is kept, since it is neither a known extension nor a
+    wrapper).
 
     ``format`` is the derived canonical format (see :class:`Format`), ``None``
     when the extension maps to no seeded format (or there is no known extension).

@@ -109,45 +109,38 @@ class UnifiedRules:
     ]
 
     # Compression and archive suffixes — "wrappers" around the format, not the
-    # format itself (see FileName). Kept as advice; in this foundation they are
-    # informational and may overlap the still-compound extension (the clean
-    # split is #244). Ordered longest-first (like COMPOUND_EXTENSIONS): the peel
-    # loop takes the first `endswith` match, so `.bgz` must precede `.gz` or a
-    # `.bgz` name would mis-peel as `.gz` and leave a dangling `b` in the stem.
+    # format itself (see FileName). Since #244 these do the real work of the
+    # extension/format split: parse_file_name splits a recognized extension token
+    # into its clean core suffix and these trailing wrappers (".vcf.gz" -> ".vcf"
+    # + (".gz",)). Ordered longest-first: the split/peel loop takes the first
+    # `endswith` match, so `.bgz` must precede `.gz` or a `.bgz` token would
+    # mis-peel as `.gz` and leave a dangling `b` on the core.
     WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".bgz", ".bz2", ".zip", ".tar", ".gz", ".xz")
 
-    # Known extension -> canonical file Format (#243). Collapses the spelling and
-    # compression variants of one format to a single identity (.fa/.fasta/.fa.gz/
-    # .fasta.gz -> FASTA), the stage-1 derivation the rules key on via `format`.
-    # Seeded with the core sequencing formats; extensions with no clean canonical
-    # collapse are absent, so their format is None until a migrating group adds
-    # its identity (see Format). Keys are lower-case: extension_to_format lowers
-    # its argument before the lookup.
+    # Known core extension -> canonical file Format (#243). Keyed on the clean
+    # core suffix the parse now yields (#244): the compression/archive variants
+    # (.vcf.gz, .fastq.gz, .fast5.tar.gz, ...) collapse to their core at parse
+    # time, so a single core key (.vcf) covers every compressed spelling. Formats
+    # the size-threshold assay rules must tell apart stay distinct (.bam vs
+    # .cram). Seeded with the core sequencing formats; core extensions with no
+    # clean canonical collapse are absent, so their format is None until a
+    # migrating group adds its identity (see Format). Keys are lower-case:
+    # extension_to_format lowers its argument before the lookup.
     EXTENSION_TO_FORMAT: ClassVar[dict[str, Format]] = {
         ".bam": Format.BAM,
         ".cram": Format.CRAM,
         ".sam": Format.SAM,
-        ".sam.gz": Format.SAM,
         ".vcf": Format.VCF,
-        ".vcf.gz": Format.VCF,
         ".bcf": Format.BCF,
         ".gvcf": Format.GVCF,
-        ".gvcf.gz": Format.GVCF,
-        ".g.vcf.gz": Format.GVCF,
+        ".g.vcf": Format.GVCF,
         ".fastq": Format.FASTQ,
         ".fq": Format.FASTQ,
-        ".fastq.gz": Format.FASTQ,
-        ".fq.gz": Format.FASTQ,
         ".fasta": Format.FASTA,
         ".fa": Format.FASTA,
-        ".fasta.gz": Format.FASTA,
-        ".fa.gz": Format.FASTA,
         ".bed": Format.BED,
-        ".bed.gz": Format.BED,
         ".gfa": Format.GFA,
-        ".gfa.gz": Format.GFA,
         ".rgfa": Format.RGFA,
-        ".rgfa.gz": Format.RGFA,
     }
 
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:
@@ -192,50 +185,76 @@ class UnifiedRules:
             return "." + filename.rsplit(".", 1)[-1].lower()
         return ""
 
-    def parse_file_name(self, filename: str) -> "FileName":
-        """Parse ``filename`` into a :class:`FileName` against this vocabulary.
+    @classmethod
+    def _peel_wrappers(cls, token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]]:
+        """Peel trailing compression/archive ``WRAPPER_SUFFIXES`` off ``token``.
 
-        The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
-        ``extension_map`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
-        rules rather than on the pure ``FileName`` data type. ``extension`` equals
-        ``extract_extension`` for every name with a known extension, so rule
-        routing is unchanged for those; a name with no known extension yields
-        ``None`` rather than the junk suffix ``extract_extension`` returns (which
-        matched no rules anyway). ``format`` is the stage-1 derivation from that
-        extension (``extension_to_format``), with ``format_source`` recording the
-        provenance — set together or both ``None`` (#243).
+        Peels longest-first and returns ``(remainder, wrappers)`` with the
+        wrappers in name order. ``keep_last`` chooses between the two uses:
+
+        - ``keep_last=True`` splits a *recognized* extension token into its core
+          and wrappers, stopping before the last remaining token so an archive
+          extension keeps its own suffix: ``.vcf.gz`` -> (``.vcf``, ``(".gz",)``);
+          ``.fast5.tar.gz`` -> (``.fast5``, ``(".tar", ".gz")``); ``.tar.gz`` ->
+          (``.tar``, ``(".gz",)``); ``.tar`` -> (``.tar``, ``()``).
+        - ``keep_last=False`` peels *every* trailing wrapper off an unrecognized
+          name, where no core is claimed and the remainder is only used to trim
+          the stem: ``notes.txt.gz`` -> (``notes.txt``, ``(".gz",)``).
         """
-        lower = filename.lower()
-
-        extension = None
-        for ext in self.COMPOUND_EXTENSIONS:
-            if lower.endswith(ext):
-                extension = ext
-                break
-        if extension is None and "." in filename:
-            simple = "." + filename.rsplit(".", 1)[-1].lower()
-            if simple in self.extension_map:
-                extension = simple
-
+        rest = token
         wrappers: list[str] = []
-        rest = lower
         while True:
-            for suffix in self.WRAPPER_SUFFIXES:
-                if rest.endswith(suffix):
+            for suffix in cls.WRAPPER_SUFFIXES:
+                if rest.endswith(suffix) and not (keep_last and rest == suffix):
                     wrappers.append(suffix)
                     rest = rest[: -len(suffix)]
                     break
             else:
                 break
-        wrappers.reverse()  # name order: "x.tar.gz" -> (".tar", ".gz")
+        wrappers.reverse()  # name order: ".tar.gz" -> (".tar", ".gz")
+        return rest, tuple(wrappers)
 
-        # The stem carries the name tokens only. Remove the known extension when
-        # there is one (a compound extension already subsumes its wrappers, e.g.
-        # ".vcf.gz"); otherwise strip the trailing wrappers so the stem does not
-        # keep the compression/archive advice ("notes.txt.gz" -> "notes.txt").
-        if extension:
-            stem = filename[: -len(extension)]
+    def parse_file_name(self, filename: str) -> "FileName":
+        """Parse ``filename`` into a :class:`FileName` against this vocabulary.
+
+        The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
+        ``extension_map`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
+        rules rather than on the pure ``FileName`` data type.
+
+        *Which* names carry a routable extension is preserved: this recognizes the
+        same compound extensions as ``extract_extension``, then gates the simple
+        suffix on ``extension_map`` — so an unknown suffix yields ``None`` here,
+        where ``extract_extension`` returns the junk last-dot suffix (which matched
+        no rule anyway). What changed in #244 is the *representation*: the
+        recognized token is split into a clean core ``extension`` (``.vcf``) and the
+        ``wrappers`` it bundled (``(".gz",)``) — where before ``extension`` was the
+        whole compound (``.vcf.gz``). ``format`` is the stage-1 derivation
+        from the core extension (``extension_to_format``), with ``format_source``
+        recording the provenance — set together or both ``None`` (#243).
+        """
+        lower = filename.lower()
+
+        recognized = None
+        for ext in self.COMPOUND_EXTENSIONS:
+            if lower.endswith(ext):
+                recognized = ext
+                break
+        if recognized is None and "." in filename:
+            simple = "." + filename.rsplit(".", 1)[-1].lower()
+            if simple in self.extension_map:
+                recognized = simple
+
+        if recognized is not None:
+            # Split the recognized token into its clean core and wrappers (#244).
+            # The stem drops the whole recognized token (core + wrappers), so it
+            # carries only the name's tokens — unchanged from before the split.
+            extension, wrappers = self._peel_wrappers(recognized, keep_last=True)
+            stem = filename[: -len(recognized)]
         else:
+            # No known extension: peel every trailing wrapper as informational
+            # advice and strip them from the stem, but claim no core extension.
+            extension = None
+            _, wrappers = self._peel_wrappers(lower, keep_last=False)
             wrapper_len = sum(len(w) for w in wrappers)
             stem = filename[:-wrapper_len] if wrapper_len else filename
 
@@ -245,7 +264,7 @@ class UnifiedRules:
             raw=filename,
             stem=stem,
             extension=extension,
-            wrappers=tuple(wrappers),
+            wrappers=wrappers,
             format=fmt,
             format_source=format_source,
         )

@@ -77,7 +77,11 @@
 # CONDITION TYPES (in 'when')
 # ---------------------------
 # Extension/filename conditions:
-# - extensions: list of file extensions to match (e.g., [".bam", ".cram"])
+# - extensions: list of clean core file extensions to match (e.g., [".bam",
+#     ".cram"]). Compression/archive is split off into wrappers at parse time
+#     (#244), so a core matches every compressed spelling: ".vcf" matches both
+#     sample.vcf and sample.vcf.gz — never list ".vcf.gz" here. gVCF keeps its
+#     own core (".g.vcf") because it is a distinct data_type signal, not just VCF.
 # - format: canonical file format to match (e.g., FASTA) — collapses the
 #     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
 #     to a single identity, so key on this instead of re-listing extensions
@@ -347,7 +351,7 @@ rules:
     tier: 1
     scope: extension
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
     then:
       data_modality: genomic
       data_type: variants
@@ -387,7 +391,7 @@ rules:
     tier: 1
     scope: extension
     when:
-      extensions: [".h5ad", ".loom", ".mtx", ".mtx.gz"]
+      extensions: [".h5ad", ".loom", ".mtx"]
     then:
       data_modality: transcriptomic.single_cell
       data_type: expression_matrix
@@ -434,7 +438,7 @@ rules:
     tier: 2
     scope: extension
     when:
-      extensions: [".fast5", ".fast5.tar", ".fast5.tar.gz"]
+      extensions: [".fast5"]
     then:
       data_type: raw_signal
       platform: ONT
@@ -461,7 +465,7 @@ rules:
     tier: 2
     scope: extension
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
     then:
       data_type: reads
       status:
@@ -496,7 +500,7 @@ rules:
     tier: 1
     scope: extension
     when:
-      extensions: [".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz", ".gbz", ".vg", ".gbwt", ".xg"]
+      extensions: [".gfa", ".rgfa", ".gbz", ".vg", ".gbwt", ".xg"]
     then:
       data_modality: genomic
       data_type: pangenome
@@ -516,7 +520,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)_rna_|rnaseq|rna-seq|transcriptome|_RNA\\."
     then:
       data_modality: transcriptomic.bulk
@@ -538,7 +542,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)scrna|sc_rna|single.?cell|10x|chromium"
     then:
       data_modality: transcriptomic.single_cell
@@ -549,7 +553,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)atac|_ATAC_"
     then:
       data_modality: epigenomic.chromatin_accessibility
@@ -561,7 +565,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)chip|_ChIP_|chipseq"
     then:
       data_modality: epigenomic.histone_modification
@@ -573,7 +577,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)_wgs_|_WGS\\.|whole.?genome"
     then:
       data_modality: genomic
@@ -585,7 +589,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)_wes_|exome|_WES\\."
     then:
       data_modality: genomic
@@ -597,7 +601,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)hifi|\\.hifi_reads\\.|pacbio|_pb_"
     then:
       data_modality: genomic
@@ -610,7 +614,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bam", ".cram", ".sam", ".sam.gz"]
+      extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)Aligned\\.sortedByCoord|_STAR_|\\.star\\."
     then:
       data_modality: transcriptomic.bulk
@@ -630,7 +634,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz", ".gbz", ".vg", ".gbwt", ".xg"]
+      extensions: [".gfa", ".rgfa", ".gbz", ".vg", ".gbwt", ".xg"]
       filename_pattern: "(?i)-mc-"
     then:
       data_modality: genomic
@@ -691,7 +695,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       filename_pattern: "(?i)_rna_|rnaseq|transcriptome"
     then:
       data_modality: transcriptomic.bulk
@@ -702,7 +706,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       filename_pattern: "(?i)scrna|single.?cell|10x"
     then:
       data_modality: transcriptomic.single_cell
@@ -713,7 +717,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       filename_pattern: "(?i)atac"
     then:
       data_modality: epigenomic.chromatin_accessibility
@@ -725,7 +729,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       filename_pattern: "(?i)_wgs_|whole.?genome"
     then:
       data_modality: genomic
@@ -769,7 +773,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".h5ad", ".loom", ".mtx", ".mtx.gz"]
+      extensions: [".h5ad", ".loom", ".mtx"]
       filename_pattern: "(?i)atac|peaks"
     then:
       data_modality: epigenomic.chromatin_accessibility
@@ -784,7 +788,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz"]
+      extensions: [".fast5", ".pod5"]
       filename_pattern: "(?i)rna|direct.?rna"
     then:
       data_modality: transcriptomic.bulk
@@ -799,7 +803,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)(modbam2bed|cpg|methylat|bisulfite|wgbs)"
     then:
       data_modality: epigenomic.methylation
@@ -811,7 +815,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\\.TSS\\.)"
     then:
       data_modality: transcriptomic.bulk
@@ -823,7 +827,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)(\\.atac\\.|atac[-_]?seq|atacseq)"
     then:
       data_modality: epigenomic.chromatin_accessibility
@@ -835,7 +839,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)(\\.chip\\.|chip[-_]?seq|chipseq|histone|h3k\\d+)"
     then:
       data_modality: epigenomic.histone_modification
@@ -847,7 +851,7 @@ rules:
     tier: 1
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      extensions: [".bed", ".narrowpeak", ".broadpeak"]
       filename_pattern: "(?i)(peak|summit|narrowPeak|broadPeak)"
     then:
       data_modality: epigenomic.chromatin_accessibility
@@ -858,7 +862,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
     then:
       data_modality: genomic
@@ -869,7 +873,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "\\.regions\\.bed"
     then:
       data_modality: genomic
@@ -921,7 +925,7 @@ rules:
     tier: 1
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz"]
+      extensions: [".bed"]
       filename_pattern: "(?i)targets?|regions?|capture|exome"
     then:
       status:
@@ -938,7 +942,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      extensions: [".bed", ".narrowpeak", ".broadpeak"]
       filename_pattern: "(?i)chip|h3k|histone"
     then:
       data_modality: epigenomic.histone_modification
@@ -993,7 +997,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".tar", ".tar.gz"]
+      extensions: [".tar"]
       filename_pattern: "^chr[0-9XY]+\\.[0-9]+_[0-9]+\\.tar$"
       dataset_pattern: "(?i)t2t"
     then:
@@ -1354,7 +1358,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##reference"
       vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.(1[5-9]|[2-9]\\d|\\d{3,}))"
     then:
@@ -1365,7 +1369,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##reference"
       vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(1[0-4]|[1-9])(?!\\d)|b37)"
     then:
@@ -1376,7 +1380,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##reference"
       vcf_pattern: "(?i)(chm13|t2t|hs1)"
     then:
@@ -1387,7 +1391,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##contig"
       vcf_pattern: "(?i)(grch38|hg38|hs38|GCA_000001405\\.(1[5-9]|[2-9]\\d|\\d{3,}))"
     then:
@@ -1398,7 +1402,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##contig"
       vcf_pattern: "(?i)(grch37|hg19|hs37|GCA_000001405\\.(1[0-4]|[1-9])(?!\\d)|b37)"
     then:
@@ -1409,7 +1413,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##contig"
       vcf_pattern: "(?i)(chm13|t2t|hs1)"
     then:
@@ -1423,7 +1427,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)haplotypecaller"
     then:
@@ -1435,7 +1439,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)deepvariant"
     then:
@@ -1447,7 +1451,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)genotypegvcfs"
     then:
@@ -1459,7 +1463,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)glnexus"
     then:
@@ -1471,7 +1475,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)bcftools.*call"
     then:
@@ -1483,7 +1487,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)freebayes"
     then:
@@ -1495,7 +1499,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)strelka2.*germline|strelka2(?!.*somatic)"
     then:
@@ -1510,7 +1514,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)mutect2?"
     then:
@@ -1522,7 +1526,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)strelka.*somatic|strelka(?!.*germline)"
     then:
@@ -1534,7 +1538,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)varscan.*somatic"
     then:
@@ -1546,7 +1550,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)somaticsniper"
     then:
@@ -1558,7 +1562,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)muse"
     then:
@@ -1573,7 +1577,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)manta"
     then:
@@ -1585,7 +1589,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)delly"
     then:
@@ -1597,7 +1601,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)lumpy"
     then:
@@ -1609,7 +1613,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)smoove"
     then:
@@ -1621,7 +1625,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)svim"
     then:
@@ -1633,7 +1637,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)sniffles"
     then:
@@ -1645,7 +1649,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)pbsv"
     then:
@@ -1657,7 +1661,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)cutesv"
     then:
@@ -1672,7 +1676,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)cnvkit"
     then:
@@ -1684,7 +1688,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)gatk.*(cnv|copynumber)|modelsegments"
     then:
@@ -1696,7 +1700,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##source"
       vcf_pattern: "(?i)canvas"
     then:
@@ -1711,7 +1715,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf", ".gvcf", ".gvcf.gz", ".g.vcf.gz"]
+      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
       vcf_header_type: "##INFO"
       vcf_pattern: "^(SOMATIC|TUMOR_|NORMAL_|TumorVAF|NormalVAF)"
     then:
@@ -1722,7 +1726,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##INFO"
       vcf_pattern: "^(SVTYPE|SVLEN|CIPOS|CIEND|MATEID|IMPRECISE)$"
     then:
@@ -1733,7 +1737,7 @@ rules:
     tier: 3
     scope: vcf_header
     when:
-      extensions: [".vcf", ".vcf.gz", ".bcf"]
+      extensions: [".vcf", ".bcf"]
       vcf_header_type: "##INFO"
       vcf_pattern: "^(CN|FOLD_CHANGE|PROBES|LOG2_COPY_RATIO)$"
     then:
@@ -1751,7 +1755,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z0-9-]+:\\d+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+"
     then:
       platform: ILLUMINA
@@ -1761,7 +1765,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z0-9-]+:\\d+:\\d+:\\d+:\\d+#"
     then:
       platform: ILLUMINA
@@ -1771,7 +1775,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@SRR\\d+\\.\\d+"
     then:
       platform: ILLUMINA
@@ -1781,7 +1785,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: " HS2[05]00[-_]"
     then:
       platform: ILLUMINA
@@ -1791,7 +1795,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[EDS]RR\\d+\\.\\d+ HS2[05]00"
     then:
       platform: ILLUMINA
@@ -1804,7 +1808,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/ccs"
     then:
       platform: PACBIO
@@ -1815,7 +1819,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+/\\d+_\\d+"
     then:
       platform: PACBIO
@@ -1826,7 +1830,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@m\\d+[A-Za-z]*_\\d+_\\d+/\\d+"
     then:
       platform: PACBIO
@@ -1840,7 +1844,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
     then:
       platform: ONT
@@ -1851,7 +1855,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "runid=[a-f0-9]+"
     then:
       platform: ONT
@@ -1865,7 +1869,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z]\\d{9}L\\dC\\d{3}R\\d{3}\\d+"
     then:
       platform: MGI
@@ -1875,7 +1879,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z]\\d+L\\d+C\\d+R\\d+"
     then:
       platform: MGI
@@ -1888,7 +1892,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z0-9]+:[A-Z0-9]+:\\d+:\\d+:\\d+:\\d+:\\d+"
     then:
       platform: ELEMENT
@@ -1901,7 +1905,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@[A-Z0-9]+_\\d+_\\d+_\\d+_[ACGT]+"
     then:
       platform: ULTIMA
@@ -1914,7 +1918,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@ERR\\d+\\.\\d+"
     then: {}
     rationale: "ERR accessions indicate data from the European Nucleotide Archive (ENA)"
@@ -1923,7 +1927,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@SRR\\d+\\.\\d+"
     then: {}
     rationale: "SRR accessions indicate data from NCBI Sequence Read Archive (SRA)"
@@ -1932,7 +1936,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "^@DRR\\d+\\.\\d+"
     then: {}
     rationale: "DRR accessions indicate data from DDBJ Sequence Read Archive (Japan)"
@@ -1944,7 +1948,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       fastq_pattern: "[/\\s][12]$|[/\\s][12]:|_R[12]_|\\.R[12]\\.|_r[12]_|\\.r[12]\\."
     then: {}
     rationale: "Read 1/2 indicators (/1, /2, _R1_, _R2_) suggest paired-end sequencing"
@@ -1956,7 +1960,7 @@ rules:
     tier: 3
     scope: fastq_header
     when:
-      extensions: [".fastq", ".fq", ".fastq.gz", ".fq.gz"]
+      extensions: [".fastq", ".fq"]
       modality_not_set: true
     then:
       status:
@@ -1971,7 +1975,7 @@ rules:
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".bed.gz", ".narrowpeak", ".broadpeak"]
+      extensions: [".bed", ".narrowpeak", ".broadpeak"]
       modality_not_set: true
     then:
       data_modality: genomic
