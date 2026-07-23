@@ -83,7 +83,9 @@ def classify_bed_files(metadata_path: Path, output_path: Path):
     }
 
     for f in bed_files:
-        name = f.get("file_name", "")
+        # str(... or ""): a present-but-null or drifted file_name must not raise in
+        # FileName.parse — coerce to "" as the pre-#246 path did.
+        name = str(f.get("file_name") or "")
         dataset_title = f.get("dataset_title", "")
         md5 = f.get("file_md5sum")
         stats["total"] += 1

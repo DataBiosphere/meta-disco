@@ -37,8 +37,10 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
         if (i + 1) % 10000 == 0:
             print(f"\rClassifying... {i + 1:,}/{total:,} ({100 * (i + 1) / total:.1f}%)", end="", flush=True)
 
+        # str(... or ""): a present-but-null or drifted (non-string) file_name must
+        # not raise in FileName.parse — coerce to "" as the pre-#246 path did.
         file_info = FileInfo.from_filename(
-            file_data.get("file_name", ""),
+            str(file_data.get("file_name") or ""),
             file_size=file_data.get("file_size"),
             dataset_title=file_data.get("dataset_title"),
         )

@@ -93,7 +93,9 @@ def validate_against_ena(
         """Process a single record and return validation result."""
         acc = rec["archive_accession"]
         sample_reads = rec.get("sample_reads", [])
-        file_name = rec.get("file_name", "")
+        # str(... or ""): a present-but-null or drifted file_name must not raise in
+        # FileName.parse — coerce to "" as the pre-#246 path did.
+        file_name = str(rec.get("file_name") or "")
 
         # Re-classify with current rules
         if sample_reads:
