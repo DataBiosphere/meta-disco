@@ -19,7 +19,7 @@ from meta_disco.schema_vocab import default_schema_path, dimension_values
 def test_rules_resource_is_readable_package_data():
     resource = default_rules_resource()
     text = resource.read_text(encoding="utf-8")  # raises if not shipped
-    assert "extension_map" in text and "rules:" in text
+    assert "rules:" in text
 
 
 def test_schema_resource_is_readable_package_data():

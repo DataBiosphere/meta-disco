@@ -1,14 +1,16 @@
 """Loader for unified classification rules from YAML."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, ClassVar
 
 import yaml
 
-from .file_name import FileName, Format, FormatSource
+from . import file_name
+from .file_name import FileName, Format
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
 
@@ -83,66 +85,35 @@ class IlluminaInstrument:
 class UnifiedRules:
     """Container for all unified rules and configurations."""
 
-    extension_map: dict[str, str]
     rules: list[UnifiedRule]
     validators: dict[str, ValidatorConfig]
     assay_type_rules: list[AssayTypeRule]
     illumina_instruments: list[IlluminaInstrument]
     reference_contig_lengths: dict[str, dict[str, int]]
 
-    # Compound extensions in priority order (longest first)
-    COMPOUND_EXTENSIONS: ClassVar[list[str]] = [
-        ".g.vcf.gz",  # Must come before .vcf.gz
-        ".gvcf.gz",
-        ".vcf.gz",
-        ".fastq.gz",
-        ".fq.gz",
-        ".fasta.gz",
-        ".fa.gz",
-        ".bed.gz",
-        ".sam.gz",
-        ".rgfa.gz",
-        ".gfa.gz",
-        ".fast5.tar.gz",  # Must come before .tar.gz
-        ".fast5.tar",  # Must come before .tar
-        ".tar.gz",
-        ".mtx.gz",
-    ]
+    # The extension vocabulary and the parse now live in file_name.py as a pure,
+    # instance-free leaf (#252). These are thin delegators so existing callers
+    # (rule_engine, header_classifier, scripts, tests) are unchanged; they retire
+    # as #246/#245 migrate their sites to the file_name API.
+    COMPOUND_EXTENSIONS: ClassVar[tuple[str, ...]] = file_name.COMPOUND_EXTENSIONS
+    WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = file_name.WRAPPER_SUFFIXES
+    EXTENSION_TO_FORMAT: ClassVar[dict[str, Format]] = file_name.EXTENSION_TO_FORMAT
 
-    # Compression and archive suffixes — "wrappers" around the format, not the
-    # format itself (see FileName). Since #244 these do the real work of the
-    # extension/format split: parse_file_name splits a recognized extension token
-    # into its clean core suffix and these trailing wrappers (".vcf.gz" -> ".vcf"
-    # + (".gz",)). Ordered longest-first: the split/peel loop takes the first
-    # `endswith` match, so `.bgz` must precede `.gz` or a `.bgz` token would
-    # mis-peel as `.gz` and leave a dangling `b` on the core.
-    WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = (".bgz", ".bz2", ".zip", ".tar", ".gz", ".xz")
+    @property
+    def extension_map(self) -> Mapping[str, str]:
+        """Extension -> file-type category. In-code since #252 (was YAML-loaded).
 
-    # Known core extension -> canonical file Format (#243). Keyed on the clean
-    # core suffix the parse now yields (#244): the compression/archive variants
-    # (.vcf.gz, .fastq.gz, .fast5.tar.gz, ...) collapse to their core at parse
-    # time, so a single core key (.vcf) covers every compressed spelling. Formats
-    # the size-threshold assay rules must tell apart stay distinct (.bam vs
-    # .cram). Seeded with the core sequencing formats; core extensions with no
-    # clean canonical collapse are absent, so their format is None until a
-    # migrating group adds its identity (see Format). Keys are lower-case:
-    # extension_to_format lowers its argument before the lookup.
-    EXTENSION_TO_FORMAT: ClassVar[dict[str, Format]] = {
-        ".bam": Format.BAM,
-        ".cram": Format.CRAM,
-        ".sam": Format.SAM,
-        ".vcf": Format.VCF,
-        ".bcf": Format.BCF,
-        ".gvcf": Format.GVCF,
-        ".g.vcf": Format.GVCF,
-        ".fastq": Format.FASTQ,
-        ".fq": Format.FASTQ,
-        ".fasta": Format.FASTA,
-        ".fa": Format.FASTA,
-        ".bed": Format.BED,
-        ".gfa": Format.GFA,
-        ".rgfa": Format.RGFA,
-    }
+        Returned as a read-only view of the shared module constant
+        ``file_name.EXTENSION_MAP`` — before #252 each ``load()`` built its own dict
+        from YAML, so exposing the mutable global directly would let a caller
+        corrupt it process-wide via ``rules.extension_map[...]``.
+        """
+        return MappingProxyType(file_name.EXTENSION_MAP)
+
+    @property
+    def core_extensions(self) -> frozenset[str]:
+        """The producible core extensions (#249), now the ``file_name`` constant."""
+        return file_name.CORE_EXTENSIONS
 
     def get_rules_by_scope(self, scope: str) -> list[UnifiedRule]:
         """Get all rules for a given scope."""
@@ -160,162 +131,22 @@ class UnifiedRules:
         """Get the file type for an extension."""
         return self.extension_map.get(extension.lower())
 
-    @cached_property
-    def core_extensions(self) -> frozenset[str]:
-        """The explicit set of producible core extensions (#249).
-
-        The single source of truth for which clean core suffixes the parse can
-        yield — previously only implicit, emergent from ``COMPOUND_EXTENSIONS`` and
-        the ``extension_map`` gate. Derived from every in-code source of core
-        truth, so it cannot drift from them: every compound extension with its
-        wrappers stripped (which is where the multi-dot core ``.g.vcf`` comes from
-        — ``peel(".g.vcf.gz")``), the single-dot ``extension_map`` keys (the simple
-        extensions), and the ``EXTENSION_TO_FORMAT`` keys (a format-mapped
-        extension is a producible core by definition, so unioning it keeps ``.g.vcf``
-        producible even if its compressed spelling were removed). Lower-cased, since
-        recognition matches against a lower-cased name. Consumed by
-        ``parse_file_name`` (the single-dot recognition lookup and, via
-        :attr:`_multi_dot_cores`, the multi-dot scan) and pinned by the
-        rule-vocabulary drift tests.
-        """
-        cores = {self._peel_wrappers(c, keep_last=True)[0] for c in self.COMPOUND_EXTENSIONS}
-        cores |= {k.lower() for k in self.extension_map if k.count(".") == 1}
-        cores |= {k.lower() for k in self.EXTENSION_TO_FORMAT}
-        return frozenset(cores)
-
-    @cached_property
-    def _multi_dot_cores(self) -> tuple[str, ...]:
-        """The core extensions with more than one dot (e.g. ``.g.vcf``), longest-
-        first. These are the only cores a last-dot-token lookup cannot recognize,
-        so ``parse_file_name`` scans just these before the O(1) single-dot lookup;
-        longest-first lets a multi-dot core win over a shorter multi-dot tail."""
-        return tuple(sorted((c for c in self.core_extensions if c.count(".") > 1), key=len, reverse=True))
-
     def extension_to_format(self, extension: str | None) -> Format | None:
-        """Derive the canonical :class:`Format` for an extension (#243).
-
-        The stage-1 derivation — from the extension alone, no I/O. Returns
-        ``None`` when the extension is ``None`` or maps to no seeded format
-        (``EXTENSION_TO_FORMAT``), so an unmapped or absent extension leaves the
-        format honestly unresolved rather than guessed.
-        """
-        if extension is None:
-            return None
-        return self.EXTENSION_TO_FORMAT.get(extension.lower())
+        """Delegate to the pure ``file_name.extension_to_format`` (#252)."""
+        return file_name.extension_to_format(extension)
 
     def extract_extension(self, filename: str) -> str:
-        """Extract the file extension, handling compound extensions."""
-        filename_lower = filename.lower()
+        """Delegate to the pure ``file_name.extract_extension`` (#252)."""
+        return file_name.extract_extension(filename)
 
-        # Check compound extensions first (in priority order)
-        for ext in self.COMPOUND_EXTENSIONS:
-            if filename_lower.endswith(ext):
-                return ext
-
-        # Fall back to simple extension
-        if "." in filename:
-            return "." + filename.rsplit(".", 1)[-1].lower()
-        return ""
-
-    @classmethod
-    def _peel_wrappers(cls, token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]]:
-        """Peel trailing compression/archive ``WRAPPER_SUFFIXES`` off ``token``.
-
-        Peels longest-first and returns ``(remainder, wrappers)`` with the
-        wrappers in name order. ``keep_last`` chooses between the two uses:
-
-        - ``keep_last=True`` splits a *recognized* extension token into its core
-          and wrappers, stopping before the last remaining token so an archive
-          extension keeps its own suffix: ``.vcf.gz`` -> (``.vcf``, ``(".gz",)``);
-          ``.fast5.tar.gz`` -> (``.fast5``, ``(".tar", ".gz")``); ``.tar.gz`` ->
-          (``.tar``, ``(".gz",)``); ``.tar`` -> (``.tar``, ``()``).
-        - ``keep_last=False`` peels *every* trailing wrapper off an unrecognized
-          name, where no core is claimed and the remainder is only used to trim
-          the stem: ``notes.txt.gz`` -> (``notes.txt``, ``(".gz",)``).
-        """
-        rest = token
-        wrappers: list[str] = []
-        while True:
-            for suffix in cls.WRAPPER_SUFFIXES:
-                if rest.endswith(suffix) and not (keep_last and rest == suffix):
-                    wrappers.append(suffix)
-                    rest = rest[: -len(suffix)]
-                    break
-            else:
-                break
-        wrappers.reverse()  # name order: ".tar.gz" -> (".tar", ".gz")
-        return rest, tuple(wrappers)
+    @staticmethod
+    def _peel_wrappers(token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]]:
+        """Delegate to the pure ``file_name._peel_wrappers`` (#252)."""
+        return file_name._peel_wrappers(token, keep_last=keep_last)
 
     def parse_file_name(self, filename: str) -> "FileName":
-        """Parse ``filename`` into a :class:`FileName` against this vocabulary.
-
-        The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
-        ``core_extensions`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
-        rules rather than on the pure ``FileName`` data type.
-
-        Recognition is a wrapper-bearing ``COMPOUND_EXTENSIONS`` match, else the
-        known core the name ends with — the multi-dot cores scanned longest-first,
-        then an O(1) lookup of the single-dot last token (#249); an unknown suffix
-        yields ``None`` here, where ``extract_extension`` returns the junk last-dot
-        suffix (which
-        matched no rule anyway). #244 made the *representation* a clean core
-        ``extension`` (``.vcf``) plus the ``wrappers`` it bundled (``(".gz",)``),
-        not the whole compound (``.vcf.gz``); #249 made the core set explicit, which
-        also lets a multi-dot core be recognized in its uncompressed spelling
-        (``sample.g.vcf`` → ``.g.vcf``, matching the compressed ``.g.vcf.gz`` form).
-        ``format`` is the stage-1 derivation from the core extension
-        (``extension_to_format``), with ``format_source`` recording the provenance
-        — set together or both ``None`` (#243).
-        """
-        lower = filename.lower()
-
-        recognized = None
-        for ext in self.COMPOUND_EXTENSIONS:
-            if lower.endswith(ext):
-                recognized = ext
-                break
-        if recognized is None:
-            # No wrapper-bearing compound matched — recognize the known core the
-            # name ends with (#249). Multi-dot cores (".g.vcf") are scanned first,
-            # longest-first, so one wins over its shorter tail (".vcf"); the common
-            # single-dot case is then an O(1) lookup of the last dot-token. Every
-            # core's leading dot makes both a genuine extension-boundary match, so
-            # the single-dot path is equivalent to the old extension_map gate and
-            # only the multi-dot scan is new (an uncompressed ".g.vcf").
-            for core in self._multi_dot_cores:
-                if lower.endswith(core):
-                    recognized = core
-                    break
-            else:
-                if "." in filename:
-                    simple = "." + filename.rsplit(".", 1)[-1].lower()
-                    if simple in self.core_extensions:
-                        recognized = simple
-
-        if recognized is not None:
-            # Split the recognized token into its clean core and wrappers (#244).
-            # The stem drops the whole recognized token (core + wrappers), so it
-            # carries only the name's tokens — unchanged from before the split.
-            extension, wrappers = self._peel_wrappers(recognized, keep_last=True)
-            stem = filename[: -len(recognized)]
-        else:
-            # No known extension: peel every trailing wrapper as informational
-            # advice and strip them from the stem, but claim no core extension.
-            extension = None
-            _, wrappers = self._peel_wrappers(lower, keep_last=False)
-            wrapper_len = sum(len(w) for w in wrappers)
-            stem = filename[:-wrapper_len] if wrapper_len else filename
-
-        fmt = self.extension_to_format(extension)
-        format_source = FormatSource.EXTENSION if fmt is not None else None
-        return FileName(
-            raw=filename,
-            stem=stem,
-            extension=extension,
-            wrappers=wrappers,
-            format=fmt,
-            format_source=format_source,
-        )
+        """Delegate to the pure ``FileName.parse`` (#252)."""
+        return FileName.parse(filename)
 
 
 class RuleLoader:
@@ -425,38 +256,36 @@ class RuleLoader:
             ) from e
         docs = list(yaml.safe_load_all(text))
 
-        if len(docs) < 2:
-            raise ValueError("Rules file must have at least 2 YAML documents")
+        if len(docs) < 1:
+            raise ValueError("Rules file must have at least 1 YAML document")
 
-        # First document: extension_map
-        extension_map = docs[0].get("extension_map", {})
-
-        # Second document: rules
-        rules_data = docs[1].get("rules", [])
+        # The extension_map is no longer a YAML document — it is in-code in
+        # file_name.py since #252, so the rules doc is now first.
+        # First document: rules
+        rules_data = docs[0].get("rules", [])
         rules = self._parse_rules(rules_data)
 
-        # Third document: validators (optional)
+        # Second document: validators (optional)
         validators = {}
-        if len(docs) > 2 and docs[2]:
-            validators = self._parse_validators(docs[2].get("validators", {}))
+        if len(docs) > 1 and docs[1]:
+            validators = self._parse_validators(docs[1].get("validators", {}))
 
-        # Fourth document: assay type rules (optional)
+        # Third document: assay type rules (optional)
         assay_type_rules = []
-        if len(docs) > 3 and docs[3]:
-            assay_type_rules = self._parse_assay_type_rules(docs[3].get("assay_type_rules", []))
+        if len(docs) > 2 and docs[2]:
+            assay_type_rules = self._parse_assay_type_rules(docs[2].get("assay_type_rules", []))
 
-        # Fifth document: illumina instruments (optional)
+        # Fourth document: illumina instruments (optional)
         illumina_instruments = []
-        if len(docs) > 4 and docs[4]:
-            illumina_instruments = self._parse_illumina_instruments(docs[4].get("illumina_instruments", []))
+        if len(docs) > 3 and docs[3]:
+            illumina_instruments = self._parse_illumina_instruments(docs[3].get("illumina_instruments", []))
 
-        # Sixth document: reference contig lengths (optional)
+        # Fifth document: reference contig lengths (optional)
         reference_contig_lengths = {}
-        if len(docs) > 5 and docs[5]:
-            reference_contig_lengths = docs[5].get("reference_contig_lengths", {})
+        if len(docs) > 4 and docs[4]:
+            reference_contig_lengths = docs[4].get("reference_contig_lengths", {})
 
         self._rules = UnifiedRules(
-            extension_map=extension_map,
             rules=rules,
             validators=validators,
             assay_type_rules=assay_type_rules,

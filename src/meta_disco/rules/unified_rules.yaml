@@ -56,12 +56,13 @@
 # ------------------------------------
 # This file contains multiple YAML documents separated by '---':
 #
-# 1. extension_map: Maps extensions to file type categories
-# 2. rules: The classification rules (main content)
-# 3. validators: Python validator configurations for complex logic
-# 4. assay_type_rules: Rules for inferring WGS/WES/RNA-seq from signals
-# 5. illumina_instruments: Instrument ID prefix to model mapping
-# 6. reference_contig_lengths: Chromosome sizes for reference detection
+# (The extension_map — extension -> file-type category — moved in-code to
+#  meta_disco.file_name in #252, so it is no longer a document here.)
+# 1. rules: The classification rules (main content)
+# 2. validators: Python validator configurations for complex logic
+# 3. assay_type_rules: Rules for inferring WGS/WES/RNA-seq from signals
+# 4. illumina_instruments: Instrument ID prefix to model mapping
+# 5. reference_contig_lengths: Chromosome sizes for reference detection
 #
 #
 # RULE SCHEMA
@@ -80,7 +81,7 @@
 # - extensions: list of clean core file extensions to match (e.g., [".bam",
 #     ".cram"]). Compression/archive is split off into wrappers at parse time
 #     (#244), so a core matches every compressed spelling the parser recognizes
-#     — those enumerated in COMPOUND_EXTENSIONS (rule_loader.py): ".vcf" matches
+#     — those enumerated in COMPOUND_EXTENSIONS (meta_disco.file_name): ".vcf" matches
 #     both sample.vcf and sample.vcf.gz (never list ".vcf.gz" here), but an
 #     unlisted spelling like sample.bam.gz is not recognized and matches nothing.
 #     gVCF keeps its
@@ -89,7 +90,7 @@
 # - format: canonical file format to match (e.g., FASTA) — collapses the
 #     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
 #     to a single identity, so key on this instead of re-listing extensions
-#     (see EXTENSION_TO_FORMAT in rule_loader.py; issue #243)
+#     (see EXTENSION_TO_FORMAT in meta_disco.file_name; issue #243)
 # - filename_pattern: regex pattern for filename (case-insensitive)
 # - dataset_pattern: regex pattern for dataset title
 # - file_format: required format (.bam, .cram, etc)
@@ -143,114 +144,6 @@
 # 4. scripts/classify_images.py (image extensions)
 # 5. scripts/classify_auxiliary_genomic.py (FAST5/POD5/PLINK)
 
-# =============================================================================
-# EXTENSION MAP
-# =============================================================================
-# Maps file extensions to file type categories for rule chain selection
-
-extension_map:
-  # Alignments
-  ".bam": alignment
-  ".cram": alignment
-  ".sam": alignment
-  ".sam.gz": alignment
-
-  # Variants
-  ".vcf": variant
-  ".vcf.gz": variant
-  ".bcf": variant
-  ".gvcf": variant
-  ".gvcf.gz": variant
-  ".g.vcf.gz": variant
-
-  # Sequencing reads
-  ".fastq": reads
-  ".fq": reads
-  ".fastq.gz": reads
-  ".fq.gz": reads
-
-  # Genomic intervals/regions
-  ".bed": intervals
-  ".bed.gz": intervals
-  ".narrowpeak": intervals
-  ".broadpeak": intervals
-
-  # Signal tracks
-  ".bigwig": signal
-  ".bw": signal
-  ".bigWig": signal
-  ".bedGraph": signal
-
-  # Indices (inherit from parent via classify_index_files.py)
-  ".bai": index
-  ".crai": index
-  ".tbi": index
-  ".csi": index
-  ".fai": index
-  ".idx": index
-  ".pbi": index
-
-  # Checksums
-  ".md5": checksum
-
-  # Genotyping (PLINK)
-  ".pgen": genotype_plink
-  ".pvar": genotype_plink
-  ".psam": genotype_plink
-
-  # Single-cell matrices
-  ".h5ad": single_cell_matrix
-  ".loom": single_cell_matrix
-  ".mtx": single_cell_matrix
-  ".mtx.gz": single_cell_matrix
-
-  # Methylation arrays
-  ".idat": methylation_array
-
-  # Nanopore raw signal
-  ".fast5": nanopore
-  ".pod5": nanopore
-  ".fast5.tar": nanopore
-  ".fast5.tar.gz": nanopore
-
-  # Images
-  ".svs": histology_image
-  ".tiff": image
-  ".tif": image
-  ".png": image
-  ".jpg": image
-
-  # Sequences (FASTA)
-  ".fasta": sequence
-  ".fa": sequence
-  ".fasta.gz": sequence
-  ".fa.gz": sequence
-
-  # Pangenome / sequence graphs (GFA/rGFA/GBZ/vg + graph indices)
-  ".gfa": pangenome
-  ".gfa.gz": pangenome
-  ".rgfa": pangenome
-  ".rgfa.gz": pangenome
-  ".gbz": pangenome
-  ".vg": pangenome
-  ".gbwt": pangenome
-  ".xg": pangenome
-
-  # Archives (need special handling)
-  ".tar": archive
-  ".tar.gz": archive
-  ".zip": archive
-
-  # Transcript quantification (Salmon/Sailfish quant.sf)
-  ".sf": quantification
-
-  # Text/tabular (ambiguous)
-  ".txt": text_ambiguous
-  ".tsv": text_ambiguous
-  ".csv": text_ambiguous
-  ".log": log_file
-
----
 # =============================================================================
 # UNIFIED RULES
 # =============================================================================
