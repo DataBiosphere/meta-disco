@@ -244,7 +244,7 @@ def _peel_wrappers(token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]
 # truth for which clean core suffixes the parse can yield. Derived from every
 # in-code source of core truth, so it cannot drift: every compound extension
 # wrapper-stripped (which is where the multi-dot core ``.g.vcf`` comes from —
-# ``peel(".g.vcf.gz")``), the single-dot ``EXTENSION_MAP`` keys, and the
+# ``_peel_wrappers(".g.vcf.gz")``), the single-dot ``EXTENSION_MAP`` keys, and the
 # ``EXTENSION_TO_FORMAT`` keys (a format-mapped extension is a producible core by
 # definition). Lower-cased, since recognition matches a lower-cased name.
 CORE_EXTENSIONS: frozenset[str] = frozenset(

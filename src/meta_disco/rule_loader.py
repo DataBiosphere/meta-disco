@@ -13,6 +13,11 @@ from . import file_name
 from .file_name import FileName, Format
 from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
 
+# A read-only view of the shared in-code extension_map, built once — the
+# UnifiedRules.extension_map property returns this rather than allocating a new
+# proxy per access (#252).
+_EXTENSION_MAP_VIEW: Mapping[str, str] = MappingProxyType(file_name.EXTENSION_MAP)
+
 
 def default_rules_resource():
     """The bundled ``unified_rules.yaml``, as a package-data resource.
@@ -106,9 +111,10 @@ class UnifiedRules:
         Returned as a read-only view of the shared module constant
         ``file_name.EXTENSION_MAP`` — before #252 each ``load()`` built its own dict
         from YAML, so exposing the mutable global directly would let a caller
-        corrupt it process-wide via ``rules.extension_map[...]``.
+        corrupt it process-wide via ``rules.extension_map[...]``. The proxy is built
+        once at module load (``_EXTENSION_MAP_VIEW``), not per access.
         """
-        return MappingProxyType(file_name.EXTENSION_MAP)
+        return _EXTENSION_MAP_VIEW
 
     @property
     def core_extensions(self) -> frozenset[str]:
@@ -262,9 +268,15 @@ class RuleLoader:
             )
 
         # The extension_map is no longer a YAML document — it is in-code in
-        # file_name.py since #252, so the rules doc is now first.
-        # First document: rules
-        rules_data = docs[0].get("rules", [])
+        # file_name.py since #252, so the rules doc is now first. Require a real
+        # `rules` list so a mapping without it (e.g. a pre-#252 extension_map doc
+        # left first) fails fast rather than silently loading zero rules, and a
+        # null/non-list `rules:` raises here rather than crashing _parse_rules.
+        rules_data = docs[0].get("rules")
+        if not isinstance(rules_data, list):
+            raise ValueError(
+                f"Rules file's first document must contain a `rules` list, got {type(rules_data).__name__}"
+            )
         rules = self._parse_rules(rules_data)
 
         # Second document: validators (optional)
