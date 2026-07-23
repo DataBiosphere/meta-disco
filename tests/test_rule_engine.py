@@ -239,9 +239,11 @@ class TestFormatMatching:
 
 class TestWrapperSplitMatching:
     """#244: rule `extensions:` are the clean core suffix; compression/archive is
-    split into wrappers at parse time. A core matches both the compressed and
-    uncompressed spelling, so classification is unchanged by whether a file is
-    gzipped."""
+    split into wrappers at parse time. A core matches the uncompressed spelling
+    and every compressed spelling the parser recognizes (those in
+    COMPOUND_EXTENSIONS), so classification is unchanged by whether such a file is
+    gzipped — an unlisted spelling like ".bam.gz" is not recognized and matches
+    nothing."""
 
     @pytest.mark.parametrize("name", ["cohort.vcf.gz", "reads.fastq.gz", "reads.fq.gz"])
     def test_core_keyed_rule_matches_compressed_and_uncompressed(self, engine, name):
@@ -269,6 +271,16 @@ class TestWrapperSplitMatching:
         assert ext_info.file_format == ".fastq"
         assert ext_info.format is Format.FASTQ
         assert result.data_type == "reads"
+
+    def test_known_core_file_format_fallback_not_collapsed(self, engine):
+        """A header-only fallback that is already a known core (".g.vcf") is kept,
+        not re-parsed — re-parsing would collapse it to ".vcf" via the simple-suffix
+        gate and derive Format.VCF, contradicting EXTENSION_TO_FORMAT[".g.vcf"]=GVCF
+        (Copilot review, #244)."""
+        ext_info = ExtendedFileInfo(filename="", file_format=".g.vcf")
+        engine.classify_extended(ext_info)
+        assert ext_info.file_format == ".g.vcf"
+        assert ext_info.format is Format.GVCF
 
 
 class TestThenStatus:
