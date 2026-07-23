@@ -45,8 +45,8 @@ def classify_images(metadata_path: Path, output_path: Path):
             continue
 
         # Classify using RuleEngine
-        file_info = FileInfo(
-            filename=name,
+        file_info = FileInfo.from_filename(
+            name,
             file_size=f.get("file_size"),
             dataset_title=f.get("dataset_title"),
         )

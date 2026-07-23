@@ -36,6 +36,8 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any
 
+from .file_name import FileName
+
 
 def _coerce_identity(value: Any) -> str:
     """Stringify a drifted identity value for echo; null (``None``) becomes ``""``.
@@ -62,6 +64,12 @@ class ClassifierRecord:
     either drifted still reaches the valid stream. They are echoed into the output
     row untouched — typed ``Any`` and passed through as-is, exactly as the raw-dict
     path did.
+
+    ``name`` is the raw ``file_name`` parsed into a :class:`FileName` once, here at
+    the load boundary (epic #242), and threaded through the fetch/classify path so
+    nothing downstream re-parses. The raw ``file_name`` string is kept alongside it:
+    it is the identity echoed into the output row and the shared attribute the
+    ``InvalidRecord`` stream also exposes (``name`` is a valid-stream-only fact).
     """
 
     file_name: str
@@ -70,6 +78,7 @@ class ClassifierRecord:
     file_md5sum: str
     dataset_title: Any
     entry_id: Any
+    name: FileName
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -81,6 +90,9 @@ class ClassifierRecord:
         input to defend against (CLAUDE.md error-handling philosophy). A ``KeyError``
         or wrong type surfacing here means the split routed a record it should not
         have.
+
+        ``file_name`` is parsed into a :class:`FileName` exactly once here — the
+        single parse site on the pipeline path (#242).
         """
         return cls(
             file_name=record["file_name"],
@@ -89,6 +101,7 @@ class ClassifierRecord:
             file_md5sum=record["file_md5sum"],
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
+            name=FileName.parse(record["file_name"]),
         )
 
 

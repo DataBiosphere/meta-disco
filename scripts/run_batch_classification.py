@@ -37,8 +37,8 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
         if (i + 1) % 10000 == 0:
             print(f"\rClassifying... {i + 1:,}/{total:,} ({100 * (i + 1) / total:.1f}%)", end="", flush=True)
 
-        file_info = FileInfo(
-            filename=file_data.get("file_name", ""),
+        file_info = FileInfo.from_filename(
+            file_data.get("file_name", ""),
             file_size=file_data.get("file_size"),
             dataset_title=file_data.get("dataset_title"),
         )

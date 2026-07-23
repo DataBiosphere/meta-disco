@@ -49,8 +49,8 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             continue
 
         # Classify using RuleEngine
-        file_info = FileInfo(
-            filename=name,
+        file_info = FileInfo.from_filename(
+            name,
             file_size=f.get("file_size"),
             dataset_title=dataset_title,
         )

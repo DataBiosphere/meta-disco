@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from .file_name import FileName
+
 # Classification status constants. NOT_APPLICABLE / NOT_CLASSIFIED are today
 # smuggled into a field's `value`; the sentinel→status migration (epic #116) is
 # splitting them into a dedicated `status` field. CLASSIFIED is the status when a
@@ -176,12 +178,30 @@ def field_label(record: dict, field_name: str) -> str | None:
 
 @dataclass
 class FileInfo:
-    """Input file information for classification."""
+    """Input file information for classification.
 
-    filename: str
+    Carries the filename as a parsed :class:`FileName` fact rather than a raw string
+    (epic #242): the name is parsed once, at whatever boundary constructs the
+    ``FileInfo``, and everything downstream reads the parsed attributes instead of
+    re-deriving the extension. Build one from a raw filename via
+    :meth:`from_filename`, which is the single parse site on this path.
+    """
+
+    name: FileName = FileName.EMPTY
     file_size: int | None = None
     dataset_title: str | None = None
     # Future: bam_header, vcf_header for Tier 5
+
+    @classmethod
+    def from_filename(cls, filename: str, **kwargs) -> "FileInfo":
+        """Build a ``FileInfo`` from a raw filename string, parsing it once.
+
+        The entry-point convenience for callers that hold a raw name (scripts, the
+        engine's single-file conveniences, tests): it funnels the raw string through
+        ``FileName.parse`` so the parse happens exactly once here, honoring the
+        "parse once" invariant of epic #242.
+        """
+        return cls(name=FileName.parse(filename), **kwargs)
 
 
 @dataclass

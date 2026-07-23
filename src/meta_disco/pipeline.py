@@ -15,6 +15,7 @@ from threading import Lock
 from typing import NamedTuple, TypeGuard
 
 from .fetchers import FetchError
+from .file_name import FileName
 from .header_classifier import classify_without_content
 from .metadata_schema import (
     classification_blocking_reasons,
@@ -100,6 +101,7 @@ def _fetch_and_classify(
     md5sum: str,
     *,
     file_name: str,
+    name: FileName,
     file_size: int | None,
     file_format: str | None,
     is_gzipped: bool,
@@ -119,6 +121,10 @@ def _fetch_and_classify(
     propagates. Shared by ``ClassifyPipeline.classify_single`` and
     ``_process_single_record`` so the fallback cannot drift between the single-file
     and batch paths.
+
+    ``file_name`` (the raw string) goes to the fetcher and the progress line; ``name``
+    (the parsed :class:`FileName`, #242) goes to the classifiers, which read the
+    extension and filename tokens from it without re-parsing.
     """
     try:
         raw_data = config.fetcher(
@@ -132,7 +138,7 @@ def _fetch_and_classify(
         print(f"Content unreadable, classifying from filename — {file_name or md5sum}: {e.reason}")
         return classify_without_content(
             e.reason,
-            file_name=file_name,
+            name=name,
             file_size=file_size,
             file_format=file_format,
             allowed_extensions=config.extensions,
@@ -141,7 +147,7 @@ def _fetch_and_classify(
 
     return config.classifier(
         raw_data,
-        file_name=file_name,
+        name=name,
         file_size=file_size,
         file_format=file_format,
     ), False
@@ -297,6 +303,7 @@ class ClassifyPipeline:
             evidence_dir,
             md5sum,
             file_name=file_name,
+            name=FileName.parse(file_name),
             file_size=file_size,
             file_format=file_format,
             is_gzipped=is_gzipped,
@@ -455,6 +462,7 @@ class ClassifyPipeline:
             self.evidence_dir,
             item.file_md5sum,
             file_name=item.file_name,
+            name=item.name,
             file_size=item.file_size,
             file_format=item.file_format,
             is_gzipped=is_gzipped,

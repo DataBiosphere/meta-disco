@@ -55,8 +55,8 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         if not name or name in already:
             continue
 
-        file_info = FileInfo(
-            filename=name,
+        file_info = FileInfo.from_filename(
+            name,
             file_size=rec.get("file_size"),
             dataset_title=rec.get("dataset_title", ""),
         )

@@ -23,6 +23,7 @@ from meta_disco.fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
 )
+from meta_disco.file_name import FileName
 from meta_disco.header_classifier import (
     classify_from_fasta_header,
     classify_from_fastq_header,
@@ -89,7 +90,7 @@ def classify_sequencing_data(
                 )
                 classifications = classify_from_header(
                     raw_data,
-                    file_name=fn,
+                    name=FileName.parse(fn),
                     file_size=file_size,
                     file_format=".cram" if fn.endswith(".cram") else ".bam",
                 )
@@ -107,7 +108,7 @@ def classify_sequencing_data(
                 )
                 classifications = classify_from_fastq_header(
                     raw_data,
-                    file_name=fn,
+                    name=FileName.parse(fn),
                     file_size=file_size,
                 )
             except FetchError:
@@ -115,7 +116,7 @@ def classify_sequencing_data(
         else:
             # FAST5, POD5, etc. — classify from filename only
             skipped += 1
-            result = engine.classify_extended(FileInfo(filename=fn, file_size=file_size))
+            result = engine.classify_extended(FileInfo.from_filename(fn, file_size=file_size))
             classifications = result.to_output_dict()
 
         if classifications:
@@ -174,7 +175,7 @@ def classify_assemblies(
 
         classifications = classify_from_fasta_header(
             raw_data,
-            file_name=fn,
+            name=FileName.parse(fn),
             file_size=file_size,
         )
         success += 1
@@ -207,7 +208,7 @@ def classify_filename_only(
         if not fn:
             continue
         file_size = rec.get("fileSize")
-        result = engine.classify_extended(FileInfo(filename=fn, file_size=file_size))
+        result = engine.classify_extended(FileInfo.from_filename(fn, file_size=file_size))
         results.append(
             {
                 "file_name": fn,

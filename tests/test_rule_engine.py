@@ -2,7 +2,7 @@
 
 import pytest
 
-from meta_disco.file_name import Format
+from meta_disco.file_name import FileName, Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -58,38 +58,38 @@ class TestRuleMatching:
 
     def test_alignment_rnaseq_filename(self, engine):
         """RNA-seq indicators in filename should set transcriptomic modality."""
-        result = engine.classify(FileInfo(filename="sample_RNA_aligned.bam"))
+        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam"))
         assert result.data_modality == "transcriptomic.bulk"
         assert "alignment_rnaseq_filename" in result.rules_matched
 
     def test_alignment_wgs_filename(self, engine):
         """WGS indicators should set genomic modality with WGS assay_type."""
-        result = engine.classify(FileInfo(filename="sample_WGS_aligned.bam"))
+        result = engine.classify(FileInfo.from_filename("sample_WGS_aligned.bam"))
         assert result.data_modality == "genomic"
 
     def test_alignment_ref_grch38(self, engine):
         """hg38/GRCh38 in filename should set reference assembly."""
-        result = engine.classify(FileInfo(filename="sample.hg38.cram"))
+        result = engine.classify(FileInfo.from_filename("sample.hg38.cram"))
         assert result.reference_assembly == "GRCh38"
 
     def test_alignment_ref_grch37(self, engine):
         """hg19/GRCh37 in filename should set reference assembly."""
-        result = engine.classify(FileInfo(filename="sample.hg19.bam"))
+        result = engine.classify(FileInfo.from_filename("sample.hg19.bam"))
         assert result.reference_assembly == "GRCh37"
 
     def test_alignment_ref_chm13(self, engine):
         """CHM13/T2T in filename should set reference assembly."""
-        result = engine.classify(FileInfo(filename="sample.chm13.cram"))
+        result = engine.classify(FileInfo.from_filename("sample.chm13.cram"))
         assert result.reference_assembly == "CHM13"
 
     def test_rna_filename_sets_modality_regardless_of_size(self, engine):
         """RNA filename indicator should set transcriptomic modality."""
-        result = engine.classify(FileInfo(filename="sample_RNA_aligned.bam", file_size=60_000_000_000))
+        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_star_aligner_indicates_rnaseq(self, engine):
         """STAR aligner output pattern should indicate RNA-seq."""
-        result = engine.classify(FileInfo(filename="sample.Aligned.sortedByCoord.out.bam"))
+        result = engine.classify(FileInfo.from_filename("sample.Aligned.sortedByCoord.out.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
 
@@ -98,17 +98,17 @@ class TestVariantFiles:
 
     def test_vcf_default_genomic(self, engine):
         """VCF files should default to genomic."""
-        result = engine.classify(FileInfo(filename="sample.vcf"))
+        result = engine.classify(FileInfo.from_filename("sample.vcf"))
         assert result.data_modality == "genomic"
 
     def test_vcf_gz_default_genomic(self, engine):
         """Compressed VCF files should default to genomic."""
-        result = engine.classify(FileInfo(filename="sample.vcf.gz"))
+        result = engine.classify(FileInfo.from_filename("sample.vcf.gz"))
         assert result.data_modality == "genomic"
 
     def test_vcf_with_ref_grch38(self, engine):
         """VCF with reference in filename."""
-        result = engine.classify(FileInfo(filename="NA19189.chr2.hg38.vcf.gz"))
+        result = engine.classify(FileInfo.from_filename("NA19189.chr2.hg38.vcf.gz"))
         assert result.data_modality == "genomic"
         assert result.reference_assembly == "GRCh38"
 
@@ -119,7 +119,7 @@ class TestVariantFiles:
         tier-3 ``vcf_contig_grch38`` rule reading the parsed assembly subfield.
         """
         ext_info = ExtendedFileInfo(
-            filename="sample.vcf.gz",
+            name=FileName.parse("sample.vcf.gz"),
             vcf_header="##contig=<ID=chr1,length=248956422,assembly=GRCh38>",
         )
         result = engine.classify_extended(ext_info, include_tier3=True)
@@ -143,7 +143,7 @@ class TestVariantFiles:
     def test_vcf_contig_assembly_aliases_classify(self, engine, assembly, expected):
         """##contig assembly aliases classify to the same set as ##reference (#221)."""
         ext_info = ExtendedFileInfo(
-            filename="sample.vcf.gz",
+            name=FileName.parse("sample.vcf.gz"),
             vcf_header=f"##contig=<ID=chr1,length=248956422,assembly={assembly}>",
         )
         result = engine.classify_extended(ext_info, include_tier3=True)
@@ -168,7 +168,7 @@ class TestVariantFiles:
         ],
     )
     def test_vcf_gca_accession_version_maps_to_correct_assembly(self, engine, header_line, expected):
-        ext_info = ExtendedFileInfo(filename="sample.vcf.gz", vcf_header=header_line)
+        ext_info = ExtendedFileInfo(name=FileName.parse("sample.vcf.gz"), vcf_header=header_line)
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
 
@@ -182,26 +182,26 @@ class TestFormatMatching:
     def test_format_keyed_rule_matches_every_spelling(self, engine, name):
         """One `format: FASTA` rule fires for every FASTA spelling/compression
         variant — the collapse the extension list used to enumerate by hand."""
-        result = engine.classify_extended(FileInfo(filename=name))
+        result = engine.classify_extended(FileInfo.from_filename(name))
         assert result.data_type == "sequence"
 
     def test_format_keyed_filename_rule_still_fires(self, engine):
         """A tier-2 rule that pairs `format: FASTA` with a filename_pattern still
         matches on both conditions (fasta_assembly_filename)."""
-        result = engine.classify_extended(FileInfo(filename="HG002.hifiasm.bp.p_ctg.fa"))
+        result = engine.classify_extended(FileInfo.from_filename("HG002.hifiasm.bp.p_ctg.fa"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
 
     def test_format_keyed_rule_skipped_for_other_formats(self, engine):
         """A format-only rule is considered for every file but must not fire when
         the format differs — a BAM is not classified as FASTA sequence."""
-        result = engine.classify_extended(FileInfo(filename="sample.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam"))
         assert result.data_type != "sequence"
 
     def test_engine_derives_format_from_settled_extension(self, engine):
         """classify_extended sets file_info.format from the extension it settles
         on, agreeing with file_format even on a header-only (name-less) call."""
-        ext_info = ExtendedFileInfo(filename="", file_format=".cram")
+        ext_info = ExtendedFileInfo(name=FileName.parse(""), file_format=".cram")
         engine.classify_extended(ext_info)
         assert ext_info.format is Format.CRAM
 
@@ -211,7 +211,7 @@ class TestFormatMatching:
         silently skipped — the guard keys on presence, not truthiness (#243)."""
         from meta_disco.rule_loader import UnifiedRule
 
-        fasta = ExtendedFileInfo(filename="genome.fa", format=Format.FASTA)
+        fasta = ExtendedFileInfo(name=FileName.parse("genome.fa"), format=Format.FASTA)
         result = ExtendedClassificationResult()
         empty_fmt = UnifiedRule(id="x", tier=1, scope="extension", when={"format": ""}, then={}, rationale="")
         assert engine._rule_matches(empty_fmt, fasta, result) is False
@@ -223,15 +223,15 @@ class TestFormatMatching:
         """A mixed-case header-only file_format is lower-cased once at the source,
         so the extensions / when.file_format / assay conditions all match case-
         insensitively — a `.CRAM` classifies identically to a `.cram` (#243)."""
-        upper = ExtendedFileInfo(filename="", file_format=".CRAM")
-        lower = ExtendedFileInfo(filename="", file_format=".cram")
+        upper = ExtendedFileInfo(name=FileName.parse(""), file_format=".CRAM")
+        lower = ExtendedFileInfo(name=FileName.parse(""), file_format=".cram")
         r_upper = engine.classify_extended(upper)
         r_lower = engine.classify_extended(lower)
         assert upper.file_format == ".cram"  # normalized in place
         assert upper.format is Format.CRAM
         assert r_upper.data_type == r_lower.data_type  # downstream matching is case-insensitive
         # A None file_format is left as-is (no crash) and derives no format.
-        none_info = ExtendedFileInfo(filename="", file_format=None)
+        none_info = ExtendedFileInfo(name=FileName.parse(""), file_format=None)
         engine.classify_extended(none_info)
         assert none_info.file_format is None
         assert none_info.format is None
@@ -249,15 +249,15 @@ class TestWrapperSplitMatching:
     def test_core_keyed_rule_matches_compressed_and_uncompressed(self, engine, name):
         """The extension rules list only the core (".vcf"), yet both sample.vcf and
         sample.vcf.gz route through it — the compression no longer needs listing."""
-        compressed = engine.classify_extended(FileInfo(filename=name))
-        bare = engine.classify_extended(FileInfo(filename=name.replace(".gz", "")))
+        compressed = engine.classify_extended(FileInfo.from_filename(name))
+        bare = engine.classify_extended(FileInfo.from_filename(name.replace(".gz", "")))
         assert compressed.data_type == bare.data_type
         assert compressed.data_type is not None
 
     def test_gvcf_core_keeps_its_distinct_signal(self, engine):
         """`.g.vcf.gz` splits to the `.g.vcf` core, which derives Format.GVCF and
         still matches the VCF rules that list `.g.vcf` (behavior-preserved)."""
-        ext_info = ExtendedFileInfo(filename="HG002.deepvariant.g.vcf.gz")
+        ext_info = ExtendedFileInfo(name=FileName.parse("HG002.deepvariant.g.vcf.gz"))
         result = engine.classify_extended(ext_info)
         assert ext_info.format is Format.GVCF
         assert result.data_type == "variants"
@@ -266,7 +266,7 @@ class TestWrapperSplitMatching:
         """A header-only call passing a compound file_format (".fastq.gz") with no
         filename settles to the core (".fastq") so the core-keyed rules still fire
         — the regression the #244 core-keying would otherwise introduce."""
-        ext_info = ExtendedFileInfo(filename="", file_format=".fastq.gz")
+        ext_info = ExtendedFileInfo(name=FileName.parse(""), file_format=".fastq.gz")
         result = engine.classify_extended(ext_info)
         assert ext_info.file_format == ".fastq"
         assert ext_info.format is Format.FASTQ
@@ -278,7 +278,7 @@ class TestWrapperSplitMatching:
         gate collapsed it, and #244 needed a known-core short-circuit to compensate;
         #249 made the parser recognize ".g.vcf" directly, so the plain normalization
         keeps it correctly and the short-circuit is gone."""
-        ext_info = ExtendedFileInfo(filename="", file_format=".g.vcf")
+        ext_info = ExtendedFileInfo(name=FileName.parse(""), file_format=".g.vcf")
         engine.classify_extended(ext_info)
         assert ext_info.file_format == ".g.vcf"
         assert ext_info.format is Format.GVCF
@@ -314,7 +314,7 @@ class TestThenStatus:
 
     def test_status_only_field_is_not_applicable(self, tmp_path):
         engine = self._engine_with_rule(tmp_path, {"status": {"reference_assembly": "not_applicable"}})
-        out = engine.classify_extended(FileInfo(filename="x.bam")).to_output_dict()
+        out = engine.classify_extended(FileInfo.from_filename("x.bam")).to_output_dict()
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
         assert out["reference_assembly"]["value"] is None
 
@@ -328,7 +328,7 @@ class TestThenStatus:
                 "status": {"reference_assembly": "not_applicable"},
             },
         )
-        out = engine.classify_extended(FileInfo(filename="x.bam")).to_output_dict()
+        out = engine.classify_extended(FileInfo.from_filename("x.bam")).to_output_dict()
         assert out["data_type"]["status"] == CLASSIFIED
         assert out["data_type"]["value"] == "raw_signal"
         assert out["reference_assembly"]["status"] == NOT_APPLICABLE
@@ -513,22 +513,22 @@ class TestDerivativeFiles:
 
     def test_index_bai(self, engine):
         """BAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_index_crai(self, engine):
         """CRAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="sample.cram.crai"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.cram.crai"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_checksum_md5(self, engine):
         """MD5 checksum files should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="HG02558.final.cram.md5"))
+        result = engine.classify_extended(FileInfo.from_filename("HG02558.final.cram.md5"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_log_files(self, engine):
         """Log files should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="pipeline.log"))
+        result = engine.classify_extended(FileInfo.from_filename("pipeline.log"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
 
@@ -538,27 +538,27 @@ class TestSpecialFileTypes:
     def test_plink_genomic(self, engine):
         """PLINK files should be genomic."""
         for ext in [".pgen", ".pvar", ".psam"]:
-            result = engine.classify(FileInfo(filename=f"sample{ext}"))
+            result = engine.classify(FileInfo.from_filename(f"sample{ext}"))
             assert result.data_modality == "genomic"
 
     def test_single_cell_matrix(self, engine):
         """Single-cell matrix files should be transcriptomic.single_cell."""
-        result = engine.classify(FileInfo(filename="sample.h5ad"))
+        result = engine.classify(FileInfo.from_filename("sample.h5ad"))
         assert result.data_modality == "transcriptomic.single_cell"
 
     def test_single_cell_atac(self, engine):
         """Single-cell ATAC matrix should be epigenomic."""
-        result = engine.classify(FileInfo(filename="sample_atac_peaks.h5ad"))
+        result = engine.classify(FileInfo.from_filename("sample_atac_peaks.h5ad"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
     def test_methylation_idat(self, engine):
         """IDAT files should be epigenomic.methylation."""
-        result = engine.classify(FileInfo(filename="sample.idat"))
+        result = engine.classify(FileInfo.from_filename("sample.idat"))
         assert result.data_modality == "epigenomic.methylation"
 
     def test_histology_svs(self, engine):
         """SVS files should be imaging.histology."""
-        result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
+        result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
 
 
@@ -567,12 +567,12 @@ class TestFastqFiles:
 
     def test_fastq_rna(self, engine):
         """FASTQ with RNA indicator."""
-        result = engine.classify(FileInfo(filename="sample_rnaseq_R1.fastq.gz"))
+        result = engine.classify(FileInfo.from_filename("sample_rnaseq_R1.fastq.gz"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_fastq_ambiguous(self, engine):
         """FASTQ without indicators is not classified for modality."""
-        result = engine.classify_extended(FileInfo(filename="sample_R1.fastq.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample_R1.fastq.gz"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
@@ -581,12 +581,12 @@ class TestSignalTracks:
 
     def test_bigwig_chip(self, engine):
         """ChIP-seq bigwig files."""
-        result = engine.classify(FileInfo(filename="sample_H3K27ac.bigwig"))
+        result = engine.classify(FileInfo.from_filename("sample_H3K27ac.bigwig"))
         assert result.data_modality == "epigenomic.histone_modification"
 
     def test_bigwig_atac(self, engine):
         """ATAC-seq bigwig files."""
-        result = engine.classify(FileInfo(filename="sample_atac.bw"))
+        result = engine.classify(FileInfo.from_filename("sample_atac.bw"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
 
@@ -595,27 +595,27 @@ class TestPeakFiles:
 
     def test_narrowpeak_chromatin_accessibility(self, engine):
         """narrowPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo(filename="sample.narrowPeak"))
+        result = engine.classify(FileInfo.from_filename("sample.narrowPeak"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
     def test_broadpeak_chromatin_accessibility(self, engine):
         """broadPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo(filename="sample.broadPeak"))
+        result = engine.classify(FileInfo.from_filename("sample.broadPeak"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
     def test_peaks_bed_chromatin_accessibility(self, engine):
         """BED files with 'peaks' should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo(filename="atac_peaks.bed"))
+        result = engine.classify(FileInfo.from_filename("atac_peaks.bed"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
     def test_chip_peaks_histone_modification(self, engine):
         """ChIP-seq peak files should be epigenomic.histone_modification."""
-        result = engine.classify(FileInfo(filename="H3K27ac_chip_peaks.bed"))
+        result = engine.classify(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
         assert result.data_modality == "epigenomic.histone_modification"
 
     def test_summit_bed_chromatin_accessibility(self, engine):
         """Summit files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo(filename="sample_summits.bed"))
+        result = engine.classify(FileInfo.from_filename("sample_summits.bed"))
         assert result.data_modality == "epigenomic.chromatin_accessibility"
 
 
@@ -624,17 +624,17 @@ class TestTextFiles:
 
     def test_stats_file(self, engine):
         """QC stats files should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="sample.stats.txt"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.stats.txt"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_count_matrix(self, engine):
         """Count matrix files should be transcriptomic."""
-        result = engine.classify(FileInfo(filename="gene_counts.txt"))
+        result = engine.classify(FileInfo.from_filename("gene_counts.txt"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_ambiguous_txt(self, engine):
         """Ambiguous text files are not classified for modality."""
-        result = engine.classify_extended(FileInfo(filename="data.txt"))
+        result = engine.classify_extended(FileInfo.from_filename("data.txt"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
@@ -643,27 +643,27 @@ class TestIntegration:
 
     def test_hifi_bam(self, engine):
         """HiFi reads BAM file."""
-        result = engine.classify(FileInfo(filename="m64043_210211_005516.hifi_reads.bam"))
+        result = engine.classify(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
         assert result.data_modality == "genomic"
 
     def test_vcf_with_chr(self, engine):
         """VCF with chromosome in filename."""
-        result = engine.classify(FileInfo(filename="NA19189.chr2.hc.vcf.gz"))
+        result = engine.classify(FileInfo.from_filename("NA19189.chr2.hc.vcf.gz"))
         assert result.data_modality == "genomic"
 
     def test_gtex_histology(self, engine):
         """GTEx histology image."""
-        result = engine.classify(FileInfo(filename="GTEX-18A6Q-1126.svs"))
+        result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
 
     def test_cram_md5(self, engine):
         """CRAM MD5 checksum should be not_applicable."""
-        result = engine.classify_extended(FileInfo(filename="HG02558.final.cram.md5"))
+        result = engine.classify_extended(FileInfo.from_filename("HG02558.final.cram.md5"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
     def test_unknown_extension(self, engine):
         """Unknown extensions are not classified."""
-        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.xyz"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
@@ -672,22 +672,22 @@ class TestConflictingReferenceRules:
 
     def test_ambiguous_filename_two_refs(self, engine):
         """Filename with both CHM13 and hg38 should be not_classified."""
-        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_liftover_chain_two_refs(self, engine):
         """Liftover chain with two references should be not_classified."""
-        result = engine.classify_extended(FileInfo(filename="liftover.hg19.to.hg38.chain"))
+        result = engine.classify_extended(FileInfo.from_filename("liftover.hg19.to.hg38.chain"))
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_single_ref_not_affected(self, engine):
         """Single reference in filename should still work."""
-        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bed"))
         assert result.reference_assembly == "GRCh38"
 
     def test_conflict_evidence_recorded(self, engine):
         """Conflict should produce a conflict marker in reference_assembly evidence."""
-        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         ref_evidence = result.field_evidence.get("reference_assembly", [])
         assert any(e.get("marker") == "conflict" for e in ref_evidence)
         # Prior evidence should also be preserved
@@ -699,14 +699,14 @@ class TestConflictingClassificationFields:
 
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
-        result = engine.classify_extended(FileInfo(filename="sample_rnaseq_wgs_aligned.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample_rnaseq_wgs_aligned.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
 
     def test_conflict_preserves_prior_evidence(self, engine):
         """Conflict marker is appended to existing evidence, not replaced."""
-        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
         rule_ids = [e.get("rule_id") for e in evidence]
         # Both the original rule and the conflict marker should be present
@@ -716,7 +716,7 @@ class TestConflictingClassificationFields:
     def test_conflict_evidence_has_status_and_competing_values(self, engine):
         """Conflict evidence carries a not_classified status (in the status field,
         not the value slot) and the structured competing_values field."""
-        result = engine.classify_extended(FileInfo(filename="CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
         conflict = next(e for e in evidence if e.get("marker") == "conflict")
         assert conflict["status"] == NOT_CLASSIFIED
@@ -725,7 +725,7 @@ class TestConflictingClassificationFields:
 
     def test_normal_evidence_has_value_field(self, engine):
         """Every evidence entry should include the value that was set."""
-        result = engine.classify_extended(FileInfo(filename="sample.GRCh38.bed"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bed"))
         evidence = result.field_evidence.get("reference_assembly", [])
         ref_entry = next(e for e in evidence if e["rule_id"] == "filename_ref_grch38")
         assert ref_entry["value"] == "GRCh38"
@@ -886,7 +886,7 @@ class TestEvaluateClaims:
 
     def test_rule_authored_not_classified_in_evidence(self, engine):
         """fastq_modality_unknown rationale should appear in evidence, not generic placeholder."""
-        result = engine.classify_extended(FileInfo(filename="sample_R1.fastq.gz"), include_tier3=True)
+        result = engine.classify_extended(FileInfo.from_filename("sample_R1.fastq.gz"), include_tier3=True)
         dm_evidence = result.field_evidence.get("data_modality", [])
         rule_ids = [e["rule_id"] for e in dm_evidence]
         # Should have the rule's ID, not the generic "not_classified" placeholder
@@ -952,11 +952,11 @@ class TestAssayTypeInference:
     def test_inferred_assay_type_has_evidence(self, engine):
         """Inferred assay_type should have evidence from the infer_assay_type rule."""
         file_info = ExtendedFileInfo(
-            filename="sample.bam",
+            name=FileName.parse("sample.bam"),
             file_size=60_000_000_000,
             file_format=".bam",
         )
-        result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
         # Set conditions that trigger WGS inference (via set_field to stay coherent)
         result.set_field("data_modality", "genomic")
         result.set_field("platform", "ILLUMINA")
@@ -971,11 +971,11 @@ class TestAssayTypeInference:
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
         """Inference should remove stale not_classified placeholder evidence."""
         file_info = ExtendedFileInfo(
-            filename="sample.bam",
+            name=FileName.parse("sample.bam"),
             file_size=60_000_000_000,
             file_format=".bam",
         )
-        result = engine.classify_extended(FileInfo(filename="sample.bam", file_size=60_000_000_000))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
         result.set_field("data_modality", "genomic")
         result.set_field("platform", "ILLUMINA")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
@@ -999,13 +999,13 @@ class TestReasonChain:
 
     def test_multiple_reasons(self, engine):
         """Multiple matching rules should accumulate reasons."""
-        result = engine.classify(FileInfo(filename="sample_RNA.hg38.bam"))
+        result = engine.classify(FileInfo.from_filename("sample_RNA.hg38.bam"))
         assert len(result.reasons) >= 2
         assert len(result.rules_matched) >= 2
 
     def test_reason_explains_decision(self, engine):
         """Reasons should explain why classification was made."""
-        result = engine.classify(FileInfo(filename="sample.svs"))
+        result = engine.classify(FileInfo.from_filename("sample.svs"))
         assert any("histology" in r.lower() or "svs" in r.lower() for r in result.reasons)
 
 
@@ -1015,7 +1015,7 @@ class TestSentinelValues:
     def test_derivative_files_get_not_applicable(self, engine):
         """Index files get not_applicable for modality/platform/assay but not reference_assembly
         (reference IS applicable to indexes — it's determined by the parent file's alignment)."""
-        result = engine.classify_extended(FileInfo(filename="sample.bam.bai"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED  # applicable but unknown without filename hint
         assert result.status_of("platform") == NOT_APPLICABLE
@@ -1023,13 +1023,13 @@ class TestSentinelValues:
 
     def test_unclassified_fields_get_not_classified(self, engine):
         """Files with unset fields should get not_classified."""
-        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.xyz"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
 
     def test_not_classified_evidence_includes_field_name(self, engine):
         """Evidence reason for not_classified should name the specific field."""
-        result = engine.classify_extended(FileInfo(filename="sample.xyz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.xyz"))
         checked = 0
         for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
             evidence = result.field_evidence[fld]
@@ -1041,31 +1041,31 @@ class TestSentinelValues:
 
     def test_images_get_not_applicable_for_genomic_fields(self, engine):
         """Image files should get not_applicable for platform and reference."""
-        result = engine.classify_extended(FileInfo(filename="sample.svs"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.svs"))
         assert result.data_modality == "imaging.histology"
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fastq_gets_not_applicable_reference(self, engine):
         """FASTQ files should get not_applicable for reference (unaligned reads)."""
-        result = engine.classify_extended(FileInfo(filename="sample.fastq.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.fastq.gz"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_fast5_gets_not_applicable_reference(self, engine):
         """FAST5 files should get not_applicable for reference (raw signal)."""
-        result = engine.classify_extended(FileInfo(filename="sample.fast5"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.fast5"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.platform == "ONT"
 
     def test_bam_without_header_not_classified(self, engine):
         """BAM without header should leave modality as not_classified."""
-        result = engine.classify_extended(ExtendedFileInfo(filename="sample.bam", file_size=60_000_000_000))
+        result = engine.classify_extended(ExtendedFileInfo(name=FileName.parse("sample.bam"), file_size=60_000_000_000))
         # No header = no modality evidence, even for large files
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_png_all_fields_not_applicable(self, engine):
         """PNG files should get not_applicable for all non-applicable fields."""
-        result = engine.classify_extended(FileInfo(filename="plot.png"))
+        result = engine.classify_extended(FileInfo.from_filename("plot.png"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
@@ -1080,22 +1080,22 @@ class TestOutputDictStatus:
         # Every dimension entry carries `status` alongside the existing keys,
         # across a spread of file types.
         for filename in ("sample_WGS_aligned.bam", "sample.fastq.gz", "plot.png"):
-            out = engine.classify_extended(FileInfo(filename=filename)).to_output_dict()
+            out = engine.classify_extended(FileInfo.from_filename(filename)).to_output_dict()
             for fld in CLASSIFICATION_FIELDS:
                 assert set(out[fld]) == {"value", "status", "evidence"}
 
     def test_status_pins_each_sentinel_state(self, engine):
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives
         # in `status` with `value` nulled out — no sentinels in `value`.
-        classified = engine.classify_extended(FileInfo(filename="sample_WGS_aligned.bam")).to_output_dict()[
+        classified = engine.classify_extended(FileInfo.from_filename("sample_WGS_aligned.bam")).to_output_dict()[
             "data_modality"
         ]
         assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)
 
-        n_a = engine.classify_extended(FileInfo(filename="plot.png")).to_output_dict()["reference_assembly"]
+        n_a = engine.classify_extended(FileInfo.from_filename("plot.png")).to_output_dict()["reference_assembly"]
         assert (n_a["value"], n_a["status"]) == (None, NOT_APPLICABLE)
 
         n_c = engine.classify_extended(
-            ExtendedFileInfo(filename="sample.bam", file_size=60_000_000_000)
+            ExtendedFileInfo(name=FileName.parse("sample.bam"), file_size=60_000_000_000)
         ).to_output_dict()["data_modality"]
         assert (n_c["value"], n_c["status"]) == (None, NOT_CLASSIFIED)
