@@ -1,6 +1,7 @@
 """Loader for unified classification rules from YAML."""
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, ClassVar
@@ -159,6 +160,37 @@ class UnifiedRules:
         """Get the file type for an extension."""
         return self.extension_map.get(extension.lower())
 
+    @cached_property
+    def core_extensions(self) -> frozenset[str]:
+        """The explicit set of producible core extensions (#249).
+
+        The single source of truth for which clean core suffixes the parse can
+        yield — previously only implicit, emergent from ``COMPOUND_EXTENSIONS`` and
+        the ``extension_map`` gate. Derived from every in-code source of core
+        truth, so it cannot drift from them: every compound extension with its
+        wrappers stripped (which is where the multi-dot core ``.g.vcf`` comes from
+        — ``peel(".g.vcf.gz")``), the single-dot ``extension_map`` keys (the simple
+        extensions), and the ``EXTENSION_TO_FORMAT`` keys (a format-mapped
+        extension is a producible core by definition, so unioning it keeps ``.g.vcf``
+        producible even if its compressed spelling were removed). Lower-cased, since
+        recognition matches against a lower-cased name. Consumed by
+        ``parse_file_name`` (the single-dot recognition lookup and, via
+        :attr:`_multi_dot_cores`, the multi-dot scan) and pinned by the
+        rule-vocabulary drift tests.
+        """
+        cores = {self._peel_wrappers(c, keep_last=True)[0] for c in self.COMPOUND_EXTENSIONS}
+        cores |= {k.lower() for k in self.extension_map if k.count(".") == 1}
+        cores |= {k.lower() for k in self.EXTENSION_TO_FORMAT}
+        return frozenset(cores)
+
+    @cached_property
+    def _multi_dot_cores(self) -> tuple[str, ...]:
+        """The core extensions with more than one dot (e.g. ``.g.vcf``), longest-
+        first. These are the only cores a last-dot-token lookup cannot recognize,
+        so ``parse_file_name`` scans just these before the O(1) single-dot lookup;
+        longest-first lets a multi-dot core win over a shorter multi-dot tail."""
+        return tuple(sorted((c for c in self.core_extensions if c.count(".") > 1), key=len, reverse=True))
+
     def extension_to_format(self, extension: str | None) -> Format | None:
         """Derive the canonical :class:`Format` for an extension (#243).
 
@@ -218,19 +250,22 @@ class UnifiedRules:
         """Parse ``filename`` into a :class:`FileName` against this vocabulary.
 
         The parse is vocabulary-gated (it consults ``COMPOUND_EXTENSIONS`` /
-        ``extension_map`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
+        ``core_extensions`` / ``EXTENSION_TO_FORMAT``), so it lives here with the
         rules rather than on the pure ``FileName`` data type.
 
-        *Which* names carry a routable extension is preserved: this recognizes the
-        same compound extensions as ``extract_extension``, then gates the simple
-        suffix on ``extension_map`` — so an unknown suffix yields ``None`` here,
-        where ``extract_extension`` returns the junk last-dot suffix (which matched
-        no rule anyway). What changed in #244 is the *representation*: the
-        recognized token is split into a clean core ``extension`` (``.vcf``) and the
-        ``wrappers`` it bundled (``(".gz",)``) — where before ``extension`` was the
-        whole compound (``.vcf.gz``). ``format`` is the stage-1 derivation
-        from the core extension (``extension_to_format``), with ``format_source``
-        recording the provenance — set together or both ``None`` (#243).
+        Recognition is a wrapper-bearing ``COMPOUND_EXTENSIONS`` match, else the
+        known core the name ends with — the multi-dot cores scanned longest-first,
+        then an O(1) lookup of the single-dot last token (#249); an unknown suffix
+        yields ``None`` here, where ``extract_extension`` returns the junk last-dot
+        suffix (which
+        matched no rule anyway). #244 made the *representation* a clean core
+        ``extension`` (``.vcf``) plus the ``wrappers`` it bundled (``(".gz",)``),
+        not the whole compound (``.vcf.gz``); #249 made the core set explicit, which
+        also lets a multi-dot core be recognized in its uncompressed spelling
+        (``sample.g.vcf`` → ``.g.vcf``, matching the compressed ``.g.vcf.gz`` form).
+        ``format`` is the stage-1 derivation from the core extension
+        (``extension_to_format``), with ``format_source`` recording the provenance
+        — set together or both ``None`` (#243).
         """
         lower = filename.lower()
 
@@ -239,10 +274,23 @@ class UnifiedRules:
             if lower.endswith(ext):
                 recognized = ext
                 break
-        if recognized is None and "." in filename:
-            simple = "." + filename.rsplit(".", 1)[-1].lower()
-            if simple in self.extension_map:
-                recognized = simple
+        if recognized is None:
+            # No wrapper-bearing compound matched — recognize the known core the
+            # name ends with (#249). Multi-dot cores (".g.vcf") are scanned first,
+            # longest-first, so one wins over its shorter tail (".vcf"); the common
+            # single-dot case is then an O(1) lookup of the last dot-token. Every
+            # core's leading dot makes both a genuine extension-boundary match, so
+            # the single-dot path is equivalent to the old extension_map gate and
+            # only the multi-dot scan is new (an uncompressed ".g.vcf").
+            for core in self._multi_dot_cores:
+                if lower.endswith(core):
+                    recognized = core
+                    break
+            else:
+                if "." in filename:
+                    simple = "." + filename.rsplit(".", 1)[-1].lower()
+                    if simple in self.core_extensions:
+                        recognized = simple
 
         if recognized is not None:
             # Split the recognized token into its clean core and wrappers (#244).

@@ -43,6 +43,17 @@ class TestExtension:
         assert fn.wrappers == (".gz",)
         assert fn.stem == "HG002.deepvariant"
 
+    def test_uncompressed_gvcf_recognized_as_core(self):
+        """#249: an uncompressed ``sample.g.vcf`` is recognized as the ``.g.vcf``
+        core (→ Format.GVCF), consistent with the compressed spelling — where the
+        old single-suffix gate resolved it to ``.vcf``. Longest-first core matching
+        picks ``.g.vcf`` over its ``.vcf`` tail."""
+        fn = parse("HG002.deepvariant.g.vcf")
+        assert fn.extension == ".g.vcf"
+        assert fn.format is Format.GVCF
+        assert fn.wrappers == ()
+        assert fn.stem == "HG002.deepvariant"
+
     def test_double_wrapper_peels_both(self):
         """``.fast5.tar.gz`` is tar-archived and gzip-compressed around a
         ``.fast5`` core — both wrappers peel, in name order."""
