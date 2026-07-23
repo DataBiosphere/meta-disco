@@ -79,8 +79,11 @@
 # Extension/filename conditions:
 # - extensions: list of clean core file extensions to match (e.g., [".bam",
 #     ".cram"]). Compression/archive is split off into wrappers at parse time
-#     (#244), so a core matches every compressed spelling: ".vcf" matches both
-#     sample.vcf and sample.vcf.gz — never list ".vcf.gz" here. gVCF keeps its
+#     (#244), so a core matches every compressed spelling the parser recognizes
+#     — those enumerated in COMPOUND_EXTENSIONS (rule_loader.py): ".vcf" matches
+#     both sample.vcf and sample.vcf.gz (never list ".vcf.gz" here), but an
+#     unlisted spelling like sample.bam.gz is not recognized and matches nothing.
+#     gVCF keeps its
 #     own core (".g.vcf"): both classify as data_type variants, but ".g.vcf"
 #     derives Format.GVCF (vs Format.VCF), so the distinction is not lost.
 # - format: canonical file format to match (e.g., FASTA) — collapses the
