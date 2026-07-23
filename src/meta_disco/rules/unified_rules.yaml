@@ -81,7 +81,8 @@
 #     ".cram"]). Compression/archive is split off into wrappers at parse time
 #     (#244), so a core matches every compressed spelling: ".vcf" matches both
 #     sample.vcf and sample.vcf.gz — never list ".vcf.gz" here. gVCF keeps its
-#     own core (".g.vcf") because it is a distinct data_type signal, not just VCF.
+#     own core (".g.vcf"): both classify as data_type variants, but ".g.vcf"
+#     derives Format.GVCF (vs Format.VCF), so the distinction is not lost.
 # - format: canonical file format to match (e.g., FASTA) — collapses the
 #     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
 #     to a single identity, so key on this instead of re-listing extensions
