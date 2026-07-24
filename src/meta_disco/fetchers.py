@@ -564,7 +564,7 @@ def parse_tar_member_names(data: bytes, max_members: int = MAX_TAR_MEMBERS) -> l
     return names
 
 
-@wrap_as_fetch_error("tar")
+@wrap_as_fetch_error("TAR head")
 def fetch_tar_headers(
     evidence_dir: Path,
     md5sum: str,

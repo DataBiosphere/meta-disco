@@ -55,8 +55,7 @@ def main():
 
     if args.md5:
         file_name = args.filename or ""
-        result = ClassifyPipeline.classify_single(
-            TAR_CONFIG,
+        result = classify_single_tar(
             args.md5,
             file_name=file_name,
             is_gzipped=file_name.endswith(".gz"),
