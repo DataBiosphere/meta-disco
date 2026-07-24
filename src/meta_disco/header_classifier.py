@@ -401,7 +401,10 @@ def classify_without_content(
     ``name`` and the declared ``file_format`` are handed to the engine, which
     reconciles them (name-extension wins, else ``file_format``); an archive name
     with no inner format (``x.tar.gz`` → ``extension=None``) falls through to
-    ``file_format`` or, failing that, stays unclassified — we do not classify a
+    ``file_format``. With neither, no *extension-scoped* rule fires, so the
+    container yields no content type of its own — though a filename/dataset rule
+    that carries no ``extensions:`` filter (e.g. a reference token in the name)
+    may still classify a field. We do not fabricate a content type for a
     container we could not read (#245).
 
     ``content_fields`` names the dimensions *this file type's content* can
