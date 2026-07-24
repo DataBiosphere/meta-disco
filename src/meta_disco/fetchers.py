@@ -118,7 +118,9 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     mirror does not hold this md5 — which is not the same as the file not existing,
     since the catalog entry may still carry a size and a DRS URI. `@wrap_as_fetch_error`
     lets this FetchError pass through unchanged, so the record becomes a
-    `not_classified` row with the HTTP status as its reason (#155).
+    `not_classified` row with the HTTP status as its reason (#155). A 416 raises
+    ``RangeNotSatisfiable``; a 200 to a ``start_byte > 0`` request (the server ignored
+    Range) also raises, so a caller accumulating bytes never appends a duplicated body.
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes={start_byte}-{end_byte}"}
@@ -126,6 +128,12 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     source = "source URL" if url else "AnVIL S3 mirror"
     if resp.status_code == 416:  # start_byte at/past EOF — the escalating read treats this as end-of-file
         raise RangeNotSatisfiable(f"HTTP 416 from {source} range request")
+    if start_byte > 0 and resp.status_code == 200:
+        # A 200 to a ranged request means the server ignored Range and returned the whole
+        # body from byte 0; appending that to the bytes already held would duplicate and
+        # corrupt the buffer. S3 and GCS (where this data lives) honor Range with 206, so
+        # this should never fire — fail loudly rather than classify from a corrupt buffer.
+        raise FetchError(f"HTTP 200 (Range ignored) from {source} range request")
     if resp.status_code not in [200, 206]:
         raise FetchError(f"HTTP {resp.status_code} from {source} range request")
     return resp.content

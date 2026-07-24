@@ -301,6 +301,18 @@ class TestReadHeadUntil:
         with pytest.raises(fetchers.RangeNotSatisfiable):
             _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
 
+    def test_200_to_a_ranged_stage_raises_rather_than_duplicating(self, monkeypatch):
+        # A server that ignores Range and answers 200 with the whole body on stage 2 would
+        # corrupt the accumulated buffer if appended. S3/GCS honor Range (206); this is the
+        # fail-loud guard for the case that they don't.
+        def _get(url, headers, timeout=None):
+            start, _end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
+            return _Resp(206 if start == 0 else 200, b"x" * 20)  # stage 2 ignores Range
+
+        monkeypatch.setattr(fetchers.requests, "get", _get)
+        with pytest.raises(FetchError, match="Range ignored"):
+            _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
+
     @pytest.mark.parametrize("stages", [(100, 10), (10, 10), (10, 100, 50)])
     def test_non_ascending_stages_rejected(self, stages):
         # A non-ascending target would ask for a range starting past the bytes in hand;
