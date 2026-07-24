@@ -20,8 +20,11 @@ def classify_single_tar(
     file_size: int | None = None,
     is_gzipped: bool = False,
     use_cache: bool = True,
-) -> dict | None:
-    """Classify a single tar/tar.gz archive by MD5. ``is_gzipped`` for a .tar.gz."""
+) -> dict:
+    """Classify a single tar/tar.gz archive by MD5. ``is_gzipped`` for a .tar.gz.
+
+    Always returns the output dict — a fetch failure becomes a ``not_classified``
+    row, not ``None`` (#155); an unexpected error propagates."""
     return ClassifyPipeline.classify_single(
         TAR_CONFIG,
         md5sum,
@@ -67,10 +70,9 @@ def main():
             is_gzipped=file_name.endswith(".gz") or not file_name,
             use_cache=not args.no_resume,
         )
-        if result:
-            print(json.dumps(result, indent=2))
-        else:
-            print("Failed to fetch or classify")
+        # classify_single always returns a dict (a fetch failure is a not_classified
+        # row, #155); an unexpected error propagates rather than being swallowed here.
+        print(json.dumps(result, indent=2))
         return
 
     if not args.input:
