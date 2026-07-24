@@ -595,8 +595,10 @@ def classify_from_tar_members(
         _claim_content("genomic", "variants", f"GenomicsDB/TileDB variant store (markers: {', '.join(markers)})")
         return result.to_output_dict()
 
-    # (2) Generic: classify by the dominant recognized inner member extension. An
-    # extension is only ever the last dot-token of the basename, never a mid-path dot.
+    # (2) Generic: classify by the dominant recognized inner member extension.
+    # FileName.parse reads the extension from the basename (peeling any wrappers and
+    # yielding a clean core, incl. multi-dot cores like .g.vcf); parsing the basename
+    # rather than the full member path keeps a mid-path directory dot out of it.
     recognized: list[tuple[str, str]] = []  # (inner extension, member basename)
     for basename in basenames:
         ext = FileName.parse(basename).extension
