@@ -311,10 +311,14 @@ class FileName:
                 if simple in CORE_EXTENSIONS:
                     extension = simple
 
-        # The stem is the original-case name minus its wrappers (base) and minus the
-        # recognized core (``extension`` is always a suffix of ``base``), so it carries
-        # only the name's tokens.
-        stem = filename[: len(base) - len(extension or "")]
+        # The stem is the original-case name minus its recognized suffix (wrappers +
+        # core), so it carries only the name's tokens. Slice by the ASCII suffix
+        # lengths off the *original* name rather than by ``len(base)``: ``str.lower()``
+        # is not guaranteed to preserve length for every Unicode char (e.g. ``"İ"``),
+        # but the wrappers and core are ASCII, so their lengths index the original
+        # name correctly regardless.
+        suffix_len = sum(len(w) for w in wrappers) + len(extension or "")
+        stem = filename[: len(filename) - suffix_len]
 
         fmt = extension_to_format(extension)
         format_source = FormatSource.EXTENSION if fmt is not None else None

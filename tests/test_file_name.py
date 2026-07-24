@@ -101,6 +101,14 @@ class TestExtension:
         assert fn.extension is None
         assert fn.stem == "readme.xyz"
 
+    def test_length_changing_lowercase_char_does_not_skew_the_stem(self):
+        """`"İ".lower()` is two chars, so slicing the stem by the lowercased length
+        would over-keep. The suffix (wrappers + core) is ASCII, so the stem is sliced
+        off the original name by suffix length and stays correct."""
+        fn = parse("İ.bam")
+        assert fn.extension == ".bam"
+        assert fn.stem == "İ"
+
 
 class TestContainersArePeeled:
     """#245: every compression/archive container is peeled off the name before the
