@@ -22,6 +22,7 @@ from .header_classifier import (
     classify_from_header,
     classify_from_tar_members,
     classify_from_vcf_header,
+    tar_head_is_conclusive,
 )
 from .pipeline import FileTypeConfig
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
@@ -92,6 +93,9 @@ TAR_CONFIG = FileTypeConfig(
     # The inner member formats determine what the contents are; nothing here reads a
     # member's own header, so no reference_assembly / platform / assay_type.
     content_fields=("data_modality", "data_type"),
+    # Escalating head-read (#260): read deeper only until the members are classifiable,
+    # so a GenomicsDB store whose variant signal sits past the first 256KiB is reached.
+    head_detector=tar_head_is_conclusive,
 )
 
 FILE_TYPE_REGISTRY = {

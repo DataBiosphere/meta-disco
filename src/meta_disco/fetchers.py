@@ -10,6 +10,7 @@ each fetcher constructs its typed evidence subclass and calls ``.save``/``.load`
 
 import functools
 import io
+import itertools
 import shutil
 import subprocess
 import tarfile
@@ -49,6 +50,17 @@ class FetchError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+class RangeNotSatisfiable(FetchError):
+    """A range request started at or past the end of the object (HTTP 416).
+
+    A subclass of :class:`FetchError` so every ``except FetchError`` still treats it
+    as unreadable content by default. The escalating read (:func:`_read_head_until`)
+    catches it specifically: once it already holds bytes, a 416 on the next stage means
+    the file ended exactly on a stage boundary, so it stops with the head in hand rather
+    than failing a file it fully read.
+    """
 
 
 def wrap_as_fetch_error(label: str, passthrough: tuple[type[BaseException], ...] = ()):
@@ -94,23 +106,74 @@ def wrap_as_fetch_error(label: str, passthrough: tuple[type[BaseException], ...]
 # ``meta_disco.evidence``.
 
 
-def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None) -> bytes:
-    """Fetch bytes 0 through end_byte (inclusive) from S3. Returns raw bytes.
+def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None, start_byte: int = 0) -> bytes:
+    """Fetch bytes ``start_byte`` through ``end_byte`` (inclusive) from S3. Returns raw bytes.
 
-    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    ``start_byte`` defaults to 0 (the whole-head fetch every caller used before #260);
+    the escalating read (:func:`_read_head_until`) passes a non-zero start to fetch only
+    the *new* bytes of the next stage. If url is provided, fetches from that URL directly.
+    Otherwise uses the AnVIL S3 mirror.
 
     Raises FetchError naming the HTTP status on a non-2xx response. 404 means the
     mirror does not hold this md5 — which is not the same as the file not existing,
     since the catalog entry may still carry a size and a DRS URI. `@wrap_as_fetch_error`
     lets this FetchError pass through unchanged, so the record becomes a
-    `not_classified` row with the HTTP status as its reason (#155).
+    `not_classified` row with the HTTP status as its reason (#155). A 416 raises
+    ``RangeNotSatisfiable``; a 200 to a ``start_byte > 0`` request (the server ignored
+    Range) also raises, so a caller accumulating bytes never appends a duplicated body.
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
-    headers = {"Range": f"bytes=0-{end_byte}"}
+    headers = {"Range": f"bytes={start_byte}-{end_byte}"}
     resp = requests.get(fetch_url, headers=headers, timeout=timeout)
+    source = "source URL" if url else "AnVIL S3 mirror"
+    if resp.status_code == 416:  # start_byte at/past EOF — the escalating read treats this as end-of-file
+        raise RangeNotSatisfiable(f"HTTP 416 from {source} range request")
+    if start_byte > 0 and resp.status_code == 200:
+        # A 200 to a ranged request means the server ignored Range and returned the whole
+        # body from byte 0; appending that to the bytes already held would duplicate and
+        # corrupt the buffer. S3 and GCS (where this data lives) honor Range with 206, so
+        # this should never fire — fail loudly rather than classify from a corrupt buffer.
+        raise FetchError(f"HTTP 200 (Range ignored) from {source} range request")
     if resp.status_code not in [200, 206]:
-        raise FetchError(f"HTTP {resp.status_code} from {'source URL' if url else 'AnVIL S3 mirror'} range request")
+        raise FetchError(f"HTTP {resp.status_code} from {source} range request")
     return resp.content
+
+
+def _read_head_until(md5sum, *, url, stages, parse_head, conclusive):
+    """Read escalating byte-prefixes from a file, stopping once the head is conclusive (#260).
+
+    For each cumulative byte target in ``stages`` (which must be strictly ascending),
+    fetch only the *new* bytes, append to the accumulated buffer, and ``parse_head`` the
+    whole buffer into a payload. Stop as soon as ``conclusive(payload)`` is true (the
+    caller-supplied detector — reader stays ignorant of what "conclusive" means), or the
+    read shows we hold the whole file: a short read, or a 416 on the next stage when the
+    file ended exactly on the prior boundary. Otherwise the stages run out (the cap).
+    Returns ``(payload, raw_bytes_fetched)``.
+
+    Most files satisfy the detector at the first (smallest) stage and never fetch more;
+    only a file whose signal is deeper reads further, up to the last stage.
+
+    ``stages`` must be strictly ascending: a non-increasing target would ask for a range
+    that starts past the bytes already held (``start=len(buf) > target-1``), and the 416
+    that provokes is now read as end-of-file — so misuse would silently under-read rather
+    than fail. Reject it up front instead.
+    """
+    stages = tuple(stages)
+    if any(b <= a for a, b in itertools.pairwise(stages)):
+        raise ValueError(f"stages must be strictly ascending, got {stages}")
+    buf = b""
+    payload = parse_head(buf)  # defined even if stages is empty
+    for target in stages:
+        try:
+            buf += _fetch_range(md5sum, target - 1, url=url, start_byte=len(buf))
+        except RangeNotSatisfiable:
+            if not buf:  # first stage on an empty object — a real unreadable, not EOF
+                raise
+            break  # the file ended exactly on the previous boundary; the head is complete
+        payload = parse_head(buf)
+        if conclusive(payload) or len(buf) < target:  # found the signal, or hit EOF
+            break
+    return payload, len(buf)
 
 
 def _decompress_if_gzipped(content: bytes, is_gzipped: bool) -> bytes:
@@ -537,6 +600,13 @@ def fetch_gfa_segment_tags(
 # members. See parse_tar_member_names.
 MAX_TAR_MEMBERS = 200
 
+# Escalating head-read stages (#260): cumulative byte targets. The read starts at
+# 256KiB (conclusive for ~98% of the T2T variant-store tars measured) and grows only
+# when the head is not yet conclusive — a GenomicsDB store whose variant signal is
+# deeper than 256KiB, say — up to the 100MiB cap. Only the deep-signal tail ever
+# fetches past the first stage.
+TAR_HEAD_STAGES = (HEAD_BYTES, 1024 * 1024, 10 * 1024 * 1024, 100 * 1024 * 1024)
+
 
 def parse_tar_member_names(data: bytes, max_members: int = MAX_TAR_MEMBERS) -> list[str]:
     """Member names from the head of a (already-decompressed) tar archive (#255).
@@ -572,32 +642,52 @@ def fetch_tar_headers(
     is_gzipped: bool = False,
     use_cache: bool = True,
     url: str | None = None,
+    head_detector=None,
     **kwargs,
 ) -> list[str]:
-    """Read member names from the head of a tar / tar.gz archive on S3 (#255).
+    """Read member names from the head of a tar / tar.gz archive on S3 (#255, #260).
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns the member names visible in the fetched head; an empty list (a truncated
-    or non-tar head) is a readable result, not a failure. Raises ``FetchError`` naming
-    the cause when the range request itself fails, so the record is kept as a
+    Returns the member names visible in the read head; an empty list (a truncated or
+    non-tar head) is a readable result, not a failure. Raises ``FetchError`` naming the
+    cause when the range request itself fails, so the record is kept as a
     ``not_classified`` row instead of vanishing (#155).
 
-    Only the head is read (``HEAD_BYTES``): a ``.tar`` is read verbatim, a ``.tar.gz``
-    has its head gzip-decompressed (``_decompress_head``, BGZF-aware). That is enough
-    to see the leading members — the archive is classified from its dominant *inner*
-    format, since a container carries no format of its own (#245).
+    The head is read in escalating stages (:data:`TAR_HEAD_STAGES`, #260): it starts at
+    256KiB and grows only while ``head_detector`` reports the members are not yet
+    conclusive — so a GenomicsDB store whose variant signal is deeper than 256KiB is
+    still found — up to the 100MiB cap. ``head_detector`` is injected by the caller
+    (``FileTypeConfig.head_detector`` → ``pipeline``), so the fetcher stays ignorant of
+    what makes a head conclusive; ``None`` degrades to a single 256KiB read. A
+    ``.tar.gz`` has its accumulated head gzip-decompressed each stage (BGZF-aware); a
+    container carries no format of its own (#245) — the archive is classified from its
+    inner members.
     """
     if use_cache:
         cached = TarEvidence.load(evidence_dir, md5sum)
         if cached is not None:
             return cached.payload
 
-    content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
-    raw_bytes = len(content)
+    def parse_head(buf: bytes) -> list[str]:
+        # `.tar.gz` decompresses the accumulated head (BGZF-aware); `.tar` passes through.
+        return parse_tar_member_names(_decompress_if_gzipped(buf, is_gzipped))
 
-    # A `.tar.gz` decompresses the head (BGZF-aware); a `.tar` passes through unchanged.
-    content = _decompress_if_gzipped(content, is_gzipped)
-    member_names = parse_tar_member_names(content)
+    detector = head_detector or (lambda _members: True)
+
+    def conclusive(members: list[str]) -> bool:
+        # A saturated parse (>= MAX_TAR_MEMBERS) can no longer grow — parse_tar_member_names
+        # only ever returns the first MAX_TAR_MEMBERS names, so deeper bytes cannot add a
+        # signal the detector would see. Stop escalating rather than read to the cap for
+        # nothing (a store of many tiny members whose signal is not in the first stage).
+        return len(members) >= MAX_TAR_MEMBERS or detector(members)
+
+    member_names, raw_bytes = _read_head_until(
+        md5sum,
+        url=url,
+        stages=TAR_HEAD_STAGES,
+        parse_head=parse_head,
+        conclusive=conclusive,
+    )
     if len(member_names) >= MAX_TAR_MEMBERS:
         # `>=` reaches the cap; the scan does not report whether more members
         # followed, so this may also fire for an archive of exactly that many — hence
