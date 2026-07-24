@@ -628,19 +628,24 @@ def _recognized_inner_extensions(member_names: list[str]) -> list[tuple[str, str
 
 
 def tar_head_is_conclusive(member_names: list[str]) -> bool:
-    """Whether reading deeper into the archive could change its classification (#260).
+    """Whether the members read so far are signal enough to stop the escalating read (#260).
 
     The escalating-read stop condition injected into the tar fetcher (via
     ``FileTypeConfig.head_detector``): read deeper only while this is False, so a
     GenomicsDB store whose variant signal sits past the first stage is still reached.
 
-    True on a GenomicsDB variant-store signal, or once any member carries a recognized
-    inner extension — at that point the members read already carry the strongest signal
-    :func:`classify_from_tar_members` acts on, so more bytes cannot improve the result.
-    "Conclusive" means *settled*, not *classified*: a head of only header-only members
-    (e.g. ``.bam``, which needs its own header, not just its extension) is conclusive yet
-    classifies to ``not_classified`` — reading deeper would not change that either. Uses
-    the same recognition helpers as the classifier so the two agree on what counts.
+    True on a GenomicsDB variant-store signal — definitive on its own, it fixes the
+    archive as a variant store regardless of the other members — or once any member
+    carries a recognized inner extension. The recognized-extension case is a
+    *first-signal* stop, not a promise about the final value: the generic path in
+    :func:`classify_from_tar_members` picks the *dominant* recognized extension over the
+    members read, and a deeper read could still shift that dominant. Stopping at the
+    first recognized member is deliberate — it keeps the generic path the fixed-head
+    sample it always was, while letting the GenomicsDB signal (the #260 target) escalate.
+    So "conclusive" means *enough to make the call*, not *classified*: a head of only
+    header-only members (e.g. ``.bam``, classified from its own header, not its
+    extension) is conclusive yet resolves to ``not_classified``. Uses the same
+    recognition helpers as the classifier so the two agree on what counts as recognized.
     """
     return bool(_is_genomicsdb_variant_store(member_names) or _recognized_inner_extensions(member_names))
 

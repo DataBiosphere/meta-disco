@@ -10,6 +10,7 @@ each fetcher constructs its typed evidence subclass and calls ``.save``/``.load`
 
 import functools
 import io
+import itertools
 import shutil
 import subprocess
 import tarfile
@@ -143,7 +144,15 @@ def _read_head_until(md5sum, *, url, stages, parse_head, conclusive):
 
     Most files satisfy the detector at the first (smallest) stage and never fetch more;
     only a file whose signal is deeper reads further, up to the last stage.
+
+    ``stages`` must be strictly ascending: a non-increasing target would ask for a range
+    that starts past the bytes already held (``start=len(buf) > target-1``), and the 416
+    that provokes is now read as end-of-file — so misuse would silently under-read rather
+    than fail. Reject it up front instead.
     """
+    stages = tuple(stages)
+    if any(b <= a for a, b in itertools.pairwise(stages)):
+        raise ValueError(f"stages must be strictly ascending, got {stages}")
     buf = b""
     payload = parse_head(buf)  # defined even if stages is empty
     for target in stages:

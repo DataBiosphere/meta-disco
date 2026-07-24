@@ -301,6 +301,13 @@ class TestReadHeadUntil:
         with pytest.raises(fetchers.RangeNotSatisfiable):
             _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
 
+    @pytest.mark.parametrize("stages", [(100, 10), (10, 10), (10, 100, 50)])
+    def test_non_ascending_stages_rejected(self, stages):
+        # A non-ascending target would ask for a range starting past the bytes in hand;
+        # the 416 that provokes now reads as EOF, so misuse must fail loudly up front.
+        with pytest.raises(ValueError, match="strictly ascending"):
+            _read_head_until(MD5, url=None, stages=stages, parse_head=lambda b: b, conclusive=lambda b: False)
+
 
 class TestTarFetcherEscalation:
     """fetch_tar_headers reads deeper only until the detector is satisfied (#260)."""
