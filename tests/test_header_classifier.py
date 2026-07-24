@@ -32,6 +32,7 @@ from meta_disco.header_classifier import (
     # Classification functions
     classify_from_fastq_header,
     classify_from_header,
+    classify_from_tar_members,
     classify_from_vcf_header,
     detect_paired_end_indicators,
     # Helper functions
@@ -930,3 +931,61 @@ class TestEdgeCases:
 @RG\tID:sample_\u00e9\tPL:ILLUMINA"""
         result = classify_from_header(header)
         assert val(result, "platform") == "ILLUMINA"
+
+
+class TestTarClassifier:
+    """classify_from_tar_members: classify a tar archive by its contents (#255)."""
+
+    def test_genomicsdb_store_from_schema_files(self):
+        """A GenomicsDB store recognized by its schema files (the common case)."""
+        members = ["./chr22.1_2/vidmap.json", "./chr22.1_2/callset.json", "./chr22.1_2/vcfheader.vcf"]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants"
+
+    def test_genomicsdb_store_from_vcf_field_arrays_only(self):
+        """A large store whose schema files are past the head is still caught by its
+        VCF-attribute TileDB arrays (e.g. PL/GQ/DP_FORMAT), incl. the `_var` pairs."""
+        members = [
+            "./chr4.1_2/chr4$1$2/__coords.tdb",
+            "./chr4.1_2/chr4$1$2/PL.tdb",
+            "./chr4.1_2/chr4$1$2/DP_FORMAT.tdb",
+            "./chr4.1_2/chr4$1$2/MLEAC_var.tdb",
+        ]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants"
+
+    def test_genomicsdb_array_name_in_mid_path_is_caught(self):
+        """A TileDB array is a directory (`PL.tdb/`), so the variant-array name is a
+        mid-path segment; when the directory entry itself is omitted, only the deeper
+        files remain — the all-segments check still recognizes it."""
+        members = [
+            "chr4.1_2/chr4$1$2/PL.tdb/__array_schema.tdb",
+            "chr4.1_2/chr4$1$2/PL.tdb/__fragment/a.tdb",
+        ]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_type") == "variants"
+
+    def test_bare_tiledb_is_not_called_variants(self):
+        """Honesty: a `.tdb` is a *generic* TileDB array — a head of only generic TileDB
+        structure files (no schema, no VCF-field array) is not read as variants."""
+        members = ["store/__tiledb_workspace.tdb", "store/__array_schema.tdb", "store/__coords.tdb"]
+        result = classify_from_tar_members(members)
+        assert field_status(result, "data_type") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+
+    def test_generic_dominant_inner_extension(self):
+        """A tar of FASTA members → the inner format's classification (sequence)."""
+        result = classify_from_tar_members(["asm/hap1.fasta", "asm/hap2.fasta", "asm/readme.txt"])
+        assert val(result, "data_type") == "sequence"
+
+    def test_unrecognized_contents_stay_not_classified(self):
+        """Read it, but no GenomicsDB signal and no recognized inner extension → not_classified."""
+        result = classify_from_tar_members(["blob/x.dat", "blob/y.bin"])
+        assert field_status(result, "data_type") == NOT_CLASSIFIED
+
+    def test_empty_member_list_is_not_classified(self):
+        """A non-tar / empty head read as no members → not_classified, not a crash."""
+        result = classify_from_tar_members([])
+        assert field_status(result, "data_type") == NOT_CLASSIFIED

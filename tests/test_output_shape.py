@@ -111,6 +111,11 @@ GOLDEN_INPUTS = {
             entry_id="g-gfa-1",
         ),
     ],
+    "tar": [
+        _golden_record(
+            "f", file_name="chr5.136400001_136500001.tar", file_size=45516800, file_format=".tar", entry_id="g-tar-1"
+        ),
+    ],
 }
 
 STUB_HEADER = "stub-header-no-network"
@@ -124,6 +129,8 @@ STUB_PAYLOADS = {
     "fastq": [STUB_HEADER],
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],
+    # tar returns member names (list[str]); a GenomicsDB-store marker set.
+    "tar": ["chr5.1_2/callset.json", "chr5.1_2/vidmap.json", "chr5.1_2/vcfheader.vcf"],
 }
 # Every evidence entry has a reason and is either a claim (rule_id) or a synthetic
 # resolution marker (marker); the two are mutually exclusive (issue #228).

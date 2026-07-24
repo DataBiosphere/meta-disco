@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -20,6 +20,7 @@ help:
 	@echo "  make classify-fastq     Classify FASTQ files (network required)"
 	@echo "  make classify-fasta     Classify FASTA files (network required)"
 	@echo "  make classify-gfa       Classify GFA/rGFA graph files (network required)"
+	@echo "  make classify-tar       Classify tar/tar.gz archives by inner format (network required)"
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
@@ -83,7 +84,7 @@ download:
 validate-metadata:
 	uv run python scripts/validate_metadata.py
 
-classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa
+classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar
 
 classify-bam:
 	uv run python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
@@ -99,6 +100,9 @@ classify-fasta:
 
 classify-gfa:
 	uv run python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json -o output/anvil/gfa_classifications.json -w 10
+
+classify-tar:
+	uv run python scripts/classify_headers.py --type tar -i data/anvil/anvil_files_metadata.json -o output/anvil/tar_classifications.json -w 10
 
 classify-bed:
 	uv run python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json

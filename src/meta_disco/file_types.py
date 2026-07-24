@@ -10,6 +10,7 @@ from .fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
+    fetch_tar_headers,
     fetch_vcf_header,
     require_samtools,
 )
@@ -19,6 +20,7 @@ from .header_classifier import (
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
     classify_from_header,
+    classify_from_tar_members,
     classify_from_vcf_header,
 )
 from .pipeline import FileTypeConfig
@@ -79,10 +81,24 @@ GFA_CONFIG = FileTypeConfig(
     content_fields=("data_type",),
 )
 
+# Tar archives (#255). A container carries no format of its own (#245); the head
+# is read and the archive is classified from its dominant recognized *inner* member
+# format. .zip (a trailing central directory, only 2 corpus files) is not handled.
+TAR_CONFIG = FileTypeConfig(
+    name="tar",
+    extensions=(".tar", ".tar.gz"),
+    fetcher=fetch_tar_headers,
+    classifier=classify_from_tar_members,
+    # The inner member formats determine what the contents are; nothing here reads a
+    # member's own header, so no reference_assembly / platform / assay_type.
+    content_fields=("data_modality", "data_type"),
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
     "fastq": FASTQ_CONFIG,
     "fasta": FASTA_CONFIG,
     "gfa": GFA_CONFIG,
+    "tar": TAR_CONFIG,
 }

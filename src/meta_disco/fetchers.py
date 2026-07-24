@@ -9,14 +9,16 @@ each fetcher constructs its typed evidence subclass and calls ``.save``/``.load`
 """
 
 import functools
+import io
 import shutil
 import subprocess
+import tarfile
 import zlib
 from pathlib import Path
 
 import requests
 
-from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, SegmentTag, VcfEvidence
+from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, SegmentTag, TarEvidence, VcfEvidence
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
@@ -524,3 +526,86 @@ def fetch_gfa_segment_tags(
     ).save(evidence_dir)
 
     return segment_tags
+
+
+# =============================================================================
+# TAR FETCHER (#255)
+# =============================================================================
+
+# Cap on member names read from a tar head. The 256KiB head range truncates most
+# archives long before this; the cap bounds a pathological head of many tiny
+# members. See parse_tar_member_names.
+MAX_TAR_MEMBERS = 200
+
+
+def parse_tar_member_names(data: bytes, max_members: int = MAX_TAR_MEMBERS) -> list[str]:
+    """Member names from the head of a (already-decompressed) tar archive (#255).
+
+    Streams members via ``tarfile`` (mode ``"r|"``), which reads the 512-byte header
+    blocks and walks past each member's data. ``data`` is only the archive head (a
+    range request), so the stream ends mid-member: that truncation raises a
+    ``tarfile.TarError``/``EOFError``, caught here — the member names read before the
+    cut are the result. A non-tar or empty head yields ``[]``.
+
+    Stops at ``max_members`` (a bound on a head of many tiny members); the natural
+    truncation usually stops it first.
+    """
+    names: list[str] = []
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r|") as tar:
+            for member in tar:
+                names.append(member.name)
+                if len(names) >= max_members:
+                    break
+    except (tarfile.TarError, EOFError, OSError):
+        # The head cut the stream mid-member (the usual case), or it is not a tar.
+        # Either way, keep the names read before the cut.
+        pass
+    return names
+
+
+@wrap_as_fetch_error("TAR head")
+def fetch_tar_headers(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = False,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> list[str]:
+    """Read member names from the head of a tar / tar.gz archive on S3 (#255).
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    Returns the member names visible in the fetched head; an empty list (a truncated
+    or non-tar head) is a readable result, not a failure. Raises ``FetchError`` naming
+    the cause when the range request itself fails, so the record is kept as a
+    ``not_classified`` row instead of vanishing (#155).
+
+    Only the head is read (``HEAD_BYTES``): a ``.tar`` is read verbatim, a ``.tar.gz``
+    has its head gzip-decompressed (``_decompress_head``, BGZF-aware). That is enough
+    to see the leading members — the archive is classified from its dominant *inner*
+    format, since a container carries no format of its own (#245).
+    """
+    if use_cache:
+        cached = TarEvidence.load(evidence_dir, md5sum)
+        if cached is not None:
+            return cached.payload
+
+    content = _fetch_range(md5sum, HEAD_BYTES - 1, timeout=60, url=url)
+    raw_bytes = len(content)
+
+    # A `.tar.gz` decompresses the head (BGZF-aware); a `.tar` passes through unchanged.
+    content = _decompress_if_gzipped(content, is_gzipped)
+    member_names = parse_tar_member_names(content)
+    if len(member_names) >= MAX_TAR_MEMBERS:
+        # `>=` reaches the cap; the scan does not report whether more members
+        # followed, so this may also fire for an archive of exactly that many — hence
+        # "may have more" rather than asserting the cap truncated the list.
+        print(f"tar member scan reached the {MAX_TAR_MEMBERS}-member cap for {file_name or md5sum}; may have more")
+
+    TarEvidence(
+        md5sum=md5sum, file_name=file_name, member_names=member_names, raw_bytes_fetched=raw_bytes, source_url=url
+    ).save(evidence_dir)
+
+    return member_names

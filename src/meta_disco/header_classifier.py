@@ -529,6 +529,166 @@ def classify_from_gfa_segment_tags(
     return result.to_output_dict()
 
 
+# A GenomicsDB variant store (the 124K T2T tars, #255) is a directory *database*, not
+# a tar of standard files — a GATK GenomicsDB import of gVCFs, built on TileDB. It is
+# identified by its member-name layout, not a file extension (`.tdb` is a *generic*
+# TileDB array — TileDB also backs single-cell and other stores — so `.tdb` alone must
+# not be read as "variants"). The honest, variant-specific signals, either of which
+# lands in the archive head:
+#   - GenomicsDB metadata files (its own schema; these name variants), and
+#   - TileDB arrays named after VCF FORMAT/INFO fields (GenomicsDB stores one array
+#     per attribute; GenomicsDB also writes a paired `<field>_var.tdb`, stripped below).
+# `__tiledb_workspace.tdb` / `__array_schema.tdb` / `__coords.tdb` are *generic* TileDB
+# structure — deliberately excluded, so a non-variant TileDB store is not misread.
+# This member-name signature is Python only because the rule engine has no "archive
+# contains member X" primitive yet; migrating it to a declarative rule is #257.
+_GENOMICSDB_SCHEMA = frozenset({"callset.json", "vidmap.json", "vcfheader.vcf"})
+_VCF_FIELD_ARRAYS = frozenset(
+    {
+        # FORMAT fields
+        "gt",
+        "ad",
+        "dp",
+        "gq",
+        "pl",
+        "min_dp",
+        "sb",
+        "pgt",
+        "pid",
+        "ps",
+        "rgq",
+        "dp_format",
+        # INFO / annotation fields (GATK)
+        "ac",
+        "af",
+        "an",
+        "qual",
+        "filter",
+        "id",
+        "alt",
+        "ref",
+        "end",
+        "mleac",
+        "mleaf",
+        "mq",
+        "mq0",
+        "mqranksum",
+        "baseqranksum",
+        "clippingranksum",
+        "excesshet",
+        "fs",
+        "inbreedingcoeff",
+        "qd",
+        "raw_mq",
+        "raw_mqanddp",
+        "readposranksum",
+        "sor",
+    }
+)
+
+
+def _is_genomicsdb_variant_store(member_names: list[str]) -> bool:
+    """Whether the archive members are a GenomicsDB (TileDB) *variant* store (#255).
+
+    True on a GenomicsDB schema file, or a TileDB array named after a VCF FORMAT/INFO
+    field. A bare `.tdb` (generic TileDB) is deliberately *not* enough — those names
+    are not variant-specific.
+
+    Checks *every* path segment, not just the basename: a TileDB array is a *directory*
+    (``…/PL.tdb/__array_schema.tdb``), so the variant-array name is usually a mid-path
+    segment, and a tar may omit the explicit ``…/PL.tdb`` directory entry (or give it a
+    trailing slash). A leaf-only check would miss those.
+    """
+    for member in member_names:
+        for segment in member.strip("/").split("/"):
+            if segment in _GENOMICSDB_SCHEMA:
+                return True
+            if segment.endswith(".tdb") and segment[:-4].removesuffix("_var").lower() in _VCF_FIELD_ARRAYS:
+                return True
+    return False
+
+
+def classify_from_tar_members(
+    member_names: list[str],
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a tar/tar.gz archive from its member files (#255).
+
+    A container carries no format of its own (#245), so it is classified by its
+    *contents*, read from the archive head. Two paths, both emitting ``CONTENT_TIER``
+    claims (we read the members, so the signal out-ranks any filename guess); the
+    archive name still contributes its own tokens through the base pass:
+
+    1. **GenomicsDB variant store** — a GATK variant database (built on TileDB),
+       recognized by its variant-specific member-name signature (schema files or
+       VCF-attribute TileDB arrays — see :func:`_is_genomicsdb_variant_store`), not a
+       file extension. → ``genomic`` / ``variants``. This is the 124K T2T case.
+    2. **Generic** — the dominant recognized inner *extension*, resolved through the
+       rule engine (so the format knowledge is not duplicated here): a tar of
+       ``.fasta`` → ``data_type: sequence`` (the ``.fasta`` extension alone leaves
+       ``data_modality`` unresolved, since a FASTA may be genomic or transcriptomic).
+       An inner type the rules can only classify from its *header* (BAM/CRAM resolve
+       to nothing from the extension alone) yields only what its extension supports —
+       reading a member's own content is a future refinement.
+
+    No recognizable contents (a head with no GenomicsDB signal and no member with a
+    known extension — e.g. only generic TileDB structure files, or a non-tar head that
+    read as empty) → left ``not_classified``: we read it and could not type the
+    contents. A GenomicsDB store whose variant signal is deeper than the fetched head
+    also lands here (~1%); a dynamic, deeper read is the follow-up.
+
+    ``file_size`` and ``file_format`` are unused (a container has no format of its
+    own); both are accepted only to match the uniform ``_fetch_and_classify`` call.
+    """
+    from collections import Counter
+
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+
+    engine = _get_engine()
+    basenames = [member.rsplit("/", 1)[-1] for member in member_names]
+
+    # Base pass over the archive's own name — its tokens may still carry a reference
+    # or other filename signal, and it seeds the result the content claims layer on.
+    result = engine.classify_extended(ExtendedFileInfo(name=name), include_tier3=False)
+
+    def _claim_content(data_modality: str | None, data_type: str | None, reason: str) -> None:
+        for fld, value in (("data_modality", data_modality), ("data_type", data_type)):
+            if value is not None:
+                result.add_claim(fld, rule_id="tar_inner_format", tier=CONTENT_TIER, reason=reason, value=value)
+
+    # (1) GenomicsDB variant store — a member-name layout signature, caught even when
+    # the `.vcf` member / schema files are pushed past the head in the larger stores.
+    if _is_genomicsdb_variant_store(member_names):
+        _claim_content("genomic", "variants", "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)")
+        return result.to_output_dict()
+
+    # (2) Generic: classify by the dominant recognized inner member extension.
+    # FileName.parse reads the extension from the basename (peeling any wrappers and
+    # yielding a clean core, incl. multi-dot cores like .g.vcf); parsing the basename
+    # rather than the full member path keeps a mid-path directory dot out of it.
+    recognized: list[tuple[str, str]] = []  # (inner extension, member basename)
+    for basename in basenames:
+        ext = FileName.parse(basename).extension
+        if ext is not None:
+            recognized.append((ext, basename))
+    if not recognized:
+        return result.to_output_dict()
+
+    # Counter.most_common breaks ties by first-seen order, so this is deterministic.
+    dominant, dom_count = Counter(ext for ext, _ in recognized).most_common(1)[0]
+    example = next(basename for ext, basename in recognized if ext == dominant)
+    inner = engine.classify_extended(ExtendedFileInfo(name=FileName.EMPTY, file_format=dominant), include_tier3=False)
+    _claim_content(
+        inner.data_modality,
+        inner.data_type,
+        f"archive head holds {dom_count} {dominant} member(s) (e.g. {example}) — dominant recognized inner format",
+    )
+    return result.to_output_dict()
+
+
 @cache
 def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""

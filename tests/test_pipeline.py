@@ -530,7 +530,7 @@ class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY
 
-        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa"}
+        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa", "tar"}
 
     def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
         import dataclasses
