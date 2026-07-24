@@ -599,7 +599,10 @@ def fetch_tar_headers(
     content = _decompress_if_gzipped(content, is_gzipped)
     member_names = parse_tar_member_names(content)
     if len(member_names) >= MAX_TAR_MEMBERS:
-        print(f"tar member scan hit the {MAX_TAR_MEMBERS}-member cap for {file_name or md5sum}; classifying from those")
+        # `>=` reaches the cap; the scan does not report whether more members
+        # followed, so this may also fire for an archive of exactly that many — hence
+        # "may have more" rather than asserting the cap truncated the list.
+        print(f"tar member scan reached the {MAX_TAR_MEMBERS}-member cap for {file_name or md5sum}; may have more")
 
     TarEvidence(
         md5sum=md5sum, file_name=file_name, member_names=member_names, raw_bytes_fetched=raw_bytes, source_url=url

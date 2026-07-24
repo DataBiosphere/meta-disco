@@ -569,7 +569,8 @@ def classify_from_tar_members(
     markers, or a non-tar head that read as empty) → left ``not_classified`` for the
     content dimensions: we read it and could not type the contents.
 
-    ``file_size`` is unused; accepted for the uniform ``_fetch_and_classify`` call.
+    ``file_size`` and ``file_format`` are unused (a container has no format of its
+    own); both are accepted only to match the uniform ``_fetch_and_classify`` call.
     """
     from collections import Counter
 
