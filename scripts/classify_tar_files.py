@@ -55,10 +55,14 @@ def main():
 
     if args.md5:
         file_name = args.filename or ""
+        # Default is_gzipped=True when the filename is unknown: _decompress_head only
+        # decompresses when the gzip magic bytes are present, so True is safe for a
+        # plain .tar too, whereas guessing False would skip decompression for a
+        # .tar.gz given by --md5 with no --filename (gzip bytes -> no members).
         result = classify_single_tar(
             args.md5,
             file_name=file_name,
-            is_gzipped=file_name.endswith(".gz"),
+            is_gzipped=file_name.endswith(".gz") or not file_name,
             use_cache=not args.no_resume,
         )
         if result:

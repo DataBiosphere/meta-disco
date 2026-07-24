@@ -4,6 +4,7 @@ samtools being absent is the one exception — an environment failure that must
 propagate as itself, not masquerade as unreadable content.
 """
 
+import gzip
 import io
 import subprocess
 import tarfile
@@ -187,6 +188,13 @@ class TestTarFetcher:
         _patch_get(monkeypatch, _Resp(206, data))
         names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
         assert names == ["g/callset.json", "g/vcfheader.vcf"]
+
+    def test_gzipped_tar_head_is_decompressed_then_parsed(self, monkeypatch, evidence_dir):
+        # A .tar.gz: is_gzipped=True must decompress the head before the tar parse.
+        gz = gzip.compress(_make_tar([("g/callset.json", b"{}"), ("g/vidmap.json", b"{}")]))
+        _patch_get(monkeypatch, _Resp(206, gz))
+        names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar.gz", is_gzipped=True, use_cache=False)
+        assert names == ["g/callset.json", "g/vidmap.json"]
 
     def test_non_2xx_raises_fetcherror(self, monkeypatch, evidence_dir):
         _patch_get(monkeypatch, _Resp(404))
