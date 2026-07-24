@@ -34,7 +34,9 @@ def classify_single_tar(
 
 def main():
     parser = argparse.ArgumentParser(description="Read tar member headers and classify by inner format")
-    parser.add_argument("--input", "-i", type=str, help="Input file (classification JSON or metadata NDJSON)")
+    parser.add_argument(
+        "--input", "-i", type=str, help="Input metadata file: NDJSON, or JSON with a 'results'/'files' key"
+    )
     parser.add_argument(
         "--output",
         "-o",
