@@ -30,15 +30,8 @@ if TYPE_CHECKING:
 
 # Text GFA formats this module can parse. The other graph extensions the
 # `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
-# GFA_CONFIG.extensions is this same tuple — defined here so the classifier and
-# the config cannot disagree about which names it may trust.
+# GFA_CONFIG.extensions is this same tuple — the file-type routing filter.
 GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
-
-# Parsed-once graph fallback name for ``file_name_for_rules`` — a module constant so
-# the literal is not re-parsed on every graph classification call (a last resort when
-# the name is empty and no file_format is grafted). The empty-name fallback uses the
-# shared :data:`FileName.EMPTY`.
-_DEFAULT_GRAPH_NAME = FileName.parse("graph.gfa")
 
 
 @dataclass(frozen=True)
@@ -389,63 +382,12 @@ _ASSEMBLER_PATTERN = re.compile(
 _TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNORECASE)
 
 
-def file_name_for_rules(
-    name: FileName,
-    file_format: str | None,
-    default: FileName,
-    allowed_extensions: tuple[str, ...] | None = None,
-) -> FileName:
-    """The :class:`FileName` to hand the rule engine, which reads its extension.
-
-    ``ClassifyPipeline._filter_records`` selects a record when *either* its
-    ``file_name`` or its ``file_format`` carries a matching extension, so a
-    selected record's parsed ``name`` may carry no known extension.
-
-    So: keep the parsed ``name`` when it already carries a *usable* extension,
-    otherwise graft ``file_format`` onto its raw string and re-parse — preserving
-    the filename tokens the tier-2 rules match (``-mc-``, ``grch38``). "Usable" is
-    tested against the *compound* spelling (core + wrappers, e.g. ``.gfa.gz``), the
-    same value the old ``extract_extension`` returned, rather than "ends with
-    file_format": 5,227 corpus records are named ``*.fastq.gz`` while declaring
-    ``file_format: ".fastq"``, and grafting there would produce ``*.fastq.gz.fastq``.
-
-    ``allowed_extensions`` narrows "usable" to the extensions the caller can
-    actually handle. Without it, a graph record named ``graph.tar.gz`` would be
-    trusted verbatim: the tar rules run, ``pangenome_graph`` never fires, and a
-    content-derived ``data_type`` claim then lands on a record whose
-    ``data_modality`` is not_classified. Pass the calling config's extensions.
-
-    ``file_format`` is only grafted on when it looks like an extension. The
-    corpus carries ``file_format: "Other"`` on ~108k records; grafting that
-    would yield ``graphOther``, which matches nothing.
-
-    The threaded ``name`` is *reused* on the usable path — no re-parse — so the raw
-    file_name is parsed exactly once (at the load boundary, #242); only the graft
-    path parses a *different* string (the file_format-extended name). This helper is
-    the sole remaining reader of the compound ``extension_map`` keys and is retired
-    in #245, which pushes the allowed-extension override into the engine.
-    """
-    rules = _get_engine().rules
-    if name.extension is not None:
-        # Reconstruct the compound extension (core + wrappers) the old
-        # ``extract_extension`` returned, and test it exactly as before — against the
-        # caller's allowed set, or the (still compound-keyed) extension_map.
-        compound = name.extension + "".join(name.wrappers)
-        usable = compound in allowed_extensions if allowed_extensions else compound in rules.extension_map
-        if usable:
-            return name
-    if file_format and file_format.startswith("."):
-        return FileName.parse(f"{name.raw or 'file'}{file_format}")
-    return name if name.raw else default
-
-
 def classify_without_content(
     reason: str,
     *,
     name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
-    allowed_extensions: tuple[str, ...] | None = None,
     content_fields: tuple[str, ...] = (),
 ) -> dict:
     """Classify a file whose content could not be read, from its name alone.
@@ -455,7 +397,12 @@ def classify_without_content(
 
     Runs the tier-1/2 (extension and filename) rules only, so everything knowable
     without reading bytes is still classified: a `.gfa` is still `pangenome`,
-    still `genomic`, still `not_applicable` for platform and assay.
+    still `genomic`, still `not_applicable` for platform and assay. The parsed
+    ``name`` and the declared ``file_format`` are handed to the engine, which
+    reconciles them (name-extension wins, else ``file_format``); an archive name
+    with no inner format (``x.tar.gz`` → ``extension=None``) falls through to
+    ``file_format`` or, failing that, stays unclassified — we do not classify a
+    container we could not read (#245).
 
     ``content_fields`` names the dimensions *this file type's content* can
     determine (``FileTypeConfig.content_fields``). Only those carry the
@@ -474,9 +421,9 @@ def classify_without_content(
     """
     from .rule_engine import ExtendedFileInfo
 
-    rule_name = file_name_for_rules(name, file_format, default=FileName.EMPTY, allowed_extensions=allowed_extensions)
     file_info = ExtendedFileInfo(
-        name=rule_name,
+        name=name,
+        file_format=file_format,
         file_size=file_size,
     )
     result = _get_engine().classify_extended(file_info, include_tier3=False)
@@ -520,9 +467,10 @@ def classify_from_gfa_segment_tags(
     Args:
         segment_tags: Per-segment :class:`SegmentTag`s from fetchers.parse_gfa_segment_tags
         name: Optional parsed :class:`FileName` for extension/filename rules
-        file_format: Optional extension (e.g. ".rgfa.gz"), used to drive the
-            extension rules when the name carries no known extension
-            (see file_name_for_rules)
+        file_format: Optional declared extension (e.g. ".rgfa.gz"); the engine uses it
+            as the fallback when the name carries no known extension. A non-extension
+            value ("Other") or absent one falls back to ".gfa" — this is the graph
+            classifier, so an unrecognizable graph is still a plain ``pangenome``.
         file_size: Unused. Accepted because ``pipeline._fetch_and_classify`` calls
             every classifier with the same keyword arguments; no graph rule keys
             on file size. ``classify_from_fasta_header`` accepts it unused too.
@@ -532,16 +480,19 @@ def classify_from_gfa_segment_tags(
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    rule_name = file_name_for_rules(
-        name,
-        file_format,
-        default=_DEFAULT_GRAPH_NAME,
-        allowed_extensions=GRAPH_TEXT_EXTENSIONS,
-    )
+    # Hand the engine the parsed name plus a graph file_format fallback: it trusts a
+    # known name-extension (``.gfa``/``.rgfa``), else this ``file_format``. A tar-named
+    # graph (``graph.tar.gz`` → extension=None, #245) falls through to ``.gfa.gz``. A
+    # file_format that is not a recognized extension — ``"Other"`` or a bare container
+    # like ``".tar"`` — defaults to ``.gfa`` so a graph we were routed to is still
+    # classified as one. "Recognized" is tested through the shared vocabulary
+    # (``FileName.parse``), not a bare ``startswith(".")``. No allowed-extension
+    # override is needed now that ``.tar`` is a container, not a content extension.
+    format_fallback = file_format if (file_format and FileName.parse(file_format).extension is not None) else ".gfa"
 
     # Tier 1/2 rules give the `pangenome` base, the `-mc-` reference refinement,
     # and reference_assembly from the filename.
-    file_info = ExtendedFileInfo(name=rule_name)
+    file_info = ExtendedFileInfo(name=name, file_format=format_fallback)
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=False)
 

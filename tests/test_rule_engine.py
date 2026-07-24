@@ -27,32 +27,6 @@ def engine():
     return RuleEngine()
 
 
-class TestExtensionExtraction:
-    """Test extension extraction logic."""
-
-    def test_simple_bam(self, engine):
-        assert engine.rules.extract_extension("sample.bam") == ".bam"
-
-    def test_compound_vcf_gz(self, engine):
-        assert engine.rules.extract_extension("file.vcf.gz") == ".vcf.gz"
-
-    def test_compound_fastq_gz(self, engine):
-        assert engine.rules.extract_extension("sample.fastq.gz") == ".fastq.gz"
-
-    def test_cram_with_dots(self, engine):
-        assert engine.rules.extract_extension("sample.hg38.cram") == ".cram"
-
-    def test_case_insensitive(self, engine):
-        assert engine.rules.extract_extension("SAMPLE.BAM") == ".bam"
-        assert engine.rules.extract_extension("File.VCF.GZ") == ".vcf.gz"
-
-    def test_no_extension(self, engine):
-        assert engine.rules.extract_extension("filename") == ""
-
-    def test_gvcf_gz(self, engine):
-        assert engine.rules.extract_extension("sample.g.vcf.gz") == ".g.vcf.gz"
-
-
 class TestRuleMatching:
     """Test rule matching logic."""
 
@@ -238,12 +212,11 @@ class TestFormatMatching:
 
 
 class TestWrapperSplitMatching:
-    """#244: rule `extensions:` are the clean core suffix; compression/archive is
-    split into wrappers at parse time. A core matches the uncompressed spelling
-    and every compressed spelling the parser recognizes (those in
-    COMPOUND_EXTENSIONS), so classification is unchanged by whether such a file is
-    gzipped — an unlisted spelling like ".bam.gz" is not recognized and matches
-    nothing."""
+    """#244/#245: rule `extensions:` are the clean core suffix; the parser peels
+    every compression/archive container off the name first, then recognizes the
+    core underneath. A core therefore matches the uncompressed spelling and every
+    compressed spelling alike (``.vcf`` matches ``sample.vcf`` and ``sample.vcf.gz``),
+    so classification is unchanged by whether such a file is gzipped."""
 
     @pytest.mark.parametrize("name", ["cohort.vcf.gz", "reads.fastq.gz", "reads.fq.gz"])
     def test_core_keyed_rule_matches_compressed_and_uncompressed(self, engine, name):

@@ -8,9 +8,8 @@ string (epic #242).
 
 ``FileName`` is a pure data type and its parse is a **pure function**:
 ``FileName.parse(name)`` needs no loaded ``UnifiedRules`` — the whole extension
-vocabulary (``COMPOUND_EXTENSIONS`` / ``WRAPPER_SUFFIXES`` / ``EXTENSION_TO_FORMAT``
-/ ``EXTENSION_MAP`` and the derived ``CORE_EXTENSIONS``) lives here in-code as a
-self-contained leaf (#252). ``extension`` is syntactic — the exact core suffix,
+vocabulary (``WRAPPER_SUFFIXES`` / ``EXTENSION_TO_FORMAT`` / ``EXTENSION_MAP`` and
+the derived ``CORE_EXTENSIONS``) lives here in-code as a self-contained leaf (#252). ``extension`` is syntactic — the exact core suffix,
 ``.cram`` distinct from ``.bam`` — with any compression/archive kept apart in
 ``wrappers`` (#244: ``sample.vcf.gz`` → extension ``.vcf`` + wrappers ``(".gz",)``).
 ``format`` is *derived*: what the file actually is, collapsing spelling and
@@ -83,32 +82,15 @@ class FormatSource(str, Enum):
 # rules instance. UnifiedRules re-exposes these as thin delegators.
 # ---------------------------------------------------------------------------
 
-# Compound extensions in priority order (longest first).
-COMPOUND_EXTENSIONS: tuple[str, ...] = (
-    ".g.vcf.gz",  # Must come before .vcf.gz
-    ".gvcf.gz",
-    ".vcf.gz",
-    ".fastq.gz",
-    ".fq.gz",
-    ".fasta.gz",
-    ".fa.gz",
-    ".bed.gz",
-    ".sam.gz",
-    ".rgfa.gz",
-    ".gfa.gz",
-    ".fast5.tar.gz",  # Must come before .tar.gz
-    ".fast5.tar",  # Must come before .tar
-    ".tar.gz",
-    ".mtx.gz",
-)
-
-# Compression and archive suffixes — "wrappers" around the format, not the
-# format itself. Since #244 these do the real work of the extension/format
-# split: the parse splits a recognized extension token into its clean core
-# suffix and these trailing wrappers (".vcf.gz" -> ".vcf" + (".gz",)). Ordered
-# longest-first: the split/peel loop takes the first `endswith` match, so `.bgz`
-# must precede `.gz` or a `.bgz` token would mis-peel as `.gz` and leave a
-# dangling `b` on the core.
+# Compression and archive suffixes — "wrappers" (containers) around the format,
+# not the format itself. The parse peels *every* trailing wrapper off the name
+# first, then recognizes the core the remainder ends with (#245): a container is
+# always stripped, so ``.fast5.tar.gz`` -> core ``.fast5`` + (``.tar``, ``.gz``)
+# falls out with no per-combination allowlist, and an archive with no inner format
+# (``graph.tar.gz``) leaves ``extension=None``. Ordered longest-first: the peel loop
+# takes the first `endswith` match, so `.bgz` must precede `.gz` or a `.bgz` token
+# would mis-peel as `.gz` and leave a dangling `b`. `.tar`/`.zip` are containers
+# here, never content extensions (#245).
 WRAPPER_SUFFIXES: tuple[str, ...] = (".bgz", ".bz2", ".zip", ".tar", ".gz", ".xz")
 
 # Known core extension -> canonical file Format (#243). Keyed on the clean core
@@ -138,27 +120,23 @@ EXTENSION_TO_FORMAT: dict[str, Format] = {
 }
 
 # Extension -> file-type category. Hoisted in-code from unified_rules.yaml (#252)
-# — the last YAML-loaded parse vocabulary. Still carries the compound spellings
-# (.vcf.gz, ...) that #249 deferred pruning to #245 (they back file_name_for_rules'
-# fallback). The parse consumes only its *keys* (via CORE_EXTENSIONS); the
-# category values feed get_file_type and the when.file_format validation (#114).
+# — the last YAML-loaded parse vocabulary. Keyed only on *clean cores* (#245): the
+# compression/archive spellings (.vcf.gz, .fast5.tar.gz, ...) were pruned once the
+# parse peels every wrapper before recognizing the core, so the compound keys were
+# unreferenced. Archive containers (.tar, .tar.gz, .zip) are not cores — they carry
+# no content format of their own (#245). The parse consumes only these *keys* (via
+# CORE_EXTENSIONS); the category values feed get_file_type and the when.file_format
+# validation (#114).
 EXTENSION_MAP: dict[str, str] = {
     ".bam": "alignment",
     ".cram": "alignment",
     ".sam": "alignment",
-    ".sam.gz": "alignment",
     ".vcf": "variant",
-    ".vcf.gz": "variant",
     ".bcf": "variant",
     ".gvcf": "variant",
-    ".gvcf.gz": "variant",
-    ".g.vcf.gz": "variant",
     ".fastq": "reads",
     ".fq": "reads",
-    ".fastq.gz": "reads",
-    ".fq.gz": "reads",
     ".bed": "intervals",
-    ".bed.gz": "intervals",
     ".narrowpeak": "intervals",
     ".broadpeak": "intervals",
     ".bigwig": "signal",
@@ -178,12 +156,9 @@ EXTENSION_MAP: dict[str, str] = {
     ".h5ad": "single_cell_matrix",
     ".loom": "single_cell_matrix",
     ".mtx": "single_cell_matrix",
-    ".mtx.gz": "single_cell_matrix",
     ".idat": "methylation_array",
     ".fast5": "nanopore",
     ".pod5": "nanopore",
-    ".fast5.tar": "nanopore",
-    ".fast5.tar.gz": "nanopore",
     ".svs": "histology_image",
     ".tiff": "image",
     ".tif": "image",
@@ -191,19 +166,12 @@ EXTENSION_MAP: dict[str, str] = {
     ".jpg": "image",
     ".fasta": "sequence",
     ".fa": "sequence",
-    ".fasta.gz": "sequence",
-    ".fa.gz": "sequence",
     ".gfa": "pangenome",
-    ".gfa.gz": "pangenome",
     ".rgfa": "pangenome",
-    ".rgfa.gz": "pangenome",
     ".gbz": "pangenome",
     ".vg": "pangenome",
     ".gbwt": "pangenome",
     ".xg": "pangenome",
-    ".tar": "archive",
-    ".tar.gz": "archive",
-    ".zip": "archive",
     ".sf": "quantification",
     ".txt": "text_ambiguous",
     ".tsv": "text_ambiguous",
@@ -212,26 +180,20 @@ EXTENSION_MAP: dict[str, str] = {
 }
 
 
-def _peel_wrappers(token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]]:
-    """Peel trailing compression/archive ``WRAPPER_SUFFIXES`` off ``token``.
+def _peel_wrappers(token: str) -> tuple[str, tuple[str, ...]]:
+    """Peel *every* trailing container/compression ``WRAPPER_SUFFIXES`` off ``token``.
 
-    Peels longest-first and returns ``(remainder, wrappers)`` with the wrappers
-    in name order. ``keep_last`` chooses between the two uses:
-
-    - ``keep_last=True`` splits a *recognized* extension token into its core and
-      wrappers, stopping before the last remaining token so an archive extension
-      keeps its own suffix: ``.vcf.gz`` -> (``.vcf``, ``(".gz",)``);
-      ``.fast5.tar.gz`` -> (``.fast5``, ``(".tar", ".gz")``); ``.tar.gz`` ->
-      (``.tar``, ``(".gz",)``); ``.tar`` -> (``.tar``, ``()``).
-    - ``keep_last=False`` peels *every* trailing wrapper off an unrecognized
-      name, where no core is claimed and the remainder is only used to trim the
-      stem: ``notes.txt.gz`` -> (``notes.txt``, ``(".gz",)``).
+    Peels longest-first and returns ``(remainder, wrappers)`` with the wrappers in
+    name order: ``notes.txt.gz`` -> (``notes.txt``, ``(".gz",)``); ``run.fast5.tar.gz``
+    -> (``run.fast5``, ``(".tar", ".gz")``); ``graph.tar.gz`` -> (``graph``, ``(".tar",
+    ".gz")``). Containers are always stripped — the caller then recognizes whatever
+    core the remainder ends with (#245).
     """
     rest = token
     wrappers: list[str] = []
     while True:
         for suffix in WRAPPER_SUFFIXES:
-            if rest.endswith(suffix) and not (keep_last and rest == suffix):
+            if rest.endswith(suffix):
                 wrappers.append(suffix)
                 rest = rest[: -len(suffix)]
                 break
@@ -242,16 +204,13 @@ def _peel_wrappers(token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]
 
 
 # The explicit set of producible core extensions (#249). The single source of
-# truth for which clean core suffixes the parse can yield. Derived from every
-# in-code source of core truth, so it cannot drift: every compound extension
-# wrapper-stripped (which is where the multi-dot core ``.g.vcf`` comes from —
-# ``_peel_wrappers(".g.vcf.gz")``), the single-dot ``EXTENSION_MAP`` keys, and the
-# ``EXTENSION_TO_FORMAT`` keys (a format-mapped extension is a producible core by
-# definition). Lower-cased, since recognition matches a lower-cased name.
+# truth for which clean core suffixes the parse can yield, once every container
+# wrapper is peeled (#245). Derived from the single-dot ``EXTENSION_MAP`` keys and
+# the ``EXTENSION_TO_FORMAT`` keys (a format-mapped extension is a producible core
+# by definition — and the only multi-dot core, ``.g.vcf``, lives there). Lower-cased,
+# since recognition matches a lower-cased name.
 CORE_EXTENSIONS: frozenset[str] = frozenset(
-    {_peel_wrappers(c, keep_last=True)[0] for c in COMPOUND_EXTENSIONS}
-    | {k.lower() for k in EXTENSION_MAP if k.count(".") == 1}
-    | {k.lower() for k in EXTENSION_TO_FORMAT}
+    {k.lower() for k in EXTENSION_MAP if k.count(".") == 1} | {k.lower() for k in EXTENSION_TO_FORMAT}
 )
 
 # The cores with more than one dot (e.g. ``.g.vcf``), longest-first — the only
@@ -261,29 +220,6 @@ CORE_EXTENSIONS: frozenset[str] = frozenset(
 _MULTI_DOT_CORES: tuple[str, ...] = tuple(
     sorted((c for c in CORE_EXTENSIONS if c.count(".") > 1), key=len, reverse=True)
 )
-
-
-def extract_extension(filename: str) -> str:
-    """Extract the file extension, handling compound extensions.
-
-    The legacy compound-or-junk extractor (returns the whole compound ``.vcf.gz``,
-    or the junk last-dot suffix for an unknown name). No longer on the classify
-    path — ``file_name_for_rules`` reconstructs the compound from the parsed
-    ``FileName`` (core + wrappers) since #246, and rule matching uses
-    :meth:`FileName.parse` directly. Retained as the leaf raw-name extractor and
-    the behavior reference its tests pin; retired with #245.
-    """
-    filename_lower = filename.lower()
-
-    # Check compound extensions first (in priority order)
-    for ext in COMPOUND_EXTENSIONS:
-        if filename_lower.endswith(ext):
-            return ext
-
-    # Fall back to simple extension
-    if "." in filename:
-        return "." + filename.rsplit(".", 1)[-1].lower()
-    return ""
 
 
 def extension_to_format(extension: str | None) -> Format | None:
@@ -307,9 +243,9 @@ class FileName:
     contract (``^.+$``) diverts a nameless record to ``validation_failed`` before
     it is parsed — though ``FileName`` itself does not re-validate. ``extension``
     is the clean core suffix the rules key on (``.vcf``, not ``.vcf.gz``), or
-    ``None`` when the name carries no known extension — never the junk last-dot
-    suffix ``extract_extension`` returns (``"hprc-v1.0-mc-grch38"`` →
-    ``".0-mc-grch38"``). ``wrappers`` are the trailing compression/archive
+    ``None`` when the name carries no known extension — never a junk last-dot
+    suffix (``"hprc-v1.0-mc-grch38"`` has no extension, not ``".0-mc-grch38"``).
+    ``wrappers`` are the trailing compression/archive
     suffixes split off that core, in name order (#244: ``sample.vcf.gz`` →
     extension ``.vcf``, wrappers ``(".gz",)``). ``stem`` is the token-carrying
     part: the name with its whole recognized extension (core + wrappers) removed,
@@ -347,57 +283,38 @@ class FileName:
     def parse(cls, filename: str) -> "FileName":
         """Parse ``filename`` into a :class:`FileName` against the in-code vocabulary.
 
-        Pure — no ``UnifiedRules`` instance (#252). Recognition is a wrapper-bearing
-        ``COMPOUND_EXTENSIONS`` match, else the known core the name ends with — the
-        multi-dot cores scanned longest-first, then an O(1) lookup of the single-dot
-        last token (#249); an unknown suffix yields ``None`` here, where
-        ``extract_extension`` returns the junk last-dot suffix (which matched no rule
-        anyway). #244 made the *representation* a clean core ``extension`` (``.vcf``)
-        plus the ``wrappers`` it bundled (``(".gz",)``), not the whole compound
-        (``.vcf.gz``); #249 made the core set explicit, which also lets a multi-dot
-        core be recognized in its uncompressed spelling (``sample.g.vcf`` →
-        ``.g.vcf``, matching the compressed ``.g.vcf.gz`` form). ``format`` is the
-        stage-1 derivation from the core extension (``extension_to_format``), with
-        ``format_source`` recording the provenance — set together or both ``None``.
+        Pure — no ``UnifiedRules`` instance (#252). Recognition is "peel every
+        container, then recognize the core underneath" (#245): strip all trailing
+        ``WRAPPER_SUFFIXES`` (compression/archive), then match the remainder against
+        the known cores — multi-dot cores (``.g.vcf``) scanned longest-first so one
+        wins over its shorter tail (``.vcf``), then an O(1) lookup of the last
+        dot-token against ``CORE_EXTENSIONS``. An archive with no inner format
+        (``graph.tar.gz`` → the remainder ``graph`` has no known core) yields
+        ``extension=None`` with ``.tar``/``.gz`` recorded as wrappers, because a
+        container carries no content format of its own. ``format`` is the stage-1
+        derivation from the core (``extension_to_format``), with ``format_source``
+        recording the provenance — set together or both ``None``.
         """
-        lower = filename.lower()
+        # Peel every trailing container/compression wrapper first, then recognize
+        # the core the wrapper-stripped remainder ends with. Lengths are preserved
+        # by lowercasing, so `base`'s length indexes back into the original-case name.
+        base, wrappers = _peel_wrappers(filename.lower())
 
-        recognized = None
-        for ext in COMPOUND_EXTENSIONS:
-            if lower.endswith(ext):
-                recognized = ext
+        extension = None
+        for core in _MULTI_DOT_CORES:
+            if base.endswith(core):
+                extension = core
                 break
-        if recognized is None:
-            # No wrapper-bearing compound matched — recognize the known core the
-            # name ends with (#249). Multi-dot cores (".g.vcf") are scanned first,
-            # longest-first, so one wins over its shorter tail (".vcf"); the common
-            # single-dot case is then an O(1) lookup of the last dot-token. Every
-            # core's leading dot makes both a genuine extension-boundary match, so
-            # the single-dot path is equivalent to the old extension_map gate and
-            # only the multi-dot scan is new (an uncompressed ".g.vcf").
-            for core in _MULTI_DOT_CORES:
-                if lower.endswith(core):
-                    recognized = core
-                    break
-            else:
-                if "." in filename:
-                    simple = "." + filename.rsplit(".", 1)[-1].lower()
-                    if simple in CORE_EXTENSIONS:
-                        recognized = simple
-
-        if recognized is not None:
-            # Split the recognized token into its clean core and wrappers (#244).
-            # The stem drops the whole recognized token (core + wrappers), so it
-            # carries only the name's tokens — unchanged from before the split.
-            extension, wrappers = _peel_wrappers(recognized, keep_last=True)
-            stem = filename[: -len(recognized)]
         else:
-            # No known extension: peel every trailing wrapper as informational
-            # advice and strip them from the stem, but claim no core extension.
-            extension = None
-            _, wrappers = _peel_wrappers(lower, keep_last=False)
-            wrapper_len = sum(len(w) for w in wrappers)
-            stem = filename[:-wrapper_len] if wrapper_len else filename
+            if "." in base:
+                simple = "." + base.rsplit(".", 1)[-1]
+                if simple in CORE_EXTENSIONS:
+                    extension = simple
+
+        # The stem is the original-case name minus its wrappers (base) and minus the
+        # recognized core (``extension`` is always a suffix of ``base``), so it carries
+        # only the name's tokens.
+        stem = filename[: len(base) - len(extension or "")]
 
         fmt = extension_to_format(extension)
         format_source = FormatSource.EXTENSION if fmt is not None else None

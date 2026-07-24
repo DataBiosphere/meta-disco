@@ -25,7 +25,7 @@ from classify_vcf_files import classify_single_vcf as classify_vcf
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
 from meta_disco.file_name import FileName
-from meta_disco.header_classifier import classify_from_gfa_segment_tags, file_name_for_rules
+from meta_disco.header_classifier import classify_from_gfa_segment_tags
 from meta_disco.models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -571,10 +571,10 @@ class TestRgfaContentClassification:
         assert get_val(record, "reference_assembly") == "GRCh38"
 
     def test_extensionless_file_name_keeps_its_tokens_and_gains_the_extension(self):
-        """A selected record's file_name may carry no extension. Appending
-        file_format keeps the `-mc-`/`grch38` tokens the tier-2 rules match;
-        using file_format alone would discard them, and using the bare name would
-        make extract_extension return the junk suffix '.0-mc-grch38'."""
+        """A selected record's file_name may carry no extension. The name's raw
+        tokens (`-mc-`/`grch38`) still reach the tier-2 filename rules, while the
+        engine falls back to the declared `file_format` (.gfa.gz) for the extension —
+        so the graph is classified and the reference is read from the name."""
         record = classify_from_gfa_segment_tags([], name=FileName.parse("hprc-v1.0-mc-grch38"), file_format=".gfa.gz")
         assert get_val(record, "data_type") == "pangenome.reference"
         assert get_val(record, "reference_assembly") == "GRCh38"
@@ -585,83 +585,15 @@ class TestRgfaContentClassification:
         assert get_val(record, "data_modality") == "genomic"
 
 
-class TestFilenameForRules:
-    """The rule engine reads the extension from the filename, so a selected record
-    whose file_name lacks one must have file_format grafted on — without corrupting
-    a name that already has a valid extension.
-
-    ``file_name_for_rules`` takes a parsed :class:`FileName` (#242) and returns one;
-    ``_rule_name`` wraps the parse/unwrap so the assertions stay in raw-string terms.
-    A ``None`` file_name models a header-only call with no name at all."""
-
-    @staticmethod
-    def _rule_name(file_name, file_format, default, allowed_extensions=None):
-        # A None file_name models a header-only call with no name — FileName.EMPTY.
-        name = FileName.parse(file_name) if file_name is not None else FileName.EMPTY
-        return file_name_for_rules(
-            name, file_format, FileName.parse(default), allowed_extensions=allowed_extensions
-        ).raw
-
-    def test_known_extension_is_kept_verbatim(self):
-        assert self._rule_name("graph.gfa", ".gfa", "x") == "graph.gfa"
-
-    def test_mismatched_but_valid_extension_is_not_appended_to(self):
-        """5,227 corpus records are named *.fastq.gz while declaring file_format
-        '.fastq'. Appending would yield '*.fastq.gz.fastq'."""
-        assert self._rule_name("IGVFFI0052MDWT.fastq.gz", ".fastq", "x") == "IGVFFI0052MDWT.fastq.gz"
-
-    def test_unknown_extension_gets_file_format_appended(self):
-        assert self._rule_name("hprc-v1.0-mc-grch38", ".gfa.gz", "x") == "hprc-v1.0-mc-grch38.gfa.gz"
-
-    def test_extensionless_name_gets_file_format_appended(self):
-        assert self._rule_name("graph", ".gfa", "x") == "graph.gfa"
-
-    def test_no_name_uses_file_format(self):
-        assert self._rule_name("", ".rgfa.gz", "x") == "file.rgfa.gz"
-
-    def test_no_name_and_no_format_uses_the_default(self):
-        assert self._rule_name("", "", "graph.gfa") == "graph.gfa"
-        assert self._rule_name(None, None, "graph.gfa") == "graph.gfa"
-
-    def test_non_dotted_file_format_is_not_grafted_on(self):
-        """~108k corpus records carry file_format 'Other'; 'graphOther' matches nothing.
-
-        The name is returned as-is rather than fabricated: nothing is knowable, and
-        claiming a `.gfa` we were never told about would be worse than not_classified.
-        """
-        assert self._rule_name("graph", "Other", "graph.gfa") == "graph"
-        assert self._rule_name("", "Other", "graph.gfa") == "graph.gfa"
-
-    def test_known_but_disallowed_extension_is_not_trusted(self):
-        """A graph record named *.tar.gz must not be classified off the tar rules
-        just because .tar.gz is a known extension somewhere in the map."""
-        assert (
-            self._rule_name(
-                "hprc-graph.tar.gz",
-                ".gfa.gz",
-                "graph.gfa",
-                allowed_extensions=(".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz"),
-            )
-            == "hprc-graph.tar.gz.gfa.gz"
-        )
-
-    def test_allowed_extension_is_trusted_verbatim(self):
-        assert (
-            self._rule_name(
-                "hprc-v1.0-mc-grch38.gfa.gz",
-                ".gfa",
-                "graph.gfa",
-                allowed_extensions=(".gfa", ".gfa.gz"),
-            )
-            == "hprc-v1.0-mc-grch38.gfa.gz"
-        )
-
-
 class TestGfaContentClaimCoherence:
     def test_tar_named_graph_record_is_coherent(self):
-        """Previously: the .tar.gz name was trusted, pangenome_graph never fired, and
-        the rGFA claim forced data_type=pangenome.reference on a record whose
-        data_modality was not_classified."""
+        """A ``.tar.gz``-named graph must still classify as a graph, not as an archive.
+
+        Since #245 ``graph.tar.gz`` parses to ``extension=None`` (``.tar``/``.gz`` are
+        containers), so the engine falls back to the declared ``.gfa.gz`` file_format
+        — ``pangenome_graph`` fires and the rGFA rank-0 claim coherently refines it to
+        ``pangenome.reference`` on a ``genomic`` record. (Previously ``.tar`` was a
+        core extension a bespoke filename override had to reject.)"""
         record = classify_from_gfa_segment_tags(
             [SegmentTag(sn="chr1", sr="0")],
             name=FileName.parse("hprc-graph.tar.gz"),
