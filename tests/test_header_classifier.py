@@ -32,6 +32,7 @@ from meta_disco.header_classifier import (
     # Classification functions
     classify_from_fastq_header,
     classify_from_header,
+    classify_from_tar_members,
     classify_from_vcf_header,
     detect_paired_end_indicators,
     # Helper functions
@@ -930,3 +931,42 @@ class TestEdgeCases:
 @RG\tID:sample_\u00e9\tPL:ILLUMINA"""
         result = classify_from_header(header)
         assert val(result, "platform") == "ILLUMINA"
+
+
+class TestTarClassifier:
+    """classify_from_tar_members: classify a tar archive by its contents (#255)."""
+
+    def test_genomicsdb_store_is_genomic_variants(self):
+        """The T2T case: a GenomicsDB/TileDB store — recognized by its layout marker
+        files, even when no `.vcf` member is in the head (large stores)."""
+        members = [
+            "./chr22.1_2/vidmap.json",
+            "./chr22.1_2/callset.json",
+            "./chr22.1_2/__tiledb_workspace.tdb",
+            "./chr22.1_2/chr22$1$2/AD.tdb",
+        ]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants"
+
+    def test_one_marker_is_not_enough_for_genomicsdb(self):
+        """A lone incidental `callset.json` (< 2 markers) is not a GenomicsDB store;
+        with no recognized inner extension either, the archive stays not_classified."""
+        result = classify_from_tar_members(["misc/callset.json", "misc/notes.tdb"])
+        assert field_status(result, "data_type") == NOT_CLASSIFIED
+        assert field_status(result, "data_modality") == NOT_CLASSIFIED
+
+    def test_generic_dominant_inner_extension(self):
+        """A tar of FASTA members → the inner format's classification (sequence)."""
+        result = classify_from_tar_members(["asm/hap1.fasta", "asm/hap2.fasta", "asm/readme.txt"])
+        assert val(result, "data_type") == "sequence"
+
+    def test_unrecognized_contents_stay_not_classified(self):
+        """Read it, but no recognized inner format and < 2 markers → not_classified."""
+        result = classify_from_tar_members(["blob/x.tdb", "blob/y.dat"])
+        assert field_status(result, "data_type") == NOT_CLASSIFIED
+
+    def test_empty_member_list_is_not_classified(self):
+        """A non-tar / empty head read as no members → not_classified, not a crash."""
+        result = classify_from_tar_members([])
+        assert field_status(result, "data_type") == NOT_CLASSIFIED

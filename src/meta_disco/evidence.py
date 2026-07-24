@@ -241,6 +241,20 @@ class FastaEvidence(CachedEvidence):
     contig_names: list[str]
 
 
+@dataclass(frozen=True, kw_only=True)
+class TarEvidence(CachedEvidence):
+    """Cached tar/tar.gz member names read from the archive's head (#255).
+
+    An empty list is a valid hit: the fetched head held no readable member header
+    (a truncated or non-tar head), which the classifier reads as `not_classified`
+    rather than a fetch failure.
+    """
+
+    PAYLOAD_KEY: ClassVar[str] = "member_names"
+
+    member_names: list[str]
+
+
 @dataclass(frozen=True)
 class SegmentTag:
     """The rGFA stable-sequence tags on one GFA segment (S) line (#207).

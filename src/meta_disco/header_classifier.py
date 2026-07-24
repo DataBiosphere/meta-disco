@@ -529,6 +529,93 @@ def classify_from_gfa_segment_tags(
     return result.to_output_dict()
 
 
+# GenomicsDB / TileDB variant-store marker files (#255). These T2T tars are a
+# directory *database*, not a tar of standard files — the identity is this layout,
+# and its markers sit in the archive head at every size, whereas the one member with
+# a known extension (`vcfheader.vcf`) is pushed past the head in the larger stores.
+# Requiring >= 2 of these (all GenomicsDB-specific filenames) avoids a false positive
+# from an incidental lone `callset.json`. This member-name signature is Python only
+# because the rule engine has no "archive contains member X" primitive yet; migrating
+# it to a declarative rule is a follow-up (the #154 content-as-first-class line).
+_GENOMICSDB_MARKERS = frozenset({"callset.json", "vidmap.json", "__tiledb_workspace.tdb", "vcfheader.vcf"})
+
+
+def classify_from_tar_members(
+    member_names: list[str],
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a tar/tar.gz archive from its member files (#255).
+
+    A container carries no format of its own (#245), so it is classified by its
+    *contents*, read from the archive head. Two paths, both emitting ``CONTENT_TIER``
+    claims (we read the members, so the signal out-ranks any filename guess); the
+    archive name still contributes its own tokens through the base pass:
+
+    1. **GenomicsDB / TileDB variant store** — a directory database recognized by its
+       layout marker files (``callset.json``/``vidmap.json``/…), which sit in the head
+       at every archive size. → ``genomic`` / ``variants``. This is the 124K T2T case.
+    2. **Generic** — the dominant recognized inner *extension*, resolved through the
+       rule engine (so the format knowledge is not duplicated here): a tar of
+       ``.fasta`` → ``data_type: sequence`` (the ``.fasta`` extension alone leaves
+       ``data_modality`` unresolved, since a FASTA may be genomic or transcriptomic).
+       An inner type the rules can only classify from its *header* (BAM/CRAM resolve
+       to nothing from the extension alone) yields only what its extension supports —
+       reading a member's own content is a future refinement.
+
+    No recognizable contents (an all-``.tdb``/``.json`` head with < 2 GenomicsDB
+    markers, or a non-tar head that read as empty) → left ``not_classified`` for the
+    content dimensions: we read it and could not type the contents.
+
+    ``file_size`` is unused; accepted for the uniform ``_fetch_and_classify`` call.
+    """
+    from collections import Counter
+
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+
+    engine = _get_engine()
+    basenames = [member.rsplit("/", 1)[-1] for member in member_names]
+
+    # Base pass over the archive's own name — its tokens may still carry a reference
+    # or other filename signal, and it seeds the result the content claims layer on.
+    result = engine.classify_extended(ExtendedFileInfo(name=name), include_tier3=False)
+
+    def _claim_content(data_modality: str | None, data_type: str | None, reason: str) -> None:
+        for fld, value in (("data_modality", data_modality), ("data_type", data_type)):
+            if value is not None:
+                result.add_claim(fld, rule_id="tar_inner_format", tier=CONTENT_TIER, reason=reason, value=value)
+
+    # (1) GenomicsDB / TileDB variant store — a member-name layout signature, caught
+    # even when the `.vcf` member is past the head.
+    markers = sorted(_GENOMICSDB_MARKERS.intersection(basenames))
+    if len(markers) >= 2:
+        _claim_content("genomic", "variants", f"GenomicsDB/TileDB variant store (markers: {', '.join(markers)})")
+        return result.to_output_dict()
+
+    # (2) Generic: classify by the dominant recognized inner member extension. An
+    # extension is only ever the last dot-token of the basename, never a mid-path dot.
+    recognized: list[tuple[str, str]] = []  # (inner extension, member basename)
+    for basename in basenames:
+        ext = FileName.parse(basename).extension
+        if ext is not None:
+            recognized.append((ext, basename))
+    if not recognized:
+        return result.to_output_dict()
+
+    # Counter.most_common breaks ties by first-seen order, so this is deterministic.
+    dominant, dom_count = Counter(ext for ext, _ in recognized).most_common(1)[0]
+    example = next(basename for ext, basename in recognized if ext == dominant)
+    inner = engine.classify_extended(ExtendedFileInfo(name=FileName.EMPTY, file_format=dominant), include_tier3=False)
+    _claim_content(
+        inner.data_modality,
+        inner.data_type,
+        f"archive head holds {dom_count} {dominant} member(s) (e.g. {example}) — dominant recognized inner format",
+    )
+    return result.to_output_dict()
+
+
 @cache
 def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""

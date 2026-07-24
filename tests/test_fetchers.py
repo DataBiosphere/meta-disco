@@ -4,7 +4,9 @@ samtools being absent is the one exception — an environment failure that must
 propagate as itself, not masquerade as unreadable content.
 """
 
+import io
 import subprocess
+import tarfile
 
 import pytest
 import requests
@@ -15,9 +17,23 @@ from meta_disco.fetchers import (
     fetch_bam_header,
     fetch_fasta_headers,
     fetch_fastq_reads,
+    fetch_tar_headers,
     fetch_vcf_header,
+    parse_tar_member_names,
     require_samtools,
 )
+
+
+def _make_tar(members: list[tuple[str, bytes]]) -> bytes:
+    """Build an in-memory tar from ``(name, data)`` pairs."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for member_name, data in members:
+            info = tarfile.TarInfo(member_name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
 
 MD5 = "a" * 32
 
@@ -140,3 +156,45 @@ class TestRequireSamtools:
     def test_ok_when_present(self, monkeypatch):
         monkeypatch.setattr(fetchers.shutil, "which", lambda _: "/usr/bin/samtools")
         require_samtools()  # must not raise
+
+
+class TestParseTarMemberNames:
+    """Member-name extraction from a (possibly truncated) tar head (#255)."""
+
+    def test_reads_all_members_of_a_whole_tar(self):
+        data = _make_tar([("dir/a.vcf", b"x" * 10), ("dir/b.fasta", b"y" * 20), ("dir/c.bam", b"z" * 5)])
+        assert parse_tar_member_names(data) == ["dir/a.vcf", "dir/b.fasta", "dir/c.bam"]
+
+    def test_truncated_head_keeps_members_read_before_the_cut(self):
+        # A large second member is cut off by the head slice; the first survives.
+        data = _make_tar([("dir/a.vcf", b"h" * 10), ("dir/big.tdb", b"D" * 8000)])
+        assert parse_tar_member_names(data[:1500]) == ["dir/a.vcf"]
+
+    def test_non_tar_and_empty_yield_no_members(self):
+        assert parse_tar_member_names(b"not a tar at all, just bytes") == []
+        assert parse_tar_member_names(b"") == []
+
+    def test_member_cap_is_honored(self):
+        data = _make_tar([(f"m{i}.txt", b"") for i in range(10)])
+        assert parse_tar_member_names(data, max_members=3) == ["m0.txt", "m1.txt", "m2.txt"]
+
+
+class TestTarFetcher:
+    """fetch_tar_headers: range-read a head, parse members, wrap failures as FetchError."""
+
+    def test_returns_member_names_from_the_head(self, monkeypatch, evidence_dir):
+        data = _make_tar([("g/callset.json", b"{}"), ("g/vcfheader.vcf", b"##")])
+        _patch_get(monkeypatch, _Resp(206, data))
+        names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
+        assert names == ["g/callset.json", "g/vcfheader.vcf"]
+
+    def test_non_2xx_raises_fetcherror(self, monkeypatch, evidence_dir):
+        _patch_get(monkeypatch, _Resp(404))
+        with pytest.raises(FetchError):
+            fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
+
+    def test_non_tar_head_is_readable_empty_not_error(self, monkeypatch, evidence_dir):
+        # A readable-but-unparseable head is an empty member list (not_classified),
+        # not a FetchError — the range request itself succeeded.
+        _patch_get(monkeypatch, _Resp(200, b"garbage, not a tar"))
+        assert fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False) == []

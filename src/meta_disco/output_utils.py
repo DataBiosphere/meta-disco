@@ -16,6 +16,7 @@ CLASSIFICATION_FILES = [
     "index_classifications.json",
     "fasta_classifications.json",
     "gfa_classifications.json",
+    "tar_classifications.json",
     "remaining_classifications.json",
 ]
 

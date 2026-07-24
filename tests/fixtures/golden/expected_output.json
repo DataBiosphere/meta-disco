@@ -375,6 +375,89 @@
       "validation_failed": 0
     }
   },
+  "tar": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "GenomicsDB/TileDB variant store (markers: callset.json, vcfheader.vcf, vidmap.json)",
+                "rule_id": "tar_inner_format",
+                "tier": 4,
+                "value": "genomic"
+              }
+            ],
+            "status": "classified",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "GenomicsDB/TileDB variant store (markers: callset.json, vcfheader.vcf, vidmap.json)",
+                "rule_id": "tar_inner_format",
+                "tier": 4,
+                "value": "variants"
+              }
+            ],
+            "status": "classified",
+            "value": "variants"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "entry_id": "g-tar-1",
+        "file_format": ".tar",
+        "file_name": "chr5.136400001_136500001.tar",
+        "file_size": 45516800,
+        "md5sum": "ffffffffffffffffffffffffffffffff"
+      }
+    ],
+    "metadata": {
+      "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
+      "failed": 0,
+      "from_cache": 0,
+      "processed": 1,
+      "successful": 1,
+      "total_to_process": 1,
+      "validation_failed": 0
+    }
+  },
   "vcf": {
     "classifications": [
       {
