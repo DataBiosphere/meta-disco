@@ -529,15 +529,79 @@ def classify_from_gfa_segment_tags(
     return result.to_output_dict()
 
 
-# GenomicsDB / TileDB variant-store marker files (#255). These T2T tars are a
-# directory *database*, not a tar of standard files — the identity is this layout,
-# and its markers sit in the archive head at every size, whereas the one member with
-# a known extension (`vcfheader.vcf`) is pushed past the head in the larger stores.
-# Requiring >= 2 of these (all GenomicsDB-specific filenames) avoids a false positive
-# from an incidental lone `callset.json`. This member-name signature is Python only
-# because the rule engine has no "archive contains member X" primitive yet; migrating
-# it to a declarative rule is a follow-up (the #154 content-as-first-class line).
-_GENOMICSDB_MARKERS = frozenset({"callset.json", "vidmap.json", "__tiledb_workspace.tdb", "vcfheader.vcf"})
+# A GenomicsDB variant store (the 124K T2T tars, #255) is a directory *database*, not
+# a tar of standard files — a GATK GenomicsDB import of gVCFs, built on TileDB. It is
+# identified by its member-name layout, not a file extension (`.tdb` is a *generic*
+# TileDB array — TileDB also backs single-cell and other stores — so `.tdb` alone must
+# not be read as "variants"). The honest, variant-specific signals, either of which
+# lands in the archive head:
+#   - GenomicsDB metadata files (its own schema; these name variants), and
+#   - TileDB arrays named after VCF FORMAT/INFO fields (GenomicsDB stores one array
+#     per attribute; GenomicsDB also writes a paired `<field>_var.tdb`, stripped below).
+# `__tiledb_workspace.tdb` / `__array_schema.tdb` / `__coords.tdb` are *generic* TileDB
+# structure — deliberately excluded, so a non-variant TileDB store is not misread.
+# This member-name signature is Python only because the rule engine has no "archive
+# contains member X" primitive yet; migrating it to a declarative rule is #257.
+_GENOMICSDB_SCHEMA = frozenset({"callset.json", "vidmap.json", "vcfheader.vcf"})
+_VCF_FIELD_ARRAYS = frozenset(
+    {
+        # FORMAT fields
+        "gt",
+        "ad",
+        "dp",
+        "gq",
+        "pl",
+        "min_dp",
+        "sb",
+        "pgt",
+        "pid",
+        "ps",
+        "rgq",
+        "dp_format",
+        # INFO / annotation fields (GATK)
+        "ac",
+        "af",
+        "an",
+        "qual",
+        "filter",
+        "id",
+        "alt",
+        "ref",
+        "end",
+        "mleac",
+        "mleaf",
+        "mq",
+        "mq0",
+        "mqranksum",
+        "baseqranksum",
+        "clippingranksum",
+        "excesshet",
+        "fs",
+        "inbreedingcoeff",
+        "qd",
+        "raw_mq",
+        "raw_mqanddp",
+        "readposranksum",
+        "sor",
+    }
+)
+
+
+def _is_genomicsdb_variant_store(basenames: list[str]) -> bool:
+    """Whether the archive members are a GenomicsDB (TileDB) *variant* store (#255).
+
+    True on a GenomicsDB schema file, or a TileDB array named after a VCF FORMAT/INFO
+    field. A bare `.tdb` (generic TileDB) is deliberately *not* enough — those names
+    are not variant-specific.
+    """
+    if _GENOMICSDB_SCHEMA.intersection(basenames):
+        return True
+    for basename in basenames:
+        if basename.endswith(".tdb"):
+            core = basename[:-4].removesuffix("_var").lower()
+            if core in _VCF_FIELD_ARRAYS:
+                return True
+    return False
 
 
 def classify_from_tar_members(
@@ -554,9 +618,10 @@ def classify_from_tar_members(
     claims (we read the members, so the signal out-ranks any filename guess); the
     archive name still contributes its own tokens through the base pass:
 
-    1. **GenomicsDB / TileDB variant store** — a directory database recognized by its
-       layout marker files (``callset.json``/``vidmap.json``/…), which sit in the head
-       at every archive size. → ``genomic`` / ``variants``. This is the 124K T2T case.
+    1. **GenomicsDB variant store** — a GATK variant database (built on TileDB),
+       recognized by its variant-specific member-name signature (schema files or
+       VCF-attribute TileDB arrays — see :func:`_is_genomicsdb_variant_store`), not a
+       file extension. → ``genomic`` / ``variants``. This is the 124K T2T case.
     2. **Generic** — the dominant recognized inner *extension*, resolved through the
        rule engine (so the format knowledge is not duplicated here): a tar of
        ``.fasta`` → ``data_type: sequence`` (the ``.fasta`` extension alone leaves
@@ -565,9 +630,11 @@ def classify_from_tar_members(
        to nothing from the extension alone) yields only what its extension supports —
        reading a member's own content is a future refinement.
 
-    No recognizable contents (an all-``.tdb``/``.json`` head with < 2 GenomicsDB
-    markers, or a non-tar head that read as empty) → left ``not_classified`` for the
-    content dimensions: we read it and could not type the contents.
+    No recognizable contents (a head with no GenomicsDB signal and no member with a
+    known extension — e.g. only generic TileDB structure files, or a non-tar head that
+    read as empty) → left ``not_classified``: we read it and could not type the
+    contents. A GenomicsDB store whose variant signal is deeper than the fetched head
+    also lands here (~1%); a dynamic, deeper read is the follow-up.
 
     ``file_size`` and ``file_format`` are unused (a container has no format of its
     own); both are accepted only to match the uniform ``_fetch_and_classify`` call.
@@ -588,11 +655,10 @@ def classify_from_tar_members(
             if value is not None:
                 result.add_claim(fld, rule_id="tar_inner_format", tier=CONTENT_TIER, reason=reason, value=value)
 
-    # (1) GenomicsDB / TileDB variant store — a member-name layout signature, caught
-    # even when the `.vcf` member is past the head.
-    markers = sorted(_GENOMICSDB_MARKERS.intersection(basenames))
-    if len(markers) >= 2:
-        _claim_content("genomic", "variants", f"GenomicsDB/TileDB variant store (markers: {', '.join(markers)})")
+    # (1) GenomicsDB variant store — a member-name layout signature, caught even when
+    # the `.vcf` member / schema files are pushed past the head in the larger stores.
+    if _is_genomicsdb_variant_store(basenames):
+        _claim_content("genomic", "variants", "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)")
         return result.to_output_dict()
 
     # (2) Generic: classify by the dominant recognized inner member extension.

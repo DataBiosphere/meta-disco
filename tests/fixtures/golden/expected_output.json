@@ -393,7 +393,7 @@
           "data_modality": {
             "evidence": [
               {
-                "reason": "GenomicsDB/TileDB variant store (markers: callset.json, vcfheader.vcf, vidmap.json)",
+                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
                 "rule_id": "tar_inner_format",
                 "tier": 4,
                 "value": "genomic"
@@ -405,7 +405,7 @@
           "data_type": {
             "evidence": [
               {
-                "reason": "GenomicsDB/TileDB variant store (markers: callset.json, vcfheader.vcf, vidmap.json)",
+                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
                 "rule_id": "tar_inner_format",
                 "tier": 4,
                 "value": "variants"

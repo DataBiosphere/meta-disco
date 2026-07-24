@@ -936,23 +936,31 @@ class TestEdgeCases:
 class TestTarClassifier:
     """classify_from_tar_members: classify a tar archive by its contents (#255)."""
 
-    def test_genomicsdb_store_is_genomic_variants(self):
-        """The T2T case: a GenomicsDB/TileDB store — recognized by its layout marker
-        files, even when no `.vcf` member is in the head (large stores)."""
+    def test_genomicsdb_store_from_schema_files(self):
+        """A GenomicsDB store recognized by its schema files (the common case)."""
+        members = ["./chr22.1_2/vidmap.json", "./chr22.1_2/callset.json", "./chr22.1_2/vcfheader.vcf"]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "variants"
+
+    def test_genomicsdb_store_from_vcf_field_arrays_only(self):
+        """A large store whose schema files are past the head is still caught by its
+        VCF-attribute TileDB arrays (e.g. PL/GQ/DP_FORMAT), incl. the `_var` pairs."""
         members = [
-            "./chr22.1_2/vidmap.json",
-            "./chr22.1_2/callset.json",
-            "./chr22.1_2/__tiledb_workspace.tdb",
-            "./chr22.1_2/chr22$1$2/AD.tdb",
+            "./chr4.1_2/chr4$1$2/__coords.tdb",
+            "./chr4.1_2/chr4$1$2/PL.tdb",
+            "./chr4.1_2/chr4$1$2/DP_FORMAT.tdb",
+            "./chr4.1_2/chr4$1$2/MLEAC_var.tdb",
         ]
         result = classify_from_tar_members(members)
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants"
 
-    def test_one_marker_is_not_enough_for_genomicsdb(self):
-        """A lone incidental `callset.json` (< 2 markers) is not a GenomicsDB store;
-        with no recognized inner extension either, the archive stays not_classified."""
-        result = classify_from_tar_members(["misc/callset.json", "misc/notes.tdb"])
+    def test_bare_tiledb_is_not_called_variants(self):
+        """Honesty: a `.tdb` is a *generic* TileDB array — a head of only generic TileDB
+        structure files (no schema, no VCF-field array) is not read as variants."""
+        members = ["store/__tiledb_workspace.tdb", "store/__array_schema.tdb", "store/__coords.tdb"]
+        result = classify_from_tar_members(members)
         assert field_status(result, "data_type") == NOT_CLASSIFIED
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
@@ -962,8 +970,8 @@ class TestTarClassifier:
         assert val(result, "data_type") == "sequence"
 
     def test_unrecognized_contents_stay_not_classified(self):
-        """Read it, but no recognized inner format and < 2 markers → not_classified."""
-        result = classify_from_tar_members(["blob/x.tdb", "blob/y.dat"])
+        """Read it, but no GenomicsDB signal and no recognized inner extension → not_classified."""
+        result = classify_from_tar_members(["blob/x.dat", "blob/y.bin"])
         assert field_status(result, "data_type") == NOT_CLASSIFIED
 
     def test_empty_member_list_is_not_classified(self):
