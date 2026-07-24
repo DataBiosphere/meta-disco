@@ -485,7 +485,8 @@ def classify_from_gfa_segment_tags(
 
     # Hand the engine the parsed name plus a graph file_format fallback: it trusts a
     # known name-extension (``.gfa``/``.rgfa``), else this ``file_format``. A tar-named
-    # graph (``graph.tar.gz`` → extension=None, #245) falls through to ``.gfa.gz``. A
+    # graph (``graph.tar.gz`` → extension=None, #245) falls through to ``.gfa.gz``,
+    # which the engine normalizes to its clean ``.gfa`` core. A
     # file_format that is not a recognized extension — ``"Other"`` or a bare container
     # like ``".tar"`` — defaults to ``.gfa`` so a graph we were routed to is still
     # classified as one. "Recognized" is tested through the shared vocabulary

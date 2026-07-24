@@ -296,8 +296,9 @@ class FileName:
         recording the provenance — set together or both ``None``.
         """
         # Peel every trailing container/compression wrapper first, then recognize
-        # the core the wrapper-stripped remainder ends with. Lengths are preserved
-        # by lowercasing, so `base`'s length indexes back into the original-case name.
+        # the core the wrapper-stripped remainder ends with. Recognition runs against
+        # the lowercased name; the stem is sliced by ASCII suffix length below, so it
+        # does not rely on lowercasing preserving length (see the stem computation).
         base, wrappers = _peel_wrappers(filename.lower())
 
         extension = None
