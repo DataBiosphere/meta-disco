@@ -302,7 +302,6 @@ enums:
       statistics:
       log:
       interval_set:
-      archive:
 
   reference_assembly_enum:
     permissible_values:

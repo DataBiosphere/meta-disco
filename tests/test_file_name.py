@@ -51,12 +51,13 @@ class TestExtension:
         assert fn.wrappers == (".gz",)
         assert fn.stem == "sample"
 
-    def test_archive_extension_keeps_tar_as_core(self):
-        """A gzipped tarball: ``.tar`` is the core extension (an archive is a real
-        file type), ``.gz`` the wrapper — the last token is never peeled away."""
+    def test_archive_container_has_no_core(self):
+        """#245: an archive with no inner format is a container, not a content
+        extension — ``.tar`` and ``.gz`` both peel as wrappers and the extension is
+        honestly None (a tar of unknown files is not classifiable from its name)."""
         fn = parse("hprc-graph.tar.gz")
-        assert fn.extension == ".tar"
-        assert fn.wrappers == (".gz",)
+        assert fn.extension is None
+        assert fn.wrappers == (".tar", ".gz")
         assert fn.stem == "hprc-graph"
 
     def test_gvcf_keeps_its_own_core(self):
@@ -78,60 +79,63 @@ class TestExtension:
         assert fn.wrappers == ()
         assert fn.stem == "HG002.deepvariant"
 
-    def test_double_wrapper_peels_both(self):
-        """``.fast5.tar.gz`` is tar-archived and gzip-compressed around a
-        ``.fast5`` core — both wrappers peel, in name order."""
+    def test_double_wrapper_peels_both_to_inner_core(self):
+        """``run.fast5.tar.gz`` is tar-archived and gzip-compressed around a
+        ``.fast5`` core — both containers peel and the inner ``.fast5`` is
+        recognized underneath (#245), with no per-combination allowlist entry."""
         fn = parse("run.fast5.tar.gz")
         assert fn.extension == ".fast5"
         assert fn.wrappers == (".tar", ".gz")
         assert fn.stem == "run"
 
     def test_extensionless_name_is_none_not_junk(self):
-        """The bug this fixes: extract_extension returns a junk last-dot suffix
-        ('.0-mc-grch38'); the parsed extension is honestly None."""
+        """A name whose last dot-token is not a known core yields extension None,
+        not a junk last-dot suffix (``.0-mc-grch38``)."""
         fn = parse("hprc-v1.0-mc-grch38")
         assert fn.extension is None
         assert fn.wrappers == ()
         assert fn.stem == "hprc-v1.0-mc-grch38"
-        # And the old parser did return the junk suffix — this is the contrast.
-        assert RULES.extract_extension("hprc-v1.0-mc-grch38") == ".0-mc-grch38"
 
     def test_unknown_simple_extension_is_none(self):
         fn = parse("readme.xyz")
         assert fn.extension is None
         assert fn.stem == "readme.xyz"
 
+    def test_length_changing_lowercase_char_does_not_skew_the_stem(self):
+        """`"İ".lower()` is two chars, so slicing the stem by the lowercased length
+        would over-keep. The suffix (wrappers + core) is ASCII, so the stem is sliced
+        off the original name by suffix length and stays correct."""
+        fn = parse("İ.bam")
+        assert fn.extension == ".bam"
+        assert fn.stem == "İ"
 
-class TestBehaviorPreservation:
-    """For every name with a *known* extension, the core extension plus its
-    wrappers reconstruct exactly what the engine derived before (the compound
-    ``extract_extension``) — so #244 changes the *representation*, not *which*
-    names carry an extension. Rule routing is preserved: the core now stands in
-    for the old compound (the rule ``extensions:`` lists were migrated in step)."""
+
+class TestContainersArePeeled:
+    """#245: every compression/archive container is peeled off the name before the
+    core is recognized, so a core matches under any container spelling (``.vcf`` for
+    ``sample.vcf.gz``) and an archive with no inner format has no core."""
 
     @pytest.mark.parametrize(
-        "name",
+        ("name", "extension", "wrappers"),
         [
-            "sample.bam",
-            "HG00741.final.cram",
-            "cohort.vcf.gz",
-            "cohort.g.vcf.gz",
-            "reads.fastq.gz",
-            "reads.fq.gz",
-            "genome.fasta",
-            "genome.fa.gz",
-            "regions.bed.gz",
-            "graph.gfa.gz",
-            "graph.rgfa",
-            "NUFIP1_quant.sf",
-            "archive.tar.gz",
-            "run.fast5.tar.gz",
+            ("sample.bam", ".bam", ()),
+            ("cohort.vcf.gz", ".vcf", (".gz",)),
+            ("cohort.g.vcf.gz", ".g.vcf", (".gz",)),
+            ("reads.fastq.gz", ".fastq", (".gz",)),
+            ("genome.fa.gz", ".fa", (".gz",)),
+            ("regions.bed.gz", ".bed", (".gz",)),
+            ("graph.gfa.gz", ".gfa", (".gz",)),
+            ("run.fast5.tar.gz", ".fast5", (".tar", ".gz")),
+            # Containers with no inner format → no core, containers as wrappers.
+            ("archive.tar.gz", None, (".tar", ".gz")),
+            ("bundle.zip", None, (".zip",)),
+            ("chr1.0_248956422.tar", None, (".tar",)),
         ],
     )
-    def test_core_plus_wrappers_reconstructs_old_compound(self, name):
+    def test_container_peeled_then_core_recognized(self, name, extension, wrappers):
         fn = parse(name)
-        assert fn.extension is not None
-        assert fn.extension + "".join(fn.wrappers) == RULES.extract_extension(name)
+        assert fn.extension == extension
+        assert fn.wrappers == wrappers
 
 
 class TestFormat:
@@ -175,16 +179,24 @@ class TestWrappers:
         assert parse("sample.bam").wrappers == ()
 
     def test_bare_compression_without_format(self):
-        """No known core extension (.txt isn't in the vocabulary), so extension is
+        """No known core extension (.xyz isn't in the vocabulary), so extension is
         None; the .gz is captured as a wrapper and stripped from the stem."""
-        fn = parse("notes.txt.gz")
+        fn = parse("blob.xyz.gz")
         assert fn.extension is None
         assert fn.wrappers == (".gz",)
-        assert fn.stem == "notes.txt"
+        assert fn.stem == "blob.xyz"
 
     def test_bgz_is_not_mis_peeled_as_gz(self):
         """`.bgz` ends with `.gz`; the wrapper list is ordered longest-first so
         `.bgz` is captured whole, not mis-peeled as `.gz` leaving a dangling `b`."""
-        fn = parse("notes.txt.bgz")
+        fn = parse("blob.xyz.bgz")
         assert fn.wrappers == (".bgz",)
-        assert fn.stem == "notes.txt"
+        assert fn.stem == "blob.xyz"
+
+    def test_compressed_core_is_recognized_under_the_wrapper(self):
+        """#245: peel-first recognizes a known core beneath any container spelling —
+        a gzipped ``.tsv`` is a ``.tsv``, not an unrecognized blob."""
+        fn = parse("expression.tsv.gz")
+        assert fn.extension == ".tsv"
+        assert fn.wrappers == (".gz",)
+        assert fn.stem == "expression"

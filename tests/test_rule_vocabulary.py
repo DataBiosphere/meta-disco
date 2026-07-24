@@ -137,24 +137,22 @@ def test_rule_when_format_values_valid():
 def test_core_extensions_derivation():
     """`core_extensions` is the explicit set of producible core extensions (#249).
 
-    Pins the derivation: every compound extension with its wrappers stripped (where
-    the multi-dot core `.g.vcf` comes from), unioned with the single-dot
-    `extension_map` keys and the `EXTENSION_TO_FORMAT` keys, all lower-cased, with
-    no compound left in.
+    Pins the derivation (#245: the parse peels every container first, so there is no
+    compound-extension allowlist): the single-dot `extension_map` keys unioned with
+    the `EXTENSION_TO_FORMAT` keys (where the one multi-dot core `.g.vcf` lives), all
+    lower-cased.
     """
     rules = get_unified_rules()
     core = rules.core_extensions
-    expected = {rules._peel_wrappers(c, keep_last=True)[0] for c in rules.COMPOUND_EXTENSIONS}
-    expected |= {k.lower() for k in rules.extension_map if k.count(".") == 1}
+    expected = {k.lower() for k in rules.extension_map if k.count(".") == 1}
     expected |= {k.lower() for k in rules.EXTENSION_TO_FORMAT}
     assert core == expected
     assert ".g.vcf" in core  # the multi-dot core
-    # No core may carry a compression/archive wrapper: a member that *ends with* a
-    # wrapper but is more than that wrapper (".vcf.gz", ".foo.bz2") is a compound
-    # that leaked in — e.g. from an unfiltered EXTENSION_TO_FORMAT key. ".tar"/".zip"
-    # are themselves archive cores (member == wrapper), so they are exempt.
-    leaked = sorted(c for c in core for w in rules.WRAPPER_SUFFIXES if c.endswith(w) and c != w)
-    assert not leaked, f"compound/wrapper-bearing extensions leaked into the core set: {leaked}"
+    # No core may carry — or be — a compression/archive container: nothing in the core
+    # set may end with a wrapper suffix. A compound (".vcf.gz") or a bare container
+    # (".tar"/".zip", removed as cores in #245) that appears here is a leak.
+    leaked = sorted(c for c in core for w in rules.WRAPPER_SUFFIXES if c.endswith(w))
+    assert not leaked, f"container/wrapper-bearing extensions leaked into the core set: {leaked}"
 
 
 def test_every_format_mapped_extension_is_producible():

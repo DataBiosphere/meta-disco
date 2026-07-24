@@ -141,7 +141,6 @@ def _fetch_and_classify(
             name=name,
             file_size=file_size,
             file_format=file_format,
-            allowed_extensions=config.extensions,
             content_fields=config.content_fields,
         ), True
 

@@ -98,9 +98,7 @@ class UnifiedRules:
 
     # The extension vocabulary and the parse now live in file_name.py as a pure,
     # instance-free leaf (#252). These are thin delegators so existing callers
-    # (rule_engine, header_classifier, scripts, tests) are unchanged; they retire
-    # as #246/#245 migrate their sites to the file_name API.
-    COMPOUND_EXTENSIONS: ClassVar[tuple[str, ...]] = file_name.COMPOUND_EXTENSIONS
+    # (rule_engine, header_classifier, scripts, tests) are unchanged.
     WRAPPER_SUFFIXES: ClassVar[tuple[str, ...]] = file_name.WRAPPER_SUFFIXES
     EXTENSION_TO_FORMAT: ClassVar[dict[str, Format]] = file_name.EXTENSION_TO_FORMAT
 
@@ -140,15 +138,6 @@ class UnifiedRules:
     def extension_to_format(self, extension: str | None) -> Format | None:
         """Delegate to the pure ``file_name.extension_to_format`` (#252)."""
         return file_name.extension_to_format(extension)
-
-    def extract_extension(self, filename: str) -> str:
-        """Delegate to the pure ``file_name.extract_extension`` (#252)."""
-        return file_name.extract_extension(filename)
-
-    @staticmethod
-    def _peel_wrappers(token: str, *, keep_last: bool) -> tuple[str, tuple[str, ...]]:
-        """Delegate to the pure ``file_name._peel_wrappers`` (#252)."""
-        return file_name._peel_wrappers(token, keep_last=keep_last)
 
     def parse_file_name(self, filename: str) -> "FileName":
         """Delegate to the pure ``FileName.parse`` (#252)."""

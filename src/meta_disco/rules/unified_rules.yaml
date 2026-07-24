@@ -79,14 +79,14 @@
 # ---------------------------
 # Extension/filename conditions:
 # - extensions: list of clean core file extensions to match (e.g., [".bam",
-#     ".cram"]). Compression/archive is split off into wrappers at parse time
-#     (#244), so a core matches every compressed spelling the parser recognizes
-#     — those enumerated in COMPOUND_EXTENSIONS (meta_disco.file_name): ".vcf" matches
-#     both sample.vcf and sample.vcf.gz (never list ".vcf.gz" here), but an
-#     unlisted spelling like sample.bam.gz is not recognized and matches nothing.
-#     gVCF keeps its
-#     own core (".g.vcf"): both classify as data_type variants, but ".g.vcf"
-#     derives Format.GVCF (vs Format.VCF), so the distinction is not lost.
+#     ".cram"]). The parser peels every compression/archive container (.gz, .tar,
+#     .zip, ...) off the name first, then recognizes the core underneath (#245), so
+#     a core matches every compressed spelling: ".vcf" matches sample.vcf,
+#     sample.vcf.gz, and sample.vcf.bgz alike (never list ".vcf.gz" here). An
+#     archive container with no inner format (graph.tar.gz) has no core and matches
+#     nothing — a container is not a content type. gVCF keeps its own core
+#     (".g.vcf"): both classify as data_type variants, but ".g.vcf" derives
+#     Format.GVCF (vs Format.VCF), so the distinction is not lost.
 # - format: canonical file format to match (e.g., FASTA) — collapses the
 #     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
 #     to a single identity, so key on this instead of re-listing extensions
@@ -886,21 +886,6 @@ rules:
       data_type: quantification
       assay_type: RNA-seq
     rationale: "Salmon/Sailfish transcript-level quantification (quant.sf)"
-
-  # ---------------------------------------------------------------------------
-  # Archive files - T2T specific
-  # ---------------------------------------------------------------------------
-  - id: archive_t2t_genomic
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".tar"]
-      filename_pattern: "^chr[0-9XY]+\\.[0-9]+_[0-9]+\\.tar$"
-      dataset_pattern: "(?i)t2t"
-    then:
-      data_modality: genomic
-      data_type: archive
-    rationale: "T2T project genomic region archive"
 
   # ===========================================================================
   # TIER 2.5: FILE SIZE HEURISTICS

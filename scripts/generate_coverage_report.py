@@ -16,11 +16,9 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from meta_disco.file_name import FileName
 from meta_disco.models import field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
-from meta_disco.rule_loader import UnifiedRules
-
-COMPOUND_EXTENSIONS = UnifiedRules.COMPOUND_EXTENSIONS
 
 DIMENSIONS = [
     ("data_modality", "Data Modality", ""),
@@ -51,13 +49,9 @@ def escape_md_cell(text: str) -> str:
 
 
 def get_extension(filename: str) -> str:
-    name = filename.lower()
-    for ext in COMPOUND_EXTENSIONS:
-        if name.endswith(ext):
-            return ext
-    if "." in filename:
-        return "." + filename.rsplit(".", 1)[-1].lower()
-    return "(none)"
+    # Group by the parsed clean core extension (#245); an archive/compression-only
+    # or extensionless name has no core and groups under "(none)".
+    return FileName.parse(filename).extension or "(none)"
 
 
 def load_records(run_dir: Path) -> list[dict]:
