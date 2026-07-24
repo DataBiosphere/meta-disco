@@ -608,6 +608,43 @@ def _is_genomicsdb_variant_store(member_names: list[str]) -> bool:
     return False
 
 
+def _recognized_inner_extensions(member_names: list[str]) -> list[tuple[str, str]]:
+    """The archive members whose basename carries a recognized inner extension (#260).
+
+    Returns ``(extension, basename)`` pairs. ``FileName.parse`` reads the extension from
+    the basename (peeling any wrappers, yielding a clean core incl. multi-dot cores like
+    ``.g.vcf``); parsing the basename rather than the full member path keeps a mid-path
+    directory dot out of it. Shared by :func:`classify_from_tar_members` (which picks the
+    dominant extension) and :func:`tar_head_is_conclusive` (which only asks whether any
+    exists), so the two cannot drift apart in what they count as recognized.
+    """
+    recognized = []
+    for member in member_names:
+        basename = member.rsplit("/", 1)[-1]
+        ext = FileName.parse(basename).extension
+        if ext is not None:
+            recognized.append((ext, basename))
+    return recognized
+
+
+def tar_head_is_conclusive(member_names: list[str]) -> bool:
+    """Whether reading deeper into the archive could change its classification (#260).
+
+    The escalating-read stop condition injected into the tar fetcher (via
+    ``FileTypeConfig.head_detector``): read deeper only while this is False, so a
+    GenomicsDB store whose variant signal sits past the first stage is still reached.
+
+    True on a GenomicsDB variant-store signal, or once any member carries a recognized
+    inner extension — at that point the members read already carry the strongest signal
+    :func:`classify_from_tar_members` acts on, so more bytes cannot improve the result.
+    "Conclusive" means *settled*, not *classified*: a head of only header-only members
+    (e.g. ``.bam``, which needs its own header, not just its extension) is conclusive yet
+    classifies to ``not_classified`` — reading deeper would not change that either. Uses
+    the same recognition helpers as the classifier so the two agree on what counts.
+    """
+    return bool(_is_genomicsdb_variant_store(member_names) or _recognized_inner_extensions(member_names))
+
+
 def classify_from_tar_members(
     member_names: list[str],
     *,
@@ -648,7 +685,6 @@ def classify_from_tar_members(
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     engine = _get_engine()
-    basenames = [member.rsplit("/", 1)[-1] for member in member_names]
 
     # Base pass over the archive's own name — its tokens may still carry a reference
     # or other filename signal, and it seeds the result the content claims layer on.
@@ -666,14 +702,7 @@ def classify_from_tar_members(
         return result.to_output_dict()
 
     # (2) Generic: classify by the dominant recognized inner member extension.
-    # FileName.parse reads the extension from the basename (peeling any wrappers and
-    # yielding a clean core, incl. multi-dot cores like .g.vcf); parsing the basename
-    # rather than the full member path keeps a mid-path directory dot out of it.
-    recognized: list[tuple[str, str]] = []  # (inner extension, member basename)
-    for basename in basenames:
-        ext = FileName.parse(basename).extension
-        if ext is not None:
-            recognized.append((ext, basename))
+    recognized = _recognized_inner_extensions(member_names)  # (inner extension, member basename)
     if not recognized:
         return result.to_output_dict()
 
