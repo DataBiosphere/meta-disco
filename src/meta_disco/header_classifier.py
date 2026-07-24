@@ -587,19 +587,23 @@ _VCF_FIELD_ARRAYS = frozenset(
 )
 
 
-def _is_genomicsdb_variant_store(basenames: list[str]) -> bool:
+def _is_genomicsdb_variant_store(member_names: list[str]) -> bool:
     """Whether the archive members are a GenomicsDB (TileDB) *variant* store (#255).
 
     True on a GenomicsDB schema file, or a TileDB array named after a VCF FORMAT/INFO
     field. A bare `.tdb` (generic TileDB) is deliberately *not* enough — those names
     are not variant-specific.
+
+    Checks *every* path segment, not just the basename: a TileDB array is a *directory*
+    (``…/PL.tdb/__array_schema.tdb``), so the variant-array name is usually a mid-path
+    segment, and a tar may omit the explicit ``…/PL.tdb`` directory entry (or give it a
+    trailing slash). A leaf-only check would miss those.
     """
-    if _GENOMICSDB_SCHEMA.intersection(basenames):
-        return True
-    for basename in basenames:
-        if basename.endswith(".tdb"):
-            core = basename[:-4].removesuffix("_var").lower()
-            if core in _VCF_FIELD_ARRAYS:
+    for member in member_names:
+        for segment in member.strip("/").split("/"):
+            if segment in _GENOMICSDB_SCHEMA:
+                return True
+            if segment.endswith(".tdb") and segment[:-4].removesuffix("_var").lower() in _VCF_FIELD_ARRAYS:
                 return True
     return False
 
@@ -657,7 +661,7 @@ def classify_from_tar_members(
 
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
-    if _is_genomicsdb_variant_store(basenames):
+    if _is_genomicsdb_variant_store(member_names):
         _claim_content("genomic", "variants", "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)")
         return result.to_output_dict()
 

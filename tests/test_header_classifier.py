@@ -956,6 +956,17 @@ class TestTarClassifier:
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants"
 
+    def test_genomicsdb_array_name_in_mid_path_is_caught(self):
+        """A TileDB array is a directory (`PL.tdb/`), so the variant-array name is a
+        mid-path segment; when the directory entry itself is omitted, only the deeper
+        files remain — the all-segments check still recognizes it."""
+        members = [
+            "chr4.1_2/chr4$1$2/PL.tdb/__array_schema.tdb",
+            "chr4.1_2/chr4$1$2/PL.tdb/__fragment/a.tdb",
+        ]
+        result = classify_from_tar_members(members)
+        assert val(result, "data_type") == "variants"
+
     def test_bare_tiledb_is_not_called_variants(self):
         """Honesty: a `.tdb` is a *generic* TileDB array — a head of only generic TileDB
         structure files (no schema, no VCF-field array) is not read as variants."""
