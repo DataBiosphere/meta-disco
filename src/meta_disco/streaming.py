@@ -31,7 +31,7 @@ import io
 import tarfile
 import zlib
 
-from .evidence import FastaEvidence, FastqEvidence, GfaEvidence, TarEvidence, VcfEvidence
+from .evidence import FastaEvidence, FastqEvidence, GfaEvidence, SegmentTag, TarEvidence, VcfEvidence
 from .fetchers import (
     HEAD_BYTES,
     MAX_TAR_MEMBERS,
@@ -86,6 +86,7 @@ class _RawRangeReader(io.RawIOBase):
         self._pending = b""  # the current fetched range
         self._pos = 0  # read offset into _pending (advanced, not sliced, so reads stay O(n))
         self._fetched = 0  # total compressed bytes pulled from the origin
+        self._served = 0  # total bytes handed to the consumer via readinto
         self._chunk = FIRST_CHUNK
         self._eof = False
 
@@ -94,7 +95,19 @@ class _RawRangeReader(io.RawIOBase):
 
     @property
     def bytes_fetched(self) -> int:
+        """Total bytes pulled from the origin — the ``raw_bytes_fetched`` for evidence.
+
+        Runs *ahead* of what the consumer has read: a fill fetches a whole range (up to
+        ``FIRST_CHUNK``/``MAX_CHUNK``) at once, so this is not a position in the stream."""
         return self._fetched
+
+    @property
+    def bytes_served(self) -> int:
+        """Total bytes handed downstream via ``readinto`` — how far the consumer has actually
+        read, lagging ``bytes_fetched`` by the outstanding fill. The tar walk gates escalation
+        on this (not ``bytes_fetched``, which jumps a whole range ahead on the first fill and
+        would cross a stage boundary before any member is parsed)."""
+        return self._served
 
     @property
     def whole_file(self) -> bool:
@@ -136,6 +149,7 @@ class _RawRangeReader(io.RawIOBase):
         n = min(len(b), len(self._pending) - self._pos)
         b[:n] = memoryview(self._pending)[self._pos : self._pos + n]
         self._pos += n
+        self._served += n
         return n
 
 
@@ -295,12 +309,13 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
     """Member names from the head of a streamed, already-decompressed tar archive.
 
     ``detector`` gates *escalation*, not per-member stopping: it is consulted only once the
-    raw reader has crossed the next byte offset in ``stages``, on all members read so far —
-    mirroring the old fixed-head fetcher, which parses a whole byte-stage of members before
-    deciding whether to read deeper. That is why a mixed archive is voted on its full head
-    sample rather than cut at the first recognized member. Walking stops when the detector is
-    conclusive at a stage boundary, at ``max_members``, or when the stream ends / is cut short
-    (a truncated or non-tar head raises ``TarError`` / ``EOFError`` / a gzip error, caught
+    consumer has read past the next byte offset in ``stages`` (``raw.bytes_served``, i.e. bytes
+    actually parsed, not the whole range prefetched into the reader), on all members read so
+    far — mirroring the old fixed-head fetcher, which parses a whole byte-stage of members
+    before deciding whether to read deeper. That is why a mixed archive is voted on its full
+    head sample rather than cut at the first recognized member. Walking stops when the detector
+    is conclusive at a stage boundary, at ``max_members``, or when the stream ends / is cut
+    short (a truncated or non-tar head raises ``TarError`` / ``EOFError`` / a gzip error, caught
     here — the names read before the cut are the result). A non-tar head yields ``[]``.
     """
     names: list[str] = []
@@ -312,7 +327,7 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
                 if len(names) >= max_members:
                     break
                 crossed = False
-                while pending and raw.bytes_fetched >= pending[0]:
+                while pending and raw.bytes_served >= pending[0]:
                     pending.pop(0)
                     crossed = True
                 if crossed and detector(names):
@@ -437,7 +452,7 @@ def fetch_gfa_segment_tags_streaming(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-):
+) -> list[SegmentTag]:
     """Streaming counterpart of :func:`~meta_disco.fetchers.fetch_gfa_segment_tags`."""
     payload = _load_cached(GfaEvidence, evidence_dir, md5sum, use_cache)
     if payload is not None:
