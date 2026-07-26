@@ -106,6 +106,18 @@ def wrap_as_fetch_error(label: str, passthrough: tuple[type[BaseException], ...]
 # ``meta_disco.evidence``.
 
 
+def _content_range_start(content_range: str) -> int | None:
+    """The first-byte position of a ``Content-Range: bytes <start>-<end>/<total>`` header.
+
+    ``"bytes 0-262143/524288"`` -> ``0``. Returns ``None`` when the header is absent or
+    unparseable, which the caller treats the same as a misaligned window.
+    """
+    try:
+        return int(content_range.split()[1].split("/")[0].split("-")[0])
+    except (IndexError, ValueError):
+        return None
+
+
 def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None, start_byte: int = 0) -> bytes:
     """Fetch bytes ``start_byte`` through ``end_byte`` (inclusive) from S3. Returns raw bytes.
 
@@ -121,6 +133,12 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     `not_classified` row with the HTTP status as its reason (#155). A 416 raises
     ``RangeNotSatisfiable``; a 200 to a ``start_byte > 0`` request (the server ignored
     Range) also raises, so a caller accumulating bytes never appends a duplicated body.
+
+    A 206 is verified against its ``Content-Range``: the returned window must start where
+    we asked (``start_byte``). A mismatched or missing ``Content-Range`` means the server
+    handed back the wrong bytes — classifying from a misaligned window could produce a
+    *wrong* answer, so it raises rather than guess. (Fewer bytes than requested is fine —
+    the object is shorter than the range; the caller reads that as EOF.)
     """
     fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
     headers = {"Range": f"bytes={start_byte}-{end_byte}"}
@@ -136,6 +154,12 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
         raise FetchError(f"HTTP 200 (Range ignored) from {source} range request")
     if resp.status_code not in [200, 206]:
         raise FetchError(f"HTTP {resp.status_code} from {source} range request")
+    if resp.status_code == 206:
+        got = resp.headers.get("Content-Range", "")
+        if _content_range_start(got) != start_byte:
+            raise FetchError(
+                f"misaligned range from {source}: requested start={start_byte}, got {got or '(no Content-Range)'!r}"
+            )
     return resp.content
 
 

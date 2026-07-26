@@ -41,9 +41,16 @@ MD5 = "a" * 32
 
 
 class _Resp:
-    def __init__(self, status_code, content=b""):
+    def __init__(self, status_code, content=b"", headers=None):
         self.status_code = status_code
         self.content = content
+        self.headers = headers or {}
+
+
+def _partial(full: bytes, start: int, end: int) -> "_Resp":
+    """A conformant 206: the requested slice plus a matching Content-Range header."""
+    body = full[start : end + 1]
+    return _Resp(206, body, headers={"Content-Range": f"bytes {start}-{start + len(body) - 1}/{len(full)}"})
 
 
 @pytest.fixture
@@ -66,7 +73,7 @@ def _patch_range_get(monkeypatch, full: bytes) -> list[tuple[int, int]]:
     def _get(url, headers, timeout=None):
         start, end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
         calls.append((start, end))
-        return _Resp(206, full[start : end + 1])
+        return _partial(full, start, end)
 
     monkeypatch.setattr(fetchers.requests, "get", _get)
     return calls
@@ -85,7 +92,7 @@ def _patch_range_get_with_eof(monkeypatch, full: bytes) -> list[tuple[int, int]]
         calls.append((start, end))
         if start >= len(full):
             return _Resp(416)
-        return _Resp(206, full[start : end + 1])
+        return _partial(full, start, end)
 
     monkeypatch.setattr(fetchers.requests, "get", _get)
     return calls
@@ -222,14 +229,14 @@ class TestTarFetcher:
 
     def test_returns_member_names_from_the_head(self, monkeypatch, evidence_dir):
         data = _make_tar([("g/callset.json", b"{}"), ("g/vcfheader.vcf", b"##")])
-        _patch_get(monkeypatch, _Resp(206, data))
+        _patch_get(monkeypatch, _partial(data, 0, len(data) - 1))
         names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
         assert names == ["g/callset.json", "g/vcfheader.vcf"]
 
     def test_gzipped_tar_head_is_decompressed_then_parsed(self, monkeypatch, evidence_dir):
         # A .tar.gz: is_gzipped=True must decompress the head before the tar parse.
         gz = gzip.compress(_make_tar([("g/callset.json", b"{}"), ("g/vidmap.json", b"{}")]))
-        _patch_get(monkeypatch, _Resp(206, gz))
+        _patch_get(monkeypatch, _partial(gz, 0, len(gz) - 1))
         names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar.gz", is_gzipped=True, use_cache=False)
         assert names == ["g/callset.json", "g/vidmap.json"]
 
@@ -306,12 +313,31 @@ class TestReadHeadUntil:
         # corrupt the accumulated buffer if appended. S3/GCS honor Range (206); this is the
         # fail-loud guard for the case that they don't.
         def _get(url, headers, timeout=None):
-            start, _end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
-            return _Resp(206 if start == 0 else 200, b"x" * 20)  # stage 2 ignores Range
+            start, end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
+            if start == 0:  # stage 1 is conformant
+                return _Resp(206, b"x" * (end - start + 1), headers={"Content-Range": f"bytes 0-{end}/1000"})
+            return _Resp(200, b"x" * 20)  # stage 2: server ignores Range
 
         monkeypatch.setattr(fetchers.requests, "get", _get)
         with pytest.raises(FetchError, match="Range ignored"):
             _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    def test_206_with_misaligned_content_range_raises(self, monkeypatch):
+        # A 206 whose Content-Range starts somewhere other than we asked for means the
+        # server handed back the wrong window; classifying from it could be wrong.
+        def _get(url, headers, timeout=None):
+            return _Resp(206, b"x" * 10, headers={"Content-Range": "bytes 5-14/100"})  # asked start=0
+
+        monkeypatch.setattr(fetchers.requests, "get", _get)
+        with pytest.raises(FetchError, match="misaligned range"):
+            _read_head_until(MD5, url=None, stages=(10,), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    def test_206_without_content_range_raises(self, monkeypatch):
+        # A conformant 206 always carries Content-Range; its absence means we cannot
+        # confirm the window is aligned, so treat it the same as a mismatch.
+        _patch_get(monkeypatch, _Resp(206, b"x" * 10))  # no Content-Range header
+        with pytest.raises(FetchError, match="misaligned range"):
+            _read_head_until(MD5, url=None, stages=(10,), parse_head=lambda b: b, conclusive=lambda b: False)
 
     @pytest.mark.parametrize("stages", [(100, 10), (10, 10), (10, 100, 50)])
     def test_non_ascending_stages_rejected(self, stages):
