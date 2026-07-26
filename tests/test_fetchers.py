@@ -15,6 +15,7 @@ import requests
 import meta_disco.fetchers as fetchers
 from meta_disco.fetchers import (
     FetchError,
+    _read_head_until,
     fetch_bam_header,
     fetch_fasta_headers,
     fetch_fastq_reads,
@@ -40,9 +41,16 @@ MD5 = "a" * 32
 
 
 class _Resp:
-    def __init__(self, status_code, content=b""):
+    def __init__(self, status_code, content=b"", headers=None):
         self.status_code = status_code
         self.content = content
+        self.headers = headers or {}
+
+
+def _partial(full: bytes, start: int, end: int) -> "_Resp":
+    """A conformant 206: the requested slice plus a matching Content-Range header."""
+    body = full[start : end + 1]
+    return _Resp(206, body, headers={"Content-Range": f"bytes {start}-{start + len(body) - 1}/{len(full)}"})
 
 
 @pytest.fixture
@@ -52,6 +60,42 @@ def evidence_dir(tmp_path):
 
 def _patch_get(monkeypatch, resp):
     monkeypatch.setattr(fetchers.requests, "get", lambda *a, **k: resp)
+
+
+def _patch_range_get(monkeypatch, full: bytes) -> list[tuple[int, int]]:
+    """Serve `full` in response to `Range: bytes=START-END`, returning that slice.
+
+    Returns a list the mock appends each requested (start, end) to — so a test can
+    assert how many range requests the escalating read actually made.
+    """
+    calls: list[tuple[int, int]] = []
+
+    def _get(url, headers, timeout=None):
+        start, end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
+        calls.append((start, end))
+        return _partial(full, start, end)
+
+    monkeypatch.setattr(fetchers.requests, "get", _get)
+    return calls
+
+
+def _patch_range_get_with_eof(monkeypatch, full: bytes) -> list[tuple[int, int]]:
+    """Like `_patch_range_get`, but a range whose start is at/past EOF answers 416.
+
+    That is S3's behavior for an unsatisfiable range, and the case the escalating read
+    hits when a file ends exactly on a stage boundary.
+    """
+    calls: list[tuple[int, int]] = []
+
+    def _get(url, headers, timeout=None):
+        start, end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
+        calls.append((start, end))
+        if start >= len(full):
+            return _Resp(416)
+        return _partial(full, start, end)
+
+    monkeypatch.setattr(fetchers.requests, "get", _get)
+    return calls
 
 
 class TestRangeFetchers:
@@ -185,14 +229,14 @@ class TestTarFetcher:
 
     def test_returns_member_names_from_the_head(self, monkeypatch, evidence_dir):
         data = _make_tar([("g/callset.json", b"{}"), ("g/vcfheader.vcf", b"##")])
-        _patch_get(monkeypatch, _Resp(206, data))
+        _patch_get(monkeypatch, _partial(data, 0, len(data) - 1))
         names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
         assert names == ["g/callset.json", "g/vcfheader.vcf"]
 
     def test_gzipped_tar_head_is_decompressed_then_parsed(self, monkeypatch, evidence_dir):
         # A .tar.gz: is_gzipped=True must decompress the head before the tar parse.
         gz = gzip.compress(_make_tar([("g/callset.json", b"{}"), ("g/vidmap.json", b"{}")]))
-        _patch_get(monkeypatch, _Resp(206, gz))
+        _patch_get(monkeypatch, _partial(gz, 0, len(gz) - 1))
         names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar.gz", is_gzipped=True, use_cache=False)
         assert names == ["g/callset.json", "g/vidmap.json"]
 
@@ -206,3 +250,164 @@ class TestTarFetcher:
         # not a FetchError — the range request itself succeeded.
         _patch_get(monkeypatch, _Resp(200, b"garbage, not a tar"))
         assert fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False) == []
+
+
+class TestReadHeadUntil:
+    """The escalating read loop (#260): stop on the detector, on EOF, or at the cap."""
+
+    def test_stops_at_the_first_conclusive_stage(self, monkeypatch):
+        # `full` is larger than stage 1 but the detector is satisfied by stage-1 bytes.
+        calls = _patch_range_get(monkeypatch, b"C" + b"x" * 5000)
+        payload, raw = _read_head_until(
+            MD5, url=None, stages=(10, 100, 1000), parse_head=lambda b: b, conclusive=lambda b: b.startswith(b"C")
+        )
+        assert payload.startswith(b"C") and raw == 10
+        assert calls == [(0, 9)]  # exactly one range request
+
+    def test_escalates_until_conclusive(self, monkeypatch):
+        # The signal byte 'S' sits at offset 15 — past stage 1 (10B), within stage 2 (100B).
+        calls = _patch_range_get(monkeypatch, b"x" * 15 + b"S" + b"y" * 500)
+        payload, raw = _read_head_until(
+            MD5, url=None, stages=(10, 100, 1000), parse_head=lambda b: b, conclusive=lambda b: b"S" in b
+        )
+        assert b"S" in payload and raw == 100
+        assert calls == [(0, 9), (10, 99)]  # stage 1 then the incremental stage-2 bytes
+
+    def test_short_read_stops_at_eof(self, monkeypatch):
+        # The whole file is 30B; stage 2 asks for up to 100 and gets a short read → EOF.
+        calls = _patch_range_get(monkeypatch, b"z" * 30)  # never conclusive
+        _payload, raw = _read_head_until(
+            MD5, url=None, stages=(10, 100, 1000), parse_head=lambda b: b, conclusive=lambda b: False
+        )
+        assert raw == 30
+        assert calls == [(0, 9), (10, 99)]  # stops after the short second read; no third stage
+
+    def test_reads_to_the_last_stage_when_never_conclusive(self, monkeypatch):
+        calls = _patch_range_get(monkeypatch, b"q" * 5000)  # bigger than the cap, never conclusive
+        _payload, raw = _read_head_until(
+            MD5, url=None, stages=(10, 100, 1000), parse_head=lambda b: b, conclusive=lambda b: False
+        )
+        assert raw == 1000  # the cap
+        assert len(calls) == 3
+
+    def test_range_not_satisfiable_after_bytes_is_treated_as_eof(self, monkeypatch):
+        # The file is exactly the stage-1 boundary (10B): stage 1 fills it (not a short
+        # read), so stage 2 asks from offset 10 == EOF → 416. That is end-of-file, not a
+        # failure — the read stops with the head it already holds.
+        calls = _patch_range_get_with_eof(monkeypatch, b"z" * 10)  # never conclusive
+        payload, raw = _read_head_until(
+            MD5, url=None, stages=(10, 100, 1000), parse_head=lambda b: b, conclusive=lambda b: False
+        )
+        assert raw == 10 and payload == b"z" * 10
+        assert calls == [(0, 9), (10, 99)]  # the 416 stage ends the read; no third stage
+
+    def test_range_not_satisfiable_on_first_stage_propagates(self, monkeypatch):
+        # An empty object 416s on the very first stage, with no bytes in hand — a real
+        # unreadable, not EOF, so it must surface as FetchError (kept as not_classified).
+        _patch_range_get_with_eof(monkeypatch, b"")
+        with pytest.raises(fetchers.RangeNotSatisfiable):
+            _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    def test_200_to_a_ranged_stage_raises_rather_than_duplicating(self, monkeypatch):
+        # A server that ignores Range and answers 200 with the whole body on stage 2 would
+        # corrupt the accumulated buffer if appended. S3/GCS honor Range (206); this is the
+        # fail-loud guard for the case that they don't.
+        def _get(url, headers, timeout=None):
+            start, end = (int(x) for x in headers["Range"].split("=")[1].split("-"))
+            if start == 0:  # stage 1 is conformant
+                return _Resp(206, b"x" * (end - start + 1), headers={"Content-Range": f"bytes 0-{end}/1000"})
+            return _Resp(200, b"x" * 20)  # stage 2: server ignores Range
+
+        monkeypatch.setattr(fetchers.requests, "get", _get)
+        with pytest.raises(FetchError, match="Range ignored"):
+            _read_head_until(MD5, url=None, stages=(10, 100), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    def test_206_with_misaligned_content_range_raises(self, monkeypatch):
+        # A 206 whose Content-Range starts somewhere other than we asked for means the
+        # server handed back the wrong window; classifying from it could be wrong.
+        def _get(url, headers, timeout=None):
+            return _Resp(206, b"x" * 10, headers={"Content-Range": "bytes 5-14/100"})  # asked start=0
+
+        monkeypatch.setattr(fetchers.requests, "get", _get)
+        with pytest.raises(FetchError, match="misaligned range"):
+            _read_head_until(MD5, url=None, stages=(10,), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    def test_206_without_content_range_raises(self, monkeypatch):
+        # A conformant 206 always carries Content-Range; its absence means we cannot
+        # confirm the window is aligned, so treat it the same as a mismatch.
+        _patch_get(monkeypatch, _Resp(206, b"x" * 10))  # no Content-Range header
+        with pytest.raises(FetchError, match="misaligned range"):
+            _read_head_until(MD5, url=None, stages=(10,), parse_head=lambda b: b, conclusive=lambda b: False)
+
+    @pytest.mark.parametrize("stages", [(100, 10), (10, 10), (10, 100, 50)])
+    def test_non_ascending_stages_rejected(self, stages):
+        # A non-ascending target would ask for a range starting past the bytes in hand;
+        # the 416 that provokes now reads as EOF, so misuse must fail loudly up front.
+        with pytest.raises(ValueError, match="strictly ascending"):
+            _read_head_until(MD5, url=None, stages=stages, parse_head=lambda b: b, conclusive=lambda b: False)
+
+
+class TestTarFetcherEscalation:
+    """fetch_tar_headers reads deeper only until the detector is satisfied (#260)."""
+
+    def test_shallow_archive_exits_at_the_first_stage(self, monkeypatch, evidence_dir):
+        from meta_disco.header_classifier import tar_head_is_conclusive
+
+        data = _make_tar([("g/callset.json", b"{}"), ("g/vidmap.json", b"{}")])
+        calls = _patch_range_get(monkeypatch, data)
+        names = fetch_tar_headers(
+            evidence_dir,
+            MD5,
+            file_name="x.tar",
+            is_gzipped=False,
+            use_cache=False,
+            head_detector=tar_head_is_conclusive,
+        )
+        assert "g/callset.json" in names
+        assert len(calls) == 1  # the GenomicsDB signal was in the first stage; no escalation
+
+    def test_deep_signal_triggers_escalation(self, monkeypatch, evidence_dir):
+        from meta_disco.header_classifier import tar_head_is_conclusive
+
+        # A >256KiB opaque member pushes the GenomicsDB signal past the first stage.
+        data = _make_tar([("bulk/blob.bin", b"x" * 300_000), ("g/callset.json", b"{}")])
+        calls = _patch_range_get(monkeypatch, data)
+        names = fetch_tar_headers(
+            evidence_dir,
+            MD5,
+            file_name="x.tar",
+            is_gzipped=False,
+            use_cache=False,
+            head_detector=tar_head_is_conclusive,
+        )
+        assert "g/callset.json" in names  # found only after escalating past 256KiB
+        assert len(calls) >= 2
+
+    def test_no_detector_reads_a_single_head(self, monkeypatch, evidence_dir):
+        data = _make_tar([("bulk/blob.bin", b"x" * 300_000), ("g/callset.json", b"{}")])
+        calls = _patch_range_get(monkeypatch, data)
+        # head_detector=None degrades to one 256KiB read (the pre-#260 behavior).
+        fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False, head_detector=None)
+        assert len(calls) == 1
+
+    def test_saturated_member_cap_stops_escalation(self, monkeypatch, evidence_dir):
+        from meta_disco.header_classifier import tar_head_is_conclusive
+
+        # 250 unrecognized members fit inside the first stage, then a big member pushes the
+        # file past 256KiB so stage 1 is a full (non-short) read with no conclusive signal.
+        # The parse saturates at MAX_TAR_MEMBERS and deeper bytes cannot grow that set, so
+        # the escalation must stop rather than march through every stage to the cap.
+        members = [(f"d/f{i}", b"") for i in range(250)] + [("d/big.bin", b"x" * 200_000)]
+        data = _make_tar(members)
+        assert len(data) > fetchers.HEAD_BYTES  # stage 1 is a full read, not EOF
+        calls = _patch_range_get(monkeypatch, data)
+        names = fetch_tar_headers(
+            evidence_dir,
+            MD5,
+            file_name="x.tar",
+            is_gzipped=False,
+            use_cache=False,
+            head_detector=tar_head_is_conclusive,
+        )
+        assert len(names) >= fetchers.MAX_TAR_MEMBERS
+        assert len(calls) == 1  # saturated parse: no escalation despite no conclusive signal

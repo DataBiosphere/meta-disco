@@ -93,6 +93,12 @@ class FileTypeConfig:
     # must be installed). Raises to abort the run fast, instead of letting every
     # record fail the same way and vanish. None means no check.
     preflight: Callable | None = None
+    # Detector for an escalating head-read (#260): given the fetcher's parsed payload,
+    # returns whether the head is conclusive (enough to classify). The fetcher reads
+    # deeper only while this is False. Injected here rather than imported by the fetcher,
+    # so the reader stays decoupled from the classifier's recognition logic. None means
+    # the fetcher reads a single fixed head (the default for every type but tar).
+    head_detector: Callable | None = None
 
 
 def _fetch_and_classify(
@@ -133,6 +139,7 @@ def _fetch_and_classify(
             file_name=file_name,
             is_gzipped=is_gzipped,
             use_cache=use_cache,
+            head_detector=config.head_detector,
         )
     except FetchError as e:
         print(f"Content unreadable, classifying from filename — {file_name or md5sum}: {e.reason}")
