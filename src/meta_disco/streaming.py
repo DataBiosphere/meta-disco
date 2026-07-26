@@ -165,10 +165,12 @@ class _CappedRead:
     and the truncated-gzip handling live; the line drivers below share it.
 
     Only gzip *decode* failures are caught here — ``EOFError`` / ``zlib.error`` /
-    ``gzip.BadGzipFile`` from a truncated or corrupt stream. A ``FetchError`` (incl. a
-    transport error, since ``requests`` exceptions subclass ``OSError``) is NOT caught, so a
-    failed range fetch mid-read propagates as a read failure instead of masquerading as a
-    clean truncation.
+    ``gzip.BadGzipFile`` from a truncated or corrupt stream. A failed range fetch mid-read is
+    deliberately NOT caught: an HTTP-status ``FetchError`` and a transport error alike
+    propagate out to be surfaced as ``FetchError`` by ``@wrap_as_fetch_error``, rather than
+    masquerading as a clean truncation. This is exactly why the catch excludes ``OSError`` —
+    ``requests`` transport exceptions (``ConnectionError`` / ``Timeout``) are ``OSError``
+    subclasses (``RequestException`` derives from ``OSError``), so catching it would swallow them.
     """
 
     def __init__(self, stream, raw: "_RawRangeReader", cap: int):
