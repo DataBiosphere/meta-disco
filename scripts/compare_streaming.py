@@ -45,14 +45,16 @@ STREAMING_FETCHERS = {
 def _route(rec: dict) -> str | None:
     """The in-scope config name whose extensions match this record, or None.
 
-    Uses production's match rule (``ClassifyPipeline._filter_records``): case-sensitive, on
-    either ``file_format`` or ``file_name`` — so a record whose extension lives only in
-    ``file_format`` is still sampled, and a mixed-case name is not spuriously matched.
-    Production runs that rule per config and may match one file to several; the harness needs a
-    single bucket per file, so it additionally picks the config with the longest matching
-    extension (``.vcf.gz`` -> vcf, not a bare ``.gz``). That extra disambiguation is the
-    harness's, not production's.
+    Uses production's match rule (``ClassifyPipeline._filter_records``): a ``skip``-flagged
+    record is excluded, and matching is case-sensitive on either ``file_format`` or
+    ``file_name`` — so a record whose extension lives only in ``file_format`` is still sampled,
+    and a mixed-case name is not spuriously matched. Production runs that rule per config and
+    may match one file to several; the harness needs a single bucket per file, so it additionally
+    picks the config with the longest matching extension (``.vcf.gz`` -> vcf, not a bare
+    ``.gz``). That extra disambiguation is the harness's, not production's.
     """
+    if rec.get("skip"):
+        return None
     fmt = str(rec.get("file_format") or "")
     name = str(rec.get("file_name") or "")
     best, best_len = None, 0

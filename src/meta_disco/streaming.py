@@ -19,11 +19,11 @@ The shape:
   (:class:`_VcfMatcher`, :class:`_FastqMatcher`, :class:`_FastaMatcher`) for the text
   types, and :func:`_walk_tar_members` for tar.
 
-Decompression-bomb defense falls out of the design: every reader stops at
-``MAX_DECOMPRESSED`` bytes (``_iter_lines`` discards each line as it scans; ``_read_head_text``
-holds at most that capped head), and the tar walk streams member bodies past without
-materializing them — so a pathological ``.gz`` yields a truncated head bounded by the cap,
-never an unbounded buffer.
+Decompression-bomb defense falls out of the design: the line readers stop at
+``MAX_DECOMPRESSED`` decompressed bytes (``_iter_lines`` discards each line as it scans;
+``_read_head_text`` holds at most that capped head), while the tar walk streams member bodies
+past without materializing them, bounded on the network side by ``TAR_COMPRESSED_CAP``
+compressed bytes — so a pathological ``.gz`` yields a truncated head, never an unbounded buffer.
 """
 
 import gzip

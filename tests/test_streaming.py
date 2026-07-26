@@ -239,11 +239,11 @@ def test_walk_tar_does_not_cut_at_first_recognized_member(monkeypatch):
 
 
 def test_walk_tar_stage_boundary_tracks_consumed_not_fetched_bytes(monkeypatch):
-    # The reader prefetches the whole (61 KiB) archive on the first fill, so bytes_fetched jumps
-    # to the end immediately. Keyed on bytes_fetched the 30 KiB stage would be crossed after
-    # member 0 (degenerating to a per-member early-stop → 1 name); keyed on bytes_served it is
-    # crossed only once tarfile has actually consumed that far, so the head is voted on many
-    # members and the walk still stops at the boundary rather than reading all 100.
+    # _walk_tar_members gates escalation on bytes_served (consumed). The reader prefetches the
+    # whole (61 KiB) archive on the first fill, so bytes_fetched jumps to the end immediately —
+    # gating on it would cross the 30 KiB stage after member 0 (a per-member early-stop → 1 name).
+    # Gating on bytes_served, the boundary is crossed only once tarfile has actually consumed that
+    # far, so the head is voted on many members and the walk still stops before reading all 100.
     _install(monkeypatch, _make_tar([f"m{i}.dat" for i in range(100)]))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
     names = _walk_tar_members(stream, raw, detector=lambda ns: True, max_members=200, stages=(30_000,))
