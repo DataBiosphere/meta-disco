@@ -55,6 +55,16 @@ def _install(monkeypatch, obj: bytes, calls: list | None = None) -> None:
     monkeypatch.setattr(streaming, "_fetch_range", _range_server(obj, calls))
 
 
+def _install_both(monkeypatch, obj: bytes) -> None:
+    """Serve the same bytes to both the streaming and fixed-window read paths."""
+    monkeypatch.setattr(streaming, "_fetch_range", _range_server(obj))
+    monkeypatch.setattr(fetchers, "_fetch_range", _range_server(obj))
+
+
+def _tags_json(tags):
+    return [t.to_json() for t in tags]
+
+
 def _make_tar(names: list[str], *, gzipped: bool = False) -> bytes:
     """Build an in-memory tar (or tar.gz) of empty members with the given names."""
     buf = io.BytesIO()
@@ -334,20 +344,29 @@ def test_fetch_vcf_streaming_no_header_raises(monkeypatch, evidence_dir):
 
 
 def test_fetch_fastq_streaming(monkeypatch, evidence_dir):
-    _install(monkeypatch, gzip.compress(b"@r1\nACGT\n+\nIIII\n@r2\nTTTT\n+\nIIII\n"))
-    assert fetch_fastq_reads_streaming(evidence_dir, MD5, is_gzipped=True, use_cache=False) == ["@r1", "@r2"]
+    _install_both(monkeypatch, gzip.compress(b"@r1\nACGT\n+\nIIII\n@r2\nTTTT\n+\nIIII\n"))
+    new = fetch_fastq_reads_streaming(evidence_dir / "new", MD5, is_gzipped=True, use_cache=False)
+    old = fetchers.fetch_fastq_reads(evidence_dir / "old", MD5, is_gzipped=True, use_cache=False)
+    assert new == ["@r1", "@r2"]
+    assert new == old  # drop-in equivalent on identical bytes
 
 
 def test_fetch_fasta_streaming(monkeypatch, evidence_dir):
-    _install(monkeypatch, gzip.compress(b">chr1 desc\nACGT\n>chr2\nTTTT\n"))
-    assert fetch_fasta_headers_streaming(evidence_dir, MD5, is_gzipped=True, use_cache=False) == ["chr1", "chr2"]
+    _install_both(monkeypatch, gzip.compress(b">chr1 desc\nACGT\n>chr2\nTTTT\n"))
+    new = fetch_fasta_headers_streaming(evidence_dir / "new", MD5, is_gzipped=True, use_cache=False)
+    old = fetchers.fetch_fasta_headers(evidence_dir / "old", MD5, is_gzipped=True, use_cache=False)
+    assert new == ["chr1", "chr2"]
+    assert new == old
 
 
 def test_fetch_gfa_streaming(monkeypatch, evidence_dir):
-    _install(monkeypatch, b"S\t1\tACGT\tSN:Z:chr1\tSR:i:0\n")
-    tags = fetch_gfa_segment_tags_streaming(evidence_dir, MD5, is_gzipped=False, use_cache=False)
-    assert len(tags) == 1
-    assert tags[0].is_reference_backbone
+    _install_both(monkeypatch, b"S\t1\tACGT\tSN:Z:chr1\tSR:i:0\n")
+    new = fetch_gfa_segment_tags_streaming(evidence_dir / "new", MD5, is_gzipped=False, use_cache=False)
+    old = fetchers.fetch_gfa_segment_tags(evidence_dir / "old", MD5, is_gzipped=False, use_cache=False)
+    assert len(new) == 1
+    assert new[0].is_reference_backbone
+    # equivalence covers the truncated derivation (raw.whole_file vs got_whole_file+stream_complete)
+    assert _tags_json(new) == _tags_json(old)
 
 
 def test_fetch_tar_streaming_reads_whole_small_head(monkeypatch, evidence_dir):
@@ -356,11 +375,11 @@ def test_fetch_tar_streaming_reads_whole_small_head(monkeypatch, evidence_dir):
     # detector's escalation role at a boundary is covered by the _walk_tar_members tests.)
     obj = _make_tar(["x.vcf", "y.vcf"])
 
-    _install(monkeypatch, obj)
-    assert fetch_tar_headers_streaming(evidence_dir / "a", MD5, is_gzipped=False, use_cache=False) == [
-        "x.vcf",
-        "y.vcf",
-    ]
+    _install_both(monkeypatch, obj)
+    new = fetch_tar_headers_streaming(evidence_dir / "new", MD5, is_gzipped=False, use_cache=False)
+    old = fetchers.fetch_tar_headers(evidence_dir / "old", MD5, is_gzipped=False, use_cache=False)
+    assert new == ["x.vcf", "y.vcf"]
+    assert new == old  # both read the whole small head and return every member
 
     _install(monkeypatch, obj)
     both = fetch_tar_headers_streaming(

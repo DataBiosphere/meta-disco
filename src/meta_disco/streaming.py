@@ -175,8 +175,12 @@ class _CappedRead:
     stream ended AND the raw reader reached genuine object EOF (``raw.whole_file``). It stays
     False when the read stopped at the decompressed ``cap``, at the compressed cap (which
     makes the raw reader return 0 bytes indistinguishably from EOF, so ``raw.whole_file`` is
-    the tie-breaker), or on a cut-short/corrupt gzip stream. This is the one place the caps
-    and the truncated-gzip handling live; the line drivers below share it.
+    the tie-breaker), or on a cut-short/corrupt gzip stream. Note this is conservative at the
+    cap: if the decoded stream happens to end exactly as ``cap`` is reached, the loop exits on
+    the cap without observing EOF, so ``complete`` is False — a technically-whole head is
+    reported truncated rather than claiming a completion the code cannot prove without reading
+    past the cap. This is the one place the caps and the truncated-gzip handling live; the
+    line drivers below share it.
 
     Only gzip *decode* failures are caught here — ``EOFError`` / ``zlib.error`` /
     ``gzip.BadGzipFile`` from a truncated or corrupt stream. A failed range fetch mid-read is
