@@ -45,8 +45,9 @@ from .fetchers import (
     wrap_as_fetch_error,
 )
 
-# Range-fetch sizing. The first range matches the fixed-window fetchers' 256KiB head;
-# each subsequent range grows so a deep read (tar) costs few round-trips, not many.
+# Range-fetch sizing. The first range is 256KiB — the common head size (FASTQ/FASTA/GFA and
+# tar's first stage); subsequent ranges grow geometrically, so the fetchers that read further
+# (VCF up to its 1MiB cap, a deep tar) reach their data in a few round-trips, not many.
 FIRST_CHUNK = HEAD_BYTES
 CHUNK_GROWTH = 4
 MAX_CHUNK = 10 * 1024 * 1024
