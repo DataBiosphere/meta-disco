@@ -362,6 +362,22 @@ def _load_cached(evidence_cls, evidence_dir, md5sum: str, use_cache: bool):
     return cached.payload if cached is not None else None
 
 
+def _save_head_evidence(evidence_cls, evidence_dir, *, md5sum, file_name, raw, url, **payload) -> None:
+    """Persist a fetched head as its typed evidence, filling the fields every fetcher shares.
+
+    ``payload`` carries the type-specific field(s) — e.g. ``read_names=...``, plus VCF's extra
+    ``max_positions``; ``md5sum`` / ``file_name`` / ``raw_bytes_fetched`` (from ``raw``) /
+    ``source_url`` are the common provenance all five fetchers record identically.
+    """
+    evidence_cls(
+        md5sum=md5sum,
+        file_name=file_name,
+        raw_bytes_fetched=raw.bytes_fetched,
+        source_url=url,
+        **payload,
+    ).save(evidence_dir)
+
+
 @wrap_as_fetch_error("VCF header")
 def fetch_vcf_header_streaming(
     evidence_dir,
@@ -383,14 +399,16 @@ def fetch_vcf_header_streaming(
     if matcher.header_lines:
         header_text = "\n".join(matcher.header_lines)
         max_positions = extract_max_positions(matcher.variant_lines) if matcher.variant_lines else None
-        VcfEvidence(
+        _save_head_evidence(
+            VcfEvidence,
+            evidence_dir,
             md5sum=md5sum,
             file_name=file_name,
+            raw=raw,
+            url=url,
             header_text=header_text,
             max_positions=max_positions,
-            raw_bytes_fetched=raw.bytes_fetched,
-            source_url=url,
-        ).save(evidence_dir)
+        )
         return header_text
 
     raise FetchError("no VCF header lines (no '#' lines) in the read head")
@@ -416,13 +434,15 @@ def fetch_fastq_reads_streaming(
     matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_FastqMatcher(num_reads=num_reads))
 
     if matcher.read_names:
-        FastqEvidence(
+        _save_head_evidence(
+            FastqEvidence,
+            evidence_dir,
             md5sum=md5sum,
             file_name=file_name,
+            raw=raw,
+            url=url,
             read_names=matcher.read_names,
-            raw_bytes_fetched=raw.bytes_fetched,
-            source_url=url,
-        ).save(evidence_dir)
+        )
         return matcher.read_names
 
     raise FetchError("no FASTQ read names (no '@' lines) in the read head")
@@ -446,13 +466,15 @@ def fetch_fasta_headers_streaming(
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=HEAD_COMPRESSED_CAP)
     matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_FastaMatcher())
 
-    FastaEvidence(
+    _save_head_evidence(
+        FastaEvidence,
+        evidence_dir,
         md5sum=md5sum,
         file_name=file_name,
+        raw=raw,
+        url=url,
         contig_names=matcher.contig_names,
-        raw_bytes_fetched=raw.bytes_fetched,
-        source_url=url,
-    ).save(evidence_dir)
+    )
     return matcher.contig_names
 
 
@@ -475,13 +497,9 @@ def fetch_gfa_segment_tags_streaming(
     text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED)
     segment_tags = parse_gfa_segment_tags(text, truncated=truncated)
 
-    GfaEvidence(
-        md5sum=md5sum,
-        file_name=file_name,
-        gfa_segment_tags=segment_tags,
-        raw_bytes_fetched=raw.bytes_fetched,
-        source_url=url,
-    ).save(evidence_dir)
+    _save_head_evidence(
+        GfaEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, gfa_segment_tags=segment_tags
+    )
     return segment_tags
 
 
@@ -512,11 +530,7 @@ def fetch_tar_headers_streaming(
         stream, raw, detector=detector, max_members=MAX_TAR_MEMBERS, stages=TAR_HEAD_STAGES
     )
 
-    TarEvidence(
-        md5sum=md5sum,
-        file_name=file_name,
-        member_names=member_names,
-        raw_bytes_fetched=raw.bytes_fetched,
-        source_url=url,
-    ).save(evidence_dir)
+    _save_head_evidence(
+        TarEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, member_names=member_names
+    )
     return member_names
