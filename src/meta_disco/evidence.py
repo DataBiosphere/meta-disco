@@ -58,8 +58,11 @@ class CachedEvidence:
     a hit needs only ``md5sum`` plus a payload. ``file_name`` is echoed *audit*
     metadata — no consumer reads it back (the fetcher returns the payload) — so a file
     missing it still hits rather than forcing an expensive re-fetch over a non-key
-    field. ``raw_bytes_fetched`` is the size of the byte range a range-request fetcher
-    read; it is ``None`` for BAM, whose ``samtools`` stream has no such count.
+    field. ``raw_bytes_fetched`` is the total compressed bytes a range-request fetcher
+    pulled from the origin; it *runs ahead* of the bytes actually consumed/parsed, because
+    the reader prefetches a whole range at a time (see ``_RawRangeReader.bytes_fetched``) — so
+    it is an upper bound on the head examined, not the exact byte count the answer used. It is
+    ``None`` for BAM, whose ``samtools`` stream has no such count.
     ``source_url`` is recorded only when the fetch used a direct URL rather than the S3
     mirror. ``fetch_timestamp`` defaults to now at construction and is preserved
     verbatim on a round-trip through :meth:`from_json`; a file that lacks it loads with
