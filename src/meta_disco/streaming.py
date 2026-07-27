@@ -315,12 +315,21 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
     ``detector`` gates *escalation*, not per-member stopping: it is consulted only once the
     consumer has read past the next byte offset in ``stages`` (``raw.bytes_served``, i.e. bytes
     actually parsed, not the whole range prefetched into the reader), on all members read so
-    far — mirroring the old fixed-head fetcher, which parses a whole byte-stage of members
-    before deciding whether to read deeper. That is why a mixed archive is voted on its full
-    head sample rather than cut at the first recognized member. Walking stops when the detector
-    is conclusive at a stage boundary, at ``max_members``, or when the stream ends / is cut
-    short (a truncated or non-tar head raises ``TarError`` / ``EOFError`` / a gzip error, caught
-    here — the names read before the cut are the result). A non-tar head yields ``[]``.
+    far. That is why a mixed archive is voted on a head sample rather than cut at the first
+    recognized member.
+
+    This *approximates* the old fixed-head fetcher's staged escalation; it does not byte-mirror
+    it. The old path parses a whole compressed byte-stage and stops at exactly that stage's
+    members, whereas here the detector is checked only at stage *crossings* and ``tarfile``
+    buffers ahead, so the walk overshoots a few members past the conclusive point before the
+    next check fires. The result is a bounded *superset* of the old member set — never fewer, a
+    few more near the boundary (for real stages, a handful out of up to ``max_members``). The
+    stage-2 shadow-diff quantifies any classification impact.
+
+    Walking stops when the detector is conclusive at a stage boundary, at ``max_members``, or
+    when the stream ends / is cut short (a truncated or non-tar head raises ``TarError`` /
+    ``EOFError`` / a gzip error, caught here — the names read before the cut are the result). A
+    non-tar head yields ``[]``.
     """
     names: list[str] = []
     pending = list(stages)

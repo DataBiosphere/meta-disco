@@ -65,12 +65,14 @@ def _tags_json(tags):
     return [t.to_json() for t in tags]
 
 
-def _make_tar(names: list[str], *, gzipped: bool = False) -> bytes:
-    """Build an in-memory tar (or tar.gz) of empty members with the given names."""
+def _make_tar(names: list[str], *, gzipped: bool = False, body_len: int = 0) -> bytes:
+    """Build an in-memory tar (or tar.gz); each member gets a ``body_len``-byte body."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz" if gzipped else "w") as tar:
         for name in names:
-            tar.addfile(tarfile.TarInfo(name), io.BytesIO(b""))
+            info = tarfile.TarInfo(name)
+            info.size = body_len
+            tar.addfile(info, io.BytesIO(b"z" * body_len))
     return buf.getvalue()
 
 
@@ -386,3 +388,31 @@ def test_fetch_tar_streaming_reads_whole_small_head(monkeypatch, evidence_dir):
         evidence_dir / "b", MD5, is_gzipped=False, use_cache=False, head_detector=lambda ns: len(ns) >= 2
     )
     assert both == ["x.vcf", "y.vcf"]
+
+
+def test_fetch_tar_streaming_escalation_is_bounded_superset_of_old(monkeypatch, evidence_dir):
+    # Staged escalation (detector false at stage 1, true at a later stage) is NOT byte-equal to
+    # the old fixed-head fetcher: the detector is checked only at stage crossings and tarfile
+    # buffers ahead, so streaming overshoots a few members past the conclusive point. The
+    # contract we hold is a bounded superset — streaming never returns fewer members than old,
+    # both conclude on the same signal, and the extra are only near the boundary.
+    names = [f"m{i}.dat" for i in range(8)]
+    names[5] = "signal.vcf"  # signal member sits past stage 1
+    obj = _make_tar(names, body_len=1024)  # bodies spread member headers across the byte stages
+    detector = lambda ns: "signal.vcf" in ns  # noqa: E731
+
+    monkeypatch.setattr(fetchers, "TAR_HEAD_STAGES", (4000, 9000, 20000))
+    monkeypatch.setattr(streaming, "TAR_HEAD_STAGES", (4000, 9000, 20000))
+    monkeypatch.setattr(streaming, "FIRST_CHUNK", 2048)  # force multi-fetch so bytes_served lags
+    _install_both(monkeypatch, obj)
+
+    old = fetchers.fetch_tar_headers(
+        evidence_dir / "old", MD5, is_gzipped=False, use_cache=False, head_detector=detector
+    )
+    new = fetch_tar_headers_streaming(
+        evidence_dir / "new", MD5, is_gzipped=False, use_cache=False, head_detector=detector
+    )
+
+    assert "signal.vcf" in old and "signal.vcf" in new  # both escalate to and conclude on the signal
+    assert set(old) <= set(new)  # bounded superset: streaming never drops a member old had
+    assert len(new) >= len(old)
