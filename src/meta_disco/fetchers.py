@@ -926,7 +926,9 @@ def fetch_tar_headers(
     signal is deeper than 256KiB is still found, up to the 100MiB cap. ``head_detector`` is
     injected by the caller (``FileTypeConfig.head_detector`` → ``pipeline``), so the fetcher
     stays ignorant of what makes a head conclusive; ``None`` degrades to an always-conclusive
-    detector that stops at the first stage boundary. A ``.tar.gz`` is decompressed on the fly
+    detector, so the walk stops at the first stage boundary it crosses — an archive smaller than
+    the first stage crosses none and is read whole (up to ``MAX_TAR_MEMBERS``). A ``.tar.gz`` is
+    decompressed on the fly
     (BGZF-aware); a container carries no format of its own (#245) — the archive is classified
     from its inner members.
     """
