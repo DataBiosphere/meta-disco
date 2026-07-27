@@ -161,11 +161,16 @@ def _open_stream(md5sum: str, *, url: str | None, is_gzipped: bool, compressed_c
     kept so the caller can read ``raw.bytes_fetched`` for the evidence record afterwards.
     ``gzip.GzipFile`` decodes concatenated members transparently, so a BGZF head reads
     past its first block (unlike the fixed-window fetchers, which decode only the first).
+
+    Decompression is enabled only when ``is_gzipped`` *and* the head actually starts with the
+    gzip magic (peeked, not consumed) — matching the legacy ``_decompress_head`` magic check, so
+    a plain file misnamed ``.gz`` is read as raw text rather than raising ``BadGzipFile``.
     """
     raw = _RawRangeReader(md5sum, url=url, cap=compressed_cap)
     buffered = io.BufferedReader(raw)
-    stream = gzip.GzipFile(fileobj=buffered) if is_gzipped else buffered
-    return stream, raw
+    if is_gzipped and buffered.peek(2)[:2] == b"\x1f\x8b":
+        return gzip.GzipFile(fileobj=buffered), raw
+    return buffered, raw
 
 
 class _CappedRead:
@@ -516,9 +521,12 @@ def fetch_tar_headers_streaming(
 ) -> list[str]:
     """Streaming counterpart of :func:`~meta_disco.fetchers.fetch_tar_headers`.
 
-    ``head_detector`` (injected by the caller, ``None`` -> read a single head) decides when
-    the members seen so far are conclusive, exactly as in the escalating fetcher — but here
-    the read escalates by streaming rather than re-decompressing a growing buffer.
+    ``head_detector`` is injected by the caller; ``None`` degrades to an always-conclusive
+    detector, which stops the walk at the first stage boundary (a single head — the compressed
+    cap never binds, since the detector concludes before it). It decides when the members seen
+    so far are conclusive; see :func:`_walk_tar_members` for how the stage-boundary gating
+    *approximates* (a bounded superset of) the escalating fetcher rather than mirroring it
+    byte-for-byte.
     """
     payload = _load_cached(TarEvidence, evidence_dir, md5sum, use_cache)
     if payload is not None:

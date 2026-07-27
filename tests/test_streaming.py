@@ -174,6 +174,17 @@ def test_compressed_cap_truncation_is_visible(monkeypatch):
     assert list(_iter_lines(stream, raw, cap=1 << 20)) == ["aaa", "bbb"]  # partial "cc" dropped
 
 
+def test_open_stream_only_gzips_when_magic_present(monkeypatch, evidence_dir):
+    # A file routed as gzipped (name ends .gz) whose bytes are NOT gzip must be read as raw
+    # text — matching legacy _decompress_head's magic check — not raised as BadGzipFile and
+    # dropped. An uncompressed VCF/FASTA misnamed .gz still yields its content.
+    _install_both(monkeypatch, b">chr1 desc\nACGT\n>chr2\nTTTT\n")  # plain FASTA, but is_gzipped=True
+    new = fetch_fasta_headers_streaming(evidence_dir / "new", MD5, is_gzipped=True, use_cache=False)
+    old = fetchers.fetch_fasta_headers(evidence_dir / "old", MD5, is_gzipped=True, use_cache=False)
+    assert new == ["chr1", "chr2"]
+    assert new == old
+
+
 def test_read_head_text_reports_completion(monkeypatch):
     _install(monkeypatch, gzip.compress(b"hello\nworld\n"))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=True, compressed_cap=1 << 20)
