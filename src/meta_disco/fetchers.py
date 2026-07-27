@@ -485,9 +485,10 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
     This *approximates* a staged escalation; it does not read exactly one compressed byte-stage
     at a time. Because the detector is checked only at stage *crossings* and the layers above
     buffer ahead, the member set near a boundary can differ from a stop-at-exactly-that-stage
-    read by a few members either way. It never flips a classification — the walk stops only when
-    the detector reports the sample *conclusive* — which the #263 shadow-diff validated across
-    the sampled corpus.
+    read by a few members either way. Since the walk stops only when the detector reports the
+    sample *conclusive*, this near-boundary variation did not change any classification in the
+    #263 stage-2 shadow-diff over the sampled corpus (an observed result, not a guarantee for
+    every possible archive/detector).
 
     Walking stops when the detector is conclusive at a stage boundary, at ``max_members``, or
     when the stream ends / is cut short (a truncated or non-tar head raises ``TarError`` /
