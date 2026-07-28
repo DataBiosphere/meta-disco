@@ -78,6 +78,12 @@ def main():
         action="store_true",
         help="Skip files that already have cached headers",
     )
+    parser.add_argument(
+        "--evidence-base",
+        type=Path,
+        default=Path("data/evidence/anvil"),
+        help="Evidence cache base directory (per source, e.g. data/evidence/hprc)",
+    )
 
     args = parser.parse_args()
     config = FILE_TYPE_REGISTRY[args.type]
@@ -104,6 +110,7 @@ def main():
         config,
         args.input,
         args.output,
+        evidence_base=args.evidence_base,
         limit=args.limit,
         resume=not args.no_resume,
         workers=args.workers,

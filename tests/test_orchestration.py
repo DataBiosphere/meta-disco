@@ -11,22 +11,19 @@ call the classifier directly.
 These tests pin the three together.
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from rerun_all_classifications import build_parallel_jobs
-
+from meta_disco.classify_run import build_parallel_jobs
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
+EVIDENCE_BASE = Path("data/evidence/anvil")
 
 
 def _jobs():
-    return build_parallel_jobs(METADATA, OUTPUT_DIR)
+    return build_parallel_jobs(METADATA, OUTPUT_DIR, EVIDENCE_BASE)
 
 
 def test_every_registered_file_type_has_a_phase1_job():
@@ -37,6 +34,30 @@ def test_every_registered_file_type_has_a_phase1_job():
         f"FILE_TYPE_REGISTRY types with no Phase 1 job: {sorted(missing)}. "
         "They would be classified by the filename-only Phase 3 catch-all."
     )
+
+
+def test_header_jobs_receive_the_evidence_base():
+    """The per-source evidence cache root (#276) must reach the header jobs — the only
+    ones that fetch and cache — so HPRC evidence lands under data/evidence/hprc, not anvil."""
+    header_jobs = [extra for _, _, extra in _jobs() if "--type" in extra]
+    assert header_jobs, "expected at least one header job"
+    for extra in header_jobs:
+        assert "--evidence-base" in extra
+        assert extra[extra.index("--evidence-base") + 1] == str(EVIDENCE_BASE)
+
+
+def test_workers_thread_to_header_jobs_only():
+    """--workers (#276) reaches the fetching header jobs as `-w`; the non-header scripts,
+    which don't fetch, never get it. Omitting workers adds no `-w` anywhere."""
+    jobs = build_parallel_jobs(METADATA, OUTPUT_DIR, EVIDENCE_BASE, workers=30)
+    header = [extra for _, _, extra in jobs if "--type" in extra]
+    non_header = [extra for _, _, extra in jobs if "--type" not in extra]
+    assert header, "expected at least one header job"
+    for extra in header:
+        assert extra[extra.index("-w") + 1] == "30"
+    assert all("-w" not in extra for extra in non_header)
+    # workers omitted -> no -w on any job
+    assert all("-w" not in extra for _, _, extra in build_parallel_jobs(METADATA, OUTPUT_DIR, EVIDENCE_BASE))
 
 
 def test_every_phase1_output_is_read_by_the_reports():

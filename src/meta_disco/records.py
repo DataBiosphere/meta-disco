@@ -70,6 +70,12 @@ class ClassifierRecord:
     nothing downstream re-parses. The raw ``file_name`` string is kept alongside it:
     it is the identity echoed into the output row and the shared attribute the
     ``InvalidRecord`` stream also exposes (``name`` is a valid-stream-only fact).
+
+    ``url`` is an optional explicit content URL (#276). It is ``None`` for the AnVIL
+    path, where the fetcher derives the S3-mirror URL from ``file_md5sum``; a caller
+    whose files are not on that mirror (the HPRC catalogs, keyed on ``md5(filename)``
+    and served from their own S3 paths) supplies it here and the fetcher streams from
+    it instead. Not a classifier-relevant field, so its absence never diverts a record.
     """
 
     file_name: str
@@ -79,6 +85,7 @@ class ClassifierRecord:
     dataset_title: Any
     entry_id: Any
     name: FileName
+    url: str | None = None
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -92,7 +99,8 @@ class ClassifierRecord:
         have.
 
         ``file_name`` is parsed into a :class:`FileName` exactly once here — the
-        single parse site on the pipeline path (#242).
+        single parse site on the pipeline path (#242). ``url`` is optional (#276) and
+        absent on the AnVIL path, so it is read with ``.get`` and defaults to ``None``.
         """
         return cls(
             file_name=record["file_name"],
@@ -102,6 +110,7 @@ class ClassifierRecord:
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
             name=FileName.parse(record["file_name"]),
+            url=record.get("url"),
         )
 
 

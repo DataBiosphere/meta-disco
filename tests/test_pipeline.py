@@ -736,3 +736,63 @@ class TestFileTypeConfigs:
             assert len(config.extensions) > 0
             assert callable(config.fetcher)
             assert callable(config.classifier)
+
+
+# --- url seam (#276) ---
+
+
+class TestUrlSeam:
+    """The optional explicit content URL (#276) reaches the fetcher, defaulting to None."""
+
+    def _capturing_config(self, captured):
+        def fetcher(evidence_dir, md5, **kw):
+            captured[md5] = kw.get("url")
+            return f"header_for_{md5}"
+
+        return _make_config(fetcher=fetcher)
+
+    def _input(self, tmp_path, record):
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": [record]}))
+        return path
+
+    def test_url_from_record_reaches_fetcher(self, tmp_path):
+        captured = {}
+        config = self._capturing_config(captured)
+        input_file = self._input(
+            tmp_path,
+            {
+                "file_md5sum": "a" * 32,
+                "file_name": "s.test",
+                "file_format": ".test",
+                "file_size": 5,
+                "url": "https://example.org/s.test",
+            },
+        )
+        ClassifyPipeline(config, input_file, tmp_path / "out.json", evidence_base=tmp_path / "ev").run()
+        assert captured["a" * 32] == "https://example.org/s.test"
+
+    def test_url_defaults_to_none_without_url_field(self, tmp_path):
+        # A record with no url (the AnVIL shape) must pass url=None so the fetcher
+        # derives its URL from the md5 — byte-for-byte the pre-#276 behavior.
+        captured = {}
+        config = self._capturing_config(captured)
+        input_file = self._input(
+            tmp_path,
+            {"file_md5sum": "b" * 32, "file_name": "t.test", "file_format": ".test", "file_size": 5},
+        )
+        ClassifyPipeline(config, input_file, tmp_path / "out.json", evidence_base=tmp_path / "ev").run()
+        assert captured["b" * 32] is None
+
+    def test_classify_single_passes_url(self, tmp_path):
+        captured = {}
+        config = self._capturing_config(captured)
+        ClassifyPipeline.classify_single(
+            config,
+            "c" * 32,
+            file_name="s.test",
+            file_format=".test",
+            url="https://example.org/single",
+            evidence_base=tmp_path / "ev",
+        )
+        assert captured["c" * 32] == "https://example.org/single"

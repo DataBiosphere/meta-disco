@@ -1,36 +1,44 @@
 #!/usr/bin/env python3
-"""Classify HPRC catalog files for validation against catalog metadata.
+"""Ingest the HPRC Data Explorer catalogs and classify them with the shared pipeline.
 
-Fetches headers from HPRC S3 URLs and classifies through the pipeline,
-then outputs classifications for comparison against HPRC ground truth.
+HPRC is a *source*, like AnVIL. This script maps its four GitHub catalogs into the one
+**meta-disco record shape** and calls the single classifier
+(``rerun_all_classifications.run_all_classifications``) — there is no HPRC-specific
+classification logic. Every source maps its native metadata into that shape and calls
+the same path.
 
-Catalogs handled:
-  - sequencing-data (6K files): BAM/FASTQ headers fetched from S3
-  - assemblies (560 files): FASTA contig names fetched from S3
-  - alignments (89 files): classified from filename only (graph formats)
-  - annotations (8.7K files): classified from filename only (.bed, .gff3, etc.)
+AnVIL's own catalog includes the HPRC dataset, and the HPRC Data Explorer's metadata is
+richer ground truth, so classifying the HPRC catalogs and comparing against them
+(``validate_against_hprc.py``) is how we quality-check our calls on the AnVIL HPRC files.
+
+Steps (issue #276):
+  1. Load the catalogs (downloaded by ``download_hprc_catalogs.py`` / ``make download-hprc``).
+  2. Fill ``file_size`` from S3 (HTTP HEAD) where the catalog omits it — only the
+     sequencing-data catalog does; assemblies/alignments/annotations carry ``fileSize``.
+  3. Map every record into the meta-disco shape (``file_name``, ``file_format``,
+     ``file_md5sum``, ``url``, ``file_size``) and write one metadata file.
+  4. Run the shared classifier over it, exactly as AnVIL does.
 """
 
 import argparse
 import hashlib
 import json
-from datetime import datetime
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from meta_disco.fetchers import (
-    FetchError,
-    fetch_bam_header,
-    fetch_fasta_headers,
-    fetch_fastq_reads,
-)
+from meta_disco.classify_run import run_all_classifications
+from meta_disco.fetchers import FetchError, fetch_content_length
 from meta_disco.file_name import FileName
-from meta_disco.header_classifier import (
-    classify_from_fasta_header,
-    classify_from_fastq_header,
-    classify_from_header,
-)
-from meta_disco.models import FileInfo
-from meta_disco.rule_engine import RuleEngine
+
+# The S3 location field differs per HPRC catalog; each maps to the meta-disco ``url``.
+# alignments/annotations also carry it, so every catalog record gets a real content URL.
+CATALOG_URL_FIELD = {
+    "sequencing-data": "path",
+    "assemblies": "awsFasta",
+    "alignments": "loc",
+    "annotations": "fileLocation",
+}
 
 
 def s3_to_https(s3_path: str) -> str:
@@ -41,289 +49,141 @@ def s3_to_https(s3_path: str) -> str:
     return s3_path
 
 
-def filename_key(filename: str) -> str:
-    """Generate a stable cache key from filename (HPRC catalogs don't provide MD5s)."""
-    return hashlib.md5(filename.encode()).hexdigest()
+def path_key(path: str) -> str:
+    """Stable cache key hashed from a file's FULL path/url (HPRC catalogs have no md5).
+
+    Keyed on the full path, not the basename: basenames collide across sample
+    directories (e.g. two ``…grch38.vcf.gz`` at different paths — 5 such HPRC files),
+    which would alias them in the evidence cache; full paths are unique (issue #276).
+    Returns a valid lowercase-hex md5, so it satisfies the input contract's
+    ``file_md5sum`` pattern and keys the evidence cache like a real md5. The uniform
+    ``hash(full path)`` cache key across all sources is the follow-up (#277).
+    """
+    return hashlib.md5(path.encode()).hexdigest()
 
 
-def classify_sequencing_data(
-    catalog: list[dict],
-    evidence_base: Path,
-    limit: int | None = None,
-) -> list[dict]:
-    """Classify sequencing-data catalog files (BAM/FASTQ) by fetching headers."""
-    bam_evidence = evidence_base / "bam"
-    fastq_evidence = evidence_base / "fastq"
-    bam_evidence.mkdir(parents=True, exist_ok=True)
-    fastq_evidence.mkdir(parents=True, exist_ok=True)
+def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int) -> list[dict]:
+    """Map one HPRC catalog into meta-disco records, S3-HEAD-filling any missing file_size.
 
-    engine = RuleEngine()
-    records = catalog[:limit] if limit is not None else catalog
-    results = []
-    success = 0
-    skipped = 0
-
-    print(f"\nClassifying {len(records)} sequencing-data files...")
-
-    for i, rec in enumerate(records):
-        fn = rec.get("filename", "")
-        s3_path = rec.get("path", "")
-        url = s3_to_https(s3_path) if s3_path else None
-        key = filename_key(fn)
-        file_size = rec.get("fileSize")  # not available in sequencing catalog
-
-        if (i + 1) % 100 == 0 or i == 0:
-            print(f"  [{i + 1}/{len(records)}] {fn[:50]}", flush=True)
-
-        classifications = None
-
-        if fn.endswith((".bam", ".cram")):
-            # A FetchError (unreadable content) skips the file, as the pre-#155
-            # None return did; a missing-samtools FileNotFoundError still propagates.
-            try:
-                raw_data = fetch_bam_header(
-                    bam_evidence,
-                    key,
-                    file_name=fn,
-                    use_cache=True,
-                    url=url,
-                )
-                classifications = classify_from_header(
-                    raw_data,
-                    name=FileName.parse(fn),
-                    file_size=file_size,
-                    file_format=".cram" if fn.endswith(".cram") else ".bam",
-                )
-            except FetchError:
-                pass
-        elif fn.endswith((".fastq.gz", ".fastq")):
-            try:
-                raw_data = fetch_fastq_reads(
-                    fastq_evidence,
-                    key,
-                    file_name=fn,
-                    is_gzipped=fn.endswith(".gz"),
-                    use_cache=True,
-                    url=url,
-                )
-                classifications = classify_from_fastq_header(
-                    raw_data,
-                    name=FileName.parse(fn),
-                    file_size=file_size,
-                )
-            except FetchError:
-                pass
-        else:
-            # FAST5, POD5, etc. — classify from filename only
-            skipped += 1
-            result = engine.classify_extended(FileInfo.from_filename(fn, file_size=file_size))
-            classifications = result.to_output_dict()
-
-        if classifications:
-            success += 1
-            results.append(
-                {
-                    "file_name": fn,
-                    "key": key,
-                    "file_size": file_size,
-                    "classifications": classifications,
-                    "catalog": "sequencing-data",
-                }
-            )
-
-    print(f"  Classified: {success}, Skipped/failed: {len(records) - success}")
-    return results
-
-
-def classify_assemblies(
-    catalog: list[dict],
-    evidence_base: Path,
-    limit: int | None = None,
-) -> list[dict]:
-    """Classify assembly catalog files (FASTA) by fetching contig names."""
-    fasta_evidence = evidence_base / "fasta"
-    fasta_evidence.mkdir(parents=True, exist_ok=True)
-
-    records = catalog[:limit] if limit is not None else catalog
-    results = []
-    success = 0
-
-    print(f"\nClassifying {len(records)} assembly files...")
-
-    for i, rec in enumerate(records):
-        fn = rec.get("filename", "")
-        s3_path = rec.get("awsFasta", "")
-        url = s3_to_https(s3_path) if s3_path else None
-        key = filename_key(fn)
-        file_size = rec.get("fileSize")
-
-        if (i + 1) % 100 == 0 or i == 0:
-            print(f"  [{i + 1}/{len(records)}] {fn[:50]}", flush=True)
-
-        try:
-            raw_data = fetch_fasta_headers(
-                fasta_evidence,
-                key,
-                file_name=fn,
-                is_gzipped=fn.endswith(".gz"),
-                use_cache=True,
-                url=url,
-            )
-        except FetchError:
-            # Unreadable content skips the file, as the pre-#155 None return did.
-            continue
-
-        classifications = classify_from_fasta_header(
-            raw_data,
-            name=FileName.parse(fn),
-            file_size=file_size,
-        )
-        success += 1
-        results.append(
-            {
-                "file_name": fn,
-                "key": key,
-                "file_size": file_size,
-                "classifications": classifications,
-                "catalog": "assemblies",
-            }
-        )
-
-    print(f"  Classified: {success}, Failed: {len(records) - success}")
-    return results
-
-
-def classify_filename_only(
-    catalog: list[dict],
-    catalog_name: str,
-) -> list[dict]:
-    """Classify files from filename only (no header fetching)."""
-    engine = RuleEngine()
-    results = []
-
-    print(f"\nClassifying {len(catalog)} {catalog_name} files (filename only)...")
-
+    Each record carries the meta-disco fields the classifier reads: ``file_name``,
+    ``file_format``, ``file_md5sum`` (synthesized as the cache key — a hash of the full
+    path, not the basename, so same-named files at different paths don't collide),
+    ``url`` (explicit S3, from the catalog's own location field), and ``file_size``. A
+    size the catalog omits is read from S3 in parallel (HEAD); a size that cannot be
+    obtained is left ``None`` — never fabricated — so the classifier's contract gate
+    marks the file not_classified rather than guessing (issue #276). In practice only
+    the sequencing-data catalog lacks ``fileSize``; the others supply it and are never HEADed.
+    """
+    records = []
+    needs_size = []  # records missing a catalog fileSize — filled by S3 HEAD below
     for rec in catalog:
         fn = rec.get("filename", "")
-        if not fn:
-            continue
-        file_size = rec.get("fileSize")
-        result = engine.classify_extended(FileInfo.from_filename(fn, file_size=file_size))
-        results.append(
-            {
-                "file_name": fn,
-                "key": filename_key(fn),
-                "file_size": file_size,
-                "classifications": result.to_output_dict(),
-                "catalog": catalog_name,
-            }
-        )
+        s3_path = rec.get(url_field, "")
+        url = s3_to_https(s3_path) if s3_path else None
+        size = rec.get("fileSize")
+        record = {
+            "file_name": fn,
+            # file_format is the parsed core extension from the canonical FileName model
+            # (.bam/.cram/.fastq/.fa/.vcf/.gfa …), or "" when the name carries no known
+            # extension — never a junk last-dot suffix. The content-fetched types need it
+            # for the contract gate; the rest classify from the name via the catch-all.
+            "file_format": FileName.parse(fn).extension or "",
+            # Cache key = hash of the full path (the unique identity). No location means the
+            # file can't be read and can't be keyed, so file_md5sum is left None and the
+            # contract gate marks it not_classified — never a fabricated basename key (#276).
+            "file_md5sum": path_key(url) if url else None,
+            "url": url,
+            "file_size": size if isinstance(size, int) else None,
+        }
+        records.append(record)
+        if record["file_size"] is None and url:
+            needs_size.append(record)
 
-    print(f"  Classified: {len(results)}")
-    return results
+    if needs_size:
+        print(f"Fetching {len(needs_size)} file sizes from S3 (HEAD, {workers} workers)...", flush=True)
+
+        def fill_size(record: dict) -> bool:
+            try:
+                record["file_size"] = fetch_content_length(record["url"])
+                return True
+            except FetchError:
+                return False  # leave file_size None → the contract gate marks it not_classified
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            failed = sum(1 for ok in executor.map(fill_size, needs_size) if not ok)
+        if failed:
+            print(f"  {failed} size lookups failed — those files are not_classified (size unavailable)")
+
+    return records
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Classify HPRC catalog files for validation",
+        description="Map the HPRC catalogs into the meta-disco shape and run the shared classifier",
     )
     parser.add_argument(
         "--catalog-dir",
         type=Path,
         default=Path("data/hprc"),
-        help="Directory containing HPRC catalog JSON files",
+        help="Directory containing the downloaded HPRC catalog JSON files",
+    )
+    parser.add_argument(
+        "--metadata-out",
+        type=Path,
+        default=Path("data/hprc/hprc_files_metadata.json"),
+        help="Where to write the mapped meta-disco metadata file (the classifier's input)",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output/hprc"),
-        help="Output directory for classification results",
+        help="Base output directory for classification run dirs",
     )
     parser.add_argument(
         "--evidence-base",
         type=Path,
         default=Path("data/evidence/hprc"),
-        help="Evidence cache base directory",
+        help="Evidence cache base directory for HPRC header fetches",
     )
     parser.add_argument(
         "--limit",
         "-l",
         type=int,
         default=None,
-        help="Limit files per catalog (for testing)",
+        help="Limit records per catalog (for testing)",
     )
     parser.add_argument(
-        "--catalogs",
-        type=str,
-        default="all",
-        help="Comma-separated catalogs to classify (sequencing,assemblies,alignments,annotations or all)",
+        "--workers",
+        "-w",
+        type=int,
+        default=30,
+        help="Parallel workers for the S3 HEAD size lookups and the header fetches",
     )
     args = parser.parse_args()
 
-    # Create timestamped output directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = args.output_dir / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
+    all_records = []
+    for catalog_name, url_field in CATALOG_URL_FIELD.items():
+        catalog_path = args.catalog_dir / f"{catalog_name}.json"
+        if not catalog_path.exists():
+            print(f"  Skipping {catalog_name} (not found: {catalog_path}); run `make download-hprc` first")
+            continue
+        with catalog_path.open() as f:
+            catalog = json.load(f)
+        if args.limit is not None:
+            catalog = catalog[: args.limit]
+        print(f"Mapping {len(catalog)} {catalog_name} records into the meta-disco shape...")
+        all_records += build_metadata_records(catalog, url_field, workers=args.workers)
 
-    catalogs_to_run = (
-        args.catalogs.split(",")
-        if args.catalogs != "all"
-        else ["sequencing", "assemblies", "alignments", "annotations"]
-    )
+    args.metadata_out.parent.mkdir(parents=True, exist_ok=True)
+    with args.metadata_out.open("w") as f:
+        # "files" is the canonical meta-disco metadata key (what the AnVIL source emits);
+        # every classifier loads it, so the mapped HPRC input is shape-identical to AnVIL's.
+        json.dump({"files": all_records}, f)
+    print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 
-    all_results = {}
-
-    # Load and classify each catalog
-    if "sequencing" in catalogs_to_run:
-        catalog_path = args.catalog_dir / "sequencing-data.json"
-        if catalog_path.exists():
-            with catalog_path.open() as f:
-                catalog = json.load(f)
-            results = classify_sequencing_data(catalog, args.evidence_base, limit=args.limit)
-            all_results["sequencing"] = results
-            with (output_dir / "sequencing_classifications.json").open("w") as f:
-                json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
-
-    if "assemblies" in catalogs_to_run:
-        catalog_path = args.catalog_dir / "assemblies.json"
-        if catalog_path.exists():
-            with catalog_path.open() as f:
-                catalog = json.load(f)
-            results = classify_assemblies(catalog, args.evidence_base, limit=args.limit)
-            all_results["assemblies"] = results
-            with (output_dir / "assembly_classifications.json").open("w") as f:
-                json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
-
-    if "alignments" in catalogs_to_run:
-        catalog_path = args.catalog_dir / "alignments.json"
-        if catalog_path.exists():
-            with catalog_path.open() as f:
-                catalog = json.load(f)
-            results = classify_filename_only(catalog, "alignments")
-            all_results["alignments"] = results
-            with (output_dir / "alignment_classifications.json").open("w") as f:
-                json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
-
-    if "annotations" in catalogs_to_run:
-        catalog_path = args.catalog_dir / "annotations.json"
-        if catalog_path.exists():
-            with catalog_path.open() as f:
-                catalog = json.load(f)
-            results = classify_filename_only(catalog, "annotations")
-            all_results["annotations"] = results
-            with (output_dir / "annotation_classifications.json").open("w") as f:
-                json.dump({"classifications": results, "metadata": {"total": len(results)}}, f, indent=2)
-
-    # Summary
-    print(f"\n{'=' * 70}")
-    print("HPRC CLASSIFICATION SUMMARY")
-    print(f"{'=' * 70}")
-    total = 0
-    for name, results in all_results.items():
-        print(f"  {name}: {len(results)}")
-        total += len(results)
-    print(f"  Total: {total}")
-    print(f"\nOutput: {output_dir}/")
+    # Step 4: call the one classifier, exactly as AnVIL does; propagate its success.
+    ok = run_all_classifications(args.metadata_out, args.output_dir, args.evidence_base, workers=args.workers)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":
