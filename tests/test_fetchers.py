@@ -586,6 +586,18 @@ def test_bed_matcher_skips_headers_and_short_rows():
     assert signals.line_count == 2  # the two 3-column rows; header/short/comment skipped
 
 
+def test_bed_matcher_parses_space_delimited_rows():
+    # BED is usually tab-delimited but the spec permits any whitespace; a space-delimited
+    # file must still yield coordinate signals rather than parsing to nothing.
+    matcher = _BedMatcher()
+    for line in ["chr1 0 100", "chr2 0 9999"]:
+        matcher.feed(line)
+    signals = matcher.result()
+    assert signals.chromosomes == ["chr1", "chr2"]
+    assert signals.max_coordinates == {"chr1": 100, "chr2": 9999}
+    assert signals.line_count == 2
+
+
 def test_bed_matcher_detects_chr_prefix_case_insensitively():
     # `Chr1`/`CHR1` carry a chr prefix; a case-sensitive check would miss them and let
     # _infer_bed_reference mislabel a chr-prefixed file as GRCh37 via its "no prefix" shortcut.

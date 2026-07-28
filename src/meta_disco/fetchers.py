@@ -528,7 +528,11 @@ class _BedMatcher:
         line = line.strip()
         if not line or line.startswith(("#", "track", "browser")):
             return False
-        parts = line.split("\t")
+        # BED is usually tab-delimited, but the spec permits any whitespace. Split on
+        # general whitespace so a space-delimited file still yields coordinate signals;
+        # columns 1-3 (chrom/start/end) are never internally spaced, so this only widens
+        # what parses, never mis-splits a tab-delimited line.
+        parts = line.split()
         if len(parts) < 3:
             return False
         self._line_count += 1
