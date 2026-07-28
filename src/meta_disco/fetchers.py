@@ -545,7 +545,10 @@ class _BedMatcher:
     def result(self) -> BedSignals:
         return BedSignals(
             chromosomes=sorted(self._chromosomes),
-            has_chr_prefix=any(c.startswith("chr") for c in self._chromosomes),
+            # Case-insensitive: `Chr1`/`CHR1` carry a chr prefix too. A case-sensitive
+            # check would miss them and let _infer_bed_reference take its "no prefix =>
+            # GRCh37" shortcut, mislabeling a chr-prefixed file as GRCh37.
+            has_chr_prefix=any(c.lower().startswith("chr") for c in self._chromosomes),
             max_coordinates=dict(self._max_coords),
             line_count=self._line_count,
         )
