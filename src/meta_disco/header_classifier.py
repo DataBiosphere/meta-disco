@@ -13,7 +13,7 @@ from dataclasses import dataclass, fields, replace
 from functools import cache
 from typing import TYPE_CHECKING
 
-from .evidence import SegmentTag
+from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
 from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from .validators.read_name_parsers import (
@@ -946,48 +946,6 @@ def classify_from_fasta_header(
 _STANDARD_CHROM_PATTERN = re.compile(r"^(chr)?(\d{1,2}|X|Y|M|MT)$", re.IGNORECASE)
 
 
-@dataclass(frozen=True)
-class BedSignals:
-    """Reference-assembly signals extracted from a BED file's coordinate lines.
-
-    The three logic fields are required: a missing ``has_chr_prefix`` used to
-    default to ``True`` via ``.get``, silently asserting chr-prefixed naming and
-    flipping the GRCh37 reference call. Requiring it makes an absent signal raise
-    at the boundary instead. ``line_count`` is diagnostic only — never read for
-    classification — and is retained so ``dataclasses.asdict`` reproduces the
-    persisted evidence JSON shape unchanged.
-    """
-
-    chromosomes: list[str]
-    has_chr_prefix: bool
-    max_coordinates: dict[str, int]
-    line_count: int = 0
-
-    @classmethod
-    def from_evidence(cls, raw: dict) -> "BedSignals":
-        """Parse cached evidence JSON into typed signals (file-content boundary).
-
-        Reads required keys directly so a malformed or truncated evidence record
-        raises here rather than silently defaulting downstream.
-        """
-        return cls(
-            chromosomes=raw["chromosomes"],
-            has_chr_prefix=raw["has_chr_prefix"],
-            max_coordinates=raw["max_coordinates"],
-            line_count=raw["line_count"],
-        )
-
-    @classmethod
-    def empty(cls) -> "BedSignals":
-        """Signals for a BED file with no coordinate evidence (never fetched).
-
-        Yields filename-only classification: with empty ``max_coordinates`` the
-        coordinate block that would read ``has_chr_prefix`` is skipped, so its
-        value here is an unread placeholder.
-        """
-        return cls(chromosomes=[], has_chr_prefix=False, max_coordinates={})
-
-
 def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
     """Infer reference assembly from BED coordinate signals.
 
@@ -1053,6 +1011,7 @@ def classify_from_bed_signals(
     *,
     name: FileName = FileName.EMPTY,
     file_size: int | None = None,
+    file_format: str | None = None,
     dataset_title: str | None = None,
 ) -> dict:
     """Classify BED file based on coordinate signals.
@@ -1064,7 +1023,12 @@ def classify_from_bed_signals(
         signals: Typed BED coordinate signals
         name: Parsed :class:`FileName` for pattern matching
         file_size: Optional file size in bytes
-        dataset_title: Optional dataset title for context rules
+        file_format: Unused. Accepted so this fits the shared pipeline's uniform
+            ``classifier(raw, name=, file_size=, file_format=)`` call; the engine reads
+            the ``.bed`` format from the fixed ``ExtendedFileInfo`` below, not this arg.
+        dataset_title: Optional dataset title for context rules. Not passed on the
+            pipeline path (the shared classifier call omits it), so BED reference comes
+            from the coordinate signal and filename, never a dataset-title rule (#282).
 
     Returns:
         Per-field classification dict with evidence

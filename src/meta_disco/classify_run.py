@@ -22,9 +22,9 @@ from meta_disco.file_types import FILE_TYPE_REGISTRY
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Phase 1 classifiers that are NOT header-based, so they have their own script
-# rather than a FILE_TYPE_REGISTRY entry.
+# rather than a FILE_TYPE_REGISTRY entry. (BED joined the registry in #282 — it reads
+# coordinate content through the shared pipeline, so it is a header job now.)
 NON_HEADER_JOBS = (
-    ("classify_bed_files.py", "bed_classifications.json"),
     ("classify_images.py", "image_classifications.json"),
     ("classify_auxiliary_genomic.py", "auxiliary_classifications.json"),
 )

@@ -38,11 +38,22 @@ import shutil
 import subprocess
 import tarfile
 import zlib
+from collections import defaultdict
 from pathlib import Path
 
 import requests
 
-from .evidence import BamEvidence, FastaEvidence, FastqEvidence, GfaEvidence, SegmentTag, TarEvidence, VcfEvidence
+from .evidence import (
+    BamEvidence,
+    BedEvidence,
+    BedSignals,
+    FastaEvidence,
+    FastqEvidence,
+    GfaEvidence,
+    SegmentTag,
+    TarEvidence,
+    VcfEvidence,
+)
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
 
@@ -243,11 +254,22 @@ _READ_CHUNK = 65536
 VCF_COMPRESSED_CAP = 1024 * 1024 + 1  # VCF header read window: bytes 0..1048576
 HEAD_COMPRESSED_CAP = HEAD_BYTES + 1  # FASTQ / FASTA read window: bytes 0..262144
 GFA_COMPRESSED_CAP = HEAD_BYTES  # GFA read window: bytes 0..262143 (256KiB)
+# BED reference is inferred from per-contig MAX end coordinates, which can sit anywhere in
+# the file, so BED reads deep (up to ~10MiB, matching the pre-pipeline fetcher) — the reader
+# escalates up to this and stops early at EOF for a smaller file.
+BED_COMPRESSED_CAP = 10 * 1024 * 1024 + 1  # BED read window: bytes 0..10485760
 TAR_COMPRESSED_CAP = 100 * 1024 * 1024  # #260 escalation ceiling
 
 # Decompressed-byte ceiling (memory bound) for the line readers — comfortably above any
 # real header, and the cap a decompression bomb hits instead of exhausting memory.
 MAX_DECOMPRESSED = 16 * 1024 * 1024
+# BED reads far more decompressed text than the header types: reference detection needs the
+# per-contig MAX end coordinate, which for a whole-genome sorted .bed.gz can sit tens of MiB
+# into the decompressed stream. So BED's decompressed ceiling is set high enough that the
+# *compressed* cap (BED_COMPRESSED_CAP, 10MiB) is what actually bounds a legitimate read
+# (matching the pre-#282 fetcher, which decompressed the whole 10MB range) — while still
+# capping a decompression bomb. The line reader discards each line, so this is memory-safe.
+BED_MAX_DECOMPRESSED = 256 * 1024 * 1024
 
 
 class _RawRangeReader(io.RawIOBase):
@@ -485,6 +507,48 @@ class _FastaMatcher:
             if parts:
                 self.contig_names.append(parts[0])
         return False  # no early signal — read the whole capped head
+
+
+class _BedMatcher:
+    """Accumulate reference-assembly signals from BED coordinate lines across the read head.
+
+    Tracks the chromosome names seen, whether they carry a ``chr`` prefix, and the max end
+    coordinate per chromosome — the signals coordinate-elimination reference detection uses.
+    ``feed`` never early-stops (like :class:`_FastaMatcher`): the discriminating max coordinate
+    can sit anywhere, so the whole capped head is read. Header/track/browser lines and rows
+    with fewer than three columns are skipped.
+    """
+
+    def __init__(self):
+        self._chromosomes: set[str] = set()
+        self._max_coords: dict[str, int] = defaultdict(int)
+        self._line_count = 0
+
+    def feed(self, line: str) -> bool:
+        line = line.strip()
+        if not line or line.startswith(("#", "track", "browser")):
+            return False
+        parts = line.split("\t")
+        if len(parts) < 3:
+            return False
+        self._line_count += 1
+        chrom = parts[0]
+        self._chromosomes.add(chrom)
+        try:
+            end = int(parts[2])  # BED end coordinate (0-based, exclusive)
+        except ValueError:
+            return False
+        if end > self._max_coords[chrom]:
+            self._max_coords[chrom] = end
+        return False
+
+    def result(self) -> BedSignals:
+        return BedSignals(
+            chromosomes=sorted(self._chromosomes),
+            has_chr_prefix=any(c.startswith("chr") for c in self._chromosomes),
+            max_coordinates=dict(self._max_coords),
+            line_count=self._line_count,
+        )
 
 
 def _scan_lines(stream, raw: "_RawRangeReader", *, cap: int, matcher):
@@ -905,6 +969,50 @@ def fetch_gfa_segment_tags(
         GfaEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, gfa_segment_tags=segment_tags
     )
     return segment_tags
+
+
+# =============================================================================
+# BED FETCHER (#282)
+# =============================================================================
+
+
+@wrap_as_fetch_error("fetch_bed_signals")
+def fetch_bed_signals(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = True,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> BedSignals:
+    """Read a BED file's reference-assembly coordinate signals from its head.
+
+    Uses the one shared streaming reader (no hand-rolled range GET or gzip decode, the
+    pre-#282 orphan): the escalating reader pulls up to ``BED_COMPRESSED_CAP`` (10MiB
+    compressed, stopping at EOF for a smaller file) and :func:`_scan_lines` streams the
+    decompressed lines through :class:`_BedMatcher`, discarding each. The decompressed cap
+    is ``BED_MAX_DECOMPRESSED`` (256MiB) — high enough that the compressed cap is what
+    bounds a legitimate read (matching the pre-#282 fetcher, which decompressed the whole
+    10MB range), so the per-contig max coordinates that drive reference detection are seen
+    to the same depth, while a bomb is still capped. Going through
+    :class:`~meta_disco.pipeline.ClassifyPipeline` like every other file type means a
+    cleared cache self-regenerates on a normal classify run (fixes #285).
+
+    Never returns None: an unreadable file raises FetchError; an empty or header-only BED
+    yields empty signals — a valid read that classifies from the filename alone.
+    """
+    payload = _load_cached(BedEvidence, evidence_dir, md5sum, use_cache)
+    if payload is not None:
+        return payload
+
+    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=BED_COMPRESSED_CAP)
+    signals = _scan_lines(stream, raw, cap=BED_MAX_DECOMPRESSED, matcher=_BedMatcher()).result()
+
+    _save_head_evidence(
+        BedEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, signals=signals
+    )
+    return signals
 
 
 # =============================================================================

@@ -24,6 +24,7 @@ from meta_disco.evidence import VcfEvidence
 from meta_disco.fetchers import (
     FetchError,
     RangeNotSatisfiable,
+    _BedMatcher,
     _FastaMatcher,
     _FastqMatcher,
     _iter_lines,
@@ -34,6 +35,7 @@ from meta_disco.fetchers import (
     _VcfMatcher,
     _walk_tar_members,
     fetch_bam_header,
+    fetch_bed_signals,
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
@@ -551,6 +553,37 @@ def test_fetch_fastq_reads_names(monkeypatch, evidence_dir):
 def test_fetch_fasta_contig_names(monkeypatch, evidence_dir):
     _install(monkeypatch, gzip.compress(b">chr1 desc\nACGT\n>chr2\nTTTT\n"))
     assert fetch_fasta_headers(evidence_dir, MD5, is_gzipped=True, use_cache=False) == ["chr1", "chr2"]
+
+
+def test_fetch_bed_signals(monkeypatch, evidence_dir):
+    # BED reference signals read through the shared streaming reader (#282): chromosomes,
+    # chr-prefix, and the per-contig MAX end coordinate.
+    _install(monkeypatch, gzip.compress(b"chr1\t0\t1000\nchr1\t2000\t5000\nchr2\t0\t300\n"))
+    signals = fetch_bed_signals(evidence_dir, MD5, is_gzipped=True, use_cache=False)
+    assert signals.chromosomes == ["chr1", "chr2"]
+    assert signals.has_chr_prefix is True
+    assert signals.max_coordinates == {"chr1": 5000, "chr2": 300}
+
+
+def test_bed_reads_deeper_than_the_generic_decompressed_cap():
+    # #282 correctness fix: BED reference detection needs per-contig MAX coordinates, which
+    # for a whole-genome sorted .bed.gz sit deep in the decompressed stream. BED's decompressed
+    # ceiling must exceed the generic MAX_DECOMPRESSED (which would truncate the head and
+    # undercount coordinates, regressing GRCh38 -> not_classified) and the compressed cap, so
+    # the compressed cap is what bounds a legitimate read (matching the pre-#282 fetcher).
+    assert fetchers.BED_MAX_DECOMPRESSED > fetchers.MAX_DECOMPRESSED
+    assert fetchers.BED_MAX_DECOMPRESSED > fetchers.BED_COMPRESSED_CAP
+
+
+def test_bed_matcher_skips_headers_and_short_rows():
+    matcher = _BedMatcher()
+    for line in ["track name=x", "1\t0\t100", "1\t50", "# comment", "2\t0\t9999"]:
+        matcher.feed(line)
+    signals = matcher.result()
+    assert signals.chromosomes == ["1", "2"]
+    assert signals.has_chr_prefix is False  # no 'chr' prefix -> the GRCh37/b37 signal
+    assert signals.max_coordinates == {"1": 100, "2": 9999}
+    assert signals.line_count == 2  # the two 3-column rows; header/short/comment skipped
 
 
 def test_fetch_gfa_reference_backbone_tags(monkeypatch, evidence_dir):

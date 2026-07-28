@@ -6,6 +6,8 @@ import pytest
 
 from meta_disco.evidence import (
     BamEvidence,
+    BedEvidence,
+    BedSignals,
     FastaEvidence,
     FastqEvidence,
     GfaEvidence,
@@ -82,6 +84,22 @@ class TestRoundTrip:
             {"SN": "chr1", "SR": "0"},
             {"SN": "chr1", "SR": "1"},
         ]
+
+    def test_bed_round_trips_as_typed_signals(self, tmp_path):
+        signals = BedSignals(
+            chromosomes=["chr1", "chr2"], has_chr_prefix=True, max_coordinates={"chr1": 5000}, line_count=3
+        )
+        BedEvidence(md5sum="a" * 32, file_name="x.bed.gz", signals=signals).save(tmp_path)
+        loaded = BedEvidence.load(tmp_path, "a" * 32)
+        assert isinstance(loaded.payload, BedSignals)
+        assert loaded.payload == signals
+        # On disk the payload is the plain asdict shape the pre-#282 fetcher wrote.
+        assert json.loads(get_evidence_path(tmp_path, "a" * 32).read_text())["signals"] == {
+            "chromosomes": ["chr1", "chr2"],
+            "has_chr_prefix": True,
+            "max_coordinates": {"chr1": 5000},
+            "line_count": 3,
+        }
 
 
 class TestEmptyPayloadIsAHit:

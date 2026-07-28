@@ -105,7 +105,7 @@ classify-tar:
 	uv run python scripts/classify_headers.py --type tar -i data/anvil/anvil_files_metadata.json -o output/anvil/tar_classifications.json -w 10
 
 classify-bed:
-	uv run python scripts/classify_bed_files.py --metadata data/anvil/anvil_files_metadata.json
+	uv run python scripts/classify_headers.py --type bed -i data/anvil/anvil_files_metadata.json -o output/anvil/bed_classifications.json -w 10
 
 coverage-report:
 	uv run python scripts/generate_coverage_report.py

@@ -84,6 +84,104 @@
       "validation_failed": 0
     }
   },
+  "bed": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
+                "rule_id": "bed_regions",
+                "tier": 2,
+                "value": "genomic"
+              }
+            ],
+            "status": "classified",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
+                "rule_id": "bed_regions",
+                "tier": 2,
+                "value": "annotations"
+              }
+            ],
+            "status": "classified",
+            "value": "annotations"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming",
+                "rule_id": "bed_coordinate_reference",
+                "tier": 4,
+                "value": "GRCh37"
+              }
+            ],
+            "status": "classified",
+            "value": "GRCh37"
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "entry_id": "g-bed-1",
+        "file_format": ".bed.gz",
+        "file_name": "sample.regions.bed.gz",
+        "file_size": 45000,
+        "md5sum": "77777777777777777777777777777777"
+      }
+    ],
+    "metadata": {
+      "complete": true,
+      "content_unreadable": 0,
+      "dropped": 0,
+      "errored": 0,
+      "failed": 0,
+      "from_cache": 0,
+      "processed": 1,
+      "successful": 1,
+      "total_to_process": 1,
+      "validation_failed": 0
+    }
+  },
   "fasta": {
     "classifications": [
       {

@@ -7,6 +7,7 @@ classify_headers.py script.
 
 from .fetchers import (
     fetch_bam_header,
+    fetch_bed_signals,
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
@@ -16,6 +17,7 @@ from .fetchers import (
 )
 from .header_classifier import (
     GRAPH_TEXT_EXTENSIONS,
+    classify_from_bed_signals,
     classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
@@ -98,6 +100,17 @@ TAR_CONFIG = FileTypeConfig(
     head_detector=tar_head_is_conclusive,
 )
 
+# BED reference is inferred from coordinate content (chromosome names + per-contig max
+# end positions), so it is a header/content type read through the shared pipeline (#282) —
+# not a hand-rolled orphan fetcher. It carries no modality/platform/assay signal.
+BED_CONFIG = FileTypeConfig(
+    name="bed",
+    extensions=(".bed", ".bed.gz"),
+    fetcher=fetch_bed_signals,
+    classifier=classify_from_bed_signals,
+    content_fields=("reference_assembly",),
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
@@ -105,4 +118,5 @@ FILE_TYPE_REGISTRY = {
     "fasta": FASTA_CONFIG,
     "gfa": GFA_CONFIG,
     "tar": TAR_CONFIG,
+    "bed": BED_CONFIG,
 }
