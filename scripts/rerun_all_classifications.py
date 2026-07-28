@@ -33,8 +33,16 @@ def main():
         default=Path("data/evidence/anvil"),
         help="Evidence cache base directory (per source, e.g. data/evidence/hprc)",
     )
+    parser.add_argument(
+        "--workers",
+        "-w",
+        type=int,
+        default=None,
+        help="Header-fetch concurrency (default: the pipeline default; raise it, e.g. -w 30, "
+        "for a cold full re-fetch of the network-bound long poles)",
+    )
     args = parser.parse_args()
-    run_all_classifications(args.metadata, args.output_dir, args.evidence_base)
+    run_all_classifications(args.metadata, args.output_dir, args.evidence_base, workers=args.workers)
 
 
 if __name__ == "__main__":
