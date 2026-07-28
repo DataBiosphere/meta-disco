@@ -1026,9 +1026,10 @@ def classify_from_bed_signals(
         file_format: Unused. Accepted so this fits the shared pipeline's uniform
             ``classifier(raw, name=, file_size=, file_format=)`` call; the engine reads
             the ``.bed`` format from the fixed ``ExtendedFileInfo`` below, not this arg.
-        dataset_title: Optional dataset title for context rules. Not passed on the
-            pipeline path (the shared classifier call omits it), so BED reference comes
-            from the coordinate signal and filename, never a dataset-title rule (#282).
+        dataset_title: Optional dataset title for context rules. The shared pipeline
+            call omits it, so on that path BED reference comes from the coordinate signal
+            and filename alone; a direct caller that passes it can still enable a
+            dataset-title rule (#282).
 
     Returns:
         Per-field classification dict with evidence

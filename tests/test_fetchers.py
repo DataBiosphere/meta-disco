@@ -565,6 +565,15 @@ def test_fetch_bed_signals(monkeypatch, evidence_dir):
     assert signals.max_coordinates == {"chr1": 5000, "chr2": 300}
 
 
+def test_fetch_bed_signals_uncompressed(monkeypatch, evidence_dir):
+    # BED_CONFIG covers plain .bed as well as .bed.gz; the shared reader must read an
+    # uncompressed body (is_gzipped=False) through the same matcher.
+    _install(monkeypatch, b"chr1\t0\t1000\nchr2\t0\t300\n")
+    signals = fetch_bed_signals(evidence_dir, MD5, is_gzipped=False, use_cache=False)
+    assert signals.chromosomes == ["chr1", "chr2"]
+    assert signals.max_coordinates == {"chr1": 1000, "chr2": 300}
+
+
 def test_bed_reads_deeper_than_the_generic_decompressed_cap():
     # #282 correctness fix: BED reference detection needs per-contig MAX coordinates, which
     # for a whole-genome sorted .bed.gz sit deep in the decompressed stream. BED's decompressed

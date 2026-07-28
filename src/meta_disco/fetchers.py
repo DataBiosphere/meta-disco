@@ -268,7 +268,10 @@ MAX_DECOMPRESSED = 16 * 1024 * 1024
 # into the decompressed stream. So BED's decompressed ceiling is set high enough that the
 # *compressed* cap (BED_COMPRESSED_CAP, 10MiB) is what actually bounds a legitimate read
 # (matching the pre-#282 fetcher, which decompressed the whole 10MB range) — while still
-# capping a decompression bomb. The line reader discards each line, so this is memory-safe.
+# capping a decompression bomb. The line reader yields and drops each terminated line, so
+# resident memory is bounded by the decompressed cap, not the object size — the only thing
+# it holds is the current unterminated tail, which a newline-sparse stream can grow to the
+# cap but no further.
 BED_MAX_DECOMPRESSED = 256 * 1024 * 1024
 
 

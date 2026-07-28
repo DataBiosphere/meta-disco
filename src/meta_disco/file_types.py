@@ -102,7 +102,9 @@ TAR_CONFIG = FileTypeConfig(
 
 # BED reference is inferred from coordinate content (chromosome names + per-contig max
 # end positions), so it is a header/content type read through the shared pipeline (#282) —
-# not a hand-rolled orphan fetcher. It carries no modality/platform/assay signal.
+# not a hand-rolled orphan fetcher. Only reference_assembly is content-derived (hence
+# content_fields); data_modality/data_type still come from the filename/extension rules,
+# while platform and assay_type carry no BED signal.
 BED_CONFIG = FileTypeConfig(
     name="bed",
     extensions=(".bed", ".bed.gz"),
