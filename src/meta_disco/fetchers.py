@@ -142,6 +142,29 @@ def _content_range_start(content_range: str) -> int | None:
         return None
 
 
+@wrap_as_fetch_error("fetch_content_length")
+def fetch_content_length(url: str, timeout: int = 60) -> int:
+    """Return the size in bytes of the object at ``url``, from an HTTP ``HEAD`` (following
+    redirects).
+
+    The HPRC adapter (#276) uses this because its sequencing catalog carries no file
+    size, yet ``file_size`` is required by the input contract and feeds the WGS/WES
+    assay heuristic — so the real size is read from the object (a HEAD's
+    ``Content-Length``) rather than guessed. Raises ``FetchError`` when the HEAD is
+    non-2xx or omits ``Content-Length``, so the caller records the file as unclassifiable
+    rather than inventing a size. (The S3 objects this is pointed at answer HEAD with
+    ``Content-Length``; the raise is the backstop for when a response does not, and a
+    resume re-attempts it since the size is not cached.)
+    """
+    resp = requests.head(url, timeout=timeout, allow_redirects=True)
+    if resp.status_code not in (200, 206):
+        raise FetchError(f"HTTP {resp.status_code} from HEAD {url}")
+    length = resp.headers.get("Content-Length")
+    if length is None:
+        raise FetchError(f"no Content-Length from HEAD {url}")
+    return int(length)
+
+
 def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None, start_byte: int = 0) -> bytes:
     """Fetch bytes ``start_byte`` through ``end_byte`` (inclusive) from S3. Returns raw bytes.
 

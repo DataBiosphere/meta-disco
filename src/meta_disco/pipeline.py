@@ -112,6 +112,7 @@ def _fetch_and_classify(
     file_format: str | None,
     is_gzipped: bool,
     use_cache: bool,
+    url: str | None = None,
 ) -> tuple[dict, bool]:
     """Fetch a file's content and classify it.
 
@@ -131,6 +132,11 @@ def _fetch_and_classify(
     ``file_name`` (the raw string) goes to the fetcher and the progress line; ``name``
     (the parsed :class:`FileName`, #242) goes to the classifiers, which read the
     extension and filename tokens from it without re-parsing.
+
+    ``url`` is an optional explicit content URL (#276). When ``None`` (the AnVIL path)
+    the fetcher derives its URL from ``md5sum`` (the S3 mirror); when supplied (HPRC)
+    the fetcher streams from it instead. Every fetcher accepts ``url`` and defaults it
+    to ``None``, so passing it unconditionally leaves the AnVIL path byte-for-byte.
     """
     try:
         raw_data = config.fetcher(
@@ -140,6 +146,7 @@ def _fetch_and_classify(
             is_gzipped=is_gzipped,
             use_cache=use_cache,
             head_detector=config.head_detector,
+            url=url,
         )
     except FetchError as e:
         print(f"Content unreadable, classifying from filename — {file_name or md5sum}: {e.reason}")
@@ -288,12 +295,16 @@ class ClassifyPipeline:
         is_gzipped: bool = True,
         use_cache: bool = True,
         evidence_base: Path = Path("data/evidence/anvil"),
+        url: str | None = None,
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
         Returns the canonical seven-key ``OutputRecord`` envelope (#204), the same
         shape the batch path writes; ``dataset_title``/``entry_id`` are ``None`` here
         since there is no source record.
+
+        ``url`` is an optional explicit content URL (#276): ``None`` derives the URL
+        from ``md5sum`` (AnVIL mirror), a value streams from it instead (HPRC).
 
         Never returns ``None`` (#155): a fetch failure surfaces as a ``FetchError``,
         which yields filename-only ``not_classified`` classifications. It does not
@@ -314,6 +325,7 @@ class ClassifyPipeline:
             file_format=file_format,
             is_gzipped=is_gzipped,
             use_cache=use_cache,
+            url=url,
         )
         return OutputRecord.from_single(
             md5sum=md5sum,
@@ -473,6 +485,7 @@ class ClassifyPipeline:
             file_format=item.file_format,
             is_gzipped=is_gzipped,
             use_cache=self.resume,
+            url=item.url,
         )
         if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher

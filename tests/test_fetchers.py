@@ -601,3 +601,26 @@ def test_fetch_tar_warns_when_member_cap_reached(monkeypatch, evidence_dir, caps
     assert len(names) == fetchers.MAX_TAR_MEMBERS
     out = capsys.readouterr().out
     assert "reached the" in out and "big.tar" in out
+
+
+# =============================================================================
+# fetch_content_length — S3 object size for the HPRC adapter (#276)
+# =============================================================================
+
+
+class TestFetchContentLength:
+    def test_head_returns_content_length(self, monkeypatch):
+        monkeypatch.setattr(
+            fetchers.requests, "head", lambda *a, **k: _Resp(200, headers={"Content-Length": "23303924936"})
+        )
+        assert fetchers.fetch_content_length("https://example.org/o.bam") == 23303924936
+
+    def test_missing_content_length_raises(self, monkeypatch):
+        monkeypatch.setattr(fetchers.requests, "head", lambda *a, **k: _Resp(200))  # no Content-Length
+        with pytest.raises(FetchError):
+            fetchers.fetch_content_length("https://example.org/o.bam")
+
+    def test_non_2xx_raises_fetcherror(self, monkeypatch):
+        monkeypatch.setattr(fetchers.requests, "head", lambda *a, **k: _Resp(403))
+        with pytest.raises(FetchError):
+            fetchers.fetch_content_length("https://example.org/o.bam")
