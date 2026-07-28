@@ -94,6 +94,7 @@ def main():
             config,
             args.md5,
             use_cache=not args.no_resume,
+            evidence_base=args.evidence_base,
         )
         if result:
             print(json.dumps(result, indent=2))

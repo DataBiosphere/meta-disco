@@ -3,7 +3,7 @@
 
 HPRC is a *source*, like AnVIL. This script maps its four GitHub catalogs into the one
 **meta-disco record shape** and calls the single classifier
-(``rerun_all_classifications.run_all_classifications``) — there is no HPRC-specific
+(``meta_disco.classify_run.run_all_classifications``) — there is no HPRC-specific
 classification logic. Every source maps its native metadata into that shape and calls
 the same path.
 

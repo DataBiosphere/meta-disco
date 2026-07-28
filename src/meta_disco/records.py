@@ -73,9 +73,10 @@ class ClassifierRecord:
 
     ``url`` is an optional explicit content URL (#276). It is ``None`` for the AnVIL
     path, where the fetcher derives the S3-mirror URL from ``file_md5sum``; a caller
-    whose files are not on that mirror (the HPRC catalogs, keyed on ``md5(filename)``
-    and served from their own S3 paths) supplies it here and the fetcher streams from
-    it instead. Not a classifier-relevant field, so its absence never diverts a record.
+    whose files are not on that mirror (the HPRC catalogs, keyed on a hash of their
+    full path and served from their own S3 paths) supplies it here and the fetcher
+    streams from it instead. Not a classifier-relevant field, so its absence never
+    diverts a record.
     """
 
     file_name: str

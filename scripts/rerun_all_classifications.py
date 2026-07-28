@@ -6,6 +6,7 @@ path shared with the HPRC source); this script is just the AnVIL-facing entry po
 """
 
 import argparse
+import sys
 from pathlib import Path
 
 from meta_disco.classify_run import run_all_classifications
@@ -42,7 +43,8 @@ def main():
         "for a cold full re-fetch of the network-bound long poles)",
     )
     args = parser.parse_args()
-    run_all_classifications(args.metadata, args.output_dir, args.evidence_base, workers=args.workers)
+    ok = run_all_classifications(args.metadata, args.output_dir, args.evidence_base, workers=args.workers)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":
