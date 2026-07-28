@@ -32,7 +32,8 @@ from meta_disco.fetchers import FetchError, fetch_content_length
 from meta_disco.file_name import FileName
 
 # The S3 location field differs per HPRC catalog; each maps to the meta-disco ``url``.
-# alignments/annotations also carry it, so every catalog record gets a real content URL.
+# All four catalogs carry one, so records normally get a content URL — but a record that
+# omits it maps to url=None and is left not_classified (never fetched from a guessed URL).
 CATALOG_URL_FIELD = {
     "sequencing-data": "path",
     "assemblies": "awsFasta",
