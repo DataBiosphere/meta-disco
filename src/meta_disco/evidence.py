@@ -396,6 +396,13 @@ class BedEvidence(CachedEvidence):
 
     signals: BedSignals
 
+    @property
+    def count(self) -> int:
+        """Coordinate rows scanned. The payload is a single (unsized) BedSignals, so the
+        inherited ``len(self.payload)`` does not apply — report line_count, as VcfEvidence
+        reports header lines for its text payload."""
+        return self.signals.line_count
+
     def to_json(self) -> dict:
         # The payload is a typed BedSignals; serialize it to its plain-dict shape.
         data = super().to_json()

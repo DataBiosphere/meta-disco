@@ -93,6 +93,8 @@ class TestRoundTrip:
         loaded = BedEvidence.load(tmp_path, "a" * 32)
         assert isinstance(loaded.payload, BedSignals)
         assert loaded.payload == signals
+        # count reports coordinate rows, not len() of the unsized BedSignals payload (would raise).
+        assert loaded.count == 3
         # On disk the payload is the plain asdict shape the pre-#282 fetcher wrote.
         assert json.loads(get_evidence_path(tmp_path, "a" * 32).read_text())["signals"] == {
             "chromosomes": ["chr1", "chr2"],
