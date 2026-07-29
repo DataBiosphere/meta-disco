@@ -65,9 +65,9 @@ class RecordOutcome(NamedTuple):
     ``errored`` in ``_run_parallel`` by *raising*, which produces no ``RecordOutcome``).
     The three flags are mutually exclusive and only one, at most, is set:
     ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
-    on disk), ``content_unreadable`` (fetch failed, classified from the filename), or
-    none of these (a fresh fetch). Named so the four fields cannot be transposed at the
-    unpack sites.
+    on disk), ``content_unreadable`` (fetch failed; the record is fully not_classified,
+    #293), or none of these (a fresh fetch). Named so the four fields cannot be transposed
+    at the unpack sites.
     """
 
     result: OutputRecord
@@ -85,10 +85,6 @@ class FileTypeConfig:
     fetcher: Callable
     classifier: Callable
     summary_printer: Callable | None = None
-    # Dimensions this file type's *content* can determine. Used to attribute a
-    # fetch failure to the answers the unread bytes would have informed — never
-    # to dimensions only the filename can supply.
-    content_fields: tuple[str, ...] = ()
     # Environment check run once before the worker pool (e.g. an external tool
     # must be installed). Raises to abort the run fast, instead of letting every
     # record fail the same way and vanish. None means no check.
@@ -119,9 +115,10 @@ def _fetch_and_classify(
     Returns ``(classifications, content_unreadable)``:
 
     * content read        -> ``(classifications, False)``
-    * content unreadable  -> ``(filename-only classifications, True)``, when the
-      fetcher raised ``FetchError``; the file stays in the output as a
-      ``not_classified`` row rather than vanishing (#155).
+    * content unreadable  -> ``(all-not_classified classifications, True)``, when the
+      fetcher raised ``FetchError``; the file stays in the output as a fully
+      ``not_classified`` row rather than vanishing (#155), asserting nothing about
+      a file we could not read (#293).
 
     A fetcher signals failure by raising ``FetchError``, not by returning ``None``.
     An exception the fetcher does not wrap (e.g. a missing-tool ``FileNotFoundError``)
@@ -149,14 +146,8 @@ def _fetch_and_classify(
             url=url,
         )
     except FetchError as e:
-        print(f"Content unreadable, classifying from filename — {file_name or md5sum}: {e.reason}")
-        return classify_without_content(
-            e.reason,
-            name=name,
-            file_size=file_size,
-            file_format=file_format,
-            content_fields=config.content_fields,
-        ), True
+        print(f"Content unreadable, classified as nothing — {file_name or md5sum}: {e.reason}")
+        return classify_without_content(e.reason), True
 
     return config.classifier(
         raw_data,
@@ -307,7 +298,7 @@ class ClassifyPipeline:
         from ``md5sum`` (AnVIL mirror), a value streams from it instead (HPRC).
 
         Never returns ``None`` (#155): a fetch failure surfaces as a ``FetchError``,
-        which yields filename-only ``not_classified`` classifications. It does not
+        which yields an all-``not_classified`` record (#293). It does not
         catch everything, though — an environment error (missing samtools raises
         ``FileNotFoundError``) or an unexpected exception from the fetcher/classifier
         propagates rather than returning a record.
@@ -455,11 +446,10 @@ class ClassifyPipeline:
         md5 ``str``, ``file_name``/``file_format`` are ``str``, ``file_size`` an
         ``int`` — by construction, so this path carries no per-field type guards.
 
-        ``content_unreadable`` is reported explicitly rather than sniffed out of
-        the output: ``classify_without_content`` annotates only the dimensions
-        this file type's *content* can determine, so a type whose
-        ``content_fields`` is empty would leave no ``fetch_failed`` evidence at
-        all. Detection must not depend on evidence that a config may not emit.
+        ``content_unreadable`` is reported explicitly, as the boolean
+        ``_fetch_and_classify`` returns on a ``FetchError``, rather than sniffed
+        out of the output — detection must not depend on the shape of the
+        classifications a fetch failure produces.
         """
         if isinstance(item, InvalidRecord):
             classifications = validation_failed_classifications(item.reasons)
@@ -567,7 +557,7 @@ class ClassifyPipeline:
         print(f"\n\nSuccessfully classified: {successful}")
         print(f"  From cache: {from_cache}")
         print(f"  New fetches: {successful - from_cache - unreadable}")
-        print(f"  Content unreadable, classified from filename: {unreadable}")
+        print(f"  Content unreadable, classified as nothing: {unreadable}")
         if errored:
             print(f"Errored (cause printed above): {errored}")
         if invalid:
@@ -597,10 +587,10 @@ class ClassifyPipeline:
     ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
-        ``unreadable`` is persisted alongside ``from_cache``: a record classified
-        from its filename after a failed fetch is otherwise indistinguishable from
-        one whose content was read, because a file type whose ``content_fields``
-        is empty leaves no ``fetch_failed`` evidence behind.
+        ``unreadable`` is persisted alongside ``from_cache``: an all-not_classified
+        record from a failed fetch is otherwise indistinguishable from one whose
+        content was read but yielded no classification, so the count is the only
+        signal that its dimensions are blank because the bytes were unreachable.
 
         The ``metadata`` block's derived tallies (``processed``, ``failed``,
         ``dropped``) are computed in :meth:`RunMetadata.from_counts`, which documents
