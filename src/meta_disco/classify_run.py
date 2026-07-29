@@ -44,9 +44,10 @@ def build_parallel_jobs(
     ``evidence_base`` is the per-source header cache root (``data/evidence/anvil`` for
     AnVIL, ``data/evidence/hprc`` for HPRC) and ``workers`` (when set) the header-fetch
     concurrency; both are passed only to the header jobs — the ones that fetch headers.
-    The non-header scripts take neither: image/auxiliary classify from the filename, and
-    bed reads a *separate* pre-fetched coordinate-evidence cache (hardcoded to the AnVIL
-    dir today, not this ``evidence_base`` — see #279).
+    The non-header scripts take neither: image/auxiliary classify from the filename. (BED
+    used to read a separate pre-fetched coordinate cache hardcoded to the AnVIL dir; #282
+    moved it into the registry, so it is now a header job that fetches through the shared
+    pipeline and honors this ``evidence_base`` like every other type — closing #279.)
 
     Every output filename here must also appear in output_utils.CLASSIFICATION_FILES
     or the reports will not read it — pinned by tests/test_orchestration.py.
