@@ -538,13 +538,15 @@ class _BedMatcher:
         parts = line.split()
         if len(parts) < 3:
             return False
-        self._line_count += 1
-        chrom = parts[0]
-        self._chromosomes.add(chrom)
         try:
             end = int(parts[2])  # BED end coordinate (0-based, exclusive)
         except ValueError:
-            return False
+            return False  # a non-numeric end is not a data row — record nothing from it
+        # Only a row with a parsed coordinate counts: recording the chromosome or the line
+        # before this point would let a malformed row pollute chromosomes/has_chr_prefix.
+        self._line_count += 1
+        chrom = parts[0]
+        self._chromosomes.add(chrom)
         if end > self._max_coords[chrom]:
             self._max_coords[chrom] = end
         return False
