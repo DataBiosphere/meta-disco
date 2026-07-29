@@ -53,7 +53,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import schema_vocab
-from meta_disco.evidence import SegmentTag
+from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
@@ -116,6 +116,11 @@ GOLDEN_INPUTS = {
             "f", file_name="chr5.136400001_136500001.tar", file_size=45516800, file_format=".tar", entry_id="g-tar-1"
         ),
     ],
+    "bed": [
+        _golden_record(
+            "7", file_name="sample.regions.bed.gz", file_size=45000, file_format=".bed.gz", entry_id="g-bed-1"
+        ),
+    ],
 }
 
 STUB_HEADER = "stub-header-no-network"
@@ -131,6 +136,15 @@ STUB_PAYLOADS = {
     "gfa": [SegmentTag(sn="chr1", sr="0")],
     # tar returns member names (list[str]); a GenomicsDB-store marker set.
     "tar": ["chr5.1_2/callset.json", "chr5.1_2/vidmap.json", "chr5.1_2/vcfheader.vcf"],
+    # bed returns BedSignals; bare (no-'chr'-prefix) standard chromosome names are the
+    # GRCh37/b37 naming convention, so coordinate inference resolves reference_assembly to
+    # GRCh37 — exercising the pipeline -> bed classifier -> value envelope path end-to-end.
+    "bed": BedSignals(
+        chromosomes=["1", "2"],
+        has_chr_prefix=False,
+        max_coordinates={"1": 1000, "2": 2000},
+        line_count=2,
+    ),
 }
 # Every evidence entry has a reason and is either a claim (rule_id) or a synthetic
 # resolution marker (marker); the two are mutually exclusive (issue #228).

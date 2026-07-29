@@ -140,7 +140,7 @@
 # -----------------
 # 1. rules/classification_rules.yaml (extension, filename rules)
 # 2. src/meta_disco/header_classifier.py (header rules)
-# 3. scripts/classify_bed_files.py (BED file patterns)
+# 3. BED coordinate rules below + header_classifier.classify_from_bed_signals
 # 4. scripts/classify_images.py (image extensions)
 # 5. scripts/classify_auxiliary_genomic.py (FAST5/POD5/PLINK)
 
@@ -572,7 +572,7 @@ rules:
   # Dataset-based reference rules
   # ---------------------------------------------------------------------------
   # dataset_t2t_reference was removed — replaced by coordinate-based detection
-  # in fetch_bed_headers.py which reads actual BED file content from S3.
+  # via fetchers.fetch_bed_signals, which reads actual BED file content from S3.
   # The blanket dataset rule misclassified GRCh38 liftover/comparison files
   # in T2T datasets as CHM13.
 
@@ -694,7 +694,7 @@ rules:
     rationale: "Nanopore direct RNA sequencing"
 
   # ---------------------------------------------------------------------------
-  # BED file classification rules (from classify_bed_files.py)
+  # BED file classification rules (applied by classify_from_bed_signals)
   # ---------------------------------------------------------------------------
   - id: bed_methylation
     tier: 2

@@ -285,6 +285,21 @@ class TestBedCoordinateClassification:
         ref = _get_val(result, "reference_assembly")
         assert ref in ("GRCh38", "CHM13"), f"Expected GRCh38 or CHM13, got {ref}"
 
+    def test_mixed_case_chr_prefix_still_eliminates(self):
+        """Upper/mixed-case chr names resolve like lowercase: the length lookup folds case.
+
+        chr1=249_000_000 exceeds GRCh38 (248_956_422) and CHM13 (248_387_497) but not GRCh37
+        (249_250_621), so GRCh37 is the sole survivor. A case-sensitive lookup would treat
+        `CHR1` as unknown, eliminate nothing, and fall to not_classified.
+        """
+        signals = BedSignals(
+            chromosomes=["CHR1"],
+            has_chr_prefix=True,
+            max_coordinates={"CHR1": 249_000_000},
+        )
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.regions.bed.gz"))
+        assert _get_val(result, "reference_assembly") == "GRCh37"
+
     def test_no_chr_prefix_grch37(self):
         """No chr prefix on standard chroms -> GRCh37."""
         signals = BedSignals(

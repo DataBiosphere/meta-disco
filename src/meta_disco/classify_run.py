@@ -22,9 +22,9 @@ from meta_disco.file_types import FILE_TYPE_REGISTRY
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Phase 1 classifiers that are NOT header-based, so they have their own script
-# rather than a FILE_TYPE_REGISTRY entry.
+# rather than a FILE_TYPE_REGISTRY entry. (BED joined the registry in #282 — it reads
+# coordinate content through the shared pipeline, so it is a header job now.)
 NON_HEADER_JOBS = (
-    ("classify_bed_files.py", "bed_classifications.json"),
     ("classify_images.py", "image_classifications.json"),
     ("classify_auxiliary_genomic.py", "auxiliary_classifications.json"),
 )
@@ -44,9 +44,10 @@ def build_parallel_jobs(
     ``evidence_base`` is the per-source header cache root (``data/evidence/anvil`` for
     AnVIL, ``data/evidence/hprc`` for HPRC) and ``workers`` (when set) the header-fetch
     concurrency; both are passed only to the header jobs — the ones that fetch headers.
-    The non-header scripts take neither: image/auxiliary classify from the filename, and
-    bed reads a *separate* pre-fetched coordinate-evidence cache (hardcoded to the AnVIL
-    dir today, not this ``evidence_base`` — see #279).
+    The non-header scripts take neither: image/auxiliary classify from the filename. (BED
+    used to read a separate pre-fetched coordinate cache hardcoded to the AnVIL dir; #282
+    moved it into the registry, so it is now a header job that fetches through the shared
+    pipeline and honors this ``evidence_base`` like every other type — closing #279.)
 
     Every output filename here must also appear in output_utils.CLASSIFICATION_FILES
     or the reports will not read it — pinned by tests/test_orchestration.py.

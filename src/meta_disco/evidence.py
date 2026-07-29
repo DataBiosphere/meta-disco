@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -338,3 +338,92 @@ class GfaEvidence(CachedEvidence):
         if not isinstance(payload, list) or not all(isinstance(x, dict) for x in payload):
             return None
         return replace(base, gfa_segment_tags=[SegmentTag.from_json(x) for x in payload])
+
+
+@dataclass(frozen=True)
+class BedSignals:
+    """Reference-assembly signals extracted from a BED file's coordinate lines.
+
+    The three logic fields are required: a missing ``has_chr_prefix`` used to
+    default to ``True`` via ``.get``, silently asserting chr-prefixed naming and
+    flipping the GRCh37 reference call. Requiring it makes an absent signal raise
+    at the boundary instead. ``line_count`` is diagnostic only — never read for
+    classification — and is retained so ``dataclasses.asdict`` reproduces the
+    persisted evidence JSON shape unchanged.
+    """
+
+    chromosomes: list[str]
+    has_chr_prefix: bool
+    max_coordinates: dict[str, int]
+    line_count: int = 0
+
+    @classmethod
+    def from_evidence(cls, raw: dict) -> BedSignals:
+        """Parse cached evidence JSON into typed signals (file-content boundary).
+
+        Reads required keys directly so a malformed or truncated evidence record
+        raises here rather than silently defaulting downstream.
+        """
+        return cls(
+            chromosomes=raw["chromosomes"],
+            has_chr_prefix=raw["has_chr_prefix"],
+            max_coordinates=raw["max_coordinates"],
+            line_count=raw["line_count"],
+        )
+
+    @classmethod
+    def empty(cls) -> BedSignals:
+        """Signals for a BED file with no coordinate evidence (never fetched).
+
+        Yields filename-only classification: with empty ``max_coordinates`` the
+        coordinate block that would read ``has_chr_prefix`` is skipped, so its
+        value here is an unread placeholder.
+        """
+        return cls(chromosomes=[], has_chr_prefix=False, max_coordinates={})
+
+
+@dataclass(frozen=True, kw_only=True)
+class BedEvidence(CachedEvidence):
+    """Cached BED coordinate signals (chromosomes, chr-prefix, per-contig max coords).
+
+    The payload is a single :class:`BedSignals`, serialized as its ``asdict`` shape (the
+    same JSON the pre-pipeline BED fetcher wrote). An empty-coordinate signal is a valid
+    hit (filename-only classification), so the whole payload is never absent — the
+    ``asdict`` always carries its keys — and this type keeps ``_EMPTY_IS_MISS`` False.
+    """
+
+    PAYLOAD_KEY: ClassVar[str] = "signals"
+
+    signals: BedSignals
+
+    @property
+    def count(self) -> int:
+        """Coordinate rows scanned. The payload is a single (unsized) BedSignals, so the
+        inherited ``len(self.payload)`` does not apply — report line_count, as VcfEvidence
+        reports header lines for its text payload."""
+        return self.signals.line_count
+
+    def to_json(self) -> dict:
+        # The payload is a typed BedSignals; serialize it to its plain-dict shape.
+        data = super().to_json()
+        data[self.PAYLOAD_KEY] = asdict(self.signals)
+        return data
+
+    @classmethod
+    def from_json(cls, data: object) -> Any:
+        # Delegate identity/provenance parse + the cache-miss guard to the base, then
+        # rebuild the payload as a typed BedSignals (base built it as a raw dict).
+        base = super().from_json(data)
+        if base is None:
+            return None
+        assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
+        payload = data[cls.PAYLOAD_KEY]
+        # A corrupt file whose signals are not the expected dict is a cache miss, not a
+        # crash — keeping load()'s "any miss -> None" contract at the boundary.
+        if not isinstance(payload, dict):
+            return None
+        try:
+            signals = BedSignals.from_evidence(payload)
+        except (KeyError, TypeError):
+            return None
+        return replace(base, signals=signals)
