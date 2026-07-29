@@ -111,6 +111,22 @@ def build_field_entry(value, status=None, evidence=None) -> dict:
     }
 
 
+def all_not_classified(evidence: list[dict]) -> dict:
+    """Build a classifications dict marking every dimension ``not_classified``.
+
+    The shared shape for a record we assert *nothing* about — a failed input
+    contract (``metadata_schema.validation_failed_classifications``) or an
+    unreadable fetch (``header_classifier.classify_without_content``). Each of the
+    five dimensions gets ``not_classified`` status and a *fresh copy* of
+    ``evidence`` (its cause). The per-field copy is deliberate: one shared list
+    aliased across five fields would let a later in-place edit of one mutate all.
+    """
+    return {
+        fld: build_field_entry(None, status=NOT_CLASSIFIED, evidence=[dict(e) for e in evidence])
+        for fld in CLASSIFICATION_FIELDS
+    }
+
+
 def _entry_status(entry) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived.
 

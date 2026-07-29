@@ -567,41 +567,36 @@ class TestFileTypeConfigs:
             workers=1,
         ).run()
 
-    def test_fetch_error_keeps_the_row_and_what_the_filename_already_gave(self, tmp_path):
-        """A dropped row is indistinguishable from a file that was never seen. But
-        blanking every dimension is also wrong: `pangenome` is knowable from the
-        extension without reading a byte. Only content-dependent fields go
-        not_classified, annotated with the cause."""
-        from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
+    def test_fetch_error_yields_a_fully_not_classified_row(self, tmp_path):
+        """We have nothing to say about a file we cannot read (#293): every dimension
+        goes not_classified with the failure as its evidence, even ones the extension
+        alone (`pangenome`) could support. The row is still written — a dropped row is
+        indistinguishable from a file that was never seen (#155)."""
+        from meta_disco.header_classifier import FETCH_FAILED_RULE_ID
+        from meta_disco.models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED
 
         results = self._run_with_failing_fetcher(tmp_path, "graph.gfa", ".gfa")
         assert len(results) == 1, "the unreadable file must still appear in the output"
         cls = results[0]["classifications"]
 
-        # Knowable from the extension alone — must survive a failed fetch.
-        assert cls["data_type"]["value"] == "pangenome"
-        assert cls["data_type"]["status"] == CLASSIFIED
-        assert cls["data_modality"]["value"] == "genomic"
-        assert cls["platform"]["status"] == NOT_APPLICABLE
-        assert cls["assay_type"]["status"] == NOT_APPLICABLE
+        for field in CLASSIFICATION_FIELDS:
+            assert cls[field]["value"] is None
+            assert cls[field]["status"] == NOT_CLASSIFIED
+            reasons = [e["reason"] for e in cls[field]["evidence"] if e.get("rule_id") == FETCH_FAILED_RULE_ID]
+            assert reasons == ["HTTPError: 404 Not Found"], f"{field} must carry the fetch_failed cause"
 
-        # The note lands on the dimension GFA *content* determines (data_type,
-        # which the unread rGFA tags might have refined to pangenome.reference).
-        failed = [e for e in cls["data_type"]["evidence"] if e.get("rule_id") == "fetch_failed"]
-        assert [e["reason"] for e in failed] == ["HTTPError: 404 Not Found"]
+    def test_fetch_error_discards_a_filename_refinement(self, tmp_path):
+        """The `-mc-`/`grch38` tokens would refine data_type and reference_assembly from
+        the name alone — but with content unreadable we do not trust that guess: both go
+        not_classified (#293), the opposite of the pre-#293 filename fallback."""
+        from meta_disco.models import NOT_CLASSIFIED
 
-        # NOT on reference_assembly: GFA content never determines it (no lengths
-        # are parsed), so a note there would say a re-fetch could resolve an
-        # assembly only the filename can supply.
-        assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
-        assert not [e for e in cls["reference_assembly"]["evidence"] if e.get("rule_id") == "fetch_failed"]
-
-    def test_fetch_error_on_mc_graph_keeps_the_filename_refinement(self, tmp_path):
-        """The `-mc-` token still refines data_type even though content is unreadable."""
         results = self._run_with_failing_fetcher(tmp_path, "hprc-v1.0-mc-grch38.gfa.gz", ".gfa.gz")
         cls = results[0]["classifications"]
-        assert cls["data_type"]["value"] == "pangenome.reference"
-        assert cls["reference_assembly"]["value"] == "GRCh38"
+        assert cls["data_type"]["value"] is None
+        assert cls["data_type"]["status"] == NOT_CLASSIFIED
+        assert cls["reference_assembly"]["value"] is None
+        assert cls["reference_assembly"]["status"] == NOT_CLASSIFIED
 
     def test_fetch_error_reports_unreadable_and_never_counts_as_cached(self, tmp_path):
         """A fetcher raises only after its own cache check missed, so it went to the
@@ -645,10 +640,14 @@ class TestFileTypeConfigs:
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
         assert out is not None
-        # The note is on data_type (what content refines), not on the four others.
+        # Every dimension carries the fetch_failed cause — we assert nothing about
+        # a file we could not read (#293).
+        from meta_disco.header_classifier import FETCH_FAILED_RULE_ID
+        from meta_disco.models import CLASSIFICATION_FIELDS
+
         cls = out.classifications
-        noted = [f for f in cls if any(e["rule_id"] == "fetch_failed" for e in cls[f]["evidence"])]
-        assert noted == ["data_type"]
+        noted = [f for f in cls if any(e["rule_id"] == FETCH_FAILED_RULE_ID for e in cls[f]["evidence"])]
+        assert set(noted) == set(CLASSIFICATION_FIELDS)
 
     def test_unreadable_count_is_persisted_in_run_metadata(self, tmp_path):
         """from_cache is persisted; unreadable must be too, or a consumer cannot tell

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
-from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
+from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, all_not_classified, build_field_entry
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -382,66 +382,26 @@ _ASSEMBLER_PATTERN = re.compile(
 _TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNORECASE)
 
 
-def classify_without_content(
-    reason: str,
-    *,
-    name: FileName = FileName.EMPTY,
-    file_size: int | None = None,
-    file_format: str | None = None,
-    content_fields: tuple[str, ...] = (),
-) -> dict:
-    """Classify a file whose content could not be read, from its name alone.
+FETCH_FAILED_RULE_ID = "fetch_failed"
 
-    Keeps the file in the output with a stated cause instead of dropping its row
-    — a missing record is indistinguishable from a file that was never seen.
 
-    Runs the tier-1/2 (extension and filename) rules only, so everything knowable
-    without reading bytes is still classified: a `.gfa` is still `pangenome`,
-    still `genomic`, still `not_applicable` for platform and assay. The parsed
-    ``name`` and the declared ``file_format`` are handed to the engine, which
-    reconciles them (name-extension wins, else ``file_format``); an archive name
-    with no inner format (``x.tar.gz`` → ``extension=None``) falls through to
-    ``file_format``. With neither, no *extension-scoped* rule fires, so the
-    container yields no content type of its own — though a filename/dataset rule
-    that carries no ``extensions:`` filter (e.g. a reference token in the name)
-    may still classify a field. We do not fabricate a content type for a
-    container we could not read (#245).
+def classify_without_content(reason: str) -> dict:
+    """Classify a file whose content could not be read: every dimension not_classified.
 
-    ``content_fields`` names the dimensions *this file type's content* can
-    determine (``FileTypeConfig.content_fields``). Only those carry the
-    ``fetch_failed`` note, so the evidence says which answers the unread bytes
-    would have informed. Annotating every unresolved dimension instead would lie:
-    GFA content never determines reference_assembly (see
-    ``classify_from_gfa_segment_tags``), so a note there would tell a reader that
-    re-fetching could resolve an assembly the filename alone must supply.
+    We have nothing to say about a file we cannot read (#293). A fetch failure
+    (404 from the mirror, DNS/connection failure, timeout) means the content —
+    the signal that would refine the classification — is unavailable, so no
+    dimension is asserted, not even ones the filename alone could support: a
+    filename token is a guess the unread bytes exist to confirm or overturn.
 
-    The note is attached whether or not the dimension is already classified — a
-    filename-derived `pangenome` may be an unrefined `pangenome.reference`. It
-    declares a status, not a value, so ``evaluate_claims`` treats it as
-    non-assertive and it never competes with a real claim.
+    The record is still written, with the failure ``reason`` as each dimension's
+    evidence, rather than dropped — a missing row is indistinguishable from a
+    file that was never seen (#155). This is the same all-``not_classified``
+    stance ``validation_failed_classifications`` takes for an untrusted record.
 
     ``reason`` should name the cause (e.g. ``"HTTP 404 from AnVIL S3 mirror ..."``).
     """
-    from .rule_engine import ExtendedFileInfo
-
-    file_info = ExtendedFileInfo(
-        name=name,
-        file_format=file_format,
-        file_size=file_size,
-    )
-    result = _get_engine().classify_extended(file_info, include_tier3=False)
-
-    output = result.to_output_dict()
-    for fld in content_fields:
-        if fld in output:
-            output[fld]["evidence"].append(
-                {
-                    "rule_id": "fetch_failed",
-                    "reason": reason,
-                    "status": NOT_CLASSIFIED,
-                }
-            )
-    return output
+    return all_not_classified([{"rule_id": FETCH_FAILED_RULE_ID, "reason": reason}])
 
 
 def classify_from_gfa_segment_tags(

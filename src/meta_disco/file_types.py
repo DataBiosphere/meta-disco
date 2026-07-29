@@ -35,8 +35,6 @@ BAM_CONFIG = FileTypeConfig(
     fetcher=fetch_bam_header,
     classifier=classify_from_header,
     summary_printer=print_bam_summary,
-    # @SQ contig lengths, @RG platform; assay_type is inferred from those.
-    content_fields=("data_modality", "data_type", "reference_assembly", "platform", "assay_type"),
     # samtools reads BAM/CRAM headers — fail fast if it is not installed.
     preflight=require_samtools,
 )
@@ -47,8 +45,6 @@ VCF_CONFIG = FileTypeConfig(
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
-    # ##contig lengths and header tokens; the VCF header names no platform.
-    content_fields=("data_modality", "data_type", "reference_assembly"),
 )
 
 FASTQ_CONFIG = FileTypeConfig(
@@ -56,8 +52,6 @@ FASTQ_CONFIG = FileTypeConfig(
     extensions=(".fastq", ".fastq.gz", ".fq", ".fq.gz"),
     fetcher=fetch_fastq_reads,
     classifier=classify_from_fastq_header,
-    # Read names give the instrument, hence platform; reads name no assembly.
-    content_fields=("data_modality", "platform", "assay_type"),
     summary_printer=print_fastq_summary,
 )
 
@@ -66,8 +60,6 @@ FASTA_CONFIG = FileTypeConfig(
     extensions=(".fasta", ".fasta.gz", ".fa", ".fa.gz"),
     fetcher=fetch_fasta_headers,
     classifier=classify_from_fasta_header,
-    # Contig names distinguish reference / assembly / transcriptome.
-    content_fields=("data_modality", "data_type", "reference_assembly"),
 )
 
 # Text GFA only (GRAPH_TEXT_EXTENSIONS). The other graph extensions the
@@ -78,10 +70,6 @@ GFA_CONFIG = FileTypeConfig(
     extensions=GRAPH_TEXT_EXTENSIONS,
     fetcher=fetch_gfa_segment_tags,
     classifier=classify_from_gfa_segment_tags,
-    # rGFA stable-rank tags refine data_type to pangenome.reference. Nothing
-    # else: reference_assembly comes only from the filename (no lengths are
-    # parsed, and the visible stable name `chr1` is shared across assemblies).
-    content_fields=("data_type",),
 )
 
 # Tar archives (#255). A container carries no format of its own (#245); the head
@@ -92,9 +80,6 @@ TAR_CONFIG = FileTypeConfig(
     extensions=(".tar", ".tar.gz"),
     fetcher=fetch_tar_headers,
     classifier=classify_from_tar_members,
-    # The inner member formats determine what the contents are; nothing here reads a
-    # member's own header, so no reference_assembly / platform / assay_type.
-    content_fields=("data_modality", "data_type"),
     # Escalating head-read (#260): read deeper only until the members are classifiable,
     # so a GenomicsDB store whose variant signal sits past the first 256KiB is reached.
     head_detector=tar_head_is_conclusive,
@@ -102,15 +87,13 @@ TAR_CONFIG = FileTypeConfig(
 
 # BED reference is inferred from coordinate content (chromosome names + per-contig max
 # end positions), so it is a header/content type read through the shared pipeline (#282) —
-# not a hand-rolled orphan fetcher. Only reference_assembly is content-derived (hence
-# content_fields); data_modality/data_type still come from the filename/extension rules,
-# while platform and assay_type carry no BED signal.
+# not a hand-rolled orphan fetcher. reference_assembly is content-derived; data_modality/
+# data_type come from the filename/extension rules; platform and assay_type carry no BED signal.
 BED_CONFIG = FileTypeConfig(
     name="bed",
     extensions=(".bed", ".bed.gz"),
     fetcher=fetch_bed_signals,
     classifier=classify_from_bed_signals,
-    content_fields=("reference_assembly",),
 )
 
 FILE_TYPE_REGISTRY = {

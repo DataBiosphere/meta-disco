@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pydantic import ConfigDict, ValidationError
 from pydantic_core import ErrorDetails
 
-from .models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED, build_field_entry
+from .models import all_not_classified
 from .schema.metadata_model import AnvilFileMetadataRecord
 
 # rule_id stamped on the evidence of a record that failed input validation.
@@ -150,18 +150,12 @@ def validation_failed_classifications(reasons: list[str]) -> dict:
     indistinguishable from a file that was never seen (issue #155).
 
     Every dimension is blanked deliberately, even ones the filename alone could
-    support (unlike the fetch-failure path, which keeps filename-derived values):
-    a contract violation means the record's provenance is untrusted wholesale, so
-    it is marked uniformly unclassifiable rather than partly classified.
+    support: a contract violation means the record's provenance is untrusted
+    wholesale, so it is marked uniformly unclassifiable rather than partly
+    classified — the same stance the fetch-failure path takes for unreadable
+    content (#293).
     """
-
-    # A fresh evidence list (and fresh dicts) per field: sharing one list across
-    # all five dimensions would alias them, so a later in-place edit of one field's
-    # evidence would silently mutate all five.
-    def _evidence():
-        return [{"rule_id": VALIDATION_RULE_ID, "reason": reason} for reason in reasons]
-
-    return {fld: build_field_entry(None, status=NOT_CLASSIFIED, evidence=_evidence()) for fld in CLASSIFICATION_FIELDS}
+    return all_not_classified([{"rule_id": VALIDATION_RULE_ID, "reason": reason} for reason in reasons])
 
 
 @dataclass
