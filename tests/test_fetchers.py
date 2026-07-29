@@ -574,14 +574,24 @@ def test_fetch_bed_signals_uncompressed(monkeypatch, evidence_dir):
     assert signals.max_coordinates == {"chr1": 1000, "chr2": 300}
 
 
-def test_bed_reads_deeper_than_the_generic_decompressed_cap():
-    # #282 correctness fix: BED reference detection needs per-contig MAX coordinates, which
-    # for a whole-genome sorted .bed.gz sit deep in the decompressed stream. BED's decompressed
-    # ceiling must exceed the generic MAX_DECOMPRESSED (which would truncate the head and
-    # undercount coordinates, regressing GRCh38 -> not_classified) and the compressed cap, so
-    # the compressed cap is what bounds a legitimate read (matching the pre-#282 fetcher).
-    assert fetchers.BED_MAX_DECOMPRESSED > fetchers.MAX_DECOMPRESSED
-    assert fetchers.BED_MAX_DECOMPRESSED > fetchers.BED_COMPRESSED_CAP
+def test_bed_reads_deeper_than_the_generic_decompressed_cap(monkeypatch, evidence_dir):
+    # #282 correctness fix: BED reference detection needs per-contig MAX coordinates, which for
+    # a whole-genome sorted .bed.gz sit deep in the decompressed stream. Behavioral proof: a
+    # discriminating coordinate placed *past* the generic MAX_DECOMPRESSED (16MiB) boundary must
+    # still be read — the generic cap would truncate the head and never see it. Highly
+    # compressible filler keeps the compressed payload well under BED_COMPRESSED_CAP, so it is
+    # the decompressed ceiling, not the fetch, that governs whether the deep line is reached.
+    line = b"chr1\t0\t100\n"
+    filler = line * (fetchers.MAX_DECOMPRESSED // len(line) + 100_000)
+    body = filler + b"chr2\t0\t999999999\n"  # discriminating line sits beyond the 16MiB mark
+    payload = gzip.compress(body)
+    assert len(body) > fetchers.MAX_DECOMPRESSED  # discriminator is past the generic cap...
+    assert len(payload) < fetchers.BED_COMPRESSED_CAP  # ...yet the compressed read fits BED's cap
+
+    _install(monkeypatch, payload)
+    signals = fetch_bed_signals(evidence_dir, MD5, is_gzipped=True, use_cache=False)
+    # The deep line was read: a generic-MAX_DECOMPRESSED-capped read would miss chr2 entirely.
+    assert signals.max_coordinates.get("chr2") == 999999999
 
 
 def test_bed_matcher_skips_headers_and_short_rows():
