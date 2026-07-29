@@ -976,9 +976,16 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
     evidence_details = []
 
     for assembly, chrom_lengths in ref_lengths.items():
+        # Resolve chromosome names case-insensitively. has_chr_prefix detection folds case
+        # (Chr1/CHR1), so this lookup must too; otherwise a mixed-case name is treated as an
+        # unknown contig and excluded from elimination, leaving reference_assembly
+        # not_classified when the coordinates could have ruled assemblies out. The keys keep
+        # their canonical casing (chrX/chrY/chrM), so match on a folded index, not str.lower.
+        by_folded = {key.lower(): key for key in chrom_lengths}
         for chrom, max_coord in max_coords.items():
-            chrom_key = chrom if chrom in chrom_lengths else f"chr{chrom}"
-            if chrom_key not in chrom_lengths:
+            folded = chrom.lower()
+            chrom_key = by_folded.get(folded) or by_folded.get(f"chr{folded}")
+            if chrom_key is None:
                 continue
 
             ref_length = chrom_lengths[chrom_key]
