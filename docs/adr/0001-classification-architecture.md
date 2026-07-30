@@ -1,12 +1,14 @@
 # ADR-0001: Metadata classification architecture — deterministic engine executing LLM-authored artifacts, import where declarations survive
 
-- **Status:** Proposed (draft, 2026-07-30)
+- **Status:** Accepted (2026-07-31)
 - **Deciders:** meta-disco team
-- **Related:** #298 (BED reference inference), #299 (unreadable vs read-but-not-this-type), #300 (coverage data_type), #301 (producing method from filename), #302 (import curated metadata), #303 (get ahead of ingestion), #304 (dataset → origin registry)
+- **Related:** #298 (BED reference inference), #299 (unreadable vs read-but-not-this-type), #300 (coverage data_type), #301 (producing method from filename), #302 (import — umbrella), #303 (get ahead of ingestion), #304 (dataset → origin registry), #307 (GTEx import), #310 (HPRC import — first build), #308 (image confidence), #309 (tissue/anatomy schema), #311 (data-format tail), #312 (companion-file resolution)
 
 ## Context
 
-meta-disco classifies AnVIL open-access files (~380K header-classifiable in the 2026-07-30 snapshot) into five dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform` — because the source metadata (especially NHGRI AnVIL) has a large hole. Its two purposes are: (1) **reduce ingest burden**, and (2) **classify data whose original submission is long gone**.
+meta-disco classifies AnVIL open-access files into five dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform` — because the source metadata (especially NHGRI AnVIL) has a large hole. Its two purposes are: (1) **reduce ingest burden**, and (2) **classify data whose original submission is long gone**.
+
+Coverage on the 2026-07-31 snapshot: of ~734K open-access files, **~660K are classifiable data and ~99% of those receive at least one field** (most two or three). Per field, strong on `data_modality` (~94%), `reference_assembly` (~68%), `data_type` (~66%), but **thin on `assay_type` and `platform` (~7–8%)** — which is precisely where import is aimed. (The ~74K not classified are mostly checksums/logs/docs, plus a ~16K tail of data formats without rules yet, #311/#312.)
 
 Two engine approaches have existed:
 - **Original:** a runtime LLM (local, Ollama) reasoning over diverse inputs. Removed.
