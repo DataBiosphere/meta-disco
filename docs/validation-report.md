@@ -1,7 +1,7 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-07-28 18:37:13**
+Classification run: **2026-08-02 17:08:26**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
@@ -12,17 +12,19 @@ Classification run: **2026-07-28 18:37:13**
 
 ## AnVIL (Azul metadata)
 
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **758,658** files across **11** datasets:
+Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **733,877** files across **13** datasets:
 
 - ANVIL_T2T_CHRY (309,979 files)
 - ANVIL_T2T (289,204 files)
-- ANVIL_HPRC (67,830 files)
 - ANVIL_1000G_high_coverage_2019 (26,016 files)
 - ANVIL_GTEx_public_data (25,789 files)
+- ANVIL_HPRC (23,185 files)
+- AnVIL_HPRC_R2 (16,271 files)
 - ANVIL_NIA_CARD_Coriell_Cell_Lines_Open (12,534 files)
 - ANVIL_1000G_PRIMED_data_model (11,493 files)
-- AnVIL_IGVF_Mouse_R1 (6,784 files)
+- AnVIL_IGVF_Mouse_R1 (6,786 files)
 - AnVIL_ENCORE_RS293 (3,752 files)
+- ANVIL_nhp_dGTEx_V1 (3,591 files)
 - AnVIL_MAGE (3,285 files)
 - AnVIL_ENCORE_293T (1,992 files)
 
