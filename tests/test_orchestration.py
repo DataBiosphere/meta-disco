@@ -71,6 +71,27 @@ def test_every_phase1_output_is_read_by_the_reports():
     )
 
 
+def _makefile_recipe(makefile: str, target: str) -> str | None:
+    """Return the recipe body (tab-indented lines) of a Makefile target, or None.
+
+    Scoped to the single stanza so an assertion about one target's recipe can't be
+    satisfied by text belonging to a different target.
+    """
+    lines = makefile.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith(f"{target}:"):
+            recipe = []
+            for follow in lines[i + 1 :]:
+                if follow.startswith("\t"):
+                    recipe.append(follow)
+                elif follow.strip() == "":
+                    continue
+                else:
+                    break
+            return "\n".join(recipe)
+    return None
+
+
 def test_every_registered_file_type_has_a_makefile_target():
     """`make classify-<type>` is the other entry point, and it is hand-written.
 
@@ -82,9 +103,11 @@ def test_every_registered_file_type_has_a_makefile_target():
         assert f"\nclassify-{ftype}:" in makefile, (
             f"No `classify-{ftype}` target in the Makefile for registered type {ftype!r}."
         )
-        assert f"{ftype}_classifications.json" in makefile, (
-            f"The classify-{ftype} target does not write "
-            f"{ftype}_classifications.json, which CLASSIFICATION_FILES expects."
+        recipe = _makefile_recipe(makefile, f"classify-{ftype}")
+        assert recipe and f"--type {ftype}" in recipe, (
+            f"The classify-{ftype} target's recipe does not run classify_headers with "
+            f"--type {ftype}; classify_headers.py derives the "
+            f"{ftype}_classifications.json name CLASSIFICATION_FILES expects from it."
         )
         assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
             f"classify-{ftype} is defined but not listed as a `classify-headers` prerequisite or in .PHONY."

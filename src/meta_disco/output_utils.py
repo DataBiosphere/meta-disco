@@ -25,7 +25,12 @@ def find_latest_run(output_dir: Path) -> Path:
     """Find the most recent timestamped run directory.
 
     Looks for subdirectories whose names start with a digit (e.g., 20260322_112336)
-    and returns the one that sorts last (most recent).
+    and returns the one that sorts last (most recent). By convention, full
+    `make classify` runs write digit-prefixed dirs while the `partials/` folder
+    (standalone/per-type test runs from `make classify-<type>`) starts with a
+    letter, so this digit-prefix filter skips it. The filter keys only on the
+    leading character, so any other digit-prefixed dir here — e.g. one an operator
+    passes via `--run-dir` — would also be considered.
 
     Raises FileNotFoundError if the output directory or run directories don't exist.
     """
