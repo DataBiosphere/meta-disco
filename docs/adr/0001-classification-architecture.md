@@ -8,7 +8,7 @@
 
 meta-disco classifies AnVIL open-access files into five dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform` — because the source metadata (especially NHGRI AnVIL) has a large hole. Its two purposes are: (1) **reduce ingest burden**, and (2) **classify data whose original submission is long gone**.
 
-Coverage (re-measured on the 2026-08-02 run over the 733,877-file snapshot): of ~734K open-access files, **~669K are classifiable data files and ~97.5% of those receive at least one field** (most two or three). The figures below are the *concrete-value* rate — files whose dimension resolved to `status=classified` (i.e. a real value, **excluding** `not_applicable`), measured over those data files. On that basis meta-disco is strong on `data_type` (~97%), `data_modality` (~92%), and `reference_assembly` (~68%), but **thin on `assay_type` and `platform` (~8–9%)** — which is precisely where import is aimed. (The coverage report's headline instead counts `not_applicable` as classified, so it shows higher rates there — e.g. `assay_type`/`platform` ~18–22%; that is the same concrete signal viewed with a looser denominator, not a different result.) The ~65K files that receive no field are mostly checksums/logs/docs, plus a ~16K tail of data formats without rules yet, #311/#312.
+Coverage (re-measured on the 2026-08-02 run over the 733,877-file snapshot): of ~734K open-access files, **~669K are classifiable data files and ~97.5% of those receive at least one field** (most two or three). The figures below are the *concrete-value* rate — files whose dimension resolved to `status=classified` (i.e. a real value, **excluding** `not_applicable`), measured over those data files. On that basis meta-disco is strong on `data_type` (~97%), `data_modality` (~92%), and `reference_assembly` (~68%), but **thin on `assay_type` and `platform` (~8–9%)** — which is precisely where import is aimed. (The coverage report's headline instead counts `not_applicable` as classified, so it shows higher rates there — e.g. `assay_type`/`platform` ~18–22%; that is the same concrete signal viewed with a looser denominator, not a different result.) About ~72K files receive no concrete field: ~55K are non-data files (checksums/logs/docs — excluded from the ~669K data-file denominator above, and mostly resolved to `not_applicable`), plus a ~16K tail of data formats without rules yet (#311/#312).
 
 Two engine approaches have existed:
 - **Original:** a runtime LLM (local, Ollama) reasoning over diverse inputs. Removed.
@@ -16,7 +16,7 @@ Two engine approaches have existed:
 
 The question this ADR settles: given the hole, do we lean on the deterministic rules, revive a runtime LLM, or something else?
 
-## Empirical backbone (measured 2026-07-30, fresh snapshot)
+## Empirical backbone (per-type deep-dive measured 2026-07-30, on the re-pulled catalog)
 
 The decisive evidence is the **ceiling of content-based inference**, which is set by the data, not the method:
 
