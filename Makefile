@@ -89,8 +89,11 @@ validate-metadata:
 # own fresh output/anvil/partials/<timestamp>/ folder. The reports' find_latest_run
 # selects only digit-prefixed run dirs, so the letter-prefixed partials/ folder is
 # skipped (see output_utils.find_latest_run).
-# Each target omits -o so classify_headers.py derives <type>_classifications.json;
-# pass RUN_DIR=... to place it, or leave it unset for the dated-partials default.
+# The per-type targets omit -o so classify_headers.py derives
+# <type>_classifications.json; pass RUN_DIR=... to a per-type target (e.g.
+# `make classify-bam RUN_DIR=...`) to place its output, or leave it unset for the
+# dated-partials default. classify-headers sets its own shared RUN_DIR, so a
+# RUN_DIR passed to classify-headers itself is overridden.
 # RUN_DIR_ARG expands to nothing when RUN_DIR is unset (standalone run).
 RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
 
