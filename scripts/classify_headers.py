@@ -11,6 +11,7 @@ Examples:
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Add project root to path
@@ -41,7 +42,17 @@ def main():
         "-o",
         type=Path,
         default=None,
-        help="Output classification file (required in batch mode)",
+        help="Output classification file (explicit path; overrides --run-dir)",
+    )
+    parser.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Run folder to write <type>_classifications.json into. Omit for a "
+            "standalone run, which lands in a fresh output/anvil/partials/<timestamp>/ "
+            "folder (test artifacts the reports never read)."
+        ),
     )
     parser.add_argument(
         "--limit",
@@ -103,14 +114,23 @@ def main():
             sys.exit(1)
         return
 
-    # Batch mode
-    if not args.output:
-        parser.error("--output is required in batch mode")
+    # Batch mode — resolve where the output lands:
+    #   -o wins (explicit one-off path); else <type>_classifications.json inside the
+    #   run dir (--run-dir, shared by `make classify-headers`); else a fresh dated
+    #   partials folder. Standalone/per-type runs are test artifacts under
+    #   output/anvil/partials/ and are deliberately NOT read by the reports, which
+    #   only consume complete `make classify` runs (see output_utils.find_latest_run).
+    if args.output:
+        output_path = args.output
+    else:
+        run_dir = args.run_dir or (Path("output/anvil/partials") / datetime.now().strftime("%Y%m%d_%H%M%S"))
+        output_path = run_dir / f"{args.type}_classifications.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     pipeline = ClassifyPipeline(
         config,
         args.input,
-        args.output,
+        output_path,
         evidence_base=args.evidence_base,
         limit=args.limit,
         resume=not args.no_resume,

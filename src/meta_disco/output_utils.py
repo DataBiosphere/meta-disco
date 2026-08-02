@@ -25,7 +25,10 @@ def find_latest_run(output_dir: Path) -> Path:
     """Find the most recent timestamped run directory.
 
     Looks for subdirectories whose names start with a digit (e.g., 20260322_112336)
-    and returns the one that sorts last (most recent).
+    and returns the one that sorts last (most recent). Only full `make classify`
+    runs are named this way; the `partials/` folder (standalone/per-type test runs
+    from `make classify-<type>`) starts with a letter and is deliberately skipped,
+    so a partial run never shadows a complete run in the reports.
 
     Raises FileNotFoundError if the output directory or run directories don't exist.
     """

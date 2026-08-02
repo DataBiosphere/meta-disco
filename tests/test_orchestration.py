@@ -82,9 +82,10 @@ def test_every_registered_file_type_has_a_makefile_target():
         assert f"\nclassify-{ftype}:" in makefile, (
             f"No `classify-{ftype}` target in the Makefile for registered type {ftype!r}."
         )
-        assert f"{ftype}_classifications.json" in makefile, (
-            f"The classify-{ftype} target does not write "
-            f"{ftype}_classifications.json, which CLASSIFICATION_FILES expects."
+        assert f"--type {ftype}" in makefile, (
+            f"The classify-{ftype} target does not run classify_headers with "
+            f"--type {ftype}; classify_headers.py derives the "
+            f"{ftype}_classifications.json name CLASSIFICATION_FILES expects from it."
         )
         assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
             f"classify-{ftype} is defined but not listed as a `classify-headers` prerequisite or in .PHONY."

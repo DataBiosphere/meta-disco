@@ -84,28 +84,39 @@ download:
 validate-metadata:
 	uv run python scripts/validate_metadata.py
 
-classify-headers: classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar
+# `make classify-headers` runs the six header types into ONE dated partials folder
+# (a shared RUN_DIR). A standalone `make classify-<type>` run instead lands in its
+# own fresh output/anvil/partials/<timestamp>/ folder. Neither is read by the
+# reports, which consume only full `make classify` runs (see output_utils.find_latest_run).
+# Each target omits -o so classify_headers.py derives <type>_classifications.json;
+# pass RUN_DIR=... to place it, or leave it unset for the dated-partials default.
+# RUN_DIR_ARG expands to nothing when RUN_DIR is unset (standalone run).
+RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
+
+classify-headers:
+	$(MAKE) classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar \
+		RUN_DIR="output/anvil/partials/$$(date +%Y%m%d_%H%M%S)"
 
 classify-bam:
-	uv run python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam_classifications.json -w 4
+	uv run python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 4
 
 classify-vcf:
-	uv run python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json -o output/anvil/vcf_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 classify-fastq:
-	uv run python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json -o output/anvil/fastq_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 classify-fasta:
-	uv run python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json -o output/anvil/fasta_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 classify-gfa:
-	uv run python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json -o output/anvil/gfa_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 classify-tar:
-	uv run python scripts/classify_headers.py --type tar -i data/anvil/anvil_files_metadata.json -o output/anvil/tar_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type tar -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 classify-bed:
-	uv run python scripts/classify_headers.py --type bed -i data/anvil/anvil_files_metadata.json -o output/anvil/bed_classifications.json -w 10
+	uv run python scripts/classify_headers.py --type bed -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
 coverage-report:
 	uv run python scripts/generate_coverage_report.py
