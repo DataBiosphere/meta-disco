@@ -51,7 +51,8 @@ def main():
         help=(
             "Run folder to write <type>_classifications.json into. Omit for a "
             "standalone run, which lands in a fresh output/anvil/partials/<timestamp>/ "
-            "folder (test artifacts the reports never read)."
+            "folder; the reports' find_latest_run selects only digit-prefixed run "
+            "dirs, so the letter-prefixed partials/ folder is skipped."
         ),
     )
     parser.add_argument(
@@ -118,8 +119,9 @@ def main():
     #   -o wins (explicit one-off path); else <type>_classifications.json inside the
     #   run dir (--run-dir, shared by `make classify-headers`); else a fresh dated
     #   partials folder. Standalone/per-type runs are test artifacts under
-    #   output/anvil/partials/ and are deliberately NOT read by the reports, which
-    #   only consume complete `make classify` runs (see output_utils.find_latest_run).
+    #   output/anvil/partials/; the reports' find_latest_run selects only
+    #   digit-prefixed run dirs, so the letter-prefixed partials/ folder is skipped
+    #   (see output_utils.find_latest_run).
     if args.output:
         output_path = args.output
     else:

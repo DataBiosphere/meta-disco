@@ -86,8 +86,9 @@ validate-metadata:
 
 # `make classify-headers` runs the six header types into ONE dated partials folder
 # (a shared RUN_DIR). A standalone `make classify-<type>` run instead lands in its
-# own fresh output/anvil/partials/<timestamp>/ folder. Neither is read by the
-# reports, which consume only full `make classify` runs (see output_utils.find_latest_run).
+# own fresh output/anvil/partials/<timestamp>/ folder. The reports' find_latest_run
+# selects only digit-prefixed run dirs, so the letter-prefixed partials/ folder is
+# skipped (see output_utils.find_latest_run).
 # Each target omits -o so classify_headers.py derives <type>_classifications.json;
 # pass RUN_DIR=... to place it, or leave it unset for the dated-partials default.
 # RUN_DIR_ARG expands to nothing when RUN_DIR is unset (standalone run).
