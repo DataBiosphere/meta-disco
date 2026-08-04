@@ -14,14 +14,13 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 
 import yaml
 
 from meta_disco.models import CLASSIFIED, _entry_value, _field_entry, status_for_value
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
-
-_RULES_PATH = Path(__file__).parent / "rules" / "consistency_rules.yaml"
 
 
 @dataclass
@@ -38,9 +37,20 @@ class Violation:
     evidence: str | None  # rule_id/marker of the offending field's first evidence
 
 
-def load_rules(path: Path = _RULES_PATH) -> list[dict]:
-    """Load the declarative invariant set."""
-    data = yaml.safe_load(path.read_text()) or {}
+def default_consistency_rules_resource():
+    """The bundled ``consistency_rules.yaml`` as an ``importlib.resources`` resource.
+
+    Anchored on this module's package (``{__package__}.rules``) so it resolves from
+    an installed wheel/zip rather than a ``__file__`` walk — mirroring
+    ``rule_loader.default_rules_resource`` (the package-data convention, #164/#166).
+    """
+    return files(f"{__package__}.rules") / "consistency_rules.yaml"
+
+
+def load_rules(resource=None) -> list[dict]:
+    """Load the declarative invariant set (defaults to the bundled package resource)."""
+    resource = resource or default_consistency_rules_resource()
+    data = yaml.safe_load(resource.read_text(encoding="utf-8")) or {}
     return data.get("rules", [])
 
 
@@ -61,7 +71,8 @@ def _dim(record: dict, name: str) -> tuple[str | None, str, list]:
     value = _entry_value(entry)
     if isinstance(entry, dict):
         status = entry.get("status") or status_for_value(value)
-        evidence = entry.get("evidence") or []
+        ev = entry.get("evidence")
+        evidence = ev if isinstance(ev, list) else []
     else:
         status, evidence = status_for_value(value), []
     return value, status, evidence
@@ -117,6 +128,7 @@ def _check_active(record: dict, rule: dict, activated: dict) -> list[Violation]:
         if not _violates(value, status, matcher):
             continue
         first = evidence[0] if evidence else {}
+        evidence_ref = (first.get("rule_id") or first.get("marker")) if isinstance(first, dict) else None
         violations.append(
             Violation(
                 md5sum=record.get("md5sum") or "",
@@ -126,7 +138,7 @@ def _check_active(record: dict, rule: dict, activated: dict) -> list[Violation]:
                 offending_field=req_field,
                 offending_value=value if status == CLASSIFIED else None,
                 offending_status=status,
-                evidence=first.get("rule_id") or first.get("marker"),
+                evidence=evidence_ref,
             )
         )
     return violations

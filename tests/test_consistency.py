@@ -100,6 +100,15 @@ def test_incoherent_entry_does_not_crash():
     assert check_record(rec, RULES) == []  # reads raw status, no ValueError raised
 
 
+def test_malformed_evidence_does_not_crash():
+    # A record whose offending field carries a non-list `evidence` must still be
+    # flagged (with no evidence ref), not abort the run.
+    rec = _rec(data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec["classifications"]["assay_type"]["evidence"] = "oops-not-a-list"
+    [viol] = [v for v in check_record(rec, RULES) if v.rule_id == "assay_for_transcriptomic"]
+    assert viol.evidence is None
+
+
 def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):
     # A 'results'-keyed envelope, plus a stray non-dict element, must not crash and
     # must yield only the dict records.
