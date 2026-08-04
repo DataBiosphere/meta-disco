@@ -1,0 +1,85 @@
+# Self-consistency invariants (#314) — cross-field semantic rules over CLASSIFIED
+# records. Each violation is a concrete internal contradiction ("these two fields
+# can't both be true"), caught with no ground truth. This is a post-hoc QA layer,
+# separate from the classification rule engine (unified_rules.yaml).
+#
+# Rule shape (evaluated by consistency.py):
+#   id:          stable identifier
+#   description: human-readable statement of the invariant
+#   when:        field -> matcher; the rule is ACTIVE only when every matcher holds
+#                  "<value>"            -> field is classified AND value == <value>
+#                  {prefix: "x."}       -> classified AND value starts with "x."
+#                  {value_in: [...]}    -> classified AND value in list
+#                  {status: <status>}   -> field status == <status>
+#   require:     field -> matcher; a violation is raised when any is UNsatisfied
+#                  {value_in: [...]}    -> violation if classified AND value not in list
+#                  {value_not_in: [...]}-> violation if classified AND value in list
+#                  {status_not: <s>}    -> violation if field status == <s>
+#                  {status: <s>}        -> violation if field status != <s>
+#
+# `value_in`/`value_not_in` only fire on CLASSIFIED fields, so absence of a value
+# is never flagged — only a determined value that contradicts another determined one.
+#
+# Scope note: the flat/deterministic subset only (spike). Conditional rules
+# (reference-applicability #4, degenerate-guard #7, data_type<->modality #2) and
+# index inertness (the propagation question, #312) are deferred follow-ups.
+
+rules:
+  # --- 1. modality <-> assay family -------------------------------------------
+  - id: assay_for_transcriptomic
+    description: A transcriptomic file's assay, if classified, must be RNA-seq.
+    when: {data_modality: {prefix: "transcriptomic."}}
+    require: {assay_type: {value_in: ["RNA-seq"]}}
+
+  - id: assay_for_genomic
+    description: A genomic file's assay, if classified, must be WGS or WES.
+    when: {data_modality: "genomic"}
+    require: {assay_type: {value_in: ["WGS", "WES"]}}
+
+  - id: assay_for_chromatin_accessibility
+    description: A chromatin-accessibility file's assay, if classified, must be ATAC-seq.
+    when: {data_modality: "epigenomic.chromatin_accessibility"}
+    require: {assay_type: {value_in: ["ATAC-seq"]}}
+
+  - id: assay_for_histone_modification
+    description: A histone-modification file's assay, if classified, must be ChIP-seq.
+    when: {data_modality: "epigenomic.histone_modification"}
+    require: {assay_type: {value_in: ["ChIP-seq"]}}
+
+  - id: assay_for_methylation
+    description: A methylation file's assay, if classified, must be Bisulfite-seq or Methylation array.
+    when: {data_modality: "epigenomic.methylation"}
+    require: {assay_type: {value_in: ["Bisulfite-seq", "Methylation array"]}}
+
+  # --- 3. imaging exclusivity -------------------------------------------------
+  - id: imaging_exclusive
+    description: >-
+      A histology image carries no sequencing signal: data_type must be images,
+      and platform / reference_assembly must not be classified (a histology file
+      with platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
+    when: {data_modality: "imaging.histology"}
+    require:
+      data_type: {value_in: ["images"]}
+      assay_type: {value_in: ["Histology"]}
+      platform: {status_not: "classified"}
+      reference_assembly: {status_not: "classified"}
+
+  # --- 5. platform <-> modality family ----------------------------------------
+  - id: platform_implies_sequencing_modality
+    description: A sequencing platform contradicts a histology modality.
+    when: {platform: {value_in: ["ILLUMINA", "PACBIO", "ONT", "MGI", "ELEMENT", "ULTIMA"]}}
+    require: {data_modality: {value_not_in: ["imaging.histology"]}}
+
+  # --- 6. auxiliary-type inertness (checksum/log; index deferred to #312) ------
+  - id: auxiliary_inert
+    description: >-
+      A checksum or log describes another file and carries no signal of its own,
+      so modality / reference / assay / platform must not be classified (e.g. a
+      .md5 classified genomic is inconsistent). Index inertness is the #312
+      propagation question and is intentionally out of scope here.
+    when: {data_type: {value_in: ["checksum", "log"]}}
+    require:
+      data_modality: {status_not: "classified"}
+      reference_assembly: {status_not: "classified"}
+      assay_type: {status_not: "classified"}
+      platform: {status_not: "classified"}

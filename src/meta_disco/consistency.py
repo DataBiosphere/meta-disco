@@ -1,0 +1,190 @@
+"""Self-consistency linter (#314): cross-field semantic invariants over records.
+
+Each rule is declarative data in ``rules/consistency_rules.yaml`` — a ``when``
+(field matchers that make the rule active) and a ``require`` (what must then
+hold). A violation is a concrete internal contradiction: it names the offending
+field, its value/status, and the evidence behind it, caught with no ground truth.
+
+Report-only for now (the #314 spike); wiring it into a hard gate is a follow-up
+once the violation landscape is known.
+"""
+
+from __future__ import annotations
+
+import json
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+
+from meta_disco.models import CLASSIFIED, _entry_value, _field_entry, status_for_value
+from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+
+_RULES_PATH = Path(__file__).parent / "rules" / "consistency_rules.yaml"
+
+
+@dataclass
+class Violation:
+    """One record failing one rule's ``require`` clause."""
+
+    md5sum: str
+    file_name: str
+    rule_id: str
+    when: dict  # field -> the value that activated the rule
+    offending_field: str
+    offending_value: str | None  # None unless the offending field is classified
+    offending_status: str
+    evidence: str | None  # rule_id/marker of the offending field's first evidence
+
+
+def load_rules(path: Path = _RULES_PATH) -> list[dict]:
+    """Load the declarative invariant set."""
+    data = yaml.safe_load(path.read_text()) or {}
+    return data.get("rules", [])
+
+
+def _dim(record: dict, name: str) -> tuple[str | None, str, list]:
+    """Return the RAW ``(value, status, evidence)`` for one dimension of a record.
+
+    Reuses ``models`` for layout normalization (``_field_entry``) and the status
+    vocabulary (``status_for_value``), so the linter reads records the same way
+    every other consumer does. Deliberately reads the emitted ``status`` verbatim
+    (falling back to ``status_for_value`` only when absent) rather than via
+    ``_entry_status``: that path runs a coherence assertion that *raises* on an
+    incoherent entry, which would abort the whole run on one malformed record. A
+    linter must read what is actually there and keep going — within-field
+    incoherence is caught upstream (``build_field_entry`` / schema validation), not
+    here. Evidence has no shared accessor and is read off the entry.
+    """
+    entry = _field_entry(record, name)
+    value = _entry_value(entry)
+    if isinstance(entry, dict):
+        status = entry.get("status") or status_for_value(value)
+        evidence = entry.get("evidence") or []
+    else:
+        status, evidence = status_for_value(value), []
+    return value, status, evidence
+
+
+def _matches(value: str | None, status: str, matcher) -> bool:
+    """Whether a field's (value, status) satisfies a ``when`` matcher."""
+    if isinstance(matcher, str):
+        return status == CLASSIFIED and value == matcher
+    if "prefix" in matcher:
+        return status == CLASSIFIED and isinstance(value, str) and value.startswith(matcher["prefix"])
+    if "value_in" in matcher:
+        return status == CLASSIFIED and value in matcher["value_in"]
+    if "status" in matcher:
+        return status == matcher["status"]
+    return False
+
+
+def _violates(value: str | None, status: str, matcher: dict) -> bool:
+    """Whether a field's (value, status) UNsatisfies a ``require`` matcher."""
+    if "value_in" in matcher:
+        return status == CLASSIFIED and value not in matcher["value_in"]
+    if "value_not_in" in matcher:
+        return status == CLASSIFIED and value in matcher["value_not_in"]
+    if "status_not" in matcher:
+        return status == matcher["status_not"]
+    if "status" in matcher:
+        return status != matcher["status"]
+    return False
+
+
+def rule_activation(record: dict, rule: dict) -> dict | None:
+    """If the rule's ``when`` matches this record, return the activating field->value
+    map; otherwise None. A rule only tests a record when it is active."""
+    activated = {}
+    for fieldname, matcher in (rule.get("when") or {}).items():
+        value, status, _ = _dim(record, fieldname)
+        if not _matches(value, status, matcher):
+            return None
+        activated[fieldname] = value if status == CLASSIFIED else f"<{status}>"
+    return activated
+
+
+def _check_active(record: dict, rule: dict, activated: dict) -> list[Violation]:
+    """Violations from an already-activated rule against a record.
+
+    Takes the ``activated`` map from :func:`rule_activation` so the ``when`` clause
+    is never re-evaluated by the caller.
+    """
+    violations: list[Violation] = []
+    for req_field, matcher in (rule.get("require") or {}).items():
+        value, status, evidence = _dim(record, req_field)
+        if not _violates(value, status, matcher):
+            continue
+        first = evidence[0] if evidence else {}
+        violations.append(
+            Violation(
+                md5sum=record.get("md5sum") or "",
+                file_name=record.get("file_name") or "",
+                rule_id=rule["id"],
+                when=dict(activated),
+                offending_field=req_field,
+                offending_value=value if status == CLASSIFIED else None,
+                offending_status=status,
+                evidence=first.get("rule_id") or first.get("marker"),
+            )
+        )
+    return violations
+
+
+def check_record(record: dict, rules: list[dict]) -> list[Violation]:
+    """Return every consistency violation for one classified record."""
+    violations: list[Violation] = []
+    for rule in rules:
+        activated = rule_activation(record, rule)
+        if activated is not None:
+            violations.extend(_check_active(record, rule, activated))
+    return violations
+
+
+def iter_records(run_dir: Path):
+    """Yield every classification record (a dict) across a run's classification files.
+
+    Unwraps the ``{"metadata", "classifications"}`` envelope the same way the
+    coverage/validation report loaders do (falling back to a ``results`` key, then
+    an empty list), and skips any non-dict element so an unexpected top-level shape
+    yields nothing rather than iterating stray keys.
+    """
+    for fname in CLASSIFICATION_FILES:
+        path = run_dir / fname
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text())
+        records = data.get("classifications", data.get("results", [])) if isinstance(data, dict) else data
+        for record in records:
+            if isinstance(record, dict):
+                yield record
+
+
+def check_run(
+    run_dir: Path | None = None, rules: list[dict] | None = None
+) -> tuple[Path, int, list[Violation], Counter]:
+    """Run every rule over every record in a run.
+
+    Returns ``(run_dir, record_count, violations, activations)`` where
+    ``activations`` counts, per rule id, how many records the rule was active on —
+    so a zero-violation rule that never activated (vacuous, no such data) is
+    distinguishable from one that was genuinely exercised and stayed clean.
+
+    Activation is evaluated once per (record, rule) and drives both the counter and
+    the ``require`` check.
+    """
+    run_dir = run_dir or find_latest_run(Path("output/anvil"))
+    rules = rules if rules is not None else load_rules()
+    violations: list[Violation] = []
+    activations: Counter = Counter()
+    total = 0
+    for record in iter_records(run_dir):
+        total += 1
+        for rule in rules:
+            activated = rule_activation(record, rule)
+            if activated is None:
+                continue
+            activations[rule["id"]] += 1
+            violations.extend(_check_active(record, rule, activated))
+    return run_dir, total, violations, activations
