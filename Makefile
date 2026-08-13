@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -122,13 +122,16 @@ classify-tar:
 classify-bed:
 	uv run python scripts/classify_headers.py --type bed -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
 
+consistency-report:
+	uv run python scripts/check_consistency.py
+
 coverage-report:
 	uv run python scripts/generate_coverage_report.py
 
 validation-report:
 	uv run python scripts/generate_validation_report.py
 
-all-reports: validate-hprc coverage-report validation-report
+all-reports: validate-hprc coverage-report validation-report consistency-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py
