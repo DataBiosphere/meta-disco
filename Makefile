@@ -131,7 +131,7 @@ coverage-report:
 validation-report:
 	uv run python scripts/generate_validation_report.py
 
-all-reports: validate-hprc coverage-report validation-report
+all-reports: validate-hprc coverage-report validation-report consistency-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py
