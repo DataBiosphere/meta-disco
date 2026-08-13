@@ -48,10 +48,31 @@ def default_consistency_rules_resource():
 
 
 def load_rules(resource=None) -> list[dict]:
-    """Load the declarative invariant set (defaults to the bundled package resource)."""
+    """Load and shape-validate the declarative invariant set (defaults to the bundled
+    package resource).
+
+    Raises ``ValueError`` on a malformed file — an unrecognized shape, a missing/
+    duplicate ``id``, or a non-mapping ``when``/``require`` — so an authoring typo
+    fails loudly instead of silently disabling a check (a false negative, the worst
+    failure mode for a QA linter).
+    """
     resource = resource or default_consistency_rules_resource()
-    data = yaml.safe_load(resource.read_text(encoding="utf-8")) or {}
-    return data.get("rules", [])
+    data = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("rules"), list):
+        raise ValueError("consistency rules file must be a mapping with a 'rules' list")
+    seen: set[str] = set()
+    for i, rule in enumerate(data["rules"]):
+        if not isinstance(rule, dict):
+            raise ValueError(f"consistency rule #{i} is not a mapping")
+        rule_id = rule.get("id")
+        if not isinstance(rule_id, str) or not rule_id:
+            raise ValueError(f"consistency rule #{i} is missing a non-empty string 'id'")
+        if rule_id in seen:
+            raise ValueError(f"duplicate consistency rule id: {rule_id!r}")
+        seen.add(rule_id)
+        if not isinstance(rule.get("when"), dict) or not isinstance(rule.get("require"), dict):
+            raise ValueError(f"consistency rule {rule_id!r} must have mapping 'when' and 'require'")
+    return data["rules"]
 
 
 def _dim(record: dict, name: str) -> tuple[str | None, str, list]:

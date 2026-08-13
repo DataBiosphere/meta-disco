@@ -54,9 +54,10 @@ rules:
   # --- 3. imaging exclusivity -------------------------------------------------
   - id: imaging_exclusive
     description: >-
-      A histology image carries no sequencing signal: data_type must be images,
-      and platform / reference_assembly must not be classified (a histology file
-      with platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
+      A histology image carries no sequencing signal: when classified, data_type
+      must be images and assay_type must be Histology; platform and
+      reference_assembly must not be classified at all (a histology file with
+      platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
     when: {data_modality: "imaging.histology"}
     require:
       data_type: {value_in: ["images"]}

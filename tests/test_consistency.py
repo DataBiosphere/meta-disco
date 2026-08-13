@@ -4,6 +4,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from meta_disco.consistency import check_record, iter_records, load_rules, render_report
 
 RULES = load_rules()
@@ -35,6 +37,22 @@ def _rule_ids(record):
 def test_rules_file_loads_and_is_nonempty():
     assert RULES, "consistency_rules.yaml produced no rules"
     assert all("id" in r and "when" in r and "require" in r for r in RULES)
+
+
+@pytest.mark.parametrize(
+    "yaml_text",
+    [
+        "not_a_mapping",  # top-level not a mapping-with-rules-list
+        "rules:\n  - {id: a, when: {}}\n",  # missing require
+        "rules:\n  - {id: a, when: {}, require: {}}\n  - {id: a, when: {}, require: {}}\n",  # dup id
+        "rules:\n  - {when: {}, require: {}}\n",  # missing id
+    ],
+)
+def test_load_rules_rejects_malformed(tmp_path, yaml_text):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(yaml_text)
+    with pytest.raises(ValueError):
+        load_rules(bad)
 
 
 def test_clean_genomic_wgs_has_no_violations():
