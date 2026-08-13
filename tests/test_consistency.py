@@ -67,7 +67,7 @@ def test_histology_with_sequencing_fields_flags_imaging_and_platform_rules():
     )
     ids = _rule_ids(rec)
     assert "imaging_exclusive" in ids  # platform must not be classified
-    assert "platform_implies_sequencing_modality" in ids  # sequencing platform vs histology
+    assert "sequencing_platform_excludes_histology" in ids  # sequencing platform vs histology
 
 
 def test_clean_histology_has_no_violations():

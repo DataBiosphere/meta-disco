@@ -13,7 +13,7 @@ Cross-field invariants over classified records (#314). *Active* is how many reco
 | 0 | 0 | `assay_for_histone_modification` _(vacuous)_ |
 | 0 | 188 | `assay_for_methylation` |
 | 0 | 25,708 | `imaging_exclusive` |
-| 0 | 57,973 | `platform_implies_sequencing_modality` |
+| 0 | 57,973 | `sequencing_platform_excludes_histology` |
 | 0 | 0 | `auxiliary_inert` _(vacuous)_ |
 
 ## Examples

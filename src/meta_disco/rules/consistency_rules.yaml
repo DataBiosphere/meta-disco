@@ -65,8 +65,16 @@ rules:
       reference_assembly: {status_not: "classified"}
 
   # --- 5. platform <-> modality family ----------------------------------------
-  - id: platform_implies_sequencing_modality
-    description: A sequencing platform contradicts a histology modality.
+  # Conservative form: a sequencing platform must not sit on a histology modality.
+  # This is the "platform implies a sequencing modality" invariant operationalized
+  # against today's enum, where imaging.histology is the ONLY non-sequencing
+  # modality — so "not histology" == "is sequencing" here. Deliberately not an
+  # allow-list of sequencing modalities: that would false-positive if the enum
+  # later gains a new sequencing modality (accuracy over coverage — no false
+  # positives). It cross-checks, from the platform side, the same contradiction
+  # imaging_exclusive catches from the modality side.
+  - id: sequencing_platform_excludes_histology
+    description: A sequencing platform must not sit on a histology modality.
     when: {platform: {value_in: ["ILLUMINA", "PACBIO", "ONT", "MGI", "ELEMENT", "ULTIMA"]}}
     require: {data_modality: {value_not_in: ["imaging.histology"]}}
 
