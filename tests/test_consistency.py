@@ -1,8 +1,10 @@
 """Tests for the self-consistency linter (#314)."""
 
 import json
+from collections import Counter
+from pathlib import Path
 
-from meta_disco.consistency import check_record, iter_records, load_rules
+from meta_disco.consistency import check_record, iter_records, load_rules, render_report
 
 RULES = load_rules()
 
@@ -107,6 +109,24 @@ def test_malformed_evidence_does_not_crash():
     rec["classifications"]["assay_type"]["evidence"] = "oops-not-a-list"
     [viol] = [v for v in check_record(rec, RULES) if v.rule_id == "assay_for_transcriptomic"]
     assert viol.evidence is None
+
+
+def test_render_report_clean_and_vacuous():
+    md = render_report(Path("output/anvil/run"), 100, [], Counter({"assay_for_genomic": 40}), RULES)
+    assert "**Total violations: 0**" in md
+    assert "_No violations._" in md
+    assert "`assay_for_genomic`" in md
+    # a rule with 0 activations is marked vacuous, not silently clean
+    assert "_(vacuous)_" in md
+
+
+def test_render_report_lists_violations():
+    rec = _rec(md5="deadbeef01", name="x.bam", data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    violations = check_record(rec, RULES)
+    md = render_report(Path("r"), 1, violations, Counter({"assay_for_transcriptomic": 1}), RULES)
+    assert "**Total violations: 1**" in md
+    assert "assay_for_transcriptomic" in md
+    assert "assay_type=WGS" in md
 
 
 def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):

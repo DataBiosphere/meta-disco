@@ -173,6 +173,60 @@ def iter_records(run_dir: Path):
                 yield record
 
 
+def render_report(
+    run_dir: Path,
+    total: int,
+    violations: list[Violation],
+    activations: Counter,
+    rules: list[dict],
+    examples: int = 3,
+) -> str:
+    """Render the consistency result as a committed markdown report.
+
+    A per-rule table of violations + activations (a 0-violation rule that never
+    activated is marked vacuous, not verified-clean) plus a capped set of example
+    contradictions. Committing this gives a diffable baseline: a future run that
+    regresses shows violations going 0 -> N in the report diff.
+    """
+    by_rule = Counter(v.rule_id for v in violations)
+    lines = [
+        "# Self-Consistency Report",
+        "",
+        f"Run: **{run_dir}** — {total:,} records, {len(rules)} rules  ",
+        f"**Total violations: {len(violations):,}**",
+        "",
+        "Cross-field invariants over classified records (#314). *Active* is how many "
+        "records a rule tested; a rule with 0 active is **vacuous** (no matching data "
+        "in this run), not verified-clean.",
+        "",
+        "| Violations | Active | Rule |",
+        "|---:|---:|---|",
+    ]
+    for rule in rules:
+        count = by_rule.get(rule["id"], 0)
+        active = activations.get(rule["id"], 0)
+        note = " ⚠" if count else (" _(vacuous)_" if active == 0 else "")
+        lines.append(f"| {count:,} | {active:,} | `{rule['id']}`{note} |")
+
+    lines += ["", "## Examples", ""]
+    if not violations:
+        lines.append("_No violations._")
+    else:
+        shown: Counter = Counter()
+        for v in violations:
+            if shown[v.rule_id] >= examples:
+                continue
+            shown[v.rule_id] += 1
+            when_str = ", ".join(f"{k}={val}" for k, val in v.when.items())
+            offending = v.offending_value if v.offending_status == CLASSIFIED else f"<{v.offending_status}>"
+            evidence = f" (evidence: {v.evidence})" if v.evidence else ""
+            lines.append(
+                f"- **{v.rule_id}** — `{v.file_name}` ({v.md5sum[:8]}): "
+                f"when {when_str} → `{v.offending_field}={offending}`{evidence}"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def check_run(
     run_dir: Path | None = None, rules: list[dict] | None = None
 ) -> tuple[Path, int, list[Violation], Counter]:
