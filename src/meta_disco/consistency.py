@@ -47,14 +47,40 @@ def default_consistency_rules_resource():
     return files(f"{__package__}.rules") / "consistency_rules.yaml"
 
 
+# Recognized matcher keys per clause -> the value type each requires. `when` also
+# accepts a bare string (exact-value shorthand). Kept in lockstep with the branches
+# in _matches / _violates, so a matcher the evaluator can't interpret is rejected at
+# load time rather than silently ignored.
+_WHEN_MATCHERS = {"prefix": str, "value_in": list, "status": str}
+_REQUIRE_MATCHERS = {"value_in": list, "value_not_in": list, "status_not": str, "status": str}
+
+
+def _check_matcher(rule_id: str, clause: str, field: str, matcher, allowed: dict, allow_str: bool) -> None:
+    """Validate one field matcher against the keys/types the evaluator understands."""
+    if allow_str and isinstance(matcher, str):
+        return
+    if not isinstance(matcher, dict) or len(matcher) != 1:
+        shape = "a string or a single-key mapping" if allow_str else "a single-key mapping"
+        raise ValueError(f"consistency rule {rule_id!r}: {clause}.{field} must be {shape}")
+    ((key, value),) = matcher.items()
+    if key not in allowed:
+        raise ValueError(
+            f"consistency rule {rule_id!r}: {clause}.{field} has unknown matcher {key!r}; "
+            f"expected one of {sorted(allowed)}"
+        )
+    if not isinstance(value, allowed[key]):
+        raise ValueError(f"consistency rule {rule_id!r}: {clause}.{field}.{key} must be {allowed[key].__name__}")
+
+
 def load_rules(resource=None) -> list[dict]:
     """Load and shape-validate the declarative invariant set (defaults to the bundled
     package resource).
 
     Raises ``ValueError`` on a malformed file — an unrecognized shape, a missing/
-    duplicate ``id``, or a non-mapping ``when``/``require`` — so an authoring typo
-    fails loudly instead of silently disabling a check (a false negative, the worst
-    failure mode for a QA linter).
+    duplicate ``id``, a non-mapping ``when``/``require``, or a matcher whose key/type
+    the evaluator can't interpret — so an authoring typo fails loudly instead of
+    silently disabling a check (a false negative, the worst failure mode for a QA
+    linter).
     """
     resource = resource or default_consistency_rules_resource()
     data = yaml.safe_load(resource.read_text(encoding="utf-8"))
@@ -72,6 +98,10 @@ def load_rules(resource=None) -> list[dict]:
         seen.add(rule_id)
         if not isinstance(rule.get("when"), dict) or not isinstance(rule.get("require"), dict):
             raise ValueError(f"consistency rule {rule_id!r} must have mapping 'when' and 'require'")
+        for field, matcher in rule["when"].items():
+            _check_matcher(rule_id, "when", field, matcher, _WHEN_MATCHERS, allow_str=True)
+        for field, matcher in rule["require"].items():
+            _check_matcher(rule_id, "require", field, matcher, _REQUIRE_MATCHERS, allow_str=False)
     return data["rules"]
 
 

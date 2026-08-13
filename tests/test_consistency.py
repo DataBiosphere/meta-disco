@@ -46,6 +46,9 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {}}\n",  # missing require
         "rules:\n  - {id: a, when: {}, require: {}}\n  - {id: a, when: {}, require: {}}\n",  # dup id
         "rules:\n  - {when: {}, require: {}}\n",  # missing id
+        "rules:\n  - {id: a, when: {m: {value_ni: [x]}}, require: {}}\n",  # unknown when matcher (typo)
+        "rules:\n  - {id: a, when: {}, require: {f: {value_in: nope}}}\n",  # value_in not a list
+        "rules:\n  - {id: a, when: {f: null}, require: {}}\n",  # matcher not str/mapping
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
