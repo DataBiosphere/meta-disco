@@ -1,0 +1,39 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is "none" for both workspaces,
+# so the dbGaP-anchored sources (gap-exchange, study page, FHIR, accession
+# searches) have nothing to query. Publication discovery via fallback only.
+phsid: null
+title: Telomere-to-Telomere (T2T) Consortium
+anvil_datasets: [ANVIL_T2T, ANVIL_T2T_CHRY]
+publications:
+  - pmid: "35357919"
+    pmcid: null
+    doi: 10.1126/science.abj6987
+    title: The complete sequence of a human genome
+    year: 2022
+    journal: Science
+    role: marker
+    provenance: [pubmed-title-search]
+    note: T2T-CHM13 flagship paper (Nurk et al.); anchors the ANVIL_T2T workspace.
+  - pmid: "37612512"
+    pmcid: null
+    doi: 10.1038/s41586-023-06457-y
+    title: The complete sequence of a human Y chromosome
+    year: 2023
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: Anchors the ANVIL_T2T_CHRY workspace.
+secondary_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: azul
+    outcome: hit — both workspaces present, accessible, registered_identifier "none"; data_modality [assembly, genotyping, whole genome]; description names the T2T consortium
+  - source: pubmed-title-search
+    outcome: hit — both marker papers found by title-word match
+notes: >-
+  Study-level facts useful downstream: organism Homo sapiens (CHM13 cell
+  line; HG002 for chrY); content is genome assemblies — matches the
+  workspaces' assembly-heavy files. The missing phs accession despite being
+  an AnVIL-hosted NIH dataset is itself a survey finding: not every AnVIL
+  open dataset has a dbGaP anchor.

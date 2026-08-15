@@ -1,0 +1,28 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is null for this workspace.
+phsid: null
+title: MAGE (1000 Genomes LCL RNA-seq, mccoy-lab)
+anvil_datasets: [AnVIL_MAGE]
+publications:
+  - pmid: "39020179"
+    pmcid: null
+    doi: 10.1038/s41586-024-07708-2
+    title: Sources of gene expression variation in a globally diverse human cohort
+    year: 2024
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: MAGE flagship paper (preprint PMID 37965206, bioRxiv 2023).
+secondary_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: azul
+    outcome: hit — workspace present, accessible, registered_identifier null; description states "RNA-seq data from lymphoblastoid cell lines derived from 731 individuals from the 1000 Genomes Project … 26 globally-distributed populations"
+  - source: pubmed-title-search
+    outcome: hit — marker paper found by title-word match
+notes: >-
+  Study-level facts useful downstream (per Azul description): organism Homo
+  sapiens; RNA-seq of 1000 Genomes LCLs, 731 individuals — an RNA-leaning
+  workspace and the mirror image of the 1000G WGS constraint example (a
+  genomic-only classification here would deserve a second look; exact assay
+  scope is Epic 2 work).

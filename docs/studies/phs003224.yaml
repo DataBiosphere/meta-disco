@@ -1,0 +1,55 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+phsid: phs003224
+title: NIA CARD Coriell Cell Lines
+anvil_datasets: [ANVIL_NIA_CARD_Coriell_Cell_Lines_Open]
+publications:
+  - pmid: "37710018"
+    pmcid: null
+    doi: 10.1038/s41592-023-01993-x
+    title: Scalable Nanopore sequencing of human genomes provides a comprehensive view of haplotype-resolved variation and methylation
+    year: 2023
+    journal: Nature Methods
+    role: unclear
+    provenance: [pubmed-title-search]
+    note: >-
+      CARD program's ONT sequencing pipeline paper (preprint PMID 36711673).
+      Matched by program (NIA CARD long-read effort), not by accession or
+      title; whether it describes these specific Coriell cell-line runs is
+      unverified, hence role unclear.
+secondary_count: 0
+dbgap_record:
+  populated:
+    - path: ResearchStudy.title
+      value: NIA CARD Coriell Cell Lines
+    - path: ResearchStudy.status
+      value: completed
+    - path: ResearchStudy.category
+      value: [Control Set]
+    - path: ResearchStudy.sponsor.display
+      value: National Institute on Aging
+    - path: ResearchStudy.description
+      value: >-
+        ONT long-read data from three widely used lymphoblastoid cell lines
+        (HG002, HG02723, HG00733) obtained from Coriell.
+    - path: ResearchStudy.extension[ResearchStudy-StudyOverviewUrl]
+      value: https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs003224.v1.p1
+    - path: ResearchStudy.extension[ResearchStudy-Content]
+      value: NumPhenotypeDatasets/NumMolecularDatasets/NumVariables/NumDocuments/NumAnalyses/NumSubjects/NumSamples/NumSubStudies counts
+  empty: [MolecularDataTypes, StudyDesign, Citers, StudyConsents, ReleaseDate, focus, condition, enrollment, keyword]
+sources_checked:
+  - source: gap-exchange
+    outcome: miss — no dbGaP FTP directory for phs003224 (HTTP 404)
+  - source: dbgap-study-page
+    outcome: partial — PI Cornelis Blauwendraat (CARD, NIA/NINDS); ONT long-read, ~30kb N50, >30X targets; human LCLs HG002/HG02723/HG00733; grant ZIA AG000538-03; no publications
+  - source: pmc-fulltext
+    outcome: miss — 0 PMC papers contain "phs003224"
+  - source: pubmed-si
+    outcome: miss — 0 PubMed records register the accession as [SI]
+  - source: fhir
+    outcome: partial — thin record (title/status/category/sponsor/description only among metadata-relevant fields)
+  - source: pubmed-title-search
+    outcome: partial — program-matched candidate only (role unclear)
+notes: >-
+  Strong study-level facts despite no confirmed marker paper: organism Homo
+  sapiens; sample type LCLs; platform Oxford Nanopore (ONT); assay long-read
+  WGS ~30X. The three samples are the same reference cell lines HPRC uses.

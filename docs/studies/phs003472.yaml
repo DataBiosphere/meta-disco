@@ -1,0 +1,66 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+phsid: phs003472
+title: Impact of Genomic Variation on Function (IGVF) Consortium
+anvil_datasets: [AnVIL_IGVF_Mouse_R1]
+publications:
+  - pmid: "39232149"
+    pmcid: PMC11973978
+    doi: 10.1038/s41586-024-07510-0
+    title: Deciphering the impact of genomic variation on function
+    year: 2024
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: >-
+      IGVF consortium marker/perspective paper; assigned by title match with
+      the consortium name, not by accession citation.
+secondary_count: 0
+dbgap_record:
+  populated:
+    - path: ResearchStudy.title
+      value: Impact of Genomic Variation on Function (IGVF) Consortium
+    - path: ResearchStudy.status
+      value: completed
+    - path: ResearchStudy.category
+      value: [Collection]
+    - path: ResearchStudy.sponsor.display
+      value: National Human Genome Research Institute
+    - path: ResearchStudy.focus
+      value: [Genomic Structural Variation]
+    - path: ResearchStudy.condition
+      value: Genomic Structural Variation (plus its MeSH synonym expansion)
+    - path: ResearchStudy.keyword
+      value: Genomic Structural Variation (plus its MeSH synonym expansion)
+    - path: ResearchStudy.description
+      value: >-
+        IGVF consortium prose — how genomic variation affects genome function
+        and phenotype; NHGRI-funded collaborative program.
+    - path: ResearchStudy.extension[ResearchStudy-ReleaseDate]
+      value: "2025-07-21"
+    - path: ResearchStudy.extension[ResearchStudy-StudyConsents]
+      value: 5 consent groups (phs003472.v1.p1 - 1 through 5)
+    - path: ResearchStudy.extension[ResearchStudy-StudyOverviewUrl]
+      value: https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs003472.v1.p1
+    - path: ResearchStudy.extension[ResearchStudy-Content]
+      value: NumPhenotypeDatasets/NumMolecularDatasets/NumVariables/NumDocuments/NumAnalyses/NumSubjects/NumSamples/NumSubStudies counts
+  empty: [MolecularDataTypes, Citers, enrollment]
+sources_checked:
+  - source: gap-exchange
+    outcome: partial — FTP dir and v1.p1 GapExchange XML exist but list zero publications
+  - source: dbgap-study-page
+    outcome: partial — 60+ investigators across many institutions, 26 NHGRI grant numbers (HG012047 …); no publications, no species stated
+  - source: pmc-fulltext
+    outcome: miss — 0 PMC papers contain "phs003472"
+  - source: pubmed-si
+    outcome: miss — 0 PubMed records register the accession as [SI]
+  - source: fhir
+    outcome: partial — richest record of the three open studies (focus/condition/keyword/consents/release date) but no Citers or MolecularDataTypes
+  - source: pubmed-title-search
+    outcome: hit — marker paper found by title-word match
+notes: >-
+  The AnVIL workspace is IGVF *Mouse* R1 while the dbGaP record never states
+  an organism — a caution against inferring organism from the study anchor
+  alone: IGVF spans human and mouse, so the workspace-level context
+  (Mouse_R1) is the discriminating signal here. The 26 grant numbers make
+  this the best candidate for a RePORTER grant→publications probe (not run
+  this round).
