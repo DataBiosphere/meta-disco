@@ -74,6 +74,31 @@ workspaces additionally have full dossiers in this directory.
 | phs004069 | A Depression and Opioid Pragmatic Trial in Pharmacogenetics  | 2: AnVIL_ADOPT_PGx_Depression_GRU_R1… | 2 | 38860639 (2024) — Rationale and design for a pragmatic randomized trial to assess gene-b |
 | phs004430 | Center for Common Disease Genomics (CCDG) - Neuropsychiatric | 1: ANVIL_CCDG_NYGC_NP_Autism_AFS_DS_W… | 0 | Selected Publications empty |
 
+## RePORTER probe of the empty-list CCDG studies (2026-08-15)
+
+The 12 CCDG studies with empty Selected Publications lists were run through
+the grant channel (study page attribution → grant serials → `reporter`).
+Outcome: **the channel resolves but does not isolate cohort papers**:
+
+- 6/12 study pages list **no grant numbers at all** in their fetched
+  attribution HTML (phs001398, phs001579, phs001880, phs002018, phs002236,
+  phs002243) — the grant channel cannot start.
+- 5/12 list exactly **one shared center grant** (Broad `HG008895` ×3, WashU
+  `HG008853`, NYGC `HG008901`), so RePORTER returns the *center's* whole
+  publication list (47–118 papers) with no ranking signal — a single grant
+  gives every paper the same link count, and the papers are center-wide
+  (e.g. the same three Broad cardiovascular papers top TAICHI, MI-ATVB, and
+  the IBD study alike), not specific to the sub-cohort.
+- phs001871 matched serial `HG000885` with 0 linked publications — possibly
+  a false-positive match on the page rather than a real grant.
+
+Takeaway for Epic 2: for sequencing-center deposits (CCDG, CMG), neither
+the Selected Publications list nor the grant channel identifies a
+study-specific marker paper. The likely-correct fallback is a
+**cohort-name search** — these deposits wrap long-running named cohorts
+(TAICHI, VIRGO, METSIM, T1DGC, …) whose founding papers predate the CCDG
+deposit and are findable by name, as done for the no-phs open workspaces.
+
 ## Workspaces with no phs accession
 
 These have no dbGaP anchor; the open-access ones among them have dossiers here with title-search-based publications:
