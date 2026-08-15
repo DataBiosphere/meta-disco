@@ -60,8 +60,35 @@ appear there as text).
   against the raw API — not a bot block: the same client succeeds against
   `db=pubmed`/`db=pmc`). The old Entrez web path
   `www.ncbi.nlm.nih.gov/gap/` now redirects to the standalone
-  `dbgap.ncbi.nlm.nih.gov` application, consistent with dbGaP search having
-  been migrated out of Entrez. No NCBI announcement found.
+  `dbgap.ncbi.nlm.nih.gov` application. No retirement announcement exists —
+  the [NCBI Insights dbGaP archive](https://ncbiinsights.ncbi.nlm.nih.gov/tag/dbgap/)
+  never mentions removing Entrez search; the migration context is the site
+  modernization announced in
+  ["Beta Now Live! New & Improved dbGaP Homepage Design"](https://ncbiinsights.ncbi.nlm.nih.gov/2025/06/02/beta-improved-dbgap-homepage/)
+  (June 2025).
+
+## Sanctioned programmatic access post-Entrez (researched 2026-08-15)
+
+What NCBI documents as the ways to query dbGaP programmatically, and where
+this skill stands on each:
+
+- **dbGaP FHIR API** — NCBI's stated interoperability path for dbGaP (NCPI
+  FHIR pilot; see the 2025 GIM Open abstract
+  ["Enhancing dbGaP interoperability with FHIR APIs"](https://www.gimopen.org/article/S2949-7744(25)00491-1/fulltext)).
+  Already the skill's `fhir` subcommand.
+- **dbGaP FTP GapExchange XML** — already the skill's `gap-exchange`
+  subcommand.
+- **[SSTR API](https://ncbiinsights.ncbi.nlm.nih.gov/2023/04/27/dbgap-subject-sample-telemetry-report/)**
+  (Subject Sample Telemetry Report, 2023) — per-study subject/sample/consent
+  telemetry; not publication-relevant, but a candidate metadata channel for
+  later epics.
+- **Advanced-search CSV export** — the dbGaP advanced-search UI exports
+  study lists as CSV; ncpi-dataset-catalog's `dbGapCSVandFTP.ts` ingests
+  exactly this. Not automated here.
+- **Undocumented lead**: the new `dbgap.ncbi.nlm.nih.gov` beta app
+  configures an `apiBaseUrl` in its page source, so a JSON backend exists;
+  obvious route guesses 404 (probed 2026-08-15) and mapping the real routes
+  would require reading the app's JS bundle. Future work.
 - Quoted-phrase PubMed title queries silently return 0 for phrases absent
   from the phrase index (`quotedphrasesnotfound`).
 
