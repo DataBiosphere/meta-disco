@@ -94,10 +94,37 @@ Outcome: **the channel resolves but does not isolate cohort papers**:
 
 Takeaway for Epic 2: for sequencing-center deposits (CCDG, CMG), neither
 the Selected Publications list nor the grant channel identifies a
-study-specific marker paper. The likely-correct fallback is a
-**cohort-name search** — these deposits wrap long-running named cohorts
-(TAICHI, VIRGO, METSIM, T1DGC, …) whose founding papers predate the CCDG
-deposit and are findable by name, as done for the no-phs open workspaces.
+study-specific marker paper. The working fallback is a **cohort-name
+search** — these deposits wrap long-running named cohorts whose founding
+papers predate the CCDG deposit. Run below.
+
+## Cohort-name search pass over the same 12 studies (2026-08-15)
+
+PubMed searches built from each study title's cohort name (unquoted
+term-words, per findings.md's caveat; some queries needed refinement — the
+bare acronym "TAICHI" drowns in tai-chi exercise papers). Result: **9/12
+studies got a marker candidate**, most of them explicit cohort-design
+papers. All are title/name matches — role confirmation by reading is
+Epic 2.
+
+| phs | cohort | candidate PMID (year) — title | strength |
+| --- | --- | --- | --- |
+| phs001398 | BRAVE | 25930055 (2015) — The Bangladesh Risk of Acute Vascular Events (BRAVE) Study: objectives and design | strong — design paper |
+| phs001487 | TAICHI | 26982883 (2016) — Genetics of Coronary Artery Disease in Taiwan: A Cardiometabochip Study by the Taichi Consortium | strong — consortium paper |
+| phs001579 | METSIM | 28119442 (2017) — The Metabolic Syndrome in Men study: a resource for studies of metabolic and cardiovascular diseases | strong — resource paper |
+| phs001592 | ATVB (Italian) | 12615788 (2003) — early ATVB Italian Study Group genetics paper | unclear — no dedicated design paper surfaced |
+| phs001642 | IBD (Broad/Daly) | 42180385 (2026) — Exome sequencing directly implicates 68 genes in inflammatory bowel disease | candidate — unread; program-scale flagship |
+| phs001871 | Cleveland Clinic GeneBank | — | none — only per-association papers surfaced |
+| phs001880 | Emory (EmCAB) | 29288185 (2017) — Cohort profile: the Emory Cardiovascular Biobank (EmCAB) | strong — cohort profile |
+| phs002018 | Partners Biobank | 26784234 (2016) — Building the Partners HealthCare Biobank at Partners Personalized Medicine | strong — biobank description |
+| phs002236 | GAPP | 23299990 (2013) — Genetic and phenotypic determinants of blood pressure and other cardiovascular risk factors | strong — title matches the dbGaP study title verbatim |
+| phs002243 | PEGASUS-TIMI 54 | 24655690 (2014) — Design and rationale for the Prevention of Cardiovascular Events… (PEGASUS-TIMI 54) trial | strong — trial design paper |
+| phs003499 | Multiethnic Cohort | 10695593 (2000) — A multiethnic cohort in Hawaii and Los Angeles: baseline characteristics | strong — same MEC marker as phs000220 (PAGE MEC) |
+| phs004430 | Autism AFS (NYGC) | — | none confirmed — cohort identity ("AFS") not resolvable from the title alone |
+
+Channel ranking that emerges for center-style deposits: cohort-name search
+≫ grant channel ≈ Selected Publications (both empty/uninformative). The
+skill's SKILL.md fallback ordering already reflects this pattern.
 
 ## Workspaces with no phs accession
 
