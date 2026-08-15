@@ -47,6 +47,9 @@ MAX_SUMMARIES = 20
 # Retry transient failures (NCBI intermittently returns 429/5xx) so one
 # blip does not abort a whole subcommand run.
 _session = requests.Session()
+# NCBI asks clients to identify themselves; an identifiable UA also reduces
+# the chance of throttling on the other public APIs we hit.
+_session.headers["User-Agent"] = "meta-disco-phs-anchor/1.0 (https://github.com/DataBiosphere/meta-disco)"
 _session.mount(
     "https://",
     HTTPAdapter(
@@ -117,7 +120,19 @@ def gap_exchange(phsid: str) -> dict:
         return {"phsid": phsid, "versions": [], "pmids": []}
     v, p = versions[-1]
     xml_url = f"{DBGAP_FTP_BASE}/{phsid}/{phsid}.v{v}.p{p}/GapExchange_{phsid}.v{v}.p{p}.xml"
-    xml_resp = _get(xml_url)
+    try:
+        xml_resp = _get(xml_url)
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            # A version dir without its GapExchange XML is a recordable
+            # partial result, same contract as the missing-directory case.
+            return {
+                "phsid": phsid,
+                "versions": [f"v{v}.p{p}" for v, p in versions],
+                "pmids": [],
+                "note": f"GapExchange XML not found for latest version v{v}.p{p} (HTTP 404)",
+            }
+        raise
     return {
         "phsid": phsid,
         "versions": [f"v{v}.p{p}" for v, p in versions],
@@ -159,6 +174,8 @@ def reporter(grant_serials: str) -> dict:
     grants link them — papers shared across a study's grants rank first.
     """
     serials = [s.strip() for s in grant_serials.split(",") if s.strip()]
+    if not serials:
+        return {"grant_serials": [], "total_publication_links": 0, "publications": [], "note": "no grant serials given"}
     criteria = {"core_project_nums": [f"*{s}" for s in serials]}
     core_projects_by_pmid: dict[str, set[str]] = {}
     offset, total = 0, None
