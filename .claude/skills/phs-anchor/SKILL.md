@@ -25,8 +25,9 @@ per-source hit rates, not just first-hit provenance.
 1. **GapExchange XML (dbGaP FTP)**:
    `python3 .claude/skills/phs-anchor/fetch_phs.py gap-exchange <phsid>` — the
    machine-readable "Selected Publications" list. When present, the marker
-   paper is typically listed first (verified on phs000424). Young studies may
-   404 (no FTP dir yet) or list zero PMIDs — record that as a miss.
+   paper is typically listed first (see findings.md). Young studies may have
+   no FTP dir yet (a clean `no dbGaP FTP directory` result) or list zero
+   PMIDs — record that as a miss.
 2. **dbGaP study page**: WebFetch
    `https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=<phsid>`
    — study title, molecular-data prose, attribution (PIs, grant numbers).
@@ -41,23 +42,33 @@ per-source hit rates, not just first-hit provenance.
    self-register); treat as corroboration.
 5. **FHIR citations**: `Citers` extension entries (title + PMC URL) found in
    the Phase 2 fetch also count as publication provenance — fold them in here.
-   Populated only for mature studies (present on phs000424, absent on all
-   2026-08 open-access AnVIL studies).
+   Populated only for mature studies (see findings.md for observed coverage).
 6. **ncpi-dataset-catalog** (`NIH-NCPI/ncpi-dataset-catalog`): its built
    catalog carries per-study `publications`, assembled from the same
    GapExchange XML plus NIH RePORTER grant→publication links
    (`catalog-build/fetch-dbgap-selected-publications.ts`,
    `catalog-build/fetch-grant-publications.ts`) — consult it as a
    cross-check, and as the reference implementation for both channels.
-7. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study —
+7. **NIH RePORTER (grant → publications)**:
+   `fetch_phs.py reporter <serials>` with the comma-separated grant serials
+   from source 2's attribution page (e.g. `HG012047,HG012022`). Output ranks
+   PMIDs by how many of the study's grants link them — papers linked by
+   (nearly) all grants are consortium/marker candidates (see the phs003472
+   example in findings.md). Needs grant numbers to exist on the study page.
+   ZIA (intramural) serials resolve too, but a single-grant study yields no
+   ranking signal — expect a large undifferentiated list. Resolve the
+   top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
+   <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
+8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study —
    description prose often names the consortium/portal to search next.
-8. **Fallback**: PubMed title-word search built from the study/consortium
+9. **Fallback**: PubMed title-word search built from the study/consortium
    name (unquoted, stopwords dropped — PubMed's phrase index misses many
-   titles and quoted phrases can return 0 for papers that exist); WebSearch;
-   NIH RePORTER API v2 (grant → publications) using attribution grant numbers.
+   titles and quoted phrases can return 0 for papers that exist); WebSearch.
 
-Do NOT use Entrez `db=gap` — the database was retired and E-utilities rejects
-it (verified 2026-08-15).
+Do NOT use Entrez `db=gap` — E-utilities no longer exposes a dbGaP database
+(`elink gap→pubmed` is dead). See findings.md "Retired/broken paths" for
+the evidence, and for the `dbgap.ncbi.nlm.nih.gov` application lead worth
+probing as future work.
 
 Label each found publication's `role`: `marker` (describes the study/cohort
 itself — the methods paper), `secondary` (uses the data), or `unclear`. Only
@@ -82,7 +93,7 @@ survey question is what this API reliably populates.
 ```yaml
 phsid: phs000424
 title: <dbGaP study title>
-anvil_dataset: <AnVIL workspace title, if this study maps to one>
+anvil_datasets: [<AnVIL workspace titles, if this study maps to any>]
 publications:
   - pmid: "23715323"
     pmcid: null        # when known
@@ -100,13 +111,20 @@ dbgap_record:
       value: [<...>]
   empty: [<field/extension names checked but absent>]
 sources_checked:
-  - source: dbgap-study-page
+  # Use these canonical source slugs (one entry per source tried, in order):
+  # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir, reporter,
+  # azul, pubmed-title-search, websearch
+  - source: gap-exchange
     outcome: <hit | miss | partial — one line on what it gave>
+  - source: dbgap-study-page
+    outcome: <...>
   - source: pmc-fulltext
     outcome: <...>
   - source: pubmed-si
     outcome: <...>
   - source: fhir
+    outcome: <...>
+  - source: reporter
     outcome: <...>
 notes: <anything surprising, one short paragraph max>
 ```

@@ -25,12 +25,13 @@ groups (fallback sources):
 
 | Source | Hits | Notes |
 | --- | --- | --- |
-| GapExchange XML (dbGaP FTP) | 0/3 | phs003018, phs003224: no FTP dir (404); phs003472: XML exists, zero PMIDs. On mature phs000424 it returns 39 PMIDs with the marker paper listed first — the best source *when populated*. |
+| GapExchange XML (dbGaP FTP) | 0/3 | phs003018, phs003224: no FTP dir (404); phs003472: XML exists, zero PMIDs. On mature phs000424 it returns 9 PMIDs with the marker paper listed first — the best source *when populated*. |
 | dbGaP study page (static HTML) | 0/3 for publications | Rich prose (species, assays, PIs, grants) every time; "Selected Publications" is JS-loaded and empty in fetched HTML — GapExchange XML is that section's data. |
 | PMC full-text accession search | 0/3 | phs000424 control: 1,671 hits. The channel works; the open studies simply have no accession-citing literature yet. |
 | PubMed `[SI]` | 0/3 | Sparse even for GTEx (1 hit). Corroboration only. |
 | dbGaP FHIR `Citers`/publications | 0/3 | Present on phs000424 (670 citers, title + PMC URL each); absent on all three open studies. |
-| PubMed title-word search | 8/9 marker or candidate | Found every flagship paper (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); only HPRC release 2 has no identifiable paper. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
+| NIH RePORTER grant→publications | 2/2 probed | phs003472 (26 grants): 623 distinct PMIDs; ranking by "linked by how many of the study's grants" put the marker papers at the top — of the 4 papers linked by 26/26 grants, two are marker papers (PMIDs 37547663 — which the title search had missed — and 39232149), one is a catalog-description paper (unread, role unclear), one is a variant-specific study. phs003224 (single intramural ZIA grant): resolves and grant-verifies the ONT-pipeline candidate among 417 linked papers, but one grant gives no ranking signal. Not applicable to phs003018 (its study page lists no grants). |
+| PubMed title-word search | 9/9 groups got at least a candidate | Markers identified for 7 groups (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); candidates only for NIA CARD (program-matched, role unclear) and 1000G-PRIMED (underlying-data marker); no paper specific to HPRC release 2. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
 
 **Headline:** every dbGaP-anchored publication channel returned zero for the
 current open-access studies — they are young and thin in dbGaP. Publication
@@ -53,21 +54,30 @@ appear there as text).
 
 ## Retired/broken paths (don't retry)
 
-- Entrez `db=gap` no longer exists — `elink gap→pubmed` is dead
-  (E-utilities rejects the db name; verified 2026-08-15).
+- `elink gap→pubmed` does not work: E-utilities' `einfo` list (raw JSON)
+  contains no dbGaP database and `esearch`/`elink` return the API's own
+  validation error ("Invalid db name specified: gap"; verified 2026-08-15
+  against the raw API — not a bot block: the same client succeeds against
+  `db=pubmed`/`db=pmc`). The old Entrez web path
+  `www.ncbi.nlm.nih.gov/gap/` now redirects to the standalone
+  `dbgap.ncbi.nlm.nih.gov` application, consistent with dbGaP search having
+  been migrated out of Entrez. No NCBI announcement found.
 - Quoted-phrase PubMed title queries silently return 0 for phrases absent
   from the phrase index (`quotedphrasesnotfound`).
 
 ## Reference implementation found
 
 `NIH-NCPI/ncpi-dataset-catalog` already assembles per-study `publications`
-from exactly two channels: the GapExchange XML
+from two channels: the GapExchange XML
 (`catalog-build/fetch-dbgap-selected-publications.ts`) and NIH RePORTER
 grant→publication links (`catalog-build/fetch-grant-publications.ts`,
-API v2 `projects/search` + `publications/search`). Its built catalog is both
-a cross-check and the model for automating our chain. RePORTER was **not
-probed** this round — with 26 NHGRI grant numbers on IGVF's attribution
-page, it is the most promising untried channel.
+API v2). Both are now implemented in the skill (`gap-exchange` and
+`reporter` subcommands). The RePORTER probe on IGVF validated the channel
+(see the table above): it is the only source that found publications for a
+young phs study, and its grant-count ranking surfaced a marker paper the
+title search missed. Implementation note: `projects/search` rejected
+`*serial*` wildcards in our tests, but `publications/search` accepts
+leading-wildcard `core_project_nums` (`*HG012047`) directly.
 
 ## What the papers/records can already justify (Epic 2/3 preview)
 
@@ -83,8 +93,10 @@ page, it is the most promising untried channel.
 
 ## Epic 2 go/no-go
 
-**Go, with reframed scope.** Marker papers exist and are identifiable for
-8/9 study groups, and their methods sections plus the dbGaP/Azul
+**Go, with reframed scope.** Marker papers were identified for 7 of 9 study
+groups (candidates only for NIA CARD and 1000G-PRIMED) — identified by title
+match, with independent grant-link corroboration only for IGVF and NIA CARD
+— and their methods sections plus the dbGaP/Azul
 descriptions clearly carry organism/modality/platform facts. But the
 accession is not the reliable key for open-access AnVIL — Epic 2 should take
 the dossier (paper list + descriptions), not a phsid, as its input, and

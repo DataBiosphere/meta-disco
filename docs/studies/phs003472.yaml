@@ -3,6 +3,18 @@ phsid: phs003472
 title: Impact of Genomic Variation on Function (IGVF) Consortium
 anvil_datasets: [AnVIL_IGVF_Mouse_R1]
 publications:
+  - pmid: "37547663"
+    pmcid: null
+    doi: null
+    title: The Impact of Genomic Variation on Function (IGVF) Consortium
+    year: 2023
+    role: marker
+    provenance: [reporter, pubmed-esummary]
+    note: >-
+      Title matches the dbGaP study title verbatim; linked by all 26 of the
+      study's NHGRI grants in RePORTER. Missed by the original title search
+      (which used the 2024 paper's words) — found via the reporter
+      subcommand.
   - pmid: "39232149"
     pmcid: PMC11973978
     doi: 10.1038/s41586-024-07510-0
@@ -10,10 +22,21 @@ publications:
     year: 2024
     journal: Nature
     role: marker
-    provenance: [pubmed-title-search]
+    provenance: [pubmed-title-search, reporter]
     note: >-
-      IGVF consortium marker/perspective paper; assigned by title match with
-      the consortium name, not by accession citation.
+      IGVF consortium marker/perspective paper; title-matched to the
+      consortium name and corroborated by RePORTER (linked by all 26 of the
+      study's grants).
+  - pmid: "41359121"
+    pmcid: null
+    doi: null
+    title: The IGVF catalog-from genetic variation to function
+    year: 2026
+    role: unclear
+    provenance: [reporter, pubmed-esummary]
+    note: >-
+      Also linked by all 26 grants; describes the IGVF data catalog. Not
+      read, hence role unclear.
 secondary_count: 0
 dbgap_record:
   populated:
@@ -57,10 +80,16 @@ sources_checked:
     outcome: partial — richest record of the three open studies (focus/condition/keyword/consents/release date) but no Citers or MolecularDataTypes
   - source: pubmed-title-search
     outcome: hit — marker paper found by title-word match
+  - source: reporter
+    outcome: >-
+      hit — all 26 attribution-page grant serials queried; 753 publication
+      links, 623 distinct PMIDs; exactly 4 papers are linked by all 26
+      grants (the consortium papers above plus PMID 41648336, a
+      variant-specific study), then a cliff to ≤4 grants — the
+      linked-by-most-grants ranking isolates consortium/marker papers
+      cleanly.
 notes: >-
   The AnVIL workspace is IGVF *Mouse* R1 while the dbGaP record never states
   an organism — a caution against inferring organism from the study anchor
   alone: IGVF spans human and mouse, so the workspace-level context
-  (Mouse_R1) is the discriminating signal here. The 26 grant numbers make
-  this the best candidate for a RePORTER grant→publications probe (not run
-  this round).
+  (Mouse_R1) is the discriminating signal here.

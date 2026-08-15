@@ -10,12 +10,13 @@ publications:
     year: 2023
     journal: Nature Methods
     role: unclear
-    provenance: [pubmed-title-search]
+    provenance: [pubmed-title-search, reporter]
     note: >-
       CARD program's ONT sequencing pipeline paper (preprint PMID 36711673).
-      Matched by program (NIA CARD long-read effort), not by accession or
-      title; whether it describes these specific Coriell cell-line runs is
-      unverified, hence role unclear.
+      RePORTER links it to this study's attribution grant (ZIA AG000538),
+      so the connection is grant-verified, not just program-matched; whether
+      it describes these specific Coriell cell-line runs is unverified,
+      hence role unclear.
 secondary_count: 0
 dbgap_record:
   populated:
@@ -49,7 +50,15 @@ sources_checked:
     outcome: partial — thin record (title/status/category/sponsor/description only among metadata-relevant fields)
   - source: pubmed-title-search
     outcome: partial — program-matched candidate only (role unclear)
+  - source: reporter
+    outcome: >-
+      partial — ZIA AG000538 (intramural) resolves: 417 linked PMIDs
+      including the ONT pipeline paper, confirming the grant link; but a
+      single-grant study gives no grant-count ranking signal to isolate the
+      marker among 417 papers
 notes: >-
   Strong study-level facts despite no confirmed marker paper: organism Homo
   sapiens; sample type LCLs; platform Oxford Nanopore (ONT); assay long-read
-  WGS ~30X. The three samples are the same reference cell lines HPRC uses.
+  WGS ~30X (all per the dbGaP study page). The three lines are widely used
+  reference samples — we believe the same ones HPRC assembles, but that is
+  not verified here.
