@@ -112,8 +112,8 @@ dbgap_record:
   empty: [<field/extension names checked but absent>]
 sources_checked:
   # Use these canonical source slugs (one entry per source tried, in order):
-  # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir, reporter,
-  # azul, pubmed-title-search, websearch
+  # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir,
+  # ncpi-dataset-catalog, reporter, azul, pubmed-title-search, websearch
   - source: gap-exchange
     outcome: <hit | miss | partial — one line on what it gave>
   - source: dbgap-study-page

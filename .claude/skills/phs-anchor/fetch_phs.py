@@ -196,7 +196,7 @@ def reporter(grant_serials: str) -> dict:
         offset += len(rows)
         if offset < total:
             time.sleep(1)  # RePORTER asks for at most 1 request/second
-    ranked = sorted(core_projects_by_pmid.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    ranked = sorted(core_projects_by_pmid.items(), key=lambda kv: (-len(kv[1]), int(kv[0])))
     return {
         "grant_serials": serials,
         "total_publication_links": total,
@@ -249,7 +249,9 @@ def main(argv: list[str]) -> int:
         else:
             print(__doc__, file=sys.stderr)
             return 2
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
+        # ValueError covers a 200-OK non-JSON body (json decode failure),
+        # which would otherwise escape as an uncaught traceback.
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 1
     json.dump(out, sys.stdout, indent=1)

@@ -2,9 +2,13 @@
 
 Generated 2026-08-15 by the phs-anchor skill's `gap-exchange` + `fhir` +
 `esummary` subcommands over every unique phs accession in the full Azul
-`/index/datasets` list (accessible and controlled-access alike). See
-`findings.md` for methodology and per-source behavior; the 12 open-access
-workspaces additionally have full dossiers in this directory.
+`/index/datasets` list. Note the extraction method: the skill's `datasets`
+subcommand filters to `accessible=true`, so this sweep instead queried the
+same endpoint **without** the accessible filter (single `size=300` page —
+covering all hits reported by the endpoint's pagination at run time) to
+include controlled-access studies. See `findings.md` for methodology and
+per-source behavior; the 12 open-access workspaces additionally have full
+dossiers in this directory.
 
 - **61 unique phs accessions** across the AnVIL datasets (ADR-0001 recorded 78 — snapshot drift, not re-reconciled here); 10 workspaces carry no phs accession.
 - **37/61 studies have a non-empty dbGaP Selected Publications list** (GapExchange XML).
