@@ -9,16 +9,15 @@ Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 `docs/studies/<phsid>.yaml` following the template below.
 
 The workflow's real input contract is a minimal **study record** —
-`{phsid|null, title, description}` — and every source below depends only on
-those core fields. Platform-specific annotations are not part of the core:
-adapters namespace them under their own extension key (the AnVIL/Azul
-adapter, `fetch_phs.py datasets`, adds `azul: {accessible, consent_group,
-data_modality}`). Another platform (e.g. the NCPI dataset catalog, whose
-study records carry the same core fields) can substitute its own adapter
-without touching the rest of the workflow. The core is also the shape a
-future origin registry (#304) would hold; study-level *metadata* is a
-separate concern layered on top (the dossier, and eventually Epic 2/3
-extractions), not part of the input record.
+`{phsid|null, title, description, consent_group}` — where `consent_group`
+is a list (a study can span several consent groups) and the publication
+lookups below depend only on the first three fields. The AnVIL/Azul
+adapter is `fetch_phs.py datasets`; another platform (e.g. the NCPI
+dataset catalog, whose study records carry the same fields) can substitute
+its own adapter without touching the rest of the workflow. This record is
+also the shape a future origin registry (#304) would hold; study-level
+*metadata* is a separate concern layered on top (the dossier, and
+eventually Epic 2/3 extractions), not part of the input record.
 
 Two channels, in this order. Publication discovery is the primary goal; the
 FHIR record is a separate, additional channel — do not let it substitute for
@@ -72,8 +71,7 @@ per-source hit rates, not just first-hit provenance.
    top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
    <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
 8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study
-   (all datasets; `azul.accessible` marks the open subset) — the
-   description prose often names the underlying cohort and the
+   — the description prose often names the underlying cohort and the
    consortium/portal to search next; read it before crafting fallback
    searches.
 9. **Cohort-name search** — the most productive fallback for center-style

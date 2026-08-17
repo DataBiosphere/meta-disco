@@ -6,9 +6,7 @@ marker paper, which FHIR fields matter — is the agent's job, per SKILL.md.
 
 Subcommands:
     datasets              All AnVIL datasets from Azul as study records:
-                          core {phsid|null, title, description} plus
-                          adapter-specific fields (accessible, consent,
-                          modality) namespaced under "azul"
+                          {phsid|null, title, description, consent_group}
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -79,13 +77,12 @@ def _get_json(url: str, params: dict | None = None) -> dict:
 def datasets() -> dict:
     """All AnVIL datasets from Azul, normalized to the skill's study-record shape.
 
-    The study record's core — the only fields the rest of the workflow
-    depends on — is {phsid|null, title, description}. Everything
-    platform-specific (access state, consent groups, Azul's modality
-    annotation) is namespaced under "azul", so another platform (e.g. the
-    NCPI dataset catalog, whose DbGapStudy records carry the same core
-    fields) can substitute an adapter emitting the core plus its own
-    extension key. Filter on `azul.accessible` for the open-access subset.
+    The study record is {phsid|null, title, description, consent_group};
+    the workflow's publication/record lookups depend only on the first
+    three, and consent_group is a list (a study can span several consent
+    groups). Another platform (e.g. the NCPI dataset catalog, whose
+    DbGapStudy records carry the same fields) can substitute an adapter
+    emitting this shape.
     """
     records = []
     azul_total = None
@@ -100,16 +97,13 @@ def datasets() -> dict:
                 if not isinstance(rids, list):
                     rids = [rids]
                 phsid = next((m.group(1) for r in rids for m in [re.match(r"(phs\d{6})", str(r or ""))] if m), None)
+                consent = ds.get("consent_group") or []
                 records.append(
                     {
                         "phsid": phsid,
                         "title": ds.get("title"),
                         "description": ds.get("description"),
-                        "azul": {
-                            "accessible": ds.get("accessible"),
-                            "consent_group": ds.get("consent_group"),
-                            "data_modality": ds.get("data_modality"),
-                        },
+                        "consent_group": consent if isinstance(consent, list) else [consent],
                     }
                 )
         # Azul's `next` is a fully-formed URL carrying the cursor.
