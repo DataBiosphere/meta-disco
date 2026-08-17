@@ -132,7 +132,24 @@ skill's SKILL.md fallback ordering already reflects this pattern.
 
 ## Workspaces with no phs accession
 
-These have no dbGaP anchor; the open-access ones among them have dossiers here with title-search-based publications:
+These have no dbGaP anchor; the open-access ones among them have dossiers
+here with title-search-based publications. The three controlled-access
+no-phs workspaces were searched by cohort name (2026-08-17):
+
+- **ANVIL_CSER_NCGENES2_GRU** — resolved: PMID 34127041 (2021,
+  clinical-utility trial design matching the workspace description) and
+  PMID 41935954 (2026, "Exome sequencing early in outpatient evaluation in
+  NCGENES 2" results paper). Strong candidates.
+- **ANVIL_ALSCompute_Collection_HMB** — candidate with caveat: PMID
+  35115730 (2022, "Answer ALS, a large-scale resource…"). The workspace
+  description names no source consortium, so whether this collection is
+  Answer ALS data is unverified — role unclear.
+- **ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes** — unresolved: the
+  description's specific cohort (653 early MI/revascularization survivors
+  plus matched controls, Utah) surfaced only older Utah family-study
+  papers, none clearly describing this cohort.
+
+Full list:
 
 - ANVIL_1000G_PRIMED_data_model
 - ANVIL_1000G_high_coverage_2019
