@@ -9,12 +9,18 @@ Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 `docs/studies/<phsid>.yaml` following the template below.
 
 The workflow's input list comes from `fetch_phs.py studies`: one record per
-distinct phsid — `{phsid, description, workspaces[], consent_group[],
-descriptions_differ}` — built by the AnVIL/Azul adapter
-(`fetch_phs.py datasets`, one record per workspace) aggregated on phsid:
-workspaces listed, consent groups unioned, description hoisted to the study
-(workspace descriptions are the study text copied down — validated on the
-2026-08 snapshot, 27/30 multi-workspace studies byte-identical). Workspaces
+distinct phsid — `{phsid, description, datasets[], consent_group[],
+descriptions_differ}`. Terminology is deliberately adapter-agnostic: a
+**study** (the phs anchor — the general concept) has one or more
+**datasets**, the platform's deposit unit. In AnVIL a dataset is a Terra
+workspace (Azul's `datasets[].title`) — a Broad convention that partitions
+a study by consent group and sometimes contributing author — but that
+partitioning is not general, so nothing downstream may assume it. The
+AnVIL/Azul adapter is `fetch_phs.py datasets` (one record per dataset);
+`studies` validates each record's shape (malformed ones are excluded and
+reported under `invalid_records`), aggregates on phsid, unions consent
+groups, and hoists description to study level (validated on the 2026-08
+snapshot — see findings.md "Description hoisting measurement"). Datasets
 with no phsid are returned separately and take the fallback path. Another
 platform (e.g. the NCPI dataset catalog) can substitute its own adapter
 emitting the same study records. This record is also the shape a future
@@ -133,6 +139,8 @@ publications:
     year: 2013
     role: marker       # marker | secondary | unclear
     provenance: [pmc-fulltext, pubmed-si]   # every source that surfaced it
+    journal: Nature    # optional, when known
+    note: <optional one-liner: how the role/match was judged>
 secondary_count: 42    # total accession-citing papers found (PMC count)
 dbgap_record:
   populated:

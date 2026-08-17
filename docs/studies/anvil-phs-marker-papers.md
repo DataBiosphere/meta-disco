@@ -90,8 +90,12 @@ dossiers in this directory.
 
 ## RePORTER probe of the empty-list CCDG studies (2026-08-15)
 
-The 12 CCDG studies with empty Selected Publications lists were run through
-the grant channel (study page attribution → grant serials → `reporter`).
+The 12 CCDG studies with empty Selected Publications lists *known at the
+time of this pass* (2026-08-15, before the sweep grew to 74 studies) were
+run through the grant channel (study page attribution → grant serials →
+`reporter`). Four further empty CCDG-titled studies surfaced in the
+regenerated table and have **not** been probed by either the grant or
+cohort-name channel: phs001227, phs001913, phs002205, phs002726.
 Outcome: **the channel resolves but does not isolate cohort papers**:
 
 - 6/12 study pages list **no grant numbers at all** in their fetched
@@ -173,16 +177,4 @@ Full list:
 - ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes
 - ANVIL_nhp_dGTEx_V1
 - AnVIL_HPRC_R2
-- AnVIL_MAGE
-
-
-- ANVIL_1000G_PRIMED_data_model
-- ANVIL_1000G_high_coverage_2019
-- ANVIL_ALSCompute_Collection_HMB
-- ANVIL_CSER_NCGENES2_GRU
-- ANVIL_HPRC
-- ANVIL_T2T
-- ANVIL_T2T_CHRY
-- ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes
-- ANVIL_nhp_dGTEx_V1
 - AnVIL_MAGE

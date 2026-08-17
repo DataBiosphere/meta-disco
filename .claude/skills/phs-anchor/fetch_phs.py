@@ -5,11 +5,13 @@ Each subcommand prints JSON to stdout. Interpretation — which paper is the
 marker paper, which FHIR fields matter — is the agent's job, per SKILL.md.
 
 Subcommands:
-    datasets              All AnVIL datasets (workspaces) from Azul:
+    datasets              All AnVIL datasets from Azul (a dataset = a Terra
+                          workspace; Azul's datasets[].title):
                           {phsid|null, title, description, consent_group}
-    studies               The per-study input list: datasets aggregated on
-                          phsid — workspaces listed, consent groups
-                          unioned, description hoisted to the study
+    studies               The per-study input list: dataset records
+                          validated, then aggregated on phsid — dataset
+                          titles listed, consent groups unioned,
+                          description hoisted to the study
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -45,6 +47,7 @@ TIMEOUT = 30
 # NCBI asks for at most 3 requests/second without an API key.
 EUTILS_DELAY_S = 0.4
 MAX_SUMMARIES = 20
+ESUMMARY_CHUNK = 200  # keep each esummary GET's id list well under URL-length limits
 
 # Retry transient failures (NCBI intermittently returns 429/5xx) so one
 # blip does not abort a whole subcommand run.
@@ -78,14 +81,13 @@ def _get_json(url: str, params: dict | None = None) -> dict:
 
 
 def datasets() -> dict:
-    """All AnVIL datasets from Azul, normalized to the skill's study-record shape.
+    """All AnVIL datasets from Azul as per-dataset records (one per Terra workspace).
 
-    The study record is {phsid|null, title, description, consent_group};
-    the workflow's publication/record lookups depend only on the first
-    three, and consent_group is a list (a study can span several consent
-    groups). Another platform (e.g. the NCPI dataset catalog, whose
-    DbGapStudy records carry the same fields) can substitute an adapter
-    emitting this shape.
+    The dataset record is {phsid|null, title, description, consent_group},
+    where title is Azul's `datasets[].title` (the workspace name). The
+    *study* record is the `studies` subcommand's aggregate of these —
+    reserve that term for it. Another platform can substitute an adapter
+    emitting this per-dataset shape.
     """
     records = []
     azul_total = None
@@ -99,14 +101,23 @@ def datasets() -> dict:
                 rids = ds.get("registered_identifier") or []
                 if not isinstance(rids, list):
                     rids = [rids]
-                phsid = next((m.group(1) for r in rids for m in [re.match(r"(phs\d{6})", str(r or ""))] if m), None)
+                phsid = None
+                for rid in rids:
+                    match = re.match(r"(phs\d{6})", str(rid or ""))
+                    if match:
+                        phsid = match.group(1)
+                        break
                 consent = ds.get("consent_group") or []
+                if not isinstance(consent, list):
+                    consent = [consent]
                 records.append(
                     {
                         "phsid": phsid,
                         "title": ds.get("title"),
                         "description": ds.get("description"),
-                        "consent_group": consent if isinstance(consent, list) else [consent],
+                        # Azul emits null entries (e.g. [null]); drop them —
+                        # normalization is the adapter's job.
+                        "consent_group": [c for c in consent if isinstance(c, str)],
                     }
                 )
         # Azul's `next` is a fully-formed URL carrying the cursor.
@@ -118,39 +129,61 @@ def datasets() -> dict:
 PLACEHOLDER_DESC = "[Description currently not available]"
 
 
-def studies() -> dict:
-    """Aggregate datasets() workspace records into the per-study input list.
+def _validate_dataset_record(r: dict) -> list[str]:
+    """Shape problems in one adapter-emitted dataset record ([] when valid)."""
+    problems = []
+    if not (isinstance(r.get("title"), str) and r["title"].strip()):
+        problems.append("title missing/empty")
+    if r.get("phsid") is not None and not re.fullmatch(r"phs\d{6}", str(r["phsid"])):
+        problems.append(f"phsid malformed: {r.get('phsid')!r}")
+    if r.get("description") is not None and not isinstance(r["description"], str):
+        problems.append("description not a string")
+    if not (isinstance(r.get("consent_group"), list) and all(isinstance(c, str) for c in r["consent_group"])):
+        problems.append("consent_group not a list of strings")
+    return problems
 
-    The distinct phsids form the study list (phsid hosts the study), with
-    each study's workspaces listed and consent groups unioned. description
-    is hoisted to study level — validated 2026-08-17: 27/30 multi-workspace
-    studies carry byte-identical descriptions across their workspaces; for
-    the rest the longest non-placeholder description wins and
-    descriptions_differ is set. Workspaces with no phsid are returned
-    separately (no study anchor to aggregate on).
+
+def studies() -> dict:
+    """Aggregate datasets() records into the per-study input list.
+
+    Terminology is adapter-agnostic: a *study* (anchored by phsid) has one
+    or more *datasets* — the platform's deposit unit, which in AnVIL is a
+    Terra workspace (Azul's `datasets[].title`). The distinct phsids form
+    the study list; each study lists its dataset titles, unions consent
+    groups, and hoists description to study level (see findings.md
+    "Description hoisting measurement" for the validation behind the
+    policy: longest non-placeholder wins, descriptions_differ flags
+    disagreement). Dataset records failing shape validation are excluded
+    and reported under `invalid_records`; datasets with no phsid are
+    returned separately (no study anchor to aggregate on).
     """
     grouped: dict[str, dict] = {}
+    descs: dict[str, list[str]] = {}
     no_phsid = []
+    invalid = []
     for r in datasets()["datasets"]:
+        problems = _validate_dataset_record(r)
+        if problems:
+            invalid.append({"record": r, "problems": problems})
+            continue
         if r["phsid"] is None:
             no_phsid.append(r)
             continue
         entry = grouped.setdefault(
-            r["phsid"],
-            {"phsid": r["phsid"], "description": None, "workspaces": [], "consent_group": set(), "_descs": []},
+            r["phsid"], {"phsid": r["phsid"], "description": None, "datasets": [], "consent_group": set()}
         )
-        entry["workspaces"].append(r["title"])
+        entry["datasets"].append(r["title"])
         entry["consent_group"].update(r["consent_group"])
-        entry["_descs"].append((r["description"] or "").strip())
+        descs.setdefault(r["phsid"], []).append((r["description"] or "").strip())
     out = []
-    for _, entry in sorted(grouped.items()):
-        distinct = sorted({x for x in entry.pop("_descs") if x and x != PLACEHOLDER_DESC})
+    for phsid, entry in sorted(grouped.items()):
+        distinct = sorted({x for x in descs[phsid] if x and x != PLACEHOLDER_DESC})
         entry["description"] = max(distinct, key=len) if distinct else None
         entry["descriptions_differ"] = len(distinct) > 1
         entry["consent_group"] = sorted(entry["consent_group"])
-        entry["workspaces"].sort()
+        entry["datasets"].sort()
         out.append(entry)
-    return {"count": len(out), "studies": out, "no_phsid_workspaces": no_phsid}
+    return {"count": len(out), "studies": out, "no_phsid_datasets": no_phsid, "invalid_records": invalid}
 
 
 def fhir(phsid: str) -> dict:
@@ -200,6 +233,21 @@ def gap_exchange(phsid: str) -> dict:
     }
 
 
+def _esummary_result(db: str, ids: list[str]) -> dict:
+    """Cleaned esummary result dict for ids, chunked to bound the GET URL length."""
+    summaries: dict = {}
+    for start in range(0, len(ids), ESUMMARY_CHUNK):
+        if start:
+            time.sleep(EUTILS_DELAY_S)
+        chunk = _get_json(
+            f"{EUTILS_BASE}/esummary.fcgi",
+            params={"db": db, "id": ",".join(ids[start : start + ESUMMARY_CHUNK]), "retmode": "json"},
+        ).get("result", {})
+        chunk.pop("uids", None)
+        summaries.update(chunk)
+    return summaries
+
+
 def _search_with_summaries(db: str, term: str) -> dict:
     search = _get_json(
         f"{EUTILS_BASE}/esearch.fcgi",
@@ -210,11 +258,7 @@ def _search_with_summaries(db: str, term: str) -> dict:
     summaries = {}
     if ids:
         time.sleep(EUTILS_DELAY_S)
-        summaries = _get_json(
-            f"{EUTILS_BASE}/esummary.fcgi",
-            params={"db": db, "id": ",".join(ids[:MAX_SUMMARIES]), "retmode": "json"},
-        ).get("result", {})
-        summaries.pop("uids", None)
+        summaries = _esummary_result(db, ids[:MAX_SUMMARIES])
     return {
         "db": db,
         "term": term,
@@ -229,8 +273,9 @@ def reporter(grant_serials: str) -> dict:
 
     Serials are the bare numbers dbGaP attribution pages list (e.g. HG012047);
     each is queried as a leading-wildcard core project number so any activity
-    code (U01/UM1/R01/…) matches. PMIDs are ranked by how many of the given
-    grants link them — papers shared across a study's grants rank first.
+    code (U01/UM1/R01/…) matches. PMIDs are ranked by how many distinct core
+    project numbers link them (one serial can match several core projects) —
+    papers shared across a study's grants rank first.
     """
     serials = [s.strip() for s in grant_serials.split(",") if s.strip()]
     if not serials:
@@ -267,18 +312,11 @@ def esummary(pmids: str) -> dict:
     """PubMed esummary records for the given comma-separated PMIDs.
 
     Companion to `reporter`, whose output is bare PMIDs: this resolves them
-    to titles/years/article ids. Pass a modest batch (a URL-length-bounded
-    GET carries the ids).
+    to titles/years/article ids. Large batches are fetched in chunks of
+    ESUMMARY_CHUNK ids so a reporter-sized list cannot overflow the GET URL.
     """
     ids = [p.strip() for p in pmids.split(",") if p.strip()]
-    summaries = {}
-    if ids:
-        summaries = _get_json(
-            f"{EUTILS_BASE}/esummary.fcgi",
-            params={"db": "pubmed", "id": ",".join(ids), "retmode": "json"},
-        ).get("result", {})
-        summaries.pop("uids", None)
-    return {"pmids": ids, "summaries": summaries}
+    return {"pmids": ids, "summaries": _esummary_result("pubmed", ids)}
 
 
 def pubmed_si(phsid: str) -> dict:

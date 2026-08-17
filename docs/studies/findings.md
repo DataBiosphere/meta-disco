@@ -52,6 +52,17 @@ studies. The `description` field was the single most metadata-informative
 field across the young studies (species, cell lines, platform, assay all
 appear there as text).
 
+## Description hoisting measurement (backs the `studies` subcommand)
+
+The `studies` subcommand hoists workspace descriptions to study level.
+Measured 2026-08-17 on the live snapshot: grouping the fully-paginated
+unfiltered `datasets` output by phsid gave 30 multi-workspace studies, of
+which 27 carried byte-identical (stripped) descriptions across all their
+workspaces; the 3 exceptions were blank/"[Description currently not
+available]" placeholders plus one study (phs002502) with two near-identical
+variants. Hence the hoist policy: longest non-placeholder description wins,
+`descriptions_differ` flags disagreement.
+
 ## Retired/broken paths (don't retry)
 
 - `elink gap→pubmed` does not work: E-utilities' `einfo` list (raw JSON)
