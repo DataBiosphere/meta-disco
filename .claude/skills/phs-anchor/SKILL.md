@@ -8,6 +8,14 @@ description: Given a dbGaP phs accession (e.g. phs000424), find the study's mark
 Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 `docs/studies/<phsid>.yaml` following the template below.
 
+The workflow's real input contract is a minimal **study record** —
+`{phsid|null, title, description}` — and every source below depends only on
+those fields. `fetch_phs.py datasets` is the AnVIL/Azul adapter producing
+such records (with an `accessible` flag per record); another platform (e.g.
+the NCPI dataset catalog, whose study records carry the same fields) can
+substitute its own adapter without touching the rest of the workflow. This
+is also the shape a future origin registry (#304) would hold.
+
 Two channels, in this order. Publication discovery is the primary goal; the
 FHIR record is a separate, additional channel — do not let it substitute for
 finding the paper.
@@ -59,11 +67,28 @@ per-source hit rates, not just first-hit provenance.
    ranking signal — expect a large undifferentiated list. Resolve the
    top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
    <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
-8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study —
-   description prose often names the consortium/portal to search next.
-9. **Fallback**: PubMed title-word search built from the study/consortium
-   name (unquoted, stopwords dropped — PubMed's phrase index misses many
-   titles and quoted phrases can return 0 for papers that exist); WebSearch.
+8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study
+   (all datasets, `accessible` flagged per record) — the description prose
+   often names the underlying cohort and the consortium/portal to search
+   next; read it before crafting fallback searches.
+9. **Cohort-name search** — the most productive fallback for center-style
+   deposits (resolved 9/12 empty-list CCDG studies and 2/3 no-phs
+   controlled workspaces in the 2026-08 survey). Many deposits are new
+   wrappers around old, *named* cohorts whose founding paper predates the
+   deposit. Recipe:
+   - Extract the cohort name from the study title or description (e.g.
+     METSIM, BRAVE, "Emory Cohort").
+   - Search PubMed with unquoted ANDed `[Title]`/`[tiab]` terms, stopwords
+     dropped — quoted phrases silently return 0 for titles missing from
+     PubMed's phrase index.
+   - Bare acronyms collide ("TAICHI" returns tai-chi exercise papers): add
+     context terms from the description (Taiwan, coronary, …). Author
+     (`Laakso[Author]`) and corporate-author fields help for old cohorts.
+   - The marker "tell" is design vocabulary in the title: *cohort profile*,
+     *objectives and design*, *rationale*, *resource*.
+   - A hit is a *candidate* (provenance slug `pubmed-title-search`) — never
+     assert the role without the title/description matching the study.
+10. **Last resort**: WebSearch.
 
 Do NOT use Entrez `db=gap` — E-utilities no longer exposes a dbGaP database
 (`elink gap→pubmed` is dead). See findings.md "Retired/broken paths" for

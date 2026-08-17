@@ -5,9 +5,10 @@ Each subcommand prints JSON to stdout. Interpretation — which paper is the
 marker paper, which FHIR fields matter — is the agent's job, per SKILL.md.
 
 Subcommands:
-    datasets              AnVIL open-access datasets from Azul (title,
-                          registered_identifier — a phs accession or
-                          none — consent group, data modality)
+    datasets              All AnVIL datasets from Azul, normalized to the
+                          skill's study-record shape: phsid (or null),
+                          title, description, accessible, plus consent
+                          group and data modality
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -76,22 +77,41 @@ def _get_json(url: str, params: dict | None = None) -> dict:
 
 
 def datasets() -> dict:
-    """AnVIL datasets with accessible=true, with their registered_identifier (a phs accession, or "none"/null)."""
-    raw = _get_json(
-        AZUL_DATASETS_URL,
-        params={"filters": json.dumps({"accessible": {"is": [True]}}), "size": "200"},
-    )
-    found = [
-        {
-            "title": ds.get("title"),
-            "registered_identifier": ds.get("registered_identifier"),
-            "consent_group": ds.get("consent_group"),
-            "data_modality": ds.get("data_modality"),
-        }
-        for hit in raw.get("hits", [])
-        for ds in hit.get("datasets", [])
-    ]
-    return {"count": len(found), "datasets": found}
+    """All AnVIL datasets from Azul, normalized to the skill's study-record shape.
+
+    The rest of the workflow depends only on the study record — phsid (or
+    null), title, description, accessible — not on Azul: another platform
+    (e.g. the NCPI dataset catalog, whose DbGapStudy records carry the same
+    fields) can substitute an adapter emitting this shape. Filter on the
+    per-record `accessible` flag for the open-access subset.
+    """
+    records = []
+    azul_total = None
+    url: str | None = AZUL_DATASETS_URL
+    params: dict | None = {"size": "300"}
+    while url:
+        raw = _get_json(url, params=params)
+        azul_total = raw.get("pagination", {}).get("total", azul_total)
+        for hit in raw.get("hits", []):
+            for ds in hit.get("datasets", []):
+                rids = ds.get("registered_identifier") or []
+                if not isinstance(rids, list):
+                    rids = [rids]
+                phsid = next((m.group(1) for r in rids for m in [re.match(r"(phs\d{6})", str(r or ""))] if m), None)
+                records.append(
+                    {
+                        "phsid": phsid,
+                        "title": ds.get("title"),
+                        "description": ds.get("description"),
+                        "accessible": ds.get("accessible"),
+                        "consent_group": ds.get("consent_group"),
+                        "data_modality": ds.get("data_modality"),
+                    }
+                )
+        # Azul's `next` is a fully-formed URL carrying the cursor.
+        url = raw.get("pagination", {}).get("next")
+        params = None
+    return {"count": len(records), "azul_total": azul_total, "datasets": records}
 
 
 def fhir(phsid: str) -> dict:

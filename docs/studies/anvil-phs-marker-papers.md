@@ -2,21 +2,22 @@
 
 Generated 2026-08-15 by the phs-anchor skill's `gap-exchange` + `fhir` +
 `esummary` subcommands over every unique phs accession in the full Azul
-`/index/datasets` list. Note the extraction method: the skill's `datasets`
-subcommand filters to `accessible=true`, so this sweep instead queried the
-same endpoint **without** the accessible filter (single `size=300` page —
-covering all hits reported by the endpoint's pagination at run time) to
-include controlled-access studies. See `findings.md` for methodology and
+`/index/datasets` list. Correction 2026-08-17: the
+original sweep queried a single `size=300` page of the unfiltered endpoint,
+which silently truncated at 300 of 420 hits and missed 13 studies; the
+`datasets` subcommand now paginates the full unfiltered list itself, and the
+13 missed studies were swept and merged below. See `findings.md` for methodology and
 per-source behavior; the 12 open-access workspaces additionally have full
 dossiers in this directory.
 
-- **61 unique phs accessions** across the AnVIL datasets (ADR-0001 recorded 78 — snapshot drift, not re-reconciled here); 10 workspaces carry no phs accession.
-- **37/61 studies have a non-empty dbGaP Selected Publications list** (GapExchange XML).
+- **74 unique phs accessions** across the AnVIL datasets (ADR-0001 recorded 78; the 2026-08-17 snapshot lists 13 workspaces with no phs accession).
+- **42/74 studies have a non-empty dbGaP Selected Publications list** (GapExchange XML).
 - The **lead PMID** below is the first Selected Publication — observed to be the marker paper for cohort/project-style studies (GTEx, ClinSeq, MEC), but for sequencing-center studies (e.g. Mendelian Genomics centers) the list opens with individual result papers, so the lead is a *candidate*, not a confirmed marker. `role` confirmation is Epic 2 work.
 
 | phs | dbGaP study title | AnVIL workspaces | pubs | lead PMID (year) — title |
 | --- | --- | --- | --- | --- |
 | phs000220 | PAGE: Multiethnic Cohort (MEC) | 1: ANVIL_PAGE_MEC_GRU_WGS | 35 | 10695593 (2000) — A multiethnic cohort in Hawaii and Los Angeles: baseline characteristi |
+| phs000298 | Autism Sequencing Consortium (ASC) | 1: ANVIL_ccdg_asc_ndd_daly_talkowski_… | 6 | 22495311 (2012) — Patterns and rates of exonic de novo mutations in autism spectrum diso |
 | phs000424 | Common Fund (CF) Genotype-Tissue Expression Project (GTEx) | 5: ANVIL_GTEx_V7_hg19… | 9 | 23715323 (2013) — The Genotype-Tissue Expression (GTEx) project. |
 | phs000693 | University of Washington Center for Mendelian Genomics (UW-C | 10: ANVIL_CMG_UWASH_DS_BAV_IRB_PUB_RD… | 50 | 33583022 (2021) — Expanding the phenotype, genotype and biochemical knowledge of ALG3-CD |
 | phs000744 | Yale Center for Mendelian Genomics (YCMG) | 5: ANVIL_CMG_YALE_DS_MC… | 30 | 23359680 (2013) — Recessive loss of function of the neuronal ubiquitin hydrolase UCHL1 l |
@@ -47,6 +48,7 @@ dossiers in this directory.
 | phs001871 | Center for Common Disease Genomics (CCDG)-Cardiovascular:Cle | 1: ANVIL_ccdg_washu_cvd_eocad_clevela… | 0 | Selected Publications empty |
 | phs001880 | Center for Common Disease Genomics (CCDG) - Cardiovascular:  | 1: ANVIL_ccdg_washu_cvd_eocad_emory_w… | 0 | Selected Publications empty |
 | phs001894 | CCDG-Neuropsychiatric: Autism- Genetics of Human Development | 1: ANVIL_ccdg_nygc_np_autism_hmca_wgs | 11 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
+| phs001913 | CCDG - Cardiovascular: eMERGE - Northwestern Cohort | 1: ANVIL_ccdg_washu_cvd_eocad_emerge_… | 0 | Selected Publications empty |
 | phs001963 | DEMENTIA-SEQ: WGS in Lewy Body Dementia and Frontotemporal D | 1: ANVIL_ALS_FTD_DEMENTIA_SEQ_GRU_v1 | 7 | 16237129 (2005) — Diagnosis and management of dementia with Lewy bodies: third report of |
 | phs002004 | CCDG-Neuropsychiatric: A Study of the Genetic Causes of Comp | 1: ANVIL_CCDG_NYGC_NP_Autism_CAG_DS_W… | 13 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
 | phs002018 | Center Common Disease Genomics [CCDG] - Cardiovascular: Part | 2: ANVIL_CCDG_Broad_CVD_EOCAD_Partner… | 0 | Selected Publications empty |
@@ -54,26 +56,37 @@ dossiers in this directory.
 | phs002041 | WGSPD Project 1: Whole Genome Sequencing for Schizophrenia a | 5: ANVIL_NIMH_Broad_WGSPD1_McCarroll_… | 0 | Selected Publications empty |
 | phs002042 | CCDG Neuropsychiatric: Autism Center of Excellence (ACE II) | 1: ANVIL_CCDG_NYGC_NP_Autism_ACE2_DS_… | 13 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
 | phs002043 | CCDG Neuropsychiatric: Multimodal Developmental Neurogenetic | 1: ANVIL_CCDG_NYGC_NP_Autism_PELPHREY… | 13 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
+| phs002044 | CCDG-Neuropsychiatric: Victorian Collaborative AuTism Study  | 1: ANVIL_CCDG_NYGC_NP_Autism_HFA_DS_W… | 13 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
+| phs002111 | CSER: Exome Sequencing in Diverse Populations in Colorado an | 1: ANVIL_CSER_CHARM_GRU | 20 | 30193136 (2018) — The Clinical Sequencing Evidence-Generating Research Consortium: Integ |
+| phs002205 | Center for Common Disease Genomics [CCDG] - Inflammatory Bow | 1: ANVIL_ccdg_broad_ai_ibd_alm_gmc_we… | 0 | Selected Publications empty |
 | phs002206 | Genomic Answers for Kids (GA4K) | 1: AnVIL_CMH_GAFK_R5 | 0 | Selected Publications empty |
 | phs002236 | Center for Common Disease Genomics [CCDG] - Cardiovascular:  | 1: ANVIL_CCDG_Broad_CVD_AF_GAPP_DS_MD… | 0 | Selected Publications empty |
 | phs002242 | Center for Common Disease Genomics [CCDG] - Cardiovascular:  | 1: ANVIL_CCDG_Broad_CVD_AF_Swiss_Case… | 2 | 17903304 (2007) — Framingham Heart Study 100K project: genome-wide associations for card |
 | phs002243 | Center for Common Disease Genomics [CCDG] - Cardiovascular:  | 1: ANVIL_CCDG_Broad_CVD_AF_PEGASUS_HM… | 0 | Selected Publications empty |
+| phs002307 | CSER: South-Seq: DNA Sequencing for Newborn Nurseries in the | 1: ANVIL_CSER_SouthSeq_GRU | 0 | Selected Publications empty |
 | phs002324 | CSER: Genomic Sequencing to Aid Diagnosis in Pediatric and P | 1: ANVIL_CSER_P3EGS_GRU | 0 | Selected Publications empty |
 | phs002337 | CSER: Incorporating Genomics into the Clinical Care of Diver | 2: ANVIL_CSER_NYCKIDSEQ_GRU… | 1 | 33446240 (2021) — The NYCKidSeq project: study protocol for a randomized controlled tria |
 | phs002378 | CSER: Evaluating Utility and Improving Implementation of Gen | 1: ANVIL_CSER_KidsCanSeq_GRU | 5 | 30193136 (2018) — The Clinical Sequencing Evidence-Generating Research Consortium: Integ |
 | phs002502 | Center for Common Disease Genomics [CCDG] Neuropsychiatric:  | 26: ANVIL_ccdg_asc_ndd_daly_talkowski_… | 7 | 31981491 (2020) — Large-Scale Exome Sequencing Study Implicates Both Developmental and F |
 | phs002509 | Center for Common Disease Genomics [CCDG] - Neuropsychiatric | 1: ANVIL_CCDG_NYGC_NP_Autism_GASD_GRU… | 11 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
 | phs002511 | Center for Common Disease Genomics [CCDG] - Neuropsychiatric | 1: ANVIL_CCDG_NYGC_NP_Autism_SPARK_GR… | 11 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
+| phs002512 | Center for Common Disease Genomics [CCDG] - Neuropsychiatric | 1: ANVIL_CCDG_NYGC_NP_Autism_SEARCHLI… | 11 | 28630308 (2017) — Measuring shared variants in cohorts of discordant siblings with appli |
+| phs002726 | Center for Common Disease Genomics [CCDG] - Cardiovascular:  | 2: ANVIL_CCDG_Broad_CVD_AF_Figtree_Bi… | 0 | Selected Publications empty |
 | phs003018 | A Comprehensive Binding and Functional Map of Human RNA-bind | 2: AnVIL_ENCORE_293T… | 0 | no dbGaP FTP directory (HTTP 404) |
 | phs003047 | NHGRI GREGoR Consortium: Genomics Research to Elucidate the  | 7: ANVIL_GREGoR_R01_HMB… | 2 | 41224980 (2025) — GREGoR: accelerating genomics for rare diseases. |
+| phs003181 | NABEC Long-Read Whole-Genome Sequencing | 1: ANVIL_NIA_CARD_LR_WGS_NABEC_GRU | 0 | no dbGaP FTP directory (HTTP 404) |
+| phs003184 | ALS Compute | 1: ANVIL_ALSCompute_Collection_GRU | 0 | Selected Publications empty |
 | phs003193 | Fetal Genomics Consortium (FGC) | 1: ANVIL_FetalGenomics_PrenatalSEQ | 0 | Selected Publications empty |
 | phs003200 | High-Throughput RNA Isoform Sequencing using Programmable cD | 1: ANVIL_MAS_ISO_seq | 0 | Selected Publications empty |
+| phs003224 | NIA CARD Coriell Cell Lines | 1: ANVIL_NIA_CARD_Coriell_Cell_Lines_… | 0 | no dbGaP FTP directory (HTTP 404) |
 | phs003444 | The Cancer Dependency Map (DepMap) | 4: ANVIL_DepMap_HMB… | 0 | Selected Publications empty |
 | phs003472 | Impact of Genomic Variation on Function (IGVF) Consortium | 3: AnVIL_IGVF_GRU_PUB_R1… | 0 | Selected Publications empty |
 | phs003499 | Center for Common Disease Genomics (CCDG) - Cardiovascular:  | 1: ANVIL_CCDG_WashU_CVD_MultiEthnic_W… | 0 | Selected Publications empty |
 | phs003537 | HudsonAlpha Long Read Sequencing Data of Individuals with Ra | 1: ANVIL_HudsonAlpha_LR_v1_GRU | 6 | 38585854 (2024) — Long-read genome sequencing and variant reanalysis increase diagnostic |
 | phs003821 | OurHealth - Cardiovascular Disease in South Asians | 2: AnVIL_OurHealth_GRU_R1… | 0 | Selected Publications empty |
 | phs003838 | Developmental Genotype Tissue Expression (dGTEx) Project | 1: ANVIL_dGTEx_GRU_v1 | 1 | 39815096 (2025) — The human and non-human primate developmental GTEx projects. |
+| phs004000 | Assessment of Complex Chromosomal Changes in De-Identified C | 1: AnVIL_Complex_Chromosomal_Changes_… | 0 | Selected Publications empty |
+| phs004045 | Genetic Testing to Understand and Address Renal Disease Disp | 2: AnVIL_GUARDD_US_GRU_R1… | 2 | 35660539 (2022) — Design and rationale of GUARDD-US: A pragmatic, randomized trial of ge |
 | phs004058 | A Depression and Opioid Pragmatic Trial in Pharmacogenetics  | 1: AnVIL_ADOPT_PGx_Acute_Pain_HMB_R1 | 2 | 35899435 (2022) — Implementing a pragmatic clinical trial to tailor opioids for acute pa |
 | phs004069 | A Depression and Opioid Pragmatic Trial in Pharmacogenetics  | 2: AnVIL_ADOPT_PGx_Depression_GRU_R1… | 2 | 38860639 (2024) — Rationale and design for a pragmatic randomized trial to assess gene-b |
 | phs004430 | Center for Common Disease Genomics (CCDG) - Neuropsychiatric | 1: ANVIL_CCDG_NYGC_NP_Autism_AFS_DS_W… | 0 | Selected Publications empty |
