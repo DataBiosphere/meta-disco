@@ -10,11 +10,15 @@ Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 
 The workflow's real input contract is a minimal **study record** —
 `{phsid|null, title, description}` — and every source below depends only on
-those fields. `fetch_phs.py datasets` is the AnVIL/Azul adapter producing
-such records (with an `accessible` flag per record); another platform (e.g.
-the NCPI dataset catalog, whose study records carry the same fields) can
-substitute its own adapter without touching the rest of the workflow. This
-is also the shape a future origin registry (#304) would hold.
+those core fields. Platform-specific annotations are not part of the core:
+adapters namespace them under their own extension key (the AnVIL/Azul
+adapter, `fetch_phs.py datasets`, adds `azul: {accessible, consent_group,
+data_modality}`). Another platform (e.g. the NCPI dataset catalog, whose
+study records carry the same core fields) can substitute its own adapter
+without touching the rest of the workflow. The core is also the shape a
+future origin registry (#304) would hold; study-level *metadata* is a
+separate concern layered on top (the dossier, and eventually Epic 2/3
+extractions), not part of the input record.
 
 Two channels, in this order. Publication discovery is the primary goal; the
 FHIR record is a separate, additional channel — do not let it substitute for
@@ -68,9 +72,10 @@ per-source hit rates, not just first-hit provenance.
    top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
    <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
 8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study
-   (all datasets, `accessible` flagged per record) — the description prose
-   often names the underlying cohort and the consortium/portal to search
-   next; read it before crafting fallback searches.
+   (all datasets; `azul.accessible` marks the open subset) — the
+   description prose often names the underlying cohort and the
+   consortium/portal to search next; read it before crafting fallback
+   searches.
 9. **Cohort-name search** — the most productive fallback for center-style
    deposits (resolved 9/12 empty-list CCDG studies and 2/3 no-phs
    controlled workspaces in the 2026-08 survey). Many deposits are new
