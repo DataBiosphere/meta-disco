@@ -5,8 +5,11 @@ Each subcommand prints JSON to stdout. Interpretation — which paper is the
 marker paper, which FHIR fields matter — is the agent's job, per SKILL.md.
 
 Subcommands:
-    datasets              All AnVIL datasets from Azul as study records:
+    datasets              All AnVIL datasets (workspaces) from Azul:
                           {phsid|null, title, description, consent_group}
+    studies               The per-study input list: datasets aggregated on
+                          phsid — workspaces listed, consent groups
+                          unioned, description hoisted to the study
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -110,6 +113,44 @@ def datasets() -> dict:
         url = raw.get("pagination", {}).get("next")
         params = None
     return {"count": len(records), "azul_total": azul_total, "datasets": records}
+
+
+PLACEHOLDER_DESC = "[Description currently not available]"
+
+
+def studies() -> dict:
+    """Aggregate datasets() workspace records into the per-study input list.
+
+    The distinct phsids form the study list (phsid hosts the study), with
+    each study's workspaces listed and consent groups unioned. description
+    is hoisted to study level — validated 2026-08-17: 27/30 multi-workspace
+    studies carry byte-identical descriptions across their workspaces; for
+    the rest the longest non-placeholder description wins and
+    descriptions_differ is set. Workspaces with no phsid are returned
+    separately (no study anchor to aggregate on).
+    """
+    grouped: dict[str, dict] = {}
+    no_phsid = []
+    for r in datasets()["datasets"]:
+        if r["phsid"] is None:
+            no_phsid.append(r)
+            continue
+        entry = grouped.setdefault(
+            r["phsid"],
+            {"phsid": r["phsid"], "description": None, "workspaces": [], "consent_group": set(), "_descs": []},
+        )
+        entry["workspaces"].append(r["title"])
+        entry["consent_group"].update(r["consent_group"])
+        entry["_descs"].append((r["description"] or "").strip())
+    out = []
+    for _, entry in sorted(grouped.items()):
+        distinct = sorted({x for x in entry.pop("_descs") if x and x != PLACEHOLDER_DESC})
+        entry["description"] = max(distinct, key=len) if distinct else None
+        entry["descriptions_differ"] = len(distinct) > 1
+        entry["consent_group"] = sorted(entry["consent_group"])
+        entry["workspaces"].sort()
+        out.append(entry)
+    return {"count": len(out), "studies": out, "no_phsid_workspaces": no_phsid}
 
 
 def fhir(phsid: str) -> dict:
@@ -259,9 +300,10 @@ def main(argv: list[str]) -> int:
         "reporter": reporter,
         "esummary": esummary,
     }
+    zero_arg = {"datasets": datasets, "studies": studies}
     try:
-        if argv == ["datasets"]:
-            out = datasets()
+        if len(argv) == 1 and argv[0] in zero_arg:
+            out = zero_arg[argv[0]]()
         elif len(argv) == 2 and argv[0] in commands:
             out = commands[argv[0]](argv[1])
         else:

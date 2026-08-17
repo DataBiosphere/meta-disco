@@ -8,16 +8,19 @@ description: Given a dbGaP phs accession (e.g. phs000424), find the study's mark
 Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 `docs/studies/<phsid>.yaml` following the template below.
 
-The workflow's real input contract is a minimal **study record** —
-`{phsid|null, title, description, consent_group}` — where `consent_group`
-is a list (a study can span several consent groups) and the publication
-lookups below depend only on the first three fields. The AnVIL/Azul
-adapter is `fetch_phs.py datasets`; another platform (e.g. the NCPI
-dataset catalog, whose study records carry the same fields) can substitute
-its own adapter without touching the rest of the workflow. This record is
-also the shape a future origin registry (#304) would hold; study-level
-*metadata* is a separate concern layered on top (the dossier, and
-eventually Epic 2/3 extractions), not part of the input record.
+The workflow's input list comes from `fetch_phs.py studies`: one record per
+distinct phsid — `{phsid, description, workspaces[], consent_group[],
+descriptions_differ}` — built by the AnVIL/Azul adapter
+(`fetch_phs.py datasets`, one record per workspace) aggregated on phsid:
+workspaces listed, consent groups unioned, description hoisted to the study
+(workspace descriptions are the study text copied down — validated on the
+2026-08 snapshot, 27/30 multi-workspace studies byte-identical). Workspaces
+with no phsid are returned separately and take the fallback path. Another
+platform (e.g. the NCPI dataset catalog) can substitute its own adapter
+emitting the same study records. This record is also the shape a future
+origin registry (#304) would hold; study-level *metadata* is a separate
+concern layered on top (the dossier, and eventually Epic 2/3 extractions),
+not part of the input record.
 
 Two channels, in this order. Publication discovery is the primary goal; the
 FHIR record is a separate, additional channel — do not let it substitute for
