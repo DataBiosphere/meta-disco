@@ -1,6 +1,8 @@
 # phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
 phsid: phs003472
 title: Impact of Genomic Variation on Function (IGVF) Consortium
+# anvil_datasets reflects this dossier's 2026-08-15 open-access pass; the
+# study's full AnVIL footprint is 6 workspaces (see anvil-phs-marker-papers.md).
 anvil_datasets: [AnVIL_IGVF_Mouse_R1]
 publications:
   - pmid: "37547663"

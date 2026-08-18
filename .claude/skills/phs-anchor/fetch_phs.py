@@ -206,7 +206,7 @@ def gap_exchange(phsid: str) -> dict:
             return {"phsid": phsid, "versions": [], "pmids": [], "note": "no dbGaP FTP directory (HTTP 404)"}
         raise
     versions = sorted(
-        set(re.findall(rf"{phsid}\.v(\d+)\.p(\d+)", listing.text)), key=lambda vp: (int(vp[0]), int(vp[1]))
+        set(re.findall(rf"{re.escape(phsid)}\.v(\d+)\.p(\d+)", listing.text)), key=lambda vp: (int(vp[0]), int(vp[1]))
     )
     if not versions:
         return {"phsid": phsid, "versions": [], "pmids": []}
@@ -288,14 +288,14 @@ def reporter(grant_serials: str) -> dict:
         resp = _session.post(REPORTER_PUBS_URL, json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
-        total = data.get("meta", {}).get("total", 0)
+        total = data.get("meta", {}).get("total")
         rows = data.get("results", [])
         if not rows:
             break
         for row in rows:
             pmid, core = row.get("pmid"), row.get("coreproject")
-            if pmid is None or core is None:
-                continue  # an incomplete link row would pollute the ranking (or crash sorted())
+            if core is None or not str(pmid).isdigit():
+                continue  # an incomplete link row would pollute the ranking (or crash the sort)
             core_projects_by_pmid.setdefault(str(pmid), set()).add(core)
         offset += len(rows)
         if offset < total:
@@ -347,9 +347,10 @@ def main(argv: list[str]) -> int:
         else:
             print(__doc__, file=sys.stderr)
             return 2
-    except (requests.RequestException, ValueError) as exc:
-        # ValueError covers a 200-OK non-JSON body (json decode failure),
-        # which would otherwise escape as an uncaught traceback.
+    except (requests.RequestException, json.JSONDecodeError) as exc:
+        # JSONDecodeError covers a 200-OK non-JSON body (requests' variant
+        # subclasses it); kept narrow so an internal logic bug still
+        # tracebacks instead of masquerading as a transport error.
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 1
     json.dump(out, sys.stdout, indent=1)

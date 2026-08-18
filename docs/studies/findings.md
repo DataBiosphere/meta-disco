@@ -7,8 +7,12 @@ read-out.
 
 ## The test set is not what we expected
 
-- Azul (`accessible: true`) returned **12 workspaces**, not the 13 recorded in
-  ADR-0001 (snapshot drift; not re-reconciled this round).
+- Azul filtered to `accessible: true` returned **12 workspaces**, not the 13
+  recorded in ADR-0001 (snapshot drift; not re-reconciled this round).
+  Reproduction note: this survey predates the adapter rework — today's
+  `datasets` subcommand returns the full unfiltered catalog (see
+  anvil-phs-marker-papers.md for the all-studies sweep); the 12-workspace
+  scope here was the then-current `accessible=true` query.
 - Only **3 distinct phs accessions** exist among them: phs003018 (both ENCORE
   workspaces), phs003472 (IGVF Mouse R1), phs003224 (NIA CARD Coriell). The
   other 8 workspaces have `registered_identifier` of `"none"`/null — T2T,

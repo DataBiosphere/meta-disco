@@ -130,7 +130,9 @@ survey question is what this API reliably populates.
 ```yaml
 phsid: phs000424
 title: <dbGaP study title>
-anvil_datasets: [<AnVIL workspace titles, if this study maps to any>]
+anvil_datasets: [<AnVIL workspace titles — the same values as the studies
+                  output's datasets[] field; the dossier key keeps the
+                  platform-specific name>]
 publications:
   - pmid: "23715323"
     pmcid: null        # when known
@@ -152,7 +154,9 @@ dbgap_record:
 sources_checked:
   # Use these canonical source slugs (one entry per source tried, in order):
   # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir,
-  # ncpi-dataset-catalog, reporter, azul, pubmed-title-search, websearch
+  # ncpi-dataset-catalog, reporter, azul, pubmed-title-search, websearch.
+  # (pubmed-esummary is a valid provenance slug on publications — it marks
+  # the PMID→title resolution step, not a discovery source.)
   - source: gap-exchange
     outcome: <hit | miss | partial — one line on what it gave>
   - source: dbgap-study-page
@@ -168,7 +172,8 @@ sources_checked:
 notes: <anything surprising, one short paragraph max>
 ```
 
-For a dataset with no phs accession (Azul `registered_identifier` is
-`"none"`), there is no anchor: write the dossier named after the workspace
-title instead, note the missing accession, and run only the
-publication-fallback sources.
+For a dataset with no phs accession (`phsid: null` in the adapter output —
+these are listed under `no_phsid_datasets` by the `studies` subcommand),
+there is no anchor: write the dossier named after the dataset title
+instead, note the missing accession, and run only the publication-fallback
+sources.

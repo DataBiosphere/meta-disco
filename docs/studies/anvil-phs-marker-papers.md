@@ -7,7 +7,7 @@ results of 2026-08-15/17. See `findings.md` for methodology and
 per-source behavior; the open-access workspaces additionally have full
 dossiers in this directory.
 
-- **74 unique phs accessions** (each hosting one study; ADR-0001 recorded 78 — snapshot drift); 13 workspaces carry no phs accession and take the fallback path.
+- **74 unique phs accessions** (each hosting one study; ADR-0001 recorded 78 — snapshot drift); 13 workspaces carry no phs accession and take the fallback path. When regenerating, check the `studies` output's `invalid_records` is empty before trusting these totals — shape-validation exclusions would silently lower them.
 - **42/74 studies have a non-empty dbGaP Selected Publications list** (GapExchange XML).
 - The **lead PMID** below is the first Selected Publication — observed to be the marker paper for cohort/project-style studies (GTEx, ClinSeq, MEC), but for sequencing-center studies (e.g. Mendelian Genomics centers) the list opens with individual result papers, so the lead is a *candidate*, not a confirmed marker. `role` confirmation is Epic 2 work.
 
@@ -93,7 +93,8 @@ dossiers in this directory.
 The 12 CCDG studies with empty Selected Publications lists *known at the
 time of this pass* (2026-08-15, before the sweep grew to 74 studies) were
 run through the grant channel (study page attribution → grant serials →
-`reporter`). Four further empty CCDG-titled studies surfaced in the
+`reporter`). Four further empty CCDG-program studies (CCDG in the study
+title or, for phs001227, in its workspace names) surfaced in the
 regenerated table and have **not** been probed by either the grant or
 cohort-name channel: phs001227, phs001913, phs002205, phs002726.
 Outcome: **the channel resolves but does not isolate cohort papers**:
