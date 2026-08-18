@@ -189,7 +189,12 @@ def _fhir_study_index(phsids: list[str]) -> dict[str, dict]:
                         display = c.get("valueCoding", {}).get("display")
                         if isinstance(display, str):
                             consents.add(display)
-                index[sid] = {"title": res.get("title"), "consents": consents}
+                # Normalize the title at the boundary: the output contract is
+                # str-or-null, so a non-string or whitespace-only value
+                # becomes None here rather than leaking through.
+                title = res.get("title")
+                title = title.strip() if isinstance(title, str) else None
+                index[sid] = {"title": title or None, "consents": consents}
             url = next((ln.get("url") for ln in bundle.get("link", []) if ln.get("relation") == "next"), None)
             params = None
     return index
