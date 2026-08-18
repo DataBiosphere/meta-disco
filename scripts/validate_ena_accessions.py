@@ -2,21 +2,24 @@
 """Validate stored FASTQ classifications against ENA metadata.
 
 Cross-references the classification output with the European Nucleotide
-Archive record for every FASTQ whose name carries a run accession
-([ESD]RRnnnnnn), which the join also verifies resolves.
+Archive record for each record carrying a run accession — the stored
+``archive_accession`` field when present, else one parsed from the file
+name. Accessions that fail to resolve at ENA are reported as api_errors,
+not validated.
 
 What each comparison means today (#330):
-- platform — the meaningful check: our value is byte-derived (read-name
-  grammar), ENA's is submitter-declared; two independent routes to the
-  same fact.
+- platform — the meaningful check: the stored value was derived from the
+  file's read-name grammar at classification time, ENA's is
+  submitter-declared; two independent routes to the same fact.
 - modality / assay — reported, but expected to score unknown-by-design
   under current rules: FASTQ modality/assay is not recoverable from
   content (the content ceiling), so our side is a sentinel. The
   comparisons are wired now so they activate once import work fills
   those dimensions.
-- Circularity rule: ENA may only validate modality/assay values that
-  were imported from a DIFFERENT source (e.g. the HPRC Catalog or a
-  study's methods paper) — never values imported from ENA itself.
+- Circularity policy (stated here, NOT yet enforced in code): ENA should
+  only validate modality/assay values that were imported from a
+  DIFFERENT source (e.g. the HPRC Catalog or a study's methods paper) —
+  never values imported from ENA itself.
 
 Usage:
     python scripts/validate_ena_accessions.py -i output/anvil/<run>/fastq_classifications.json
@@ -27,21 +30,28 @@ Output saved to: output/anvil/ena_validation_results.json
 import argparse
 import json
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
 
+from meta_disco.models import field_status, field_value
 from meta_disco.output_utils import find_latest_run
 from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
 
 ENA_API = "https://www.ebi.ac.uk/ena/portal/api/filereport"
 FIELDS = "run_accession,instrument_platform,library_strategy,library_source"
-# No trailing \b: names like ERR3988887_1.fastq.gz put a word character
-# (the underscore) right after the digits, which \b rejects.
-ACCESSION_RE = re.compile(r"\b([ESD]RR\d{6,})(?!\d)")
-_SENTINEL_STATUSES = {"not_classified", "not_applicable", "conflict"}
+# Boundaries chosen for real naming: ERR3988887_1.fastq.gz has a word char
+# (underscore) right after the digits, so no trailing \b; HG002_ERR123456
+# style prefixes put an underscore *before* the accession, so the leading
+# guard rejects only letters/digits (an embedded ...XERR123456 is not an
+# accession), not underscores. Greedy \d{6,} consumes the whole digit run.
+ACCESSION_RE = re.compile(r"(?<![A-Za-z0-9])([ESD]RR\d{6,})")
+# Statuses that mean "our side committed nothing" ("" = status absent).
+_SENTINEL_STATUSES = {"not_classified", "not_applicable", "conflict", ""}
 
 
 def extract_accession(rec: dict) -> str | None:
@@ -54,21 +64,28 @@ def extract_accession(rec: dict) -> str | None:
 
 
 def our_field(rec: dict, field: str) -> tuple[str, str]:
-    """(value, status) for one dimension, tolerating the legacy flat shape."""
-    c = rec.get("classifications")
-    if isinstance(c, dict):
-        f = c.get(field) or {}
-        status = f.get("status") or ""
-        value = f.get("value") or ""
-        return str(value), str(status)
-    value = rec.get(field) or ""
-    return str(value), ("classified" if value else "")
+    """(value, status) for one dimension, via the canonical models readers.
+
+    A non-string value (schema-invalid drift) reads as uncommitted so the
+    verdict scores it unknown rather than a bogus mismatch.
+    """
+    value = field_value(rec, field)
+    status = field_status(rec, field)
+    if not isinstance(value, str):
+        return "", str(status or "")
+    return value, str(status or "")
+
+
+# One pooled session for the whole run: ~7K calls to the same host would
+# otherwise each pay a fresh TLS handshake. Pool size is raised to match
+# --workers in validate_against_ena().
+_session = requests.Session()
 
 
 def fetch_ena_metadata(acc: str) -> dict | None:
     """Fetch metadata for a single accession from ENA API."""
     try:
-        resp = requests.get(
+        resp = _session.get(
             ENA_API,
             params={"accession": acc, "result": "read_run", "fields": FIELDS},
             timeout=10,
@@ -108,9 +125,15 @@ def validate_against_ena(
         print(f"Limiting to first {limit} files", flush=True)
 
     print(f"Using {workers} parallel workers", flush=True)
+    # Size the shared session's pool to the worker count so threads reuse
+    # keep-alive connections instead of serializing on the default pool.
+    adapter = HTTPAdapter(pool_connections=workers, pool_maxsize=workers)
+    _session.mount("https://", adapter)
 
-    # Results tracking. "unknown" = our side is a sentinel (nothing committed),
-    # excluded from both match and mismatch (#330; same policy direction as #329).
+    # Results tracking. "unknown" = our side committed nothing (sentinel or
+    # absent status) OR, assay only, ENA's strategy has no mapping into our
+    # vocabulary. Unknown is excluded from both match and mismatch (#330;
+    # same policy direction as #329).
     results = {
         "platform_match": 0,
         "platform_mismatch": 0,
@@ -159,14 +182,14 @@ def validate_against_ena(
 
         result: dict = {"error": False}
 
-        def verdict(dim: str, ours: str, status: str, expected: str | None, detail: dict) -> None:
-            if not ours or status in _SENTINEL_STATUSES or status == "":
+        def verdict(dim: str, ours: str, status: str, expected: str | None, detail: dict, prefix: bool = False) -> None:
+            if not ours or status in _SENTINEL_STATUSES:
                 result[dim] = "unknown"
                 return
             if expected is None:
                 result[dim] = "unknown"  # nothing comparable on the ENA side
                 return
-            matched = ours == expected if dim != "modality" else ours.startswith(expected)
+            matched = ours.startswith(expected) if prefix else ours == expected
             result[dim] = "match" if matched else "mismatch"
             if not matched:
                 result[f"{dim}_detail"] = {
@@ -180,11 +203,15 @@ def validate_against_ena(
         our_platform, platform_status = our_field(rec, "platform")
         verdict("platform", our_platform.upper(), platform_status, ena_platform, {"ena": ena_platform})
 
-        expected_modality = (
-            "transcriptomic"
-            if (ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"])
-            else "genomic"
-        )
+        # No default: when ENA declares neither source nor strategy there is
+        # no evidence to compare against, so modality scores unknown rather
+        # than being force-compared to a guessed "genomic".
+        if not ena_source and not ena_strategy:
+            expected_modality = None
+        elif ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"]:
+            expected_modality = "transcriptomic"
+        else:
+            expected_modality = "genomic"
         our_modality, modality_status = our_field(rec, "data_modality")
         verdict(
             "modality",
@@ -192,10 +219,12 @@ def validate_against_ena(
             modality_status,
             expected_modality,
             {"ena_source": ena_source, "ena_strategy": ena_strategy, "expected": expected_modality},
+            prefix=True,
         )
 
         # Dormant until import fills assay (#330): activates the moment our
-        # side holds concrete values. Circularity rule in the module docstring.
+        # side holds concrete values. Circularity policy (unenforced) in the
+        # module docstring.
         our_assay, assay_status = our_field(rec, "assay_type")
         expected_assay = ENA_LIBRARY_STRATEGY_MAP.get(ena_strategy)
         verdict(
@@ -260,10 +289,11 @@ def validate_against_ena(
     print("=" * 60)
     print("FULL ENA VALIDATION RESULTS")
     print("=" * 60)
+    rate = completed / elapsed if elapsed > 0 else 0.0
     print(f"Total files with ENA accession: {len(with_acc):,}")
     print(f"Successfully validated:         {n:,}")
     print(f"API errors (no data):           {results['api_errors']:,}")
-    print(f"Time elapsed:                   {elapsed:.1f}s ({len(with_acc) / elapsed:.1f} files/sec)")
+    print(f"Time elapsed:                   {elapsed:.1f}s ({rate:.1f} files/sec)")
     print()
 
     for dim, label in (("platform", "PLATFORM"), ("modality", "MODALITY"), ("assay", "ASSAY")):
@@ -291,7 +321,16 @@ def validate_against_ena(
         json.dump(
             {
                 "metadata": {
+                    "input": str(input_path),
                     "total_files": len(with_acc),
+                    # Population definition (#330): stored archive_accession
+                    # field OR name-parsed — a superset of the pre-2026-08
+                    # stored-field-only population, so counts are not
+                    # directly comparable with the 2026-01 artifact.
+                    "accession_source": {
+                        "stored_field": sum(1 for r in with_acc if r.get("archive_accession")),
+                        "name_parsed": sum(1 for r in with_acc if not r.get("archive_accession")),
+                    },
                     "validated": n,
                     "api_errors": results["api_errors"],
                     "elapsed_seconds": elapsed,
@@ -341,7 +380,14 @@ def main():
     )
     args = parser.parse_args()
 
-    input_path = args.input or find_latest_run(Path("output/anvil")) / "fastq_classifications.json"
+    if args.input:
+        input_path = args.input
+    else:
+        try:
+            input_path = find_latest_run(Path("output/anvil")) / "fastq_classifications.json"
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
     validate_against_ena(
         input_path,
         args.output,
