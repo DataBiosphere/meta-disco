@@ -313,10 +313,12 @@ def reporter(grant_serials: str) -> dict:
         resp = _session.post(REPORTER_PUBS_URL, json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
-        # Defensive: a missing/null/non-int total stays None — the loop then
-        # runs until a page comes back empty instead of comparing int < None.
+        # Defensive: only an int meta.total is kept (and a later page cannot
+        # clobber a known total back to None — same policy as datasets()).
+        # With no int total ever seen, the loop runs until an empty page.
         raw_total = data.get("meta", {}).get("total")
-        total = raw_total if isinstance(raw_total, int) else None
+        if isinstance(raw_total, int):
+            total = raw_total
         rows = data.get("results", [])
         if not rows:
             break
