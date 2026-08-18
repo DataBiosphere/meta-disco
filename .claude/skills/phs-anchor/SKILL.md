@@ -10,7 +10,11 @@ Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 
 The workflow's input list comes from `fetch_phs.py studies`: one record per
 distinct phsid — `{phsid, description, datasets[], consent_group[],
-descriptions_differ}`. Terminology is deliberately adapter-agnostic: a
+descriptions_differ}`. Cache it locally for inspection at
+`data/anvil/anvil_studies.json` (gitignored, like the pipeline's file
+metadata; regenerate with `python3 .claude/skills/phs-anchor/fetch_phs.py
+studies > data/anvil/anvil_studies.json` — every run refetches the live
+Azul catalog, so the file is a dated snapshot, not an input). Terminology is deliberately adapter-agnostic: a
 **study** (the phs anchor — the general concept) has one or more
 **datasets**, the platform's deposit unit. In AnVIL a dataset is a Terra
 workspace (Azul's `datasets[].title`) — a Broad convention that partitions
