@@ -61,7 +61,8 @@ appear there as text).
 The `studies` subcommand hoists workspace descriptions to study level.
 Measured 2026-08-17 on the live snapshot: grouping the fully-paginated
 unfiltered `datasets` output by phsid gave 30 multi-workspace studies, of
-which 27 carried byte-identical (stripped) descriptions across all their
+which 27 carried descriptions identical after stripping leading/trailing
+whitespace across all their
 workspaces; the 3 exceptions were blank/"[Description currently not
 available]" placeholders plus one study (phs002502) with two near-identical
 variants. Hence the hoist policy: longest non-placeholder description wins,

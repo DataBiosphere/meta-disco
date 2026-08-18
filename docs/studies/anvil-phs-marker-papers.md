@@ -129,15 +129,17 @@ from the dbGaP study titles and the dataset records (descriptions named
 WUCADS, the NUgene biobank, and the Figtree/BioHeart workspaces named
 BioHEART). Result: **12/16 studies have a marker candidate** (11 firm
 candidates + ATVB retained with a reproducibility caveat); unresolved:
-Cleveland GeneBank, Autism AFS, WUCADS, NUgene. All are title/name
-matches — role confirmation by reading is Epic 2.
+Cleveland GeneBank, Autism AFS, WUCADS, NUgene. Candidate identities were
+subsequently checked against study records in the abstract verification
+pass below (which caught and corrected one mismatch, phs002205); role
+confirmation by reading full papers is Epic 2.
 
 | phs | cohort | candidate PMID (year) — title | strength |
 | --- | --- | --- | --- |
 | phs001398 | BRAVE | 25930055 (2015) — The Bangladesh Risk of Acute Vascular Events (BRAVE) Study: objectives and design | strong — design paper |
 | phs001487 | TAICHI | 26982883 (2016) — Genetics of Coronary Artery Disease in Taiwan: A Cardiometabochip Study by the Taichi Consortium | strong — consortium paper |
 | phs001579 | METSIM | 28119442 (2017) — The Metabolic Syndrome in Men study: a resource for studies of metabolic and cardiovascular diseases | strong — resource paper |
-| phs001592 | ATVB (Italian) | 12615788 (2003) — early ATVB Italian Study Group genetics paper | unclear — 2026-08-15 candidate; the rerun's 5 queries did not re-surface it |
+| phs001592 | ATVB (Italian) | 12615788 (2003) — early ATVB Italian Study Group genetics paper | unclear role, cohort abstract-verified — the abstract's cohort (1210 first-MI survivors <45, nationwide Italian case-control + 1210 matched controls) matches the deposit; but it is an association paper, not a design paper, and the rerun's 5 queries did not re-surface it |
 | phs001642 | IBD (Broad/Daly) | 42180385 (2026) — Exome sequencing directly implicates 68 genes in inflammatory bowel disease | candidate — unread; program-scale flagship |
 | phs001871 | Cleveland Clinic GeneBank | — | none — 5 queries; only papers *using* GeneBank samples surfaced, no cohort-profile paper |
 | phs001880 | Emory (EmCAB) | 29288185 (2017) — Cohort profile: the Emory Cardiovascular Biobank (EmCAB) | strong — cohort profile |
@@ -148,7 +150,7 @@ matches — role confirmation by reading is Epic 2.
 | phs004430 | Autism AFS (NYGC) | — | none — 2 queries; cohort identity ("AFS") not resolvable from the title or dataset record, leads exhausted |
 | phs001227 | WUCADS (WashU CAD) | — | none — 3 queries; "WUCADS" absent from PubMed, cohort apparently undescribed in the literature |
 | phs001913 | NUgene (Northwestern) | — | none — 3 queries; NUgene appears only as a sample source in 12 papers, no biobank-description paper found |
-| phs002205 | Broad IBD (Alm) | 31142855 (2019) — Multi-omics of the gut microbial ecosystem in inflammatory bowel diseases | candidate — iHMP/IBDMDB flagship; whether the alm_gmc deposit is IBDMDB data is unverified |
+| phs002205 | GMbC (Alm) | 33794144 (2021) — Elevated rates of horizontal gene transfer in the industrialized human microbiome | candidate — GMbC flagship results paper (Groussin/Alm, Cell); no dedicated cohort-profile paper found. Previous candidate 31142855 (iHMP/IBDMDB) was a verification-caught mismatch: the study description names the Global Microbiome Conservancy (gmc = GMbC) and links companion study phs002235 |
 | phs002726 | BioHEART-CT | 31537558 (2019) — Biobanking for discovery of novel cardiovascular biomarkers…: protocol for the… BioHEART-CT cohort study | strong — protocol paper |
 
 Queries recorded (verbatim; ✓ marks the query that surfaced the candidate):
@@ -167,7 +169,7 @@ Queries recorded (verbatim; ✓ marks the query that surfaced the candidate):
 - phs004430 (all missed): `autism[tiab] AND AFS[tiab]`; `autism[Title] AND family[Title] AND study[Title] AND sequencing[tiab]`
 - phs001227 (all missed): `WUCADS[tiab]`; `Washington[tiab] AND coronary[Title] AND artery[Title] AND disease[Title] AND ancestry[tiab]`; `coronary[Title] AND artery[Title] AND disease[Title] AND African[tiab] AND ancestry[tiab] AND sequencing[tiab]`
 - phs001913 (all missed as marker): `NUgene[tiab]`; `NUgene[tiab] AND biobank[tiab]`; `NUgene[Title]`
-- phs002205: `microbiome[Title] AND inflammatory[Title] AND bowel[Title] AND cohort[tiab]` (miss); `Alm[Author] AND microbiome[tiab] AND IBD[tiab]` (miss); ✓ `gut[Title] AND microbial[Title] AND ecosystem[Title] AND inflammatory[Title]`
+- phs002205: `microbiome[Title] AND inflammatory[Title] AND bowel[Title] AND cohort[tiab]` (miss); `Alm[Author] AND microbiome[tiab] AND IBD[tiab]` (miss); `gut[Title] AND microbial[Title] AND ecosystem[Title] AND inflammatory[Title]` (surfaced 31142855 — later verification-caught as a cohort mismatch); after the description identified GMbC: `Global[Title] AND Microbiome[Title] AND Conservancy[tiab]` (1 hit, a news piece); ✓ `Groussin[Author] AND industrialized[tiab] AND microbiome[tiab]`
 - phs002726: `BioHEART[tiab]` (27 hits, protocol paper buried); `BioHEART[tiab] AND rationale[tiab]` (0); `BioHEART[Title] AND study[Title]` (scaffold-trial noise); ✓ `BioHEART-CT[tiab] AND protocol[tiab]`
 
 Channel ranking that emerges for center-style deposits: cohort-name search
@@ -177,6 +179,44 @@ lessons: recency-sorted esearch buries decades-old markers under the
 cohort's ongoing output (a date-range term like `2000:2000[dp]` recovers
 them), and acronym collisions ("Bioheart" scaffold trials, tai-chi
 papers) make a hyphenated/context-qualified form the better query.
+
+### Abstract verification pass (2026-08-18)
+
+Every candidate's PubMed abstract was fetched and checked against the
+study's dbGaP/dataset description on identifying facts (cohort name,
+enrollment, geography, institution, design). This is identity
+verification only — role confirmation by reading full papers stays
+Epic 2.
+
+**Abstract-verified** (the abstract's cohort facts match the study
+record): BRAVE (~8000 Bangladeshi first-MI cases + matched controls,
+Cambridge-led — the dataset description names the same study), TAICHI
+(8556 Taiwanese CAD cases/controls, TAICHI Consortium), METSIM (10,197
+Finnish men, Kuopio), EmCAB (~7000 Emory catheterisation patients,
+Atlanta), Partners (>30,000-subject Boston biobank launched 2010), GAPP
+(1,333 healthy 25–41-year-olds, Liechtenstein; title verbatim in the
+dbGaP study title), PEGASUS-TIMI 54 (the 21,000-patient ticagrelor
+trial), MEC (215,251 adults, Hawaii/LA, five ethnic groups — the phs003499
+dbGaP description names the University of Hawaii/USC Multiethnic Cohort
+and links phs002183), BioHEART-CT (5000 CTCA patients, Sydney, Figtree
+senior author matching the workspace name), NCGENES2 (both papers: the
+UNC pediatric first-line-ES RCT and its 101-participant sequencing-arm
+results), and ATVB (cohort verified, role still unclear — see table).
+
+**Mismatch caught and corrected**: phs002205 — the previous candidate
+31142855 (iHMP/IBDMDB) describes a 132-subject longitudinal Boston-area
+IBD cohort, but the study description names the **Global Microbiome
+Conservancy** (diverse/indigenous populations worldwide, gut microbiome +
+human WGS/WES, companion microbiome study phs002235). Replaced with the
+GMbC flagship 33794144; the workspace's `ibd_alm` tokens reflect the
+Broad IBD working group and the Alm lab, not the cohort.
+
+**Consistent but not identity-proof**: IBD-Daly 42180385 (Daly/Broad
+authorship and IBD exomes match the program; whether this deposit's
+samples are in the 86,213-case meta-analysis is not determinable from the
+abstract). **Unverifiable**: ALSCompute 35115730 (the abstract describes
+Answer ALS precisely, but the workspace description names no source
+consortium, so the collection's identity remains open).
 
 ## Workspaces with no phs accession
 
