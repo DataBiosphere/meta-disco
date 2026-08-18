@@ -203,6 +203,31 @@ abstract). **Unverifiable**: ALSCompute 35115730 (the abstract describes
 Answer ALS precisely, but the workspace description names no source
 consortium, so the collection's identity remains open).
 
+## Fallback pass over the remaining empty-list studies (2026-08-18)
+
+The 13 empty-list studies not covered by the CCDG cohort-name pass or a
+dossier had stopped at source 1 — the fallback chain (dataset-record
+leads → PubMed title/name search, ≤5 recorded queries per study) had
+never run for them. Result: **10/13 have a marker candidate** (8 strong,
+SouthSeq as a candidate, P3EGS covered by its program marker);
+unresolved: ALS Compute, PrenatalSEQ, and the phs004000 pilot.
+
+| phs | program/cohort | candidate PMID (year) — title | strength |
+| --- | --- | --- | --- |
+| phs001272 | Broad CMG | [22628075](https://pubmed.ncbi.nlm.nih.gov/22628075/) (2012) — The Centers for Mendelian Genomics: a new large-scale initiative to identify the genes underlying rare Mendelian conditions; also [35148959](https://pubmed.ncbi.nlm.nih.gov/35148959/) (2022) decade retrospective | strong — CMG program markers (program-wide; no Broad-specific description paper surfaced) |
+| phs001616 | eMERGEseq panel | [31447099](https://pubmed.ncbi.nlm.nih.gov/31447099/) (2019) — Harmonizing Clinical Sequencing and Interpretation for the eMERGE III Network | strong — the panel's design paper |
+| phs002041 | Genomic Psychiatry Cohort (WGSPD1) | [23650244](https://pubmed.ncbi.nlm.nih.gov/23650244/) (2013) — The genomic psychiatry cohort: partners in discovery | strong — cohort marker; the study description names the GPC |
+| phs002206 | Genomic Answers for Kids (GA4K) | [35305867](https://pubmed.ncbi.nlm.nih.gov/35305867/) (2022) — Genomic answers for children: Dynamic analyses of >1000 pediatric rare disease genomes | strong — program flagship |
+| phs002307 | SouthSeq (CSER) | [34930662](https://pubmed.ncbi.nlm.nih.gov/34930662/) (2022) — Genome sequencing as a first-line diagnostic test for hospitalized infants | candidate — surfaced by the SouthSeq full-text term; title does not name the cohort |
+| phs002324 | P3EGS (CSER) | — | no dedicated marker; the CSER consortium marker [30193136](https://pubmed.ncbi.nlm.nih.gov/30193136/) covers the program (2 queries: only perspective/payer papers) |
+| phs003181 | NABEC long-read | [39764002](https://pubmed.ncbi.nlm.nih.gov/39764002/) (2024) — Long-read sequencing of hundreds of diverse brains provides insight into the impact of structural variation… | strong candidate — matches the deposit's assay (ONT long-read on NABEC brains) |
+| phs003184 | ALS Compute (GRU) | — | unresolved (1 query) — description names no source consortium; the sibling ALSCompute workspaces' Answer ALS candidate may apply |
+| phs003193 | FGC PrenatalSEQ | — | unresolved (2 queries) — only a case report citing PrenatalSEQ; no consortium marker found |
+| phs003200 | MAS-ISO-seq | [37291427](https://pubmed.ncbi.nlm.nih.gov/37291427/) (2024) — High-throughput RNA isoform sequencing using programmed cDNA concatenation | strong — the method paper; title matches the dbGaP study title |
+| phs003444 | DepMap | [28753430](https://pubmed.ncbi.nlm.nih.gov/28753430/) (2017) — Defining a Cancer Dependency Map | strong — program marker |
+| phs003821 | OurHealth | [41545632](https://pubmed.ncbi.nlm.nih.gov/41545632/) (2026) — The OurHealth Study: A digital genomic cohort for cardiometabolic risk mechanisms in US South Asians | strong — cohort design paper matching the dbGaP title |
+| phs004000 | Coriell complex-chromosomal pilot | — | unresolved (1 query) — 16-sample pilot per its description; no publication found |
+
 ## Workspaces with no phs accession
 
 These have no dbGaP anchor; the open-access ones among them have dossiers
