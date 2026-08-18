@@ -155,6 +155,8 @@ confirmation by reading full papers is Epic 2.
 | phs002205 | GMbC (Alm) | [33794144](https://pubmed.ncbi.nlm.nih.gov/33794144/) (2021) — Elevated rates of horizontal gene transfer in the industrialized human microbiome | candidate — GMbC flagship results paper (Groussin/Alm, Cell); no dedicated cohort-profile paper found. Previous candidate 31142855 (iHMP/IBDMDB) was a verification-caught mismatch: the study description names the Global Microbiome Conservancy (gmc = GMbC) and links companion study phs002235 |
 | phs002726 | BioHEART-CT | [31537558](https://pubmed.ncbi.nlm.nih.gov/31537558/) (2019) — Biobanking for discovery of novel cardiovascular biomarkers…: protocol for the… BioHEART-CT cohort study | strong — protocol paper |
 
+### Channel ranking and search lessons
+
 Channel ranking that emerges for center-style deposits: cohort-name search
 ≫ grant channel ≈ Selected Publications (both empty/uninformative). The
 skill's SKILL.md fallback ordering already reflects this pattern. Rerun
