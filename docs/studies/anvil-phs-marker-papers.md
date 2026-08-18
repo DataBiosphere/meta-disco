@@ -95,9 +95,11 @@ time of this pass* (2026-08-15, before the sweep grew to 74 studies) were
 run through the grant channel (study page attribution → grant serials →
 `reporter`). Four further empty CCDG-program studies (CCDG in the study
 title or, for phs001227, in its workspace names) surfaced in the
-regenerated table and have **not** been probed by either the grant or
-cohort-name channel: phs001227, phs001913, phs002205, phs002726.
-Outcome: **the channel resolves but does not isolate cohort papers**:
+regenerated table: phs001227, phs001913, phs002205, phs002726 — probed by
+the cohort-name channel in the 2026-08-18 rerun below (BioHEART resolved,
+IBD/Alm candidate, WUCADS and NUgene unresolved), still un-probed by the
+grant channel. Outcome of the 12-study grant probe: **the channel
+resolves but does not isolate cohort papers**:
 
 - 6/12 study pages list **no grant numbers at all** in their fetched
   attribution HTML (phs001398, phs001579, phs001880, phs002018, phs002236,
@@ -117,52 +119,93 @@ study-specific marker paper. The working fallback is a **cohort-name
 search** — these deposits wrap long-running named cohorts whose founding
 papers predate the CCDG deposit. Run below.
 
-## Cohort-name search pass over the same 12 studies (2026-08-15)
+## Cohort-name search pass (rerun 2026-08-18 under the query discipline)
 
-PubMed searches built from each study title's cohort name (unquoted
-term-words, per findings.md's caveat; some queries needed refinement — the
-bare acronym "TAICHI" drowns in tai-chi exercise papers). Result: **9/12
-studies got a marker candidate**, most of them explicit cohort-design
-papers. All are title/name matches — role confirmation by reading is
-Epic 2.
+Originally run 2026-08-15 over the 12 then-known empty-list CCDG studies;
+rerun 2026-08-18 under SKILL.md's query discipline — every query recorded
+verbatim (hits and misses alike), ≤5 queries per study — and extended to
+the 4 empty-CCDG newcomers the regenerated table surfaced. Leads came
+from the dbGaP study titles and the dataset records (descriptions named
+WUCADS, the NUgene biobank, and the Figtree/BioHeart workspaces named
+BioHEART). Result: **12/16 studies have a marker candidate** (11 firm
+candidates + ATVB retained with a reproducibility caveat); unresolved:
+Cleveland GeneBank, Autism AFS, WUCADS, NUgene. All are title/name
+matches — role confirmation by reading is Epic 2.
 
 | phs | cohort | candidate PMID (year) — title | strength |
 | --- | --- | --- | --- |
 | phs001398 | BRAVE | 25930055 (2015) — The Bangladesh Risk of Acute Vascular Events (BRAVE) Study: objectives and design | strong — design paper |
 | phs001487 | TAICHI | 26982883 (2016) — Genetics of Coronary Artery Disease in Taiwan: A Cardiometabochip Study by the Taichi Consortium | strong — consortium paper |
 | phs001579 | METSIM | 28119442 (2017) — The Metabolic Syndrome in Men study: a resource for studies of metabolic and cardiovascular diseases | strong — resource paper |
-| phs001592 | ATVB (Italian) | 12615788 (2003) — early ATVB Italian Study Group genetics paper | unclear — no dedicated design paper surfaced |
+| phs001592 | ATVB (Italian) | 12615788 (2003) — early ATVB Italian Study Group genetics paper | unclear — 2026-08-15 candidate; the rerun's 5 queries did not re-surface it |
 | phs001642 | IBD (Broad/Daly) | 42180385 (2026) — Exome sequencing directly implicates 68 genes in inflammatory bowel disease | candidate — unread; program-scale flagship |
-| phs001871 | Cleveland Clinic GeneBank | — | none — only per-association papers surfaced |
+| phs001871 | Cleveland Clinic GeneBank | — | none — 5 queries; only papers *using* GeneBank samples surfaced, no cohort-profile paper |
 | phs001880 | Emory (EmCAB) | 29288185 (2017) — Cohort profile: the Emory Cardiovascular Biobank (EmCAB) | strong — cohort profile |
 | phs002018 | Partners Biobank | 26784234 (2016) — Building the Partners HealthCare Biobank at Partners Personalized Medicine | strong — biobank description |
-| phs002236 | GAPP | 23299990 (2013) — Genetic and phenotypic determinants of blood pressure and other cardiovascular risk factors | strong — title matches the dbGaP study title verbatim |
+| phs002236 | GAPP | 23299990 (2013) — Genetic and phenotypic determinants of blood pressure and other cardiovascular risk factors (GAPP) | strong — title matches the dbGaP study title verbatim |
 | phs002243 | PEGASUS-TIMI 54 | 24655690 (2014) — Design and rationale for the Prevention of Cardiovascular Events… (PEGASUS-TIMI 54) trial | strong — trial design paper |
 | phs003499 | Multiethnic Cohort | 10695593 (2000) — A multiethnic cohort in Hawaii and Los Angeles: baseline characteristics | strong — same MEC marker as phs000220 (PAGE MEC) |
-| phs004430 | Autism AFS (NYGC) | — | none confirmed — cohort identity ("AFS") not resolvable from the title alone |
+| phs004430 | Autism AFS (NYGC) | — | none — 2 queries; cohort identity ("AFS") not resolvable from the title or dataset record, leads exhausted |
+| phs001227 | WUCADS (WashU CAD) | — | none — 3 queries; "WUCADS" absent from PubMed, cohort apparently undescribed in the literature |
+| phs001913 | NUgene (Northwestern) | — | none — 3 queries; NUgene appears only as a sample source in 12 papers, no biobank-description paper found |
+| phs002205 | Broad IBD (Alm) | 31142855 (2019) — Multi-omics of the gut microbial ecosystem in inflammatory bowel diseases | candidate — iHMP/IBDMDB flagship; whether the alm_gmc deposit is IBDMDB data is unverified |
+| phs002726 | BioHEART-CT | 31537558 (2019) — Biobanking for discovery of novel cardiovascular biomarkers…: protocol for the… BioHEART-CT cohort study | strong — protocol paper |
+
+Queries recorded (verbatim; ✓ marks the query that surfaced the candidate):
+
+- phs001398: ✓ `Bangladesh[Title] AND acute[Title] AND vascular[Title] AND events[Title]`
+- phs001487: ✓ `taichi[tiab] AND coronary[tiab]`
+- phs001579: ✓ `metabolic[Title] AND syndrome[Title] AND men[Title] AND resource[Title]`
+- phs001592 (all missed the 2003 candidate): `ATVB[tiab] AND Italian[tiab]`; `atherosclerosis[Title] AND thrombosis[Title] AND vascular[Title] AND biology[Title] AND Italian[tiab]`; `premature[Title] AND myocardial[Title] AND infarction[Title] AND Italian[tiab] AND design[tiab]`; `young[tiab] AND myocardial[tiab] AND infarction[tiab] AND Italian[tiab] AND polymorphisms[tiab]`; `prothrombotic[tiab] AND myocardial[tiab] AND infarction[tiab] AND young[tiab] AND Italian[tiab]`
+- phs001642: ✓ `exome[Title] AND sequencing[Title] AND inflammatory[Title] AND bowel[Title]`
+- phs001871 (all missed): `GeneBank[tiab] AND Cleveland[tiab]`; `GeneBank[tiab] AND catheterization[tiab]`; `Hazen[Author] AND GeneBank[tiab]`; `GeneBank[tiab] AND cohort[tiab] AND cardiovascular[tiab]`; `GeneBank[tiab] AND coronary[tiab]`
+- phs001880: ✓ `EmCAB[tiab]`
+- phs002018: `Partners[Title] AND biobank[Title]` (miss); `Partners[tiab] AND HealthCare[tiab] AND biobank[tiab]` (miss in top hits); ✓ `building[Title] AND partners[Title] AND biobank[Title]`
+- phs002236: ✓ `genetic[Title] AND phenotypic[Title] AND determinants[Title] AND blood[Title] AND pressure[Title]`
+- phs002243: ✓ `pegasus[tiab] AND ticagrelor[tiab] AND design[Title]`
+- phs003499: `multiethnic[Title] AND cohort[Title] AND Hawaii[tiab]` (132 hits, recency-sorted, marker buried); `… AND baseline[tiab] …` (31 hits, still buried); ✓ `multiethnic[Title] AND cohort[Title] AND Hawaii[tiab] AND 2000:2000[dp]`
+- phs004430 (all missed): `autism[tiab] AND AFS[tiab]`; `autism[Title] AND family[Title] AND study[Title] AND sequencing[tiab]`
+- phs001227 (all missed): `WUCADS[tiab]`; `Washington[tiab] AND coronary[Title] AND artery[Title] AND disease[Title] AND ancestry[tiab]`; `coronary[Title] AND artery[Title] AND disease[Title] AND African[tiab] AND ancestry[tiab] AND sequencing[tiab]`
+- phs001913 (all missed as marker): `NUgene[tiab]`; `NUgene[tiab] AND biobank[tiab]`; `NUgene[Title]`
+- phs002205: `microbiome[Title] AND inflammatory[Title] AND bowel[Title] AND cohort[tiab]` (miss); `Alm[Author] AND microbiome[tiab] AND IBD[tiab]` (miss); ✓ `gut[Title] AND microbial[Title] AND ecosystem[Title] AND inflammatory[Title]`
+- phs002726: `BioHEART[tiab]` (27 hits, protocol paper buried); `BioHEART[tiab] AND rationale[tiab]` (0); `BioHEART[Title] AND study[Title]` (scaffold-trial noise); ✓ `BioHEART-CT[tiab] AND protocol[tiab]`
 
 Channel ranking that emerges for center-style deposits: cohort-name search
 ≫ grant channel ≈ Selected Publications (both empty/uninformative). The
-skill's SKILL.md fallback ordering already reflects this pattern.
+skill's SKILL.md fallback ordering already reflects this pattern. Rerun
+lessons: recency-sorted esearch buries decades-old markers under the
+cohort's ongoing output (a date-range term like `2000:2000[dp]` recovers
+them), and acronym collisions ("Bioheart" scaffold trials, tai-chi
+papers) make a hyphenated/context-qualified form the better query.
 
 ## Workspaces with no phs accession
 
 These have no dbGaP anchor; the open-access ones among them have dossiers
 here with title-search-based publications. The three controlled-access
-no-phs workspaces were searched by cohort name (2026-08-17):
+no-phs workspaces were searched by cohort name (2026-08-17; rerun
+2026-08-18 with queries recorded, ✓ = surfacing query):
 
 - **ANVIL_CSER_NCGENES2_GRU** — resolved: PMID 34127041 (2021,
   clinical-utility trial design matching the workspace description) and
   PMID 41935954 (2026, "Exome sequencing early in outpatient evaluation in
-  NCGENES 2" results paper). Strong candidates.
+  NCGENES 2" results paper). Strong candidates. Queries: ✓ `NCGENES[tiab]`
+  (one query surfaced both).
 - **ANVIL_ALSCompute_Collection_HMB** — candidate with caveat: PMID
   35115730 (2022, "Answer ALS, a large-scale resource…"). The workspace
   description names no source consortium, so whether this collection is
-  Answer ALS data is unverified — role unclear.
-- **ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes** — unresolved: the
-  description's specific cohort (653 early MI/revascularization survivors
-  plus matched controls, Utah) surfaced only older Utah family-study
-  papers, none clearly describing this cohort.
+  Answer ALS data is unverified — role unclear. Queries:
+  ✓ `answer[Title] AND ALS[Title]`; `ALS[tiab] AND compute[tiab]` (miss —
+  unrelated computational papers).
+- **ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes** — unresolved after 5
+  recorded queries: the description's specific cohort (653 early
+  MI/revascularization survivors plus matched controls, Utah) surfaced
+  only older Utah family-study papers, none clearly describing this
+  cohort. Queries (all missed): `myocardial[Title] AND infarction[Title]
+  AND Utah[tiab]`; `premature[tiab] AND coronary[tiab] AND Utah[tiab] AND
+  families[tiab]`; `early[tiab] AND myocardial infarction[tiab] AND Salt
+  Lake City[tiab]`; `myocardial[tiab] AND infarction[tiab] AND
+  survivors[tiab] AND Utah[tiab]`; `coronary[tiab] AND disease[tiab] AND
+  Utah[tiab] AND pedigrees[tiab]`.
 
 Full list:
 

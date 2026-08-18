@@ -85,11 +85,14 @@ per-source hit rates, not just first-hit provenance.
    dataset title(s) and description prose for search leads: cohort and
    consortium names, acronym expansions, geography, disease and design
    terms. Extracting leads is agent judgment, not pattern matching, and
-   leads only seed the searches below — nothing from this record enters
-   the dossier as evidence.
+   leads only seed the searches below. Dataset-record facts may appear in
+   a dossier only with explicit provenance (this source's row, or a note
+   naming the record) and as non-authoritative context — never as the
+   sole justification for a metadata claim.
 9. **Cohort-name search** — the most productive fallback for center-style
-   deposits (resolved 9/12 empty-list CCDG studies and 2/3 no-phs
-   controlled workspaces in the 2026-08 survey). Many deposits are new
+   deposits (candidates for 12/16 empty-list CCDG-program studies and 2/3
+   no-phs controlled workspaces in the 2026-08 survey and its 2026-08-18
+   rerun). Many deposits are new
    wrappers around old, *named* cohorts whose founding paper predates the
    deposit. Recipe:
    - Extract the cohort name from the study title or description (e.g.
