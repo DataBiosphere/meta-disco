@@ -79,10 +79,14 @@ per-source hit rates, not just first-hit provenance.
    ranking signal — expect a large undifferentiated list. Resolve the
    top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
    <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
-8. **AnVIL dataset record**: `fetch_phs.py datasets` output for this study
-   — the description prose often names the underlying cohort and the
-   consortium/portal to search next; read it before crafting fallback
-   searches.
+8. **Dataset record** (slug `dataset-record`): the platform's dataset
+   record for this study — `fetch_phs.py datasets` output (in AnVIL,
+   served by Azul; the source is the record, not the index). Read the
+   dataset title(s) and description prose for search leads: cohort and
+   consortium names, acronym expansions, geography, disease and design
+   terms. Extracting leads is agent judgment, not pattern matching, and
+   leads only seed the searches below — nothing from this record enters
+   the dossier as evidence.
 9. **Cohort-name search** — the most productive fallback for center-style
    deposits (resolved 9/12 empty-list CCDG studies and 2/3 no-phs
    controlled workspaces in the 2026-08 survey). Many deposits are new
@@ -100,6 +104,13 @@ per-source hit rates, not just first-hit provenance.
      *objectives and design*, *rationale*, *resource*.
    - A hit is a *candidate* (provenance slug `pubmed-title-search`) — never
      assert the role without the title/description matching the study.
+   - Record every query actually run — on hits and misses alike — in this
+     source's `sources_checked` outcome line, so the search is
+     reproducible without re-deriving the leads.
+   - Cap this pass at ~5 queries per study. If nothing credible has
+     surfaced by then, record the study as unresolved with the queries
+     tried: an unresolved entry with an audit trail is a valid outcome
+     (accuracy over coverage), not a failure.
 10. **Last resort**: WebSearch.
 
 Do NOT use Entrez `db=gap` — E-utilities no longer exposes a dbGaP database
@@ -154,7 +165,8 @@ dbgap_record:
 sources_checked:
   # Use these canonical source slugs (one entry per source tried, in order):
   # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir,
-  # ncpi-dataset-catalog, reporter, azul, pubmed-title-search, websearch.
+  # ncpi-dataset-catalog, reporter, dataset-record, pubmed-title-search,
+  # websearch.
   # (pubmed-esummary is a valid provenance slug on publications — it marks
   # the PMID→title resolution step, not a discovery source.)
   - source: gap-exchange

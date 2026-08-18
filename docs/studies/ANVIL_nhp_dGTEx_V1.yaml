@@ -25,7 +25,7 @@ publications:
 secondary_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
-  - source: azul
+  - source: dataset-record
     outcome: hit — workspace present, accessible, registered_identifier null; description is dGTEx program prose (gene expression and regulation across development) — note it describes the program broadly, including the pediatric human arm, not the NHP arm specifically
   - source: pubmed-title-search
     outcome: hit — project paper plus a resource-paper candidate

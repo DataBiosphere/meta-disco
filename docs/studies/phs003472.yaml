@@ -90,6 +90,11 @@ sources_checked:
       variant-specific study), then a cliff to ≤4 grants — the
       linked-by-most-grants ranking isolates consortium/marker papers
       cleanly.
+  - source: dataset-record
+    outcome: >-
+      partial — no publication leads (description is study-level IGVF
+      prose), but the workspace title (IGVF Mouse R1) supplies the
+      organism context the dbGaP record lacks (see notes)
 notes: >-
   The AnVIL workspace is IGVF *Mouse* R1 while the dbGaP record never states
   an organism — a caution against inferring organism from the study anchor

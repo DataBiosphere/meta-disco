@@ -16,7 +16,7 @@ publications:
 secondary_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
-  - source: azul
+  - source: dataset-record
     outcome: hit — both workspaces present, accessible, registered_identifier null
   - source: pubmed-title-search
     outcome: partial — release-1 marker found; no release-2 marker paper surfaced (searched pangenome/reference title words)

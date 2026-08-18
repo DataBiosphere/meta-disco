@@ -56,6 +56,11 @@ sources_checked:
       including the ONT pipeline paper, confirming the grant link; but a
       single-grant study gives no grant-count ranking signal to isolate the
       marker among 417 papers
+  - source: dataset-record
+    outcome: >-
+      partial — no publication leads beyond the CARD program name (which
+      the title search already used); description restates the dbGaP
+      ONT/Coriell prose
 notes: >-
   Strong study-level facts despite no confirmed marker paper: organism Homo
   sapiens; sample type LCLs; platform Oxford Nanopore (ONT); assay long-read

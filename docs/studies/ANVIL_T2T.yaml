@@ -27,7 +27,7 @@ publications:
 secondary_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
-  - source: azul
+  - source: dataset-record
     outcome: hit — both workspaces present, accessible, registered_identifier "none"; data_modality [assembly, genotyping, whole genome]; description names the T2T consortium
   - source: pubmed-title-search
     outcome: hit — both marker papers found by title-word match
