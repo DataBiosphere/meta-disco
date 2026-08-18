@@ -70,8 +70,13 @@ def our_field(rec: dict, field: str) -> tuple[str, str]:
     A non-string value (schema-invalid drift) reads as uncommitted so the
     verdict scores it unknown rather than a bogus mismatch.
     """
-    value = field_value(rec, field)
-    status = field_status(rec, field)
+    try:
+        value = field_value(rec, field)
+        status = field_status(rec, field)
+    except ValueError:
+        # models' coherence check raises on an incoherent {value, status}
+        # pair — that drift also reads as uncommitted, not a crash.
+        return "", ""
     if not isinstance(value, str):
         return "", str(status or "")
     return value, str(status or "")
