@@ -1,0 +1,32 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is null for this workspace.
+phsid: null
+title: 1000 Genomes data in the PRIMED consortium data model
+anvil_datasets: [ANVIL_1000G_PRIMED_data_model]
+publications:
+  - pmid: "36055201"
+    pmcid: PMC9439720
+    doi: 10.1016/j.cell.2022.08.004
+    title: High-coverage whole-genome sequencing of the expanded 1000 Genomes Project cohort including 602 trios
+    year: 2022
+    journal: Cell
+    role: unclear
+    provenance: [pubmed-title-search]
+    note: >-
+      Marker for the underlying 1000G high-coverage data, not for this
+      workspace itself — the workspace is that data restructured into the
+      PRIMED consortium data model. No PRIMED-specific data paper found.
+pmc_citing_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: dataset-record
+    outcome: hit — workspace present, accessible, registered_identifier null; data_modality [genotyping]; description says it contains two 1000G callsets (phase 3 low-coverage of 2504 samples, high-coverage of 3202 samples)
+  - source: pubmed-title-search
+    outcome: partial — underlying-data marker only; nothing describing this derived workspace
+notes: >-
+  Derived workspace holding 1000G *callsets* (two of them, per the Azul
+  description), not the sequencing reads: organism Homo sapiens, DNA-only.
+  The high-coverage callset's marker is the Cell 2022 paper; the phase 3
+  low-coverage callset traces to the original 1000G publications (not
+  chased this round). A reminder that workspace ≠ study: some AnVIL
+  datasets are repackagings of another study's data.

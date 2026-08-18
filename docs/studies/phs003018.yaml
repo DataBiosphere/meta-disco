@@ -1,0 +1,58 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+phsid: phs003018
+title: A Comprehensive Binding and Functional Map of Human RNA-binding Proteins
+anvil_datasets: [AnVIL_ENCORE_RS293, AnVIL_ENCORE_293T]
+publications:
+  - pmid: "32728246"
+    pmcid: PMC7410833
+    doi: 10.1038/s41586-020-2077-3
+    title: A large-scale binding and functional map of human RNA-binding proteins
+    year: 2020
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: >-
+      Assigned by near-verbatim title match with the dbGaP study title, not by
+      accession citation — the paper (ENCORE/ENCODE RBP program) predates the
+      phs registration and no channel links the two directly. Author
+      correction at PMID 33402748.
+pmc_citing_count: 0
+dbgap_record:
+  populated:
+    - path: ResearchStudy.title
+      value: A Comprehensive Binding and Functional Map of Human RNA-binding Proteins
+    - path: ResearchStudy.status
+      value: completed
+    - path: ResearchStudy.category
+      value: [Case-Control]
+    - path: ResearchStudy.sponsor.display
+      value: National Human Genome Research Institute
+    - path: ResearchStudy.description
+      value: >-
+        ENCORE (Encyclopedia of RNA Elements) prose — foundational functional
+        map of protein-RNA interactions; physical map of hundreds of RBPs in
+        two human cell lines plus transcriptome-wide RBP-depletion
+        measurements (per study page).
+    - path: ResearchStudy.extension[ResearchStudy-StudyOverviewUrl]
+      value: https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs003018.v1.p1
+    - path: ResearchStudy.extension[ResearchStudy-Content]
+      value: NumPhenotypeDatasets/NumMolecularDatasets/NumVariables/NumDocuments/NumAnalyses/NumSubjects/NumSamples/NumSubStudies counts
+  empty: [MolecularDataTypes, StudyDesign, Citers, StudyConsents, ReleaseDate, focus, condition, enrollment, keyword]
+sources_checked:
+  - source: gap-exchange
+    outcome: miss — no dbGaP FTP directory for phs003018 (HTTP 404)
+  - source: dbgap-study-page
+    outcome: partial — species (human), two cell lines, RBP map/knockdown prose; no publications, no PI names, no grants in fetched HTML
+  - source: pmc-fulltext
+    outcome: miss — 0 PMC papers contain "phs003018"
+  - source: pubmed-si
+    outcome: miss — 0 PubMed records register the accession as [SI]
+  - source: fhir
+    outcome: partial — record exists but no Citers or MolecularDataTypes
+  - source: pubmed-title-search
+    outcome: hit — marker paper found by title-word match
+notes: >-
+  Both ENCORE AnVIL workspaces (RS293, 293T) register this same accession.
+  Study-level facts useful downstream: organism Homo sapiens; assays are
+  RBP-binding maps plus transcriptome-wide depletion measurements
+  (transcriptomic-leaning), per dbGaP prose.

@@ -1,0 +1,37 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is null for this workspace.
+phsid: null
+title: Non-human primate developmental GTEx (nhp dGTEx), release V1
+anvil_datasets: [ANVIL_nhp_dGTEx_V1]
+publications:
+  - pmid: "39815096"
+    pmcid: null
+    doi: 10.1038/s41586-024-08244-9
+    title: The human and non-human primate developmental GTEx projects
+    year: 2025
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: Project-description paper for the dGTEx programs (human and NHP arms).
+  - pmid: "42563274"
+    pmcid: null
+    doi: 10.1177/19475535261475862
+    title: The Nonhuman Primate Developmental Genotype-Tissue Expression Biospecimen and Histology resource
+    year: 2026
+    journal: Biopreservation and Biobanking
+    role: unclear
+    provenance: [pubmed-title-search]
+    note: Biospecimen/histology resource paper for the NHP arm; likely methods-relevant, role unverified.
+pmc_citing_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: dataset-record
+    outcome: hit — workspace present, accessible, registered_identifier null; description is dGTEx program prose (gene expression and regulation across development) — note it describes the program broadly, including the pediatric human arm, not the NHP arm specifically
+  - source: pubmed-title-search
+    outcome: hit — project paper plus a resource-paper candidate
+notes: >-
+  Study-level facts useful downstream: organism is non-human primate — the
+  clearest organism-constraint example in the open set (human-reference
+  classifications for these files would deserve scrutiny; species and assay
+  list are Epic 2 work). Also relevant to the mouse/non-human roadmap
+  (issue #15).

@@ -1,0 +1,29 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is null for both workspaces.
+phsid: null
+title: Human Pangenome Reference Consortium (HPRC)
+anvil_datasets: [ANVIL_HPRC, AnVIL_HPRC_R2]
+publications:
+  - pmid: "37165242"
+    pmcid: PMC10172123
+    doi: 10.1038/s41586-023-05896-x
+    title: A draft human pangenome reference
+    year: 2023
+    journal: Nature
+    role: marker
+    provenance: [pubmed-title-search]
+    note: HPRC release-1 flagship paper (Liao et al.).
+pmc_citing_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: dataset-record
+    outcome: hit — both workspaces present, accessible, registered_identifier null
+  - source: pubmed-title-search
+    outcome: partial — release-1 marker found; no release-2 marker paper surfaced (searched pangenome/reference title words)
+notes: >-
+  Study-level facts useful downstream: organism Homo sapiens; content is
+  assemblies + the sequencing reads behind them. A release-2 data paper was
+  not found via PubMed title search this round; the AnVIL_HPRC_R2 workspace
+  currently anchors to the release-1 paper only. The repo already validates
+  HPRC files against the consortium's own catalogs (data.humanpangenome.org)
+  — for HPRC the consortium catalog, not a paper, is the stronger authority.

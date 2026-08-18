@@ -1,0 +1,31 @@
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# No phs accession: Azul registered_identifier is "none" for this workspace.
+phsid: null
+title: 1000 Genomes Project high-coverage resequencing (NYGC)
+anvil_datasets: [ANVIL_1000G_high_coverage_2019]
+publications:
+  - pmid: "36055201"
+    pmcid: PMC9439720
+    doi: 10.1016/j.cell.2022.08.004
+    title: High-coverage whole-genome sequencing of the expanded 1000 Genomes Project cohort including 602 trios
+    year: 2022
+    journal: Cell
+    role: marker
+    provenance: [pubmed-title-search]
+    note: >-
+      Byrska-Bishop et al.; title matches the workspace's content
+      (high-coverage resequencing of the expanded 1000G cohort). Whether it
+      covers precisely this workspace's files is Epic 2 verification.
+pmc_citing_count: null  # not countable without an accession to search on
+dbgap_record: null     # no phs accession to fetch
+sources_checked:
+  - source: dataset-record
+    outcome: hit — workspace present, accessible, registered_identifier "none"
+  - source: pubmed-title-search
+    outcome: hit — marker paper found by title-word match
+notes: >-
+  Study-level facts useful downstream: organism Homo sapiens; assay
+  high-coverage whole-genome sequencing (per the paper title) — DNA-only, a
+  clean example of the constraint use-case (a transcriptomic classification
+  in this workspace would be suspect). Coverage depth, platform, and library
+  details are Epic 2 work (reading the methods text).

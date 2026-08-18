@@ -1,0 +1,199 @@
+---
+name: phs-anchor
+description: Given a dbGaP phs accession (e.g. phs000424), find the study's marker/methods publication(s) and capture its structured dbGaP FHIR record, each fact with provenance. Use when asked to look up a study's publication, survey a study's dbGaP metadata, or build a study dossier under docs/studies/. Issue #324.
+---
+
+# phs-anchor: query the phs anchor for a study
+
+Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
+`docs/studies/<phsid>.yaml` following the template below.
+
+The workflow's input list comes from `fetch_phs.py studies`: one record per
+distinct phsid — `{phsid, description, datasets[], consent_group[],
+descriptions_differ}`. Cache it locally for inspection at
+`data/anvil/anvil_studies.json` (gitignored, like the pipeline's file
+metadata; regenerate with `mkdir -p data/anvil && python3
+.claude/skills/phs-anchor/fetch_phs.py studies >
+data/anvil/anvil_studies.json` — every run refetches the live Azul
+catalog, so the file is a dated snapshot, not an input). Terminology is deliberately adapter-agnostic: a
+**study** (the phs anchor — the general concept) has one or more
+**datasets**, the platform's deposit unit. In AnVIL a dataset is a Terra
+workspace (Azul's `datasets[].title`) — a Broad convention that partitions
+a study by consent group and sometimes contributing author — but that
+partitioning is not general, so nothing downstream may assume it. The
+AnVIL/Azul adapter is `fetch_phs.py datasets` (one record per dataset);
+`studies` validates each record's shape (malformed ones are excluded and
+reported under `invalid_records`), aggregates on phsid, unions consent
+groups, and hoists description to study level (validated on the 2026-08
+snapshot — see findings.md "Description hoisting measurement"). Datasets
+with no phsid are returned separately and take the fallback path. Another
+platform (e.g. the NCPI dataset catalog) can substitute its own adapter
+emitting the same study records. This record is also the shape a future
+origin registry (#304) would hold; study-level *metadata* is a separate
+concern layered on top (the dossier, and eventually Epic 2/3 extractions),
+not part of the input record.
+
+Two channels, in this order. Publication discovery is the primary goal; the
+FHIR record is a separate, additional channel — do not let it substitute for
+finding the paper.
+
+Every fact in the dossier carries provenance (which source, which field, or
+which page). Never guess a paper: if discovery comes up empty, record
+`publications: []` and list the sources checked with their outcomes.
+
+## Phase 1 — find the publication(s)
+
+Try the sources in this order and record hit/miss per source in
+`sources_checked`, even for sources tried after a hit — the survey needs
+per-source hit rates, not just first-hit provenance.
+
+1. **GapExchange XML (dbGaP FTP)**:
+   `python3 .claude/skills/phs-anchor/fetch_phs.py gap-exchange <phsid>` — the
+   machine-readable "Selected Publications" list. When present, the marker
+   paper is typically listed first (see findings.md). Young studies may have
+   no FTP dir yet (a clean `no dbGaP FTP directory` result) or list zero
+   PMIDs — record that as a miss.
+2. **dbGaP study page**: WebFetch
+   `https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=<phsid>`
+   — study title, molecular-data prose, attribution (PIs, grant numbers).
+   Known limitation: its "Selected Publications" section is JS-loaded and
+   empty in fetched HTML — source 1 is that section's data.
+3. **PMC full text**: `fetch_phs.py pmc <phsid>` — papers whose indexed full
+   text contains the accession. The marker paper usually cites its own
+   accession; secondary analyses cite it too, so judge roles from titles/years
+   (earliest consortium-titled paper is a marker candidate).
+4. **PubMed [SI]**: `fetch_phs.py pubmed-si <phsid>` — papers that registered
+   the accession as a secondary source ID. Known sparse (papers
+   self-register); treat as corroboration.
+5. **FHIR citations**: `Citers` extension entries (title + PMC URL) found in
+   the Phase 2 fetch also count as publication provenance — fold them in here.
+   Populated only for mature studies (see findings.md for observed coverage).
+6. **ncpi-dataset-catalog** (`NIH-NCPI/ncpi-dataset-catalog`): its built
+   catalog carries per-study `publications`, assembled from the same
+   GapExchange XML plus NIH RePORTER grant→publication links
+   (`catalog-build/fetch-dbgap-selected-publications.ts`,
+   `catalog-build/fetch-grant-publications.ts`) — consult it as a
+   cross-check, and as the reference implementation for both channels.
+7. **NIH RePORTER (grant → publications)**:
+   `fetch_phs.py reporter <serials>` with the comma-separated grant serials
+   from source 2's attribution page (e.g. `HG012047,HG012022`). Output ranks
+   PMIDs by how many of the study's grants link them — papers linked by
+   (nearly) all grants are consortium/marker candidates (see the phs003472
+   example in findings.md). Needs grant numbers to exist on the study page.
+   ZIA (intramural) serials resolve too, but a single-grant study yields no
+   ranking signal — expect a large undifferentiated list. Resolve the
+   top-ranked bare PMIDs to titles/years with `fetch_phs.py esummary
+   <pmids>` before judging roles (provenance slug: `pubmed-esummary`).
+8. **Dataset record** (slug `dataset-record`): the platform's dataset
+   record for this study — `fetch_phs.py datasets` output (in AnVIL,
+   served by Azul; the source is the record, not the index). Read the
+   dataset title(s) and description prose for search leads: cohort and
+   consortium names, acronym expansions, geography, disease and design
+   terms. Extracting leads is agent judgment, not pattern matching, and
+   leads only seed the searches below. Dataset-record facts may appear in
+   a dossier only with explicit provenance (this source's row, or a note
+   naming the record) and as non-authoritative context — never as the
+   sole justification for a metadata claim.
+9. **Cohort-name search** — the most productive fallback for center-style
+   deposits (candidates for 12/16 empty-list CCDG-program studies and 2/3
+   no-phs controlled workspaces in the 2026-08 survey and its 2026-08-18
+   rerun). Many deposits are new
+   wrappers around old, *named* cohorts whose founding paper predates the
+   deposit. Recipe:
+   - Extract the cohort name from the study title or description (e.g.
+     METSIM, BRAVE, "Emory Cohort").
+   - Search PubMed with unquoted ANDed `[Title]`/`[tiab]` terms, stopwords
+     dropped — quoted phrases silently return 0 for titles missing from
+     PubMed's phrase index.
+   - Bare acronyms collide ("TAICHI" returns tai-chi exercise papers): add
+     context terms from the description (Taiwan, coronary, …). Author
+     (`Laakso[Author]`) and corporate-author fields help for old cohorts.
+   - The marker "tell" is design vocabulary in the title: *cohort profile*,
+     *objectives and design*, *rationale*, *resource*.
+   - A hit is a *candidate* (provenance slug `pubmed-title-search`) — never
+     assert the role without the title/description matching the study.
+   - Record every query actually run — on hits and misses alike — in this
+     source's `sources_checked` outcome line, so the search is
+     reproducible without re-deriving the leads.
+   - Cap this pass at ~5 queries per study. If nothing credible has
+     surfaced by then, record the study as unresolved with the queries
+     tried: an unresolved entry with an audit trail is a valid outcome
+     (accuracy over coverage), not a failure.
+10. **Last resort**: WebSearch.
+
+Do NOT use Entrez `db=gap` — E-utilities no longer exposes a dbGaP database
+(`elink gap→pubmed` is dead). See findings.md "Retired/broken paths" for
+the evidence, and for the `dbgap.ncbi.nlm.nih.gov` application lead worth
+probing as future work.
+
+Label each found publication's `role`: `marker` (describes the study/cohort
+itself — the methods paper), `secondary` (uses the data), or `unclear`. Only
+assign `marker` when the title/abstract shows the paper describes this study;
+otherwise `unclear`.
+
+## Phase 2 — dbGaP FHIR record
+
+`python3 .claude/skills/phs-anchor/fetch_phs.py fhir <phsid>`
+
+From the returned Bundle, record under `dbgap_record`: every populated
+metadata-relevant field with its raw value and its FHIR field/extension path
+(title, description, category, focus, condition, enrollment, sponsor, keyword,
+and any extensions — molecular data types, study design, consent groups,
+citers). Also record which of those expected fields came back empty — the
+survey question is what this API reliably populates.
+
+## Phase 3 — write the dossier
+
+`docs/studies/<phsid>.yaml`:
+
+```yaml
+phsid: phs000424
+title: <dbGaP study title>
+anvil_datasets: [<AnVIL workspace titles — the same values as the studies
+                  output's datasets[] field; the dossier key keeps the
+                  platform-specific name>]
+publications:
+  - pmid: "23715323"
+    pmcid: null        # when known
+    doi: null          # when known
+    title: <paper title>
+    year: 2013
+    role: marker       # marker | secondary | unclear
+    provenance: [pmc-fulltext, pubmed-si]   # every source that surfaced it
+    journal: Nature    # optional, when known
+    note: <optional one-liner: how the role/match was judged>
+pmc_citing_count: 42  # papers whose PMC-indexed full text cites the accession
+dbgap_record:
+  populated:
+    - path: ResearchStudy.title
+      value: <...>
+    - path: ResearchStudy.extension[.../ResearchStudy-MolecularDataTypes]
+      value: [<...>]
+  empty: [<field/extension names checked but absent>]
+sources_checked:
+  # Use these canonical source slugs (one entry per source tried, in order):
+  # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir,
+  # ncpi-dataset-catalog, reporter, dataset-record, pubmed-title-search,
+  # websearch.
+  # (pubmed-esummary is a valid provenance slug on publications — it marks
+  # the PMID→title resolution step, not a discovery source.)
+  - source: gap-exchange
+    outcome: <hit | miss | partial — one line on what it gave>
+  - source: dbgap-study-page
+    outcome: <...>
+  - source: pmc-fulltext
+    outcome: <...>
+  - source: pubmed-si
+    outcome: <...>
+  - source: fhir
+    outcome: <...>
+  - source: reporter
+    outcome: <...>
+notes: <anything surprising, one short paragraph max>
+```
+
+For a dataset with no phs accession (`phsid: null` in the adapter output —
+these are listed under `no_phsid_datasets` by the `studies` subcommand),
+there is no anchor: write the dossier named after the dataset title
+instead, note the missing accession, and run only the publication-fallback
+sources.
