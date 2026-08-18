@@ -4,8 +4,9 @@
 Cross-references the classification output with the European Nucleotide
 Archive record for each record carrying a run accession — the stored
 ``archive_accession`` field when present, else one parsed from the file
-name. Accessions that fail to resolve at ENA are reported as api_errors,
-not validated.
+name. Lookups that yield no usable ENA record (accession fails to
+resolve, or the record lacks an instrument_platform) are reported as
+api_errors, not validated.
 
 What each comparison means today (#330):
 - platform — the meaningful check: the stored value was derived from the
@@ -116,6 +117,11 @@ def validate_against_ena(
         data = json.load(f)
 
     classifications = data.get("classifications", data)
+    if not isinstance(classifications, list):
+        # Fail fast: iterating an unexpected dict shape would yield keys and
+        # silently report "Found 0 files" instead of an actionable error.
+        print(f"Error: {input_path} does not hold a classification list", file=sys.stderr)
+        sys.exit(1)
     with_acc = [c for c in classifications if isinstance(c, dict) and extract_accession(c)]
 
     print(f"Found {len(with_acc):,} files with ENA accessions", flush=True)
@@ -132,8 +138,10 @@ def validate_against_ena(
 
     # Results tracking. "unknown" = our side committed nothing (sentinel or
     # absent status) OR, assay only, ENA's strategy has no mapping into our
-    # vocabulary. Unknown is excluded from both match and mismatch (#330;
-    # same policy direction as #329).
+    # vocabulary. Unknown is excluded from both match and mismatch (#330).
+    # Note #329's refinement, not yet adopted here: not_applicable against a
+    # DECLARED external value should arguably score mismatch, not unknown —
+    # to be settled when the validators' policies are consolidated.
     results = {
         "platform_match": 0,
         "platform_mismatch": 0,
