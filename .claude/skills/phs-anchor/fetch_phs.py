@@ -309,7 +309,10 @@ def reporter(grant_serials: str) -> dict:
         resp = _session.post(REPORTER_PUBS_URL, json=payload, timeout=TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
-        total = data.get("meta", {}).get("total")
+        # Defensive: a missing/null/non-int total stays None — the loop then
+        # runs until a page comes back empty instead of comparing int < None.
+        raw_total = data.get("meta", {}).get("total")
+        total = raw_total if isinstance(raw_total, int) else None
         rows = data.get("results", [])
         if not rows:
             break
@@ -322,7 +325,7 @@ def reporter(grant_serials: str) -> dict:
                 continue  # core project the wildcard matched but no input serial explains
             serials_by_pmid.setdefault(str(pmid), set()).add(serial)
         offset += len(rows)
-        if offset < total:
+        if total is None or offset < total:
             time.sleep(1)  # RePORTER asks for at most 1 request/second
     ranked = sorted(serials_by_pmid.items(), key=lambda kv: (-len(kv[1]), int(kv[0])))
     return {
