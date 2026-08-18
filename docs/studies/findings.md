@@ -145,3 +145,14 @@ accession is not the reliable key for open-access AnVIL — Epic 2 should take
 the dossier (paper list + descriptions), not a phsid, as its input, and
 extraction should cover the dbGaP/Azul description prose as well as the
 paper text.
+
+Full-text access (measured 2026-08-18): of the 50 distinct papers in
+anvil-phs-marker-papers.md, **42 have free PMC full text** via `efetch
+db=pmc` (structured XML with a Methods section). The 8 without: four
+pre-OA-era leads (2002–2005, incl. ATVB 12615788), GAPP 23299990 (Swiss
+Med Wkly — OA at the publisher, just not deposited in PMC), PEGASUS-TIMI
+54 24655690 (publisher-paywalled), and the GMbC 33794144 and GA4K
+35305867 flagships (no PMC deposit found; publisher OA status
+unverified). Abstracts are available for all 50, so the paywalled
+minority narrows Epic 2's evidence to abstract + dbGaP/dataset
+description prose but blocks no study completely.
