@@ -122,7 +122,7 @@ title search missed. Implementation note: `projects/search` rejected
 `*serial*` wildcards in our tests, but `publications/search` accepts
 leading-wildcard `core_project_nums` (`*HG012047`) directly.
 
-## What the papers/records can already justify (Epic 2/3 preview)
+## Early observations: what the papers/records could justify (informal, ahead of Epic 2/3 extraction)
 
 - Organism: nhp_dGTEx is non-human primate; everything else surveyed is
   human — an organism dimension would be immediately constrainable.
