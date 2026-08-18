@@ -39,7 +39,7 @@ publications:
     note: >-
       Also linked by all 26 grants; describes the IGVF data catalog. Not
       read, hence role unclear.
-secondary_count: 0
+pmc_citing_count: 0
 dbgap_record:
   populated:
     - path: ResearchStudy.title

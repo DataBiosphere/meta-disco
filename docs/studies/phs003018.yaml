@@ -16,7 +16,7 @@ publications:
       accession citation — the paper (ENCORE/ENCODE RBP program) predates the
       phs registration and no channel links the two directly. Author
       correction at PMID 33402748.
-secondary_count: 0
+pmc_citing_count: 0
 dbgap_record:
   populated:
     - path: ResearchStudy.title

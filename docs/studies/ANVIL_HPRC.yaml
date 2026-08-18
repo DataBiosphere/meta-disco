@@ -13,7 +13,7 @@ publications:
     role: marker
     provenance: [pubmed-title-search]
     note: HPRC release-1 flagship paper (Liao et al.).
-secondary_count: null  # not countable without an accession to search on
+pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record

@@ -162,7 +162,7 @@ publications:
     provenance: [pmc-fulltext, pubmed-si]   # every source that surfaced it
     journal: Nature    # optional, when known
     note: <optional one-liner: how the role/match was judged>
-secondary_count: 42    # total accession-citing papers found (PMC count)
+pmc_citing_count: 42  # papers whose PMC-indexed full text cites the accession
 dbgap_record:
   populated:
     - path: ResearchStudy.title

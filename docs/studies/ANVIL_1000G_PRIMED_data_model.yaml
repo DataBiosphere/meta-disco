@@ -16,7 +16,7 @@ publications:
       Marker for the underlying 1000G high-coverage data, not for this
       workspace itself — the workspace is that data restructured into the
       PRIMED consortium data model. No PRIMED-specific data paper found.
-secondary_count: null  # not countable without an accession to search on
+pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record

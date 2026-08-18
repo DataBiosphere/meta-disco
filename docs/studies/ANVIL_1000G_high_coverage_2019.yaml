@@ -16,7 +16,7 @@ publications:
       Byrska-Bishop et al.; title matches the workspace's content
       (high-coverage resequencing of the expanded 1000G cohort). Whether it
       covers precisely this workspace's files is Epic 2 verification.
-secondary_count: null  # not countable without an accession to search on
+pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record

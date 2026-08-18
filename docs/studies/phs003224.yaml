@@ -17,7 +17,7 @@ publications:
       so the connection is grant-verified, not just program-matched; whether
       it describes these specific Coriell cell-line runs is unverified,
       hence role unclear.
-secondary_count: 0
+pmc_citing_count: 0
 dbgap_record:
   populated:
     - path: ResearchStudy.title

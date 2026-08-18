@@ -13,7 +13,7 @@ publications:
     role: marker
     provenance: [pubmed-title-search]
     note: MAGE flagship paper (preprint PMID 37965206, bioRxiv 2023).
-secondary_count: null  # not countable without an accession to search on
+pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record

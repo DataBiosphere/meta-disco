@@ -22,7 +22,7 @@ publications:
     role: unclear
     provenance: [pubmed-title-search]
     note: Biospecimen/histology resource paper for the NHP arm; likely methods-relevant, role unverified.
-secondary_count: null  # not countable without an accession to search on
+pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record
