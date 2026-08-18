@@ -3,7 +3,10 @@
 Regenerated 2026-08-17 from the phs-anchor skill's `studies` subcommand
 (the per-study input list: all Azul datasets aggregated on phsid, fully
 paginated), joined with the `gap-exchange` + `fhir` + `esummary` sweep
-results of 2026-08-15/17. See `findings.md` for methodology and
+results of 2026-08-15/17. (The `studies` output has since been slimmed —
+issue #326: anchor-less datasets now appear as `phsid: null` records in
+the same list, so a future regeneration of this phs table must filter
+them out.) See `findings.md` for methodology and
 per-source behavior; the open-access workspaces additionally have full
 dossiers in this directory.
 

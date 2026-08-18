@@ -68,6 +68,50 @@ available]" placeholders plus one study (phs002502) with two near-identical
 variants. Hence the hoist policy: longest non-placeholder description wins,
 `descriptions_differ` flags disagreement.
 
+## Consent vocabulary (observed 2026-08)
+
+What consent labels actually look like across the catalog, from the dbGaP
+FHIR `StudyConsents` registry (72 of the 74 phs studies carry one) and
+the Azul dataset records, measured on the 2026-08-18 snapshot.
+
+**dbGaP's registered vocabulary** (103 distinct codes over 72 studies):
+base codes `GRU` (9 studies), `HMB` (11), `EA` (1), and `DS-<disease>`
+(82) — **no unrestricted/open code appears anywhere in the observed
+registries** (none among the 103 codes on this snapshot). Codes are
+hyphen-joined chains of the base, a disease abbreviation for DS, and
+access modifiers — the recurring modifiers are `MDS`, `NPU`, `IRB`,
+`PUB`, `RD`, `GSO`, `COL`. One registered code carries an underscore
+*inside* its disease token (`DS-MULTIPLE_DISEASES-IRB-COL-NPU-RD`), so
+underscores are not categorically invalid — which is why the `malformed`
+bucket only fires for labels that also fail the registry match. Each
+FHIR consent entry couples the display code to a version-qualified group
+number (`phs000220.v2.p2 - 2`); group 0 is reserved (NRUP — data not
+usable for research, per dbGaP convention), and `EA` appears at group
+999 on phs000220 — an out-of-sequence numbering whose FHIR-vs-GapExchange
+handling was observed to differ and is recorded here without
+interpretation.
+
+**AnVIL-side labels with no dbGaP registration**, from the dataset
+records: `NRES` (a GA4GH DUO code, DUO:0000004 "no restriction" — the
+platform's open-access marker, seen on 9 anchor-less datasets and on 2
+phs-anchored studies, phs003018 and phs003472), the free-text
+`Unrestricted access` (phs003224), the placeholder `TBD`, and free-text
+one-offs `Consortia Access Only` (phs002018) and `Disease specific
+(mental, behavioral & neurodevelopmental disorders)` (a NIMH workspace).
+phs001642 (IBD) is the malformed hot spot: 7 underscore variants of
+hyphenated codes (`DS_GI`, `HMB_MDS`, …) plus a comma variant
+(`DS-GI,18+`) live in its Azul labels.
+
+**Validation buckets** (flag-only, implemented in `fetch_phs.py
+studies`): every label is bucketed inline as `dbgap-registered` /
+`open-channel` / `placeholder` / `malformed` / `unmatched`. Snapshot
+outcome: 169 registered, 12 open-channel, 7 malformed, 1 placeholder,
+18 unmatched — the unmatched being dbGaP-style labels absent from their
+study's registered set (e.g. `HMB` on phs000298), the free-text one-offs
+above, the comma variant (`malformed` detects only underscore variants),
+and dbGaP-style labels on anchor-less studies (no registry to check).
+Nothing is rejected; the buckets are the report.
+
 ## Retired/broken paths (don't retry)
 
 - `elink gap→pubmed` does not work: E-utilities' `einfo` list (raw JSON)
