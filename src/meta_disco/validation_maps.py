@@ -26,6 +26,19 @@ HPRC_LIBRARY_STRATEGY_MAP = {
     "Iso-Seq": "ISO-seq",
 }
 
+# ENA/SRA library_strategy → our assay_type_enum. Only strategies with a
+# clean equivalent are mapped; anything absent scores "unknown" in the ENA
+# validator rather than being force-fitted (#330).
+ENA_LIBRARY_STRATEGY_MAP = {
+    "WGS": "WGS",
+    "WXS": "WES",
+    "WES": "WES",
+    "RNA-Seq": "RNA-seq",
+    "ATAC-seq": "ATAC-seq",
+    "ChIP-Seq": "ChIP-seq",
+    "Bisulfite-Seq": "Bisulfite-seq",
+}
+
 HPRC_REF_COORDINATES_MAP = {
     "chm13": "CHM13",
     "grch38": "GRCh38",
