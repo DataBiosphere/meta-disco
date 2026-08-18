@@ -305,7 +305,7 @@ def validate_against_ena(
     rate = completed / elapsed if elapsed > 0 else 0.0
     print(f"Total files with ENA accession: {len(with_acc):,}")
     print(f"Successfully validated:         {n:,}")
-    print(f"API errors (no data):           {results['api_errors']:,}")
+    print(f"ENA lookup errors (not validated): {results['api_errors']:,}")
     print(f"Time elapsed:                   {elapsed:.1f}s ({rate:.1f} files/sec)")
     print()
 
