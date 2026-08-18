@@ -95,10 +95,9 @@ time of this pass* (2026-08-15, before the sweep grew to 74 studies) were
 run through the grant channel (study page attribution → grant serials →
 `reporter`). Four further empty CCDG-program studies (CCDG in the study
 title or, for phs001227, in its workspace names) surfaced in the
-regenerated table: phs001227, phs001913, phs002205, phs002726 — probed by
-the cohort-name channel in the 2026-08-18 rerun below (BioHEART resolved,
-IBD/Alm candidate, WUCADS and NUgene unresolved), still un-probed by the
-grant channel. Outcome of the 12-study grant probe: **the channel
+regenerated table: phs001227, phs001913, phs002205, phs002726 — their
+name-search candidates are in the table below; the grant channel has not
+been run on them. Outcome of the 12-study grant probe: **the channel
 resolves but does not isolate cohort papers**:
 
 - 6/12 study pages list **no grant numbers at all** in their fetched
@@ -117,49 +116,59 @@ Takeaway for Epic 2: for sequencing-center deposits (CCDG, CMG), neither
 the Selected Publications list nor the grant channel identifies a
 study-specific marker paper. The working fallback is a **cohort-name
 search** — these deposits wrap long-running named cohorts whose founding
-papers predate the CCDG deposit. Run below.
+papers predate the CCDG deposit. Results in the next section.
 
-## Cohort-name search pass (rerun 2026-08-18 under the query discipline)
+## Marker candidates for the empty-list studies
 
-Originally run 2026-08-15 over the 12 then-known empty-list CCDG studies;
-rerun 2026-08-18 under SKILL.md's query discipline — every query recorded
-verbatim (hits and misses alike), ≤5 queries per study — and extended to
-the 4 empty-CCDG newcomers the regenerated table surfaced. The verbatim
-query log was trimmed from this doc for readability; it lives in this
-file's git history (commit 75c8236). Leads came
-from the dbGaP study titles and the dataset records (descriptions named
-WUCADS, the NUgene biobank, and the Figtree/BioHeart workspaces named
-BioHEART). Result: **12/16 studies have a marker candidate** (11 firm
-candidates + ATVB retained with a reproducibility caveat); unresolved:
-Cleveland GeneBank, Autism AFS, WUCADS, NUgene. Candidate identities were
-subsequently checked against study records in the abstract verification
-pass below (which caught and corrected one mismatch, phs002205); role
-confirmation by reading full papers is Epic 2.
+The 29 studies whose Selected Publications list is empty or absent, with
+the marker candidate the fallback chain found for each. Provenance:
+PubMed cohort/program-name search seeded by the dbGaP study titles and
+the dataset records (agent judgment, ≤5 recorded queries per study, run
+2026-08; the verbatim query log lives in this file's git history, commit
+75c8236). Result: **22/29 have a marker candidate**; unresolved: WUCADS,
+Cleveland GeneBank, NUgene, ALS Compute, FGC PrenatalSEQ, the phs004000
+pilot, and Autism AFS. Candidate identities were checked against study
+records in the abstract-verification subsection below (which caught and
+corrected one mismatch, phs002205); role confirmation by reading full
+papers is Epic 2.
 
-| phs | cohort | candidate PMID (year) — title | strength |
+| phs | cohort/program | candidate PMID (year) — title | strength |
 | --- | --- | --- | --- |
+| phs001227 | WUCADS (WashU CAD) | — | none — 3 queries; "WUCADS" absent from PubMed, cohort apparently undescribed in the literature |
+| phs001272 | Broad CMG | [22628075](https://pubmed.ncbi.nlm.nih.gov/22628075/) (2012) — The Centers for Mendelian Genomics: a new large-scale initiative to identify the genes underlying rare Mendelian conditions; also [35148959](https://pubmed.ncbi.nlm.nih.gov/35148959/) (2022) decade retrospective | strong — CMG program markers (program-wide; no Broad-specific description paper surfaced) |
 | phs001398 | BRAVE | [25930055](https://pubmed.ncbi.nlm.nih.gov/25930055/) (2015) — The Bangladesh Risk of Acute Vascular Events (BRAVE) Study: objectives and design | strong — design paper |
 | phs001487 | TAICHI | [26982883](https://pubmed.ncbi.nlm.nih.gov/26982883/) (2016) — Genetics of Coronary Artery Disease in Taiwan: A Cardiometabochip Study by the Taichi Consortium | strong — consortium paper |
 | phs001579 | METSIM | [28119442](https://pubmed.ncbi.nlm.nih.gov/28119442/) (2017) — The Metabolic Syndrome in Men study: a resource for studies of metabolic and cardiovascular diseases | strong — resource paper |
-| phs001592 | ATVB (Italian) | [12615788](https://pubmed.ncbi.nlm.nih.gov/12615788/) (2003) — early ATVB Italian Study Group genetics paper | unclear role, cohort abstract-verified — the abstract's cohort (1210 first-MI survivors <45, nationwide Italian case-control + 1210 matched controls) matches the deposit; but it is an association paper, not a design paper, and the rerun's 5 queries did not re-surface it |
+| phs001592 | ATVB (Italian) | [12615788](https://pubmed.ncbi.nlm.nih.gov/12615788/) (2003) — early ATVB Italian Study Group genetics paper | unclear role, cohort abstract-verified — the abstract's cohort (1210 first-MI survivors <45, nationwide Italian case-control + 1210 matched controls) matches the deposit; but it is an association paper, not a design paper, and a fresh 5-query search could not re-surface it |
+| phs001616 | eMERGEseq panel | [31447099](https://pubmed.ncbi.nlm.nih.gov/31447099/) (2019) — Harmonizing Clinical Sequencing and Interpretation for the eMERGE III Network | strong — the panel's design paper |
 | phs001642 | IBD (Broad/Daly) | [42180385](https://pubmed.ncbi.nlm.nih.gov/42180385/) (2026) — Exome sequencing directly implicates 68 genes in inflammatory bowel disease | candidate — unread; program-scale flagship |
 | phs001871 | Cleveland Clinic GeneBank | — | none — 5 queries; only papers *using* GeneBank samples surfaced, no cohort-profile paper |
 | phs001880 | Emory (EmCAB) | [29288185](https://pubmed.ncbi.nlm.nih.gov/29288185/) (2017) — Cohort profile: the Emory Cardiovascular Biobank (EmCAB) | strong — cohort profile |
+| phs001913 | NUgene (Northwestern) | — | none — 3 queries; NUgene appears only as a sample source in 12 papers, no biobank-description paper found |
 | phs002018 | Partners Biobank | [26784234](https://pubmed.ncbi.nlm.nih.gov/26784234/) (2016) — Building the Partners HealthCare Biobank at Partners Personalized Medicine | strong — biobank description |
+| phs002041 | Genomic Psychiatry Cohort (WGSPD1) | [23650244](https://pubmed.ncbi.nlm.nih.gov/23650244/) (2013) — The genomic psychiatry cohort: partners in discovery | strong — cohort marker; the study description names the GPC |
+| phs002205 | GMbC (Alm) | [33794144](https://pubmed.ncbi.nlm.nih.gov/33794144/) (2021) — Elevated rates of horizontal gene transfer in the industrialized human microbiome | candidate — GMbC flagship results paper (Groussin/Alm, Cell); no dedicated cohort-profile paper found. Previous candidate 31142855 (iHMP/IBDMDB) was a verification-caught mismatch: the study description names the Global Microbiome Conservancy (gmc = GMbC) and links companion study phs002235 |
+| phs002206 | Genomic Answers for Kids (GA4K) | [35305867](https://pubmed.ncbi.nlm.nih.gov/35305867/) (2022) — Genomic answers for children: Dynamic analyses of >1000 pediatric rare disease genomes | strong — program flagship |
 | phs002236 | GAPP | [23299990](https://pubmed.ncbi.nlm.nih.gov/23299990/) (2013) — Genetic and phenotypic determinants of blood pressure and other cardiovascular risk factors (GAPP) | strong — title matches the dbGaP study title verbatim |
 | phs002243 | PEGASUS-TIMI 54 | [24655690](https://pubmed.ncbi.nlm.nih.gov/24655690/) (2014) — Design and rationale for the Prevention of Cardiovascular Events… (PEGASUS-TIMI 54) trial | strong — trial design paper |
-| phs003499 | Multiethnic Cohort | [10695593](https://pubmed.ncbi.nlm.nih.gov/10695593/) (2000) — A multiethnic cohort in Hawaii and Los Angeles: baseline characteristics | strong — same MEC marker as phs000220 (PAGE MEC) |
-| phs004430 | Autism AFS (NYGC) | — | none — 2 queries; cohort identity ("AFS") not resolvable from the title or dataset record, leads exhausted |
-| phs001227 | WUCADS (WashU CAD) | — | none — 3 queries; "WUCADS" absent from PubMed, cohort apparently undescribed in the literature |
-| phs001913 | NUgene (Northwestern) | — | none — 3 queries; NUgene appears only as a sample source in 12 papers, no biobank-description paper found |
-| phs002205 | GMbC (Alm) | [33794144](https://pubmed.ncbi.nlm.nih.gov/33794144/) (2021) — Elevated rates of horizontal gene transfer in the industrialized human microbiome | candidate — GMbC flagship results paper (Groussin/Alm, Cell); no dedicated cohort-profile paper found. Previous candidate 31142855 (iHMP/IBDMDB) was a verification-caught mismatch: the study description names the Global Microbiome Conservancy (gmc = GMbC) and links companion study phs002235 |
+| phs002307 | SouthSeq (CSER) | [34930662](https://pubmed.ncbi.nlm.nih.gov/34930662/) (2022) — Genome sequencing as a first-line diagnostic test for hospitalized infants | candidate — surfaced by the SouthSeq full-text term; title does not name the cohort |
+| phs002324 | P3EGS (CSER) | — | no dedicated marker; the CSER consortium marker [30193136](https://pubmed.ncbi.nlm.nih.gov/30193136/) covers the program (2 queries: only perspective/payer papers) |
 | phs002726 | BioHEART-CT | [31537558](https://pubmed.ncbi.nlm.nih.gov/31537558/) (2019) — Biobanking for discovery of novel cardiovascular biomarkers…: protocol for the… BioHEART-CT cohort study | strong — protocol paper |
+| phs003181 | NABEC long-read | [39764002](https://pubmed.ncbi.nlm.nih.gov/39764002/) (2024) — Long-read sequencing of hundreds of diverse brains provides insight into the impact of structural variation… | strong candidate — matches the deposit's assay (ONT long-read on NABEC brains) |
+| phs003184 | ALS Compute (GRU) | — | unresolved (1 query) — description names no source consortium; the sibling ALSCompute workspaces' Answer ALS candidate may apply |
+| phs003193 | FGC PrenatalSEQ | — | unresolved (2 queries) — only a case report citing PrenatalSEQ; no consortium marker found |
+| phs003200 | MAS-ISO-seq | [37291427](https://pubmed.ncbi.nlm.nih.gov/37291427/) (2024) — High-throughput RNA isoform sequencing using programmed cDNA concatenation | strong — the method paper; title matches the dbGaP study title |
+| phs003444 | DepMap | [28753430](https://pubmed.ncbi.nlm.nih.gov/28753430/) (2017) — Defining a Cancer Dependency Map | strong — program marker |
+| phs003499 | Multiethnic Cohort | [10695593](https://pubmed.ncbi.nlm.nih.gov/10695593/) (2000) — A multiethnic cohort in Hawaii and Los Angeles: baseline characteristics | strong — same MEC marker as phs000220 (PAGE MEC) |
+| phs003821 | OurHealth | [41545632](https://pubmed.ncbi.nlm.nih.gov/41545632/) (2026) — The OurHealth Study: A digital genomic cohort for cardiometabolic risk mechanisms in US South Asians | strong — cohort design paper matching the dbGaP title |
+| phs004000 | Coriell complex-chromosomal pilot | — | unresolved (1 query) — 16-sample pilot per its description; no publication found |
+| phs004430 | Autism AFS (NYGC) | — | none — 2 queries; cohort identity ("AFS") not resolvable from the title or dataset record, leads exhausted |
 
 ### Channel ranking and search lessons
 
 Channel ranking that emerges for center-style deposits: cohort-name search
 ≫ grant channel ≈ Selected Publications (both empty/uninformative). The
-skill's SKILL.md fallback ordering already reflects this pattern. Rerun
+skill's SKILL.md fallback ordering already reflects this pattern. Search
 lessons: recency-sorted esearch buries decades-old markers under the
 cohort's ongoing output (a date-range term like `2000:2000[dp]` recovers
 them), and acronym collisions ("Bioheart" scaffold trials, tai-chi
@@ -203,59 +212,26 @@ abstract). **Unverifiable**: ALSCompute 35115730 (the abstract describes
 Answer ALS precisely, but the workspace description names no source
 consortium, so the collection's identity remains open).
 
-## Fallback pass over the remaining empty-list studies (2026-08-18)
-
-The 13 empty-list studies not covered by the CCDG cohort-name pass or a
-dossier had stopped at source 1 — the fallback chain (dataset-record
-leads → PubMed title/name search, ≤5 recorded queries per study) had
-never run for them. Result: **10/13 have a marker candidate** (8 strong,
-SouthSeq as a candidate, P3EGS covered by its program marker);
-unresolved: ALS Compute, PrenatalSEQ, and the phs004000 pilot.
-
-| phs | program/cohort | candidate PMID (year) — title | strength |
-| --- | --- | --- | --- |
-| phs001272 | Broad CMG | [22628075](https://pubmed.ncbi.nlm.nih.gov/22628075/) (2012) — The Centers for Mendelian Genomics: a new large-scale initiative to identify the genes underlying rare Mendelian conditions; also [35148959](https://pubmed.ncbi.nlm.nih.gov/35148959/) (2022) decade retrospective | strong — CMG program markers (program-wide; no Broad-specific description paper surfaced) |
-| phs001616 | eMERGEseq panel | [31447099](https://pubmed.ncbi.nlm.nih.gov/31447099/) (2019) — Harmonizing Clinical Sequencing and Interpretation for the eMERGE III Network | strong — the panel's design paper |
-| phs002041 | Genomic Psychiatry Cohort (WGSPD1) | [23650244](https://pubmed.ncbi.nlm.nih.gov/23650244/) (2013) — The genomic psychiatry cohort: partners in discovery | strong — cohort marker; the study description names the GPC |
-| phs002206 | Genomic Answers for Kids (GA4K) | [35305867](https://pubmed.ncbi.nlm.nih.gov/35305867/) (2022) — Genomic answers for children: Dynamic analyses of >1000 pediatric rare disease genomes | strong — program flagship |
-| phs002307 | SouthSeq (CSER) | [34930662](https://pubmed.ncbi.nlm.nih.gov/34930662/) (2022) — Genome sequencing as a first-line diagnostic test for hospitalized infants | candidate — surfaced by the SouthSeq full-text term; title does not name the cohort |
-| phs002324 | P3EGS (CSER) | — | no dedicated marker; the CSER consortium marker [30193136](https://pubmed.ncbi.nlm.nih.gov/30193136/) covers the program (2 queries: only perspective/payer papers) |
-| phs003181 | NABEC long-read | [39764002](https://pubmed.ncbi.nlm.nih.gov/39764002/) (2024) — Long-read sequencing of hundreds of diverse brains provides insight into the impact of structural variation… | strong candidate — matches the deposit's assay (ONT long-read on NABEC brains) |
-| phs003184 | ALS Compute (GRU) | — | unresolved (1 query) — description names no source consortium; the sibling ALSCompute workspaces' Answer ALS candidate may apply |
-| phs003193 | FGC PrenatalSEQ | — | unresolved (2 queries) — only a case report citing PrenatalSEQ; no consortium marker found |
-| phs003200 | MAS-ISO-seq | [37291427](https://pubmed.ncbi.nlm.nih.gov/37291427/) (2024) — High-throughput RNA isoform sequencing using programmed cDNA concatenation | strong — the method paper; title matches the dbGaP study title |
-| phs003444 | DepMap | [28753430](https://pubmed.ncbi.nlm.nih.gov/28753430/) (2017) — Defining a Cancer Dependency Map | strong — program marker |
-| phs003821 | OurHealth | [41545632](https://pubmed.ncbi.nlm.nih.gov/41545632/) (2026) — The OurHealth Study: A digital genomic cohort for cardiometabolic risk mechanisms in US South Asians | strong — cohort design paper matching the dbGaP title |
-| phs004000 | Coriell complex-chromosomal pilot | — | unresolved (1 query) — 16-sample pilot per its description; no publication found |
-
 ## Workspaces with no phs accession
 
 These have no dbGaP anchor; the open-access ones among them have dossiers
 here with title-search-based publications. The three controlled-access
-no-phs workspaces were searched by cohort name (2026-08-17; rerun
-2026-08-18 with queries recorded, ✓ = surfacing query):
+no-phs workspaces were searched by cohort name (2026-08; queries in git
+history):
 
 - **ANVIL_CSER_NCGENES2_GRU** — resolved: PMID 34127041 (2021,
   clinical-utility trial design matching the workspace description) and
   PMID 41935954 (2026, "Exome sequencing early in outpatient evaluation in
-  NCGENES 2" results paper). Strong candidates. Queries: ✓ `NCGENES[tiab]`
-  (one query surfaced both).
+  NCGENES 2" results paper). Strong candidates.
 - **ANVIL_ALSCompute_Collection_HMB** — candidate with caveat: PMID
   35115730 (2022, "Answer ALS, a large-scale resource…"). The workspace
   description names no source consortium, so whether this collection is
-  Answer ALS data is unverified — role unclear. Queries:
-  ✓ `answer[Title] AND ALS[Title]`; `ALS[tiab] AND compute[tiab]` (miss —
-  unrelated computational papers).
+  Answer ALS data is unverified — role unclear.
 - **ANVIL_ccdg_broad_mi_univutah_ds_cvd_wes** — unresolved after 5
   recorded queries: the description's specific cohort (653 early
   MI/revascularization survivors plus matched controls, Utah) surfaced
   only older Utah family-study papers, none clearly describing this
-  cohort. Queries (all missed): `myocardial[Title] AND infarction[Title]
-  AND Utah[tiab]`; `premature[tiab] AND coronary[tiab] AND Utah[tiab] AND
-  families[tiab]`; `early[tiab] AND myocardial infarction[tiab] AND Salt
-  Lake City[tiab]`; `myocardial[tiab] AND infarction[tiab] AND
-  survivors[tiab] AND Utah[tiab]`; `coronary[tiab] AND disease[tiab] AND
-  Utah[tiab] AND pedigrees[tiab]`.
+  cohort.
 
 Full list:
 
