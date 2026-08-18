@@ -8,30 +8,43 @@ description: Given a dbGaP phs accession (e.g. phs000424), find the study's mark
 Input: one **phsid** (e.g. `phs000424`). Output: a dossier at
 `docs/studies/<phsid>.yaml` following the template below.
 
-The workflow's input list comes from `fetch_phs.py studies`: one record per
-distinct phsid — `{phsid, description, datasets[], consent_group[],
-descriptions_differ}`. Cache it locally for inspection at
+The workflow's input list comes from `fetch_phs.py studies`. A study
+record is **identity only** — `{phsid|null, title, description}`:
+`title` is the STUDY's title, resolved from the dbGaP FHIR ResearchStudy
+when the study has a phs anchor; a dataset with no anchor becomes its own
+study record (`phsid: null`) with the dataset title as the fallback, and
+takes the fallback path below. Everything else is metadata *about* the
+study and lives under the record's `annotations` object: `datasets[]`
+(the deposit titles), `descriptions_differ`, `title_source`
+(`dbgap-fhir` | `dataset-title` | `none`), and `consent_group` as inline
+`{label, bucket}` pairs — flag-only label validation, against the study's
+FHIR StudyConsents registry for phs-anchored studies (anchor-less studies
+have no registry, so their labels can only land in the non-registered
+buckets). Buckets: `dbgap-registered`, `open-channel`, `placeholder`,
+`malformed`, `unmatched`; see findings.md "Consent vocabulary". Cache the output locally for inspection at
 `data/anvil/anvil_studies.json` (gitignored, like the pipeline's file
 metadata; regenerate with `mkdir -p data/anvil && python3
 .claude/skills/phs-anchor/fetch_phs.py studies >
 data/anvil/anvil_studies.json` — every run refetches the live Azul
-catalog, so the file is a dated snapshot, not an input). Terminology is deliberately adapter-agnostic: a
-**study** (the phs anchor — the general concept) has one or more
+catalog and dbGaP FHIR, so the file is a dated snapshot, not an input).
+
+Terminology is deliberately adapter-agnostic: a **study** (the general
+concept, phs-anchored when an anchor exists) has one or more
 **datasets**, the platform's deposit unit. In AnVIL a dataset is a Terra
 workspace (Azul's `datasets[].title`) — a Broad convention that partitions
 a study by consent group and sometimes contributing author — but that
 partitioning is not general, so nothing downstream may assume it. The
 AnVIL/Azul adapter is `fetch_phs.py datasets` (one record per dataset);
 `studies` validates each record's shape (malformed ones are excluded and
-reported under `invalid_records`), aggregates on phsid, unions consent
-groups, and hoists description to study level (validated on the 2026-08
-snapshot — see findings.md "Description hoisting measurement"). Datasets
-with no phsid are returned separately and take the fallback path. Another
-platform (e.g. the NCPI dataset catalog) can substitute its own adapter
-emitting the same study records. This record is also the shape a future
-origin registry (#304) would hold; study-level *metadata* is a separate
-concern layered on top (the dossier, and eventually Epic 2/3 extractions),
-not part of the input record.
+reported under `invalid_records`), aggregates on phsid, and hoists
+description to study level (validated on the 2026-08 snapshot — see
+findings.md "Description hoisting measurement"). Another platform (e.g.
+the NCPI dataset catalog) can substitute its own adapter emitting the
+same study records. The identity trio is also the shape a future origin
+registry (#304) would hold — the registry maps dataset → phsid and
+phsid → {title, description} — while study-level *metadata* stays a
+separate concern layered on top (the annotations, the dossier, and
+eventually Epic 2/3 extractions), never part of study identity.
 
 Two channels, in this order. Publication discovery is the primary goal; the
 FHIR record is a separate, additional channel — do not let it substitute for
@@ -148,10 +161,11 @@ survey question is what this API reliably populates.
 
 ```yaml
 phsid: phs000424
-title: <dbGaP study title>
+title: <the study record's resolved title — dbGaP FHIR ResearchStudy.title
+        for phs-anchored studies, the dataset title otherwise>
 anvil_datasets: [<AnVIL workspace titles — the same values as the studies
-                  output's datasets[] field; the dossier key keeps the
-                  platform-specific name>]
+                  output's annotations.datasets field; the dossier key
+                  keeps the platform-specific name>]
 publications:
   - pmid: "23715323"
     pmcid: null        # when known
@@ -192,8 +206,8 @@ sources_checked:
 notes: <anything surprising, one short paragraph max>
 ```
 
-For a dataset with no phs accession (`phsid: null` in the adapter output —
-these are listed under `no_phsid_datasets` by the `studies` subcommand),
+For a study with no phs accession (a `phsid: null` record in the
+`studies` output — one per anchor-less dataset),
 there is no anchor: write the dossier named after the dataset title
 instead, note the missing accession, and run only the publication-fallback
 sources.

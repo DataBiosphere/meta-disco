@@ -13,10 +13,13 @@ Subcommands:
                           envelope {count, azul_total, datasets: [{phsid|
                           null, title, description, consent_group}, ...]}
     studies               The per-study input list, as an envelope {count,
-                          studies, no_phsid_datasets, invalid_records}:
-                          dataset records validated, then aggregated on
-                          phsid — dataset titles listed, consent groups
-                          unioned, description hoisted to the study
+                          studies, invalid_records}. A study record is
+                          identity only — {phsid|null, title, description}
+                          with title resolved from dbGaP FHIR for
+                          phs-anchored studies; datasets, consent labels
+                          (with flag-only validation buckets), and
+                          derivation flags live under each record's
+                          annotations object
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -44,6 +47,7 @@ from urllib3.util.retry import Retry
 
 AZUL_DATASETS_URL = "https://service.explore.anvilproject.org/index/datasets"
 FHIR_BASE = "https://dbgap-api.ncbi.nlm.nih.gov/fhir/x1"
+FHIR_STUDY_URL = f"{FHIR_BASE}/ResearchStudy"
 EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 DBGAP_FTP_BASE = "https://ftp.ncbi.nlm.nih.gov/dbgap/studies"
 REPORTER_PUBS_URL = "https://api.reporter.nih.gov/v2/publications/search"
@@ -138,6 +142,112 @@ def datasets() -> dict:
 
 
 PLACEHOLDER_DESC = "[Description currently not available]"
+FHIR_ID_CHUNK = 50  # phsids per batched ResearchStudy _id query (~11 chars each — well under URL limits)
+# AnVIL-side open-access labels (GA4GH DUO:0000004 territory) — no
+# unrestricted code appears in the observed dbGaP registries; see
+# findings.md "Consent vocabulary".
+OPEN_CHANNEL_LABELS = {"NRES", "Unrestricted access"}
+PLACEHOLDER_LABELS = {"TBD"}
+
+
+def _chunks(ids: list[str], size: int):
+    """Successive size-bounded slices of ids (bounds each GET URL's length)."""
+    for start in range(0, len(ids), size):
+        yield ids[start : start + size]
+
+
+def _fhir_study_index(phsids: list[str]) -> dict[str, dict]:
+    """{phsid: {title, consents}} from batched dbGaP FHIR ResearchStudy queries.
+
+    consents is the set of StudyConsents display codes (e.g. "GRU",
+    "DS-CRM-PUB-MDS"). Studies the FHIR API does not know are absent from
+    the index. Follows bundle next-links if the server paginates; the
+    _elements projection trims each resource to what the index reads
+    (checked 2026-08-18 against the live server: the projected resource
+    keeps the full extension array, StudyConsents included).
+    """
+    index: dict[str, dict] = {}
+    first = True
+    for chunk in _chunks(phsids, FHIR_ID_CHUNK):
+        url: str | None = FHIR_STUDY_URL
+        params: dict | None = {"_id": ",".join(chunk), "_format": "json", "_elements": "id,title,extension"}
+        while url:
+            if not first:
+                time.sleep(EUTILS_DELAY_S)  # same NCBI-host etiquette as the E-utilities calls
+            first = False
+            bundle = _get_json(url, params=params)
+            for entry in bundle.get("entry", []):
+                res = entry.get("resource", {})
+                sid = res.get("id")
+                if not (isinstance(sid, str) and sid):
+                    continue  # an entry without a usable id cannot be joined back to a phsid
+                consents = set()
+                for ext in res.get("extension", []):
+                    if not ext.get("url", "").endswith("ResearchStudy-StudyConsents"):
+                        continue
+                    for c in ext.get("extension", []):
+                        display = c.get("valueCoding", {}).get("display")
+                        if isinstance(display, str):
+                            consents.add(display)
+                # Normalize the title at the boundary: the output contract is
+                # str-or-null, so a non-string or whitespace-only value
+                # becomes None here rather than leaking through.
+                title = res.get("title")
+                title = title.strip() if isinstance(title, str) else None
+                index[sid] = {"title": title or None, "consents": consents}
+            url = next((ln.get("url") for ln in bundle.get("link", []) if ln.get("relation") == "next"), None)
+            params = None
+    return index
+
+
+def _consent_bucket(label: str, registered: set[str]) -> str:
+    """Flag-only validation bucket for one consent label.
+
+    Buckets (see findings.md "Consent vocabulary"): dbgap-registered (label
+    is one of the study's FHIR StudyConsents codes), open-channel (an
+    AnVIL-side open-access label), placeholder, malformed (underscore
+    variant — the only malformation signal checked; other anomalies land
+    in unmatched), unmatched (none of the above). A study with no anchor
+    passes an empty `registered`, so its labels land in the four
+    non-registered buckets — underscore-bearing ones still as malformed.
+    """
+    if label in registered:
+        return "dbgap-registered"
+    if label in OPEN_CHANNEL_LABELS:
+        return "open-channel"
+    if label in PLACEHOLDER_LABELS:
+        return "placeholder"
+    if "_" in label:
+        return "malformed"
+    return "unmatched"
+
+
+def _study_record(
+    phsid: str | None,
+    title: str | None,
+    title_source: str,
+    dataset_titles: list[str],
+    descriptions: list[str],
+    consents,
+    registered: set[str],
+) -> dict:
+    """One slim study record — the single schema for phs-anchored and
+    anchor-less studies alike: the identity trio plus the annotations
+    object (description hoisting per findings.md "Description hoisting
+    measurement": longest distinct non-placeholder wins; the sort makes the
+    equal-length tie-break deterministic)."""
+    distinct = sorted({s for d in descriptions if (s := d.strip()) and s != PLACEHOLDER_DESC})
+    return {
+        "phsid": phsid,
+        "title": title,
+        "description": max(distinct, key=len) if distinct else None,
+        "annotations": {
+            "datasets": sorted(dataset_titles),
+            "descriptions_differ": len(distinct) > 1,
+            "title_source": title_source,
+            "consent_group": [{"label": c, "bucket": _consent_bucket(c, registered)} for c in sorted(set(consents))],
+        },
+    }
 
 
 def _validate_dataset_record(r: dict) -> list[str]:
@@ -157,20 +267,29 @@ def _validate_dataset_record(r: dict) -> list[str]:
 def studies() -> dict:
     """Aggregate datasets() records into the per-study input list.
 
-    Terminology is adapter-agnostic: a *study* (anchored by phsid) has one
-    or more *datasets* — the platform's deposit unit, which in AnVIL is a
-    Terra workspace (Azul's `datasets[].title`). The distinct phsids form
-    the study list; each study lists its dataset titles, unions consent
-    groups, and hoists description to study level (see findings.md
-    "Description hoisting measurement" for the validation behind the
-    policy: longest non-placeholder wins, descriptions_differ flags
-    disagreement). Dataset records failing shape validation are excluded
-    and reported under `invalid_records`; datasets with no phsid are
-    returned separately (no study anchor to aggregate on).
+    Terminology is adapter-agnostic: a *study* (the general concept,
+    anchored by phsid when one exists) has one or more *datasets* — the
+    platform's deposit unit, which in AnVIL is a Terra workspace (Azul's
+    `datasets[].title`). A study record is identity only:
+    {phsid|null, title, description}. `title` is the STUDY's title: for a
+    phs-anchored study it comes from the dbGaP FHIR ResearchStudy, falling
+    back to the dataset title when FHIR yields none and the study has a
+    single distinct dataset title, else null (title_source records which);
+    a dataset with no anchor becomes its own study record with the dataset
+    title. `description` is hoisted from the datasets (see
+    findings.md "Description hoisting measurement": longest non-placeholder
+    wins). Everything else is metadata about the study and lives under the
+    record's `annotations` object: the dataset titles, descriptions_differ,
+    title_source (dbgap-fhir | dataset-title | none), and consent_group as
+    inline {label, bucket} pairs — flag-only label validation, checked
+    against the study's FHIR StudyConsents registry for phs-anchored
+    studies; anchor-less studies have no registry, so their labels bucket
+    among the non-registered buckets (see _consent_bucket; no consent
+    label is ever rejected). Dataset records failing shape validation are
+    excluded and reported under `invalid_records`.
     """
     grouped: dict[str, dict] = {}
-    descs: dict[str, list[str]] = {}
-    no_phsid = []
+    no_anchor = []
     invalid = []
     for r in datasets()["datasets"]:
         problems = _validate_dataset_record(r)
@@ -178,28 +297,49 @@ def studies() -> dict:
             invalid.append({"record": r, "problems": problems})
             continue
         if r["phsid"] is None:
-            no_phsid.append(r)
+            no_anchor.append(r)
             continue
-        entry = grouped.setdefault(
-            r["phsid"], {"phsid": r["phsid"], "description": None, "datasets": [], "consent_group": set()}
-        )
+        entry = grouped.setdefault(r["phsid"], {"datasets": [], "consents": set(), "descriptions": []})
         entry["datasets"].append(r["title"])
-        entry["consent_group"].update(r["consent_group"])
-        descs.setdefault(r["phsid"], []).append((r["description"] or "").strip())
+        entry["consents"].update(r["consent_group"])
+        entry["descriptions"].append(r["description"] or "")
+    phsids = sorted(grouped)
+    fhir_index = _fhir_study_index(phsids)
     out = []
-    for phsid, entry in sorted(grouped.items()):
-        distinct = sorted({x for x in descs[phsid] if x and x != PLACEHOLDER_DESC})
-        entry["description"] = max(distinct, key=len) if distinct else None
-        entry["descriptions_differ"] = len(distinct) > 1
-        entry["consent_group"] = sorted(entry["consent_group"])
-        entry["datasets"].sort()
-        out.append(entry)
-    return {"count": len(out), "studies": out, "no_phsid_datasets": no_phsid, "invalid_records": invalid}
+    for phsid in phsids:
+        entry = grouped[phsid]
+        fhir_rec = fhir_index.get(phsid, {})
+        title = fhir_rec.get("title")
+        distinct_titles = set(entry["datasets"])
+        if title:
+            title_source = "dbgap-fhir"
+        elif len(distinct_titles) == 1:
+            title, title_source = next(iter(distinct_titles)), "dataset-title"
+        else:
+            title, title_source = None, "none"
+        out.append(
+            _study_record(
+                phsid,
+                title,
+                title_source,
+                entry["datasets"],
+                entry["descriptions"],
+                entry["consents"],
+                fhir_rec.get("consents", set()),
+            )
+        )
+    for r in sorted(no_anchor, key=lambda r: r["title"]):
+        out.append(
+            _study_record(
+                None, r["title"], "dataset-title", [r["title"]], [r["description"] or ""], r["consent_group"], set()
+            )
+        )
+    return {"count": len(out), "studies": out, "invalid_records": invalid}
 
 
 def fhir(phsid: str) -> dict:
     """dbGaP FHIR ResearchStudy bundle for the accession, verbatim."""
-    return _get_json(f"{FHIR_BASE}/ResearchStudy", params={"_id": phsid, "_format": "json"})
+    return _get_json(FHIR_STUDY_URL, params={"_id": phsid, "_format": "json"})
 
 
 def gap_exchange(phsid: str) -> dict:
@@ -247,12 +387,12 @@ def gap_exchange(phsid: str) -> dict:
 def _esummary_result(db: str, ids: list[str]) -> dict:
     """Cleaned esummary result dict for ids, chunked to bound the GET URL length."""
     summaries: dict = {}
-    for start in range(0, len(ids), ESUMMARY_CHUNK):
-        if start:
+    for i, chunk_ids in enumerate(_chunks(ids, ESUMMARY_CHUNK)):
+        if i:
             time.sleep(EUTILS_DELAY_S)
         chunk = _get_json(
             f"{EUTILS_BASE}/esummary.fcgi",
-            params={"db": db, "id": ",".join(ids[start : start + ESUMMARY_CHUNK]), "retmode": "json"},
+            params={"db": db, "id": ",".join(chunk_ids), "retmode": "json"},
         ).get("result", {})
         chunk.pop("uids", None)
         summaries.update(chunk)
