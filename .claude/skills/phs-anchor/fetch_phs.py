@@ -178,6 +178,9 @@ def _fhir_study_index(phsids: list[str]) -> dict[str, dict]:
             bundle = _get_json(url, params=params)
             for entry in bundle.get("entry", []):
                 res = entry.get("resource", {})
+                sid = res.get("id")
+                if not (isinstance(sid, str) and sid):
+                    continue  # an entry without a usable id cannot be joined back to a phsid
                 consents = set()
                 for ext in res.get("extension", []):
                     if not ext.get("url", "").endswith("ResearchStudy-StudyConsents"):
@@ -186,7 +189,7 @@ def _fhir_study_index(phsids: list[str]) -> dict[str, dict]:
                         display = c.get("valueCoding", {}).get("display")
                         if isinstance(display, str):
                             consents.add(display)
-                index[res.get("id")] = {"title": res.get("title"), "consents": consents}
+                index[sid] = {"title": res.get("title"), "consents": consents}
             url = next((ln.get("url") for ln in bundle.get("link", []) if ln.get("relation") == "next"), None)
             params = None
     return index
