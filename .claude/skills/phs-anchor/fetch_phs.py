@@ -100,7 +100,11 @@ def datasets() -> dict:
     params: dict | None = {"size": "300"}
     while url:
         raw = _get_json(url, params=params)
-        azul_total = raw.get("pagination", {}).get("total", azul_total)
+        # Keep the last int total seen — a later page returning total: null
+        # must not clobber the count captured from an earlier page.
+        page_total = raw.get("pagination", {}).get("total")
+        if isinstance(page_total, int):
+            azul_total = page_total
         for hit in raw.get("hits", []):
             for ds in hit.get("datasets", []):
                 rids = ds.get("registered_identifier") or []
