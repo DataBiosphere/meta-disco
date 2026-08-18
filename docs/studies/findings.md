@@ -75,10 +75,10 @@ variants. Hence the hoist policy: longest non-placeholder description wins,
   against the raw API — not a bot block: the same client succeeds against
   `db=pubmed`/`db=pmc`). The old Entrez web path
   `www.ncbi.nlm.nih.gov/gap/` now redirects to the standalone
-  `dbgap.ncbi.nlm.nih.gov` application. No retirement announcement exists —
-  the [NCBI Insights dbGaP archive](https://ncbiinsights.ncbi.nlm.nih.gov/tag/dbgap/)
-  never mentions removing Entrez search; the migration context is the site
-  modernization announced in
+  `dbgap.ncbi.nlm.nih.gov` application. No retirement announcement was
+  found — the [NCBI Insights dbGaP archive](https://ncbiinsights.ncbi.nlm.nih.gov/tag/dbgap/)
+  had no post about removing Entrez search when checked (2026-08-15); the
+  migration context is the site modernization announced in
   ["Beta Now Live! New & Improved dbGaP Homepage Design"](https://ncbiinsights.ncbi.nlm.nih.gov/2025/06/02/beta-improved-dbgap-homepage/)
   (June 2025).
 

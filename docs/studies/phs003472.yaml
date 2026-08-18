@@ -71,7 +71,7 @@ dbgap_record:
   empty: [MolecularDataTypes, Citers, enrollment]
 sources_checked:
   - source: gap-exchange
-    outcome: partial — FTP dir and v1.p1 GapExchange XML exist but list zero publications
+    outcome: miss — FTP dir and v1.p1 GapExchange XML exist but list zero publications (zero-PMID list records as a miss per SKILL.md)
   - source: dbgap-study-page
     outcome: partial — 60+ investigators across many institutions, 26 NHGRI grant numbers (HG012047 …); no publications, no species stated
   - source: pmc-fulltext

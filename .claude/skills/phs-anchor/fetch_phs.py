@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Deterministic fetches for the phs-anchor skill (.claude/skills/phs-anchor/).
 
-Each subcommand prints JSON to stdout. Interpretation — which paper is the
-marker paper, which FHIR fields matter — is the agent's job, per SKILL.md.
+Each subcommand prints JSON to stdout. On a fetch or JSON-decode error,
+main() prints a JSON {"error": ...} object to stderr and exits 1; invalid
+usage or arguments print to stderr and exit 2. Interpretation — which paper
+is the marker paper, which FHIR fields matter — is the agent's job, per
+SKILL.md.
 
 Subcommands:
     datasets              All AnVIL datasets from Azul (a dataset = a Terra
-                          workspace; Azul's datasets[].title):
-                          {phsid|null, title, description, consent_group}
-    studies               The per-study input list: dataset records
-                          validated, then aggregated on phsid — dataset
-                          titles listed, consent groups unioned,
-                          description hoisted to the study
+                          workspace; Azul's datasets[].title), as an
+                          envelope {count, azul_total, datasets: [{phsid|
+                          null, title, description, consent_group}, ...]}
+    studies               The per-study input list, as an envelope {count,
+                          studies, no_phsid_datasets, invalid_records}:
+                          dataset records validated, then aggregated on
+                          phsid — dataset titles listed, consent groups
+                          unioned, description hoisted to the study
     fhir PHSID            dbGaP FHIR ResearchStudy bundle for the study
     gap-exchange PHSID    Selected-publication PMIDs from the latest
                           GapExchange XML on the dbGaP FTP site
@@ -103,7 +108,9 @@ def datasets() -> dict:
                     rids = [rids]
                 phsid = None
                 for rid in rids:
-                    match = re.match(r"(phs\d{6})", str(rid or ""))
+                    # search, not match: tolerate an accession embedded in a
+                    # longer identifier string.
+                    match = re.search(r"(phs\d{6})", str(rid or ""))
                     if match:
                         phsid = match.group(1)
                         break
@@ -249,21 +256,32 @@ def _esummary_result(db: str, ids: list[str]) -> dict:
 
 
 def _search_with_summaries(db: str, term: str) -> dict:
+    """esearch + esummary, with both caps made explicit in the output.
+
+    `ids` is capped at retmax (100) — `ids_truncated` is true when `count`
+    exceeds it; `summaries` covers only the first MAX_SUMMARIES ids, listed
+    in `summarized_ids` so absence from `summaries` is not mistaken for
+    "no summary data".
+    """
     search = _get_json(
         f"{EUTILS_BASE}/esearch.fcgi",
         params={"db": db, "term": term, "retmax": "100", "retmode": "json"},
     )
     result = search.get("esearchresult", {})
     ids = result.get("idlist", [])
+    count = int(result.get("count", 0))
+    summarized = ids[:MAX_SUMMARIES]
     summaries = {}
-    if ids:
+    if summarized:
         time.sleep(EUTILS_DELAY_S)
-        summaries = _esummary_result(db, ids[:MAX_SUMMARIES])
+        summaries = _esummary_result(db, summarized)
     return {
         "db": db,
         "term": term,
-        "count": int(result.get("count", 0)),
+        "count": count,
         "ids": ids,
+        "ids_truncated": count > len(ids),
+        "summarized_ids": summarized,
         "summaries": summaries,
     }
 
@@ -273,15 +291,18 @@ def reporter(grant_serials: str) -> dict:
 
     Serials are the bare numbers dbGaP attribution pages list (e.g. HG012047);
     each is queried as a leading-wildcard core project number so any activity
-    code (U01/UM1/R01/…) matches. PMIDs are ranked by how many distinct core
-    project numbers link them (one serial can match several core projects) —
-    papers shared across a study's grants rank first.
+    code (U01/UM1/R01/…) matches. PMIDs are ranked by how many distinct
+    *input serials* link them: each returned core project number is mapped
+    back to its serial (suffix match), so a grant renewed under a new
+    activity code (U01→UM1 keeps the serial) cannot count twice and the
+    count is capped at the number of serials given. Papers shared across a
+    study's grants rank first.
     """
     serials = [s.strip() for s in grant_serials.split(",") if s.strip()]
     if not serials:
         return {"grant_serials": [], "total_publication_links": 0, "publications": [], "note": "no grant serials given"}
     criteria = {"core_project_nums": [f"*{s}" for s in serials]}
-    core_projects_by_pmid: dict[str, set[str]] = {}
+    serials_by_pmid: dict[str, set[str]] = {}
     offset, total = 0, None
     while total is None or offset < total:
         payload = {"criteria": criteria, "limit": REPORTER_LIMIT, "offset": offset}
@@ -296,15 +317,18 @@ def reporter(grant_serials: str) -> dict:
             pmid, core = row.get("pmid"), row.get("coreproject")
             if core is None or not str(pmid).isdigit():
                 continue  # an incomplete link row would pollute the ranking (or crash the sort)
-            core_projects_by_pmid.setdefault(str(pmid), set()).add(core)
+            serial = next((s for s in serials if str(core).endswith(s)), None)
+            if serial is None:
+                continue  # core project the wildcard matched but no input serial explains
+            serials_by_pmid.setdefault(str(pmid), set()).add(serial)
         offset += len(rows)
         if offset < total:
             time.sleep(1)  # RePORTER asks for at most 1 request/second
-    ranked = sorted(core_projects_by_pmid.items(), key=lambda kv: (-len(kv[1]), int(kv[0])))
+    ranked = sorted(serials_by_pmid.items(), key=lambda kv: (-len(kv[1]), int(kv[0])))
     return {
         "grant_serials": serials,
         "total_publication_links": total,
-        "publications": [{"pmid": pmid, "core_projects": sorted(cores)} for pmid, cores in ranked],
+        "publications": [{"pmid": pmid, "serials": sorted(matched)} for pmid, matched in ranked],
     }
 
 
@@ -339,10 +363,19 @@ def main(argv: list[str]) -> int:
         "esummary": esummary,
     }
     zero_arg = {"datasets": datasets, "studies": studies}
+    phsid_commands = {"fhir", "gap-exchange", "pubmed-si", "pmc"}
     try:
         if len(argv) == 1 and argv[0] in zero_arg:
             out = zero_arg[argv[0]]()
         elif len(argv) == 2 and argv[0] in commands:
+            # Validate up front so a bad argument is a usage error, not a
+            # downstream HTTP error against a mangled URL/query.
+            if argv[0] in phsid_commands and not re.fullmatch(r"phs\d{6}", argv[1]):
+                print(f"invalid phsid {argv[1]!r}: expected phs + 6 digits (e.g. phs000424)", file=sys.stderr)
+                return 2
+            if argv[0] == "esummary" and not all(p.strip().isdigit() for p in argv[1].split(",") if p.strip()):
+                print(f"invalid pmid list {argv[1]!r}: expected comma-separated numeric PMIDs", file=sys.stderr)
+                return 2
             out = commands[argv[0]](argv[1])
         else:
             print(__doc__, file=sys.stderr)
