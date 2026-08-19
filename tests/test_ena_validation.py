@@ -51,6 +51,33 @@ class TestExtractAccession:
         rec = {"archive_accession": "ERR999999", "file_name": "ERR111111_1.fastq.gz"}
         assert ena.extract_accession(rec) == "ERR999999"
 
+    def test_stored_field_nested_under_classifications(self):
+        # the current pipeline output stores the accession beside the
+        # dimension entries, not at the top level
+        rec = {
+            "file_name": "ERR111111_1.fastq.gz",
+            "classifications": {
+                "archive_accession": "ERR999999",
+                "platform": {"value": "ILLUMINA", "status": "classified"},
+            },
+        }
+        assert ena.extract_accession(rec) == "ERR999999"
+
+    def test_top_level_stored_field_wins_over_nested(self):
+        rec = {
+            "archive_accession": "ERR222222",
+            "classifications": {"archive_accession": "ERR999999"},
+            "file_name": "ERR111111_1.fastq.gz",
+        }
+        assert ena.extract_accession(rec) == "ERR222222"
+
+    def test_non_string_stored_value_falls_back_to_name(self):
+        rec = {
+            "classifications": {"archive_accession": {"value": "ERR999999"}},
+            "file_name": "ERR111111_1.fastq.gz",
+        }
+        assert ena.extract_accession(rec) == "ERR111111"
+
     def test_no_accession(self):
         assert ena.extract_accession({"file_name": "HG002.hifi_reads.fastq.gz"}) is None
 

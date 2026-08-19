@@ -55,11 +55,26 @@ ACCESSION_RE = re.compile(r"(?<![A-Za-z0-9])([ESD]RR\d{6,})")
 _SENTINEL_STATUSES = {"not_classified", "not_applicable", "conflict", ""}
 
 
+def stored_accession(rec: dict) -> str | None:
+    """The stored ``archive_accession``, wherever the record layout puts it.
+
+    The current pipeline output nests it under ``classifications`` (a plain
+    string beside the dimension entries); older/flat layouts carry it at the
+    top level. Returns None when neither location holds a value.
+    """
+    acc = rec.get("archive_accession")
+    if not acc:
+        nested = rec.get("classifications")
+        if isinstance(nested, dict):
+            acc = nested.get("archive_accession")
+    return str(acc) if acc and not isinstance(acc, (dict, list)) else None
+
+
 def extract_accession(rec: dict) -> str | None:
     """The record's run accession: the stored field, else parsed from file_name."""
-    acc = rec.get("archive_accession")
+    acc = stored_accession(rec)
     if acc:
-        return str(acc)
+        return acc
     m = ACCESSION_RE.search(str(rec.get("file_name") or ""))
     return m.group(1) if m else None
 
@@ -121,7 +136,7 @@ def validate_against_ena(
     with input_path.open() as f:
         data = json.load(f)
 
-    classifications = data.get("classifications", data)
+    classifications = data.get("classifications", data) if isinstance(data, dict) else data
     if not isinstance(classifications, list):
         # Fail fast: iterating an unexpected dict shape would yield keys and
         # silently report "Found 0 files" instead of an actionable error.
@@ -345,8 +360,8 @@ def validate_against_ena(
                     # stored-field-only population, so counts are not
                     # directly comparable with the 2026-01 artifact.
                     "accession_source": {
-                        "stored_field": sum(1 for r in with_acc if r.get("archive_accession")),
-                        "name_parsed": sum(1 for r in with_acc if not r.get("archive_accession")),
+                        "stored_field": sum(1 for r in with_acc if stored_accession(r)),
+                        "name_parsed": sum(1 for r in with_acc if not stored_accession(r)),
                     },
                     "validated": n,
                     "api_errors": results["api_errors"],
@@ -396,6 +411,9 @@ def main():
         help="Number of parallel workers (default: 10)",
     )
     args = parser.parse_args()
+
+    if args.workers < 1:
+        parser.error("--workers must be >= 1")
 
     if args.input:
         input_path = args.input
