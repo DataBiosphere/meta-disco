@@ -436,7 +436,7 @@ def main():
             limit=args.limit,
             workers=args.workers,
         )
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
