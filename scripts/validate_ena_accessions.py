@@ -1,35 +1,121 @@
 #!/usr/bin/env python3 -u
-"""Validate FASTQ classifications against ENA metadata.
+"""Validate stored FASTQ classifications against ENA metadata.
 
-Cross-references our platform and modality classifications with the
-authoritative ENA (European Nucleotide Archive) metadata.
+Cross-references the classification output with the European Nucleotide
+Archive record for each record carrying a run accession — the stored
+``archive_accession`` field when present, else one parsed from the file
+name. Lookups that yield no usable ENA record (accession fails to
+resolve, or the record lacks an instrument_platform) are reported as
+api_errors, not validated.
+
+What each comparison means today (#330):
+- platform — the meaningful check: the stored value was derived from the
+  file's read-name grammar at classification time, ENA's is
+  submitter-declared; two independent routes to the same fact.
+- modality / assay — reported, but expected to score unknown-by-design
+  under current rules: FASTQ modality/assay is not recoverable from
+  content (the content ceiling), so our side is a sentinel. The
+  comparisons are wired now so they activate once import work fills
+  those dimensions.
+- Circularity policy (stated here, NOT yet enforced in code): ENA should
+  only validate modality/assay values that were imported from a
+  DIFFERENT source (e.g. the HPRC Catalog or a study's methods paper) —
+  never values imported from ENA itself.
 
 Usage:
-    python scripts/validate_ena_accessions.py
+    python scripts/validate_ena_accessions.py -i output/anvil/<run>/fastq_classifications.json
 
 Output saved to: output/anvil/ena_validation_results.json
 """
 
 import argparse
 import json
+import re
+import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
 
-# Add project root to path
-from meta_disco.file_name import FileName
-from meta_disco.header_classifier import classify_from_fastq_header
+from meta_disco.models import field_status, field_value
+from meta_disco.output_utils import find_latest_run
+from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
 
 ENA_API = "https://www.ebi.ac.uk/ena/portal/api/filereport"
 FIELDS = "run_accession,instrument_platform,library_strategy,library_source"
+# Boundaries chosen for real naming: ERR3988887_1.fastq.gz has a word char
+# (underscore) right after the digits, so no trailing \b; HG002_ERR123456
+# style prefixes put an underscore *before* the accession, so the leading
+# guard rejects only letters/digits (an embedded ...XERR123456 is not an
+# accession), not underscores. Greedy \d{6,} consumes the whole digit run.
+ACCESSION_RE = re.compile(r"(?<![A-Za-z0-9])([ESD]RR\d{6,})")
+# Statuses that mean "our side committed nothing" ("" = status absent).
+_SENTINEL_STATUSES = {"not_classified", "not_applicable", "conflict", ""}
+
+
+def stored_accession(rec: dict) -> str | None:
+    """The stored ``archive_accession``, wherever the record layout puts it.
+
+    The current pipeline output nests it under ``classifications`` (a plain
+    string beside the dimension entries); older/flat layouts carry it at the
+    top level. Returns None when neither location holds a value.
+    """
+    acc = rec.get("archive_accession")
+    if not acc:
+        nested = rec.get("classifications")
+        if isinstance(nested, dict):
+            acc = nested.get("archive_accession")
+    return str(acc) if acc and not isinstance(acc, (dict, list)) else None
+
+
+def extract_accession(rec: dict) -> str | None:
+    """The record's run accession: the stored field, else parsed from file_name."""
+    acc = stored_accession(rec)
+    if acc:
+        return acc
+    m = ACCESSION_RE.search(str(rec.get("file_name") or ""))
+    return m.group(1) if m else None
+
+
+def our_field(rec: dict, field: str) -> tuple[str, str]:
+    """(value, status) for one dimension, via the canonical models readers.
+
+    A non-string value (schema-invalid drift) reads as uncommitted so the
+    verdict scores it unknown rather than a bogus mismatch.
+    """
+    try:
+        value = field_value(rec, field)
+        status = field_status(rec, field)
+    except ValueError:
+        # models' coherence check raises on an incoherent {value, status}
+        # pair — that drift also reads as uncommitted, not a crash.
+        return "", ""
+    if not isinstance(value, str):
+        return "", str(status or "")
+    return value, str(status or "")
+
+
+_thread_local = threading.local()
+
+
+def _get_session() -> requests.Session:
+    """The calling thread's Session, created on first use.
+
+    Keep-alive saves ~7K calls to the same host from each paying a fresh
+    TLS handshake, without sharing one Session across threads (a Session
+    is not guaranteed safe for concurrent use).
+    """
+    if not hasattr(_thread_local, "session"):
+        _thread_local.session = requests.Session()
+    return _thread_local.session
 
 
 def fetch_ena_metadata(acc: str) -> dict | None:
     """Fetch metadata for a single accession from ENA API."""
     try:
-        resp = requests.get(
+        resp = _get_session().get(
             ENA_API,
             params={"accession": acc, "result": "read_run", "fields": FIELDS},
             timeout=10,
@@ -59,8 +145,14 @@ def validate_against_ena(
     with input_path.open() as f:
         data = json.load(f)
 
-    classifications = data.get("classifications", data)
-    with_acc = [c for c in classifications if c.get("archive_accession")]
+    classifications = data.get("classifications", data) if isinstance(data, dict) else data
+    if not isinstance(classifications, list):
+        # Fail fast: iterating an unexpected dict shape would yield keys and
+        # silently report "Found 0 files" instead of an actionable error.
+        # Raised (not sys.exit) so importers/tests aren't force-exited;
+        # main() turns it into the CLI error + exit 1.
+        raise ValueError(f"{input_path} does not hold a classification list")
+    with_acc = [c for c in classifications if isinstance(c, dict) and extract_accession(c)]
 
     print(f"Found {len(with_acc):,} files with ENA accessions", flush=True)
 
@@ -70,12 +162,24 @@ def validate_against_ena(
 
     print(f"Using {workers} parallel workers", flush=True)
 
-    # Results tracking
+    # Results tracking. "unknown" = one side has nothing to compare: ours
+    # committed nothing (sentinel or absent status), or ENA offers no
+    # comparable evidence (modality with neither library_source nor
+    # library_strategy; assay with a strategy outside our map). Unknown is
+    # excluded from both match and mismatch (#330).
+    # Note #329's refinement, not yet adopted here: not_applicable against a
+    # DECLARED external value should arguably score mismatch, not unknown —
+    # to be settled when the validators' policies are consolidated.
     results = {
         "platform_match": 0,
         "platform_mismatch": 0,
+        "platform_unknown": 0,
         "modality_match": 0,
         "modality_mismatch": 0,
+        "modality_unknown": 0,
+        "assay_match": 0,
+        "assay_mismatch": 0,
+        "assay_unknown": 0,
         "api_errors": 0,
         "total_validated": 0,
     }
@@ -90,23 +194,17 @@ def validate_against_ena(
     completed = 0
 
     def process_record(rec):
-        """Process a single record and return validation result."""
-        acc = rec["archive_accession"]
-        sample_reads = rec.get("sample_reads", [])
-        # str(... or ""): a present-but-null or drifted file_name must not raise in
-        # FileName.parse — coerce to "" as the pre-#246 path did.
+        """Compare one stored record against its ENA run record.
+
+        Per-dimension verdicts are "match" / "mismatch" / "unknown" — unknown
+        when our side is a sentinel, or when ENA offers nothing comparable
+        (no modality evidence declared; assay strategy outside our map).
+        """
+        acc = extract_accession(rec)
         file_name = str(rec.get("file_name") or "")
+        if not acc:  # with_acc filtering makes this unreachable; guards the type
+            return {"error": True, "accession": None, "file": file_name, "reason": "no_accession"}
 
-        # Re-classify with current rules
-        if sample_reads:
-            new_class = classify_from_fastq_header(sample_reads, name=FileName.parse(file_name))
-            our_platform = (new_class.get("platform") or "").upper()
-            our_modality = new_class.get("data_modality") or ""
-        else:
-            our_platform = (rec.get("platform") or "").upper()
-            our_modality = rec.get("data_modality") or ""
-
-        # Fetch ENA metadata
         ena = fetch_ena_metadata(acc)
         if not ena:
             return {"error": True, "accession": acc, "file": file_name, "reason": "api_failed"}
@@ -118,40 +216,60 @@ def validate_against_ena(
         if not ena_platform:
             return {"error": True, "accession": acc, "file": file_name, "reason": "no_platform"}
 
-        # Validate
-        platform_match = our_platform == ena_platform
-        expected_modality = (
-            "transcriptomic"
-            if (ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"])
-            else "genomic"
+        result: dict = {"error": False}
+
+        def verdict(dim: str, ours: str, status: str, expected: str | None, detail: dict, prefix: bool = False) -> None:
+            if not ours or status in _SENTINEL_STATUSES:
+                result[dim] = "unknown"
+                return
+            if expected is None:
+                result[dim] = "unknown"  # nothing comparable on the ENA side
+                return
+            matched = ours.startswith(expected) if prefix else ours == expected
+            result[dim] = "match" if matched else "mismatch"
+            if not matched:
+                result[f"{dim}_detail"] = {
+                    "accession": acc,
+                    "file": file_name,
+                    "type": dim,
+                    "ours": ours,
+                    **detail,
+                }
+
+        our_platform, platform_status = our_field(rec, "platform")
+        verdict("platform", our_platform.upper(), platform_status, ena_platform, {"ena": ena_platform})
+
+        # No default: when ENA declares neither source nor strategy there is
+        # no evidence to compare against, so modality scores unknown rather
+        # than being force-compared to a guessed "genomic".
+        if not ena_source and not ena_strategy:
+            expected_modality = None
+        elif ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"]:
+            expected_modality = "transcriptomic"
+        else:
+            expected_modality = "genomic"
+        our_modality, modality_status = our_field(rec, "data_modality")
+        verdict(
+            "modality",
+            our_modality,
+            modality_status,
+            expected_modality,
+            {"ena_source": ena_source, "ena_strategy": ena_strategy, "expected": expected_modality},
+            prefix=True,
         )
-        modality_match = our_modality and our_modality.startswith(expected_modality)
 
-        result = {
-            "error": False,
-            "platform_match": platform_match,
-            "modality_match": modality_match,
-        }
-
-        if not platform_match:
-            result["platform_mismatch"] = {
-                "accession": acc,
-                "file": file_name,
-                "type": "platform",
-                "ours": our_platform or "(empty)",
-                "ena": ena_platform,
-            }
-
-        if not modality_match:
-            result["modality_mismatch"] = {
-                "accession": acc,
-                "file": file_name,
-                "type": "modality",
-                "ours": our_modality or "(empty)",
-                "ena_source": ena_source,
-                "ena_strategy": ena_strategy,
-                "expected": expected_modality,
-            }
+        # Dormant until import fills assay (#330): activates the moment our
+        # side holds concrete values. Circularity policy (unenforced) in the
+        # module docstring.
+        our_assay, assay_status = our_field(rec, "assay_type")
+        expected_assay = ENA_LIBRARY_STRATEGY_MAP.get(ena_strategy)
+        verdict(
+            "assay",
+            our_assay,
+            assay_status,
+            expected_assay,
+            {"ena_strategy": ena_strategy, "expected": expected_assay},
+        )
 
         return result
 
@@ -174,19 +292,11 @@ def validate_against_ena(
                 )
             else:
                 results["total_validated"] += 1
-                if result["platform_match"]:
-                    results["platform_match"] += 1
-                else:
-                    results["platform_mismatch"] += 1
-                    if result.get("platform_mismatch"):
-                        mismatches.append(result["platform_mismatch"])
-
-                if result["modality_match"]:
-                    results["modality_match"] += 1
-                else:
-                    results["modality_mismatch"] += 1
-                    if result.get("modality_mismatch"):
-                        mismatches.append(result["modality_mismatch"])
+                for dim in ("platform", "modality", "assay"):
+                    results[f"{dim}_{result[dim]}"] += 1
+                    detail = result.get(f"{dim}_detail")
+                    if detail:
+                        mismatches.append(detail)
 
             # Progress update
             progress_interval = 10 if len(with_acc) <= 100 else 100
@@ -195,18 +305,13 @@ def validate_against_ena(
                 rate = completed / elapsed if elapsed > 0 else 0
                 remaining = (len(with_acc) - completed) / rate if rate > 0 else 0
 
-                n = results["total_validated"]
-                if n > 0:
-                    plat_pct = 100 * results["platform_match"] / n
-                    mod_pct = 100 * results["modality_match"] / n
-                else:
-                    plat_pct = mod_pct = 0
+                scored = results["platform_match"] + results["platform_mismatch"]
+                plat_pct = 100 * results["platform_match"] / scored if scored else 0
 
                 print(
                     f"\r[{completed:,}/{len(with_acc):,}] "
                     f"{rate:.1f}/sec | "
                     f"Platform: {plat_pct:.1f}% | "
-                    f"Modality: {mod_pct:.1f}% | "
                     f"ETA: {remaining:.0f}s   ",
                     end="",
                     flush=True,
@@ -220,36 +325,31 @@ def validate_against_ena(
     print("=" * 60)
     print("FULL ENA VALIDATION RESULTS")
     print("=" * 60)
+    rate = completed / elapsed if elapsed > 0 else 0.0
     print(f"Total files with ENA accession: {len(with_acc):,}")
     print(f"Successfully validated:         {n:,}")
-    print(f"API errors (no data):           {results['api_errors']:,}")
-    print(f"Time elapsed:                   {elapsed:.1f}s ({len(with_acc) / elapsed:.1f} files/sec)")
+    print(f"ENA lookup errors (not validated): {results['api_errors']:,}")
+    print(f"Time elapsed:                   {elapsed:.1f}s ({rate:.1f} files/sec)")
     print()
 
-    if n > 0:
-        plat_pct = 100 * results["platform_match"] / n
-        mod_pct = 100 * results["modality_match"] / n
-        print(f"PLATFORM ACCURACY:  {results['platform_match']:,}/{n:,} ({plat_pct:.2f}%)")
-        print(f"MODALITY ACCURACY:  {results['modality_match']:,}/{n:,} ({mod_pct:.2f}%)")
+    for dim, label in (("platform", "PLATFORM"), ("modality", "MODALITY"), ("assay", "ASSAY")):
+        match, mismatch = results[f"{dim}_match"], results[f"{dim}_mismatch"]
+        unknown = results[f"{dim}_unknown"]
+        scored = match + mismatch
+        if scored:
+            print(f"{label}: {match:,}/{scored:,} agree ({100 * match / scored:.2f}%), {unknown:,} unknown")
+        else:
+            print(
+                f"{label}: nothing scored — {unknown:,} unknown (nothing comparable on one side; see module docstring)"
+            )
 
-    if results["platform_mismatch"] > 0:
-        print(f"\nPlatform mismatches: {results['platform_mismatch']:,}")
-    if results["modality_mismatch"] > 0:
-        print(f"Modality mismatches: {results['modality_mismatch']:,}")
-
-    # Show sample mismatches
-    platform_mismatches = [m for m in mismatches if m["type"] == "platform"]
-    modality_mismatches = [m for m in mismatches if m["type"] == "modality"]
-
-    if platform_mismatches:
-        print("\nSample platform mismatches (first 10):")
-        for m in platform_mismatches[:10]:
-            print(f"  {m['accession']}: ours={m['ours']} vs ENA={m['ena']}")
-
-    if modality_mismatches:
-        print("\nSample modality mismatches (first 10):")
-        for m in modality_mismatches[:10]:
-            print(f"  {m['accession']}: ours={m['ours']} vs ENA={m['ena_source']}/{m['ena_strategy']}")
+    # Show sample mismatches per dimension
+    for dim in ("platform", "modality", "assay"):
+        dim_mismatches = [m for m in mismatches if m["type"] == dim]
+        if dim_mismatches:
+            print(f"\nSample {dim} mismatches (first 10):")
+            for m in dim_mismatches[:10]:
+                print(f"  {m['accession']}: ours={m['ours']} vs expected={m.get('expected', m.get('ena'))}")
 
     print("=" * 60)
 
@@ -259,7 +359,16 @@ def validate_against_ena(
         json.dump(
             {
                 "metadata": {
+                    "input": str(input_path),
                     "total_files": len(with_acc),
+                    # Population definition (#330): stored archive_accession
+                    # field OR name-parsed — a superset of the pre-2026-08
+                    # stored-field-only population, so counts are not
+                    # directly comparable with the 2026-01 artifact.
+                    "accession_source": {
+                        "stored_field": sum(1 for r in with_acc if stored_accession(r)),
+                        "name_parsed": sum(1 for r in with_acc if not stored_accession(r)),
+                    },
                     "validated": n,
                     "api_errors": results["api_errors"],
                     "elapsed_seconds": elapsed,
@@ -283,8 +392,8 @@ def main():
         "--input",
         "-i",
         type=Path,
-        default=Path("output/anvil/fastq_classifications.json"),
-        help="Input FASTQ classifications file",
+        default=None,
+        help="Input FASTQ classifications file (default: the latest run's fastq_classifications.json)",
     )
     parser.add_argument(
         "--output",
@@ -309,12 +418,27 @@ def main():
     )
     args = parser.parse_args()
 
-    validate_against_ena(
-        args.input,
-        args.output,
-        limit=args.limit,
-        workers=args.workers,
-    )
+    if args.workers < 1:
+        parser.error("--workers must be >= 1")
+
+    if args.input:
+        input_path = args.input
+    else:
+        try:
+            input_path = find_latest_run(Path("output/anvil")) / "fastq_classifications.json"
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    try:
+        validate_against_ena(
+            input_path,
+            args.output,
+            limit=args.limit,
+            workers=args.workers,
+        )
+    except (ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
