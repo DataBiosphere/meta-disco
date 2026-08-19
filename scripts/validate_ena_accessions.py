@@ -141,9 +141,11 @@ def validate_against_ena(
     adapter = HTTPAdapter(pool_connections=workers, pool_maxsize=workers)
     _session.mount("https://", adapter)
 
-    # Results tracking. "unknown" = our side committed nothing (sentinel or
-    # absent status) OR, assay only, ENA's strategy has no mapping into our
-    # vocabulary. Unknown is excluded from both match and mismatch (#330).
+    # Results tracking. "unknown" = one side has nothing to compare: ours
+    # committed nothing (sentinel or absent status), or ENA offers no
+    # comparable evidence (modality with neither library_source nor
+    # library_strategy; assay with a strategy outside our map). Unknown is
+    # excluded from both match and mismatch (#330).
     # Note #329's refinement, not yet adopted here: not_applicable against a
     # DECLARED external value should arguably score mismatch, not unknown —
     # to be settled when the validators' policies are consolidated.
@@ -316,7 +318,7 @@ def validate_against_ena(
         if scored:
             print(f"{label}: {match:,}/{scored:,} agree ({100 * match / scored:.2f}%), {unknown:,} unknown")
         else:
-            print(f"{label}: nothing scored — {unknown:,} unknown (our side uncommitted; see module docstring)")
+            print(f"{label}: nothing scored — {unknown:,} unknown (nothing comparable on one side; see module docstring)")
 
     # Show sample mismatches per dimension
     for dim in ("platform", "modality", "assay"):
