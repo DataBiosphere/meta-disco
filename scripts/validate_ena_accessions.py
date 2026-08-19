@@ -176,8 +176,8 @@ def validate_against_ena(
         """Compare one stored record against its ENA run record.
 
         Per-dimension verdicts are "match" / "mismatch" / "unknown" — unknown
-        when our side is a sentinel, or (assay only) when ENA's strategy has
-        no mapping into our vocabulary.
+        when our side is a sentinel, or when ENA offers nothing comparable
+        (no modality evidence declared; assay strategy outside our map).
         """
         acc = extract_accession(rec)
         file_name = str(rec.get("file_name") or "")
