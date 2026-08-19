@@ -140,8 +140,9 @@ def validate_against_ena(
     if not isinstance(classifications, list):
         # Fail fast: iterating an unexpected dict shape would yield keys and
         # silently report "Found 0 files" instead of an actionable error.
-        print(f"Error: {input_path} does not hold a classification list", file=sys.stderr)
-        sys.exit(1)
+        # Raised (not sys.exit) so importers/tests aren't force-exited;
+        # main() turns it into the CLI error + exit 1.
+        raise ValueError(f"{input_path} does not hold a classification list")
     with_acc = [c for c in classifications if isinstance(c, dict) and extract_accession(c)]
 
     print(f"Found {len(with_acc):,} files with ENA accessions", flush=True)
@@ -423,12 +424,16 @@ def main():
         except FileNotFoundError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
-    validate_against_ena(
-        input_path,
-        args.output,
-        limit=args.limit,
-        workers=args.workers,
-    )
+    try:
+        validate_against_ena(
+            input_path,
+            args.output,
+            limit=args.limit,
+            workers=args.workers,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
