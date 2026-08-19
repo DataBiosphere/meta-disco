@@ -318,7 +318,9 @@ def validate_against_ena(
         if scored:
             print(f"{label}: {match:,}/{scored:,} agree ({100 * match / scored:.2f}%), {unknown:,} unknown")
         else:
-            print(f"{label}: nothing scored — {unknown:,} unknown (nothing comparable on one side; see module docstring)")
+            print(
+                f"{label}: nothing scored — {unknown:,} unknown (nothing comparable on one side; see module docstring)"
+            )
 
     # Show sample mismatches per dimension
     for dim in ("platform", "modality", "assay"):
