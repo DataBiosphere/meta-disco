@@ -32,12 +32,12 @@ import argparse
 import json
 import re
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
-from requests.adapters import HTTPAdapter
 
 from meta_disco.models import field_status, field_value
 from meta_disco.output_utils import find_latest_run
@@ -97,16 +97,25 @@ def our_field(rec: dict, field: str) -> tuple[str, str]:
     return value, str(status or "")
 
 
-# One pooled session for the whole run: ~7K calls to the same host would
-# otherwise each pay a fresh TLS handshake. Pool size is raised to match
-# --workers in validate_against_ena().
-_session = requests.Session()
+_thread_local = threading.local()
+
+
+def _get_session() -> requests.Session:
+    """The calling thread's Session, created on first use.
+
+    Keep-alive saves ~7K calls to the same host from each paying a fresh
+    TLS handshake, without sharing one Session across threads (a Session
+    is not guaranteed safe for concurrent use).
+    """
+    if not hasattr(_thread_local, "session"):
+        _thread_local.session = requests.Session()
+    return _thread_local.session
 
 
 def fetch_ena_metadata(acc: str) -> dict | None:
     """Fetch metadata for a single accession from ENA API."""
     try:
-        resp = _session.get(
+        resp = _get_session().get(
             ENA_API,
             params={"accession": acc, "result": "read_run", "fields": FIELDS},
             timeout=10,
@@ -152,10 +161,6 @@ def validate_against_ena(
         print(f"Limiting to first {limit} files", flush=True)
 
     print(f"Using {workers} parallel workers", flush=True)
-    # Size the shared session's pool to the worker count so threads reuse
-    # keep-alive connections instead of serializing on the default pool.
-    adapter = HTTPAdapter(pool_connections=workers, pool_maxsize=workers)
-    _session.mount("https://", adapter)
 
     # Results tracking. "unknown" = one side has nothing to compare: ours
     # committed nothing (sentinel or absent status), or ENA offers no
