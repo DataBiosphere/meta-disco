@@ -23,9 +23,11 @@ publications:
     year: 2026
     journal: bioRxiv (preprint)
     role: marker
-    provenance: [pubmed-title-search]
+    provenance: [pubmed-term-search]
     note: >-
       HPRC release-2 flagship paper (Lucas et al.); anchors AnVIL_HPRC_R2.
+      Found by date-sorted free-term search, NOT by title-word search — the
+      latter returned nothing for it on 2026-08-15 (see SKILL.md source 10).
       Corroborated by file count, not title alone: the abstract states HPRC2
       contributes 460 haplotypes, and the 2026-07-29 corpus snapshot holds
       exactly 460 assembly .fa.gz files for AnVIL_HPRC_R2 across 230 samples
@@ -42,10 +44,16 @@ sources_checked:
     outcome: hit — both workspaces present, accessible, registered_identifier null
   - source: pubmed-title-search
     outcome: >-
-      hit (2026-08-23) — both release markers found. On 2026-08-15 this was a
-      partial: release 1 only, with no release-2 paper surfaced by
-      pangenome/reference title words. Re-searched 2026-08-23 with
-      date-sorted PubMed term queries and the HPRC2 preprint came back.
+      partial — release-1 marker found (2026-08-15). Release 2 was NOT found
+      by this channel, on either the 2026-08-15 sweep or the 2026-08-23
+      recheck: pangenome/reference title words return nothing for the HPRC2
+      preprint.
+  - source: pubmed-term-search
+    outcome: >-
+      hit (2026-08-23) — date-sorted free-term query
+      ("human pangenome reference consortium release 2", sort=date, all
+      fields) returned the HPRC2 preprint on the first page. This channel,
+      not the title search, is what found it.
 notes: >-
   Study-level facts useful downstream: organism Homo sapiens; content is
   assemblies + the sequencing reads behind them. Each release now anchors to
