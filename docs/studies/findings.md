@@ -35,7 +35,7 @@ groups (fallback sources):
 | PubMed `[SI]` | 0/3 | Sparse even for GTEx (1 hit). Corroboration only. |
 | dbGaP FHIR `Citers`/publications | 0/3 | Present on phs000424 (670 citers, title + PMC URL each); absent on all three open studies. |
 | NIH RePORTER grant→publications | 2/2 probed | phs003472 (26 grants): 623 distinct PMIDs; ranking by "linked by how many of the study's grants" put the marker papers at the top — of the 4 papers linked by 26/26 grants, two are marker papers (PMIDs 37547663 — which the title search had missed — and 39232149), one is a catalog-description paper (unread, role unclear), one is a variant-specific study. phs003224 (single intramural ZIA grant): resolves and grant-verifies the ONT-pipeline candidate among 417 linked papers, but one grant gives no ranking signal. Not applicable to phs003018 (its study page lists no grants). |
-| PubMed title-word search | 9/9 groups got at least a candidate | Markers identified for 7 groups (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); candidates only for NIA CARD (program-matched, role unclear) and 1000G-PRIMED (underlying-data marker). ~~no paper specific to HPRC release 2~~ — **corrected 2026-08-23 (#338)**: the HPRC2 paper (PMID 42539208, bioRxiv, posted 2026-07-22) existed three weeks before this sweep and was missed; see the preprint caveat below. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
+| PubMed title-word search | 9/9 groups got at least a candidate | Markers identified for 7 groups (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); candidates only for NIA CARD (program-matched, role unclear) and 1000G-PRIMED (underlying-data marker). ~~no paper specific to HPRC release 2~~ — **corrected 2026-08-23 (#338)**: the HPRC2 paper (PMID 42539208, bioRxiv, posted 2026-07-22) existed three weeks before this sweep. This row's verdict stands *for this channel* — title-word queries return nothing for it, on the original sweep and on recheck. It was found by a different channel, `pubmed-term-search` (SKILL.md source 10), which is why the find is recorded there and not here. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
 
 **Headline:** every dbGaP-anchored publication channel returned zero for the
 current open-access studies — they are young and thin in dbGaP. Publication
@@ -157,8 +157,10 @@ this skill stands on each:
   recorded "no paper specific to HPRC release 2", despite the title containing
   both `pangenome` and `reference`. The likeliest cause is PubMed indexing lag
   on the preprint; that is a guess, not a verified cause. What worked on the
-  retry was a **date-sorted term query** (`sort=date` over free terms) rather
-  than a `[Title]`-field query. Any group publishing its data descriptor as a
+  retry is now its own channel — **`pubmed-term-search`** (SKILL.md source 10):
+  free terms across all fields, `sort=date`. Keep the two slugs distinct; a survey's
+  per-source hit rates are meaningless if a find by one channel is recorded against
+  another. Any group publishing its data descriptor as a
   preprint first — increasingly the norm for consortium releases — can be
   missed the same way, so re-run discovery for anchor-less consortium
   workspaces periodically rather than treating one sweep as final.
