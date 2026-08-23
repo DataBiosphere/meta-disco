@@ -35,7 +35,7 @@ groups (fallback sources):
 | PubMed `[SI]` | 0/3 | Sparse even for GTEx (1 hit). Corroboration only. |
 | dbGaP FHIR `Citers`/publications | 0/3 | Present on phs000424 (670 citers, title + PMC URL each); absent on all three open studies. |
 | NIH RePORTER grant→publications | 2/2 probed | phs003472 (26 grants): 623 distinct PMIDs; ranking by "linked by how many of the study's grants" put the marker papers at the top — of the 4 papers linked by 26/26 grants, two are marker papers (PMIDs 37547663 — which the title search had missed — and 39232149), one is a catalog-description paper (unread, role unclear), one is a variant-specific study. phs003224 (single intramural ZIA grant): resolves and grant-verifies the ONT-pipeline candidate among 417 linked papers, but one grant gives no ranking signal. Not applicable to phs003018 (its study page lists no grants). |
-| PubMed title-word search | 9/9 groups got at least a candidate | Markers identified for 7 groups (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); candidates only for NIA CARD (program-matched, role unclear) and 1000G-PRIMED (underlying-data marker); no paper specific to HPRC release 2. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
+| PubMed title-word search | 9/9 groups got at least a candidate | Markers identified for 7 groups (ENCORE, IGVF, T2T ×2, 1000G-HC, HPRC r1, MAGE, nhp dGTEx); candidates only for NIA CARD (program-matched, role unclear) and 1000G-PRIMED (underlying-data marker). ~~no paper specific to HPRC release 2~~ — **corrected 2026-08-23 (#338)**: the HPRC2 paper (PMID 42539208, bioRxiv, posted 2026-07-22) existed three weeks before this sweep and was missed; see the preprint caveat below. Caveat: quoted-phrase queries return 0 for titles missing from PubMed's phrase index — use unquoted ANDed `[Title]` words with stopwords dropped. |
 
 **Headline:** every dbGaP-anchored publication channel returned zero for the
 current open-access studies — they are young and thin in dbGaP. Publication
@@ -151,6 +151,20 @@ this skill stands on each:
   would require reading the app's JS bundle. Future work.
 - Quoted-phrase PubMed title queries silently return 0 for phrases absent
   from the phrase index (`quotedphrasesnotfound`).
+- **Preprint-only markers are a title-search blind spot** (found 2026-08-23,
+  #338). The HPRC release-2 paper (PMID 42539208) was posted to bioRxiv on
+  2026-07-22 — three weeks before the 2026-08-15 sweep — and the sweep still
+  recorded "no paper specific to HPRC release 2", despite the title containing
+  both `pangenome` and `reference`. The likeliest cause is PubMed indexing lag
+  on the preprint; that is a guess, not a verified cause. What worked on the
+  retry was a **date-sorted term query** (`sort=date` over free terms) rather
+  than a `[Title]`-field query. Any group publishing its data descriptor as a
+  preprint first — increasingly the norm for consortium releases — can be
+  missed the same way, so re-run discovery for anchor-less consortium
+  workspaces periodically rather than treating one sweep as final.
+- Corroborate a title match with a countable fact where one exists. HPRC2 was
+  confirmed not by its title but by its abstract's claim of 460 haplotypes
+  matching the 460 assembly FASTAs held for `AnVIL_HPRC_R2` exactly.
 
 ## Reference implementation found
 

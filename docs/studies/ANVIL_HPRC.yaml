@@ -1,4 +1,5 @@
-# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15.
+# phs-anchor dossier (issue #324). Facts carry provenance; surveyed 2026-08-15,
+# release-2 publication added 2026-08-23 (issue #338).
 # No phs accession: Azul registered_identifier is null for both workspaces.
 phsid: null
 title: Human Pangenome Reference Consortium (HPRC)
@@ -12,18 +13,48 @@ publications:
     journal: Nature
     role: marker
     provenance: [pubmed-title-search]
-    note: HPRC release-1 flagship paper (Liao et al.).
+    note: HPRC release-1 flagship paper (Liao et al.); anchors ANVIL_HPRC.
+  - pmid: "42539208"
+    pmcid: PMC13419748
+    doi: 10.64898/2026.07.21.739710
+    title: >-
+      HPRC2: A human pangenome reference with near-complete coverage of common
+      genetic variation
+    year: 2026
+    journal: bioRxiv (preprint)
+    role: marker
+    provenance: [pubmed-title-search]
+    note: >-
+      HPRC release-2 flagship paper (Lucas et al.); anchors AnVIL_HPRC_R2.
+      Corroborated by file count, not title alone: the abstract states HPRC2
+      contributes 460 haplotypes, and the 2026-07-29 corpus snapshot holds
+      exactly 460 assembly .fa.gz files for AnVIL_HPRC_R2 across 230 samples
+      (two haplotypes each). Posted 2026-07-22 — three weeks BEFORE the
+      2026-08-15 sweep that recorded it as missing; the likeliest cause is
+      PubMed indexing lag on the preprint, but that is unverified.
+      Also ships continuous local-ancestry estimates for every genome, which
+      is a finer instrument than population labels for ancestry-stratified
+      analysis.
 pmc_citing_count: null  # not countable without an accession to search on
 dbgap_record: null     # no phs accession to fetch
 sources_checked:
   - source: dataset-record
     outcome: hit — both workspaces present, accessible, registered_identifier null
   - source: pubmed-title-search
-    outcome: partial — release-1 marker found; no release-2 marker paper surfaced (searched pangenome/reference title words)
+    outcome: >-
+      hit (2026-08-23) — both release markers found. On 2026-08-15 this was a
+      partial: release 1 only, with no release-2 paper surfaced by
+      pangenome/reference title words. Re-searched 2026-08-23 with
+      date-sorted PubMed term queries and the HPRC2 preprint came back.
 notes: >-
   Study-level facts useful downstream: organism Homo sapiens; content is
-  assemblies + the sequencing reads behind them. A release-2 data paper was
-  not found via PubMed title search this round; the AnVIL_HPRC_R2 workspace
-  currently anchors to the release-1 paper only. The repo already validates
-  HPRC files against the consortium's own catalogs (data.humanpangenome.org)
-  — for HPRC the consortium catalog, not a paper, is the stronger authority.
+  assemblies + the sequencing reads behind them. Each release now anchors to
+  its own paper — ANVIL_HPRC to release 1, AnVIL_HPRC_R2 to HPRC2. The repo
+  already validates HPRC files against the consortium's own catalogs
+  (data.humanpangenome.org) — for HPRC the consortium catalog, not a paper, is
+  the stronger authority for per-file metadata; the papers are the authority
+  for study-level scope and method.
+  Survey lesson (#338): a marker paper that exists only as a preprint can be
+  invisible to a PubMed title search for weeks after posting. Preprint-only
+  markers are a blind spot of the title-search channel, and the fix that
+  worked was a date-sorted term query rather than a title-word query.
