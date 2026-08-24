@@ -132,7 +132,23 @@ per-source hit rates, not just first-hit provenance.
      surfaced by then, record the study as unresolved with the queries
      tried: an unresolved entry with an audit trail is a valid outcome
      (accuracy over coverage), not a failure.
-10. **Last resort**: WebSearch.
+10. **Date-sorted term search** (slug `pubmed-term-search`) — for *recent*
+    releases, where source 9 fails. Search PubMed with free terms across all
+    fields (not `[Title]`-restricted), `sort=date`, and read the top few.
+    - Use it when the target is a **preprint** or a release from the last
+      year or two. A data descriptor posted to bioRxiv can be absent from
+      PubMed's title index for weeks after posting while still being
+      retrievable by term search, so a `[Title]` query returns 0 for a paper
+      that exists (observed 2026-08-23 on HPRC release 2, #338: the paper was
+      posted three weeks before the sweep that recorded it as missing).
+    - Keep it a distinct slug from `pubmed-title-search`. The two channels
+      have different failure modes, and a survey's per-source hit rates are
+      meaningless if a find by one is recorded against the other.
+    - Corroborate the hit with a **countable fact** where one exists rather
+      than title similarity alone — HPRC2 was confirmed by its abstract's
+      "460 haplotypes" matching the 460 assembly FASTAs held for
+      `AnVIL_HPRC_R2` exactly.
+11. **Last resort**: WebSearch.
 
 Do NOT use Entrez `db=gap` — E-utilities no longer exposes a dbGaP database
 (`elink gap→pubmed` is dead). See findings.md "Retired/broken paths" for
@@ -188,7 +204,7 @@ sources_checked:
   # Use these canonical source slugs (one entry per source tried, in order):
   # gap-exchange, dbgap-study-page, pmc-fulltext, pubmed-si, fhir,
   # ncpi-dataset-catalog, reporter, dataset-record, pubmed-title-search,
-  # websearch.
+  # pubmed-term-search, websearch.
   # (pubmed-esummary is a valid provenance slug on publications — it marks
   # the PMID→title resolution step, not a discovery source.)
   - source: gap-exchange
