@@ -12,6 +12,8 @@ one that fails if that regresses.
 """
 
 from importlib.resources import files
+from itertools import combinations
+from typing import ClassVar
 
 import yaml
 
@@ -302,6 +304,85 @@ class TestCoarseValueReconciliation:
         assert entry["value"] == "CHM13"
         assert entry["build"]["base"] == "CHM13"
         assert entry["build"]["version"] == "v2.0"
+
+
+class TestKeyDiscrimination:
+    """How much the (chr1, chrY) key actually discriminates — pinned, not assumed.
+
+    The key is fitted to the references this corpus contains. The risk that
+    creates is not that it is imperfect today, but that a build added to the
+    table later silently stops being distinguishable from an existing one — the
+    collapse this module exists to prevent, arriving by a different route.
+
+    These pin the current state so that degradation fails loudly. If a new build
+    widens the name-dependent set, the expected list below has to be edited
+    deliberately, which is the point.
+    """
+
+    #: Pairs (by family/version) that no signature can separate, so resolution
+    #: depends on the declared reference name. Most are thin table rows;
+    #: CHM13 v1.1 vs v2.0 is genuine — they share chr1, and v1.1 records no chrY.
+    NAME_DEPENDENT_PAIRS: ClassVar[set[tuple[str, str]]] = {
+        ("CHM13/v1.0", "CHM13/v1.0+GRCh38chrY"),
+        ("CHM13/v1.0", "CHM13/v1.0+HG002chrY"),
+        ("CHM13/v1.0", "GRCh38/p12"),
+        ("CHM13/v1.0+GRCh38chrY", "CHM13/v1.0+HG002chrY"),
+        ("CHM13/v1.0+GRCh38chrY", "GRCh38/p12"),
+        ("CHM13/v1.0+HG002chrY", "GRCh38/p12"),
+        ("CHM13/v1.1", "CHM13/v2.0"),
+        ("CHM13/v1.1", "GRCh38/p12"),
+        ("CHM13/v2.0", "GRCh38/p12"),
+        ("GRCh38/None", "GRCh38/p12"),
+    }
+
+    SIGNATURE_FIELDS: ClassVar[tuple[str, ...]] = ("chr1_length", "chr1_m5", "chry_length", "chry_m5")
+
+    @staticmethod
+    def _label(build):
+        return f"{build.family}/{build.version}"
+
+    @classmethod
+    def _signature_separable(cls, a, b):
+        """True when some observation is consistent with one build and not the other.
+
+        Requires both rows to record the field: an empty set means "never
+        observed", which constrains nothing, so it cannot discriminate.
+        """
+        return any(
+            getattr(a, f) and getattr(b, f) and not (getattr(a, f) & getattr(b, f)) for f in cls.SIGNATURE_FIELDS
+        )
+
+    def test_the_name_dependent_set_has_not_widened(self):
+        observed = {
+            tuple(sorted((self._label(a), self._label(b))))
+            for a, b in combinations(get_unified_rules().reference_builds, 2)
+            if not self._signature_separable(a, b)
+        }
+        assert observed == self.NAME_DEPENDENT_PAIRS, (
+            "the set of build pairs that no signature separates has changed.\n"
+            f"  newly name-dependent: {sorted(observed - self.NAME_DEPENDENT_PAIRS)}\n"
+            f"  no longer:            {sorted(self.NAME_DEPENDENT_PAIRS - observed)}\n"
+            "A pair that becomes name-dependent means a nameless file can no longer "
+            "tell those builds apart. Widen the key, or accept it deliberately by "
+            "editing NAME_DEPENDENT_PAIRS."
+        )
+
+    def test_every_build_is_reachable_by_some_evidence(self):
+        """No build may be indistinguishable from another by *both* signature and
+        name — that would make one of them permanently unresolvable."""
+        builds = get_unified_rules().reference_builds
+        for a, b in combinations(builds, 2):
+            assert self._signature_separable(a, b) or not (a.aliases & b.aliases), (
+                f"{self._label(a)} and {self._label(b)} share an alias and no signature separates them"
+            )
+
+    def test_a_nameless_file_withholds_a_version_it_cannot_prove(self):
+        """The genuine case: CHM13 v1.1 and v2.0 share chr1. Without a name, the
+        family resolves and the version does not."""
+        header = "@SQ\tSN:chr1\tLN:248387328\tM5:e469247288ceb332aee524caec92bb22\n"
+        identity = identity_from_sam(header)
+        assert identity.base == "CHM13"
+        assert identity.version is None
 
 
 class TestSchemaContract:

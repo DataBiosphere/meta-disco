@@ -17,10 +17,11 @@ Neither alone is sufficient, and the corpus shows why:
 - **chrY alone cannot separate GRCh38 from CHM13-with-grafted-GRCh38-chrY**,
   which share a chrY exactly because one borrowed it from the other.
 
-The pair separates every reference observed in this corpus. That is a fitted
-result, not a general identity: a reference differing from another only on, say,
-chr7 would collide. #342's contig-set digest is the principled successor and
-should supersede this key when it lands.
+The pair does not separate every build it emits — 8 of the 21 pairs among the
+current seven rely on the declared name, mostly because one row is thin, and one
+genuinely (CHM13 v1.1 and v2.0 share chr1). See the resolver module docstring;
+the separability guard lives in tests/test_reference_builds.py. #342's
+contig-set digest is the structural fix.
 
 What this deliberately does not decide
 --------------------------------------

@@ -21,10 +21,27 @@ Neither contig alone identifies a build, and the corpus shows why:
 - **chrY cannot separate GRCh38 from CHM13-with-grafted-GRCh38-chrY**, which
   share a chrY exactly because the latter borrowed it from the former.
 
-The pair separates every reference observed in this corpus. That is a fitted
-result rather than a general identity — two builds differing only on, say, chr7
-would collide, and this module would correctly report the ambiguity rather than
-pick one. #342's contig-set digest is the principled successor.
+The pair does **not** separate every build in the table. Measured over the
+current seven, 8 of 21 pairs are indistinguishable by signature alone and rely on
+the declared name to resolve — most because one row is thin (``GRCh38.p12``
+records no signature at all), but one genuinely: CHM13 v1.1 and v2.0 share chr1
+and v1.1 has no chrY recorded, so a *nameless* file carrying only chr1 resolves
+to the family and withholds the version. That is the honest outcome, not a
+failure, but it is the ceiling of a two-contig key.
+
+Two consequences worth stating plainly:
+
+- This is a **fitted** result, not a general identity. Two builds differing only
+  on, say, chr7 would collide, and this module would report the ambiguity rather
+  than pick one — correct, but uninformative.
+- The fitting is **checked**, not assumed:
+  ``tests/test_reference_builds.py`` pins which pairs depend on the name, so a
+  build added to the table that widens that set fails loudly instead of quietly
+  collapsing two references — which is the failure this module exists to prevent,
+  arriving by a different route.
+
+#342's contig-set digest is the structural fix: it keys on the whole contig
+composition rather than two chromosomes, and supersedes this key when it lands.
 
 Signatures are sets, not values
 -------------------------------
