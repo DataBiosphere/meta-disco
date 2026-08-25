@@ -78,6 +78,22 @@ def _get_engine() -> "RuleEngine":
 # =============================================================================
 
 
+def _record_reference_build(result, identity) -> None:
+    """Attach a resolved reference build to ``reference_assembly``'s detail (#340).
+
+    The dimension is named here, in the classifier that observed the build,
+    rather than in the generic output assembler — ``build_field_entry`` and
+    ``to_output_dict`` stay dimension-agnostic.
+
+    An identity with nothing in it is dropped rather than recorded: an object
+    whose every member is null says nothing while looking like an answer, and the
+    entry should simply carry no build.
+    """
+    if identity.is_empty():
+        return
+    result.field_detail["reference_assembly"] = {"build": identity.to_dict()}
+
+
 def classify_from_header(
     header_text: str,
     *,
@@ -163,9 +179,9 @@ def classify_from_header(
     # header names. Runs whatever the contig detection above concluded, including
     # when it concluded nothing — an unresolvable file still keeps its observed
     # checksums so a later table row can resolve it without re-fetching.
-    from .validators.reference_builds import resolve_identity
+    from .validators.reference_builds import identity_from_sam
 
-    result.reference_identity = resolve_identity(header_text, is_bam=True)
+    _record_reference_build(result, identity_from_sam(header_text))
 
     # Infer assay type
     engine.infer_assay_type(result, file_info)
@@ -244,9 +260,9 @@ def classify_from_vcf_header(
     # the resolver less to work with than BAM does: ##contig carries no checksum,
     # so builds that differ only in sequence stay ambiguous here and resolve to a
     # null version rather than a guess.
-    from .validators.reference_builds import resolve_identity
+    from .validators.reference_builds import identity_from_vcf
 
-    result.reference_identity = resolve_identity(header_text, is_bam=False)
+    _record_reference_build(result, identity_from_vcf(header_text))
 
     return result.to_output_dict()
 

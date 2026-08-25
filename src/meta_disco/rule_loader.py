@@ -86,6 +86,32 @@ class IlluminaInstrument:
     model: str
 
 
+@dataclass(frozen=True)
+class ReferenceBuild:
+    """One known reference build and the signatures observed for it (#340).
+
+    Signature fields are *sets* matched by membership, not single values.
+    Headers vary in completeness — a chromosome-subset BAM carries no chr1, and
+    many carry no ``M5`` — and one build legitimately appears with more than one
+    chrY checksum at identical length, so a build is described by everything seen
+    for it rather than by a representative example.
+
+    ``family`` is a ``reference_assembly_enum`` value, checked against the schema
+    by ``tests/test_rule_vocabulary.py``. ``version`` is free text: T2T releases
+    (``v1.0``/``v2.0``) and GRC patches (``p12``) are not the same kind of thing,
+    and where a build grafts a chromosome from elsewhere the origin is part of the
+    version (``v1.0+GRCh38chrY``).
+    """
+
+    family: str
+    version: str | None
+    chr1_length: frozenset[int]
+    chr1_m5: frozenset[str]
+    chry_length: frozenset[int]
+    chry_m5: frozenset[str]
+    aliases: frozenset[str]
+
+
 @dataclass
 class UnifiedRules:
     """Container for all unified rules and configurations."""
@@ -95,7 +121,7 @@ class UnifiedRules:
     assay_type_rules: list[AssayTypeRule]
     illumina_instruments: list[IlluminaInstrument]
     reference_contig_lengths: dict[str, dict[str, int]]
-    reference_builds: list[dict]
+    reference_builds: list[ReferenceBuild]
 
     # The extension vocabulary and the parse now live in file_name.py as a pure,
     # instance-free leaf (#252). These are thin delegators so existing callers
@@ -290,10 +316,10 @@ class RuleLoader:
         # because both describe references, not because either depends on the
         # other — the coarse path does not consult the build table.
         reference_contig_lengths = {}
-        reference_builds: list[dict] = []
+        reference_builds: list[ReferenceBuild] = []
         if len(docs) > 4 and docs[4]:
             reference_contig_lengths = docs[4].get("reference_contig_lengths", {})
-            reference_builds = docs[4].get("reference_builds", []) or []
+            reference_builds = self._parse_reference_builds(docs[4].get("reference_builds", []) or [])
 
         self._rules = UnifiedRules(
             rules=rules,
@@ -478,6 +504,46 @@ class RuleLoader:
                 model=inst.get("model", ""),
             )
             for inst in instruments_data
+        ]
+
+    @staticmethod
+    def _signature_set(build: dict, key: str) -> frozenset:
+        """One signature field as a frozenset, rejecting a bare scalar.
+
+        ``frozenset("abc")`` is ``{"a", "b", "c"}`` — so a YAML author writing
+        ``chr1_m5: e469...`` instead of a list would produce a set of characters
+        that matches nothing, and the build would silently stop resolving. These
+        fields are lists by contract; anything else fails at load, where it is
+        attributable, rather than as an unexplained miss at classify time.
+        """
+        value = build.get(key)
+        if value is None:
+            return frozenset()
+        if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set)):
+            raise ValueError(
+                f"reference_builds entry {build.get('family')!r}/{build.get('version')!r}: "
+                f"{key} must be a list, got {type(value).__name__}"
+            )
+        return frozenset(value)
+
+    def _parse_reference_builds(self, builds_data: list[dict]) -> list[ReferenceBuild]:
+        """Parse the reference build table from YAML (#340).
+
+        Signature fields are frozen here rather than at the consumer so the YAML
+        key names are spelled out once, and a missing ``family`` fails at load
+        instead of degrading to a build that silently matches nothing.
+        """
+        return [
+            ReferenceBuild(
+                family=build["family"],
+                version=build.get("version"),
+                chr1_length=self._signature_set(build, "chr1_length"),
+                chr1_m5=self._signature_set(build, "chr1_m5"),
+                chry_length=self._signature_set(build, "chry_length"),
+                chry_m5=self._signature_set(build, "chry_m5"),
+                aliases=self._signature_set(build, "aliases"),
+            )
+            for build in builds_data
         ]
 
     def get_rules(self) -> UnifiedRules:

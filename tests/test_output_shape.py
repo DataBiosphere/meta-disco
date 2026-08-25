@@ -57,6 +57,7 @@ from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
+from meta_disco.validators.reference_builds import IDENTITY_FIELDS
 from tests.metadata_fixtures import valid_record
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
@@ -157,7 +158,9 @@ FIELD_KEYS = {"value", "status", "evidence"}
 # resolves there and the golden is unaffected — but the contract below still has
 # to permit and check it, or the field would slip through untested.
 OPTIONAL_FIELD_KEYS = {"build"}
-BUILD_KEYS = {"base", "version", "chr1_m5", "chry_m5", "name"}
+# Derived from the dataclass so the contract cannot drift from the fields it
+# is meant to pin.
+BUILD_KEYS = set(IDENTITY_FIELDS)
 RECORD_KEYS = {
     "file_name",
     "md5sum",

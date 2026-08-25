@@ -131,19 +131,52 @@ classes:
 
       ``chr1_m5``, ``chry_m5`` and ``name`` are OBSERVED, read from the file's
       own header. ``base`` and ``version`` are DERIVED by matching those
-      observations against a table of known builds, and are null when the
-      evidence does not identify exactly one — an ambiguous file keeps its
-      observations rather than being assigned a nearest match.
+      observations against a table of known builds. ``version`` is null unless
+      the evidence identifies exactly one build; ``base`` is filled whenever
+      every candidate agrees on the family, which is often true when the version
+      is not. An ambiguous file keeps its observations rather than being assigned
+      a nearest match.
 
       Not a claim: it carries no tier, never competes in claim resolution, and
       cannot change which ``value`` won. Absent entirely when nothing was
       observed.
-    slots:
-      - base
-      - version
-      - chr1_m5
-      - chry_m5
-      - name
+
+      Declared as class-local ``attributes`` rather than global ``slots``:
+      ``name``, ``base`` and ``version`` are the kind of identifier that collides
+      across a shared namespace, and nothing outside this class needs them.
+    attributes:
+      base:
+        description: >-
+          Assembly family of the resolved build, matching ``reference_assembly_enum``.
+          Duplicates the coarse value when both are known, so a build is readable on
+          its own; null when no single family was identified.
+      version:
+        description: >-
+          Build version within the family. Free text by necessity: T2T releases
+          (``v1.0``, ``v1.1``, ``v2.0``) and GRC patches (``p12``) are not the same
+          kind of thing, and CHM13 has no patch concept. Where a build grafts a
+          chromosome from elsewhere the origin is part of the version
+          (``v1.0+GRCh38chrY``), because that is a real difference in the reference.
+          Null unless the evidence identifies exactly one build.
+      chr1_m5:
+        description: >-
+          MD5 of the chr1 sequence, from SAM ``@SQ M5``. Identifies the sequence, not
+          the packaging: two references with different decoy or alt content share this
+          value when their chr1 is the same. Null for VCF, whose ``##contig`` md5
+          attribute is optional in the specification and unpopulated in practice.
+      chry_m5:
+        description: >-
+          MD5 of the chrY sequence, from SAM ``@SQ M5``. Recorded because chr1 alone
+          cannot separate some builds — CHM13 v2.0 is v1.1 plus a chrY, so their
+          autosomes are identical. One build can appear with more than one value here
+          at identical chrY length; the header cannot say why, so both are recorded
+          as observations and neither is preferred.
+      name:
+        description: >-
+          Reference filename as the file declares it, from SAM ``@SQ UR`` or VCF
+          ``##reference``. An observation about the file, not a statement about the
+          reference's content: one name can denote references that differ, and
+          differently-named references can be identical.
 
   Evidence:
     description: >-
@@ -234,46 +267,15 @@ slots:
     multivalued: true
     inlined_as_list: true
 
-  # --- ReferenceBuild sub-fields (issue #340) ---
+  # --- ReferenceBuild link (issue #340) ---
   build:
     description: >-
       The specific reference build behind this dimension's coarse value. Named
       ``build`` rather than ``reference`` because ``Evidence.reference`` already
-      means a provenance pointer.
+      means a provenance pointer. ReferenceBuild's own fields are class-local
+      attributes, so they add nothing to the global slot namespace.
     range: ReferenceBuild
     required: false
-  base:
-    description: >-
-      Assembly family of the resolved build, matching ``reference_assembly_enum``.
-      Duplicates the coarse value when both are known, so a build is readable on
-      its own; null when no single build was identified.
-  version:
-    description: >-
-      Build version within the family. Free text by necessity: T2T releases
-      (``v1.0``, ``v1.1``, ``v2.0``) and GRC patches (``p12``) are not the same
-      kind of thing, and CHM13 has no patch concept. Where a build grafts a
-      chromosome from elsewhere the origin is part of the version
-      (``v1.0+GRCh38chrY``), because that is a real difference in the reference.
-      Null when the evidence does not identify exactly one build.
-  chr1_m5:
-    description: >-
-      MD5 of the chr1 sequence, from SAM ``@SQ M5``. Identifies the sequence, not
-      the packaging: two references with different decoy or alt content share this
-      value when their chr1 is the same. Null for VCF, whose ``##contig`` md5
-      attribute is optional in the specification and unpopulated in practice.
-  chry_m5:
-    description: >-
-      MD5 of the chrY sequence, from SAM ``@SQ M5``. Recorded because chr1 alone
-      cannot separate some builds — CHM13 v2.0 is v1.1 plus a chrY, so their
-      autosomes are identical. One build can appear with more than one value here
-      at identical chrY length; the header cannot say why, so both are recorded
-      as observations and neither is preferred.
-  name:
-    description: >-
-      Reference filename as the file declares it, from SAM ``@SQ UR`` or VCF
-      ``##reference``. An observation about the file, not a statement about the
-      reference's content: one name can denote references that differ, and
-      differently-named references can be identical.
 
   # --- Evidence sub-fields ---
   rule_id:

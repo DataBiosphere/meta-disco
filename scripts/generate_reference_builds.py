@@ -46,23 +46,32 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from collections import Counter, defaultdict
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-EVIDENCE_GLOBS = (
-    "data/evidence/anvil/bam/*/*",
-    "data/evidence/anvil/vcf/*/*",
+from meta_disco.evidence import BamEvidence, VcfEvidence
+from meta_disco.validators.reference_builds import observe_sam, observe_vcf
+
+# (evidence directory, observer, evidence class). The observers are imported from the resolver
+# rather than reimplemented here: this script measures the table the resolver
+# matches against, so a parser that differed would produce a table describing
+# headers the resolver reads differently. That divergence is not hypothetical —
+# an earlier version of this script used a stricter ##contig pattern than the
+# resolver and would silently have under-populated the table.
+EVIDENCE_SOURCES = (
+    (Path("data/evidence/anvil/bam"), observe_sam, BamEvidence),
+    (Path("data/evidence/anvil/vcf"), observe_vcf, VcfEvidence),
 )
 
-# Reference-name -> (family, version). The measured signatures below are facts;
-# this mapping is the one place a human judgement enters, so it is explicit and
+# Reference-name -> (family, version). The measured signatures are facts; this
+# mapping is the one place a human judgement enters, so it is explicit and
 # reviewable rather than inferred from a filename at classify time.
 #
 # `version` is free text because the families version themselves differently:
 # T2T releases (v1.0, v1.1, v2.0) and GRC patches (p12, p13) are not the same
 # kind of thing, and CHM13 has no patch concept at all.
+#
 # CHM13 is derived from a female cell line and so has no chrY of its own. Builds
 # that carry one grafted it from somewhere, and *where from* is a real difference
 # in the reference even though the autosomes are identical — so those are separate
@@ -83,66 +92,43 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "GRCh38.p12": ("GRCh38", "p12"),
 }
 
-_SQ_UR = re.compile(r"\tUR:(\S+)")
-_VCF_REF = re.compile(r"##reference=(?:file://)?(\S+)")
-
-
-def _sq_signature(header: str, contig: str) -> tuple[int | None, str | None]:
-    """(length, md5) for one contig from a SAM ``@SQ`` block, or (None, None)."""
-    pattern = re.compile(rf"\tSN:(?:chr)?{contig}\t")
-    for line in header.split("\n"):
-        if line.startswith("@SQ") and pattern.search(line):
-            length = re.search(r"\tLN:(\d+)", line)
-            md5 = re.search(r"\tM5:(\w+)", line)
-            return (int(length.group(1)) if length else None, md5.group(1) if md5 else None)
-    return (None, None)
-
-
-def _vcf_signature(header: str, contig: str) -> tuple[int | None, str | None]:
-    """(length, None) for one contig from VCF ``##contig`` lines.
-
-    VCF carries no checksum: the ``md5`` attribute of ``##contig`` is optional in
-    the spec and is populated on none of the cached headers, so length is the
-    only in-band signal this format offers.
-    """
-    match = re.search(rf"##contig=<ID=(?:chr)?{contig},length=(\d+)", header)
-    return (int(match.group(1)) if match else None, None)
-
-
-def _reference_name(header: str, is_bam: bool) -> str | None:
-    """The reference path the header declares, reduced to a basename."""
-    if is_bam:
-        for line in header.split("\n"):
-            if line.startswith("@SQ"):
-                match = _SQ_UR.search(line)
-                return PurePosixPath(match.group(1)).name if match else None
-        return None
-    match = _VCF_REF.search(header)
-    return PurePosixPath(match.group(1)).name if match else None
+# Contigs whose signature the table records, matching KEY_CONTIGS in the resolver.
+KEY_CONTIGS = ("1", "Y")
 
 
 def collect() -> dict[str, Counter]:
-    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name."""
+    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name.
+
+    Reads through the ``CachedEvidence`` classes rather than the raw JSON so a
+    malformed cache entry is skipped at the boundary instead of silently reading
+    as an empty header.
+    """
     observed: dict[str, Counter] = defaultdict(Counter)
-    for pattern in EVIDENCE_GLOBS:
-        is_bam = "/bam/" in pattern
-        root, _, leaf = pattern.partition("*")
-        for path in Path(root.rstrip("/")).glob("*" + leaf):
+    for directory, observe, evidence_cls in EVIDENCE_SOURCES:
+        for path in directory.glob("*/*"):
             if not path.is_file():
                 continue
             try:
                 with path.open() as handle:
-                    record = json.load(handle)
+                    entry = evidence_cls.from_json(json.load(handle))
             except (OSError, json.JSONDecodeError):
                 continue
-            header = record.get("header_text") or ""
-            name = _reference_name(header, is_bam)
+            if entry is None:
+                continue
+            signatures, name = observe(entry.header_text)
             if not name:
                 continue
-            sig = _sq_signature if is_bam else _vcf_signature
-            chr1_len, chr1_m5 = sig(header, "1")
-            chry_len, chry_m5 = sig(header, "Y")
-            observed[name][(chr1_len, chr1_m5, chry_len, chry_m5)] += 1
+            by_contig = {sig.bare_name: sig for sig in signatures}
+            chr1 = by_contig.get(KEY_CONTIGS[0])
+            chry = by_contig.get(KEY_CONTIGS[1])
+            observed[name][
+                (
+                    chr1.length if chr1 else None,
+                    chr1.md5 if chr1 else None,
+                    chry.length if chry else None,
+                    chry.md5 if chry else None,
+                )
+            ] += 1
     return observed
 
 
@@ -179,11 +165,9 @@ def build_rows(observed: dict[str, Counter]) -> list[dict]:
                 "chry_length": set(),
                 "chry_m5": set(),
                 "aliases": set(),
-                "files_seen": 0,
             },
         )
         row["aliases"].add(name)
-        row["files_seen"] += sum(counter.values())
         for signature in counter:
             for field, value in zip(("chr1_length", "chr1_m5", "chry_length", "chry_m5"), signature, strict=True):
                 if value is not None:

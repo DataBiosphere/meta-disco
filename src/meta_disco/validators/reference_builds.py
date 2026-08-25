@@ -46,22 +46,81 @@ the checksums seen and the reference name declared. Discarding those would make
 the file unresolvable forever; keeping them means a later table row can resolve
 it from stored output, with no re-fetch. That matters because the evidence cache
 holds raw headers and re-classifying the corpus is expensive.
+
+Format neutrality
+-----------------
+Resolution runs over :class:`ContigSignature` values, not over header text, so
+this module holds no SAM or VCF parsing of its own — ``header_extractors`` owns
+that, and the two observers below are the only place the formats are told apart.
+The generator that *builds* the table imports those same observers, which is what
+keeps a table measured one way from being matched another.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from functools import cache
+from dataclasses import asdict, astuple, dataclass, fields
 from pathlib import PurePosixPath
 
-from ..rule_loader import get_unified_rules
+from ..rule_loader import ReferenceBuild, get_unified_rules
+from .header_extractors import parse_sam_header, parse_vcf_header
 
-_SQ_UR = re.compile(r"\tUR:(\S+)")
-_VCF_REFERENCE = re.compile(r"##reference=(?:file://)?(\S+)")
-
-# Contigs the build key is computed over, in the order they are reported.
+# Contigs the build key is computed over. Changing this set means regenerating
+# the table (scripts/generate_reference_builds.py) — ReferenceBuild's signature
+# fields are named per contig, so the two have to move together.
 KEY_CONTIGS = ("1", "Y")
+
+# A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
+# is whatever sat between two tabs — so a value that is not a checksum is dropped
+# rather than recorded as one. Either case is accepted here (the SAM
+# specification does not require one) and normalised below; contrast
+# ``pipeline._MD5_RE``, which is lowercase-only because it validates md5s this
+# project generated rather than ones a third party wrote.
+_M5_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+
+
+def _checksum(value: str | None) -> str | None:
+    """A header's ``M5`` tag as a lowercase MD5, or None if it is not one.
+
+    Lowercased because matching against the build table is exact string
+    membership: an uppercase checksum is the same sequence, and without
+    normalising it here it would silently fail to resolve.
+    """
+    if not value or not _M5_RE.match(value):
+        return None
+    return value.lower()
+
+
+def _length(value: str | None) -> int | None:
+    """A header's contig length if it is a plain base-10 integer, else None.
+
+    ``str.isdigit`` alone is not enough: it is true for characters like ``²``
+    that ``int()`` then refuses, which would raise mid-classification on a
+    malformed header. Requiring ASCII makes the guard match what ``int`` accepts.
+    """
+    if not value or not (value.isascii() and value.isdigit()):
+        return None
+    return int(value)
+
+
+@dataclass(frozen=True)
+class ContigSignature:
+    """One reference contig as a file declares it.
+
+    ``md5`` is ``None`` for VCF: the ``md5`` attribute of ``##contig`` is optional
+    in the specification and populated on none of the cached headers, so VCF
+    evidence rests on length alone. That is why builds differing only in sequence
+    stay ambiguous when the evidence is a VCF.
+    """
+
+    name: str
+    length: int | None
+    md5: str | None = None
+
+    @property
+    def bare_name(self) -> str:
+        """Contig name without a ``chr`` prefix, which references vary on."""
+        return self.name.removeprefix("chr")
 
 
 @dataclass(frozen=True)
@@ -91,143 +150,159 @@ class ReferenceIdentity:
         """True when nothing at all was observed or derived.
 
         Callers use this to omit the field entirely rather than emit an object
-        whose every member is null, which would say nothing while looking like
-        an answer.
+        whose every member is null, which would say nothing while looking like an
+        answer. Derived from the declared fields, so adding one cannot leave this
+        check behind.
         """
-        return not any((self.base, self.version, self.chr1_m5, self.chry_m5, self.name))
+        return not any(astuple(self))
 
     def to_dict(self) -> dict:
-        """Serialize for output. Every key is always present, so a consumer can
-        distinguish "we looked and found nothing" (null) from "this shape has no
-        such field" — the field is only omitted upstream when nothing was found
-        at all."""
-        return {
-            "base": self.base,
-            "version": self.version,
-            "chr1_m5": self.chr1_m5,
-            "chry_m5": self.chry_m5,
-            "name": self.name,
-        }
+        """Serialize for output, keys derived from the declared fields.
+
+        Every key is always present, so a consumer can tell "we looked and found
+        nothing" (null) from "this shape has no such field" — the object is only
+        omitted upstream when nothing was found at all.
+        """
+        return asdict(self)
 
 
-@cache
-def _builds() -> tuple[dict, ...]:
-    """The build table from unified_rules.yaml, signature fields as frozensets."""
-    rows = []
-    for row in get_unified_rules().reference_builds:
-        rows.append(
-            {
-                "family": row.get("family"),
-                "version": row.get("version"),
-                "chr1_length": frozenset(row.get("chr1_length") or ()),
-                "chr1_m5": frozenset(row.get("chr1_m5") or ()),
-                "chry_length": frozenset(row.get("chry_length") or ()),
-                "chry_m5": frozenset(row.get("chry_m5") or ()),
-                "aliases": frozenset(row.get("aliases") or ()),
-            }
-        )
-    return tuple(rows)
+def observe_sam(header_text: str) -> tuple[list[ContigSignature], str | None]:
+    """Contig signatures and the declared reference name from a SAM/BAM header.
 
-
-def _sq_signature(header_lines: list[str], contig: str) -> tuple[int | None, str | None]:
-    """``(length, md5)`` for one contig from SAM ``@SQ`` lines."""
-    pattern = re.compile(rf"\tSN:(?:chr)?{contig}\t")
-    for line in header_lines:
-        if line.startswith("@SQ") and pattern.search(line):
-            length = re.search(r"\tLN:(\d+)", line)
-            md5 = re.search(r"\tM5:(\w+)", line)
-            return (int(length.group(1)) if length else None, md5.group(1) if md5 else None)
-    return (None, None)
-
-
-def _vcf_signature(header_lines: list[str], contig: str) -> tuple[int | None, str | None]:
-    """``(length, None)`` for one contig from VCF ``##contig`` lines.
-
-    Always ``None`` for the checksum: ``md5`` is an optional attribute of
-    ``##contig`` in the VCF specification and is populated on none of the cached
-    headers, so length is the only in-band signal this format offers. VCF builds
-    are therefore resolvable only where lengths differ between builds — which is
-    why, for instance, CHM13 v1.1 and v2.0 stay ambiguous from a VCF alone.
+    Reads the ``@SQ`` dictionary through ``parse_sam_header`` rather than
+    re-tokenizing it, so tag order and optional tags behave here exactly as they
+    do everywhere else in the project.
     """
-    for line in header_lines:
-        if line.startswith("##contig"):
-            match = re.match(rf"##contig=<ID=(?:chr)?{contig},.*?length=(\d+)", line)
-            if match:
-                return (int(match.group(1)), None)
-    return (None, None)
+    header = parse_sam_header(header_text)
+    sq_records = header.sq or []
+    signatures = [
+        ContigSignature(
+            name=sq["SN"],
+            length=_length(sq.get("LN")),
+            md5=_checksum(sq.get("M5")),
+        )
+        for sq in sq_records
+        if sq.get("SN")
+    ]
+    # UR is the reference path, carried per-@SQ and identical across them; the
+    # first record that has one speaks for the file.
+    declared = next((sq["UR"] for sq in sq_records if sq.get("UR")), None)
+    return signatures, _basename(declared)
 
 
-def _declared_name(header_lines: list[str], is_bam: bool) -> str | None:
-    """The reference path the header declares, reduced to a basename.
+def observe_vcf(header_text: str) -> tuple[list[ContigSignature], str | None]:
+    """Contig signatures and the declared reference name from a VCF header.
+
+    ``##contig`` attributes are unordered, which is why this reads the parsed
+    fields rather than matching a positional pattern.
+    """
+    header = parse_vcf_header(header_text)
+    signatures = []
+    for contig in header.contigs or []:
+        contig_id = contig.fields.get("ID")
+        if not contig_id:
+            continue
+        signatures.append(ContigSignature(name=contig_id, length=_length(contig.fields.get("length"))))
+    return signatures, _basename(header.reference)
+
+
+def _basename(reference: str | None) -> str | None:
+    """A declared reference path reduced to its filename.
+
+    ``PurePosixPath`` because these are URIs and posix paths out of file headers:
+    they must reduce the same way regardless of the OS running the classifier.
 
     A name is an observation about the file, not a statement about the
-    reference's content: one name can denote references that differ, and
-    references with different names can be identical. It is recorded and used
-    only to break a tie that the checksums leave open.
+    reference's content — one name can denote references that differ, and
+    references with different names can be identical — so it is used only to
+    break a tie the checksums leave open.
     """
-    if is_bam:
-        for line in header_lines:
-            if line.startswith("@SQ"):
-                match = _SQ_UR.search(line)
-                return PurePosixPath(match.group(1)).name if match else None
+    if not reference:
         return None
-    for line in header_lines:
-        if line.startswith("##reference="):
-            match = _VCF_REFERENCE.match(line)
-            return PurePosixPath(match.group(1)).name if match else None
-    return None
+    return PurePosixPath(reference.removeprefix("file://")).name
 
 
-def _candidates(observed: dict[str, object]) -> list[dict]:
-    """Builds consistent with every part of the evidence we actually have.
+def _signature_for(signatures: list[ContigSignature], contig: str) -> ContigSignature | None:
+    return next((sig for sig in signatures if sig.bare_name == contig), None)
 
-    Parts that were not observed do not constrain: a header without ``M5`` must
-    still be able to match on lengths. A part that *was* observed and matches no
-    build eliminates that build, which is what makes an unknown reference resolve
-    to nothing rather than to its nearest neighbour.
+
+def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
+    """Whether one observation is consistent with one build.
+
+    Three cases, and the middle one is where this went wrong once:
+
+    - **nothing observed** — no constraint. A header without ``M5`` must still be
+      able to match on lengths.
+    - **the build records nothing for this contig** — no constraint either. An
+      empty set means "never observed for this build", not "known to be absent".
+      Treating it as a contradiction eliminates builds whose table row is merely
+      thinner than another's, which is how a CHM13 v1.1 file — whose chr1 is
+      byte-identical to v2.0's — came to resolve as v2.0, reproducing the exact
+      collapse this module exists to prevent.
+    - **both known** — must match, and a mismatch eliminates the build. That is
+      what makes an unknown reference resolve to nothing rather than to its
+      nearest neighbour.
     """
-    matches = []
-    for build in _builds():
-        for field, value in observed.items():
-            if value is None:
-                continue
-            if value not in build[field]:
-                break
-        else:
-            matches.append(build)
-    return matches
+    if value is None:
+        return True
+    known = getattr(build, field)
+    return not known or value in known
 
 
-def resolve_identity(header_text: str, *, is_bam: bool) -> ReferenceIdentity:
-    """Identify the reference build behind a BAM/CRAM or VCF header.
+def _has_signatures(build: ReferenceBuild) -> bool:
+    """Whether any contig signature was ever observed for this build.
 
-    Returns an identity whose ``base``/``version`` are filled only when the
-    evidence matches exactly one build. Ambiguous evidence — several builds
-    consistent with what was observed — resolves to ``None`` for both, keeping
-    the observations. Accuracy over coverage: a wrong build is worse than none.
+    A row with none — ``GRCh38.p12`` is one, known only by name — is consistent
+    with *every* observation under :func:`_consistent`, so it would join every
+    candidate set and drag the family into disagreement. Such a build carries no
+    evidence to match against and is reachable only by its declared name.
     """
-    lines = header_text.strip().split("\n") if header_text else []
-    if not lines:
-        return ReferenceIdentity()
+    return bool(build.chr1_length or build.chr1_m5 or build.chry_length or build.chry_m5)
 
-    signature = _sq_signature if is_bam else _vcf_signature
-    chr1_length, chr1_m5 = signature(lines, KEY_CONTIGS[0])
-    chry_length, chry_m5 = signature(lines, KEY_CONTIGS[1])
-    name = _declared_name(lines, is_bam)
 
-    matches = _candidates(
-        {
-            "chr1_length": chr1_length,
-            "chr1_m5": chr1_m5,
-            "chry_length": chry_length,
-            "chry_m5": chry_m5,
-        }
-    )
+def _candidates(observed: dict[str, object]) -> list[ReferenceBuild]:
+    """Builds whose recorded signatures are consistent with the evidence."""
+    return [
+        build
+        for build in get_unified_rules().reference_builds
+        if _has_signatures(build) and all(_consistent(build, field, value) for field, value in observed.items())
+    ]
 
-    # The declared name breaks a tie the checksums left open — but only narrows an
-    # existing candidate set, never introduces a build the signatures ruled out.
-    if len(matches) > 1 and name:
-        by_name = [build for build in matches if name in build["aliases"]]
+
+def resolve_identity(signatures: list[ContigSignature], declared_name: str | None) -> ReferenceIdentity:
+    """Identify the reference build behind a file's contig signatures.
+
+    Format-neutral by construction: callers observe once, through
+    :func:`observe_sam` or :func:`observe_vcf`, and resolution never learns which
+    format the evidence came from.
+
+    Ambiguous evidence — several builds consistent with what was observed —
+    leaves ``version`` unset while keeping the observations. Accuracy over
+    coverage: a wrong build is worse than none.
+    """
+    chr1 = _signature_for(signatures, KEY_CONTIGS[0])
+    chry = _signature_for(signatures, KEY_CONTIGS[1])
+    observed = {
+        "chr1_length": chr1.length if chr1 else None,
+        "chr1_m5": chr1.md5 if chr1 else None,
+        "chry_length": chry.length if chry else None,
+        "chry_m5": chry.md5 if chry else None,
+    }
+
+    # With no key-contig evidence at all there is nothing to narrow, and every
+    # build would trivially be a candidate. The declared name must not resolve a
+    # build by itself: a name is what a file claims, and a chr20-only BAM naming
+    # chm13v2.0.fasta has offered no evidence that it is one. Keep the name as an
+    # observation and derive nothing from it.
+    if not any(value is not None for value in observed.values()):
+        return ReferenceIdentity(name=declared_name)
+
+    matches = _candidates(observed)
+
+    # The declared name breaks a tie the signatures left open — narrowing an
+    # existing candidate set, never introducing a build they ruled out.
+    if len(matches) > 1 and declared_name:
+        by_name = [build for build in matches if declared_name in build.aliases]
         if len(by_name) == 1:
             matches = by_name
 
@@ -235,12 +310,27 @@ def resolve_identity(header_text: str, *, is_bam: bool) -> ReferenceIdentity:
     # agrees on one — a VCF carrying only chr1=248,387,497 cannot say which CHM13
     # v1.0 variant it is, but all three candidates are CHM13, so reporting that is
     # informative and cannot be wrong. Only `version` is withheld.
-    families = {build["family"] for build in matches}
+    families = {build.family for build in matches}
     build = matches[0] if len(matches) == 1 else None
     return ReferenceIdentity(
         base=families.pop() if len(families) == 1 else None,
-        version=build["version"] if build else None,
-        chr1_m5=chr1_m5,
-        chry_m5=chry_m5,
-        name=name,
+        version=build.version if build else None,
+        chr1_m5=chr1.md5 if chr1 else None,
+        chry_m5=chry.md5 if chry else None,
+        name=declared_name,
     )
+
+
+def identity_from_sam(header_text: str) -> ReferenceIdentity:
+    """Observe a SAM/BAM header and resolve the build behind it."""
+    return resolve_identity(*observe_sam(header_text))
+
+
+def identity_from_vcf(header_text: str) -> ReferenceIdentity:
+    """Observe a VCF header and resolve the build behind it."""
+    return resolve_identity(*observe_vcf(header_text))
+
+
+# ReferenceIdentity's field names, derived rather than re-listed so the schema
+# and any consumer stay in lockstep with the dataclass.
+IDENTITY_FIELDS = tuple(f.name for f in fields(ReferenceIdentity))

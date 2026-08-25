@@ -43,7 +43,12 @@ from .read_name_parsers import (
     parse_pacbio_read_name,
 )
 from .reference_builds import (
+    ContigSignature,
     ReferenceIdentity,
+    identity_from_sam,
+    identity_from_vcf,
+    observe_sam,
+    observe_vcf,
     resolve_identity,
 )
 
@@ -53,7 +58,12 @@ __all__ = [
     "detect_reference_from_contig_lengths",
     "detect_reference_from_max_positions",
     # Reference build identity (#340)
+    "ContigSignature",
     "ReferenceIdentity",
+    "identity_from_sam",
+    "identity_from_vcf",
+    "observe_sam",
+    "observe_vcf",
     "resolve_identity",
     # Header extractors
     "SAMHeader",

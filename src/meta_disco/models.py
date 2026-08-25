@@ -82,7 +82,7 @@ def _assert_coherent(value, status) -> None:
         raise ValueError(f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
-def build_field_entry(value, status=None, evidence=None, build=None) -> dict:
+def build_field_entry(value, status=None, evidence=None, detail=None) -> dict:
     """Build a serialized per-field classification entry.
 
     The single place that assembles the ``{value, status, evidence}`` output shape
@@ -101,16 +101,16 @@ def build_field_entry(value, status=None, evidence=None, build=None) -> dict:
     carry the sentinel in ``value``; pass it explicitly when the status is known
     directly. The derived path is coherent by construction and never raises.
 
-    ``build`` is optional detail *about* the value, used only by
-    ``reference_assembly`` to name the specific reference build behind a coarse
-    family (#340). It is omitted from the entry entirely when absent, so every
-    other dimension's shape is byte-identical to before this argument existed,
-    and a dimension that has no such concept never carries an empty one. It is
-    not a claim and carries no tier: it cannot change which value won.
+    ``detail`` carries extra, dimension-specific facts *about* the value — the
+    first is ``reference_assembly``'s resolved build (#340), and #341/#342 will
+    add more. Its keys are merged into the entry, and it is omitted entirely when
+    absent or empty, so a dimension with no such facts serializes byte-identically
+    to before this argument existed. Detail is never a claim: it carries no tier
+    and cannot change which value won.
 
-    Named ``build`` rather than ``reference`` because LinkML slots are global and
-    ``reference`` already belongs to ``Evidence``, where it means a provenance
-    pointer — a different thing entirely.
+    This function stays dimension-agnostic on purpose — it is the single place the
+    entry shape is assembled, so it must not learn any dimension by name. Which
+    dimension gets which detail is decided by whichever classifier observed it.
     """
     if status is None:
         status = status_for_value(value)
@@ -120,8 +120,11 @@ def build_field_entry(value, status=None, evidence=None, build=None) -> dict:
         "status": status,
         "evidence": evidence if evidence is not None else [],
     }
-    if build is not None:
-        entry["build"] = build
+    if detail:
+        clashing = set(detail) & set(entry)
+        if clashing:
+            raise ValueError(f"detail may not shadow the entry's own keys: {sorted(clashing)}")
+        entry.update(detail)
     return entry
 
 
