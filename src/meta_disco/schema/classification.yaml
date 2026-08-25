@@ -146,10 +146,13 @@ classes:
       across a shared namespace, and nothing outside this class needs them.
     attributes:
       base:
+        range: reference_assembly_enum
         description: >-
-          Assembly family of the resolved build, matching ``reference_assembly_enum``.
-          Duplicates the coarse value when both are known, so a build is readable on
-          its own; null when no single family was identified.
+          Assembly family of the resolved build. Duplicates the coarse value when
+          both are known, so a build is readable on its own; null when no single
+          family was identified. Range-constrained rather than merely documented
+          as such, so a table entry naming a family outside the vocabulary fails
+          validation instead of passing as free text.
       version:
         description: >-
           Build version within the family. Free text by necessity: T2T releases

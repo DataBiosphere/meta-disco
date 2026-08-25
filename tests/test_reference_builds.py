@@ -11,8 +11,14 @@ whose chr1 differs by 169 bases. ``test_the_two_chm13_builds_separate`` is the
 one that fails if that regresses.
 """
 
+from importlib.resources import files
+
+import yaml
+
+from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
+from meta_disco.rule_loader import get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
     ReferenceIdentity,
@@ -259,6 +265,35 @@ class TestUntrustedHeaders:
     def test_a_real_checksum_still_resolves(self):
         """The guard must not reject the values the corpus actually carries."""
         assert identity_from_sam(CHM13_V2).version == "v2.0"
+
+
+class TestSchemaContract:
+    """The emitted build must satisfy the contract the schema declares.
+
+    The golden fixture in test_output_shape carries no ``build`` — its stub
+    headers resolve none — so without these the new ReferenceBuild contract would
+    never be exercised by any test.
+    """
+
+    def test_every_table_family_is_a_vocabulary_value(self):
+        """``ReferenceBuild.base`` is range-constrained to reference_assembly_enum
+        in the schema, so a table entry outside the vocabulary would emit a build
+        that fails validation."""
+        for build in get_unified_rules().reference_builds:
+            assert schema_vocab.value_in_vocabulary("reference_assembly", build.family), build.family
+
+    def test_an_emitted_base_is_a_vocabulary_value(self):
+        """The same constraint on the path that actually produces output."""
+        entry = classify_from_header(CHM13_V2)["reference_assembly"]
+        assert schema_vocab.value_in_vocabulary("reference_assembly", entry["build"]["base"])
+
+    def test_the_emitted_build_carries_exactly_the_declared_attributes(self):
+        """The schema declares five class-local attributes; the emitted object
+        must match them, or output and schema have drifted apart."""
+        schema = yaml.safe_load((files("meta_disco.schema") / "classification.yaml").read_text(encoding="utf-8"))
+        declared = set(schema["classes"]["ReferenceBuild"]["attributes"])
+        entry = classify_from_header(CHM13_V2)["reference_assembly"]
+        assert set(entry["build"]) == declared == set(IDENTITY_FIELDS)
 
 
 class TestSerialization:

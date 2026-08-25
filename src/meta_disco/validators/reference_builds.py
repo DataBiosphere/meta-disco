@@ -254,8 +254,14 @@ def _has_signatures(build: ReferenceBuild) -> bool:
 
     A row with none — ``GRCh38.p12`` is one, known only by name — is consistent
     with *every* observation under :func:`_consistent`, so it would join every
-    candidate set and drag the family into disagreement. Such a build carries no
-    evidence to match against and is reachable only by its declared name.
+    candidate set and drag the family into disagreement.
+
+    Excluding it makes such a row **currently unreachable**: the name narrows an
+    existing candidate set rather than selecting outside it, and a file with no
+    key-contig evidence returns before matching runs at all. That is the
+    consequence of refusing to resolve a build from a filename alone, and it is
+    the intended trade — a row like this contributes its aliases to the table's
+    documentation but resolves nothing until a signature for it is observed.
     """
     return bool(build.chr1_length or build.chr1_m5 or build.chry_length or build.chry_m5)
 

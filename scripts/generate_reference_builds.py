@@ -99,9 +99,12 @@ KEY_CONTIGS = ("1", "Y")
 def collect() -> dict[str, Counter]:
     """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name.
 
-    Reads through the ``CachedEvidence`` classes rather than the raw JSON so a
-    malformed cache entry is skipped at the boundary instead of silently reading
-    as an empty header.
+    Reads through the ``CachedEvidence`` classes rather than raw JSON so a
+    structurally wrong entry is skipped at the boundary. That check is
+    structural only — ``from_json`` does not validate payload *types* — so a
+    corrupt entry whose ``header_text`` is not a string still arrives here, and
+    is skipped explicitly below. One bad cache file must not abort a table
+    generation that reads hundreds of thousands of them.
     """
     observed: dict[str, Counter] = defaultdict(Counter)
     for directory, observe, evidence_cls in EVIDENCE_SOURCES:
@@ -113,7 +116,7 @@ def collect() -> dict[str, Counter]:
                     entry = evidence_cls.from_json(json.load(handle))
             except (OSError, json.JSONDecodeError):
                 continue
-            if entry is None:
+            if entry is None or not isinstance(entry.header_text, str):
                 continue
             signatures, name = observe(entry.header_text)
             if not name:
