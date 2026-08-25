@@ -95,6 +95,7 @@ class UnifiedRules:
     assay_type_rules: list[AssayTypeRule]
     illumina_instruments: list[IlluminaInstrument]
     reference_contig_lengths: dict[str, dict[str, int]]
+    reference_builds: list[dict]
 
     # The extension vocabulary and the parse now live in file_name.py as a pure,
     # instance-free leaf (#252). These are thin delegators so existing callers
@@ -283,10 +284,16 @@ class RuleLoader:
         if len(docs) > 3 and docs[3]:
             illumina_instruments = self._parse_illumina_instruments(docs[3].get("illumina_instruments", []))
 
-        # Fifth document: reference contig lengths (optional)
+        # Fifth document: reference tables (both optional). Contig lengths drive
+        # the coarse family detection; reference_builds is the finer build table
+        # read by validators.reference_builds (#340). They share a document
+        # because both describe references, not because either depends on the
+        # other — the coarse path does not consult the build table.
         reference_contig_lengths = {}
+        reference_builds: list[dict] = []
         if len(docs) > 4 and docs[4]:
             reference_contig_lengths = docs[4].get("reference_contig_lengths", {})
+            reference_builds = docs[4].get("reference_builds", []) or []
 
         self._rules = UnifiedRules(
             rules=rules,
@@ -294,6 +301,7 @@ class RuleLoader:
             assay_type_rules=assay_type_rules,
             illumina_instruments=illumina_instruments,
             reference_contig_lengths=reference_contig_lengths,
+            reference_builds=reference_builds,
         )
 
         return self._rules

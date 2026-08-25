@@ -19,6 +19,7 @@ from .models import (
     status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
+from .validators.reference_builds import ReferenceIdentity
 
 if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
@@ -197,6 +198,12 @@ class ExtendedClassificationResult:
     # not_classified) lives here, never in a value slot. Defaults to
     # not_classified (no statement made) until a value or status is set.
     field_status: dict[str, str] = field(default_factory=lambda: dict.fromkeys(CLASSIFICATION_FIELDS, NOT_CLASSIFIED))
+    # The specific reference build behind ``reference_assembly`` (#340), when a
+    # classifier could observe one. Detail *about* that dimension's value, not a
+    # dimension of its own and not a claim: it carries no tier and never competes
+    # in ``evaluate_claims``, so it cannot change which value wins. A file whose
+    # build is unresolved keeps whatever ``reference_assembly`` it already had.
+    reference_identity: ReferenceIdentity | None = None
 
     def set_field(self, fld: str, value: str | None = None, status: str | None = None) -> None:
         """Set a dimension's value and status coherently.
@@ -370,8 +377,19 @@ class ExtendedClassificationResult:
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
             evidence = self.field_evidence.get(fld, [])
+            # Only reference_assembly carries a build identity, and only when one
+            # was observed — an all-null identity is omitted rather than emitted,
+            # so "we found nothing" and "there was nothing to find" do not look
+            # alike in the output (#340).
+            build = None
+            if (
+                fld == "reference_assembly"
+                and self.reference_identity is not None
+                and not self.reference_identity.is_empty()
+            ):
+                build = self.reference_identity.to_dict()
             classifications[fld] = build_field_entry(
-                getattr(self, fld), status=self.field_status[fld], evidence=evidence
+                getattr(self, fld), status=self.field_status[fld], evidence=evidence, build=build
             )
         return classifications
 

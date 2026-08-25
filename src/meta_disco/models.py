@@ -82,7 +82,7 @@ def _assert_coherent(value, status) -> None:
         raise ValueError(f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
-def build_field_entry(value, status=None, evidence=None) -> dict:
+def build_field_entry(value, status=None, evidence=None, build=None) -> dict:
     """Build a serialized per-field classification entry.
 
     The single place that assembles the ``{value, status, evidence}`` output shape
@@ -100,15 +100,29 @@ def build_field_entry(value, status=None, evidence=None) -> dict:
     ``status`` defaults to ``status_for_value(value)`` for producers that still
     carry the sentinel in ``value``; pass it explicitly when the status is known
     directly. The derived path is coherent by construction and never raises.
+
+    ``build`` is optional detail *about* the value, used only by
+    ``reference_assembly`` to name the specific reference build behind a coarse
+    family (#340). It is omitted from the entry entirely when absent, so every
+    other dimension's shape is byte-identical to before this argument existed,
+    and a dimension that has no such concept never carries an empty one. It is
+    not a claim and carries no tier: it cannot change which value won.
+
+    Named ``build`` rather than ``reference`` because LinkML slots are global and
+    ``reference`` already belongs to ``Evidence``, where it means a provenance
+    pointer — a different thing entirely.
     """
     if status is None:
         status = status_for_value(value)
     _assert_coherent(value, status)
-    return {
+    entry = {
         "value": value if status == CLASSIFIED else None,
         "status": status,
         "evidence": evidence if evidence is not None else [],
     }
+    if build is not None:
+        entry["build"] = build
+    return entry
 
 
 def all_not_classified(evidence: list[dict]) -> dict:

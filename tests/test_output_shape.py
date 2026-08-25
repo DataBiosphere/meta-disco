@@ -151,6 +151,13 @@ STUB_PAYLOADS = {
 CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
 MARKER_EVIDENCE_KEYS = {"marker", "reason"}
 FIELD_KEYS = {"value", "status", "evidence"}
+# `build` (#340) is optional detail about a value, carried only by
+# reference_assembly and only when a reference build was actually resolvable from
+# the file's header. The golden's stub headers have no contig content, so no build
+# resolves there and the golden is unaffected — but the contract below still has
+# to permit and check it, or the field would slip through untested.
+OPTIONAL_FIELD_KEYS = {"build"}
+BUILD_KEYS = {"base", "version", "chr1_m5", "chry_m5", "name"}
 RECORD_KEYS = {
     "file_name",
     "md5sum",
@@ -276,7 +283,17 @@ def test_output_structural_contract(output):
         assert set(CLASSIFICATION_FIELDS) <= set(classifications), ftype
         for field in CLASSIFICATION_FIELDS:
             entry = classifications[field]
-            assert set(entry) == FIELD_KEYS, f"{ftype}.{field}: {set(entry)}"
+            assert set(entry) >= FIELD_KEYS, f"{ftype}.{field}: missing {FIELD_KEYS - set(entry)}"
+            extra = set(entry) - FIELD_KEYS
+            assert extra <= OPTIONAL_FIELD_KEYS, f"{ftype}.{field}: unexpected keys {extra}"
+            if "build" in entry:
+                assert field == "reference_assembly", f"{ftype}.{field}: only reference_assembly carries a build"
+                assert set(entry["build"]) == BUILD_KEYS, f"{ftype}.{field}.build: {set(entry['build'])}"
+                # Every member null would say nothing while looking like an
+                # answer; such an identity is omitted upstream, not emitted.
+                assert any(v is not None for v in entry["build"].values()), (
+                    f"{ftype}.{field}: an all-null build should be omitted, not emitted"
+                )
             assert entry["value"] is None or isinstance(entry["value"], str)
             # Stage 3 (#116) coherence: status is a schema-defined value (incl.
             # conflict, #88); sentinels live only in `status`; `value` is non-null

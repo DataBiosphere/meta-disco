@@ -158,6 +158,15 @@ def classify_from_header(
                 value="genomic",
             )
 
+    # Resolve the specific build behind the coarse family (#340). Additive: this
+    # never sets or changes reference_assembly, only records which build the
+    # header names. Runs whatever the contig detection above concluded, including
+    # when it concluded nothing — an unresolvable file still keeps its observed
+    # checksums so a later table row can resolve it without re-fetching.
+    from .validators.reference_builds import resolve_identity
+
+    result.reference_identity = resolve_identity(header_text, is_bam=True)
+
     # Infer assay type
     engine.infer_assay_type(result, file_info)
 
@@ -230,6 +239,14 @@ def classify_from_vcf_header(
             reason=reason,
             value=contig_ref,
         )
+
+    # Resolve the specific build (#340), additively — see the BAM path. VCF gives
+    # the resolver less to work with than BAM does: ##contig carries no checksum,
+    # so builds that differ only in sequence stay ambiguous here and resolve to a
+    # null version rather than a guess.
+    from .validators.reference_builds import resolve_identity
+
+    result.reference_identity = resolve_identity(header_text, is_bam=False)
 
     return result.to_output_dict()
 

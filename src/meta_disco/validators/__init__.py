@@ -2,7 +2,8 @@
 
 This package contains Python validators for classification logic that is
 too complex to express in YAML rules, such as:
-- Reference detection from chromosome contig lengths
+- Reference detection from chromosome contig lengths (family) and from
+  chr1/chrY signatures (specific build)
 - Read name parsing for different sequencing platforms
 - Header field extraction from BAM/VCF files
 """
@@ -41,12 +42,19 @@ from .read_name_parsers import (
     parse_ont_read_name,
     parse_pacbio_read_name,
 )
+from .reference_builds import (
+    ReferenceIdentity,
+    resolve_identity,
+)
 
 __all__ = [
     # Contig length validators
     "REFERENCE_CONTIG_LENGTHS",
     "detect_reference_from_contig_lengths",
     "detect_reference_from_max_positions",
+    # Reference build identity (#340)
+    "ReferenceIdentity",
+    "resolve_identity",
     # Header extractors
     "SAMHeader",
     "VCFHeader",
