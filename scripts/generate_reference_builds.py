@@ -114,7 +114,12 @@ def collect() -> dict[str, Counter]:
             try:
                 with path.open() as handle:
                     entry = evidence_cls.from_json(json.load(handle))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, ValueError):
+                # ValueError covers JSONDecodeError and UnicodeDecodeError — a
+                # cache member that is not valid UTF-8 raises the latter, which
+                # is not an OSError and would otherwise abort a run over hundreds
+                # of thousands of files. CachedEvidence.load treats the same case
+                # as a miss; this read matches that.
                 continue
             if entry is None or not isinstance(entry.header_text, str):
                 continue

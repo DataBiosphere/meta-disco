@@ -267,6 +267,43 @@ class TestUntrustedHeaders:
         assert identity_from_sam(CHM13_V2).version == "v2.0"
 
 
+class TestCoarseValueReconciliation:
+    """One entry must not assert two families.
+
+    The coarse value and the build are derived independently and can disagree.
+    Where they do, the derivations are withheld and the observations kept — the
+    same treatment any other ambiguity gets.
+    """
+
+    # chrY-only, from the CHM13 build that grafted GRCh38's chrY. The coarse
+    # detector sees only that borrowed chrY and says GRCh38; the signature and
+    # name identify the CHM13 build it actually belongs to.
+    GRAFTED_CHRY_ONLY = (
+        "@SQ\tSN:chrY\tLN:57227415\tM5:ce3e31103314a704255f3cd90369ecce"
+        "\tUR:file:///r/t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r.fasta\n"
+    )
+
+    def test_a_record_never_asserts_two_families(self):
+        entry = classify_from_header(self.GRAFTED_CHRY_ONLY)["reference_assembly"]
+        build = entry.get("build") or {}
+        assert build.get("base") in (None, entry["value"])
+
+    def test_the_observations_survive_the_disagreement(self):
+        """Withholding the derivation must not discard the evidence — a later
+        pass has to be able to resolve this from stored output."""
+        entry = classify_from_header(self.GRAFTED_CHRY_ONLY)["reference_assembly"]
+        build = entry["build"]
+        assert build["base"] is None and build["version"] is None
+        assert build["chry_m5"] == "ce3e31103314a704255f3cd90369ecce"
+        assert build["name"].startswith("t2t-chm13")
+
+    def test_an_agreeing_build_is_untouched(self):
+        entry = classify_from_header(CHM13_V2)["reference_assembly"]
+        assert entry["value"] == "CHM13"
+        assert entry["build"]["base"] == "CHM13"
+        assert entry["build"]["version"] == "v2.0"
+
+
 class TestSchemaContract:
     """The emitted build must satisfy the contract the schema declares.
 
