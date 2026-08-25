@@ -120,7 +120,9 @@ def _reconcile_with_coarse_value(result, identity):
     contradictory is asserted now.
 
     The underlying gap is in the coarse detector, which cannot tell a genome
-    from one that borrowed its chrY. Fixing that is out of scope here.
+    from one that borrowed its chrY — issue #345. When that is fixed this
+    reconciliation becomes dead code and should be removed with it: a record that
+    cannot contradict itself needs no guard against contradiction.
     """
     coarse = result.reference_assembly
     if identity.base is None or coarse is None or identity.base == coarse:
