@@ -7,9 +7,11 @@ tolerance precisely so that minor build differences do not defeat detection. Thi
 module answers "which *build*", and so it does the opposite: exact matching only,
 and ``None`` rather than a nearest neighbour.
 
-The two never interact. The coarse value this project already emits is produced
-entirely by ``contig_lengths`` and is unchanged by anything here; a build that
-cannot be resolved leaves that value exactly as it was and simply adds no detail.
+Nothing here changes the coarse value. It is produced entirely by
+``contig_lengths``, and a build that cannot be resolved leaves it exactly as it
+was and simply adds no detail. The interaction runs the other way only:
+``header_classifier._reconcile_with_coarse_value`` withholds a derived family
+that contradicts the coarse value (issue #345).
 
 The key is (chr1, chrY)
 -----------------------
@@ -21,13 +23,16 @@ Neither contig alone identifies a build, and the corpus shows why:
 - **chrY cannot separate GRCh38 from CHM13-with-grafted-GRCh38-chrY**, which
   share a chrY exactly because the latter borrowed it from the former.
 
-The pair does **not** separate every build in the table. Measured over the
-current seven, 8 of 21 pairs are indistinguishable by signature alone and rely on
-the declared name to resolve — most because one row is thin (``GRCh38.p12``
-records no signature at all), but one genuinely: CHM13 v1.1 and v2.0 share chr1
-and v1.1 has no chrY recorded, so a *nameless* file carrying only chr1 resolves
-to the family and withholds the version. That is the honest outcome, not a
-failure, but it is the ceiling of a two-contig key.
+The pair does **not** separate every build in the table. Some pairs are
+indistinguishable by signature alone and rely on the declared name to resolve —
+``TestKeyDiscrimination.NAME_DEPENDENT_PAIRS`` in ``tests/test_reference_builds.py``
+is the authoritative list, pinned so it cannot widen unnoticed. They come in
+three kinds: pairs involving ``GRCh38.p12``, which records no signature at all;
+pairs among the CHM13 v1.0 variants, which share chr1 and where a row records no
+chrY; and one genuine collision: CHM13 v1.1 and v2.0 share chr1 and v1.1 has no
+chrY recorded, so a *nameless* file carrying only chr1 resolves to the family and
+withholds the version. That is the honest outcome, not a failure, but it is the
+ceiling of a two-contig key.
 
 Two consequences worth stating plainly:
 

@@ -386,6 +386,49 @@ class TestLoadClassifications:
         assert field_value(cls, "platform") == "ILLUMINA"
         assert field_value(cls, "assay_type") == "RNA-seq"
 
+    def test_bai_inherits_the_parent_reference_build(self, tmp_path):
+        """The parent's resolved build (#340) must reach the index record; an
+        index that names only the coarse family describes its parent's reference
+        less precisely than the parent does."""
+        build = {
+            "base": "CHM13",
+            "version": "v2.0",
+            "chr1_m5": "e469247288ceb332aee524caec92bb22",
+            "chry_m5": "dd7264df17e7e4a4dac5b0f1f19dcfe0",
+            "name": "chm13v2.0.fasta",
+        }
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {"file_name": "s.bam", "file_format": ".bam", "file_md5sum": "bam_md5", "dataset_id": "ds1"},
+                    {"file_name": "s.bam.bai", "file_format": ".bai", "file_md5sum": "bai_md5", "dataset_id": "ds1"},
+                ]
+            )
+        )
+        bam_cls = tmp_path / "bam.json"
+        bam_cls.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bam_md5",
+                            "file_name": "s.bam",
+                            "classifications": {
+                                "reference_assembly": {"value": "CHM13", "evidence": [], "build": build}
+                            },
+                        }
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [bam_cls], output_file)
+        with output_file.open() as f:
+            entry = json.load(f)["classifications"][0]["classifications"]["reference_assembly"]
+        assert entry["value"] == "CHM13"
+        assert entry["build"] == build
+
     def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
         """Index file with no parent in metadata goes to unmatched_files, not classifications."""
         metadata_file = tmp_path / "metadata.json"

@@ -23,10 +23,13 @@ from meta_disco.models import field_status, field_value
 from meta_disco.rule_loader import get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
+    ContigSignature,
     ReferenceIdentity,
+    _has_signatures,
     identity_from_sam,
     identity_from_vcf,
     observe_sam,
+    resolve_identity,
 )
 
 # --- Real signatures, as measured from the corpus ---------------------------
@@ -367,14 +370,35 @@ class TestKeyDiscrimination:
             "editing NAME_DEPENDENT_PAIRS."
         )
 
-    def test_every_build_is_reachable_by_some_evidence(self):
-        """No build may be indistinguishable from another by *both* signature and
-        name — that would make one of them permanently unresolvable."""
-        builds = get_unified_rules().reference_builds
-        for a, b in combinations(builds, 2):
-            assert self._signature_separable(a, b) or not (a.aliases & b.aliases), (
-                f"{self._label(a)} and {self._label(b)} share an alias and no signature separates them"
+    #: Rows the resolver cannot reach: no signature was ever observed for them,
+    #: and a name alone resolves nothing (``_has_signatures``). Pinned so a row
+    #: that silently becomes unreachable fails here instead of resolving nothing.
+    UNREACHABLE_ROWS: ClassVar[set[str]] = {"GRCh38/p12"}
+
+    @staticmethod
+    def _one_observation_of(build) -> list[ContigSignature]:
+        """A header's worth of evidence drawn from the row itself: one recorded
+        value per signature field. Each field is matched by membership
+        independently, so pairing a length with any recorded checksum is valid."""
+        return [
+            ContigSignature(name=name, length=min(lengths, default=None), md5=min(checksums, default=None))
+            for name, lengths, checksums in (
+                ("chr1", build.chr1_length, build.chr1_m5),
+                ("chrY", build.chry_length, build.chry_m5),
             )
+            if lengths or checksums
+        ]
+
+    def test_every_signatured_build_resolves_from_its_own_evidence(self):
+        """Every row must be reachable by actually resolving: its own recorded
+        signatures plus one alias have to come back as that row, or the table
+        holds a build nothing can ever be classified as. Rows the resolver's own
+        predicate excludes are pinned, not skipped."""
+        builds = get_unified_rules().reference_builds
+        assert {self._label(b) for b in builds if not _has_signatures(b)} == self.UNREACHABLE_ROWS
+        for build in filter(_has_signatures, builds):
+            identity = resolve_identity(self._one_observation_of(build), min(build.aliases))
+            assert (identity.base, identity.version) == (build.family, build.version), self._label(build)
 
     def test_a_nameless_file_withholds_a_version_it_cannot_prove(self):
         """The genuine case: CHM13 v1.1 and v2.0 share chr1. Without a name, the

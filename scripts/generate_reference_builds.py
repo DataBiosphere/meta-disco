@@ -17,11 +17,10 @@ Neither alone is sufficient, and the corpus shows why:
 - **chrY alone cannot separate GRCh38 from CHM13-with-grafted-GRCh38-chrY**,
   which share a chrY exactly because one borrowed it from the other.
 
-The pair does not separate every build it emits — 8 of the 21 pairs among the
-current seven rely on the declared name, mostly because one row is thin, and one
-genuinely (CHM13 v1.1 and v2.0 share chr1). See the resolver module docstring;
-the separability guard lives in tests/test_reference_builds.py. #342's
-contig-set digest is the structural fix.
+The pair does not separate every build it emits; some pairs rely on the declared
+name. See the resolver module docstring for the kinds, and
+``NAME_DEPENDENT_PAIRS`` in tests/test_reference_builds.py for the pinned list.
+#342's contig-set digest is the structural fix.
 
 What this deliberately does not decide
 --------------------------------------
@@ -52,11 +51,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from meta_disco.evidence import BamEvidence, VcfEvidence
-from meta_disco.validators.reference_builds import observe_sam, observe_vcf
+from meta_disco.validators.reference_builds import KEY_CONTIGS, observe_sam, observe_vcf
 
-# (evidence directory, observer, evidence class). The observers are imported from the resolver
-# rather than reimplemented here: this script measures the table the resolver
-# matches against, so a parser that differed would produce a table describing
+# (evidence directory, observer, evidence class). The observers — and KEY_CONTIGS,
+# the pair the table is keyed on — are imported from the resolver rather than
+# reimplemented here: this script measures the table the resolver matches
+# against, so a parser or key that differed would produce a table describing
 # headers the resolver reads differently. That divergence is not hypothetical —
 # an earlier version of this script used a stricter ##contig pattern than the
 # resolver and would silently have under-populated the table.
@@ -92,9 +92,6 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna": ("GRCh38", None),
     "GRCh38.p12": ("GRCh38", "p12"),
 }
-
-# Contigs whose signature the table records, matching KEY_CONTIGS in the resolver.
-KEY_CONTIGS = ("1", "Y")
 
 
 def collect() -> dict[str, Counter]:

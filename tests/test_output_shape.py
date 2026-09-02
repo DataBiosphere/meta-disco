@@ -55,7 +55,7 @@ import pytest
 from meta_disco import schema_vocab
 from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
+from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
 from tests.metadata_fixtures import valid_record
@@ -151,12 +151,14 @@ STUB_PAYLOADS = {
 # resolution marker (marker); the two are mutually exclusive (issue #228).
 CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
 MARKER_EVIDENCE_KEYS = {"marker", "reason"}
-FIELD_KEYS = {"value", "status", "evidence"}
+FIELD_KEYS = set(ENTRY_KEYS)
 # `build` (#340) is optional detail about a value, carried only by
-# reference_assembly and only when a reference build was actually resolvable from
-# the file's header. The golden's stub headers have no contig content, so no build
-# resolves there and the golden is unaffected — but the contract below still has
-# to permit and check it, or the field would slip through untested.
+# reference_assembly and only when the header yielded some observation — a key
+# contig checksum or a declared reference name. `base` and `version` inside it
+# are null when those observations resolved no build. The golden's stub headers
+# carry neither, so no build is emitted there and the golden is unaffected — but
+# the contract below still has to permit and check it, or the field would slip
+# through untested.
 OPTIONAL_FIELD_KEYS = {"build"}
 # Derived from the dataclass so the contract cannot drift from the fields it
 # is meant to pin.

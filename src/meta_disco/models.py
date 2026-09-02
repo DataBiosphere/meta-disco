@@ -82,6 +82,11 @@ def _assert_coherent(value, status) -> None:
         raise ValueError(f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
+# The keys every per-field entry carries. Anything else on an entry is *detail*
+# (``build_field_entry``'s ``detail`` argument), and ``field_detail`` reads it back.
+ENTRY_KEYS = frozenset({"value", "status", "evidence"})
+
+
 def build_field_entry(value, status=None, evidence=None, detail=None) -> dict:
     """Build a serialized per-field classification entry.
 
@@ -191,6 +196,20 @@ def field_status(record: dict, field_name: str) -> str:
     NOT_CLASSIFIED.
     """
     return _entry_status(_field_entry(record, field_name))
+
+
+def field_detail(record: dict, field_name: str) -> dict:
+    """The dimension-specific detail on a field entry: every key beyond ``ENTRY_KEYS``.
+
+    The read-side mirror of ``build_field_entry``'s ``detail`` argument, so a
+    consumer that rebuilds an entry (the index-propagation script) can carry the
+    detail through without naming any dimension or key. Empty when the entry
+    carries none, or is not a dict (the flat layout has nowhere to put detail).
+    """
+    entry = _field_entry(record, field_name)
+    if not isinstance(entry, dict):
+        return {}
+    return {key: value for key, value in entry.items() if key not in ENTRY_KEYS}
 
 
 def field_label(record: dict, field_name: str) -> str | None:

@@ -14,6 +14,7 @@ from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     NOT_APPLICABLE,
     build_field_entry,
+    field_detail,
     field_label,
     status_for_value,
 )
@@ -80,6 +81,10 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
                     "reference_assembly": field_label(c, "reference_assembly"),
+                    # Per-field detail (the first is reference_assembly's build, #340)
+                    # rides along with the labels: an index record must not describe
+                    # its parent less precisely than the parent does.
+                    "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
                     "source_file": c.get("file_name"),
                 }
 
@@ -197,6 +202,7 @@ def propagate_to_index_files(
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
+                "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
             }
 
@@ -292,7 +298,7 @@ def propagate_to_index_files(
         for fld in CLASSIFICATION_FIELDS:
             value = r.get(fld)
             evidence = inherited_evidence(fld, value, parent)
-            classifications[fld] = build_field_entry(value, evidence=evidence)
+            classifications[fld] = build_field_entry(value, evidence=evidence, detail=r["detail"].get(fld))
         standard_results.append(
             {
                 "file_name": r["file_name"],
