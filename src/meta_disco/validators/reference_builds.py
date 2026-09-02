@@ -64,10 +64,11 @@ contig, and matching is membership. Two reasons, both observed:
 What "unresolved" preserves
 ---------------------------
 A file whose build cannot be determined still gets its *observations* back —
-the checksums seen and the reference name declared. Discarding those would make
-the file unresolvable forever; keeping them means a later table row can resolve
-it from stored output, with no re-fetch. That matters because the evidence cache
-holds raw headers and re-classifying the corpus is expensive.
+the key-contig checksums seen and the reference name declared. Keeping them
+means a later table row can resolve such a file from stored output, without
+re-reading its header. That holds for BAM/CRAM, which usually carry ``M5``; it
+does not yet hold for a VCF, whose only signature is contig *length* and which
+:class:`ReferenceIdentity` does not serialize — issue #349.
 
 Format neutrality
 -----------------
