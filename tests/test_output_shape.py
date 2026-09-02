@@ -154,8 +154,8 @@ MARKER_EVIDENCE_KEYS = {"marker", "reason"}
 FIELD_KEYS = set(ENTRY_KEYS)
 # `build` (#340) is optional detail about a value, carried only by
 # reference_assembly and only when the header yielded some observation — a key
-# contig checksum or a declared reference name. `base` and `version` inside it
-# are null when those observations resolved no build. The golden's stub headers
+# contig length or checksum, or a declared reference name. `base` and `version`
+# inside it are null when those observations resolved no build. The golden's stub headers
 # carry neither, so no build is emitted there and the golden is unaffected — but
 # the contract below still has to permit and check it, or the field would slip
 # through untested.

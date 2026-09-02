@@ -82,9 +82,9 @@ def _record_reference_build(result, identity) -> None:
     """Attach the observed reference build to ``reference_assembly``'s detail (#340).
 
     "Observed" is the precise word: the build is emitted whenever the header
-    yielded a key-contig checksum or a declared reference name, with ``base`` /
-    ``version`` null if nothing resolved, so the observations survive for a
-    later table row.
+    yielded any key-contig evidence — a length or a checksum — or a declared
+    reference name, with ``base`` / ``version`` null if nothing resolved, so
+    the observations survive for a later table row.
 
     The dimension is named here, in the classifier that observed the build,
     rather than in the generic output assembler — ``build_field_entry`` and
