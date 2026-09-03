@@ -464,14 +464,14 @@ class TestKeyDiscrimination:
 
     @staticmethod
     def _signature_separable(a, b):
-        """True when some field's recorded values *all* fit one build and not the other.
+        """True when, for some field, every recorded value fits exactly one of the two builds.
 
         Asks the resolver's own predicate rather than re-deriving its rules, so
         this pin stays honest if ``_consistent`` learns a new case. Every value
         either row records for a field is tried against both; the field
-        separates the pair only if every verdict differs. One shared value is
-        enough to make the pair name-dependent, because a file carrying that
-        value cannot tell them apart. An empty set ("never observed") offers
+        separates the pair only if no value fits both (or neither). One shared
+        value is enough to make the pair name-dependent, because a file carrying
+        that value cannot tell them apart. An empty set ("never observed") offers
         nothing to try, and a declared absence (#351) rejects what the other
         row records.
         """
