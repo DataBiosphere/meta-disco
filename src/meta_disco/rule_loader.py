@@ -102,13 +102,11 @@ class ReferenceBuild:
     and where a build grafts a chromosome from elsewhere the origin is part of the
     version (``v1.0+GRCh38chrY``).
 
-    ``absent`` (issue #351) names key contigs — by bare name, ``"Y"`` — that the
-    reference has *no contig called that* for, so a header listing one cannot
-    have come from this build. It is distinct from an empty signature set, which
-    means "never observed" and constrains nothing. The two are different kinds
-    of fact: signatures are measured from headers; absence is declared in
-    ``scripts/generate_reference_builds.py`` and checked there against the
-    corpus.
+    ``absent`` (issue #351) names key contigs, by bare name (``"Y"``), that the
+    reference has *no contig called that* for — distinct from an empty signature
+    set, which means "never observed". Declared in ``KNOWN_ABSENT`` in
+    ``scripts/generate_reference_builds.py``, not measured; see "Declared
+    absence" in ``validators/reference_builds``.
     """
 
     family: str

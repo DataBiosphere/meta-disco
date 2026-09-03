@@ -22,13 +22,6 @@ name. See the resolver module docstring for the kinds, and
 ``NAME_DEPENDENT_PAIRS`` in tests/test_reference_builds.py for the pinned list.
 #342's contig-set digest is the structural fix.
 
-What is declared rather than measured
--------------------------------------
-``KNOWN_ABSENT`` (issue #351) states that some builds have no contig named
-``chrY``. A header can show that a file listed no chrY, never that the reference
-lacks one, so this cannot be measured — but it can be *falsified*: the script
-refuses to emit a table if any cached header for such a build lists the contig.
-
 What this deliberately does not decide
 --------------------------------------
 Some reference *names* appear with two different chrY checksums at identical
@@ -58,12 +51,18 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from meta_disco.evidence import BamEvidence, VcfEvidence
-from meta_disco.validators.reference_builds import KEY_CONTIGS, observe_sam, observe_vcf
+from meta_disco.validators.reference_builds import (
+    FIELD_CONTIG,
+    KEY_CONTIGS,
+    SIGNATURE_FIELDS,
+    observe_sam,
+    observe_vcf,
+)
 
-# (evidence directory, observer, evidence class). The observers — and KEY_CONTIGS,
-# the pair the table is keyed on — are imported from the resolver rather than
-# reimplemented here: this script measures the table the resolver matches
-# against, so a parser or key that differed would produce a table describing
+# (evidence directory, observer, evidence class). The observers — and the key
+# and field layout the table is written in — are imported from the resolver
+# rather than reimplemented here: this script measures the table the resolver
+# matches against, so a parser or key that differed would produce a table describing
 # headers the resolver reads differently. That divergence is not hypothetical —
 # an earlier version of this script used a stricter ##contig pattern than the
 # resolver and would silently have under-populated the table.
@@ -101,10 +100,10 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
 }
 
 # Key contigs a build has *no contig named that* for (issue #351), by bare name.
-# This is the one declared — not measured — fact in the table: a header cannot
-# show that a reference lacks a contig, only that this file did not list it. So
-# it is stated here, in one place, and `check_absences` fails generation if any
-# cached header for one of these builds lists the contig after all.
+# This is the one declared — not measured — fact in the table: a header can show
+# that a file listed no chrY, never that the reference lacks one. So it is stated
+# here, in one place, and can only be *falsified*: `check_absences` refuses the
+# table if any cached header for one of these builds lists the contig after all.
 #
 # CHM13 is assembled from a female cell line and has no chrY of its own. v1.0 and
 # v1.1 ship without one; v2.0 is the first release to carry a chrY (HG002's). The
@@ -199,7 +198,7 @@ def build_rows(observed: dict[str, Counter]) -> list[dict]:
         )
         row["aliases"].add(name)
         for signature in counter:
-            for field, value in zip(("chr1_length", "chr1_m5", "chry_length", "chry_m5"), signature, strict=True):
+            for field, value in zip(SIGNATURE_FIELDS, signature, strict=True):
                 if value is not None:
                     row[field].add(value)
     return list(rows.values())
@@ -214,15 +213,13 @@ def check_absences(observed: dict[str, Counter]) -> list[str]:
     declaration can be corrected rather than silently mis-resolving files.
     """
     contradictions = []
-    for name, counter in sorted(observed.items()):
-        build = NAME_TO_BUILD.get(name)
-        if build is None:
-            continue
-        for contig in KNOWN_ABSENT.get(build, ()):
-            index = KEY_CONTIGS.index(contig)
-            # Each signature is (chr1 len, chr1 m5, chrY len, chrY m5): two slots per key contig.
+    declared = {name: build for name, build in NAME_TO_BUILD.items() if build in KNOWN_ABSENT}
+    for name, build in sorted(declared.items()):
+        for contig in KNOWN_ABSENT[build]:
             seen = sum(
-                count for sig, count in counter.items() if any(v is not None for v in sig[2 * index : 2 * index + 2])
+                count
+                for sig, count in observed.get(name, Counter()).items()
+                if any(v is not None for f, v in zip(SIGNATURE_FIELDS, sig, strict=True) if FIELD_CONTIG[f] == contig)
             )
             if seen:
                 contradictions.append(
@@ -258,7 +255,7 @@ def emit_yaml(rows: list[dict]) -> str:
         version = f'"{row["version"]}"' if row["version"] else "null"
         lines.append(f"  - family: {row['family']}")
         lines.append(f"    version: {version}")
-        for field in ("chr1_length", "chr1_m5", "chry_length", "chry_m5"):
+        for field in SIGNATURE_FIELDS:
             values = sorted(row[field])
             if not values:
                 lines.append(f"    {field}: []")

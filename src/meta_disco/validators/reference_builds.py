@@ -28,12 +28,10 @@ indistinguishable by signature alone and rely on the declared name to resolve �
 ``TestKeyDiscrimination.NAME_DEPENDENT_PAIRS`` in ``tests/test_reference_builds.py``
 is the authoritative list, pinned so it cannot widen unnoticed. They come in
 two kinds: pairs involving ``GRCh38.p12``, which records no signature at all,
-and pairs of CHM13 builds that share chr1 and *both* lack a chrY (v1.0 and the
-HG002-grafted v1.0, whose Y contig is not called ``chrY``). CHM13 v1.1 and v2.0
-share chr1 too, and a *nameless* file carrying only chr1 resolves to the family
-and withholds the version — the honest outcome, and the ceiling of a two-contig
-key — but a file that also lists a chrY is separable, because v1.1 has none
-(see "Declared absence" below).
+and CHM13 v1.0 against the HG002-grafted v1.0, which share chr1 and both declare
+chrY absent (see "Declared absence" below). CHM13 v1.1 and v2.0 share chr1 too,
+so a *nameless* file carrying only chr1 resolves to the family and withholds the
+version — the honest outcome, and the ceiling of a two-contig key.
 
 Two consequences worth stating plainly:
 
@@ -108,14 +106,18 @@ from .header_extractors import parse_sam_header, parse_vcf_header
 # fields are named per contig, so the two have to move together.
 KEY_CONTIGS = ("1", "Y")
 
-# Which key contig each signature field describes, so an ``absent`` declaration
-# (by contig) can be checked against an observation (by field).
-_FIELD_CONTIG = {
+# The signature fields of a ``ReferenceBuild`` row, in order, and the key contig
+# each describes. The one place that layout is spelled out: the generator
+# measures and emits rows by ``SIGNATURE_FIELDS``, ``_consistent`` checks an
+# ``absent`` declaration (by contig) against an observation (by field) through
+# ``FIELD_CONTIG``, and the tests read both rather than re-listing them.
+FIELD_CONTIG = {
     "chr1_length": KEY_CONTIGS[0],
     "chr1_m5": KEY_CONTIGS[0],
     "chry_length": KEY_CONTIGS[1],
     "chry_m5": KEY_CONTIGS[1],
 }
+SIGNATURE_FIELDS = tuple(FIELD_CONTIG)
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
@@ -280,9 +282,9 @@ def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
 
     - **nothing observed** — no constraint. A header without ``M5`` must still be
       able to match on lengths.
-    - **the build declares the contig absent** (#351) — a contradiction. The
-      reference has no contig by that name, so a header listing one did not come
-      from it. Only reached when something *was* observed, per the first case.
+    - **the build declares the contig absent** (#351) — a contradiction; see
+      "Declared absence" in the module docstring. Only reached when something
+      *was* observed, per the first case.
     - **the build records nothing for this contig** — no constraint. An empty
       set means "never observed for this build", not "known to be absent" —
       that is what ``absent`` is for. Treating it as a contradiction eliminates
@@ -295,7 +297,7 @@ def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
     """
     if value is None:
         return True
-    if _FIELD_CONTIG[field] in build.absent:
+    if build.absent and FIELD_CONTIG[field] in build.absent:
         return False
     known = getattr(build, field)
     return not known or value in known

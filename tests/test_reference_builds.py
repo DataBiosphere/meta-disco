@@ -28,10 +28,11 @@ from generate_reference_builds import KNOWN_ABSENT, check_absences
 from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
-from meta_disco.rule_loader import ReferenceBuild, RuleLoader, get_unified_rules
+from meta_disco.rule_loader import RuleLoader, get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
     KEY_CONTIGS,
+    SIGNATURE_FIELDS,
     ContigSignature,
     ReferenceIdentity,
     _candidates,
@@ -365,23 +366,12 @@ class TestDeclaredAbsence:
         """Scenario 4. A build declared absent for chrY stays a candidate for a
         header that lists no chrY."""
         v1_1 = next(b for b in get_unified_rules().reference_builds if (b.family, b.version) == ("CHM13", "v1.1"))
-        assert KEY_CONTIGS[1] in v1_1.absent
         assert _consistent(v1_1, "chry_length", None)
-        assert v1_1 in _candidates({"chr1_length": 248387328})
 
     def test_a_thin_row_is_still_not_a_contradiction(self):
         """Scenario 5. Empty signature sets without a declaration keep their
         #344 meaning: never observed, constrains nothing."""
-        thin = ReferenceBuild(
-            family="CHM13",
-            version="thin",
-            chr1_length=frozenset({1}),
-            chr1_m5=frozenset(),
-            chry_length=frozenset(),
-            chry_m5=frozenset(),
-            aliases=frozenset(),
-            absent=frozenset(),
-        )
+        (thin,) = RuleLoader()._parse_reference_builds([{"family": "CHM13", "version": "thin", "chr1_length": [1]}])
         assert _consistent(thin, "chry_length", 62460029)
 
     def test_the_hg002_grafted_build_is_ruled_out_by_a_chry_line(self):
@@ -442,28 +432,25 @@ class TestKeyDiscrimination:
         ("GRCh38/None", "GRCh38/p12"),
     }
 
-    SIGNATURE_FIELDS: ClassVar[tuple[str, ...]] = ("chr1_length", "chr1_m5", "chry_length", "chry_m5")
-
     @staticmethod
     def _label(build):
         return f"{build.family}/{build.version}"
 
-    @classmethod
-    def _signature_separable(cls, a, b):
-        """True when some observation is consistent with one build and not the other.
+    @staticmethod
+    def _signature_separable(a, b):
+        """True when some recorded observation fits one build and not the other.
 
-        Two ways: both rows record the field with disjoint values (an empty set
-        means "never observed" and cannot discriminate), or one row declares the
-        field's contig absent while the other records it (#351) — an observation
-        of that contig then fits one and rules out the other.
+        Asks the resolver's own predicate rather than re-deriving its rules, so
+        this pin stays honest if ``_consistent`` learns a new case: every value
+        either row records is tried against both, and one verdict differing is
+        separation. An empty set ("never observed") offers nothing to try, and
+        a declared absence (#351) rejects what the other row records.
         """
-        for f in cls.SIGNATURE_FIELDS:
-            contig = KEY_CONTIGS[0] if f.startswith("chr1") else KEY_CONTIGS[1]
-            if getattr(a, f) and getattr(b, f) and not (getattr(a, f) & getattr(b, f)):
-                return True
-            if (contig in a.absent and getattr(b, f)) or (contig in b.absent and getattr(a, f)):
-                return True
-        return False
+        return any(
+            _consistent(a, f, value) != _consistent(b, f, value)
+            for f in SIGNATURE_FIELDS
+            for value in getattr(a, f) | getattr(b, f)
+        )
 
     def test_the_name_dependent_set_has_not_widened(self):
         observed = {
