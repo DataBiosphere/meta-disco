@@ -2126,6 +2126,11 @@ reference_builds:
   # build can carry more than one chrY checksum at the same chrY length; the
   # header cannot say why, so both are recorded and neither is preferred.
   # An empty list means that part was never observed for this build.
+  #
+  # `absent` (issue #351) lists key contigs the reference has NO contig named
+  # that for, so a header listing one rules the build out. Declared, not
+  # measured — see KNOWN_ABSENT in the generator, which checks it against the
+  # corpus. Distinct from an empty list, which constrains nothing.
   - family: CHM13
     version: "v1.0"
     chr1_length:
@@ -2136,6 +2141,8 @@ reference_builds:
     aliases:
       - "T2T_CHM13.v1.0"
       - "chm13.draft_v1.0.fasta"
+    absent:
+      - "Y"
   - family: CHM13
     version: "v1.0+GRCh38chrY"
     chr1_length:
@@ -2158,6 +2165,8 @@ reference_builds:
     chry_m5: []
     aliases:
       - "t2t-chm13.20200921.HG002chrY.chrEBV.fasta"
+    absent:
+      - "Y"
   - family: CHM13
     version: "v1.1"
     chr1_length:
@@ -2167,6 +2176,8 @@ reference_builds:
     chry_m5: []
     aliases:
       - "chm13.v1.1.fasta"
+    absent:
+      - "Y"
   - family: CHM13
     version: "v2.0"
     chr1_length:

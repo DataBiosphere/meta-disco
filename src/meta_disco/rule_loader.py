@@ -101,6 +101,14 @@ class ReferenceBuild:
     (``v1.0``/``v2.0``) and GRC patches (``p12``) are not the same kind of thing,
     and where a build grafts a chromosome from elsewhere the origin is part of the
     version (``v1.0+GRCh38chrY``).
+
+    ``absent`` (issue #351) names key contigs — by bare name, ``"Y"`` — that the
+    reference has *no contig called that* for, so a header listing one cannot
+    have come from this build. It is distinct from an empty signature set, which
+    means "never observed" and constrains nothing. The two are different kinds
+    of fact: signatures are measured from headers; absence is declared in
+    ``scripts/generate_reference_builds.py`` and checked there against the
+    corpus.
     """
 
     family: str
@@ -110,6 +118,7 @@ class ReferenceBuild:
     chry_length: frozenset[int]
     chry_m5: frozenset[str]
     aliases: frozenset[str]
+    absent: frozenset[str]
 
 
 @dataclass
@@ -542,6 +551,7 @@ class RuleLoader:
                 chry_length=self._signature_set(build, "chry_length"),
                 chry_m5=self._signature_set(build, "chry_m5"),
                 aliases=self._signature_set(build, "aliases"),
+                absent=self._signature_set(build, "absent"),
             )
             for build in builds_data
         ]

@@ -11,20 +11,31 @@ whose chr1 differs by 169 bases. ``test_the_two_chm13_builds_separate`` is the
 one that fails if that regresses.
 """
 
+import sys
+from collections import Counter
 from importlib.resources import files
 from itertools import combinations
+from pathlib import Path
 from typing import ClassVar
 
+import pytest
 import yaml
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+from generate_reference_builds import KNOWN_ABSENT, check_absences
 
 from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
-from meta_disco.rule_loader import get_unified_rules
+from meta_disco.rule_loader import ReferenceBuild, RuleLoader, get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
+    KEY_CONTIGS,
     ContigSignature,
     ReferenceIdentity,
+    _candidates,
+    _consistent,
     _has_signatures,
     identity_from_sam,
     identity_from_vcf,
@@ -45,6 +56,22 @@ CHM13_V2 = (
     "@HD\tVN:1.6\tSO:coordinate\n"
     "@SQ\tSN:chr1\tLN:248387328\tM5:e469247288ceb332aee524caec92bb22\tUR:file:///ref/chm13v2.0.fasta\n"
     "@SQ\tSN:chrY\tLN:62460029\tM5:dd7264df17e7e4a4dac5b0f1f19dcfe0\n"
+)
+
+# Per-chromosome VCFs from the two T2T workspaces. No ##reference line; the
+# ##contig block lists every contig, so chr1 and chrY are both observed even
+# for a chr22 VCF. These are the 159K headers issue #351 is about.
+T2T_VCF = (
+    "##fileformat=VCFv4.2\n"
+    "##contig=<ID=chr1,length=248387497>\n"
+    "##contig=<ID=chr22,length=51324926>\n"
+    "##contig=<ID=chrY,length=57227415>\n"
+)
+T2T_CHRY_VCF = (
+    "##fileformat=VCFv4.2\n"
+    "##contig=<ID=chr1,length=248387328>\n"
+    "##contig=<ID=chr22,length=51324926>\n"
+    "##contig=<ID=chrY,length=62460029>\n"
 )
 
 GRCH38_ANALYSIS_SET = (
@@ -309,6 +336,84 @@ class TestCoarseValueReconciliation:
         assert entry["build"]["version"] == "v2.0"
 
 
+class TestDeclaredAbsence:
+    """Issue #351: a row can say "this reference has no chrY", and a header
+    that lists one then rules the build out. Scenario numbers are the issue's."""
+
+    def test_t2t_vcf_resolves_to_the_grafted_grch38_chry_build(self):
+        """Scenario 1. chr1 says a v1.0 variant; chrY at GRCh38's length says
+        which — once v1.0 and the HG002-grafted build are known to have no chrY."""
+        entry = classify_from_vcf_header(T2T_VCF)["reference_assembly"]
+        assert entry["value"] == "CHM13"
+        assert entry["build"]["base"] == "CHM13"
+        assert entry["build"]["version"] == "v1.0+GRCh38chrY"
+
+    def test_t2t_chry_vcf_resolves_to_v2(self):
+        """Scenario 2. chr1 says v1.1 or v2.0; a chrY at all says v2.0."""
+        entry = classify_from_vcf_header(T2T_CHRY_VCF)["reference_assembly"]
+        assert entry["value"] == "CHM13"
+        assert entry["build"]["base"] == "CHM13"
+        assert entry["build"]["version"] == "v2.0"
+
+    def test_a_chr1_only_header_still_withholds_the_version(self):
+        """Scenario 3. Without a chrY observation nothing separates v1.1 from v2.0."""
+        identity = identity_from_vcf("##fileformat=VCFv4.2\n##contig=<ID=chr1,length=248387328>\n")
+        assert identity.base == "CHM13"
+        assert identity.version is None
+
+    def test_absence_is_not_a_contradiction_when_nothing_was_observed(self):
+        """Scenario 4. A build declared absent for chrY stays a candidate for a
+        header that lists no chrY."""
+        v1_1 = next(b for b in get_unified_rules().reference_builds if (b.family, b.version) == ("CHM13", "v1.1"))
+        assert KEY_CONTIGS[1] in v1_1.absent
+        assert _consistent(v1_1, "chry_length", None)
+        assert v1_1 in _candidates({"chr1_length": 248387328})
+
+    def test_a_thin_row_is_still_not_a_contradiction(self):
+        """Scenario 5. Empty signature sets without a declaration keep their
+        #344 meaning: never observed, constrains nothing."""
+        thin = ReferenceBuild(
+            family="CHM13",
+            version="thin",
+            chr1_length=frozenset({1}),
+            chr1_m5=frozenset(),
+            chry_length=frozenset(),
+            chry_m5=frozenset(),
+            aliases=frozenset(),
+            absent=frozenset(),
+        )
+        assert _consistent(thin, "chry_length", 62460029)
+
+    def test_the_hg002_grafted_build_is_ruled_out_by_a_chry_line(self):
+        """Scenario 6. Its Y contig is chrY_hg002, so a header listing chrY did
+        not come from it."""
+        candidates = {(b.family, b.version) for b in _candidates({"chr1_length": 248387497, "chry_length": 57227415})}
+        assert candidates == {("CHM13", "v1.0+GRCh38chrY")}
+
+    def test_generation_fails_when_the_corpus_contradicts_a_declaration(self):
+        """Scenario 7, hermetically: one header naming a chrY-absent build that
+        lists a chrY is enough to refuse the table."""
+        observed = {"chm13.v1.1.fasta": Counter({(248387328, None, 62460029, None): 1})}
+        (line,) = check_absences(observed)
+        assert "CHM13/v1.1" in line and "chm13.v1.1.fasta" in line and "chrY" in line
+
+    def test_generation_passes_when_the_contig_is_simply_unobserved(self):
+        observed = {"chm13.v1.1.fasta": Counter({(248387328, None, None, None): 3})}
+        assert check_absences(observed) == []
+
+    def test_exactly_the_declared_rows_carry_absent(self):
+        """Scenario 8's table half: the YAML declares absence on the three
+        builds KNOWN_ABSENT names and on no other."""
+        in_table = {(b.family, b.version): set(b.absent) for b in get_unified_rules().reference_builds if b.absent}
+        assert in_table == {key: set(contigs) for key, contigs in KNOWN_ABSENT.items()}
+
+    def test_a_scalar_absent_fails_at_load(self):
+        """Same contract as the signature fields: a list, or fail attributably."""
+        row = {"family": "CHM13", "version": "x", "aliases": [], "absent": "Y"}
+        with pytest.raises(ValueError, match="absent must be a list"):
+            RuleLoader()._parse_reference_builds([row])
+
+
 class TestKeyDiscrimination:
     """How much the (chr1, chrY) key actually discriminates — pinned, not assumed.
 
@@ -323,16 +428,15 @@ class TestKeyDiscrimination:
     """
 
     #: Pairs (by family/version) that no signature can separate, so resolution
-    #: depends on the declared reference name. Most are thin table rows;
-    #: CHM13 v1.1 vs v2.0 is genuine — they share chr1, and v1.1 records no chrY.
+    #: depends on the declared reference name. Every pair with GRCh38.p12 (no
+    #: signature at all), plus the two CHM13 v1.0 builds that share chr1 and
+    #: both lack a contig named chrY. (#351 removed three pairs from this set
+    #: by letting a row declare chrY absent.)
     NAME_DEPENDENT_PAIRS: ClassVar[set[tuple[str, str]]] = {
-        ("CHM13/v1.0", "CHM13/v1.0+GRCh38chrY"),
         ("CHM13/v1.0", "CHM13/v1.0+HG002chrY"),
         ("CHM13/v1.0", "GRCh38/p12"),
-        ("CHM13/v1.0+GRCh38chrY", "CHM13/v1.0+HG002chrY"),
         ("CHM13/v1.0+GRCh38chrY", "GRCh38/p12"),
         ("CHM13/v1.0+HG002chrY", "GRCh38/p12"),
-        ("CHM13/v1.1", "CHM13/v2.0"),
         ("CHM13/v1.1", "GRCh38/p12"),
         ("CHM13/v2.0", "GRCh38/p12"),
         ("GRCh38/None", "GRCh38/p12"),
@@ -348,12 +452,18 @@ class TestKeyDiscrimination:
     def _signature_separable(cls, a, b):
         """True when some observation is consistent with one build and not the other.
 
-        Requires both rows to record the field: an empty set means "never
-        observed", which constrains nothing, so it cannot discriminate.
+        Two ways: both rows record the field with disjoint values (an empty set
+        means "never observed" and cannot discriminate), or one row declares the
+        field's contig absent while the other records it (#351) — an observation
+        of that contig then fits one and rules out the other.
         """
-        return any(
-            getattr(a, f) and getattr(b, f) and not (getattr(a, f) & getattr(b, f)) for f in cls.SIGNATURE_FIELDS
-        )
+        for f in cls.SIGNATURE_FIELDS:
+            contig = KEY_CONTIGS[0] if f.startswith("chr1") else KEY_CONTIGS[1]
+            if getattr(a, f) and getattr(b, f) and not (getattr(a, f) & getattr(b, f)):
+                return True
+            if (contig in a.absent and getattr(b, f)) or (contig in b.absent and getattr(a, f)):
+                return True
+        return False
 
     def test_the_name_dependent_set_has_not_widened(self):
         observed = {

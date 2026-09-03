@@ -22,6 +22,13 @@ name. See the resolver module docstring for the kinds, and
 ``NAME_DEPENDENT_PAIRS`` in tests/test_reference_builds.py for the pinned list.
 #342's contig-set digest is the structural fix.
 
+What is declared rather than measured
+-------------------------------------
+``KNOWN_ABSENT`` (issue #351) states that some builds have no contig named
+``chrY``. A header can show that a file listed no chrY, never that the reference
+lacks one, so this cannot be measured — but it can be *falsified*: the script
+refuses to emit a table if any cached header for such a build lists the contig.
+
 What this deliberately does not decide
 --------------------------------------
 Some reference *names* appear with two different chrY checksums at identical
@@ -91,6 +98,22 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "Homo_sapiens_assembly38.fasta": ("GRCh38", None),
     "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna": ("GRCh38", None),
     "GRCh38.p12": ("GRCh38", "p12"),
+}
+
+# Key contigs a build has *no contig named that* for (issue #351), by bare name.
+# This is the one declared — not measured — fact in the table: a header cannot
+# show that a reference lacks a contig, only that this file did not list it. So
+# it is stated here, in one place, and `check_absences` fails generation if any
+# cached header for one of these builds lists the contig after all.
+#
+# CHM13 is assembled from a female cell line and has no chrY of its own. v1.0 and
+# v1.1 ship without one; v2.0 is the first release to carry a chrY (HG002's). The
+# HG002-grafted v1.0 does carry a Y, but names it `chrY_hg002`, so no file aligned
+# to it lists a contig called `chrY` either.
+KNOWN_ABSENT: dict[tuple[str, str | None], tuple[str, ...]] = {
+    ("CHM13", "v1.0"): (KEY_CONTIGS[1],),
+    ("CHM13", "v1.0+HG002chrY"): (KEY_CONTIGS[1],),
+    ("CHM13", "v1.1"): (KEY_CONTIGS[1],),
 }
 
 
@@ -171,6 +194,7 @@ def build_rows(observed: dict[str, Counter]) -> list[dict]:
                 "chry_length": set(),
                 "chry_m5": set(),
                 "aliases": set(),
+                "absent": KNOWN_ABSENT.get((family, version), ()),
             },
         )
         row["aliases"].add(name)
@@ -179,6 +203,32 @@ def build_rows(observed: dict[str, Counter]) -> list[dict]:
                 if value is not None:
                     row[field].add(value)
     return list(rows.values())
+
+
+def check_absences(observed: dict[str, Counter]) -> list[str]:
+    """Every corpus observation that contradicts a ``KNOWN_ABSENT`` declaration.
+
+    A declaration says a build has no contig by that name; one cached header for
+    that build listing the contig is enough to falsify it. Returns one line per
+    contradiction naming the build, the reference name, and the contig, so the
+    declaration can be corrected rather than silently mis-resolving files.
+    """
+    contradictions = []
+    for name, counter in sorted(observed.items()):
+        build = NAME_TO_BUILD.get(name)
+        if build is None:
+            continue
+        for contig in KNOWN_ABSENT.get(build, ()):
+            index = KEY_CONTIGS.index(contig)
+            # Each signature is (chr1 len, chr1 m5, chrY len, chrY m5): two slots per key contig.
+            seen = sum(
+                count for sig, count in counter.items() if any(v is not None for v in sig[2 * index : 2 * index + 2])
+            )
+            if seen:
+                contradictions.append(
+                    f"{build[0]}/{build[1]} declares chr{contig} absent, but {seen} header(s) naming {name} list it"
+                )
+    return contradictions
 
 
 def emit_yaml(rows: list[dict]) -> str:
@@ -198,6 +248,11 @@ def emit_yaml(rows: list[dict]) -> str:
         "  # build can carry more than one chrY checksum at the same chrY length; the",
         "  # header cannot say why, so both are recorded and neither is preferred.",
         "  # An empty list means that part was never observed for this build.",
+        "  #",
+        "  # `absent` (issue #351) lists key contigs the reference has NO contig named",
+        "  # that for, so a header listing one rules the build out. Declared, not",
+        "  # measured — see KNOWN_ABSENT in the generator, which checks it against the",
+        "  # corpus. Distinct from an empty list, which constrains nothing.",
     ]
     for row in sorted(rows, key=lambda r: (r["family"], str(r["version"]))):
         version = f'"{row["version"]}"' if row["version"] else "null"
@@ -214,6 +269,10 @@ def emit_yaml(rows: list[dict]) -> str:
         lines.append("    aliases:")
         for alias in sorted(row["aliases"]):
             lines.append(f'      - "{alias}"')
+        if row["absent"]:
+            lines.append("    absent:")
+            for contig in sorted(row["absent"]):
+                lines.append(f'      - "{contig}"')
     return "\n".join(lines)
 
 
@@ -234,6 +293,13 @@ def main() -> int:
             for (c1l, c1m, cyl, cym), count in observed[name].most_common():
                 print(f"{name[:60]:60s} {c1l!s:>10} {str(c1m)[:12]:14s} {cyl!s:>10} {str(cym)[:12]:14s} {count}")
         return 0
+
+    contradictions = check_absences(observed)
+    if contradictions:
+        print("KNOWN_ABSENT is contradicted by the corpus; no table emitted:", file=sys.stderr)
+        for line in contradictions:
+            print(f"  {line}", file=sys.stderr)
+        return 1
 
     print(emit_yaml(build_rows(observed)))
     return 0
