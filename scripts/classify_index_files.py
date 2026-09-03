@@ -12,8 +12,11 @@ from pathlib import Path
 
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    CONFLICT,
     NOT_APPLICABLE,
+    NOT_CLASSIFIED,
     build_field_entry,
+    field_detail,
     field_label,
     status_for_value,
 )
@@ -80,6 +83,10 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
                     "reference_assembly": field_label(c, "reference_assembly"),
+                    # Per-field detail (the first is reference_assembly's build, #340)
+                    # rides along with the labels: an index record must not describe
+                    # its parent less precisely than the parent does.
+                    "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
                     "source_file": c.get("file_name"),
                 }
 
@@ -128,8 +135,11 @@ def propagate_to_index_files(
     results = []
     unmatched = []  # Track failed lookups
     stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "with_modality": 0, "with_ref": 0})
-    nc = "not_classified"
-    _sentinels = {"not_classified", "not_applicable"}
+    nc = NOT_CLASSIFIED
+    # Labels field_label() returns for a field that is *not* classified. They are
+    # statuses, not values, and must be re-emitted as such — a parent in
+    # conflict must not become an index file classified as "conflict".
+    _sentinels = {NOT_CLASSIFIED, NOT_APPLICABLE, CONFLICT}
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -197,6 +207,7 @@ def propagate_to_index_files(
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
+                "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
             }
 
@@ -273,15 +284,23 @@ def propagate_to_index_files(
                     "value": field_val,
                 }
             ]
-        status = status_for_value(field_val)
+        status = _inherited_status(field_val)
         # An explicit not_applicable parent isn't "no value" — the field is
         # determined (not applicable). Keep "had no value" for the not_classified /
         # missing case. (generate_coverage_report normalizes both reason forms.)
         if status == NOT_APPLICABLE:
             reason = f"Parent file {parent} marks {field_name} not applicable"
+        elif status == CONFLICT:
+            reason = f"Parent file {parent} had conflicting evidence for {field_name}"
         else:
             reason = f"Parent file {parent} had no value for {field_name}"
         return [{"rule_id": "inherited_from_parent", "reason": reason, "status": status}]
+
+    def _inherited_status(field_val):
+        """Status for an inherited label. ``status_for_value`` knows the two
+        sentinels a value can carry; ``conflict`` is a status a label can carry
+        that a value never does, so it is mapped here."""
+        return CONFLICT if field_val == CONFLICT else status_for_value(field_val)
 
     standard_results = []
     for r in results:
@@ -290,9 +309,12 @@ def propagate_to_index_files(
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
         classifications = {}
         for fld in CLASSIFICATION_FIELDS:
-            value = r.get(fld)
-            evidence = inherited_evidence(fld, value, parent)
-            classifications[fld] = build_field_entry(value, evidence=evidence)
+            label = r.get(fld)
+            evidence = inherited_evidence(fld, label, parent)
+            status = _inherited_status(label)
+            classifications[fld] = build_field_entry(
+                None if status == CONFLICT else label, status=status, evidence=evidence, detail=r["detail"].get(fld)
+            )
         standard_results.append(
             {
                 "file_name": r["file_name"],

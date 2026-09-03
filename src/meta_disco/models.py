@@ -11,6 +11,10 @@ from .file_name import FileName
 CLASSIFIED = "classified"
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
+# Top-tier claims disagreed (issue #88). Today the rule engine records this as an
+# evidence marker under NOT_CLASSIFIED; the constant exists so consumers that
+# re-emit a parent's status can carry it once it becomes a status of its own.
+CONFLICT = "conflict"
 
 # The five classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
@@ -82,7 +86,12 @@ def _assert_coherent(value, status) -> None:
         raise ValueError(f"incoherent entry: {status!r} status must not carry a real value, got {value!r}")
 
 
-def build_field_entry(value, status=None, evidence=None) -> dict:
+# The keys every per-field entry carries. Anything else on an entry is *detail*
+# (``build_field_entry``'s ``detail`` argument), and ``field_detail`` reads it back.
+ENTRY_KEYS = frozenset({"value", "status", "evidence"})
+
+
+def build_field_entry(value, status=None, evidence=None, detail=None) -> dict:
     """Build a serialized per-field classification entry.
 
     The single place that assembles the ``{value, status, evidence}`` output shape
@@ -100,15 +109,32 @@ def build_field_entry(value, status=None, evidence=None) -> dict:
     ``status`` defaults to ``status_for_value(value)`` for producers that still
     carry the sentinel in ``value``; pass it explicitly when the status is known
     directly. The derived path is coherent by construction and never raises.
+
+    ``detail`` carries extra, dimension-specific facts *about* the value — the
+    first is ``reference_assembly``'s resolved build (#340), and #341/#342 will
+    add more. Its keys are merged into the entry, and it is omitted entirely when
+    absent or empty, so a dimension with no such facts serializes byte-identically
+    to before this argument existed. Detail is never a claim: it carries no tier
+    and cannot change which value won.
+
+    This function stays dimension-agnostic on purpose — it is the single place the
+    entry shape is assembled, so it must not learn any dimension by name. Which
+    dimension gets which detail is decided by whichever classifier observed it.
     """
     if status is None:
         status = status_for_value(value)
     _assert_coherent(value, status)
-    return {
+    entry = {
         "value": value if status == CLASSIFIED else None,
         "status": status,
         "evidence": evidence if evidence is not None else [],
     }
+    if detail:
+        clashing = set(detail) & set(entry)
+        if clashing:
+            raise ValueError(f"detail may not shadow the entry's own keys: {sorted(clashing)}")
+        entry.update(detail)
+    return entry
 
 
 def all_not_classified(evidence: list[dict]) -> dict:
@@ -174,6 +200,20 @@ def field_status(record: dict, field_name: str) -> str:
     NOT_CLASSIFIED.
     """
     return _entry_status(_field_entry(record, field_name))
+
+
+def field_detail(record: dict, field_name: str) -> dict:
+    """The dimension-specific detail on a field entry: every key beyond ``ENTRY_KEYS``.
+
+    The read-side mirror of ``build_field_entry``'s ``detail`` argument, so a
+    consumer that rebuilds an entry (the index-propagation script) can carry the
+    detail through without naming any dimension or key. Empty when the entry
+    carries none, or is not a dict (the flat layout has nowhere to put detail).
+    """
+    entry = _field_entry(record, field_name)
+    if not isinstance(entry, dict):
+        return {}
+    return {key: value for key, value in entry.items() if key not in ENTRY_KEYS}
 
 
 def field_label(record: dict, field_name: str) -> str | None:

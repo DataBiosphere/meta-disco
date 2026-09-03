@@ -223,6 +223,25 @@ def test_assay_type_inference_values_in_vocabulary():
     )
 
 
+def test_reference_build_families_in_vocabulary():
+    """reference_builds[*].family must be a reference_assembly_enum value (#340).
+
+    The build table is non-rule data in the same YAML as the rules, and its
+    generated comment asserts that `family` matches the enum — this is what makes
+    that true rather than merely claimed. Same guard the assay_type inference
+    block gets above, for the same reason: a value that drifts out of the
+    vocabulary would surface as a build that resolves to a family no consumer
+    recognises.
+    """
+    rules = get_unified_rules()
+    violations = [
+        f"{build.family}/{build.version}: family={build.family!r}"
+        for build in rules.reference_builds
+        if not schema_vocab.value_in_vocabulary("reference_assembly", build.family)
+    ]
+    assert not violations, "reference_builds families not in the schema vocabulary:\n  " + "\n  ".join(violations)
+
+
 def _assay_condition_violations(rules):
     """Enum-backed assay_type_rules *condition* values not in the vocabulary.
 

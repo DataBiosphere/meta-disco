@@ -197,6 +197,12 @@ class ExtendedClassificationResult:
     # not_classified) lives here, never in a value slot. Defaults to
     # not_classified (no statement made) until a value or status is set.
     field_status: dict[str, str] = field(default_factory=lambda: dict.fromkeys(CLASSIFICATION_FIELDS, NOT_CLASSIFIED))
+    # Extra facts *about* a dimension's value, keyed by dimension exactly as
+    # field_evidence and field_status are — the first being reference_assembly's
+    # resolved build (#340). Detail is not a claim: it carries no tier and never
+    # competes in ``evaluate_claims``, so it cannot change which value wins. A
+    # dimension with no detail serializes exactly as it did before.
+    field_detail: dict[str, dict] = field(default_factory=dict)
 
     def set_field(self, fld: str, value: str | None = None, status: str | None = None) -> None:
         """Set a dimension's value and status coherently.
@@ -371,7 +377,10 @@ class ExtendedClassificationResult:
         for fld in self._CLASSIFICATION_FIELDS:
             evidence = self.field_evidence.get(fld, [])
             classifications[fld] = build_field_entry(
-                getattr(self, fld), status=self.field_status[fld], evidence=evidence
+                getattr(self, fld),
+                status=self.field_status[fld],
+                evidence=evidence,
+                detail=self.field_detail.get(fld),
             )
         return classifications
 

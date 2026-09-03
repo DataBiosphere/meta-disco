@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
-from meta_disco.models import CLASSIFIED, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import CLASSIFIED, CONFLICT, NOT_CLASSIFIED, field_status, field_value
 
 
 class TestParentCandidateGeneration:
@@ -385,6 +385,85 @@ class TestLoadClassifications:
         assert field_value(cls, "data_modality") == "transcriptomic.bulk"
         assert field_value(cls, "platform") == "ILLUMINA"
         assert field_value(cls, "assay_type") == "RNA-seq"
+
+    def test_bai_inherits_the_parent_reference_build(self, tmp_path):
+        """The parent's resolved build (#340) must reach the index record; an
+        index that names only the coarse family describes its parent's reference
+        less precisely than the parent does."""
+        build = {
+            "base": "CHM13",
+            "version": "v2.0",
+            "chr1_m5": "e469247288ceb332aee524caec92bb22",
+            "chry_m5": "dd7264df17e7e4a4dac5b0f1f19dcfe0",
+            "name": "chm13v2.0.fasta",
+        }
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {"file_name": "s.bam", "file_format": ".bam", "file_md5sum": "bam_md5", "dataset_id": "ds1"},
+                    {"file_name": "s.bam.bai", "file_format": ".bai", "file_md5sum": "bai_md5", "dataset_id": "ds1"},
+                ]
+            )
+        )
+        bam_cls = tmp_path / "bam.json"
+        bam_cls.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bam_md5",
+                            "file_name": "s.bam",
+                            "classifications": {
+                                "reference_assembly": {"value": "CHM13", "evidence": [], "build": build}
+                            },
+                        }
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [bam_cls], output_file)
+        with output_file.open() as f:
+            entry = json.load(f)["classifications"][0]["classifications"]["reference_assembly"]
+        assert entry["value"] == "CHM13"
+        assert entry["build"] == build
+
+    def test_a_parent_in_conflict_propagates_the_status_not_a_value(self, tmp_path):
+        """``field_label`` hands back ``conflict`` as a label; the index record must
+        re-emit it as a status with a null value, never as a classified value."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(
+            json.dumps(
+                [
+                    {"file_name": "s.bam", "file_format": ".bam", "file_md5sum": "bam_md5", "dataset_id": "ds1"},
+                    {"file_name": "s.bam.bai", "file_format": ".bai", "file_md5sum": "bai_md5", "dataset_id": "ds1"},
+                ]
+            )
+        )
+        bam_cls = tmp_path / "bam.json"
+        bam_cls.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        {
+                            "md5sum": "bam_md5",
+                            "file_name": "s.bam",
+                            "classifications": {
+                                "reference_assembly": {"value": None, "status": CONFLICT, "evidence": []}
+                            },
+                        }
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [bam_cls], output_file)
+        with output_file.open() as f:
+            cls = json.load(f)["classifications"][0]["classifications"]
+        assert field_status(cls, "reference_assembly") == CONFLICT
+        assert field_value(cls, "reference_assembly") is None
+        assert cls["reference_assembly"]["evidence"][0]["status"] == CONFLICT
 
     def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
         """Index file with no parent in metadata goes to unmatched_files, not classifications."""

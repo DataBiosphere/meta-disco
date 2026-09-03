@@ -78,6 +78,65 @@ def _get_engine() -> "RuleEngine":
 # =============================================================================
 
 
+def _record_reference_build(result, identity) -> None:
+    """Attach the observed reference build to ``reference_assembly``'s detail (#340).
+
+    "Observed" is the precise word: the build is emitted whenever anything
+    survives into the identity — a derived ``base``/``version``, an observed
+    key-contig checksum, or a declared reference name — and ``base``/``version``
+    are null there if nothing resolved. A contig *length* is evidence for
+    resolution but is not itself recorded, so a length-only header that
+    resolves nothing carries no build at all (issue #349).
+
+    The dimension is named here, in the classifier that observed the build,
+    rather than in the generic output assembler — ``build_field_entry`` and
+    ``to_output_dict`` stay dimension-agnostic.
+
+    An identity with nothing in it is dropped rather than recorded: an object
+    whose every member is null says nothing while looking like an answer, and the
+    entry should simply carry no build.
+
+    Where the derived family disagrees with the coarse value, both derivations
+    are withheld and only the observations are kept — see
+    :func:`_reconcile_with_coarse_value`.
+    """
+    if identity.is_empty():
+        return
+    identity = _reconcile_with_coarse_value(result, identity)
+    if identity.is_empty():
+        return
+    result.field_detail["reference_assembly"] = {"build": identity.to_dict()}
+
+
+def _reconcile_with_coarse_value(result, identity):
+    """Drop a derived family that contradicts the coarse ``reference_assembly``.
+
+    The two answers are produced independently — the coarse value by
+    ``contig_lengths``' fuzzy family match, the build by exact signature
+    matching — and they can disagree. The case that shows up in this corpus is a
+    chrY-only header from the CHM13 build carrying a *grafted GRCh38 chrY*: the
+    coarse detector sees only that borrowed chrY and says GRCh38, while the
+    signature and declared name identify the CHM13 build it actually belongs to.
+
+    The resolver is the better answer there, but this change is strictly
+    additive and must not restate the dimension's value. Emitting both would
+    publish a record asserting two families at once, which is worse than
+    publishing neither. So the derivations are dropped and the *observations* —
+    the checksums seen and the name declared — are kept, exactly as they are for
+    any other ambiguity: the evidence survives for a later pass, and nothing
+    contradictory is asserted now.
+
+    The underlying gap is in the coarse detector, which cannot tell a genome
+    from one that borrowed its chrY — issue #345. When that is fixed this
+    reconciliation becomes dead code and should be removed with it: a record that
+    cannot contradict itself needs no guard against contradiction.
+    """
+    coarse = result.reference_assembly
+    if identity.base is None or coarse is None or identity.base == coarse:
+        return identity
+    return replace(identity, base=None, version=None)
+
+
 def classify_from_header(
     header_text: str,
     *,
@@ -158,6 +217,15 @@ def classify_from_header(
                 value="genomic",
             )
 
+    # Resolve the specific build behind the coarse family (#340). Additive: this
+    # never sets or changes reference_assembly, only records which build the
+    # header names. Runs whatever the contig detection above concluded, including
+    # when it concluded nothing — an unresolvable file still keeps its observed
+    # checksums so a later table row can resolve it without re-fetching.
+    from .validators.reference_builds import identity_from_sam
+
+    _record_reference_build(result, identity_from_sam(header_text))
+
     # Infer assay type
     engine.infer_assay_type(result, file_info)
 
@@ -230,6 +298,14 @@ def classify_from_vcf_header(
             reason=reason,
             value=contig_ref,
         )
+
+    # Resolve the specific build (#340), additively — see the BAM path. VCF gives
+    # the resolver less to work with than BAM does: ##contig carries no checksum,
+    # so builds that differ only in sequence stay ambiguous here and resolve to a
+    # null version rather than a guess.
+    from .validators.reference_builds import identity_from_vcf
+
+    _record_reference_build(result, identity_from_vcf(header_text))
 
     return result.to_output_dict()
 
