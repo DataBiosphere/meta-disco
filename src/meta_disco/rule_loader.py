@@ -86,6 +86,32 @@ class IlluminaInstrument:
     model: str
 
 
+# Contigs the build key is computed over (bare names, without ``chr``). Changing
+# this set means regenerating the table (scripts/generate_reference_builds.py) —
+# ReferenceBuild's signature fields are named per contig, so the two have to
+# move together.
+KEY_CONTIGS = ("1", "Y")
+
+# The signature fields of a ``ReferenceBuild`` row, in the positional order the
+# generator and the resolver build signature tuples in by hand: (chr1 length,
+# chr1 md5, chrY length, chrY md5). Stated as a literal for that reason — the
+# order is a contract with those hand-built tuples, not an accident of a dict.
+SIGNATURE_FIELDS: tuple[str, ...] = ("chr1_length", "chr1_m5", "chry_length", "chry_m5")
+
+# The key contig each signature field describes, derived from the order above so
+# the two cannot disagree. The loader validates ``absent`` against it, and the
+# resolver checks an absent declaration (by contig) against an observation (by
+# field) through it.
+FIELD_CONTIG: dict[str, str] = dict(
+    zip(SIGNATURE_FIELDS, (KEY_CONTIGS[0], KEY_CONTIGS[0], KEY_CONTIGS[1], KEY_CONTIGS[1]), strict=True)
+)
+
+
+def fields_for(contig: str) -> tuple[str, ...]:
+    """The signature fields that describe one key contig (bare name)."""
+    return tuple(field for field, key in FIELD_CONTIG.items() if key == contig)
+
+
 @dataclass(frozen=True)
 class ReferenceBuild:
     """One known reference build and the signatures observed for it (#340).
@@ -101,6 +127,12 @@ class ReferenceBuild:
     (``v1.0``/``v2.0``) and GRC patches (``p12``) are not the same kind of thing,
     and where a build grafts a chromosome from elsewhere the origin is part of the
     version (``v1.0+GRCh38chrY``).
+
+    ``absent`` (issue #351) names key contigs, by bare name (``"Y"``), that the
+    reference has *no contig called that* for — distinct from an empty signature
+    set, which means "never observed". Declared in ``KNOWN_ABSENT`` in
+    ``scripts/generate_reference_builds.py``, not measured; see "Declared
+    absence" in ``validators/reference_builds``.
     """
 
     family: str
@@ -110,6 +142,7 @@ class ReferenceBuild:
     chry_length: frozenset[int]
     chry_m5: frozenset[str]
     aliases: frozenset[str]
+    absent: frozenset[str]
 
 
 @dataclass
@@ -532,8 +565,14 @@ class RuleLoader:
         Signature fields are frozen here rather than at the consumer so the YAML
         key names are spelled out once, and a missing ``family`` fails at load
         instead of degrading to a build that silently matches nothing.
+
+        ``absent`` (#351) is checked the same way: a name that is not a key contig
+        (``"chrY"`` for ``"Y"``) would load as inert, and a contig declared absent
+        on a row that also records a signature for it is a contradiction whose
+        signatures would go dead. The table is pasted by hand after regeneration,
+        so both are real ways for a stale line to survive; both fail here.
         """
-        return [
+        rows = [
             ReferenceBuild(
                 family=build["family"],
                 version=build.get("version"),
@@ -542,9 +581,19 @@ class RuleLoader:
                 chry_length=self._signature_set(build, "chry_length"),
                 chry_m5=self._signature_set(build, "chry_m5"),
                 aliases=self._signature_set(build, "aliases"),
+                absent=self._signature_set(build, "absent"),
             )
             for build in builds_data
         ]
+        for row in rows:
+            label = f"reference_builds entry {row.family!r}/{row.version!r}"
+            unknown = row.absent - set(KEY_CONTIGS)
+            if unknown:
+                raise ValueError(f"{label}: absent names {sorted(unknown)}; key contigs are {list(KEY_CONTIGS)}")
+            for contig in sorted(row.absent):
+                if any(getattr(row, field) for field in fields_for(contig)):
+                    raise ValueError(f"{label}: declares chr{contig} absent but records a signature for it")
+        return rows
 
     def get_rules(self) -> UnifiedRules:
         """Get the loaded rules, loading if necessary."""
