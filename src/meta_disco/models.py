@@ -11,6 +11,10 @@ from .file_name import FileName
 CLASSIFIED = "classified"
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
+# Top-tier claims disagreed (issue #88). Today the rule engine records this as an
+# evidence marker under NOT_CLASSIFIED; the constant exists so consumers that
+# re-emit a parent's status can carry it once it becomes a status of its own.
+CONFLICT = "conflict"
 
 # The five classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
