@@ -61,7 +61,12 @@ class VCFHeader:
     info_fields: list[VcfStructuredMeta] | None = None  # ##INFO fields
     format_fields: list[VcfStructuredMeta] | None = None  # ##FORMAT fields
     filter_fields: list[VcfStructuredMeta] | None = None  # ##FILTER fields
-    other_meta: list[str] | None = None  # Other ## lines
+    other_meta: list[str] | None = None  # Other ## lines the line parser accepted
+    # ``##`` lines the line parser rejected (a key it cannot match, such as GATK3's
+    # dotted ``##GATKCommandLine.<Tool>``), verbatim. Kept apart from
+    # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
+    # scan of that list, and these must not widen what a rule can match (#354).
+    unkeyed_meta: list[str] | None = None
 
 
 def parse_sam_header_line(line: str) -> tuple[str, dict[str, str]] | None:
@@ -267,6 +272,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     format_fields = []
     filter_fields = []
     other_meta = []
+    unkeyed_meta = []
 
     for line in header_text.strip().split("\n"):
         if not line.startswith("##"):
@@ -274,10 +280,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 
         parsed = parse_vcf_header_line(line)
         if parsed is None:
-            # A ``##`` line whose key the line parser does not accept (GATK3's
-            # dotted ``##GATKCommandLine.<Tool>``, for one) is still a header
-            # line; keep it so ``other_meta`` really is every unrouted line.
-            other_meta.append(line)
+            unkeyed_meta.append(line)
             continue
 
         if isinstance(parsed, VcfSimpleMeta):
@@ -310,6 +313,8 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         header.filter_fields = filter_fields
     if other_meta:
         header.other_meta = other_meta
+    if unkeyed_meta:
+        header.unkeyed_meta = unkeyed_meta
 
     return header
 
@@ -319,11 +324,14 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 # ``##GATKCommandLine.HaplotypeCaller``), bcftools writes
 # ``##bcftools_normCommand=norm -f ...``, freebayes ``##commandline=...``. What
 # they share is the word "command" in the key, so that is the whole test; the
-# tool names are not enumerated. The attribute pattern tolerates a
+# tool names are not enumerated. GATK4 spells the attribute ``CommandLine``,
+# GATK3 ``CommandLineOptions`` (its value is ``key=value`` pairs, among them
+# ``reference_sequence=/path.fa``). The attribute pattern tolerates a
 # backslash-escaped quote inside the value, which ``parse_vcf_header_line``'s
-# field pattern does not.
+# field pattern does not; it is written unrolled because it runs on every
+# command line in the corpus.
 _VCF_COMMAND_KEY_RE = re.compile(r"^##[^=]*command[^=]*=(.*)$", re.IGNORECASE)
-_VCF_COMMAND_ATTR_RE = re.compile(r'CommandLine="((?:[^"\\]|\\.)*)"')
+_VCF_COMMAND_ATTR_RE = re.compile(r'CommandLine(?:Options)?="([^"\\]*(?:\\.[^"\\]*)*)"')
 
 # INFO fields Picard's LiftoverVcf adds — three of them; any one marks a lifted
 # file (issue #354).
@@ -336,17 +344,18 @@ def sam_command_lines(header: SAMHeader) -> list[str]:
 
 
 def vcf_command_lines(header: VCFHeader) -> list[str]:
-    """The command lines recorded under ``##<key containing "command">=`` lines, in header order.
+    """The command lines recorded under ``##<key containing "command">=`` lines.
 
-    Read from ``other_meta``, where :func:`parse_vcf_header` keeps every ``##``
-    line it does not route to a named field. A structured ``<...>`` line
-    contributes its quoted ``CommandLine`` attribute and is skipped if it has
-    none; a simple ``##key=value`` line contributes its value, minus one pair
-    of enclosing double quotes if the whole value is quoted (freebayes writes
-    it that way).
+    Read from ``other_meta`` and then ``unkeyed_meta`` — together, every ``##``
+    line :func:`parse_vcf_header` does not route to a named field — each in
+    header order. A structured ``<...>`` line contributes its quoted
+    ``CommandLine`` (GATK4) or ``CommandLineOptions`` (GATK3) attribute and is
+    skipped if it has neither; a simple ``##key=value`` line contributes its
+    value, minus one pair of enclosing double quotes if the whole value is
+    quoted (freebayes writes it that way).
     """
     commands = []
-    for line in header.other_meta or []:
+    for line in (header.other_meta or []) + (header.unkeyed_meta or []):
         match = _VCF_COMMAND_KEY_RE.match(line)
         if not match:
             continue

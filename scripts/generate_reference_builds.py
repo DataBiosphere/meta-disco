@@ -7,7 +7,7 @@ can be checked against the corpus that produced it.
 
 A header is attributed to a name the way the resolver would attribute it: the
 dedicated reference field first, else the program command line (#354). That
-is what lets the per-chromosome T2T VCFs, which carry no ``##reference``, count
+is what lets the per-chromosome T2T VCFs, most of which carry no ``##reference``, count
 toward their rows — and, for a build declared in ``KNOWN_ABSENT``, be checked
 against the declaration.
 

@@ -353,9 +353,10 @@ def reference_from_command_line(command_line: str) -> str | None:
 
     Precision comes from :func:`_declared_from_command_lines`'s guards, not from
     this parse. Splitting is ``str.split`` unless the line contains a quote
-    character: ``shlex`` is two hundred times slower and only matters when a
-    quoted argument (a read-group string) must stay one token; a line ``shlex``
-    rejects (an unbalanced quote) falls back to whitespace splitting.
+    character: ``shlex`` is two hundred times slower, and what it contributes
+    is stripping the quotes, so that ``--reference="/ref/x.fa"`` yields a
+    token the FASTA check can match. A line ``shlex`` rejects (an unbalanced
+    quote) falls back to whitespace splitting.
     """
     argv = _split_command_line(command_line)
     # ``--reference=path`` as the two tokens the flag loop expects.

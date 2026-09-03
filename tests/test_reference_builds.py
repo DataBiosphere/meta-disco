@@ -309,13 +309,15 @@ class TestCommandLineName:
         _, declared = observe_sam(header)
         assert declared == DeclaredReference("chm13v2.0.fasta", NAME_SOURCE_COMMAND_LINE)
 
-    def test_a_gatk3_dotted_key_is_read(self):
-        """GATK3 wrote ``##GATKCommandLine.<Tool>``; the VCF parser drops that
-        key, so the command-line scan must not depend on it."""
+    def test_a_gatk3_line_is_read(self):
+        """GATK3 wrote a dotted key the VCF line parser rejects, and spelled the
+        attribute ``CommandLineOptions`` with ``key=value`` content — the shape
+        every one of the 3,252 dotted lines in the cache has."""
         header = (
             "##fileformat=VCFv4.2\n"
-            '##GATKCommandLine.HaplotypeCaller=<ID=HaplotypeCaller,Version=3.8,CommandLine="HaplotypeCaller '
-            '-R /ref/Homo_sapiens_assembly38.fasta -I in.bam">\n'
+            '##GATKCommandLine.HaplotypeCaller=<ID=HaplotypeCaller,Version=3.5-0-g36282e4,Date="Tue Mar 01",'
+            'Epoch=1456876433588,CommandLineOptions="analysis_type=HaplotypeCaller input_file=[in.bam] '
+            'reference_sequence=/ref/Homo_sapiens_assembly38.fasta out=out.vcf">\n'
             "##contig=<ID=chr1,length=248956422>\n"
         )
         _, declared = observe_vcf(header)
@@ -361,6 +363,8 @@ class TestReferenceFromCommandLine:
             ),
             # synthetic: the --flag=value form, which nothing in the corpus writes
             ("HaplotypeCaller --reference=/ref/chm13v2.0.fasta --input HG.cram", "chm13v2.0.fasta"),
+            # synthetic: a quoted value — what shlex is there for
+            ('gatk HaplotypeCaller --reference="/ref/hg38.fa" -I in.bam', "hg38.fa"),
             # samtools CRAM conversion: -T is not a flag this knows; the path is still the first FASTA
             ("samtools view -@ 16 -C -T /cromwell_root/t2t.fasta -o HG00453.cram", "t2t.fasta"),
             # minimap2 / winnowmap: a no-argument flag right before the positional reference

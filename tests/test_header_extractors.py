@@ -71,6 +71,16 @@ class TestParseVcfHeader:
 class TestMatchVcfHeaderPattern:
     """Test match_vcf_header_pattern over the typed header."""
 
+    def test_a_line_the_parser_rejects_cannot_match_a_rule(self):
+        """``##reference-genome:`` has no ``=`` after a ``\\w+`` key, so the line
+        parser rejects it. It must not reach the ``other_meta`` prefix fallback,
+        where a ``##reference`` rule would read it as a reference declaration —
+        the regression #354's ``unkeyed_meta`` field exists to prevent."""
+        header = parse_vcf_header("##reference-genome: file:///x/hg19.fa\n##contig=<ID=1,length=249250621>\n")
+        assert header.unkeyed_meta == ["##reference-genome: file:///x/hg19.fa"]
+        assert header.other_meta is None
+        assert not match_vcf_header_pattern(header, "##reference", "hg19")
+
     HEADER = "\n".join(
         [
             "##reference=file:///GRCh38.fa",

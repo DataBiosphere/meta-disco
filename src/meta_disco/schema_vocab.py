@@ -127,10 +127,7 @@ def status_values() -> frozenset[str]:
     the ``status`` field the sentinel→status migration adds (epic #116). Raises
     KeyError (with the schema path) if the schema is missing the status enum.
     """
-    enums = _load_enums()
-    if STATUS_ENUM not in enums:
-        raise KeyError(f"Schema at {default_schema_path()} is missing enum {STATUS_ENUM!r}")
-    return enums[STATUS_ENUM]
+    return _enum_values(STATUS_ENUM)
 
 
 def marker_values() -> frozenset[str]:
@@ -141,10 +138,7 @@ def marker_values() -> frozenset[str]:
     stay pinned to the schema. Raises KeyError (with the schema path) if the schema
     is missing the marker enum.
     """
-    enums = _load_enums()
-    if MARKER_ENUM not in enums:
-        raise KeyError(f"Schema at {default_schema_path()} is missing enum {MARKER_ENUM!r}")
-    return enums[MARKER_ENUM]
+    return _enum_values(MARKER_ENUM)
 
 
 def name_source_values() -> frozenset[str]:
@@ -155,10 +149,15 @@ def name_source_values() -> frozenset[str]:
     ``NAME_SOURCE_*`` constants stay pinned to the schema. Raises KeyError (with
     the schema path) if the schema is missing the enum.
     """
+    return _enum_values(NAME_SOURCE_ENUM)
+
+
+def _enum_values(enum_name: str) -> frozenset[str]:
+    """The permissible values of one named schema enum; KeyError (with the schema path) if it is missing."""
     enums = _load_enums()
-    if NAME_SOURCE_ENUM not in enums:
-        raise KeyError(f"Schema at {default_schema_path()} is missing enum {NAME_SOURCE_ENUM!r}")
-    return enums[NAME_SOURCE_ENUM]
+    if enum_name not in enums:
+        raise KeyError(f"Schema at {default_schema_path()} is missing enum {enum_name!r}")
+    return enums[enum_name]
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:
