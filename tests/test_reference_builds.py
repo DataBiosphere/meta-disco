@@ -28,11 +28,9 @@ from generate_reference_builds import KNOWN_ABSENT, check_absences
 from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
-from meta_disco.rule_loader import RuleLoader, get_unified_rules
+from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, RuleLoader, get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
-    KEY_CONTIGS,
-    SIGNATURE_FIELDS,
     ContigSignature,
     ReferenceIdentity,
     _candidates,
@@ -144,10 +142,11 @@ class TestRefusesToGuess:
         assert identity.version is None
 
     def test_a_thin_table_row_does_not_lose_to_a_fuller_one(self):
-        """The regression that shipped once: CHM13 v1.1's row records no chrY, and
-        treating that absence as a contradiction eliminated v1.1 whenever a file
-        carried any chrY — resolving a v1.1 file as v2.0, the exact collapse this
-        module exists to prevent."""
+        """The regression that shipped once: CHM13 v1.1's row records no chrY
+        signature, and treating that *empty* set as a contradiction eliminated
+        v1.1 on any chrY evidence — resolving a v1.1 file as v2.0, the exact
+        collapse this module exists to prevent. (Since #351 a row that truly has
+        no chrY says so with ``absent``; an empty set still means "unobserved".)"""
         header = "@SQ\tSN:chr1\tLN:248387328\tM5:e469247288ceb332aee524caec92bb22\tUR:file:///ref/chm13.v1.1.fasta\n"
         assert identity_from_sam(header).version == "v1.1"
 
@@ -384,11 +383,23 @@ class TestDeclaredAbsence:
         """Scenario 7, hermetically: one header naming a chrY-absent build that
         lists a chrY is enough to refuse the table."""
         observed = {"chm13.v1.1.fasta": Counter({(248387328, None, 62460029, None): 1})}
-        (line,) = check_absences(observed)
+        (line,) = [p for p in check_absences(observed) if "list it" in p]
         assert "CHM13/v1.1" in line and "chm13.v1.1.fasta" in line and "chrY" in line
 
-    def test_generation_passes_when_the_contig_is_simply_unobserved(self):
+    def test_generation_fails_when_a_declaration_would_vanish(self):
+        """A declared build with no cached header naming it gets no row at all,
+        so its absence would silently disappear from the table. Refuse instead."""
         observed = {"chm13.v1.1.fasta": Counter({(248387328, None, None, None): 3})}
+        problems = check_absences(observed)
+        assert any("CHM13/v1.0 declares absence, but no cached header names it" in p for p in problems)
+        assert not any("chm13.v1.1.fasta" in p for p in problems)
+
+    def test_generation_passes_when_the_contig_is_simply_unobserved(self):
+        observed = {
+            "chm13.v1.1.fasta": Counter({(248387328, None, None, None): 3}),
+            "chm13.draft_v1.0.fasta": Counter({(248387497, None, None, None): 1}),
+            "t2t-chm13.20200921.HG002chrY.chrEBV.fasta": Counter({(248387497, "8646cb1d", None, None): 1}),
+        }
         assert check_absences(observed) == []
 
     def test_exactly_the_declared_rows_carry_absent(self):
@@ -401,6 +412,21 @@ class TestDeclaredAbsence:
         """Same contract as the signature fields: a list, or fail attributably."""
         row = {"family": "CHM13", "version": "x", "aliases": [], "absent": "Y"}
         with pytest.raises(ValueError, match="absent must be a list"):
+            RuleLoader()._parse_reference_builds([row])
+
+    def test_an_absent_name_that_is_not_a_key_contig_fails_at_load(self):
+        """``"chrY"`` is how every comment spells it and ``"Y"`` is how the table
+        does; the wrong one would load as an inert declaration."""
+        row = {"family": "CHM13", "version": "x", "absent": ["chrY"]}
+        with pytest.raises(ValueError, match=r"absent names \['chrY'\]; key contigs are \['1', 'Y'\]"):
+            RuleLoader()._parse_reference_builds([row])
+        assert "Y" in KEY_CONTIGS
+
+    def test_absent_over_a_recorded_signature_fails_at_load(self):
+        """A stale ``absent`` line surviving a re-pasted table would make the
+        row's chrY signatures dead; refuse the contradiction instead."""
+        row = {"family": "CHM13", "version": "x", "chry_length": [62460029], "absent": ["Y"]}
+        with pytest.raises(ValueError, match="declares chrY absent but records a signature for it"):
             RuleLoader()._parse_reference_builds([row])
 
 
@@ -438,18 +464,21 @@ class TestKeyDiscrimination:
 
     @staticmethod
     def _signature_separable(a, b):
-        """True when some recorded observation fits one build and not the other.
+        """True when some field's recorded values *all* fit one build and not the other.
 
         Asks the resolver's own predicate rather than re-deriving its rules, so
-        this pin stays honest if ``_consistent`` learns a new case: every value
-        either row records is tried against both, and one verdict differing is
-        separation. An empty set ("never observed") offers nothing to try, and
-        a declared absence (#351) rejects what the other row records.
+        this pin stays honest if ``_consistent`` learns a new case. Every value
+        either row records for a field is tried against both; the field
+        separates the pair only if every verdict differs. One shared value is
+        enough to make the pair name-dependent, because a file carrying that
+        value cannot tell them apart. An empty set ("never observed") offers
+        nothing to try, and a declared absence (#351) rejects what the other
+        row records.
         """
         return any(
-            _consistent(a, f, value) != _consistent(b, f, value)
+            (values := getattr(a, f) | getattr(b, f))
+            and all(_consistent(a, f, value) != _consistent(b, f, value) for value in values)
             for f in SIGNATURE_FIELDS
-            for value in getattr(a, f) | getattr(b, f)
         )
 
     def test_the_name_dependent_set_has_not_widened(self):

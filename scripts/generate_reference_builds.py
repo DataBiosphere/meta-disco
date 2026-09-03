@@ -51,18 +51,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from meta_disco.evidence import BamEvidence, VcfEvidence
-from meta_disco.validators.reference_builds import (
-    FIELD_CONTIG,
-    KEY_CONTIGS,
-    SIGNATURE_FIELDS,
-    observe_sam,
-    observe_vcf,
-)
+from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, fields_for
+from meta_disco.validators.reference_builds import observe_sam, observe_vcf
 
-# (evidence directory, observer, evidence class). The observers — and the key
-# and field layout the table is written in — are imported from the resolver
-# rather than reimplemented here: this script measures the table the resolver
-# matches against, so a parser or key that differed would produce a table describing
+# (evidence directory, observer, evidence class). The observers are imported
+# from the resolver, and the key and field layout from the loader that owns the
+# row type, rather than reimplemented here: this script measures the table the
+# resolver matches against, so a parser or key that differed would produce a table describing
 # headers the resolver reads differently. That divergence is not hypothetical —
 # an earlier version of this script used a stricter ##contig pattern than the
 # resolver and would silently have under-populated the table.
@@ -103,7 +98,9 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
 # This is the one declared — not measured — fact in the table: a header can show
 # that a file listed no chrY, never that the reference lacks one. So it is stated
 # here, in one place, and can only be *falsified*: `check_absences` refuses the
-# table if any cached header for one of these builds lists the contig after all.
+# table if any cached header whose declared name maps to one of these builds
+# lists the contig with a length or checksum after all. (Nameless headers are
+# not attributable to a build and so cannot check it.)
 #
 # CHM13 is assembled from a female cell line and has no chrY of its own. v1.0 and
 # v1.1 ship without one; v2.0 is the first release to carry a chrY (HG002's). The
@@ -205,27 +202,39 @@ def build_rows(observed: dict[str, Counter]) -> list[dict]:
 
 
 def check_absences(observed: dict[str, Counter]) -> list[str]:
-    """Every corpus observation that contradicts a ``KNOWN_ABSENT`` declaration.
+    """Everything in the corpus, or in this file, that contradicts ``KNOWN_ABSENT``.
 
-    A declaration says a build has no contig by that name; one cached header for
-    that build listing the contig is enough to falsify it. Returns one line per
-    contradiction naming the build, the reference name, and the contig, so the
-    declaration can be corrected rather than silently mis-resolving files.
+    A declaration says a build has no contig by that name; one cached header
+    whose declared name maps to that build and that lists the contig with a
+    length or checksum is enough to falsify it. A declaration is also refused if
+    no name in ``NAME_TO_BUILD`` maps to its build, or no cached header names
+    such a build — either way the row it describes would never be emitted and
+    the declaration would vanish silently. Returns one line per problem naming
+    the build, the reference name where there is one, and the contig.
     """
-    contradictions = []
-    declared = {name: build for name, build in NAME_TO_BUILD.items() if build in KNOWN_ABSENT}
-    for name, build in sorted(declared.items()):
-        for contig in KNOWN_ABSENT[build]:
-            seen = sum(
-                count
-                for sig, count in observed.get(name, Counter()).items()
-                if any(v is not None for f, v in zip(SIGNATURE_FIELDS, sig, strict=True) if FIELD_CONTIG[f] == contig)
+    problems = []
+    names_of = defaultdict(list)
+    for name, build in NAME_TO_BUILD.items():
+        names_of[build].append(name)
+    for build, contigs in sorted(KNOWN_ABSENT.items(), key=str):
+        names = [name for name in sorted(names_of.get(build, ())) if name in observed]
+        if not names:
+            problems.append(
+                f"{build[0]}/{build[1]} declares absence, but no cached header names it; its row would not be emitted"
             )
-            if seen:
-                contradictions.append(
-                    f"{build[0]}/{build[1]} declares chr{contig} absent, but {seen} header(s) naming {name} list it"
+            continue
+        for contig in contigs:
+            for name in names:
+                seen = sum(
+                    count
+                    for sig, count in observed[name].items()
+                    if any(v is not None for f, v in zip(SIGNATURE_FIELDS, sig, strict=True) if f in fields_for(contig))
                 )
-    return contradictions
+                if seen:
+                    problems.append(
+                        f"{build[0]}/{build[1]} declares chr{contig} absent, but {seen} header(s) naming {name} list it"
+                    )
+    return problems
 
 
 def emit_yaml(rows: list[dict]) -> str:

@@ -66,13 +66,14 @@ An empty signature set on a table row means "never observed" and constrains
 nothing, which is right for a thin row. But some rows are not thin: CHM13 v1.0
 and v1.1 have no chrY at all (CHM13 is a female cell line; v2.0 is the first
 release to carry one), and the HG002-grafted v1.0 names its Y contig
-``chrY_hg002``. A header that lists ``chrY`` cannot have come from any of them.
-``ReferenceBuild.absent`` says so, and :func:`_consistent` treats an observed
-contig the row declares absent as a contradiction. Absence is only evidence when
-the contig *is* observed: a header with no chrY line is consistent with a
-reference that has no chrY. The declaration is human knowledge, not a
-measurement, so it lives in one place in the generator and is checked there
-against every cached header.
+``chrY_hg002``. A header that lists ``chrY`` with a length or checksum cannot
+have come from any of them. ``ReferenceBuild.absent`` says so, and
+:func:`_consistent` treats such an observation as a contradiction. Absence is
+only evidence when the contig *is* observed with a value: a header with no chrY
+line — or a bare ``##contig=<ID=chrY>`` carrying no length — is consistent with
+a reference that has no chrY. The declaration is human knowledge, not a
+measurement, so it lives in one place in the generator, which checks it against
+every cached header whose declared reference name maps to one of these builds.
 
 What "unresolved" preserves
 ---------------------------
@@ -98,26 +99,10 @@ import re
 from dataclasses import asdict, astuple, dataclass, fields
 from pathlib import PurePosixPath
 
-from ..rule_loader import ReferenceBuild, get_unified_rules
+# The key contigs and the row layout live beside ``ReferenceBuild`` in the
+# loader, which validates ``absent`` against them at load (#351).
+from ..rule_loader import FIELD_CONTIG, KEY_CONTIGS, ReferenceBuild, get_unified_rules
 from .header_extractors import parse_sam_header, parse_vcf_header
-
-# Contigs the build key is computed over. Changing this set means regenerating
-# the table (scripts/generate_reference_builds.py) — ReferenceBuild's signature
-# fields are named per contig, so the two have to move together.
-KEY_CONTIGS = ("1", "Y")
-
-# The signature fields of a ``ReferenceBuild`` row, in order, and the key contig
-# each describes. The one place that layout is spelled out: the generator
-# measures and emits rows by ``SIGNATURE_FIELDS``, ``_consistent`` checks an
-# ``absent`` declaration (by contig) against an observation (by field) through
-# ``FIELD_CONTIG``, and the tests read both rather than re-listing them.
-FIELD_CONTIG = {
-    "chr1_length": KEY_CONTIGS[0],
-    "chr1_m5": KEY_CONTIGS[0],
-    "chry_length": KEY_CONTIGS[1],
-    "chry_m5": KEY_CONTIGS[1],
-}
-SIGNATURE_FIELDS = tuple(FIELD_CONTIG)
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
@@ -297,7 +282,7 @@ def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
     """
     if value is None:
         return True
-    if build.absent and FIELD_CONTIG[field] in build.absent:
+    if FIELD_CONTIG[field] in build.absent:
         return False
     known = getattr(build, field)
     return not known or value in known

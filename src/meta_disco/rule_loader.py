@@ -86,6 +86,33 @@ class IlluminaInstrument:
     model: str
 
 
+# Contigs the build key is computed over (bare names, without ``chr``). Changing
+# this set means regenerating the table (scripts/generate_reference_builds.py) —
+# ReferenceBuild's signature fields are named per contig, so the two have to
+# move together.
+KEY_CONTIGS = ("1", "Y")
+
+# The signature fields of a ``ReferenceBuild`` row, in order, and the key contig
+# each describes. The loader validates ``absent`` against it, the resolver checks
+# an absent declaration (by contig) against an observation (by field) through
+# it, and the generator and the tests' separability pin iterate
+# ``SIGNATURE_FIELDS``. The per-contig *positional* tuple the generator and the
+# resolver build by hand (length, md5, per key contig) is not derived from this
+# and must agree with it.
+FIELD_CONTIG = {
+    "chr1_length": KEY_CONTIGS[0],
+    "chr1_m5": KEY_CONTIGS[0],
+    "chry_length": KEY_CONTIGS[1],
+    "chry_m5": KEY_CONTIGS[1],
+}
+SIGNATURE_FIELDS = tuple(FIELD_CONTIG)
+
+
+def fields_for(contig: str) -> tuple[str, ...]:
+    """The signature fields that describe one key contig (bare name)."""
+    return tuple(field for field, key in FIELD_CONTIG.items() if key == contig)
+
+
 @dataclass(frozen=True)
 class ReferenceBuild:
     """One known reference build and the signatures observed for it (#340).
@@ -539,8 +566,14 @@ class RuleLoader:
         Signature fields are frozen here rather than at the consumer so the YAML
         key names are spelled out once, and a missing ``family`` fails at load
         instead of degrading to a build that silently matches nothing.
+
+        ``absent`` (#351) is checked the same way: a name that is not a key contig
+        (``"chrY"`` for ``"Y"``) would load as inert, and a contig declared absent
+        on a row that also records a signature for it is a contradiction whose
+        signatures would go dead. The table is pasted by hand after regeneration,
+        so both are real ways for a stale line to survive; both fail here.
         """
-        return [
+        rows = [
             ReferenceBuild(
                 family=build["family"],
                 version=build.get("version"),
@@ -553,6 +586,15 @@ class RuleLoader:
             )
             for build in builds_data
         ]
+        for row in rows:
+            label = f"reference_builds entry {row.family!r}/{row.version!r}"
+            unknown = row.absent - set(KEY_CONTIGS)
+            if unknown:
+                raise ValueError(f"{label}: absent names {sorted(unknown)}; key contigs are {list(KEY_CONTIGS)}")
+            for contig in sorted(row.absent):
+                if any(getattr(row, field) for field in fields_for(contig)):
+                    raise ValueError(f"{label}: declares chr{contig} absent but records a signature for it")
+        return rows
 
     def get_rules(self) -> UnifiedRules:
         """Get the loaded rules, loading if necessary."""
