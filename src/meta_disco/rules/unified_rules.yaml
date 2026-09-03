@@ -2127,8 +2127,8 @@ reference_builds:
   # header cannot say why, so both are recorded and neither is preferred.
   # An empty list means that part was never observed for this build.
   #
-  # `absent` (issue #351) lists key contigs the reference has NO contig named
-  # that for, so a header listing one rules the build out. Declared, not
+  # `absent` (issue #351) lists key contigs for which the reference has NO
+  # contig of that name, so a header listing one rules the build out. Declared, not
   # measured — see KNOWN_ABSENT in the generator, which checks it against the
   # corpus. Distinct from an empty list, which constrains nothing.
   - family: CHM13

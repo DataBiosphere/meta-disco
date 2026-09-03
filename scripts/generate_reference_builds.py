@@ -94,7 +94,7 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "GRCh38.p12": ("GRCh38", "p12"),
 }
 
-# Key contigs a build has *no contig named that* for (issue #351), by bare name.
+# Key contigs for which a build has *no contig of that name* (issue #351), by bare name.
 # This is the one declared — not measured — fact in the table: a header can show
 # that a file listed no chrY, never that the reference lacks one. So it is stated
 # here, in one place, and can only be *falsified*: `check_absences` refuses the
@@ -256,8 +256,8 @@ def emit_yaml(rows: list[dict]) -> str:
         "  # header cannot say why, so both are recorded and neither is preferred.",
         "  # An empty list means that part was never observed for this build.",
         "  #",
-        "  # `absent` (issue #351) lists key contigs the reference has NO contig named",
-        "  # that for, so a header listing one rules the build out. Declared, not",
+        "  # `absent` (issue #351) lists key contigs for which the reference has NO",
+        "  # contig of that name, so a header listing one rules the build out. Declared, not",
         "  # measured — see KNOWN_ABSENT in the generator, which checks it against the",
         "  # corpus. Distinct from an empty list, which constrains nothing.",
     ]
