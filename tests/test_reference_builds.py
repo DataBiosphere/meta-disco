@@ -342,7 +342,8 @@ class TestCommandLineName:
 
 
 class TestReferenceFromCommandLine:
-    """The parse itself, tool by tool — every line is a real one from the corpus, trimmed."""
+    """The parse itself, tool by tool. Corpus lines, trimmed, except the three
+    marked synthetic."""
 
     @pytest.mark.parametrize(
         ("command_line", "expected"),
@@ -358,6 +359,7 @@ class TestReferenceFromCommandLine:
                 "HaplotypeCaller --intervals chr10 --reference /ref/chm13v2.0.XY.fasta --input HG.cram",
                 "chm13v2.0.XY.fasta",
             ),
+            # synthetic: the --flag=value form, which nothing in the corpus writes
             ("HaplotypeCaller --reference=/ref/chm13v2.0.fasta --input HG.cram", "chm13v2.0.fasta"),
             # samtools CRAM conversion: -T is not a flag this knows; the path is still the first FASTA
             ("samtools view -@ 16 -C -T /cromwell_root/t2t.fasta -o HG00453.cram", "t2t.fasta"),
@@ -372,9 +374,9 @@ class TestReferenceFromCommandLine:
             # nothing FASTA-like
             ("samtools sort -@ 8 -o out.bam in.bam", None),
             ("STAR --genomeDir /idx --readFilesIn r1.fq", None),
-            # a reference flag whose value is not a FASTA path falls through to the positional rule
+            # synthetic: a reference flag whose value is not a FASTA path falls through to the positional rule
             ("dragen -r /ref/hash_table --output-dir out /ref/genome.fa", "genome.fa"),
-            # an unbalanced quote does not raise
+            # synthetic: an unbalanced quote does not raise
             ("bwa mem -R '@RG\\tID:x /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
         ],
     )

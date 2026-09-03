@@ -28,6 +28,8 @@ STATUS_ENUM = "classification_status_enum"
 # The enum defining the permissible synthetic-marker kinds on an evidence entry
 # (issue #228): not_classified / conflict.
 MARKER_ENUM = "evidence_marker_enum"
+# The reference-build ``name_source`` vocabulary (issue #354).
+NAME_SOURCE_ENUM = "reference_name_source_enum"
 
 # ``when`` condition keys whose value must be a member of a dimension enum,
 # mapped to that dimension. The rule engine compares these against enum values at
@@ -143,6 +145,20 @@ def marker_values() -> frozenset[str]:
     if MARKER_ENUM not in enums:
         raise KeyError(f"Schema at {default_schema_path()} is missing enum {MARKER_ENUM!r}")
     return enums[MARKER_ENUM]
+
+
+def name_source_values() -> frozenset[str]:
+    """Return the permissible ``ReferenceBuild.name_source`` values from the schema.
+
+    The single source of truth for where a declared reference name may come
+    from (reference_field / command_line, issue #354), so the resolver's
+    ``NAME_SOURCE_*`` constants stay pinned to the schema. Raises KeyError (with
+    the schema path) if the schema is missing the enum.
+    """
+    enums = _load_enums()
+    if NAME_SOURCE_ENUM not in enums:
+        raise KeyError(f"Schema at {default_schema_path()} is missing enum {NAME_SOURCE_ENUM!r}")
+    return enums[NAME_SOURCE_ENUM]
 
 
 def value_in_vocabulary(field: str, value: object) -> bool:

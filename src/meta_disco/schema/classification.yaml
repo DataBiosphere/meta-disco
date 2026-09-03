@@ -130,12 +130,12 @@ classes:
       which one.
 
       ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are OBSERVED, read
-      from the file's own header. ``base`` and ``version`` are DERIVED by matching those
-      observations against a table of known builds. ``version`` is null unless
-      the evidence identifies exactly one build; ``base`` is filled whenever
-      every candidate agrees on the family, which is often true when the version
-      is not. An ambiguous file keeps its observations rather than being assigned
-      a nearest match.
+      from the file's own header. ``base`` and ``version`` are DERIVED by
+      matching those observations against a table of known builds. ``version``
+      is null unless the evidence identifies exactly one build; ``base`` is
+      filled whenever every candidate agrees on the family, which is often true
+      when the version is not. An ambiguous file keeps its observations rather
+      than being assigned a nearest match.
 
       Not a claim: it carries no tier, never competes in claim resolution, and
       cannot change which ``value`` won. Absent entirely when nothing was

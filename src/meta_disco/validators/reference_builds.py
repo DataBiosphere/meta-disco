@@ -77,7 +77,7 @@ every cached header whose declared reference name maps to one of these builds.
 
 What "unresolved" preserves
 ---------------------------
-A file whose build cannot be determined still gets its *observations* back —
+A file whose build cannot be determined still gets its *observations* back:
 the key-contig checksums seen and the reference name declared, with where the
 name was read from. Keeping them means a later table row can resolve such a
 file from stored output, without re-reading its header. That holds for BAM/CRAM, which usually carry ``M5``; it
@@ -95,10 +95,10 @@ keeps a table measured one way from being matched another.
 Where the declared name comes from (issue #354)
 -----------------------------------------------
 Each format has a field that exists to name the reference — SAM ``@SQ UR``,
-VCF ``##reference`` — and it is read first. Many headers leave it empty (four
-in five VCFs and a third of BAMs in the corpus) while the command line of the
-aligner or caller (``@PG CL``, ``##GATKCommandLine``) names the reference
-anyway, so the observers fall back to that, format-neutrally: :func:`reference_from_command_line` knows two
+VCF ``##reference`` — and it is read first. Many headers leave it empty (issue
+#354 has the corpus counts) while the command line of the aligner or caller
+(``@PG CL``, ``##GATKCommandLine``) names the reference anyway, so the
+observers fall back to that, format-neutrally: :func:`reference_from_command_line` knows two
 conventions (a reference flag, else the first FASTA-looking argument) and no
 tool names. What makes a command-line name safe to record is not the parse but
 the guards around it — a header with no contigs takes none, command lines that
@@ -118,7 +118,7 @@ from pathlib import PurePosixPath
 # The key contigs and the row layout live beside ``ReferenceBuild`` in the
 # loader, which validates ``absent`` against them at load (#351).
 from ..rule_loader import FIELD_CONTIG, KEY_CONTIGS, ReferenceBuild, get_unified_rules
-from .header_extractors import VCFHeader, parse_sam_header, parse_vcf_header, sam_command_lines, vcf_command_lines
+from .header_extractors import is_lifted, parse_sam_header, parse_vcf_header, sam_command_lines, vcf_command_lines
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
@@ -137,27 +137,14 @@ _M5_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 NAME_SOURCE_REFERENCE_FIELD = "reference_field"
 NAME_SOURCE_COMMAND_LINE = "command_line"
 
-# The command-line rule (#354) is deliberately tool-agnostic. It knows two
-# conventions and nothing about any particular aligner or caller:
-#
-# - a *reference flag* whose next argument is the reference: ``--reference``
-#   (GATK 4), ``-R`` (GATK), ``-r``. The value is taken only when it looks like
-#   a FASTA path, which is what stops bwa's ``-R`` — a read-group string — from
-#   ever matching;
-# - otherwise the first argument that looks like a FASTA path, which is where
-#   aligners that take the reference positionally (bwa, minimap2, winnowmap)
-#   put it, and also happens to be where samtools' ``-T`` and bcftools' ``-f``
-#   values fall without either being named here.
-#
-# Precision comes from the guards in ``_declared_from_command_lines``, not from
-# this parse: no name without contigs, no name when command lines disagree.
+# The reference-flag spellings issue #354 names, and what a reference path
+# looks like; the rule that uses them is :func:`reference_from_command_line`.
+# The extension set is kept apart from ``file_name.EXTENSION_TO_FORMAT`` on
+# purpose: that vocabulary says which files this pipeline classifies, and
+# ``.fna`` — common for reference FASTAs named on command lines — is not one
+# of them. Widening it here would change classification, not just this parse.
 _REFERENCE_FLAGS = frozenset({"--reference", "-R", "-r"})
 _FASTA_PATH_RE = re.compile(r"\.(fa|fasta|fna)(\.gz)?$", re.IGNORECASE)
-
-# Three of the INFO fields Picard's LiftoverVcf adds; any one marks a lifted
-# file. A lifted VCF's command lines name the reference the *caller* was given,
-# which is the pre-liftover build, so no name is taken from them (#354).
-_LIFTOVER_INFO_IDS = frozenset({"OriginalContig", "OriginalStart", "OriginalAlleles"})
 
 
 def _checksum(value: str | None) -> str | None:
@@ -310,14 +297,11 @@ def observe_vcf(header_text: str) -> tuple[list[ContigSignature], DeclaredRefere
             continue
         signatures.append(ContigSignature(name=contig_id, length=_length(contig.fields.get("length"))))
     declared = _declared_from_field(header.reference)
-    if declared is None and not _is_lifted(header):
-        declared = _declared_from_command_lines(vcf_command_lines(header_text), signatures)
+    # A lifted VCF's command lines name the reference the *caller* was given,
+    # which is the pre-liftover build, so they are not consulted.
+    if declared is None and not is_lifted(header):
+        declared = _declared_from_command_lines(vcf_command_lines(header), signatures)
     return signatures, declared
-
-
-def _is_lifted(header: VCFHeader) -> bool:
-    """Whether the parsed VCF header declares any of Picard LiftoverVcf's INFO fields."""
-    return any(info.fields.get("ID") in _LIFTOVER_INFO_IDS for info in header.info_fields or [])
 
 
 def _declared_from_field(reference: str | None) -> DeclaredReference | None:
@@ -353,26 +337,42 @@ def _declared_from_command_lines(
 
 
 def reference_from_command_line(command_line: str) -> str | None:
-    """The reference filename a program command line names, or ``None``.
+    """The reference filename a program command line names, or ``None`` (#354).
 
-    The value after a reference flag (``_REFERENCE_FLAGS``, also in the
-    ``--reference=path`` form) when it looks like a FASTA path; failing that,
-    the first FASTA-looking argument after the program name. See the comment on
-    ``_REFERENCE_FLAGS`` for why this is the whole rule. Shell-style quoting is
-    honoured so a quoted read-group string stays one argument; a line that
-    ``shlex`` rejects (an unbalanced quote) is split on whitespace instead.
+    Deliberately tool-agnostic — two conventions and no aligner or caller
+    names:
+
+    - the argument after a reference flag (``--reference``, ``-R``, ``-r``;
+      ``--reference=path`` counts too) when it looks like a FASTA path. The
+      FASTA check is what stops bwa's ``-R``, a read-group string, from ever
+      matching;
+    - otherwise the first argument that looks like a FASTA path, which is where
+      aligners that take the reference positionally (bwa, minimap2, winnowmap)
+      put it — and, without either being named here, where samtools' ``-T`` and
+      bcftools' ``-f`` values fall.
+
+    Precision comes from :func:`_declared_from_command_lines`'s guards, not from
+    this parse. Splitting is ``str.split`` unless the line contains a quote
+    character: ``shlex`` is two hundred times slower and only matters when a
+    quoted argument (a read-group string) must stay one token; a line ``shlex``
+    rejects (an unbalanced quote) falls back to whitespace splitting.
     """
-    try:
-        argv = shlex.split(command_line)
-    except ValueError:
-        argv = command_line.split()
+    argv = _split_command_line(command_line)
+    # ``--reference=path`` as the two tokens the flag loop expects.
+    argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]
     for flag, value in pairwise(argv):
         if flag in _REFERENCE_FLAGS and _FASTA_PATH_RE.search(value):
             return _basename(value)
-    for arg in argv[1:]:
-        if arg.startswith("--reference=") and _FASTA_PATH_RE.search(arg):
-            return _basename(arg.split("=", 1)[1])
     return next((_basename(arg) for arg in argv[1:] if _FASTA_PATH_RE.search(arg)), None)
+
+
+def _split_command_line(command_line: str) -> list[str]:
+    if '"' not in command_line and "'" not in command_line:
+        return command_line.split()
+    try:
+        return shlex.split(command_line)
+    except ValueError:
+        return command_line.split()
 
 
 def _basename(reference: str | None) -> str | None:

@@ -99,10 +99,11 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "CHM13Y_EBV_v1.1.fasta": ("CHM13", "v1.1+GRCh38chrY"),
     "chm13v2.0.fasta": ("CHM13", "v2.0"),
     "CHM13v2.fa": ("CHM13", "v2.0"),
-    # Sex-specific packagings mask chrY's PAR (XY) or all of chrY (XX) with N.
-    # Masking changes the sequence, not the coordinates, so these are the parent
-    # build here; the masking itself is not recorded (#354 declined to infer it
-    # from a name).
+    # Sex-specific packagings: by the naming convention these follow, XY masks
+    # chrY's PAR and XX masks all of chrY with N. A header cannot confirm that
+    # (see "What this deliberately does not decide" above), and either way
+    # masking changes the sequence, not the coordinates — so these map to the
+    # parent build, and the masking itself is not recorded (#354).
     "chm13v2.0.XX.fasta": ("CHM13", "v2.0"),
     "chm13v2.0.XY.fasta": ("CHM13", "v2.0"),
     # One assembly, several packagings. Packaging is #342's composition work; all
@@ -137,13 +138,13 @@ KNOWN_ABSENT: dict[tuple[str, str | None], tuple[str, ...]] = {
 }
 
 
-def collect(sources: dict[str, Counter] | None = None) -> dict[str, Counter]:
-    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name.
+def collect() -> tuple[dict[str, Counter], dict[str, Counter]]:
+    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name, and name sources.
 
     A name counts whether the header declared it in the dedicated field or on a
-    command line (#354); the observers decide that. When ``sources`` is given it
-    is filled with, per name, how many headers supplied it from each source —
-    for ``--report`` only; the table does not record it.
+    command line (#354); the observers decide that. The second mapping counts,
+    per name, how many headers supplied it from each source — for ``--report``
+    only; the table does not record it.
 
     Reads through the ``CachedEvidence`` classes rather than raw JSON so a
     structurally wrong entry is skipped at the boundary. That check is
@@ -153,8 +154,7 @@ def collect(sources: dict[str, Counter] | None = None) -> dict[str, Counter]:
     generation that reads hundreds of thousands of them.
     """
     observed: dict[str, Counter] = defaultdict(Counter)
-    if sources is None:
-        sources = defaultdict(Counter)
+    sources: dict[str, Counter] = defaultdict(Counter)
     for directory, observe, evidence_cls in EVIDENCE_SOURCES:
         for path in directory.glob("*/*"):
             if not path.is_file():
@@ -187,7 +187,7 @@ def collect(sources: dict[str, Counter] | None = None) -> dict[str, Counter]:
                     chry.md5 if chry else None,
                 )
             ] += 1
-    return observed
+    return observed, sources
 
 
 def build_rows(observed: dict[str, Counter]) -> list[dict]:
@@ -322,8 +322,7 @@ def main() -> int:
     parser.add_argument("--report", action="store_true", help="print per-reference evidence instead of YAML")
     args = parser.parse_args()
 
-    sources: dict[str, Counter] = defaultdict(Counter)
-    observed = collect(sources)
+    observed, sources = collect()
     if not observed:
         print("No cached evidence found under data/evidence/anvil — nothing to generate.", file=sys.stderr)
         return 1

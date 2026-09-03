@@ -274,6 +274,10 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 
         parsed = parse_vcf_header_line(line)
         if parsed is None:
+            # A ``##`` line whose key the line parser does not accept (GATK3's
+            # dotted ``##GATKCommandLine.<Tool>``, for one) is still a header
+            # line; keep it so ``other_meta`` really is every unrouted line.
+            other_meta.append(line)
             continue
 
         if isinstance(parsed, VcfSimpleMeta):
@@ -315,9 +319,15 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 # ``##GATKCommandLine.HaplotypeCaller``), bcftools writes
 # ``##bcftools_normCommand=norm -f ...``, freebayes ``##commandline=...``. What
 # they share is the word "command" in the key, so that is the whole test; the
-# tool names are not enumerated.
-_VCF_COMMAND_KEY_RE = re.compile(r"^##([^=]*command[^=]*)=(.*)$", re.IGNORECASE)
+# tool names are not enumerated. The attribute pattern tolerates a
+# backslash-escaped quote inside the value, which ``parse_vcf_header_line``'s
+# field pattern does not.
+_VCF_COMMAND_KEY_RE = re.compile(r"^##[^=]*command[^=]*=(.*)$", re.IGNORECASE)
 _VCF_COMMAND_ATTR_RE = re.compile(r'CommandLine="((?:[^"\\]|\\.)*)"')
+
+# INFO fields Picard's LiftoverVcf adds — three of them; any one marks a lifted
+# file (issue #354).
+LIFTOVER_INFO_IDS = frozenset({"OriginalContig", "OriginalStart", "OriginalAlleles"})
 
 
 def sam_command_lines(header: SAMHeader) -> list[str]:
@@ -325,22 +335,22 @@ def sam_command_lines(header: SAMHeader) -> list[str]:
     return [pg["CL"] for pg in header.pg or [] if pg.get("CL")]
 
 
-def vcf_command_lines(header_text: str) -> list[str]:
-    """Every command line a VCF header records, in header order.
+def vcf_command_lines(header: VCFHeader) -> list[str]:
+    """The command lines recorded under ``##<key containing "command">=`` lines, in header order.
 
-    Reads the raw ``##`` lines rather than :func:`parse_vcf_header`'s output
-    because that parser keys lines on ``\\w+`` and so drops GATK3's dotted
-    ``##GATKCommandLine.<Tool>`` form entirely. A structured line contributes
-    its quoted ``CommandLine`` attribute (skipped if it has none); a simple
-    ``##key=value`` line contributes its value, minus one pair of enclosing
-    double quotes if the whole value is quoted (freebayes writes it that way).
+    Read from ``other_meta``, where :func:`parse_vcf_header` keeps every ``##``
+    line it does not route to a named field. A structured ``<...>`` line
+    contributes its quoted ``CommandLine`` attribute and is skipped if it has
+    none; a simple ``##key=value`` line contributes its value, minus one pair
+    of enclosing double quotes if the whole value is quoted (freebayes writes
+    it that way).
     """
     commands = []
-    for line in header_text.split("\n"):
+    for line in header.other_meta or []:
         match = _VCF_COMMAND_KEY_RE.match(line)
         if not match:
             continue
-        value = match.group(2)
+        value = match.group(1)
         if value.startswith("<"):
             attr = _VCF_COMMAND_ATTR_RE.search(value)
             if attr:
@@ -350,6 +360,11 @@ def vcf_command_lines(header_text: str) -> list[str]:
         else:
             commands.append(value)
     return commands
+
+
+def is_lifted(header: VCFHeader) -> bool:
+    """Whether the header declares any of ``LIFTOVER_INFO_IDS``."""
+    return any(info.fields.get("ID") in LIFTOVER_INFO_IDS for info in header.info_fields or [])
 
 
 def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) -> bool:
