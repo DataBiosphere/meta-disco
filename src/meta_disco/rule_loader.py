@@ -96,13 +96,13 @@ KEY_CONTIGS = ("1", "Y")
 # generator and the resolver build signature tuples in by hand: (chr1 length,
 # chr1 md5, chrY length, chrY md5). Stated as a literal for that reason — the
 # order is a contract with those hand-built tuples, not an accident of a dict.
-SIGNATURE_FIELDS = ("chr1_length", "chr1_m5", "chry_length", "chry_m5")
+SIGNATURE_FIELDS: tuple[str, ...] = ("chr1_length", "chr1_m5", "chry_length", "chry_m5")
 
 # The key contig each signature field describes, derived from the order above so
 # the two cannot disagree. The loader validates ``absent`` against it, and the
 # resolver checks an absent declaration (by contig) against an observation (by
 # field) through it.
-FIELD_CONTIG = dict(
+FIELD_CONTIG: dict[str, str] = dict(
     zip(SIGNATURE_FIELDS, (KEY_CONTIGS[0], KEY_CONTIGS[0], KEY_CONTIGS[1], KEY_CONTIGS[1]), strict=True)
 )
 
