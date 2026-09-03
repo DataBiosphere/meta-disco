@@ -129,8 +129,8 @@ classes:
       ``CHM13`` and be aligned to builds whose coordinates differ; this says
       which one.
 
-      ``chr1_m5``, ``chry_m5`` and ``name`` are OBSERVED, read from the file's
-      own header. ``base`` and ``version`` are DERIVED by matching those
+      ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are OBSERVED, read
+      from the file's own header. ``base`` and ``version`` are DERIVED by matching those
       observations against a table of known builds. ``version`` is null unless
       the evidence identifies exactly one build; ``base`` is filled whenever
       every candidate agrees on the family, which is often true when the version
@@ -177,9 +177,20 @@ classes:
       name:
         description: >-
           Reference filename as the file declares it, from SAM ``@SQ UR`` or VCF
-          ``##reference``. An observation about the file, not a statement about the
+          ``##reference`` when present, else from a program command line in the
+          header (``@PG CL``, ``##GATKCommandLine``; issue #354) — ``name_source``
+          says which. An observation about the file, not a statement about the
           reference's content: one name can denote references that differ, and
           differently-named references can be identical.
+      name_source:
+        range: reference_name_source_enum
+        description: >-
+          Where ``name`` was read from. ``reference_field`` is the field that
+          exists to carry it; ``command_line`` is the command line of the program
+          that produced the file, one step further from the file, and taken only
+          when the header declares contigs, every command line that names a
+          reference names the same one, and (for VCF) the file carries no liftover
+          INFO fields. Null when ``name`` is null.
 
   Evidence:
     description: >-
@@ -380,6 +391,14 @@ enums:
       GRCh38:
       CHM13:
       # GRCm39:  # mouse — pending issue #15
+
+  reference_name_source_enum:
+    description: >-
+      Which part of a file's header a declared reference name was read from
+      (issue #354). See ``ReferenceBuild.name_source``.
+    permissible_values:
+      reference_field:
+      command_line:
 
   assay_type_enum:
     permissible_values:

@@ -310,6 +310,48 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     return header
 
 
+# A VCF header line that records how the file was produced. GATK writes
+# ``##GATKCommandLine=<ID=Tool,...,CommandLine="...">`` (GATK3 suffixed the key:
+# ``##GATKCommandLine.HaplotypeCaller``), bcftools writes
+# ``##bcftools_normCommand=norm -f ...``, freebayes ``##commandline=...``. What
+# they share is the word "command" in the key, so that is the whole test; the
+# tool names are not enumerated.
+_VCF_COMMAND_KEY_RE = re.compile(r"^##([^=]*command[^=]*)=(.*)$", re.IGNORECASE)
+_VCF_COMMAND_ATTR_RE = re.compile(r'CommandLine="((?:[^"\\]|\\.)*)"')
+
+
+def sam_command_lines(header: SAMHeader) -> list[str]:
+    """The ``CL`` of each ``@PG`` record, in header order; empty when none carry one."""
+    return [pg["CL"] for pg in header.pg or [] if pg.get("CL")]
+
+
+def vcf_command_lines(header_text: str) -> list[str]:
+    """Every command line a VCF header records, in header order.
+
+    Reads the raw ``##`` lines rather than :func:`parse_vcf_header`'s output
+    because that parser keys lines on ``\\w+`` and so drops GATK3's dotted
+    ``##GATKCommandLine.<Tool>`` form entirely. A structured line contributes
+    its quoted ``CommandLine`` attribute (skipped if it has none); a simple
+    ``##key=value`` line contributes its value, minus one pair of enclosing
+    double quotes if the whole value is quoted (freebayes writes it that way).
+    """
+    commands = []
+    for line in header_text.split("\n"):
+        match = _VCF_COMMAND_KEY_RE.match(line)
+        if not match:
+            continue
+        value = match.group(2)
+        if value.startswith("<"):
+            attr = _VCF_COMMAND_ATTR_RE.search(value)
+            if attr:
+                commands.append(attr.group(1))
+        elif len(value) >= 2 and value[0] == value[-1] == '"':
+            commands.append(value[1:-1])
+        else:
+            commands.append(value)
+    return commands
+
+
 def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) -> bool:
     """
     Check if any VCF header line of a given type matches a pattern.

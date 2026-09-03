@@ -31,7 +31,10 @@ from meta_disco.models import field_status, field_value
 from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, RuleLoader, get_unified_rules
 from meta_disco.validators.reference_builds import (
     IDENTITY_FIELDS,
+    NAME_SOURCE_COMMAND_LINE,
+    NAME_SOURCE_REFERENCE_FIELD,
     ContigSignature,
+    DeclaredReference,
     ReferenceIdentity,
     _candidates,
     _consistent,
@@ -39,6 +42,8 @@ from meta_disco.validators.reference_builds import (
     identity_from_sam,
     identity_from_vcf,
     observe_sam,
+    observe_vcf,
+    reference_from_command_line,
     resolve_identity,
 )
 
@@ -201,6 +206,180 @@ class TestNameAsTiebreak:
     def test_uri_and_bare_path_reduce_to_the_same_name(self):
         bare = CHM13_V2.replace("file:///ref/", "/some/other/dir/")
         assert identity_from_sam(bare).name == "chm13v2.0.fasta"
+
+
+# The HPRC assembly-to-reference BAMs: no UR on any @SQ, the reference named
+# only positionally on the minimap2 line (issue #354 scenario 3). Lengths are
+# CHM13 v1.1's chr1 beside GRCh38's chrY, as measured on the 94 cached headers.
+CHM13Y_EBV_BAM = (
+    "@HD\tVN:1.6\tSO:coordinate\n"
+    "@SQ\tSN:chr1\tLN:248387328\n"
+    "@SQ\tSN:chrY\tLN:57227415\n"
+    "@PG\tID:minimap2\tPN:minimap2\tVN:2.24-r1122"
+    "\tCL:minimap2 -x asm5 -a --eqx --cs -t 36 /path/CHM13Y_EBV_v1.1.fasta /path/reads.fa\n"
+)
+
+GATK_LINE = (
+    '##GATKCommandLine=<ID=HaplotypeCaller,CommandLine="HaplotypeCaller --sample-ploidy 2 '
+    '--output HG.chr10.vcf --intervals chr10 --reference {ref} --input HG.cram",'
+    'Version="4.2.0.0",Date="2021-06-01">\n'
+)
+
+
+class TestCommandLineName:
+    """Issue #354: the declared name falls back to the program command line."""
+
+    def test_a_vcf_without_reference_takes_the_gatk_line(self):
+        """Scenario 1."""
+        header = "##fileformat=VCFv4.2\n" + GATK_LINE.format(ref="/ref/chm13v2.0.XY.fasta")
+        header += "##contig=<ID=chr1,length=248387328>\n"
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("chm13v2.0.XY.fasta", NAME_SOURCE_COMMAND_LINE)
+
+    def test_the_dedicated_field_wins_over_the_command_line(self):
+        """Scenario 2."""
+        header = (
+            "##fileformat=VCFv4.2\n##reference=file:///a/chm13v2.0.fasta\n"
+            + GATK_LINE.format(ref="/b/other.fasta")
+            + "##contig=<ID=chr1,length=248387328>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("chm13v2.0.fasta", NAME_SOURCE_REFERENCE_FIELD)
+
+    def test_a_minimap2_bam_takes_its_positional_reference(self):
+        """Scenario 3: no UR anywhere, the reference is the first FASTA argument."""
+        _, declared = observe_sam(CHM13Y_EBV_BAM)
+        assert declared == DeclaredReference("CHM13Y_EBV_v1.1.fasta", NAME_SOURCE_COMMAND_LINE)
+
+    def test_a_command_line_name_resolves_like_any_other(self):
+        """Scenario 4: the HPRC CHM13Y_EBV files resolve to the row #352 asked for."""
+        entry = classify_from_header(CHM13Y_EBV_BAM)["reference_assembly"]
+        assert entry["build"]["base"] == "CHM13"
+        assert entry["build"]["version"] == "v1.1+GRCh38chrY"
+        assert entry["build"]["name_source"] == NAME_SOURCE_COMMAND_LINE
+
+    def test_a_sex_specific_spelling_maps_to_the_parent_build(self):
+        """Scenario 5: XY masking changes the sequence, not the coordinates."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            + GATK_LINE.format(ref="/ref/chm13v2.0.XY.fasta")
+            + "##contig=<ID=chr1,length=248387328>\n##contig=<ID=chrY,length=62460029>\n"
+        )
+        assert identity_from_vcf(header).version == "v2.0"
+        plain = header.replace("chm13v2.0.XY.fasta", "chm13v2.0.fasta")
+        assert identity_from_vcf(plain).version == "v2.0"
+
+    def test_a_lifted_vcf_takes_no_name_from_the_caller_line(self):
+        """Scenario 6: the caller line names the pre-liftover reference."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            '##INFO=<ID=OriginalContig,Number=1,Type=String,Description="The name of the source contig">\n'
+            + GATK_LINE.format(ref="/ref/chm13v2.0.fasta")
+            + "##contig=<ID=chr1,length=248387328>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared is None
+        with_field = header.replace("##fileformat=VCFv4.2\n", "##fileformat=VCFv4.2\n##reference=/ref/lifted.fa\n")
+        _, declared = observe_vcf(with_field)
+        assert declared == DeclaredReference("lifted.fa", NAME_SOURCE_REFERENCE_FIELD)
+
+    def test_a_header_without_contigs_takes_no_command_line_name(self):
+        """The guard that keeps an unaligned PacBio BAM from being named after
+        its adapter file: a name describes a contig dictionary, and there is none."""
+        header = "@HD\tVN:1.6\n@PG\tID:lima\tPN:lima\tCL:lima --hifi-preset movie.bam adapters.fasta out.bam\n"
+        _, declared = observe_sam(header)
+        assert declared is None
+
+    def test_disagreeing_command_lines_yield_no_name(self):
+        """Two lines, two references, and no way to say whose word counts."""
+        header = (
+            "@SQ\tSN:chr1\tLN:248387328\n"
+            "@PG\tID:bwa\tCL:bwa mem -t 16 /ref/chm13v2.0.XY.fasta r1.fq r2.fq\n"
+            "@PG\tID:samtools\tCL:samtools view -C -T /ref/chm13v2.0.fasta -o out.cram in.bam\n"
+        )
+        _, declared = observe_sam(header)
+        assert declared is None
+
+    def test_agreeing_command_lines_yield_the_shared_name(self):
+        header = (
+            "@SQ\tSN:chr1\tLN:248387328\n"
+            "@PG\tID:bwa\tCL:bwa mem -t 16 /a/chm13v2.0.fasta r1.fq r2.fq\n"
+            "@PG\tID:samtools\tCL:samtools view -C -T /b/chm13v2.0.fasta -o out.cram in.bam\n"
+        )
+        _, declared = observe_sam(header)
+        assert declared == DeclaredReference("chm13v2.0.fasta", NAME_SOURCE_COMMAND_LINE)
+
+    def test_a_gatk3_dotted_key_is_read(self):
+        """GATK3 wrote ``##GATKCommandLine.<Tool>``; the VCF parser drops that
+        key, so the command-line scan must not depend on it."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            '##GATKCommandLine.HaplotypeCaller=<ID=HaplotypeCaller,Version=3.8,CommandLine="HaplotypeCaller '
+            '-R /ref/Homo_sapiens_assembly38.fasta -I in.bam">\n'
+            "##contig=<ID=chr1,length=248956422>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("Homo_sapiens_assembly38.fasta", NAME_SOURCE_COMMAND_LINE)
+
+    def test_a_quoted_simple_command_line_is_unquoted(self):
+        """freebayes writes ``##commandline="..."``; the quotes must not fuse the
+        whole line into one argument."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            '##commandline="freebayes -f /ref/GRCh38_no_alt.fa --min-alternate-count 2 in.bam"\n'
+            "##contig=<ID=chr1,length=248956422>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("GRCh38_no_alt.fa", NAME_SOURCE_COMMAND_LINE)
+
+    def test_source_is_null_when_there_is_no_name(self):
+        identity = identity_from_sam("@SQ\tSN:chr1\tLN:248387328\tM5:e469247288ceb332aee524caec92bb22\n")
+        assert identity.name is None and identity.name_source is None
+
+    def test_the_field_source_is_recorded_in_output(self):
+        entry = classify_from_header(CHM13_V2)["reference_assembly"]
+        assert entry["build"]["name_source"] == NAME_SOURCE_REFERENCE_FIELD
+
+
+class TestReferenceFromCommandLine:
+    """The parse itself, tool by tool — every line is a real one from the corpus, trimmed."""
+
+    @pytest.mark.parametrize(
+        ("command_line", "expected"),
+        [
+            # bwa: -R is the read-group string, the reference is positional
+            (
+                "bwa mem -Y -K 100000000 -t 16 -R @RG\\tID:NA21127\\tPL:illumina /ref/chm13v2.0.XX.fasta r1.fq.gz r2.fq.gz",
+                "chm13v2.0.XX.fasta",
+            ),
+            ("bwa mem -R '@RG\\tID:x\\tSM:y' /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
+            # GATK: --reference
+            (
+                "HaplotypeCaller --intervals chr10 --reference /ref/chm13v2.0.XY.fasta --input HG.cram",
+                "chm13v2.0.XY.fasta",
+            ),
+            ("HaplotypeCaller --reference=/ref/chm13v2.0.fasta --input HG.cram", "chm13v2.0.fasta"),
+            # samtools CRAM conversion: -T is not a flag this knows; the path is still the first FASTA
+            ("samtools view -@ 16 -C -T /cromwell_root/t2t.fasta -o HG00453.cram", "t2t.fasta"),
+            # minimap2 / winnowmap: a no-argument flag right before the positional reference
+            (
+                "minimap2 -a -xasm5 --cs -t8 GCA_000001405.15_GRCh38_no_alt_analysis_set.fna HG03516.fa",
+                "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
+            ),
+            ("winnowmap -a -xasm5 --cs -t8 -r2k -W repetitive_k19.txt CHM13v2.fa HG01175_mat.fa.gz", "CHM13v2.fa"),
+            # gzip-compressed reference
+            ("minimap2 -a ref.fa.gz reads.fq", "ref.fa.gz"),
+            # nothing FASTA-like
+            ("samtools sort -@ 8 -o out.bam in.bam", None),
+            ("STAR --genomeDir /idx --readFilesIn r1.fq", None),
+            # a reference flag whose value is not a FASTA path falls through to the positional rule
+            ("dragen -r /ref/hash_table --output-dir out /ref/genome.fa", "genome.fa"),
+            # an unbalanced quote does not raise
+            ("bwa mem -R '@RG\\tID:x /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
+        ],
+    )
+    def test_reference_from_command_line(self, command_line, expected):
+        assert reference_from_command_line(command_line) == expected
 
 
 class TestAdditive:
@@ -450,13 +629,15 @@ class TestKeyDiscrimination:
     #: depends on the declared reference name. Every pair with GRCh38.p12 (no
     #: signature at all), plus the two CHM13 v1.0 builds that share chr1 and
     #: both lack a contig named chrY. (#351 removed three pairs from this set
-    #: by letting a row declare chrY absent.)
+    #: by letting a row declare chrY absent; #354 added one, the CHM13
+    #: v1.1+GRCh38chrY row, against p12 like every other signatured row.)
     NAME_DEPENDENT_PAIRS: ClassVar[set[tuple[str, str]]] = {
         ("CHM13/v1.0", "CHM13/v1.0+HG002chrY"),
         ("CHM13/v1.0", "GRCh38/p12"),
         ("CHM13/v1.0+GRCh38chrY", "GRCh38/p12"),
         ("CHM13/v1.0+HG002chrY", "GRCh38/p12"),
         ("CHM13/v1.1", "GRCh38/p12"),
+        ("CHM13/v1.1+GRCh38chrY", "GRCh38/p12"),
         ("CHM13/v2.0", "GRCh38/p12"),
         ("GRCh38/None", "GRCh38/p12"),
     }
@@ -526,7 +707,8 @@ class TestKeyDiscrimination:
         builds = get_unified_rules().reference_builds
         assert {self._label(b) for b in builds if not _has_signatures(b)} == self.UNREACHABLE_ROWS
         for build in filter(_has_signatures, builds):
-            identity = resolve_identity(self._one_observation_of(build), min(build.aliases))
+            declared = DeclaredReference(min(build.aliases), NAME_SOURCE_REFERENCE_FIELD)
+            identity = resolve_identity(self._one_observation_of(build), declared)
             assert (identity.base, identity.version) == (build.family, build.version), self._label(build)
 
     def test_a_nameless_file_withholds_a_version_it_cannot_prove(self):

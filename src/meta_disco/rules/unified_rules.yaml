@@ -2155,6 +2155,7 @@ reference_builds:
     chry_m5:
       - "ce3e31103314a704255f3cd90369ecce"
     aliases:
+      - "CHM13v1Y.fa"
       - "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r.fasta"
   - family: CHM13
     version: "v1.0+HG002chrY"
@@ -2180,6 +2181,16 @@ reference_builds:
     absent:
       - "Y"
   - family: CHM13
+    version: "v1.1+GRCh38chrY"
+    chr1_length:
+      - 248387328
+    chr1_m5: []
+    chry_length:
+      - 57227415
+    chry_m5: []
+    aliases:
+      - "CHM13Y_EBV_v1.1.fasta"
+  - family: CHM13
     version: "v2.0"
     chr1_length:
       - 248387328
@@ -2191,6 +2202,9 @@ reference_builds:
       - "40d26ed39899fc0198762197d8c0e682"
       - "dd7264df17e7e4a4dac5b0f1f19dcfe0"
     aliases:
+      - "CHM13v2.fa"
+      - "chm13v2.0.XX.fasta"
+      - "chm13v2.0.XY.fasta"
       - "chm13v2.0.fasta"
   - family: GRCh38
     version: null
@@ -2204,8 +2218,13 @@ reference_builds:
       - "08b6ead4da41036d8adc6f283355d456"
       - "ce3e31103314a704255f3cd90369ecce"
     aliases:
+      - "GCA_000001405.15_GRCh38_no_alt_analysis_set.fa"
+      - "GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta"
       - "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna"
       - "GRCh38_full_analysis_set_plus_decoy_hla.fa"
+      - "GRCh38_no_alt.fa"
+      - "Homo_sapiens_assembly38.XX.fasta"
+      - "Homo_sapiens_assembly38.XY.fasta"
       - "Homo_sapiens_assembly38.fasta"
   - family: GRCh38
     version: "p12"
