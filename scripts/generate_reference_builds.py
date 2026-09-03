@@ -209,8 +209,9 @@ def check_absences(observed: dict[str, Counter]) -> list[str]:
     length or checksum is enough to falsify it. A declaration is also refused if
     no name in ``NAME_TO_BUILD`` maps to its build, or no cached header names
     such a build — either way the row it describes would never be emitted and
-    the declaration would vanish silently. Returns one line per problem naming
-    the build, the reference name where there is one, and the contig.
+    the declaration would vanish silently. Returns one line per problem: a
+    contradiction names the build, the reference name, and the contig; a
+    vanishing declaration names only the build.
     """
     problems = []
     names_of = defaultdict(list)
@@ -302,7 +303,7 @@ def main() -> int:
 
     contradictions = check_absences(observed)
     if contradictions:
-        print("KNOWN_ABSENT is contradicted by the corpus; no table emitted:", file=sys.stderr)
+        print("KNOWN_ABSENT cannot be emitted as declared; no table emitted:", file=sys.stderr)
         for line in contradictions:
             print(f"  {line}", file=sys.stderr)
         return 1
