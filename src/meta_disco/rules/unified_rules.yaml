@@ -2128,9 +2128,10 @@ reference_builds:
   # An empty list means that part was never observed for this build.
   #
   # `absent` (issue #351) lists key contigs for which the reference has NO
-  # contig of that name, so a header listing one rules the build out. Declared, not
-  # measured — see KNOWN_ABSENT in the generator, which checks it against the
-  # corpus. Distinct from an empty list, which constrains nothing.
+  # contig of that name, so a header that lists one with a length or checksum
+  # rules the build out. Declared, not measured — see KNOWN_ABSENT in the
+  # generator, which checks it against the corpus. Distinct from an empty
+  # list, which constrains nothing.
   - family: CHM13
     version: "v1.0"
     chr1_length:

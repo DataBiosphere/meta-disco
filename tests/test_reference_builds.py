@@ -338,18 +338,21 @@ class TestCoarseValueReconciliation:
 
 class TestDeclaredAbsence:
     """Issue #351: a row can say "this reference has no chrY", and a header
-    that lists one then rules the build out. Scenario numbers are the issue's."""
+    that lists one with a length or checksum then rules the build out. Scenario
+    numbers are the issue's."""
 
     def test_t2t_vcf_resolves_to_the_grafted_grch38_chry_build(self):
-        """Scenario 1. chr1 says a v1.0 variant; chrY at GRCh38's length says
-        which — once v1.0 and the HG002-grafted build are known to have no chrY."""
+        """Scenario 1. chr1 says a v1.0 variant; a chrY at GRCh38's length says
+        which — it fits the GRCh38-grafted build and contradicts v1.0 and the
+        HG002-grafted build, both declared to have no contig named chrY."""
         entry = classify_from_vcf_header(T2T_VCF)["reference_assembly"]
         assert entry["value"] == "CHM13"
         assert entry["build"]["base"] == "CHM13"
         assert entry["build"]["version"] == "v1.0+GRCh38chrY"
 
     def test_t2t_chry_vcf_resolves_to_v2(self):
-        """Scenario 2. chr1 says v1.1 or v2.0; a chrY at all says v2.0."""
+        """Scenario 2. chr1 says v1.1 or v2.0; a chrY at HG002's length fits
+        v2.0 and contradicts v1.1, which is declared to have no chrY."""
         entry = classify_from_vcf_header(T2T_CHRY_VCF)["reference_assembly"]
         assert entry["value"] == "CHM13"
         assert entry["build"]["base"] == "CHM13"

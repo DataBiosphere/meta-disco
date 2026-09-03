@@ -257,9 +257,10 @@ def emit_yaml(rows: list[dict]) -> str:
         "  # An empty list means that part was never observed for this build.",
         "  #",
         "  # `absent` (issue #351) lists key contigs for which the reference has NO",
-        "  # contig of that name, so a header listing one rules the build out. Declared, not",
-        "  # measured — see KNOWN_ABSENT in the generator, which checks it against the",
-        "  # corpus. Distinct from an empty list, which constrains nothing.",
+        "  # contig of that name, so a header that lists one with a length or checksum",
+        "  # rules the build out. Declared, not measured — see KNOWN_ABSENT in the",
+        "  # generator, which checks it against the corpus. Distinct from an empty",
+        "  # list, which constrains nothing.",
     ]
     for row in sorted(rows, key=lambda r: (r["family"], str(r["version"]))):
         version = f'"{row["version"]}"' if row["version"] else "null"
