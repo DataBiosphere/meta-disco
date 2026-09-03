@@ -81,10 +81,12 @@ def _get_engine() -> "RuleEngine":
 def _record_reference_build(result, identity) -> None:
     """Attach the observed reference build to ``reference_assembly``'s detail (#340).
 
-    "Observed" is the precise word: the build is emitted whenever the header
-    yielded any key-contig evidence — a length or a checksum — or a declared
-    reference name, with ``base`` / ``version`` null if nothing resolved, so
-    the observations survive for a later table row.
+    "Observed" is the precise word: the build is emitted whenever anything
+    survives into the identity — a derived ``base``/``version``, an observed
+    key-contig checksum, or a declared reference name — and ``base``/``version``
+    are null there if nothing resolved. A contig *length* is evidence for
+    resolution but is not itself recorded, so a length-only header that
+    resolves nothing carries no build at all (issue #349).
 
     The dimension is named here, in the classifier that observed the build,
     rather than in the generic output assembler — ``build_field_entry`` and

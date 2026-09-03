@@ -153,10 +153,12 @@ CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
 MARKER_EVIDENCE_KEYS = {"marker", "reason"}
 FIELD_KEYS = set(ENTRY_KEYS)
 # `build` (#340) is optional detail about a value, carried only by
-# reference_assembly and only when the header yielded some observation — a key
-# contig length or checksum, or a declared reference name. `base` and `version`
-# inside it are null when those observations resolved no build. The golden's stub headers
-# carry neither, so no build is emitted there and the golden is unaffected — but
+# reference_assembly and only when something survives into the identity: a
+# derived base/version, an observed key-contig checksum, or a declared reference
+# name. `base` and `version` inside it are null when nothing resolved. A contig
+# length is evidence for resolution but is not recorded, so a length-only header
+# that resolves nothing carries no build (#349). The golden's stub headers carry
+# none of these, so no build is emitted there and the golden is unaffected — but
 # the contract below still has to permit and check it, or the field would slip
 # through untested.
 OPTIONAL_FIELD_KEYS = {"build"}
