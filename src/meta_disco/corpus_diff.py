@@ -201,13 +201,15 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
     report, not the input-contract gate (``validate_metadata``), which is where a
     malformed record is meant to surface.
 
-    Every record is assumed to carry an ``file_md5sum``. The input contract
-    requires one — ``metadata_schema``'s md5 format rule, gated by
-    ``validate_metadata`` before any run (#161) — so a snapshot that reaches this
-    function has one on every record. A record that somehow lacked one would be
-    counted under the empty string, and two such records with the same name would
-    then read as ``unchanged``; that is the cost of trusting the contract rather
-    than re-checking it here (#375).
+    Every record is assumed to carry a ``file_md5sum``. The input contract
+    requires one and ``validate_metadata`` reports any record that lacks it, but
+    nothing forces that gate to run before this report — ``make classify`` has no
+    such prerequisite — so the assumption is *measured*, not enforced: no snapshot
+    on disk holds such a record. One that did would be counted under the empty
+    string, and two of them sharing a dataset and name would read as
+    ``unchanged``. #376 turns the measurement into a guarantee by excluding
+    checksum-less files from processing; until it lands, this is the accepted risk
+    recorded on #375.
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -276,12 +278,17 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
-    Every record is assumed to carry an ``md5sum``, which the input contract
-    requires of every input record (#161), so the identity is trusted rather than
-    re-checked here. Only md5 need be present: ``dataset_title`` is a qualifier
-    and is legitimately ``None`` for the HPRC source, so it is normalized to the
-    empty string rather than required — requiring it would drop that corpus
-    entirely.
+    Every record is assumed to carry an ``md5sum`` (the output echo of the input
+    contract's ``file_md5sum``). That is not guaranteed by the contract alone: a
+    record violating it is not dropped but diverted to a ``validation_failed``
+    row, which is still written with its md5 echoed as-is (#155), so a null md5
+    can in principle reach this reader. None does — 0 of 1.4M records across every
+    run on disk — and #376 excludes such files from classification, which makes it
+    a guarantee rather than a measurement.
+
+    Only md5 matters for the join: ``dataset_title`` is a qualifier and is
+    legitimately ``None`` for the HPRC source, so it is normalized to the empty
+    string rather than required — requiring it would drop that corpus entirely.
 
     Raises FileNotFoundError if the run directory does not exist — an empty result
     would otherwise read as a run with no coverage.
