@@ -3,8 +3,8 @@ name: meta_disco_input_metadata
 title: Meta-Disco AnVIL Input Metadata Model
 description: >-
   The contract for a raw AnVIL file metadata record — one entry in the `files`
-  array of `data/anvil/anvil_files_metadata.json`, as produced by
-  `scripts/download_anvil_metadata.py` from the AnVIL Explorer API.
+  array of `data/anvil/anvil_files_metadata.json`, as derived by
+  `scripts/download_anvil_manifest.py` from the compact Azul manifest (#368).
 
   This is the *input* to classification, distinct from `classification.yaml`
   which models the classified *output*. Kept in a separate schema so the input

@@ -12,7 +12,7 @@ help:
 	@echo "  make format-check       Check formatting without writing (CI)"
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
 	@echo "  make classify-and-report Run classify + regenerate all reports"
-	@echo "  make download           Download fresh AnVIL metadata from API"
+	@echo "  make download           Pull AnVIL metadata as Azul manifests, per dataset (CATALOG=anvil15)"
 	@echo "  make validate-metadata  Check a downloaded metadata file's shape before classifying"
 	@echo ""
 	@echo "  make classify-bam       Classify BAM/CRAM files (network required)"
@@ -76,8 +76,13 @@ classify-hprc:
 
 classify-and-report: classify classify-hprc all-reports
 
+# The Azul catalog generation to pull. Named explicitly (#335, #368): the
+# service default advances without notice, and a snapshot must record which
+# generation it captured.
+CATALOG ?= anvil15
+
 download:
-	uv run python scripts/download_anvil_metadata.py
+	uv run python scripts/download_anvil_manifest.py --catalog $(CATALOG)
 
 # Pre-run gate: validate a downloaded metadata file against the input contract
 # (issue #161). Non-zero exit on any shape violation. Run after `make download`.
