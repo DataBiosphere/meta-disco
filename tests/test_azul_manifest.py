@@ -67,12 +67,15 @@ def verbatim_payload(n: int) -> bytes:
 
 
 class FakeResponse:
-    def __init__(self, *, json_body=None, content=b""):
+    def __init__(self, *, json_body=None, content=b"", status_code=200, headers=None):
         self._json = json_body
         self.content = content
+        self.status_code = status_code
+        self.headers = headers or {}
 
     def raise_for_status(self):
-        pass
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
     def json(self):
         return self._json
@@ -81,10 +84,13 @@ class FakeResponse:
 class FakeSession:
     """Answers the files facet, then a manifest job that polls twice before finishing."""
 
-    def __init__(self, datasets: dict[str, int], payloads: dict[tuple[str, str], bytes], polls: int = 2):
+    def __init__(
+        self, datasets: dict[str, int], payloads: dict[tuple[str, str], bytes], polls: int = 2, rate_limits: int = 0
+    ):
         self.datasets = datasets
         self.payloads = payloads
         self.polls = polls
+        self.rate_limits = rate_limits  # how many PUTs answer 429 before one is accepted
         self.calls: list[tuple[str, str, dict | None]] = []
         self._jobs: dict[str, dict] = {}
 
@@ -108,6 +114,9 @@ class FakeSession:
         params = kwargs.get("params")
         self.calls.append(("PUT", url, params))
         assert url == am.MANIFEST_URL and params is not None
+        if self.rate_limits > 0:
+            self.rate_limits -= 1
+            return FakeResponse(json_body={"message": "slow down"}, status_code=429, headers={"Retry-After": "7"})
         title = json.loads(params["filters"])["datasets.title"]["is"][0]
         key = (title, params["format"])
         job_url = f"job://{title}/{params['format']}"
@@ -137,6 +146,20 @@ class TestFetchManifest:
         assert put_params is not None
         assert put_params["catalog"] == "anvil15" and put_params["format"] == "compact"
         assert json.loads(put_params["filters"]) == {"datasets.title": {"is": ["ds"]}}
+
+    def test_a_rate_limited_request_is_retried_after_the_named_wait(self):
+        """Azul answered 429 on the sixteenth consecutive job of the first real run."""
+        session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=2)
+        sleeps = []
+        assert am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append) == b"h\nr\n"
+        assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
+        assert sleeps[:2] == [7.0, 7.0]
+
+    def test_a_request_that_stays_rate_limited_gives_up(self):
+        session = FakeSession({}, {("ds", "compact"): b""}, rate_limits=10**6)
+        with pytest.raises(RuntimeError, match="HTTP 429"):
+            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=lambda _s: None)
+        assert sum(1 for c in session.calls if c[0] == "PUT") == am._MAX_ATTEMPTS
 
     def test_a_job_that_never_finishes_times_out(self):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)
@@ -218,7 +241,7 @@ class TestScript:
         return session
 
     def test_a_full_run_writes_manifests_sidecar_and_input(self, tmp_path, session):
-        assert dl.download("anvil15", tmp_path, None, force=False) == 0
+        assert dl.download("anvil15", tmp_path, None, force=False, pause=0) == 0
         manifest_dir = tmp_path / "manifest" / "anvil15"
         assert (manifest_dir / "ds.compact.tsv").is_file() and (manifest_dir / "ds.verbatim.jsonl").is_file()
         sidecar = json.loads((manifest_dir / "manifests.json").read_text())
@@ -232,10 +255,10 @@ class TestScript:
 
     def test_a_rerun_skips_manifests_on_disk_but_rebuilds_the_input(self, tmp_path, session):
         """Scenario 6."""
-        assert dl.download("anvil15", tmp_path, None, force=False) == 0
+        assert dl.download("anvil15", tmp_path, None, force=False, pause=0) == 0
         (tmp_path / "anvil_files_metadata.json").unlink()
         puts_before = sum(1 for c in session.calls if c[0] == "PUT")
-        assert dl.download("anvil15", tmp_path, None, force=False) == 0
+        assert dl.download("anvil15", tmp_path, None, force=False, pause=0) == 0
         assert sum(1 for c in session.calls if c[0] == "PUT") == puts_before
         assert (tmp_path / "anvil_files_metadata.json").is_file()
 
@@ -245,5 +268,5 @@ class TestScript:
         session = FakeSession({"ds": 3}, payloads)
         monkeypatch.setattr(am, "requests", type("R", (), {"Session": staticmethod(lambda: session)}))
         monkeypatch.setattr(am, "time", type("T", (), {"sleep": staticmethod(lambda _s: None)}))
-        assert dl.download("anvil15", tmp_path, None, force=False) == 1
+        assert dl.download("anvil15", tmp_path, None, force=False, pause=0) == 1
         assert not (tmp_path / "anvil_files_metadata.json").exists()

@@ -53,14 +53,43 @@ FORMAT_SUFFIX = {FORMAT_COMPACT: "compact.tsv", FORMAT_VERBATIM: "verbatim.jsonl
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 
+# Responses worth retrying: Azul rate-limits a run of manifest jobs (a 429 landed
+# on the sixteenth consecutive request on 2026-09-03), and a gateway hiccup is
+# not a reason to abandon a multi-gigabyte run. Anything else is raised.
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+_MAX_ATTEMPTS = 6
+_BACKOFF_BASE = 5.0  # seconds; doubled per attempt when the server names no Retry-After
+
 
 class HttpSession(Protocol):
     """The two calls this module makes, keyword arguments only; ``requests.Session``
     satisfies it, and so can a test fake. Responses are typed ``Any``: they need
-    ``raise_for_status()``, ``json()`` and ``content``, which both provide."""
+    ``status_code``, ``headers``, ``raise_for_status()``, ``json()`` and
+    ``content``, which both provide."""
 
     def get(self, url: str, **kwargs: Any) -> Any: ...
     def put(self, url: str, **kwargs: Any) -> Any: ...
+
+
+def _request(http: HttpSession, method: str, url: str, sleep: Callable[[float], None], **kwargs: Any) -> Any:
+    """One HTTP call, retried on a rate-limit or gateway status.
+
+    Waits the server's ``Retry-After`` when it names one, else ``_BACKOFF_BASE``
+    doubled per attempt, and gives up after ``_MAX_ATTEMPTS`` by raising the last
+    response's error. Any other error status raises at once.
+    """
+    resp = None
+    for attempt in range(_MAX_ATTEMPTS):
+        resp = getattr(http, method)(url, **kwargs)
+        if resp.status_code not in _RETRY_STATUSES:
+            resp.raise_for_status()
+            return resp
+        retry_after = resp.headers.get("Retry-After")
+        wait = float(retry_after) if retry_after else _BACKOFF_BASE * (2**attempt)
+        sleep(wait)
+    assert resp is not None
+    resp.raise_for_status()
+    raise RuntimeError(f"{method.upper()} {url} still returning {resp.status_code} after {_MAX_ATTEMPTS} attempts")
 
 
 @dataclass(frozen=True)
@@ -80,8 +109,7 @@ def discover_datasets(catalog: str, session: HttpSession | None = None) -> list[
     Sorted by file count descending, then title, so a run's order is stable.
     """
     http: HttpSession = session if session is not None else requests.Session()
-    resp = http.get(FILES_URL, params={"catalog": catalog, "size": 1}, timeout=60)
-    resp.raise_for_status()
+    resp = _request(http, "get", FILES_URL, time.sleep, params={"catalog": catalog, "size": 1}, timeout=60)
     terms = resp.json()["termFacets"]["datasets.title"]["terms"]
     datasets = [Dataset(title=t["term"], file_count=int(t["count"])) for t in terms if t.get("term")]
     return sorted(datasets, key=lambda d: (-d.file_count, d.title))
@@ -104,20 +132,23 @@ def fetch_manifest(
 
     Polls while the job reports ``Status`` 301, waiting ``Retry-After`` seconds
     (at least one) between polls, and downloads the 302 ``Location`` at once,
-    because that URL is signed and expires. Raises ``TimeoutError`` if the job
-    has not finished after ``timeout`` seconds of waiting, and ``RuntimeError``
-    on any other status.
+    because that URL is signed and expires. Each HTTP call goes through
+    :func:`_request`, so a 429 or gateway error is retried with backoff. Raises
+    ``TimeoutError`` if the job has not finished after ``timeout`` seconds of
+    polling, and ``RuntimeError`` on any other job status.
     """
     if fmt not in FORMATS:
         raise ValueError(f"unknown manifest format {fmt!r}; expected one of {FORMATS}")
     http: HttpSession = session if session is not None else requests.Session()
     sleep = sleep or time.sleep
-    resp = http.put(
+    resp = _request(
+        http,
+        "put",
         MANIFEST_URL,
+        sleep,
         params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_title)},
         timeout=120,
     )
-    resp.raise_for_status()
     body = resp.json()
     waited = 0.0
     while body.get("Status") == 301:
@@ -126,14 +157,11 @@ def fetch_manifest(
             raise TimeoutError(f"manifest job for {dataset_title!r} ({fmt}) still running after {waited:.0f}s")
         sleep(wait)
         waited += wait
-        resp = http.get(body["Location"], timeout=120)
-        resp.raise_for_status()
+        resp = _request(http, "get", body["Location"], sleep, timeout=120)
         body = resp.json()
     if body.get("Status") != 302:
         raise RuntimeError(f"unexpected manifest job response for {dataset_title!r} ({fmt}): {body}")
-    payload = http.get(body["Location"], timeout=1800)
-    payload.raise_for_status()
-    return payload.content
+    return _request(http, "get", body["Location"], sleep, timeout=1800).content
 
 
 def count_rows(fmt: str, payload: bytes) -> int:

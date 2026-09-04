@@ -17,7 +17,9 @@ dataset, it derives the classifier's input from the compact rows::
 
 A manifest already on disk is not re-requested unless ``--force`` is given; the
 input file is rebuilt from whatever is on disk either way. A parity mismatch
-exits non-zero and leaves the input file untouched.
+exits non-zero and leaves the input file untouched. A rate-limit or gateway
+error is retried with backoff (see ``azul_manifest._request``), and ``--pause``
+seconds separate consecutive jobs.
 
 Usage:
     python scripts/download_anvil_manifest.py --catalog anvil15
@@ -29,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -64,7 +67,7 @@ def save_sidecar(manifest_dir: Path, sidecar: dict) -> None:
         json.dump(sidecar, f, indent=2, sort_keys=True)
 
 
-def download(catalog: str, output_dir: Path, only: set[str] | None, force: bool) -> int:
+def download(catalog: str, output_dir: Path, only: set[str] | None, force: bool, pause: float = 5.0) -> int:
     manifest_dir = output_dir / "manifest" / catalog
     manifest_dir.mkdir(parents=True, exist_ok=True)
     sidecar = load_sidecar(manifest_dir)
@@ -96,6 +99,8 @@ def download(catalog: str, output_dir: Path, only: set[str] | None, force: bool)
                 elapsed = (datetime.now() - started).total_seconds()
                 print(f" {len(payload):,} bytes in {elapsed:.0f}s")
                 entry[fmt] = {"requested_at": started.isoformat(), "bytes": len(payload), "seconds": round(elapsed)}
+                # A courtesy gap between consecutive jobs; Azul rate-limits a tight run.
+                time.sleep(pause)
             rows = count_rows(fmt, payload)
             counts[(dataset.title, fmt)] = rows
             entry.setdefault(fmt, {})["rows"] = rows
@@ -132,8 +137,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", "-o", type=Path, default=Path("data/anvil"), help="Output directory")
     parser.add_argument("--datasets", nargs="+", help="Only these dataset titles (default: every accessible dataset)")
     parser.add_argument("--force", action="store_true", help="Re-request manifests already on disk")
+    parser.add_argument("--pause", type=float, default=5.0, help="Seconds to wait between manifest jobs (default 5)")
     args = parser.parse_args(argv)
-    return download(args.catalog, args.output, set(args.datasets) if args.datasets else None, args.force)
+    return download(args.catalog, args.output, set(args.datasets) if args.datasets else None, args.force, args.pause)
 
 
 if __name__ == "__main__":
