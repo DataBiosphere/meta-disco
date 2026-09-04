@@ -64,6 +64,8 @@ SIDECAR = "manifests.json"
 
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
+# How a compact cell spells a boolean (all 708,088 anvil15 rows use one of these).
+_BOOL_CELL = {"True": True, "False": False}
 
 # Responses worth waiting out. The manifest endpoint has a usage quota. What was
 # measured on 2026-09-03: sixteen consecutive jobs went through, the seventeenth
@@ -120,8 +122,9 @@ def _request(
         if resp.status_code not in _RETRY_STATUSES:
             resp.raise_for_status()
             return resp
-        retry_after = resp.headers.get("Retry-After")
-        wait = float(retry_after) if retry_after else min(_BACKOFF_BASE * (2**attempt), _BACKOFF_CAP)
+        wait = _retry_after_seconds(resp.headers.get("Retry-After"))
+        if wait is None:
+            wait = min(_BACKOFF_BASE * (2**attempt), _BACKOFF_CAP)
         if waited + wait > max_wait:
             raise RuntimeError(
                 f"{method.upper()} {url} still returning HTTP {resp.status_code} after {waited:.0f}s of waiting"
@@ -133,6 +136,22 @@ def _request(
         attempt += 1
 
 
+def _retry_after_seconds(value: Any) -> float | None:
+    """A ``Retry-After`` as seconds to wait, at least one; ``None`` if absent or not a number.
+
+    The header may also be an HTTP date (RFC 7231); that form is not parsed and
+    falls back to the caller's backoff rather than aborting a long run. The
+    floor keeps a server saying ``0`` from turning the wait into a tight loop
+    that never consumes the budget.
+    """
+    if value is None:
+        return None
+    try:
+        return max(float(value), 1.0)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class Dataset:
     """One accessible dataset as the files facet reports it."""
@@ -141,7 +160,13 @@ class Dataset:
     file_count: int
 
 
-def discover_datasets(catalog: str, session: HttpSession | None = None, sleep: Sleep = time.sleep) -> list[Dataset]:
+def discover_datasets(
+    catalog: str,
+    session: HttpSession | None = None,
+    sleep: Sleep = time.sleep,
+    max_wait: float = DEFAULT_MAX_WAIT,
+    log: Log | None = None,
+) -> list[Dataset]:
     """The datasets with accessible files in ``catalog``, with their file counts.
 
     Read from the ``datasets.title`` term facet of a one-hit ``/index/files``
@@ -150,7 +175,7 @@ def discover_datasets(catalog: str, session: HttpSession | None = None, sleep: S
     Sorted by file count descending, then title, so a run's order is stable.
     """
     http: HttpSession = session if session is not None else requests.Session()
-    resp = _request(http, "get", FILES_URL, sleep, params={"catalog": catalog, "size": 1}, timeout=60)
+    resp = _request(http, "get", FILES_URL, sleep, max_wait, log, params={"catalog": catalog, "size": 1}, timeout=60)
     terms = resp.json()["termFacets"]["datasets.title"]["terms"]
     datasets = [Dataset(title=t["term"], file_count=int(t["count"])) for t in terms if t.get("term")]
     return sorted(datasets, key=lambda d: (-d.file_count, d.title))
@@ -194,7 +219,7 @@ def fetch_manifest(
     body = resp.json()
     waited = 0.0
     while body.get("Status") == 301:
-        wait = max(float(body.get("Retry-After", 1)), 1.0)
+        wait = _retry_after_seconds(body.get("Retry-After")) or 1.0
         if waited + wait > timeout:
             raise TimeoutError(f"manifest job for {dataset_title!r} ({fmt}) still running after {waited:.0f}s")
         sleep(wait)
@@ -246,8 +271,15 @@ def load_sidecar(root: Path, catalog: str) -> dict[str, Any]:
 def save_sidecar(root: Path, catalog: str, sidecar: dict[str, Any]) -> None:
     directory = manifest_dir(root, catalog)
     directory.mkdir(parents=True, exist_ok=True)
-    with (directory / SIDECAR).open("w") as f:
-        json.dump(sidecar, f, indent=2, sort_keys=True)
+    _write_atomically(directory / SIDECAR, lambda f: json.dump(sidecar, f, indent=2, sort_keys=True))
+
+
+def _write_atomically(path: Path, write: Callable[[Any], None]) -> None:
+    """Write through a temporary file and rename, so a failure mid-write leaves the previous file."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w") as f:
+        write(f)
+    tmp.replace(path)
 
 
 # --- reading manifests ---------------------------------------------------------
@@ -305,10 +337,13 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     The keys are the input contract (``schema/metadata.yaml``) plus the two
     donor fields the page downloader also emitted and the contract ignores.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
-    strict validation requires. The four nullable fields — ``data_modality``,
-    ``reference_assembly``, ``organism_type``, ``phenotypic_sex`` — read an
-    empty cell as ``None``; every other field is passed through as the cell's
-    text, and the contract's non-empty patterns are what reject a blank one.
+    strict validation requires; a cell that is not one of Azul's ``True`` /
+    ``False`` spellings raises rather than silently becoming ``False``. The
+    four nullable fields — ``data_modality``, ``reference_assembly``,
+    ``organism_type``, ``phenotypic_sex`` — read an empty cell as ``None`` and
+    a multi-valued one as its first value, which is what the page downloader
+    emitted for them; every other field is passed through as the cell's text,
+    and the contract's non-empty patterns are what reject a blank one.
     """
     return {
         "entry_id": row["files.document_id"],
@@ -319,20 +354,23 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
         "file_md5sum": row["files.file_md5sum"],
         "data_modality": _first(row.get("files.data_modality", "")),
         "reference_assembly": _first(row.get("files.reference_assembly", "")),
-        "is_supplementary": row["files.is_supplementary"] == "True",
+        "is_supplementary": _BOOL_CELL[row["files.is_supplementary"]],
         "drs_uri": row["files.drs_uri"],
         "dataset_id": row["datasets.dataset_id"],
         "dataset_title": row["datasets.title"],
-        "organism_type": row.get("donors.organism_type") or None,
-        "phenotypic_sex": row.get("donors.phenotypic_sex") or None,
+        "organism_type": _first(row.get("donors.organism_type", "")),
+        "phenotypic_sex": _first(row.get("donors.phenotypic_sex", "")),
     }
 
 
 def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
     """Every record in one compact manifest on disk, in manifest order, streamed."""
     with path.open(newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f, delimiter="\t"):
-            yield record_from_compact_row(row)
+        for n, row in enumerate(csv.DictReader(f, delimiter="\t"), start=2):
+            try:
+                yield record_from_compact_row(row)
+            except (KeyError, ValueError) as exc:
+                raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
 
 
 def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: datetime) -> dict[str, Any]:
@@ -357,11 +395,15 @@ def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[
 
     ``records`` is consumed once; no more than the current record is held. The
     JSON envelope is ``{"metadata": block, "files": [...]}`` (the shape
-    ``pipeline.load_records`` reads); the NDJSON is one record per line. Returns
-    the number of records written.
+    ``pipeline.load_records`` reads); the NDJSON is one record per line. Both
+    are written to temporary files and renamed into place only after every
+    record is out, so an exception mid-stream — a cell the mapping rejects —
+    leaves the previous input files untouched. Returns the number written.
     """
+    json_path, nd_path = root / "anvil_files_metadata.json", root / "anvil_files_metadata.ndjson"
+    json_tmp, nd_tmp = json_path.with_suffix(".json.tmp"), nd_path.with_suffix(".ndjson.tmp")
     n = 0
-    with (root / "anvil_files_metadata.json").open("w") as js, (root / "anvil_files_metadata.ndjson").open("w") as nd:
+    with json_tmp.open("w") as js, nd_tmp.open("w") as nd:
         js.write('{"metadata": ')
         json.dump(block, js)
         js.write(', "files": [')
@@ -371,4 +413,7 @@ def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[
             nd.write(line + "\n")
             n += 1
         js.write("]}")
+    # Both or neither: a failure above leaves the previous pair in place.
+    json_tmp.replace(json_path)
+    nd_tmp.replace(nd_path)
     return n

@@ -17,12 +17,13 @@ classifier's input from the compact rows::
     <output>/anvil_files_metadata.ndjson   # one record per line
 
 A manifest already on disk is not re-requested unless ``--force`` is given, and
-the input file is rebuilt from what is on disk either way. Discovery decides
-what to fetch; parity is judged against the sidecar's stored counts, so a
-catalog that has moved on since the pull — or been deleted, as anvil14 was —
-still rebuilds, and the live count is reported beside the stored one when the
-two differ. A parity mismatch exits non-zero and leaves the input file
-untouched. A rate-limit or gateway error is waited out, honoring the server's
+the input file is rebuilt from every dataset on disk either way — ``--datasets``
+narrows what is fetched, never what the input file covers, so a targeted
+repair cannot shrink the corpus. Discovery decides what to fetch; parity is
+judged against the sidecar's stored counts, so a catalog that has moved on
+since the pull — or been deleted, as anvil14 was — still rebuilds, and the live
+count is reported beside the stored one when the two differ. A parity mismatch
+exits non-zero and leaves the input files untouched. A rate-limit or gateway error is waited out, honoring the server's
 ``Retry-After``, for up to ``--max-wait`` seconds per request (see
 ``azul_manifest._request``); ``--pause`` seconds separate consecutive jobs.
 
@@ -80,22 +81,26 @@ def download(
     sidecar = load_sidecar(output_dir, catalog)
     stored = sidecar["datasets"]
 
+    log = lambda m: print(f"\n    {m}", end="", flush=True)  # noqa: E731
     try:
-        live = {d.title: d for d in discover_datasets(catalog, http, sleep)}
-    except requests.HTTPError as exc:
+        live = {d.title: d for d in discover_datasets(catalog, http, sleep, max_wait, log)}
+    except (requests.RequestException, RuntimeError) as exc:
         if not stored or force:
             raise
         # The catalog is gone or unreachable, but its manifests are here.
         print(f"Discovery failed ({exc}); rebuilding from the {len(stored)} dataset(s) on disk", file=sys.stderr)
         live = {}
-    titles = list(live) if live else list(stored)
+    # Every dataset the input file covers: the catalog's, plus any on disk from an
+    # earlier pull. --datasets narrows only what is fetched.
+    titles = list(live) + [t for t in stored if t not in live]
+    fetch = set(live)
     if only:
         unknown = only - set(titles)
         if unknown:
             print(f"Not in the {catalog} accessible-dataset facet or on disk: {sorted(unknown)}", file=sys.stderr)
             return 1
-        titles = [t for t in titles if t in only]
-    accessible = f", {sum(live[t].file_count for t in titles):,} accessible files" if live else ""
+        fetch &= only
+    accessible = f", {sum(d.file_count for d in live.values()):,} accessible files" if live else ""
     print(f"{catalog}: {len(titles)} dataset(s){accessible}")
 
     datasets: list[Dataset] = []
@@ -103,18 +108,25 @@ def download(
     for title in titles:
         entry = stored.setdefault(title, {})
         on_disk = all(manifest_path(output_dir, catalog, title, fmt).is_file() for fmt in FORMATS)
-        if on_disk and not force and "file_count" in entry:
+        if on_disk and not (force and title in fetch) and "file_count" in entry:
             # Parity is judged against the count the manifests were requested under.
             if title in live and live[title].file_count != entry["file_count"]:
                 print(f"  {title}: catalog now says {live[title].file_count:,} files, stored {entry['file_count']:,}")
-        else:
+        elif title in live:
             entry["file_count"] = live[title].file_count
+        if "file_count" not in entry:
+            # Neither a stored count nor a live one: the sidecar entry is from an
+            # interrupted first fetch of a dataset the catalog no longer lists.
+            print(f"  {title}: no manifests on disk and the catalog no longer lists it", file=sys.stderr)
+            return 1
         dataset = Dataset(title, entry["file_count"])
         datasets.append(dataset)
         for fmt in FORMATS:
             path = manifest_path(output_dir, catalog, title, fmt)
-            if path.is_file() and not force:
+            if path.is_file() and not (force and title in fetch):
                 print(f"  {title} {fmt}: on disk, {path.stat().st_size:,} bytes")
+            elif title not in fetch:
+                continue  # missing and not being fetched: parity reports it
             else:
                 started = datetime.now()
                 print(f"  {title} {fmt}: requesting ...", end="", flush=True)

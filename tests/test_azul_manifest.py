@@ -150,6 +150,14 @@ def one_dataset_session(n: int = 2, facet: int | None = None) -> FakeSession:
     return FakeSession({"ds": n if facet is None else facet}, payloads)
 
 
+def two_dataset_session() -> FakeSession:
+    payloads = {}
+    for title, n in (("a", 3), ("b", 2)):
+        payloads[(title, "compact")] = compact_payload(title, n)
+        payloads[(title, "verbatim.jsonl")] = verbatim_payload(n)
+    return FakeSession({"a": 3, "b": 2}, payloads)
+
+
 def run(catalog: str, root: Path, session: FakeSession) -> int:
     return dl.download(catalog, root, None, force=False, session=session, sleep=no_sleep)
 
@@ -193,6 +201,30 @@ class TestFetchManifest:
             am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=30)
         assert sleeps == [7.0] * 4
         assert session.puts() == 5
+
+    def test_a_zero_or_dated_retry_after_does_not_defeat_the_budget(self):
+        """Retry-After: 0 must not spin without consuming the budget, and an HTTP-date
+        value (valid per RFC 7231) must fall back to the backoff, not abort the run."""
+
+        class Throttled(FakeSession):
+            def __init__(self, header: str):
+                super().__init__({}, {})
+                self.header = header
+
+            def put(self, url, **kwargs):
+                self.calls.append(("PUT", url, kwargs.get("params")))
+                return FakeResponse(status_code=429, headers={"Retry-After": self.header})
+
+        session = Throttled("0")
+        sleeps = []
+        with pytest.raises(RuntimeError):
+            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=3)
+        assert sleeps == [1.0, 1.0, 1.0]
+        session = Throttled("Wed, 21 Oct 2026 07:28:00 GMT")
+        sleeps = []
+        with pytest.raises(RuntimeError):
+            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=12)
+        assert sleeps == [5.0]
 
     def test_each_wait_is_reported(self):
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=1)
@@ -275,6 +307,32 @@ class TestRecordMapping:
         assert am._first("genomic || transcriptomic") == "genomic"
         assert am._first("") is None
 
+    def test_a_boolean_cell_that_is_neither_spelling_is_refused(self, tmp_path):
+        payload = compact_payload("ds", 1).replace(b"\tFalse\t", b"\ttrue\t")
+        (tmp_path / "c.tsv").write_bytes(payload)
+        with pytest.raises(ValueError, match=r"c\.tsv line 2"):
+            list(am.iter_compact_records(tmp_path / "c.tsv"))
+
+    def test_donor_fields_take_the_first_of_a_multi_value(self, tmp_path):
+        payload = compact_payload("ds", 1).replace(b"\tFemale\n", b"\tFemale || Male\n")
+        (tmp_path / "c.tsv").write_bytes(payload)
+        [record] = am.iter_compact_records(tmp_path / "c.tsv")
+        assert record["phenotypic_sex"] == "Female"
+
+    def test_a_failed_write_leaves_the_previous_input_files(self, tmp_path):
+        block = am.metadata_block("anvil15", {"ds": 1}, datetime(2026, 9, 4))
+        assert am.write_input_files(tmp_path, block, [valid_record()]) == 1
+        before = (tmp_path / "anvil_files_metadata.json").read_bytes()
+
+        def bad():
+            yield valid_record()
+            raise ValueError("a cell the mapping rejects")
+
+        with pytest.raises(ValueError):
+            am.write_input_files(tmp_path, block, bad())
+        assert (tmp_path / "anvil_files_metadata.json").read_bytes() == before
+        assert load_records(tmp_path / "anvil_files_metadata.ndjson") == [valid_record()]
+
     def test_the_metadata_block_names_the_catalog_and_the_source(self):
         block = am.metadata_block("anvil15", {"b": 1, "a": 2}, datetime(2026, 9, 4))
         assert block == {
@@ -332,6 +390,31 @@ class TestScript:
         session.datasets = None
         assert run("anvil14", tmp_path, session) == 0
         assert (tmp_path / "anvil_files_metadata.json").is_file()
+        assert "rebuilding from the 1 dataset(s) on disk" in capsys.readouterr().err
+
+    def test_a_dataset_subset_fetches_only_that_dataset_but_rebuilds_the_whole_input(self, tmp_path):
+        """A targeted repair must not shrink the corpus: --datasets narrows the fetch, not the file."""
+        session = two_dataset_session()
+        assert run("anvil15", tmp_path, session) == 0
+        am.manifest_path(tmp_path, "anvil15", "b", "compact").unlink()
+        puts_before = session.puts()
+        assert dl.download("anvil15", tmp_path, {"b"}, force=True, session=session, sleep=no_sleep) == 0
+        assert session.puts() == puts_before + 2  # b's two manifests, nothing of a's
+        out = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
+        assert out["metadata"]["datasets"] == {"a": 3, "b": 2} and len(out["files"]) == 5
+
+    def test_an_unreachable_catalog_still_rebuilds_from_disk(self, tmp_path, capsys):
+        """Discovery failing with a connection error, not just a 404, must not abort a rebuild."""
+        session = one_dataset_session()
+        assert run("anvil15", tmp_path, session) == 0
+
+        class Unreachable(FakeSession):
+            def get(self, url, **kwargs):
+                if url == am.FILES_URL:
+                    raise requests.ConnectionError("no route")
+                return super().get(url, **kwargs)
+
+        assert run("anvil15", tmp_path, Unreachable({"ds": 2}, session.payloads)) == 0
         assert "rebuilding from the 1 dataset(s) on disk" in capsys.readouterr().err
 
     def test_a_parity_mismatch_exits_nonzero_and_writes_no_input(self, tmp_path):
