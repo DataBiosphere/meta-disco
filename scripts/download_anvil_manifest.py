@@ -78,6 +78,7 @@ def download(
     sleep: Sleep = time.sleep,
 ) -> int:
     http: HttpSession = session if session is not None else requests.Session()
+    output_dir.mkdir(parents=True, exist_ok=True)
     sidecar = load_sidecar(output_dir, catalog)
     stored = sidecar["datasets"]
 

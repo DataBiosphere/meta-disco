@@ -269,7 +269,7 @@ class TestFetchManifest:
         out = tmp_path / "m.tsv"
         with pytest.raises(requests.ConnectionError):
             am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=no_sleep)
-        assert not out.exists()
+        assert not out.exists() and not out.with_name("m.tsv.tmp").exists()
 
     def test_a_job_that_never_finishes_times_out(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)
@@ -373,7 +373,9 @@ class TestRecordMapping:
 
 class TestScript:
     def test_a_full_run_writes_manifests_sidecar_and_input(self, tmp_path):
+        """The output directory need not exist beforehand."""
         session = one_dataset_session()
+        tmp_path = tmp_path / "data" / "anvil"
         assert run("anvil15", tmp_path, session) == 0
         assert am.manifest_path(tmp_path, "anvil15", "ds", "compact").is_file()
         assert am.manifest_path(tmp_path, "anvil15", "ds", "verbatim.jsonl").is_file()

@@ -236,10 +236,15 @@ def fetch_manifest(
     resp = call("get", body["Location"], timeout=1800, stream=True)
     tmp = destination.with_name(destination.name + ".tmp")
     written = 0
-    with tmp.open("wb") as f:
-        for chunk in resp.iter_content(chunk_size=_CHUNK_BYTES):
-            f.write(chunk)
-            written += len(chunk)
+    try:
+        with tmp.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=_CHUNK_BYTES):
+                f.write(chunk)
+                written += len(chunk)
+    except BaseException:
+        # A half-written verbatim manifest is hundreds of megabytes; do not leave it behind.
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.replace(destination)
     return written
 
