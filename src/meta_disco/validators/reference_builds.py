@@ -257,6 +257,12 @@ def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredRefere
     The name comes from ``@SQ UR`` when any record carries one, and otherwise
     from the ``@PG`` command lines (#354) under the guards in
     :func:`_declared_from_command_lines`.
+
+    Unlike :func:`observe_vcf` there is no liftover guard: SAM has no standard
+    marker for a lifted alignment, and recognising CrossMap-style ``@PG``
+    programs would be the tool knowledge this rule avoids. A lifted BAM would
+    therefore record the aligner's pre-liftover reference as its name; the
+    contig signatures still decide the build, and a name never overrides them.
     """
     header = parse_sam_header(header_text)
     sq_records = header.sq or []
@@ -343,16 +349,23 @@ def reference_from_command_line(command_line: str) -> str | None:
     names:
 
     - the argument after a reference flag (``--reference``, ``-R``, ``-r``;
-      ``--reference=path`` counts too) when it looks like a FASTA path. The
-      FASTA check is what stops bwa's ``-R``, a read-group string, from ever
-      matching;
+      ``--reference=path`` counts too) when it looks like a FASTA path;
     - otherwise the first argument that looks like a FASTA path, which is where
       aligners that take the reference positionally (bwa, minimap2, winnowmap)
       put it — and, without either being named here, where samtools' ``-T`` and
       bcftools' ``-f`` values fall.
 
-    Precision comes from :func:`_declared_from_command_lines`'s guards, not from
-    this parse. Splitting is ``str.split`` unless the line contains a quote
+    "Looks like a FASTA path" is a FASTA extension and no tab: bwa's ``-R``
+    takes a tab-separated read-group string, and the no-tab rule is what keeps
+    it from matching even when its last field happens to end in ``.fa``.
+
+    Known limit, accepted in #354: when the reference is named by a non-FASTA
+    path (a ``.mmi`` index, a bwa index prefix) and another argument is a
+    FASTA — reads, an assembly — the positional rule names that file instead.
+    A name only ever breaks a tie the signatures left open, and the generator
+    warns on a name it cannot map, so the cost is a wrong observation, not a
+    wrong build. Precision comes from :func:`_declared_from_command_lines`'s
+    guards, not from this parse. Splitting is ``str.split`` unless the line contains a quote
     character: ``shlex`` is two hundred times slower, and what it contributes
     is stripping the quotes, so that ``--reference="/ref/x.fa"`` yields a
     token the FASTA check can match. A line ``shlex`` rejects (an unbalanced
@@ -362,9 +375,14 @@ def reference_from_command_line(command_line: str) -> str | None:
     # ``--reference=path`` as the two tokens the flag loop expects.
     argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]
     for flag, value in pairwise(argv):
-        if flag in _REFERENCE_FLAGS and _FASTA_PATH_RE.search(value):
+        if flag in _REFERENCE_FLAGS and _looks_like_fasta_path(value):
             return _basename(value)
-    return next((_basename(arg) for arg in argv[1:] if _FASTA_PATH_RE.search(arg)), None)
+    return next((_basename(arg) for arg in argv[1:] if _looks_like_fasta_path(arg)), None)
+
+
+def _looks_like_fasta_path(token: str) -> bool:
+    # A literal backslash-t is how a tab is written inside a SAM ``CL`` value.
+    return bool(_FASTA_PATH_RE.search(token)) and "\\t" not in token and "\t" not in token
 
 
 def _split_command_line(command_line: str) -> list[str]:

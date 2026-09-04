@@ -333,9 +333,12 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 _VCF_COMMAND_KEY_RE = re.compile(r"^##[^=]*command[^=]*=(.*)$", re.IGNORECASE)
 _VCF_COMMAND_ATTR_RE = re.compile(r'CommandLine(?:Options)?="([^"\\]*(?:\\.[^"\\]*)*)"')
 
-# INFO fields Picard's LiftoverVcf adds — three of them; any one marks a lifted
-# file (issue #354).
-LIFTOVER_INFO_IDS = frozenset({"OriginalContig", "OriginalStart", "OriginalAlleles"})
+# INFO fields Picard's LiftoverVcf adds: the two swap flags on every run, the
+# three ``Original*`` fields only with its opt-in WRITE_ORIGINAL_* options. Any
+# one marks a lifted file (issue #354).
+LIFTOVER_INFO_IDS = frozenset(
+    {"SwappedAlleles", "ReverseComplementedAlleles", "OriginalContig", "OriginalStart", "OriginalAlleles"}
+)
 
 
 def sam_command_lines(header: SAMHeader) -> list[str]:

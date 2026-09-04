@@ -279,6 +279,19 @@ class TestCommandLineName:
         )
         _, declared = observe_vcf(header)
         assert declared is None
+
+    def test_a_default_picard_liftover_is_recognised(self):
+        """Picard writes only the two swap flags unless asked for the Original*
+        fields; 84 lifted files in the cache carry nothing else."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            '##INFO=<ID=SwappedAlleles,Number=0,Type=Flag,Description="Swapped">\n'
+            '##INFO=<ID=ReverseComplementedAlleles,Number=0,Type=Flag,Description="RC">\n'
+            + GATK_LINE.format(ref="/ref/chm13v2.0.fasta")
+            + "##contig=<ID=chr1,length=248956422>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared is None
         with_field = header.replace("##fileformat=VCFv4.2\n", "##fileformat=VCFv4.2\n##reference=/ref/lifted.fa\n")
         _, declared = observe_vcf(with_field)
         assert declared == DeclaredReference("lifted.fa", NAME_SOURCE_REFERENCE_FIELD)
@@ -356,6 +369,9 @@ class TestReferenceFromCommandLine:
                 "chm13v2.0.XX.fasta",
             ),
             ("bwa mem -R '@RG\\tID:x\\tSM:y' /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
+            # synthetic: a read-group field that ends in .fa is still a read group, not a path
+            ("bwa mem -R @RG\\tID:s1\\tDS:aligned_to_hs37d5.fa /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
+            ("bwa mem -R '@RG\\tID:s1\\tDS:hs37d5.fa' /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
             # GATK: --reference
             (
                 "HaplotypeCaller --intervals chr10 --reference /ref/chm13v2.0.XY.fasta --input HG.cram",
