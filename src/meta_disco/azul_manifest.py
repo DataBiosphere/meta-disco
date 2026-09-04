@@ -1,7 +1,8 @@
 """Pull AnVIL file metadata from Azul manifests (issue #368).
 
 Azul serves two manifests over its file index, and this module knows how to ask
-for them and how to turn one of them into the classifier's input records:
+for them, where to keep them, and how to turn one of them into the classifier's
+input records:
 
 - ``compact`` — one tab-separated row per file: the harmonized join Azul
   materializes from its bundle structure (file, dataset, donor, biosample,
@@ -23,19 +24,29 @@ JSON carrying ``Status`` 301 and a ``Location`` to poll after ``Retry-After``
 seconds, until a ``Status`` 302 whose ``Location`` is a signed, expiring URL for
 the payload. :func:`fetch_manifest` follows that to the bytes.
 
-The HTTP session is injected so the job-following logic and the discovery parse
-are testable against a fake; the default is a :mod:`requests` session.
+On disk, a catalog's manifests live under ``<root>/manifest/<catalog>/`` as
+``<dataset>.compact.tsv`` and ``<dataset>.verbatim.jsonl`` beside a sidecar,
+``manifests.json``, recording per dataset the catalog file count each manifest
+was requested against and, per format, when it was fetched and how many files
+it holds. Anything that needs to find a dataset's manifest — #369's registry
+loader, #270's change check — should come through :func:`manifest_path` and
+:func:`load_sidecar` rather than re-deriving the layout.
+
+The HTTP session and the sleep are injected so the job-following logic and the
+discovery parse are testable against fakes; the defaults are a :mod:`requests`
+session and :func:`time.sleep`.
 """
 
 from __future__ import annotations
 
 import csv
-import io
 import json
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
+from pathlib import Path
 from typing import Any, Protocol
 
 import requests
@@ -47,17 +58,22 @@ MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
 FORMAT_COMPACT = "compact"
 FORMAT_VERBATIM = "verbatim.jsonl"
 FORMATS = (FORMAT_COMPACT, FORMAT_VERBATIM)
-# On-disk suffix per format, under data/anvil/manifest/<catalog>/<dataset>.<suffix>
+# On-disk suffix per format.
 FORMAT_SUFFIX = {FORMAT_COMPACT: "compact.tsv", FORMAT_VERBATIM: "verbatim.jsonl"}
+SIDECAR = "manifests.json"
 
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 
-# Responses worth waiting out: the manifest endpoint has a usage quota that
-# behaves like a token bucket — on 2026-09-03 sixteen consecutive jobs went
-# through, then every request drew 429 with ``Retry-After: 30`` and the quota
-# refilled at roughly one job every few minutes — and a gateway hiccup is not a
-# reason to abandon a multi-gigabyte run. Anything else is raised at once.
+# Responses worth waiting out. The manifest endpoint has a usage quota. What was
+# measured on 2026-09-03: sixteen consecutive jobs went through, the seventeenth
+# request drew 429 with ``Retry-After: 30`` and so did every request for the next
+# few minutes; the endpoint reopened within five minutes, accepted one job, and
+# throttled the next; a later resume of eight jobs saw no 429 at all. I think
+# that is a refilling quota of some kind, but the refill rule is not known, so a
+# request waits for however long the server keeps asking, up to a budget. A
+# gateway hiccup is likewise not a reason to abandon a multi-gigabyte run.
+# Anything else is raised at once.
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 DEFAULT_MAX_WAIT = 1800.0  # seconds a single request may spend waiting to be accepted
 _BACKOFF_BASE = 5.0  # seconds; doubled per attempt, capped, when the server names no Retry-After
@@ -74,13 +90,17 @@ class HttpSession(Protocol):
     def put(self, url: str, **kwargs: Any) -> Any: ...
 
 
+Sleep = Callable[[float], None]
+Log = Callable[[str], None]
+
+
 def _request(
     http: HttpSession,
     method: str,
     url: str,
-    sleep: Callable[[float], None],
+    sleep: Sleep,
     max_wait: float = DEFAULT_MAX_WAIT,
-    log: Callable[[str], None] | None = None,
+    log: Log | None = None,
     **kwargs: Any,
 ) -> Any:
     """One HTTP call, waited out on a rate-limit or gateway status.
@@ -88,9 +108,10 @@ def _request(
     Waits the server's ``Retry-After`` when it names one, else ``_BACKOFF_BASE``
     doubled per attempt up to ``_BACKOFF_CAP``, and keeps trying until the
     request is accepted or the waits would exceed ``max_wait`` seconds in
-    total, at which point the last response's error is raised. Each wait is
-    reported through ``log`` when one is given, so a run riding out a quota is
-    visibly waiting rather than hung. Any other error status raises at once.
+    total, at which point ``RuntimeError`` names the status and the time spent.
+    Each wait is reported through ``log`` when one is given, so a run riding
+    out a quota is visibly waiting rather than hung. Any other error status
+    raises at once.
     """
     waited = 0.0
     attempt = 0
@@ -102,9 +123,8 @@ def _request(
         retry_after = resp.headers.get("Retry-After")
         wait = float(retry_after) if retry_after else min(_BACKOFF_BASE * (2**attempt), _BACKOFF_CAP)
         if waited + wait > max_wait:
-            resp.raise_for_status()
             raise RuntimeError(
-                f"{method.upper()} {url} still returning {resp.status_code} after {waited:.0f}s of waiting"
+                f"{method.upper()} {url} still returning HTTP {resp.status_code} after {waited:.0f}s of waiting"
             )
         if log:
             log(f"HTTP {resp.status_code}; waiting {wait:.0f}s ({waited + wait:.0f}s of {max_wait:.0f}s)")
@@ -121,7 +141,7 @@ class Dataset:
     file_count: int
 
 
-def discover_datasets(catalog: str, session: HttpSession | None = None) -> list[Dataset]:
+def discover_datasets(catalog: str, session: HttpSession | None = None, sleep: Sleep = time.sleep) -> list[Dataset]:
     """The datasets with accessible files in ``catalog``, with their file counts.
 
     Read from the ``datasets.title`` term facet of a one-hit ``/index/files``
@@ -130,7 +150,7 @@ def discover_datasets(catalog: str, session: HttpSession | None = None) -> list[
     Sorted by file count descending, then title, so a run's order is stable.
     """
     http: HttpSession = session if session is not None else requests.Session()
-    resp = _request(http, "get", FILES_URL, time.sleep, params={"catalog": catalog, "size": 1}, timeout=60)
+    resp = _request(http, "get", FILES_URL, sleep, params={"catalog": catalog, "size": 1}, timeout=60)
     terms = resp.json()["termFacets"]["datasets.title"]["terms"]
     datasets = [Dataset(title=t["term"], file_count=int(t["count"])) for t in terms if t.get("term")]
     return sorted(datasets, key=lambda d: (-d.file_count, d.title))
@@ -146,10 +166,10 @@ def fetch_manifest(
     fmt: str,
     dataset_title: str,
     session: HttpSession | None = None,
-    sleep: Callable[[float], None] | None = None,
+    sleep: Sleep = time.sleep,
     timeout: float = 3600,
     max_wait: float = DEFAULT_MAX_WAIT,
-    log: Callable[[str], None] | None = None,
+    log: Log | None = None,
 ) -> bytes:
     """Request one manifest and follow its job to the payload bytes.
 
@@ -164,14 +184,10 @@ def fetch_manifest(
     if fmt not in FORMATS:
         raise ValueError(f"unknown manifest format {fmt!r}; expected one of {FORMATS}")
     http: HttpSession = session if session is not None else requests.Session()
-    sleep = sleep or time.sleep
-    resp = _request(
-        http,
+    call = partial(_request, http, sleep=sleep, max_wait=max_wait, log=log)
+    resp = call(
         "put",
         MANIFEST_URL,
-        sleep,
-        max_wait,
-        log,
         params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_title)},
         timeout=120,
     )
@@ -183,22 +199,68 @@ def fetch_manifest(
             raise TimeoutError(f"manifest job for {dataset_title!r} ({fmt}) still running after {waited:.0f}s")
         sleep(wait)
         waited += wait
-        resp = _request(http, "get", body["Location"], sleep, max_wait, log, timeout=120)
-        body = resp.json()
+        body = call("get", body["Location"], timeout=120).json()
     if body.get("Status") != 302:
         raise RuntimeError(f"unexpected manifest job response for {dataset_title!r} ({fmt}): {body}")
-    return _request(http, "get", body["Location"], sleep, max_wait, log, timeout=1800).content
+    return call("get", body["Location"], timeout=1800).content
 
 
-def count_rows(fmt: str, payload: bytes) -> int:
-    """Files a manifest payload describes: compact data rows, or verbatim ``anvil_file`` lines."""
-    if fmt == FORMAT_COMPACT:
-        return max(payload.count(b"\n") - 1, 0)
-    return sum(1 for line in payload.splitlines() if line.strip() and json.loads(line).get("type") == "anvil_file")
+# --- on-disk layout ----------------------------------------------------------
+
+
+def manifest_dir(root: Path, catalog: str) -> Path:
+    """Where ``catalog``'s manifests and sidecar live under ``root`` (``data/anvil``)."""
+    return root / "manifest" / catalog
+
+
+def manifest_path(root: Path, catalog: str, dataset_title: str, fmt: str) -> Path:
+    """The on-disk path of one dataset's manifest in one format."""
+    return manifest_dir(root, catalog) / f"{dataset_title}.{FORMAT_SUFFIX[fmt]}"
+
+
+def load_sidecar(root: Path, catalog: str) -> dict[str, Any]:
+    """The sidecar for ``catalog``, or an empty one if none has been written.
+
+    Shape: ``{"catalog": str, "datasets": {title: {"file_count": int, <fmt>:
+    {"requested_at": iso, "bytes": int, "seconds": int, "rows": int}}}}``.
+    ``file_count`` is the catalog's count for the dataset at the time its
+    manifests were requested; it is what parity is checked against, so a
+    catalog that has since moved on — or been deleted, as anvil14 was — does
+    not stop the manifests on disk from being rebuilt into an input file.
+    """
+    path = manifest_dir(root, catalog) / SIDECAR
+    if path.is_file():
+        with path.open() as f:
+            return json.load(f)
+    return {"catalog": catalog, "datasets": {}}
+
+
+def save_sidecar(root: Path, catalog: str, sidecar: dict[str, Any]) -> None:
+    directory = manifest_dir(root, catalog)
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / SIDECAR).open("w") as f:
+        json.dump(sidecar, f, indent=2, sort_keys=True)
+
+
+# --- reading manifests ---------------------------------------------------------
+
+
+def count_rows(fmt: str, path: Path) -> int:
+    """Files a manifest on disk describes: compact data rows, or verbatim ``anvil_file`` lines.
+
+    Streams the file rather than loading it — the largest verbatim manifest is
+    half a gigabyte — and only parses a verbatim line that mentions
+    ``anvil_file`` at all, which the submitter-table lines that make up most of
+    such a file do not.
+    """
+    with path.open("rb") as f:
+        if fmt == FORMAT_COMPACT:
+            return max(sum(1 for _ in f) - 1, 0)
+        return sum(1 for line in f if b'"anvil_file"' in line and json.loads(line).get("type") == "anvil_file")
 
 
 def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], int]) -> list[str]:
-    """One line per (dataset, format) whose row count disagrees with the facet's file count.
+    """One line per (dataset, format) whose row count disagrees with the dataset's file count.
 
     ``counts`` maps ``(dataset title, format)`` to the count :func:`count_rows`
     measured. A format with no entry is reported as missing rather than passed
@@ -212,7 +274,7 @@ def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], i
                 problems.append(f"{dataset.title}: no {fmt} manifest on disk")
             elif got != dataset.file_count:
                 problems.append(
-                    f"{dataset.title}: {fmt} has {got:,} files, the catalog facet says {dataset.file_count:,}"
+                    f"{dataset.title}: {fmt} has {got:,} files, the catalog said {dataset.file_count:,} when requested"
                 )
     return problems
 
@@ -234,8 +296,11 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
 
     The keys are the input contract (``schema/metadata.yaml``) plus the two
     donor fields the page downloader also emitted and the contract ignores.
-    Empty cells become ``None``; ``file_size`` is an int and
-    ``is_supplementary`` a bool, as the contract's strict validation requires.
+    ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
+    strict validation requires. The four nullable fields — ``data_modality``,
+    ``reference_assembly``, ``organism_type``, ``phenotypic_sex`` — read an
+    empty cell as ``None``; every other field is passed through as the cell's
+    text, and the contract's non-empty patterns are what reject a blank one.
     """
     return {
         "entry_id": row["files.document_id"],
@@ -255,10 +320,11 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def records_from_compact(payload: bytes) -> list[dict[str, Any]]:
-    """Every record in one compact manifest payload, in manifest order."""
-    reader = csv.DictReader(io.StringIO(payload.decode("utf-8")), delimiter="\t")
-    return [record_from_compact_row(row) for row in reader]
+def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
+    """Every record in one compact manifest on disk, in manifest order, streamed."""
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            yield record_from_compact_row(row)
 
 
 def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: datetime) -> dict[str, Any]:
@@ -276,3 +342,25 @@ def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: 
         "source": "manifest",
         "datasets": dict(sorted(dataset_counts.items())),
     }
+
+
+def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[str, Any]]) -> int:
+    """Write ``anvil_files_metadata.json`` and ``.ndjson`` under ``root`` in one streaming pass.
+
+    ``records`` is consumed once; no more than the current record is held. The
+    JSON envelope is ``{"metadata": block, "files": [...]}`` (the shape
+    ``pipeline.load_records`` reads); the NDJSON is one record per line. Returns
+    the number of records written.
+    """
+    n = 0
+    with (root / "anvil_files_metadata.json").open("w") as js, (root / "anvil_files_metadata.ndjson").open("w") as nd:
+        js.write('{"metadata": ')
+        json.dump(block, js)
+        js.write(', "files": [')
+        for record in records:
+            line = json.dumps(record)
+            js.write(("" if n == 0 else ", ") + line)
+            nd.write(line + "\n")
+            n += 1
+        js.write("]}")
+    return n

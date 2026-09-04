@@ -10,19 +10,21 @@ in flight at a time, and stores them under::
     <output>/manifest/<catalog>/manifests.json      # sidecar: what was fetched, when, how many rows
 
 Then, if every manifest's row count matches the catalog's file count for its
-dataset, it derives the classifier's input from the compact rows::
+dataset as it stood when the manifest was requested, it derives the
+classifier's input from the compact rows::
 
     <output>/anvil_files_metadata.json     # {"metadata": {...}, "files": [...]}
     <output>/anvil_files_metadata.ndjson   # one record per line
 
-A manifest already on disk is not re-requested unless ``--force`` is given; the
-input file is rebuilt from whatever is on disk either way. A parity mismatch
-exits non-zero and leaves the input file untouched. A rate-limit or gateway
-error is waited out, honoring the server's ``Retry-After``, for up to
-``--max-wait`` seconds per request (see ``azul_manifest._request``); the
-manifest endpoint's quota behaves like a slowly refilling token bucket, so a
-full pull may spend most of its time waiting. ``--pause`` seconds separate
-consecutive jobs.
+A manifest already on disk is not re-requested unless ``--force`` is given, and
+the input file is rebuilt from what is on disk either way. Discovery decides
+what to fetch; parity is judged against the sidecar's stored counts, so a
+catalog that has moved on since the pull — or been deleted, as anvil14 was —
+still rebuilds, and the live count is reported beside the stored one when the
+two differ. A parity mismatch exits non-zero and leaves the input file
+untouched. A rate-limit or gateway error is waited out, honoring the server's
+``Retry-After``, for up to ``--max-wait`` seconds per request (see
+``azul_manifest._request``); ``--pause`` seconds separate consecutive jobs.
 
 Usage:
     python scripts/download_anvil_manifest.py --catalog anvil15
@@ -32,43 +34,36 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
+import requests
+
 from meta_disco.azul_manifest import (
     DEFAULT_MAX_WAIT,
-    FORMAT_SUFFIX,
+    FORMAT_COMPACT,
     FORMATS,
     Dataset,
+    HttpSession,
+    Sleep,
     count_rows,
     discover_datasets,
     fetch_manifest,
+    iter_compact_records,
+    load_sidecar,
+    manifest_path,
     metadata_block,
     parity_problems,
-    records_from_compact,
+    save_sidecar,
+    write_input_files,
 )
 
-SIDECAR = "manifests.json"
 
-
-def manifest_path(manifest_dir: Path, dataset: Dataset, fmt: str) -> Path:
-    return manifest_dir / f"{dataset.title}.{FORMAT_SUFFIX[fmt]}"
-
-
-def load_sidecar(manifest_dir: Path) -> dict:
-    path = manifest_dir / SIDECAR
-    if path.is_file():
-        with path.open() as f:
-            return json.load(f)
-    return {"datasets": {}}
-
-
-def save_sidecar(manifest_dir: Path, sidecar: dict) -> None:
-    with (manifest_dir / SIDECAR).open("w") as f:
-        json.dump(sidecar, f, indent=2, sort_keys=True)
+def _all_records(root: Path, catalog: str, datasets: list[Dataset]):
+    for dataset in datasets:
+        yield from iter_compact_records(manifest_path(root, catalog, dataset.title, FORMAT_COMPACT))
 
 
 def download(
@@ -78,50 +73,71 @@ def download(
     force: bool,
     pause: float = 5.0,
     max_wait: float = DEFAULT_MAX_WAIT,
+    session: HttpSession | None = None,
+    sleep: Sleep = time.sleep,
 ) -> int:
-    manifest_dir = output_dir / "manifest" / catalog
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-    sidecar = load_sidecar(manifest_dir)
-    sidecar["catalog"] = catalog
+    http: HttpSession = session if session is not None else requests.Session()
+    sidecar = load_sidecar(output_dir, catalog)
+    stored = sidecar["datasets"]
 
-    datasets = discover_datasets(catalog)
+    try:
+        live = {d.title: d for d in discover_datasets(catalog, http, sleep)}
+    except requests.HTTPError as exc:
+        if not stored or force:
+            raise
+        # The catalog is gone or unreachable, but its manifests are here.
+        print(f"Discovery failed ({exc}); rebuilding from the {len(stored)} dataset(s) on disk", file=sys.stderr)
+        live = {}
+    titles = list(live) if live else list(stored)
     if only:
-        unknown = only - {d.title for d in datasets}
+        unknown = only - set(titles)
         if unknown:
-            print(f"Not in the {catalog} accessible-dataset facet: {sorted(unknown)}", file=sys.stderr)
+            print(f"Not in the {catalog} accessible-dataset facet or on disk: {sorted(unknown)}", file=sys.stderr)
             return 1
-        datasets = [d for d in datasets if d.title in only]
-    print(f"{catalog}: {len(datasets)} dataset(s), {sum(d.file_count for d in datasets):,} accessible files")
+        titles = [t for t in titles if t in only]
+    accessible = f", {sum(live[t].file_count for t in titles):,} accessible files" if live else ""
+    print(f"{catalog}: {len(titles)} dataset(s){accessible}")
 
+    datasets: list[Dataset] = []
     counts: dict[tuple[str, str], int] = {}
-    for dataset in datasets:
-        entry = sidecar["datasets"].setdefault(dataset.title, {})
-        entry["file_count"] = dataset.file_count
+    for title in titles:
+        entry = stored.setdefault(title, {})
+        on_disk = all(manifest_path(output_dir, catalog, title, fmt).is_file() for fmt in FORMATS)
+        if on_disk and not force and "file_count" in entry:
+            # Parity is judged against the count the manifests were requested under.
+            if title in live and live[title].file_count != entry["file_count"]:
+                print(f"  {title}: catalog now says {live[title].file_count:,} files, stored {entry['file_count']:,}")
+        else:
+            entry["file_count"] = live[title].file_count
+        dataset = Dataset(title, entry["file_count"])
+        datasets.append(dataset)
         for fmt in FORMATS:
-            path = manifest_path(manifest_dir, dataset, fmt)
+            path = manifest_path(output_dir, catalog, title, fmt)
             if path.is_file() and not force:
-                payload = path.read_bytes()
-                print(f"  {dataset.title} {fmt}: on disk, {len(payload):,} bytes")
+                print(f"  {title} {fmt}: on disk, {path.stat().st_size:,} bytes")
             else:
                 started = datetime.now()
-                print(f"  {dataset.title} {fmt}: requesting ...", end="", flush=True)
+                print(f"  {title} {fmt}: requesting ...", end="", flush=True)
                 payload = fetch_manifest(
                     catalog,
                     fmt,
-                    dataset.title,
+                    title,
+                    http,
+                    sleep,
                     max_wait=max_wait,
                     log=lambda m: print(f"\n    {m}", end="", flush=True),
                 )
+                path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(payload)
                 elapsed = (datetime.now() - started).total_seconds()
                 print(f" {len(payload):,} bytes in {elapsed:.0f}s")
                 entry[fmt] = {"requested_at": started.isoformat(), "bytes": len(payload), "seconds": round(elapsed)}
-                # A courtesy gap between consecutive jobs; Azul rate-limits a tight run.
-                time.sleep(pause)
-            rows = count_rows(fmt, payload)
-            counts[(dataset.title, fmt)] = rows
+                # A courtesy gap between consecutive jobs; the endpoint has a quota.
+                sleep(pause)
+            rows = count_rows(fmt, path)
+            counts[(title, fmt)] = rows
             entry.setdefault(fmt, {})["rows"] = rows
-            save_sidecar(manifest_dir, sidecar)
+            save_sidecar(output_dir, catalog, sidecar)
 
     problems = parity_problems(datasets, counts)
     if problems:
@@ -130,17 +146,9 @@ def download(
             print(f"  {line}", file=sys.stderr)
         return 1
 
-    records = []
-    for dataset in datasets:
-        records.extend(records_from_compact(manifest_path(manifest_dir, dataset, "compact").read_bytes()))
     block = metadata_block(catalog, {d.title: d.file_count for d in datasets}, datetime.now())
-    json_path = output_dir / "anvil_files_metadata.json"
-    with json_path.open("w") as f:
-        json.dump({"metadata": block, "files": records}, f)
-    with (output_dir / "anvil_files_metadata.ndjson").open("w") as f:
-        for record in records:
-            f.write(json.dumps(record) + "\n")
-    print(f"Wrote {len(records):,} records to {json_path} (catalog {catalog})")
+    n = write_input_files(output_dir, block, _all_records(output_dir, catalog, datasets))
+    print(f"Wrote {n:,} records to {output_dir / 'anvil_files_metadata.json'} (catalog {catalog})")
     return 0
 
 
