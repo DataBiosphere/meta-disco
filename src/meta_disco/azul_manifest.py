@@ -265,6 +265,8 @@ def manifest_path(root: Path, catalog: str, dataset_title: str, fmt: str) -> Pat
     a joined string and replaces the left side entirely for a leading ``/``.
     Every title seen so far is plain ``[A-Za-z0-9_ .-]``.
     """
+    if fmt not in FORMAT_SUFFIX:
+        raise ValueError(f"unknown manifest format {fmt!r}; expected one of {FORMATS}")
     if "/" in dataset_title or "\\" in dataset_title or dataset_title in ("", ".", ".."):
         raise ValueError(f"dataset title {dataset_title!r} cannot be used as a file name")
     return manifest_dir(root, catalog) / f"{dataset_title}.{FORMAT_SUFFIX[fmt]}"

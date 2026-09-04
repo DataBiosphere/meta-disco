@@ -107,6 +107,11 @@ def download(
     datasets: list[Dataset] = []
     counts: dict[tuple[str, str], int] = {}
     for title in titles:
+        try:
+            manifest_path(output_dir, catalog, title, FORMAT_COMPACT)
+        except ValueError as exc:
+            print(f"Refusing dataset title from the catalog: {exc}", file=sys.stderr)
+            return 1
         entry = stored.setdefault(title, {})
         on_disk = all(manifest_path(output_dir, catalog, title, fmt).is_file() for fmt in FORMATS)
         if on_disk and not (force and title in fetch) and "file_count" in entry:

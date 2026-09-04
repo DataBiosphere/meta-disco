@@ -307,6 +307,14 @@ class TestLayout:
         for title in ("../../x", "/etc/passwd", "a/b", "", ".", ".."):
             with pytest.raises(ValueError):
                 am.manifest_path(tmp_path, "anvil15", title, "compact")
+        with pytest.raises(ValueError, match="unknown manifest format"):
+            am.manifest_path(tmp_path, "anvil15", "ds", "terra.pfb")
+
+    def test_a_hostile_title_from_the_catalog_exits_with_a_message(self, tmp_path, capsys):
+        session = FakeSession({"../escape": 1}, {})
+        assert run("anvil15", tmp_path, session) == 1
+        assert "Refusing dataset title from the catalog" in capsys.readouterr().err
+        assert not (tmp_path / "manifest").exists() or not list((tmp_path / "manifest").rglob("*.tsv"))
 
 
 class TestRecordMapping:
