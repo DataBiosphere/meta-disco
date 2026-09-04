@@ -358,6 +358,7 @@ class TestRecordMapping:
             am.write_input_files(tmp_path, block, bad())
         assert (tmp_path / "anvil_files_metadata.json").read_bytes() == before
         assert load_records(tmp_path / "anvil_files_metadata.ndjson") == [valid_record()]
+        assert not list(tmp_path.glob("*.tmp"))
 
     def test_the_metadata_block_names_the_catalog_and_the_source(self):
         block = am.metadata_block("anvil15", {"b": 1, "a": 2}, datetime(2026, 9, 4))

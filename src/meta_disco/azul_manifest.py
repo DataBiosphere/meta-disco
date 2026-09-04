@@ -296,8 +296,12 @@ def save_sidecar(root: Path, catalog: str, sidecar: dict[str, Any]) -> None:
 def _write_atomically(path: Path, write: Callable[[Any], None]) -> None:
     """Write through a temporary file and rename, so a failure mid-write leaves the previous file."""
     tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("w") as f:
-        write(f)
+    try:
+        with tmp.open("w") as f:
+            write(f)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.replace(path)
 
 
@@ -422,17 +426,22 @@ def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[
     json_path, nd_path = root / "anvil_files_metadata.json", root / "anvil_files_metadata.ndjson"
     json_tmp, nd_tmp = json_path.with_suffix(".json.tmp"), nd_path.with_suffix(".ndjson.tmp")
     n = 0
-    with json_tmp.open("w") as js, nd_tmp.open("w") as nd:
-        js.write('{"metadata": ')
-        json.dump(block, js)
-        js.write(', "files": [')
-        for record in records:
-            line = json.dumps(record)
-            js.write(("" if n == 0 else ", ") + line)
-            nd.write(line + "\n")
-            n += 1
-        js.write("]}")
-    # Both or neither: a failure above leaves the previous pair in place.
+    try:
+        with json_tmp.open("w") as js, nd_tmp.open("w") as nd:
+            js.write('{"metadata": ')
+            json.dump(block, js)
+            js.write(', "files": [')
+            for record in records:
+                line = json.dumps(record)
+                js.write(("" if n == 0 else ", ") + line)
+                nd.write(line + "\n")
+                n += 1
+            js.write("]}")
+    except BaseException:
+        # Both or neither: the previous pair stays, and the partial pair does not linger.
+        json_tmp.unlink(missing_ok=True)
+        nd_tmp.unlink(missing_ok=True)
+        raise
     json_tmp.replace(json_path)
     nd_tmp.replace(nd_path)
     return n
