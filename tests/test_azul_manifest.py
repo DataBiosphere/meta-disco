@@ -89,6 +89,9 @@ class FakeResponse:
         for i in range(0, len(self.content), chunk_size):
             yield self.content[i : i + chunk_size]
 
+    def close(self):
+        self.closed = True
+
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(f"HTTP {self.status_code}")
@@ -194,9 +197,20 @@ class TestFetchManifest:
         """The seventeenth consecutive job of the first real run drew 429 with Retry-After: 30."""
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=2)
         sleeps = []
+        throttled = []
+        original_put = session.put
+
+        def put(url, **kwargs):
+            resp = original_put(url, **kwargs)
+            if resp.status_code == 429:
+                throttled.append(resp)
+            return resp
+
+        session.put = put
         assert am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
         assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
         assert sleeps[:2] == [7.0, 7.0]
+        assert [getattr(r, "closed", False) for r in throttled] == [True, True]
 
     def test_a_request_that_stays_rate_limited_gives_up_at_max_wait(self, tmp_path):
         """Retry-After is 7s, so a 30s budget allows four waits and refuses the fifth."""

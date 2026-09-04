@@ -86,8 +86,8 @@ _CHUNK_BYTES = 1 << 20  # payload download chunk
 class HttpSession(Protocol):
     """The two calls this module makes, keyword arguments only; ``requests.Session``
     satisfies it, and so can a test fake. Responses are typed ``Any``: they need
-    ``status_code``, ``headers``, ``raise_for_status()``, ``json()`` and
-    ``iter_content(chunk_size)``, which both provide."""
+    ``status_code``, ``headers``, ``raise_for_status()``, ``json()``,
+    ``iter_content(chunk_size)`` and ``close()``, which both provide."""
 
     def get(self, url: str, **kwargs: Any) -> Any: ...
     def put(self, url: str, **kwargs: Any) -> Any: ...
@@ -123,6 +123,8 @@ def _request(
         if resp.status_code not in _RETRY_STATUSES:
             resp.raise_for_status()
             return resp
+        # Release the connection before waiting; a long throttled run must not pin the pool.
+        resp.close()
         wait = _retry_after_seconds(resp.headers.get("Retry-After"))
         if wait is None:
             wait = min(_BACKOFF_BASE * (2**attempt), _BACKOFF_CAP)
