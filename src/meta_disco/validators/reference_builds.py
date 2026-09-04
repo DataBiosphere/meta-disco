@@ -77,10 +77,10 @@ every cached header whose declared reference name maps to one of these builds.
 
 What "unresolved" preserves
 ---------------------------
-A file whose build cannot be determined still gets its *observations* back —
-the key-contig checksums seen and the reference name declared. Keeping them
-means a later table row can resolve such a file from stored output, without
-re-reading its header. That holds for BAM/CRAM, which usually carry ``M5``; it
+A file whose build cannot be determined still gets its *observations* back:
+the key-contig checksums seen and the reference name declared, with where the
+name was read from. Keeping them means a later table row can resolve such a
+file from stored output, without re-reading its header. That holds for BAM/CRAM, which usually carry ``M5``; it
 does not yet hold for a VCF, whose only signature is contig *length* and which
 :class:`ReferenceIdentity` does not serialize — issue #349.
 
@@ -91,18 +91,34 @@ this module holds no SAM or VCF parsing of its own — ``header_extractors`` own
 that, and the two observers below are the only place the formats are told apart.
 The generator that *builds* the table imports those same observers, which is what
 keeps a table measured one way from being matched another.
+
+Where the declared name comes from (issue #354)
+-----------------------------------------------
+Each format has a field that exists to name the reference — SAM ``@SQ UR``,
+VCF ``##reference`` — and it is read first. Many headers leave it empty (issue
+#354 has the corpus counts) while the command line of the aligner or caller
+(``@PG CL``, ``##GATKCommandLine``) names the reference anyway, so the
+observers fall back to that, format-neutrally: :func:`reference_from_command_line` knows two
+conventions (a reference flag, else the first FASTA-looking argument) and no
+tool names. What makes a command-line name safe to record is not the parse but
+the guards around it — a header with no contigs takes none, command lines that
+disagree yield none, a lifted VCF's are not consulted — and the fact that a
+name only ever breaks a tie the signatures left open. The identity records the
+source (``name_source``) so a consumer can weight the two differently.
 """
 
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import asdict, astuple, dataclass, fields
+from itertools import pairwise
 from pathlib import PurePosixPath
 
 # The key contigs and the row layout live beside ``ReferenceBuild`` in the
 # loader, which validates ``absent`` against them at load (#351).
 from ..rule_loader import FIELD_CONTIG, KEY_CONTIGS, ReferenceBuild, get_unified_rules
-from .header_extractors import parse_sam_header, parse_vcf_header
+from .header_extractors import is_lifted, parse_sam_header, parse_vcf_header, sam_command_lines, vcf_command_lines
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
@@ -111,6 +127,24 @@ from .header_extractors import parse_sam_header, parse_vcf_header
 # ``pipeline._MD5_RE``, which is lowercase-only because it validates md5s this
 # project generated rather than ones a third party wrote.
 _M5_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+
+# Where a declared reference name was read from (issue #354). A name from the
+# field that exists to carry it (SAM ``@SQ UR``, VCF ``##reference``) is one
+# step closer to the file than one recovered from the command line of the
+# program that produced it; the source is recorded so a consumer can weight
+# them differently. The values are the ``reference_name_source_enum`` in the
+# schema.
+NAME_SOURCE_REFERENCE_FIELD = "reference_field"
+NAME_SOURCE_COMMAND_LINE = "command_line"
+
+# The reference-flag spellings issue #354 names, and what a reference path
+# looks like; the rule that uses them is :func:`reference_from_command_line`.
+# The extension set is kept apart from ``file_name.EXTENSION_TO_FORMAT`` on
+# purpose: that vocabulary says which files this pipeline classifies, and
+# ``.fna`` — common for reference FASTAs named on command lines — is not one
+# of them. Widening it here would change classification, not just this parse.
+_REFERENCE_FLAGS = frozenset({"--reference", "-R", "-r"})
+_FASTA_PATH_RE = re.compile(r"\.(fa|fasta|fna)(\.gz)?$", re.IGNORECASE)
 
 
 def _checksum(value: str | None) -> str | None:
@@ -158,15 +192,27 @@ class ContigSignature:
 
 
 @dataclass(frozen=True)
+class DeclaredReference:
+    """A reference name as a header declares it, and where in the header it was read.
+
+    ``name`` is the filename only (see :func:`_basename`); ``source`` is one of
+    the ``NAME_SOURCE_*`` values.
+    """
+
+    name: str
+    source: str
+
+
+@dataclass(frozen=True)
 class ReferenceIdentity:
     """What a file says it was aligned to.
 
-    ``chr1_m5``, ``chry_m5`` and ``name`` are *observed* — read straight from the
-    header. ``base`` and ``version`` are *derived* by matching those observations
-    against the build table. ``version`` is ``None`` unless the evidence
-    identifies exactly one build; ``base`` is filled whenever every candidate
-    build agrees on the family, which is often true when the version is not —
-    several CHM13 builds share a chr1.
+    ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are *observed* — read
+    straight from the header. ``base`` and ``version`` are *derived* by matching
+    those observations against the build table. ``version`` is ``None`` unless
+    the evidence identifies exactly one build; ``base`` is filled whenever every
+    candidate build agrees on the family, which is often true when the version
+    is not — several CHM13 builds share a chr1.
 
     ``base`` duplicates the coarse ``reference_assembly`` value when both are
     known. That is deliberate: this object is meant to be readable on its own,
@@ -179,6 +225,7 @@ class ReferenceIdentity:
     chr1_m5: str | None = None
     chry_m5: str | None = None
     name: str | None = None
+    name_source: str | None = None
 
     def is_empty(self) -> bool:
         """True when nothing at all was observed or derived.
@@ -200,12 +247,22 @@ class ReferenceIdentity:
         return asdict(self)
 
 
-def observe_sam(header_text: str) -> tuple[list[ContigSignature], str | None]:
+def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredReference | None]:
     """Contig signatures and the declared reference name from a SAM/BAM header.
 
     Reads the ``@SQ`` dictionary through ``parse_sam_header`` rather than
     re-tokenizing it, so tag order and optional tags behave here exactly as they
     do everywhere else in the project.
+
+    The name comes from ``@SQ UR`` when any record carries one, and otherwise
+    from the ``@PG`` command lines (#354) under the guards in
+    :func:`_declared_from_command_lines`.
+
+    Unlike :func:`observe_vcf` there is no liftover guard: SAM has no standard
+    marker for a lifted alignment, and recognising CrossMap-style ``@PG``
+    programs would be the tool knowledge this rule avoids. A lifted BAM would
+    therefore record the aligner's pre-liftover reference as its name; the
+    contig signatures still decide the build, and a name never overrides them.
     """
     header = parse_sam_header(header_text)
     sq_records = header.sq or []
@@ -220,15 +277,23 @@ def observe_sam(header_text: str) -> tuple[list[ContigSignature], str | None]:
     ]
     # UR is the reference path, carried per-@SQ and identical across them; the
     # first record that has one speaks for the file.
-    declared = next((sq["UR"] for sq in sq_records if sq.get("UR")), None)
-    return signatures, _basename(declared)
+    declared = _declared_from_field(next((sq["UR"] for sq in sq_records if sq.get("UR")), None))
+    if declared is None:
+        declared = _declared_from_command_lines(sam_command_lines(header), signatures)
+    return signatures, declared
 
 
-def observe_vcf(header_text: str) -> tuple[list[ContigSignature], str | None]:
+def observe_vcf(header_text: str) -> tuple[list[ContigSignature], DeclaredReference | None]:
     """Contig signatures and the declared reference name from a VCF header.
 
     ``##contig`` attributes are unordered, which is why this reads the parsed
     fields rather than matching a positional pattern.
+
+    The name comes from ``##reference`` when present, and otherwise from the
+    header's command lines (#354) under the guards in
+    :func:`_declared_from_command_lines` — unless the header carries liftover
+    INFO fields, in which case the command lines describe the file before it
+    was lifted and are not consulted.
     """
     header = parse_vcf_header(header_text)
     signatures = []
@@ -237,7 +302,96 @@ def observe_vcf(header_text: str) -> tuple[list[ContigSignature], str | None]:
         if not contig_id:
             continue
         signatures.append(ContigSignature(name=contig_id, length=_length(contig.fields.get("length"))))
-    return signatures, _basename(header.reference)
+    declared = _declared_from_field(header.reference)
+    # A lifted VCF's command lines name the reference the *caller* was given,
+    # which is the pre-liftover build, so they are not consulted.
+    if declared is None and not is_lifted(header):
+        declared = _declared_from_command_lines(vcf_command_lines(header), signatures)
+    return signatures, declared
+
+
+def _declared_from_field(reference: str | None) -> DeclaredReference | None:
+    """The dedicated reference field's value as a declaration, or ``None`` if it is empty."""
+    name = _basename(reference)
+    return DeclaredReference(name, NAME_SOURCE_REFERENCE_FIELD) if name else None
+
+
+def _declared_from_command_lines(
+    command_lines: list[str], signatures: list[ContigSignature]
+) -> DeclaredReference | None:
+    """The one reference name a header's command lines agree on, or ``None`` (#354).
+
+    Two guards, both structural rather than tool-specific:
+
+    - **no contigs, no name.** A name is an observation about a contig
+      dictionary; a header that declares none has nothing for it to describe.
+      In practice this is the unaligned-reads BAM whose only FASTA argument is
+      an adapter or barcode file.
+    - **disagreement yields nothing.** Command lines naming two different files
+      cannot be reduced to one declaration without knowing which tool's word
+      counts, and this function does not know tools. Accuracy over coverage.
+
+    Each command line contributes at most one name, via
+    :func:`reference_from_command_line`; lines naming nothing are ignored.
+    """
+    if not signatures:
+        return None
+    names = {name for name in map(reference_from_command_line, command_lines) if name}
+    if len(names) != 1:
+        return None
+    return DeclaredReference(names.pop(), NAME_SOURCE_COMMAND_LINE)
+
+
+def reference_from_command_line(command_line: str) -> str | None:
+    """The reference filename a program command line names, or ``None`` (#354).
+
+    Deliberately tool-agnostic — two conventions and no aligner or caller
+    names:
+
+    - the argument after a reference flag (``--reference``, ``-R``, ``-r``;
+      ``--reference=path`` counts too) when it looks like a FASTA path;
+    - otherwise the first argument that looks like a FASTA path, which is where
+      aligners that take the reference positionally (bwa, minimap2, winnowmap)
+      put it — and, without either being named here, where samtools' ``-T`` and
+      bcftools' ``-f`` values fall.
+
+    "Looks like a FASTA path" is a FASTA extension and no tab: bwa's ``-R``
+    takes a tab-separated read-group string, and the no-tab rule is what keeps
+    it from matching even when its last field happens to end in ``.fa``.
+
+    Known limit, accepted in #354: when the reference is named by a non-FASTA
+    path (a ``.mmi`` index, a bwa index prefix) and another argument is a
+    FASTA — reads, an assembly — the positional rule names that file instead.
+    A name only ever breaks a tie the signatures left open, and the generator
+    warns on a name it cannot map, so the cost is a wrong observation, not a
+    wrong build. Precision comes from :func:`_declared_from_command_lines`'s
+    guards, not from this parse. Splitting is ``str.split`` unless the line contains a quote
+    character: ``shlex`` is two hundred times slower, and what it contributes
+    is stripping the quotes, so that ``--reference="/ref/x.fa"`` yields a
+    token the FASTA check can match. A line ``shlex`` rejects (an unbalanced
+    quote) falls back to whitespace splitting.
+    """
+    argv = _split_command_line(command_line)
+    # ``--reference=path`` as the two tokens the flag loop expects.
+    argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]
+    for flag, value in pairwise(argv):
+        if flag in _REFERENCE_FLAGS and _looks_like_fasta_path(value):
+            return _basename(value)
+    return next((_basename(arg) for arg in argv[1:] if _looks_like_fasta_path(arg)), None)
+
+
+def _looks_like_fasta_path(token: str) -> bool:
+    # A literal backslash-t is how a tab is written inside a SAM ``CL`` value.
+    return bool(_FASTA_PATH_RE.search(token)) and "\\t" not in token and "\t" not in token
+
+
+def _split_command_line(command_line: str) -> list[str]:
+    if '"' not in command_line and "'" not in command_line:
+        return command_line.split()
+    try:
+        return shlex.split(command_line)
+    except ValueError:
+        return command_line.split()
 
 
 def _basename(reference: str | None) -> str | None:
@@ -314,7 +468,7 @@ def _candidates(observed: dict[str, object]) -> list[ReferenceBuild]:
     ]
 
 
-def resolve_identity(signatures: list[ContigSignature], declared_name: str | None) -> ReferenceIdentity:
+def resolve_identity(signatures: list[ContigSignature], declared: DeclaredReference | None) -> ReferenceIdentity:
     """Identify the reference build behind a file's contig signatures.
 
     Format-neutral by construction: callers observe once, through
@@ -334,20 +488,26 @@ def resolve_identity(signatures: list[ContigSignature], declared_name: str | Non
         "chry_m5": chry.md5 if chry else None,
     }
 
+    name = declared.name if declared else None
+    source = declared.source if declared else None
+
     # With no key-contig evidence at all there is nothing to narrow, and every
     # build would trivially be a candidate. The declared name must not resolve a
     # build by itself: a name is what a file claims, and a chr20-only BAM naming
     # chm13v2.0.fasta has offered no evidence that it is one. Keep the name as an
     # observation and derive nothing from it.
     if not any(value is not None for value in observed.values()):
-        return ReferenceIdentity(name=declared_name)
+        return ReferenceIdentity(name=name, name_source=source)
 
     matches = _candidates(observed)
 
     # The declared name breaks a tie the signatures left open — narrowing an
-    # existing candidate set, never introducing a build they ruled out.
-    if len(matches) > 1 and declared_name:
-        by_name = [build for build in matches if declared_name in build.aliases]
+    # existing candidate set, never introducing a build they ruled out. Where it
+    # was read from does not change that: a command-line name is one step
+    # further from the file, but it is still only ever choosing among builds
+    # the signatures already allow.
+    if len(matches) > 1 and name:
+        by_name = [build for build in matches if name in build.aliases]
         if len(by_name) == 1:
             matches = by_name
 
@@ -362,7 +522,8 @@ def resolve_identity(signatures: list[ContigSignature], declared_name: str | Non
         version=build.version if build else None,
         chr1_m5=chr1.md5 if chr1 else None,
         chry_m5=chry.md5 if chry else None,
-        name=declared_name,
+        name=name,
+        name_source=source,
     )
 
 

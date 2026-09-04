@@ -398,6 +398,15 @@ def test_marker_constants_match_schema_enum():
     assert {NOT_CLASSIFIED_MARKER, CONFLICT_MARKER} == schema_vocab.marker_values()
 
 
+def test_name_source_constants_match_schema_enum():
+    # The resolver stamps `build.name_source` with these constants; the schema's
+    # reference_name_source_enum is what output validation checks them against.
+    # Pin the two so they cannot drift (#354).
+    from meta_disco.validators.reference_builds import NAME_SOURCE_COMMAND_LINE, NAME_SOURCE_REFERENCE_FIELD
+
+    assert {NAME_SOURCE_REFERENCE_FIELD, NAME_SOURCE_COMMAND_LINE} == schema_vocab.name_source_values()
+
+
 def test_value_in_vocabulary_is_strict_dimension_only():
     # Antecedent/output check: a real dimension value passes; a status does NOT —
     # a status in a when/condition (or an output value) is a bug (#115, Stage 3).

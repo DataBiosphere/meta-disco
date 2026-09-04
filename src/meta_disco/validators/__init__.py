@@ -44,11 +44,13 @@ from .read_name_parsers import (
 )
 from .reference_builds import (
     ContigSignature,
+    DeclaredReference,
     ReferenceIdentity,
     identity_from_sam,
     identity_from_vcf,
     observe_sam,
     observe_vcf,
+    reference_from_command_line,
     resolve_identity,
 )
 
@@ -59,11 +61,13 @@ __all__ = [
     "detect_reference_from_max_positions",
     # Reference build identity (#340)
     "ContigSignature",
+    "DeclaredReference",
     "ReferenceIdentity",
     "identity_from_sam",
     "identity_from_vcf",
     "observe_sam",
     "observe_vcf",
+    "reference_from_command_line",
     "resolve_identity",
     # Header extractors
     "SAMHeader",

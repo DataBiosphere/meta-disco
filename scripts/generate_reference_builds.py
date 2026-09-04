@@ -5,6 +5,12 @@ Issue #340. The build table is *measured*, not hand-typed: every length and
 checksum below is read from headers already in ``data/evidence/anvil``, so a row
 can be checked against the corpus that produced it.
 
+A header is attributed to a name the way the resolver would attribute it: the
+dedicated reference field first, else the program command line (#354). That
+is what lets the per-chromosome T2T VCFs, most of which carry no ``##reference``, count
+toward their rows — and, for a build declared in ``KNOWN_ABSENT``, be checked
+against the declaration.
+
 Why chr1 + chrY (the key this emits)
 ------------------------------------
 A reference is identified here by the pair (chr1 signature, chrY signature).
@@ -84,13 +90,32 @@ NAME_TO_BUILD: dict[str, tuple[str, str | None]] = {
     "T2T_CHM13.v1.0": ("CHM13", "v1.0"),
     "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r.fasta": ("CHM13", "v1.0+GRCh38chrY"),
     "t2t-chm13.20200921.HG002chrY.chrEBV.fasta": ("CHM13", "v1.0+HG002chrY"),
+    # Its signature — v1.0's chr1 with GRCh38's chrY length — fits only this row.
+    # The name says a Y was added, not whose; the measurement does (#354).
+    "CHM13v1Y.fa": ("CHM13", "v1.0+GRCh38chrY"),
     "chm13.v1.1.fasta": ("CHM13", "v1.1"),
+    # HPRC's CHM13 v1.1 with GRCh38's chrY and chrEBV grafted on (issue #352):
+    # v1.1's chr1 (248,387,328) beside a 57,227,415 bp chrY.
+    "CHM13Y_EBV_v1.1.fasta": ("CHM13", "v1.1+GRCh38chrY"),
     "chm13v2.0.fasta": ("CHM13", "v2.0"),
+    "CHM13v2.fa": ("CHM13", "v2.0"),
+    # Sex-specific packagings: by the naming convention these follow, XY masks
+    # chrY's PAR and XX masks all of chrY with N. A header cannot confirm that
+    # (see "What this deliberately does not decide" above), and either way
+    # masking changes the sequence, not the coordinates — so these map to the
+    # parent build, and the masking itself is not recorded (#354).
+    "chm13v2.0.XX.fasta": ("CHM13", "v2.0"),
+    "chm13v2.0.XY.fasta": ("CHM13", "v2.0"),
     # One assembly, several packagings. Packaging is #342's composition work; all
-    # three are the same build as far as coordinates are concerned.
+    # of these are the same build as far as coordinates are concerned.
     "GRCh38_full_analysis_set_plus_decoy_hla.fa": ("GRCh38", None),
     "Homo_sapiens_assembly38.fasta": ("GRCh38", None),
+    "Homo_sapiens_assembly38.XX.fasta": ("GRCh38", None),
+    "Homo_sapiens_assembly38.XY.fasta": ("GRCh38", None),
     "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna": ("GRCh38", None),
+    "GCA_000001405.15_GRCh38_no_alt_analysis_set.fa": ("GRCh38", None),
+    "GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta": ("GRCh38", None),
+    "GRCh38_no_alt.fa": ("GRCh38", None),
     "GRCh38.p12": ("GRCh38", "p12"),
 }
 
@@ -113,8 +138,13 @@ KNOWN_ABSENT: dict[tuple[str, str | None], tuple[str, ...]] = {
 }
 
 
-def collect() -> dict[str, Counter]:
-    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name.
+def collect() -> tuple[dict[str, Counter], dict[str, Counter]]:
+    """Observed (chr1 len, chr1 m5, chrY len, chrY m5) per reference name, and name sources.
+
+    A name counts whether the header declared it in the dedicated field or on a
+    command line (#354); the observers decide that. The second mapping counts,
+    per name, how many headers supplied it from each source — for ``--report``
+    only; the table does not record it.
 
     Reads through the ``CachedEvidence`` classes rather than raw JSON so a
     structurally wrong entry is skipped at the boundary. That check is
@@ -124,6 +154,7 @@ def collect() -> dict[str, Counter]:
     generation that reads hundreds of thousands of them.
     """
     observed: dict[str, Counter] = defaultdict(Counter)
+    sources: dict[str, Counter] = defaultdict(Counter)
     for directory, observe, evidence_cls in EVIDENCE_SOURCES:
         for path in directory.glob("*/*"):
             if not path.is_file():
@@ -140,9 +171,11 @@ def collect() -> dict[str, Counter]:
                 continue
             if entry is None or not isinstance(entry.header_text, str):
                 continue
-            signatures, name = observe(entry.header_text)
-            if not name:
+            signatures, declared = observe(entry.header_text)
+            if declared is None:
                 continue
+            name = declared.name
+            sources[name][declared.source] += 1
             by_contig = {sig.bare_name: sig for sig in signatures}
             chr1 = by_contig.get(KEY_CONTIGS[0])
             chry = by_contig.get(KEY_CONTIGS[1])
@@ -154,7 +187,7 @@ def collect() -> dict[str, Counter]:
                     chry.md5 if chry else None,
                 )
             ] += 1
-    return observed
+    return observed, sources
 
 
 def build_rows(observed: dict[str, Counter]) -> list[dict]:
@@ -289,7 +322,7 @@ def main() -> int:
     parser.add_argument("--report", action="store_true", help="print per-reference evidence instead of YAML")
     args = parser.parse_args()
 
-    observed = collect()
+    observed, sources = collect()
     if not observed:
         print("No cached evidence found under data/evidence/anvil — nothing to generate.", file=sys.stderr)
         return 1
@@ -300,6 +333,8 @@ def main() -> int:
         for name in sorted(observed):
             for (c1l, c1m, cyl, cym), count in observed[name].most_common():
                 print(f"{name[:60]:60s} {c1l!s:>10} {str(c1m)[:12]:14s} {cyl!s:>10} {str(cym)[:12]:14s} {count}")
+            by_source = ", ".join(f"{source}={count}" for source, count in sorted(sources[name].items()))
+            print(f"{'':60s} named by: {by_source}")
         return 0
 
     contradictions = check_absences(observed)
