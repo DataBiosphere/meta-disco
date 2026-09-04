@@ -50,12 +50,13 @@ def find_latest_run(output_dir: Path) -> Path:
 def iter_records(run_dir: Path):
     """Yield every classification record (a dict) across a run's classification files.
 
-    Unwraps the ``{"metadata", "classifications"}`` envelope the same way the
-    coverage/validation report loaders do (falling back to a ``results`` key, then
-    an empty list). A file a run did not write is skipped, as is one whose record
-    list is not a list at all — a null, a number, a bare object — and within a
-    list, any element that is not a record dict. So an unexpected shape yields
-    nothing from that file rather than raising or iterating stray keys.
+    Unwraps the ``{"metadata", "classifications"}`` envelope with the same key
+    precedence as the coverage/validation report loaders — ``classifications``,
+    then a legacy ``results`` key, then nothing — but tolerates more than they do.
+    A file a run did not write is skipped, so is one whose record list is not a
+    list at all (a null, a number, a bare object), and within a list, any element
+    that is not a record dict. An unexpected shape therefore yields nothing from
+    that file, where those loaders iterate whatever they find and raise.
 
     Lives here, beside ``CLASSIFICATION_FILES``, so every reader of a run directory
     (the consistency linter, the corpus diff) shares one definition of the envelope
