@@ -86,10 +86,15 @@ def download(
     try:
         live = {d.title: d for d in discover_datasets(catalog, http, sleep, max_wait, log)}
     except (requests.RequestException, RuntimeError) as exc:
-        if not stored or force:
-            raise
-        # The catalog is gone or unreachable, but its manifests are here.
-        print(f"Discovery failed ({exc}); rebuilding from the {len(stored)} dataset(s) on disk", file=sys.stderr)
+        if not stored:
+            print(f"Discovery failed ({exc}) and nothing is on disk for {catalog}; nothing to do", file=sys.stderr)
+            return 1
+        # The catalog is gone or unreachable, but its manifests are here. Nothing
+        # can be re-fetched, so --force has nothing to force.
+        forced = "; --force has no effect without the catalog" if force else ""
+        print(
+            f"Discovery failed ({exc}); rebuilding from the {len(stored)} dataset(s) on disk{forced}", file=sys.stderr
+        )
         live = {}
     # Every dataset the input file covers: the catalog's, plus any on disk from an
     # earlier pull. --datasets narrows only what is fetched.

@@ -472,6 +472,18 @@ class TestScript:
         assert run("anvil15", tmp_path, Unreachable({"ds": 2}, session.payloads)) == 0
         assert "rebuilding from the 1 dataset(s) on disk" in capsys.readouterr().err
 
+    def test_discovery_failure_with_nothing_on_disk_exits_with_a_message(self, tmp_path, capsys):
+        session = FakeSession(None, {})
+        assert run("anvil15", tmp_path, session) == 1
+        assert "nothing is on disk for anvil15" in capsys.readouterr().err
+
+    def test_force_does_not_block_a_rebuild_when_the_catalog_is_gone(self, tmp_path, capsys):
+        session = one_dataset_session()
+        assert run("anvil14", tmp_path, session) == 0
+        session.datasets = None
+        assert dl.download("anvil14", tmp_path, None, force=True, session=session, sleep=no_sleep) == 0
+        assert "--force has no effect without the catalog" in capsys.readouterr().err
+
     def test_a_parity_mismatch_exits_nonzero_and_writes_no_input(self, tmp_path):
         """Scenario 3, end to end: the facet says 3 files, the compact manifest has 2."""
         session = one_dataset_session(n=2, facet=3)
