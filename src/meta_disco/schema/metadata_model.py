@@ -70,9 +70,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'default_range': 'string',
      'description': 'The contract for a raw AnVIL file metadata record — one entry '
                     'in the `files` array of '
-                    '`data/anvil/anvil_files_metadata.json`, as produced by '
-                    '`scripts/download_anvil_metadata.py` from the AnVIL Explorer '
-                    'API.\n'
+                    '`data/anvil/anvil_files_metadata.json`, as derived by '
+                    '`scripts/download_anvil_manifest.py` from the compact Azul '
+                    'manifest (#368).\n'
                     'This is the *input* to classification, distinct from '
                     '`classification.yaml` which models the classified *output*. '
                     'Kept in a separate schema so the input contract does not '

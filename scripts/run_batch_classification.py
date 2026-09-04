@@ -212,7 +212,7 @@ def main():
 
     if not input_path.exists():
         print(f"Error: Input file not found: {input_path}")
-        print("Run scripts/download_anvil_metadata.py first to download the data.")
+        print("Run `make download` (scripts/download_anvil_manifest.py) first to pull the data.")
         return 1
 
     print(f"Loading metadata from {input_path}...")
