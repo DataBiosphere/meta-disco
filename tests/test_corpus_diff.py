@@ -82,20 +82,6 @@ def test_parity_skips_malformed_records():
     assert (row.unchanged, row.removed, row.added) == (1, 0, 0)
 
 
-def test_parity_never_calls_a_record_without_an_md5_unchanged():
-    """No md5, no evidence of sameness — so it must not cancel as unchanged.
-
-    Both snapshots hold the same name with no md5; a shared empty-string md5 would
-    match them and claim content parity the data cannot support.
-    """
-    record = {"file_name": "a.bam", "file_md5sum": None, "dataset_title": "DS1"}
-    (row,) = snapshot_parity([dict(record)], [dict(record)])
-    assert row.unchanged == 0
-    assert row.md5_changed == 1
-    # The record still counts toward both totals rather than being dropped.
-    assert row.old_total == row.new_total == 1
-
-
 def test_read_snapshot_tolerates_a_non_numeric_total(tmp_path):
     """A stringified total must not blow up at render time, after both parses."""
     path = tmp_path / "snap.json"
@@ -141,17 +127,6 @@ def test_run_labels_skips_a_missing_output_file(tmp_path):
 def test_run_labels_raises_on_a_missing_run_dir(tmp_path):
     with pytest.raises(FileNotFoundError):
         run_labels(tmp_path / "absent")
-
-
-def test_run_labels_keeps_a_record_without_an_md5_unjoinable(tmp_path):
-    """Two records with no md5 must not be treated as the same file."""
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", None, data_modality="genomic")])
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", None)])
-    old_labels, new_labels = run_labels(old), run_labels(new)
-    assert set(old_labels) & set(new_labels) == set()
-    diff = diff_runs(old_labels, new_labels)["data_modality"]
-    assert not diff.changed
-    assert (diff.classified_lost, diff.classified_gained) == (1, 0)
 
 
 def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):

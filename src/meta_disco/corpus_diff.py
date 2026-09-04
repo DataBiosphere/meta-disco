@@ -29,7 +29,6 @@ totals here match the ones the coverage report prints.
 
 from __future__ import annotations
 
-import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -162,16 +161,6 @@ def _is_value(label: Label) -> bool:
     return label is not None and label not in STATUS_LABELS
 
 
-def _unidentified() -> str:
-    """A stand-in md5 for a record that has none, unique across every call.
-
-    Two records without an md5 must not compare equal — inside one snapshot or
-    across the two being compared — so the placeholder is random rather than a
-    per-file counter, which would collide between the old and new sides.
-    """
-    return f"\x00unidentified-{uuid.uuid4().hex}"
-
-
 def _as_int(value) -> int | None:
     """Coerce an envelope count to ``int``, or ``None`` when it is not a number.
 
@@ -210,9 +199,15 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
 
     Non-dict entries and records missing a name are skipped: this is a parity
     report, not the input-contract gate (``validate_metadata``), which is where a
-    malformed record is meant to surface. A record that has a name but no md5 is
-    kept and made unmatchable, so it is never reported as content-identical to
-    anything.
+    malformed record is meant to surface.
+
+    Every record is assumed to carry an ``file_md5sum``. The input contract
+    requires one — ``metadata_schema``'s md5 format rule, gated by
+    ``validate_metadata`` before any run (#161) — so a snapshot that reaches this
+    function has one on every record. A record that somehow lacked one would be
+    counted under the empty string, and two such records with the same name would
+    then read as ``unchanged``; that is the cost of trusting the contract rather
+    than re-checking it here (#375).
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -222,16 +217,7 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
         if not file_name:
             continue
         dataset = str(record.get("dataset_title") or "")
-        md5 = str(record.get("file_md5sum") or "")
-        if not md5:
-            # Without an md5 there is no evidence this file matches anything. A
-            # shared empty string would let two such records cancel as
-            # ``unchanged`` — the one claim this table must never make without
-            # proof — so each gets a placeholder that cannot equal another. The
-            # record still counts toward its dataset's totals, landing in
-            # md5_changed or removed/added rather than being dropped.
-            md5 = _unidentified()
-        index[(dataset, str(file_name))][md5] += 1
+        index[(dataset, str(file_name))][str(record.get("file_md5sum") or "")] += 1
     return index
 
 
@@ -290,6 +276,13 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
+    Every record is assumed to carry an ``md5sum``, which the input contract
+    requires of every input record (#161), so the identity is trusted rather than
+    re-checked here. Only md5 need be present: ``dataset_title`` is a qualifier
+    and is legitimately ``None`` for the HPRC source, so it is normalized to the
+    empty string rather than required — requiring it would drop that corpus
+    entirely.
+
     Raises FileNotFoundError if the run directory does not exist — an empty result
     would otherwise read as a run with no coverage.
     """
@@ -302,18 +295,10 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     # a fresh tuple and five fresh strings per record.
     interned: dict[Labels, Labels] = {}
     for record in iter_records(run_dir):
-        md5 = str(record.get("md5sum") or "")
-        if not md5:
-            # md5 is the content half of the identity; without it two records
-            # cannot be shown to be the same file, so each gets a placeholder that
-            # joins to nothing. Only md5 is required: ``dataset_title`` is a
-            # qualifier and is legitimately absent for the HPRC source, so
-            # requiring it would drop that corpus entirely.
-            md5 = _unidentified()
         key: FileKey = (
             str(record.get("dataset_title") or ""),
             str(record.get("file_name") or ""),
-            md5,
+            str(record.get("md5sum") or ""),
         )
         label_tuple: Labels = tuple(field_label(record, field) for field in CLASSIFICATION_FIELDS)
         labels[key][interned.setdefault(label_tuple, label_tuple)] += 1
