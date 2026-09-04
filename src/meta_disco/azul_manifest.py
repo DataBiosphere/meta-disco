@@ -214,7 +214,15 @@ def manifest_dir(root: Path, catalog: str) -> Path:
 
 
 def manifest_path(root: Path, catalog: str, dataset_title: str, fmt: str) -> Path:
-    """The on-disk path of one dataset's manifest in one format."""
+    """The on-disk path of one dataset's manifest in one format.
+
+    The title comes from the API's facet, so it is refused if it could name a
+    path outside the catalog directory: ``pathlib`` honours ``..`` segments in
+    a joined string and replaces the left side entirely for a leading ``/``.
+    Every title seen so far is plain ``[A-Za-z0-9_ .-]``.
+    """
+    if "/" in dataset_title or "\\" in dataset_title or dataset_title in ("", ".", ".."):
+        raise ValueError(f"dataset title {dataset_title!r} cannot be used as a file name")
     return manifest_dir(root, catalog) / f"{dataset_title}.{FORMAT_SUFFIX[fmt]}"
 
 

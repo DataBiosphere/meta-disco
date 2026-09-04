@@ -243,6 +243,14 @@ class TestParity:
         assert am.parity_problems([am.Dataset("a", 3)], {("a", "compact"): 3, ("a", "verbatim.jsonl"): 3}) == []
 
 
+class TestLayout:
+    def test_a_title_that_could_escape_the_catalog_directory_is_refused(self, tmp_path):
+        assert am.manifest_path(tmp_path, "anvil15", "AnVIL_HPRC R2", "compact").name == "AnVIL_HPRC R2.compact.tsv"
+        for title in ("../../x", "/etc/passwd", "a/b", "", ".", ".."):
+            with pytest.raises(ValueError):
+                am.manifest_path(tmp_path, "anvil15", title, "compact")
+
+
 class TestRecordMapping:
     def test_a_compact_row_becomes_a_record_the_contract_accepts(self, tmp_path):
         (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))
