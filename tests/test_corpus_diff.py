@@ -8,20 +8,23 @@ import pytest
 
 from meta_disco.corpus_diff import (
     _sort_key,
+    classified_by_dataset,
     diff_runs,
-    partition_by_dataset,
+    read_snapshot,
+    render_dataset_section,
     render_report,
     run_labels,
-    snapshot_meta,
     snapshot_parity,
 )
-from meta_disco.models import CLASSIFICATION_FIELDS
+from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, build_field_entry
+from tests.metadata_fixtures import valid_record
 
 _DIMS = CLASSIFICATION_FIELDS
 
 
 def _snapshot_record(name, md5, dataset="DS1"):
-    return {"file_name": name, "file_md5sum": md5, "dataset_title": dataset}
+    """An input-snapshot record, from the shared contract-valid builder."""
+    return valid_record(file_name=name, file_md5sum=md5, dataset_title=dataset)
 
 
 def _parity_by_dataset(rows):
@@ -87,15 +90,13 @@ def _write_run(run_dir: Path, records: list[dict], fname="bam_classifications.js
 
 
 def _run_record(name, md5, dataset="DS1", **labels):
-    """A classification output record; each dim kwarg is a value, else not_classified."""
-    classifications = {}
-    for dim in _DIMS:
-        value = labels.get(dim)
-        classifications[dim] = {
-            "value": value,
-            "status": "classified" if value else "not_classified",
-            "evidence": [],
-        }
+    """A classification output record; each dim kwarg is a value, else not_classified.
+
+    Entries come from ``models.build_field_entry`` — the single place that assembles
+    the ``{value, status, evidence}`` shape — so the fixture follows the output
+    shape rather than restating it.
+    """
+    classifications = {dim: build_field_entry(labels.get(dim)) for dim in _DIMS}
     return {"file_name": name, "md5sum": md5, "dataset_title": dataset, "classifications": classifications}
 
 
@@ -166,26 +167,56 @@ def test_diff_reports_an_md5_change_as_loss_plus_gain(tmp_path):
     assert not diff.changed
 
 
-def test_partition_by_dataset_scopes_a_diff(tmp_path):
-    old = _write_run(
-        tmp_path / "old",
-        [_run_record("a.bam", "m1", dataset="A"), _run_record("b.bam", "m2", dataset="B")],
-    )
-    new = _write_run(
-        tmp_path / "new",
+def test_classified_by_dataset_counts_values_per_dataset(tmp_path):
+    run = _write_run(
+        tmp_path / "run",
         [
             _run_record("a.bam", "m1", dataset="A", data_modality="genomic"),
-            _run_record("b.bam", "m2", dataset="B"),
+            _run_record("b.bam", "m2", dataset="A"),
+            _run_record("c.bam", "m3", dataset="B", data_modality="genomic", data_type="alignment"),
         ],
     )
-    old_parts = partition_by_dataset(run_labels(old))
-    new_parts = partition_by_dataset(run_labels(new))
-    assert set(old_parts) == {"A", "B"}
-    scoped = diff_runs(old_parts["A"], new_parts["A"])["data_modality"]
-    assert scoped.classified_new == 1
-    other = diff_runs(old_parts["B"], new_parts["B"])["data_modality"]
-    assert other.classified_new == 0
-    assert not other.changed
+    counts = classified_by_dataset(run_labels(run))
+    assert set(counts) == {"A", "B"}
+    assert counts["A"]["data_modality"] == 1
+    assert counts["A"]["data_type"] == 0
+    assert counts["B"]["data_modality"] == counts["B"]["data_type"] == 1
+
+
+def test_classified_by_dataset_excludes_not_applicable(tmp_path):
+    """not_applicable is a status, not a value, so it must not count as coverage."""
+    record = _run_record("a.gfa", "m1")
+    record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
+    run = _write_run(tmp_path / "run", [record])
+    counts = classified_by_dataset(run_labels(run))
+    assert counts["DS1"]["platform"] == 0
+
+
+def test_classified_by_dataset_keeps_a_dataset_with_nothing_classified(tmp_path):
+    """A dataset the classifier recognises nothing in must still be a key.
+
+    Otherwise it disappears from the per-dataset table — the one case that table
+    most needs to show. Asserted on the keys, since the returned mapping is a plain
+    dict and would otherwise raise rather than auto-create.
+    """
+    run = _write_run(
+        tmp_path / "run",
+        [
+            _run_record("a.bam", "m1", dataset="EMPTY"),
+            _run_record("b.bam", "m2", dataset="FULL", data_type="alignment"),
+        ],
+    )
+    counts = classified_by_dataset(run_labels(run))
+    assert set(counts) == {"EMPTY", "FULL"}
+    assert sum(counts["EMPTY"].values()) == 0
+
+
+def test_dataset_section_lists_a_dataset_with_nothing_classified(tmp_path):
+    """The rendered table keeps that dataset's row rather than dropping it."""
+    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1", dataset="QUIET")])
+    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m1", dataset="QUIET")])
+    rendered = "\n".join(render_dataset_section(run_labels(old), run_labels(new)))
+    assert "QUIET" in rendered
 
 
 def test_sort_key_tolerates_a_none_label():
@@ -195,10 +226,12 @@ def test_sort_key_tolerates_a_none_label():
     unreachable through a well-formed run (it raises on that shape instead), so
     this guards the sort against a shape the diff cannot itself verify.
     """
-    assert sorted([("genomic", None), (None, "alignment")], key=_sort_key) == [
-        (None, "alignment"),
-        ("genomic", None),
-    ]
+    tuples = [("genomic", None), (None, "alignment")]
+    ordered = sorted(tuples, key=_sort_key)
+    # Which order results is arbitrary and not part of the contract — that sorting
+    # is total over these shapes, rather than raising on None, is.
+    assert set(ordered) == set(tuples)
+    assert sorted(tuples, key=_sort_key) == ordered
 
 
 def test_diff_pairs_repeated_identities_as_multisets(tmp_path):
@@ -263,7 +296,7 @@ def test_attribution_accounts_for_the_whole_delta(tmp_path):
 def test_not_applicable_is_not_counted_as_classified(tmp_path):
     """not_applicable is a status label, so it must not inflate the classified count."""
     record = _run_record("a.gfa", "m1")
-    record["classifications"]["platform"] = {"value": None, "status": "not_applicable", "evidence": []}
+    record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
     run = _write_run(tmp_path / "run", [record])
     labels = run_labels(run)
     diff = diff_runs(labels, labels)["platform"]
@@ -271,20 +304,21 @@ def test_not_applicable_is_not_counted_as_classified(tmp_path):
     assert diff.old["not_applicable"] == 1
 
 
-def test_snapshot_meta_reads_the_envelope(tmp_path):
+def test_read_snapshot_reads_the_envelope(tmp_path):
     path = tmp_path / "snap.json"
     path.write_text(
         json.dumps({"metadata": {"catalog": "anvil15", "downloaded_at": "2026-09-04", "total_files": 7}, "files": []})
     )
-    meta = snapshot_meta(path)
+    meta, records = read_snapshot(path)
     assert (meta.catalog, meta.downloaded_at, meta.total_files) == ("anvil15", "2026-09-04", 7)
+    assert records == []
 
 
-def test_snapshot_meta_tolerates_an_unlabelled_snapshot(tmp_path):
+def test_read_snapshot_tolerates_an_unlabelled_snapshot(tmp_path):
     """The archived anvil14 pull predates the recorded catalog — report it as unknown."""
     path = tmp_path / "old.json"
     path.write_text(json.dumps({"metadata": {"downloaded_at": "2026-07-29", "total_files": 3}, "files": []}))
-    assert snapshot_meta(path).catalog is None
+    assert read_snapshot(path)[0].catalog is None
 
 
 def test_render_report_covers_every_section(tmp_path):
@@ -296,8 +330,8 @@ def test_render_report_covers_every_section(tmp_path):
     new_snap.write_text(json.dumps({"metadata": {"catalog": "anvil15", "total_files": 1}, "files": []}))
 
     report = render_report(
-        old_meta=snapshot_meta(old_snap),
-        new_meta=snapshot_meta(new_snap),
+        old_meta=read_snapshot(old_snap)[0],
+        new_meta=read_snapshot(new_snap)[0],
         parity=snapshot_parity(
             [_snapshot_record("a.bam", "m1"), _snapshot_record("g.svs", "m2", dataset="GONE")],
             [_snapshot_record("a.bam", "m1")],
@@ -321,8 +355,8 @@ def test_render_report_says_so_when_no_label_changed(tmp_path):
     snap = tmp_path / "snap.json"
     snap.write_text(json.dumps({"metadata": {"catalog": "anvil15", "total_files": 1}, "files": []}))
     report = render_report(
-        old_meta=snapshot_meta(snap),
-        new_meta=snapshot_meta(snap),
+        old_meta=read_snapshot(snap)[0],
+        new_meta=read_snapshot(snap)[0],
         parity=snapshot_parity([_snapshot_record("a.bam", "m1")], [_snapshot_record("a.bam", "m1")]),
         old_run=run,
         new_run=run,

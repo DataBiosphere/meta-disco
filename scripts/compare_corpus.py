@@ -24,9 +24,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from meta_disco.corpus_diff import render_report, run_labels, snapshot_meta, snapshot_parity
+from meta_disco.corpus_diff import read_snapshot, render_report, run_labels, snapshot_parity
 from meta_disco.output_utils import find_latest_run
-from meta_disco.pipeline import load_records
 
 DEFAULT_OLD_SNAPSHOT = Path("data/anvil/archive/anvil14_20260729/anvil_files_metadata.json")
 DEFAULT_NEW_SNAPSHOT = Path("data/anvil/anvil_files_metadata.json")
@@ -48,16 +47,29 @@ def main(argv=None) -> int:
     parser.add_argument("--output", "-o", type=Path, default=DEFAULT_OUTPUT, help="Report to write")
     args = parser.parse_args(argv)
 
-    new_run = args.new_run or find_latest_run(Path("output/anvil"))
+    try:
+        new_run = args.new_run or find_latest_run(Path("output/anvil"))
+    except FileNotFoundError as exc:
+        print(exc)
+        return 2
     for path in (args.old_snapshot, args.new_snapshot):
         if not path.is_file():
             print(f"Snapshot not found: {path}")
             return 2
+    # Checked before the snapshots are parsed: a mistyped run directory should not
+    # cost two several-hundred-megabyte parses before it is noticed.
+    for run in (args.old_run, new_run):
+        if not run.is_dir():
+            print(f"Run directory not found: {run}")
+            return 2
 
     print(f"Snapshots: {args.old_snapshot} → {args.new_snapshot}")
-    old_meta = snapshot_meta(args.old_snapshot)
-    new_meta = snapshot_meta(args.new_snapshot)
-    parity = snapshot_parity(load_records(args.old_snapshot), load_records(args.new_snapshot))
+    # One parse per snapshot: these files are several hundred megabytes, and the
+    # header facts and the records both come out of the same read.
+    old_meta, old_records = read_snapshot(args.old_snapshot)
+    new_meta, new_records = read_snapshot(args.new_snapshot)
+    parity = snapshot_parity(old_records, new_records)
+    del old_records, new_records
 
     print(f"Runs: {args.old_run} → {new_run}")
     old_labels = run_labels(args.old_run)

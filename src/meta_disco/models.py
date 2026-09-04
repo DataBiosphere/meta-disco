@@ -16,6 +16,14 @@ NOT_CLASSIFIED = "not_classified"
 # re-emit a parent's status can carry it once it becomes a status of its own.
 CONFLICT = "conflict"
 
+# What field_label emits in place of a value. It renders a classified field as its
+# value and any other field as its status, so a label outside this set is a real
+# value. Defined here, beside the constants that compose it, so a consumer asking
+# "did this label carry a value?" (corpus_diff) tracks the status vocabulary
+# instead of re-spelling it — a status added above and not here would otherwise be
+# silently counted as a value.
+STATUS_LABELS = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED, CONFLICT})
+
 # The five classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.

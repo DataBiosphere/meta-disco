@@ -11,7 +11,6 @@ once the violation landscape is known.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from dataclasses import dataclass
 from importlib.resources import files
@@ -20,7 +19,7 @@ from pathlib import Path
 import yaml
 
 from meta_disco.models import CLASSIFIED, _entry_value, _field_entry, status_for_value
-from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.output_utils import find_latest_run, iter_records
 
 
 @dataclass
@@ -203,25 +202,6 @@ def check_record(record: dict, rules: list[dict]) -> list[Violation]:
         if activated is not None:
             violations.extend(_check_active(record, rule, activated))
     return violations
-
-
-def iter_records(run_dir: Path):
-    """Yield every classification record (a dict) across a run's classification files.
-
-    Unwraps the ``{"metadata", "classifications"}`` envelope the same way the
-    coverage/validation report loaders do (falling back to a ``results`` key, then
-    an empty list), and skips any non-dict element so an unexpected top-level shape
-    yields nothing rather than iterating stray keys.
-    """
-    for fname in CLASSIFICATION_FILES:
-        path = run_dir / fname
-        if not path.exists():
-            continue
-        data = json.loads(path.read_text())
-        records = data.get("classifications", data.get("results", [])) if isinstance(data, dict) else data
-        for record in records:
-            if isinstance(record, dict):
-                yield record
 
 
 def render_report(

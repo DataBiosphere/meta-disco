@@ -1,6 +1,6 @@
 # Corpus comparison
 
-Generated 2026-09-04 01:26 by `scripts/compare_corpus.py` (issue #335).
+Generated 2026-09-04 02:02 by `scripts/compare_corpus.py` (issue #335).
 
 Runs compared: `output/anvil/20260802_170826` → `output/anvil/20260904_010319`.
 
@@ -13,8 +13,9 @@ Runs compared: `output/anvil/20260802_170826` → `output/anvil/20260904_010319`
 
 ### Parity by md5, per dataset
 
-A file is matched on `(dataset, file name, md5)`. `md5 changed` counts files
-that kept their name within a dataset but changed content.
+A file is matched on `(dataset, file name)`, and md5 is what is compared.
+`md5 changed` counts files that kept their name within a dataset but changed
+content — the run diff, by contrast, treats those as two different files.
 
 | dataset | old | new | unchanged | md5 changed | removed | added |
 |---|---:|---:|---:|---:|---:|---:|
@@ -37,7 +38,7 @@ that kept their name within a dataset but changed content.
 
 Files classified out of 733,992 (old) and 708,203 (new).
 `classified` counts a real value; `n/a` counts `not_applicable`, which the
-coverage report folds into its own Classified row.
+coverage report folds into its own Classified row along with any other status.
 
 | dimension | old | new | old % | new % | delta | old n/a | new n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
