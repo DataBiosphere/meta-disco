@@ -29,6 +29,7 @@ totals here match the ones the coverage report prints.
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,6 +162,29 @@ def _is_value(label: Label) -> bool:
     return label is not None and label not in STATUS_LABELS
 
 
+def _unidentified() -> str:
+    """A stand-in md5 for a record that has none, unique across every call.
+
+    Two records without an md5 must not compare equal — inside one snapshot or
+    across the two being compared — so the placeholder is random rather than a
+    per-file counter, which would collide between the old and new sides.
+    """
+    return f"\x00unidentified-{uuid.uuid4().hex}"
+
+
+def _as_int(value) -> int | None:
+    """Coerce an envelope count to ``int``, or ``None`` when it is not a number.
+
+    ``total_files`` is the one envelope fact rendered with a numeric format, so a
+    snapshot that stored it as a string would otherwise fail at render time —
+    after both files have been parsed. Reported as unrecorded instead.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def read_snapshot(path: Path) -> tuple[SnapshotMeta, list]:
     """Read an input snapshot's envelope facts and its records in one parse.
 
@@ -175,7 +199,7 @@ def read_snapshot(path: Path) -> tuple[SnapshotMeta, list]:
             path=path,
             catalog=metadata.get("catalog"),
             downloaded_at=metadata.get("downloaded_at"),
-            total_files=metadata.get("total_files"),
+            total_files=_as_int(metadata.get("total_files")),
         ),
         records,
     )
@@ -186,7 +210,9 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
 
     Non-dict entries and records missing a name are skipped: this is a parity
     report, not the input-contract gate (``validate_metadata``), which is where a
-    malformed record is meant to surface.
+    malformed record is meant to surface. A record that has a name but no md5 is
+    kept and made unmatchable, so it is never reported as content-identical to
+    anything.
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -196,7 +222,16 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
         if not file_name:
             continue
         dataset = str(record.get("dataset_title") or "")
-        index[(dataset, str(file_name))][str(record.get("file_md5sum") or "")] += 1
+        md5 = str(record.get("file_md5sum") or "")
+        if not md5:
+            # Without an md5 there is no evidence this file matches anything. A
+            # shared empty string would let two such records cancel as
+            # ``unchanged`` — the one claim this table must never make without
+            # proof — so each gets a placeholder that cannot equal another. The
+            # record still counts toward its dataset's totals, landing in
+            # md5_changed or removed/added rather than being dropped.
+            md5 = _unidentified()
+        index[(dataset, str(file_name))][md5] += 1
     return index
 
 
@@ -267,10 +302,18 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     # a fresh tuple and five fresh strings per record.
     interned: dict[Labels, Labels] = {}
     for record in iter_records(run_dir):
+        md5 = str(record.get("md5sum") or "")
+        if not md5:
+            # md5 is the content half of the identity; without it two records
+            # cannot be shown to be the same file, so each gets a placeholder that
+            # joins to nothing. Only md5 is required: ``dataset_title`` is a
+            # qualifier and is legitimately absent for the HPRC source, so
+            # requiring it would drop that corpus entirely.
+            md5 = _unidentified()
         key: FileKey = (
             str(record.get("dataset_title") or ""),
             str(record.get("file_name") or ""),
-            str(record.get("md5sum") or ""),
+            md5,
         )
         label_tuple: Labels = tuple(field_label(record, field) for field in CLASSIFICATION_FIELDS)
         labels[key][interned.setdefault(label_tuple, label_tuple)] += 1
