@@ -130,20 +130,11 @@ def download(
             else:
                 started = datetime.now()
                 print(f"  {title} {fmt}: requesting ...", end="", flush=True)
-                payload = fetch_manifest(
-                    catalog,
-                    fmt,
-                    title,
-                    http,
-                    sleep,
-                    max_wait=max_wait,
-                    log=lambda m: print(f"\n    {m}", end="", flush=True),
-                )
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(payload)
+                size = fetch_manifest(catalog, fmt, title, path, http, sleep, max_wait=max_wait, log=log)
                 elapsed = (datetime.now() - started).total_seconds()
-                print(f" {len(payload):,} bytes in {elapsed:.0f}s")
-                entry[fmt] = {"requested_at": started.isoformat(), "bytes": len(payload), "seconds": round(elapsed)}
+                print(f" {size:,} bytes in {elapsed:.0f}s")
+                entry[fmt] = {"requested_at": started.isoformat(), "bytes": size, "seconds": round(elapsed)}
                 # A courtesy gap between consecutive jobs; the endpoint has a quota.
                 sleep(pause)
             rows = count_rows(fmt, path)

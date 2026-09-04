@@ -85,6 +85,10 @@ class FakeResponse:
         self.status_code = status_code
         self.headers = headers or {}
 
+    def iter_content(self, chunk_size):
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i : i + chunk_size]
+
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(f"HTTP {self.status_code}")
@@ -172,12 +176,13 @@ class TestDiscovery:
 
 
 class TestFetchManifest:
-    def test_follows_the_job_and_downloads_the_signed_url(self):
+    def test_follows_the_job_and_downloads_the_signed_url(self, tmp_path):
         """Scenario 2: 301, 301, 302, then the payload, waiting Retry-After between polls."""
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=3)
         sleeps = []
-        payload = am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append)
-        assert payload == b"h\nr\n"
+        out = tmp_path / "m.tsv"
+        assert am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=sleeps.append) == 4
+        assert out.read_bytes() == b"h\nr\n" and not out.with_name("m.tsv.tmp").exists()
         assert [c[0] for c in session.calls] == ["PUT", "GET", "GET", "GET", "GET"]
         assert sleeps == [1.0, 3.0, 3.0]
         put_params = session.calls[0][2]
@@ -185,24 +190,24 @@ class TestFetchManifest:
         assert put_params["catalog"] == "anvil15" and put_params["format"] == "compact"
         assert json.loads(put_params["filters"]) == {"datasets.title": {"is": ["ds"]}}
 
-    def test_a_rate_limited_request_is_retried_after_the_named_wait(self):
+    def test_a_rate_limited_request_is_retried_after_the_named_wait(self, tmp_path):
         """The seventeenth consecutive job of the first real run drew 429 with Retry-After: 30."""
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=2)
         sleeps = []
-        assert am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append) == b"h\nr\n"
+        assert am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
         assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
         assert sleeps[:2] == [7.0, 7.0]
 
-    def test_a_request_that_stays_rate_limited_gives_up_at_max_wait(self):
+    def test_a_request_that_stays_rate_limited_gives_up_at_max_wait(self, tmp_path):
         """Retry-After is 7s, so a 30s budget allows four waits and refuses the fifth."""
         session = FakeSession({}, {("ds", "compact"): b""}, rate_limits=10**6)
         sleeps = []
         with pytest.raises(RuntimeError, match=r"still returning HTTP 429 after 28s of waiting"):
-            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=30)
+            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=30)
         assert sleeps == [7.0] * 4
         assert session.puts() == 5
 
-    def test_a_zero_or_dated_retry_after_does_not_defeat_the_budget(self):
+    def test_a_zero_or_dated_retry_after_does_not_defeat_the_budget(self, tmp_path):
         """Retry-After: 0 must not spin without consuming the budget, and an HTTP-date
         value (valid per RFC 7231) must fall back to the backoff, not abort the run."""
 
@@ -218,21 +223,21 @@ class TestFetchManifest:
         session = Throttled("0")
         sleeps = []
         with pytest.raises(RuntimeError):
-            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=3)
+            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=3)
         assert sleeps == [1.0, 1.0, 1.0]
         session = Throttled("Wed, 21 Oct 2026 07:28:00 GMT")
         sleeps = []
         with pytest.raises(RuntimeError):
-            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=12)
+            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=12)
         assert sleeps == [5.0]
 
-    def test_each_wait_is_reported(self):
+    def test_each_wait_is_reported(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=1)
         messages = []
-        am.fetch_manifest("anvil15", "compact", "ds", session, sleep=no_sleep, log=messages.append)
+        am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, log=messages.append)
         assert messages == ["HTTP 429; waiting 7s (7s of 1800s)"]
 
-    def test_backoff_without_retry_after_doubles_to_a_cap(self):
+    def test_backoff_without_retry_after_doubles_to_a_cap(self, tmp_path):
         class Flaky(FakeSession):
             def put(self, url, **kwargs):
                 if len(self.calls) < 5:
@@ -242,18 +247,39 @@ class TestFetchManifest:
 
         session = Flaky({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
         sleeps = []
-        assert am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append) == b"h\nr\n"
+        assert am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
         assert sleeps[:5] == [5.0, 10.0, 20.0, 40.0, 60.0]
 
-    def test_a_job_that_never_finishes_times_out(self):
+    def test_a_download_that_dies_midway_leaves_no_manifest(self, tmp_path):
+        """A rerun must not take a truncated file for a finished manifest."""
+
+        class Dying(FakeResponse):
+            def iter_content(self, chunk_size):
+                yield b"h\n"
+                raise requests.ConnectionError("dropped")
+
+        class Session(FakeSession):
+            def get(self, url, **kwargs):
+                if url.startswith("signed://"):
+                    self.calls.append(("GET", url, None))
+                    return Dying(content=b"h\nr\n")
+                return super().get(url, **kwargs)
+
+        session = Session({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
+        out = tmp_path / "m.tsv"
+        with pytest.raises(requests.ConnectionError):
+            am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=no_sleep)
+        assert not out.exists()
+
+    def test_a_job_that_never_finishes_times_out(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)
         with pytest.raises(TimeoutError):
-            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=no_sleep, timeout=5)
+            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, timeout=5)
 
-    def test_an_unknown_format_is_refused_before_any_request(self):
+    def test_an_unknown_format_is_refused_before_any_request(self, tmp_path):
         session = FakeSession({}, {})
         with pytest.raises(ValueError):
-            am.fetch_manifest("anvil15", "terra.bdbag", "ds", session)
+            am.fetch_manifest("anvil15", "terra.bdbag", "ds", tmp_path / "m", session)
         assert session.calls == []
 
 

@@ -22,7 +22,7 @@ what attributes a raw table to its dataset.
 A manifest is a job, not a download: ``PUT /fetch/manifest/files`` answers with
 JSON carrying ``Status`` 301 and a ``Location`` to poll after ``Retry-After``
 seconds, until a ``Status`` 302 whose ``Location`` is a signed, expiring URL for
-the payload. :func:`fetch_manifest` follows that to the bytes.
+the payload. :func:`fetch_manifest` follows that and streams the payload to a file.
 
 On disk, a catalog's manifests live under ``<root>/manifest/<catalog>/`` as
 ``<dataset>.compact.tsv`` and ``<dataset>.verbatim.jsonl`` beside a sidecar,
@@ -80,13 +80,14 @@ _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 DEFAULT_MAX_WAIT = 1800.0  # seconds a single request may spend waiting to be accepted
 _BACKOFF_BASE = 5.0  # seconds; doubled per attempt, capped, when the server names no Retry-After
 _BACKOFF_CAP = 60.0
+_CHUNK_BYTES = 1 << 20  # payload download chunk
 
 
 class HttpSession(Protocol):
     """The two calls this module makes, keyword arguments only; ``requests.Session``
     satisfies it, and so can a test fake. Responses are typed ``Any``: they need
     ``status_code``, ``headers``, ``raise_for_status()``, ``json()`` and
-    ``content``, which both provide."""
+    ``iter_content(chunk_size)``, which both provide."""
 
     def get(self, url: str, **kwargs: Any) -> Any: ...
     def put(self, url: str, **kwargs: Any) -> Any: ...
@@ -190,21 +191,26 @@ def fetch_manifest(
     catalog: str,
     fmt: str,
     dataset_title: str,
+    destination: Path,
     session: HttpSession | None = None,
     sleep: Sleep = time.sleep,
     timeout: float = 3600,
     max_wait: float = DEFAULT_MAX_WAIT,
     log: Log | None = None,
-) -> bytes:
-    """Request one manifest and follow its job to the payload bytes.
+) -> int:
+    """Request one manifest, follow its job, and stream the payload to ``destination``.
 
     Polls while the job reports ``Status`` 301, waiting ``Retry-After`` seconds
     (at least one) between polls, and downloads the 302 ``Location`` at once,
-    because that URL is signed and expires. Each HTTP call goes through
-    :func:`_request`, so a 429 or gateway error is waited out for up to
-    ``max_wait`` seconds per call, each wait reported through ``log``. Raises
-    ``TimeoutError`` if the job has not finished after ``timeout`` seconds of
-    polling, and ``RuntimeError`` on any other job status.
+    because that URL is signed and expires. The payload is streamed to a
+    temporary file in chunks and renamed into place when complete — the largest
+    verbatim manifest is half a gigabyte, and a download that dies partway must
+    not leave a truncated file that a rerun would take for a finished one. Each
+    HTTP call goes through :func:`_request`, so a 429 or gateway error is waited
+    out for up to ``max_wait`` seconds per call, each wait reported through
+    ``log``. Returns the bytes written. Raises ``TimeoutError`` if the job has
+    not finished after ``timeout`` seconds of polling, and ``RuntimeError`` on
+    any other job status.
     """
     if fmt not in FORMATS:
         raise ValueError(f"unknown manifest format {fmt!r}; expected one of {FORMATS}")
@@ -227,7 +233,15 @@ def fetch_manifest(
         body = call("get", body["Location"], timeout=120).json()
     if body.get("Status") != 302:
         raise RuntimeError(f"unexpected manifest job response for {dataset_title!r} ({fmt}): {body}")
-    return call("get", body["Location"], timeout=1800).content
+    resp = call("get", body["Location"], timeout=1800, stream=True)
+    tmp = destination.with_name(destination.name + ".tmp")
+    written = 0
+    with tmp.open("wb") as f:
+        for chunk in resp.iter_content(chunk_size=_CHUNK_BYTES):
+            f.write(chunk)
+            written += len(chunk)
+    tmp.replace(destination)
+    return written
 
 
 # --- on-disk layout ----------------------------------------------------------
