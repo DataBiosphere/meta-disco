@@ -273,10 +273,13 @@ class TestFetchManifest:
                 raise requests.ConnectionError("dropped")
 
         class Session(FakeSession):
+            dying = None
+
             def get(self, url, **kwargs):
                 if url.startswith("signed://"):
                     self.calls.append(("GET", url, None))
-                    return Dying(content=b"h\nr\n")
+                    self.dying = Dying(content=b"h\nr\n")
+                    return self.dying
                 return super().get(url, **kwargs)
 
         session = Session({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
@@ -284,6 +287,7 @@ class TestFetchManifest:
         with pytest.raises(requests.ConnectionError):
             am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=no_sleep)
         assert not out.exists() and not out.with_name("m.tsv.tmp").exists()
+        assert session.dying is not None and getattr(session.dying, "closed", False)
 
     def test_a_job_that_never_finishes_times_out(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)

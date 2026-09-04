@@ -247,6 +247,9 @@ def fetch_manifest(
         # A half-written verbatim manifest is hundreds of megabytes; do not leave it behind.
         tmp.unlink(missing_ok=True)
         raise
+    finally:
+        # Streamed responses hold their connection until read out or closed.
+        resp.close()
     tmp.replace(destination)
     return written
 
