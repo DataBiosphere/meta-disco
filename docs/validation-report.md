@@ -1,7 +1,7 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-08-02 17:08:26**
+Classification run: **2026-09-04 01:03:19**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
@@ -12,12 +12,11 @@ Classification run: **2026-08-02 17:08:26**
 
 ## AnVIL (Azul metadata)
 
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **733,877** files across **13** datasets:
+Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **708,088** files across **12** datasets:
 
 - ANVIL_T2T_CHRY (309,979 files)
 - ANVIL_T2T (289,204 files)
 - ANVIL_1000G_high_coverage_2019 (26,016 files)
-- ANVIL_GTEx_public_data (25,789 files)
 - ANVIL_HPRC (23,185 files)
 - AnVIL_HPRC_R2 (16,271 files)
 - ANVIL_NIA_CARD_Coriell_Cell_Lines_Open (12,534 files)
@@ -56,8 +55,8 @@ Of the 417 inferred data modality values, 413 (99.0%) matched AnVIL. There were 
 
 | Count | Inferred | AnVIL | Example |
 |---:|---|---|---|
-| 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
 | 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
+| 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
 
 ### Data Type Validation
 

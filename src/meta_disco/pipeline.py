@@ -40,12 +40,29 @@ def load_records(input_path: Path) -> list:
     ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
     ``validate_metadata`` gate so the envelope handling lives in one place.
     """
+    return load_snapshot(input_path)[1]
+
+
+def load_snapshot(input_path: Path) -> tuple[dict, list]:
+    """Load an input file's ``metadata`` block and its record list in one parse.
+
+    Same envelope handling and same errors as :func:`load_records`, which is this
+    function's record half — a caller that also needs the envelope facts (which
+    catalog a snapshot captured, when it was pulled) gets them without parsing a
+    several-hundred-megabyte file a second time.
+
+    The metadata block is ``{}`` for an ``.ndjson`` input, which carries no
+    envelope, and for a JSON envelope that has no ``metadata`` key.
+    """
     with input_path.open() as f:
         if input_path.suffix == ".ndjson":
-            return [json.loads(line) for line in f if line.strip()]
+            return {}, [json.loads(line) for line in f if line.strip()]
         data = json.load(f)
     if not isinstance(data, dict):
         raise TypeError(f"Expected JSON object with 'results' or 'files' key, got {type(data).__name__}")
+    metadata = data.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
     # Check key presence explicitly rather than `results or files`: a present but
     # empty `results: []` is a valid empty corpus, not a missing key — the truthy
     # fallback would misreport it as "must contain a key".
@@ -54,7 +71,7 @@ def load_records(input_path: Path) -> list:
             records = data[key]
             if not isinstance(records, list):
                 raise TypeError(f"'{key}' must be a list of records, got {type(records).__name__}")
-            return records
+            return metadata, records
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 

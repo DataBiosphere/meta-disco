@@ -19,6 +19,7 @@ from pathlib import Path
 from meta_disco.file_name import FileName
 from meta_disco.models import field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = [
     ("data_modality", "Data Modality", ""),
@@ -41,11 +42,6 @@ DIMENSIONS = [
         "not-classified rate is expected.",
     ),
 ]
-
-
-def escape_md_cell(text: str) -> str:
-    """Escape characters that break markdown table cells."""
-    return text.replace("|", "\\|").replace("\n", " ")
 
 
 def get_extension(filename: str) -> str:

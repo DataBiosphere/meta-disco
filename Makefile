@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -25,6 +25,7 @@ help:
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
 	@echo "  make validation-report  Generate validation report against ground truth"
+	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
 	@echo "  make all-reports        Generate all reports (coverage + validation)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
@@ -135,6 +136,15 @@ coverage-report:
 
 validation-report:
 	uv run python scripts/generate_validation_report.py
+
+# Compare two corpus generations: input snapshots file-by-file by md5, and run
+# outputs by label, splitting each coverage delta into corpus loss / corpus gain /
+# label change so a catalog migration is not mistaken for classifier drift (#335).
+# Defaults compare the archived anvil14 generation with the latest run; pass other
+# snapshots or runs through ARGS, e.g.
+# `make corpus-diff ARGS="--new-run output/anvil/20260904_010319"`.
+corpus-diff:
+	uv run python scripts/compare_corpus.py $(ARGS)
 
 all-reports: validate-hprc coverage-report validation-report consistency-report
 

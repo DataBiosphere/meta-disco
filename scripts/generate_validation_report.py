@@ -19,6 +19,7 @@ from pathlib import Path
 
 from meta_disco.models import field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
 
@@ -349,10 +350,6 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
 # =============================================================================
 # Report generation
 # =============================================================================
-
-
-def escape_md_cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ")
 
 
 SOURCE_INFO = {

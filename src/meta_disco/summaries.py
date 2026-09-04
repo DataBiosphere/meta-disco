@@ -3,6 +3,16 @@
 from .models import field_label, field_value
 
 
+def escape_md_cell(text: str) -> str:
+    """Escape characters that break a markdown table cell.
+
+    A pipe closes the cell and a newline closes the row, so a value carrying
+    either — a catalog-supplied dataset title, an evidence reason — would silently
+    reshape the table. Shared by every report that renders one.
+    """
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
 def _print_field_table(title: str, counts: dict, width: int = 35):
     print(f"\n{title}:")
     for key, count in sorted(counts.items(), key=lambda x: -x[1]):
