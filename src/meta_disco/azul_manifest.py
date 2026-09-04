@@ -368,12 +368,14 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     donor fields the page downloader also emitted and the contract ignores.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
     strict validation requires; a cell that is not one of Azul's ``True`` /
-    ``False`` spellings raises rather than silently becoming ``False``. The
-    four nullable fields — ``data_modality``, ``reference_assembly``,
-    ``organism_type``, ``phenotypic_sex`` — read an empty cell as ``None`` and
-    a multi-valued one as its first value, which is what the page downloader
-    emitted for them; every other field is passed through as the cell's text,
-    and the contract's non-empty patterns are what reject a blank one.
+    ``False`` spellings raises rather than silently becoming ``False``. Four
+    fields read an empty cell as ``None`` and a multi-valued one as its first
+    value, which is what the page downloader emitted for them: the contract's
+    two nullable slots, ``data_modality`` and ``reference_assembly``, and the
+    two donor fields, ``organism_type`` and ``phenotypic_sex``, which the
+    contract does not model and ignores as extra keys. Every other field is
+    passed through as the cell's text, and the contract's non-empty patterns
+    are what reject a blank one.
     """
     return {
         "entry_id": row["files.document_id"],
