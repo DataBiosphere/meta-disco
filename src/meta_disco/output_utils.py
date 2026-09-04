@@ -52,9 +52,10 @@ def iter_records(run_dir: Path):
 
     Unwraps the ``{"metadata", "classifications"}`` envelope the same way the
     coverage/validation report loaders do (falling back to a ``results`` key, then
-    an empty list), and skips any non-dict element so an unexpected top-level shape
-    yields nothing rather than iterating stray keys. A file a run did not write is
-    skipped.
+    an empty list). A file a run did not write is skipped, as is one whose record
+    list is not a list at all — a null, a number, a bare object — and within a
+    list, any element that is not a record dict. So an unexpected shape yields
+    nothing from that file rather than raising or iterating stray keys.
 
     Lives here, beside ``CLASSIFICATION_FILES``, so every reader of a run directory
     (the consistency linter, the corpus diff) shares one definition of the envelope
@@ -66,6 +67,11 @@ def iter_records(run_dir: Path):
             continue
         data = json.loads(path.read_text())
         records = data.get("classifications", data.get("results", [])) if isinstance(data, dict) else data
+        # A scalar or null here is iterable only by accident (a string) or not at
+        # all (a number, None) — either way it holds no records, so skip the file
+        # rather than raising on a shape this function promises to tolerate.
+        if not isinstance(records, list):
+            continue
         for record in records:
             if isinstance(record, dict):
                 yield record

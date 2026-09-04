@@ -151,6 +151,19 @@ def test_render_report_lists_violations():
     assert "assay_type=WGS" in md
 
 
+def test_iter_records_skips_a_file_whose_records_are_not_a_list(tmp_path):
+    """A null, a number or a bare object where the record list should be.
+
+    The function promises to tolerate an unexpected shape; before this guard it
+    raised TypeError trying to iterate the scalar.
+    """
+    run = tmp_path / "run"
+    run.mkdir()
+    for payload in ('{"metadata": {}, "classifications": null}', "5", '{"classifications": {"a": 1}}', "null"):
+        (run / "bam_classifications.json").write_text(payload)
+        assert list(iter_records(run)) == []
+
+
 def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):
     # A 'results'-keyed envelope, plus a stray non-dict element, must not crash and
     # must yield only the dict records.
