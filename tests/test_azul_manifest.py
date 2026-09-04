@@ -155,11 +155,33 @@ class TestFetchManifest:
         assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
         assert sleeps[:2] == [7.0, 7.0]
 
-    def test_a_request_that_stays_rate_limited_gives_up(self):
+    def test_a_request_that_stays_rate_limited_gives_up_at_max_wait(self):
+        """Retry-After is 7s, so a 30s budget allows four waits and refuses the fifth."""
         session = FakeSession({}, {("ds", "compact"): b""}, rate_limits=10**6)
+        sleeps = []
         with pytest.raises(RuntimeError, match="HTTP 429"):
-            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=lambda _s: None)
-        assert sum(1 for c in session.calls if c[0] == "PUT") == am._MAX_ATTEMPTS
+            am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append, max_wait=30)
+        assert sleeps == [7.0] * 4
+        assert sum(1 for c in session.calls if c[0] == "PUT") == 5
+
+    def test_each_wait_is_reported(self):
+        session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=1)
+        messages = []
+        am.fetch_manifest("anvil15", "compact", "ds", session, sleep=lambda _s: None, log=messages.append)
+        assert messages == ["HTTP 429; waiting 7s (7s of 1800s)"]
+
+    def test_backoff_without_retry_after_doubles_to_a_cap(self):
+        class Flaky(FakeSession):
+            def put(self, url, **kwargs):
+                self.calls.append(("PUT", url, kwargs.get("params")))
+                if len(self.calls) <= 5:
+                    return FakeResponse(status_code=503)
+                return super().put(url, **kwargs)
+
+        session = Flaky({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
+        sleeps = []
+        assert am.fetch_manifest("anvil15", "compact", "ds", session, sleep=sleeps.append) == b"h\nr\n"
+        assert sleeps[:5] == [5.0, 10.0, 20.0, 40.0, 60.0]
 
     def test_a_job_that_never_finishes_times_out(self):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)

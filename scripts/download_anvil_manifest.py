@@ -18,8 +18,11 @@ dataset, it derives the classifier's input from the compact rows::
 A manifest already on disk is not re-requested unless ``--force`` is given; the
 input file is rebuilt from whatever is on disk either way. A parity mismatch
 exits non-zero and leaves the input file untouched. A rate-limit or gateway
-error is retried with backoff (see ``azul_manifest._request``), and ``--pause``
-seconds separate consecutive jobs.
+error is waited out, honoring the server's ``Retry-After``, for up to
+``--max-wait`` seconds per request (see ``azul_manifest._request``); the
+manifest endpoint's quota behaves like a slowly refilling token bucket, so a
+full pull may spend most of its time waiting. ``--pause`` seconds separate
+consecutive jobs.
 
 Usage:
     python scripts/download_anvil_manifest.py --catalog anvil15
@@ -36,6 +39,7 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.azul_manifest import (
+    DEFAULT_MAX_WAIT,
     FORMAT_SUFFIX,
     FORMATS,
     Dataset,
@@ -67,7 +71,14 @@ def save_sidecar(manifest_dir: Path, sidecar: dict) -> None:
         json.dump(sidecar, f, indent=2, sort_keys=True)
 
 
-def download(catalog: str, output_dir: Path, only: set[str] | None, force: bool, pause: float = 5.0) -> int:
+def download(
+    catalog: str,
+    output_dir: Path,
+    only: set[str] | None,
+    force: bool,
+    pause: float = 5.0,
+    max_wait: float = DEFAULT_MAX_WAIT,
+) -> int:
     manifest_dir = output_dir / "manifest" / catalog
     manifest_dir.mkdir(parents=True, exist_ok=True)
     sidecar = load_sidecar(manifest_dir)
@@ -94,7 +105,13 @@ def download(catalog: str, output_dir: Path, only: set[str] | None, force: bool,
             else:
                 started = datetime.now()
                 print(f"  {dataset.title} {fmt}: requesting ...", end="", flush=True)
-                payload = fetch_manifest(catalog, fmt, dataset.title)
+                payload = fetch_manifest(
+                    catalog,
+                    fmt,
+                    dataset.title,
+                    max_wait=max_wait,
+                    log=lambda m: print(f"\n    {m}", end="", flush=True),
+                )
                 path.write_bytes(payload)
                 elapsed = (datetime.now() - started).total_seconds()
                 print(f" {len(payload):,} bytes in {elapsed:.0f}s")
@@ -138,8 +155,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--datasets", nargs="+", help="Only these dataset titles (default: every accessible dataset)")
     parser.add_argument("--force", action="store_true", help="Re-request manifests already on disk")
     parser.add_argument("--pause", type=float, default=5.0, help="Seconds to wait between manifest jobs (default 5)")
+    parser.add_argument(
+        "--max-wait",
+        type=float,
+        default=DEFAULT_MAX_WAIT,
+        help=f"Seconds one request may spend waiting out a rate limit before failing (default {DEFAULT_MAX_WAIT:.0f})",
+    )
     args = parser.parse_args(argv)
-    return download(args.catalog, args.output, set(args.datasets) if args.datasets else None, args.force, args.pause)
+    only = set(args.datasets) if args.datasets else None
+    return download(args.catalog, args.output, only, args.force, args.pause, args.max_wait)
 
 
 if __name__ == "__main__":

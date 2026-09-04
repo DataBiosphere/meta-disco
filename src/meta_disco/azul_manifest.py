@@ -53,12 +53,15 @@ FORMAT_SUFFIX = {FORMAT_COMPACT: "compact.tsv", FORMAT_VERBATIM: "verbatim.jsonl
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 
-# Responses worth retrying: Azul rate-limits a run of manifest jobs (a 429 landed
-# on the sixteenth consecutive request on 2026-09-03), and a gateway hiccup is
-# not a reason to abandon a multi-gigabyte run. Anything else is raised.
+# Responses worth waiting out: the manifest endpoint has a usage quota that
+# behaves like a token bucket — on 2026-09-03 sixteen consecutive jobs went
+# through, then every request drew 429 with ``Retry-After: 30`` and the quota
+# refilled at roughly one job every few minutes — and a gateway hiccup is not a
+# reason to abandon a multi-gigabyte run. Anything else is raised at once.
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
-_MAX_ATTEMPTS = 6
-_BACKOFF_BASE = 5.0  # seconds; doubled per attempt when the server names no Retry-After
+DEFAULT_MAX_WAIT = 1800.0  # seconds a single request may spend waiting to be accepted
+_BACKOFF_BASE = 5.0  # seconds; doubled per attempt, capped, when the server names no Retry-After
+_BACKOFF_CAP = 60.0
 
 
 class HttpSession(Protocol):
@@ -71,25 +74,43 @@ class HttpSession(Protocol):
     def put(self, url: str, **kwargs: Any) -> Any: ...
 
 
-def _request(http: HttpSession, method: str, url: str, sleep: Callable[[float], None], **kwargs: Any) -> Any:
-    """One HTTP call, retried on a rate-limit or gateway status.
+def _request(
+    http: HttpSession,
+    method: str,
+    url: str,
+    sleep: Callable[[float], None],
+    max_wait: float = DEFAULT_MAX_WAIT,
+    log: Callable[[str], None] | None = None,
+    **kwargs: Any,
+) -> Any:
+    """One HTTP call, waited out on a rate-limit or gateway status.
 
     Waits the server's ``Retry-After`` when it names one, else ``_BACKOFF_BASE``
-    doubled per attempt, and gives up after ``_MAX_ATTEMPTS`` by raising the last
-    response's error. Any other error status raises at once.
+    doubled per attempt up to ``_BACKOFF_CAP``, and keeps trying until the
+    request is accepted or the waits would exceed ``max_wait`` seconds in
+    total, at which point the last response's error is raised. Each wait is
+    reported through ``log`` when one is given, so a run riding out a quota is
+    visibly waiting rather than hung. Any other error status raises at once.
     """
-    resp = None
-    for attempt in range(_MAX_ATTEMPTS):
+    waited = 0.0
+    attempt = 0
+    while True:
         resp = getattr(http, method)(url, **kwargs)
         if resp.status_code not in _RETRY_STATUSES:
             resp.raise_for_status()
             return resp
         retry_after = resp.headers.get("Retry-After")
-        wait = float(retry_after) if retry_after else _BACKOFF_BASE * (2**attempt)
+        wait = float(retry_after) if retry_after else min(_BACKOFF_BASE * (2**attempt), _BACKOFF_CAP)
+        if waited + wait > max_wait:
+            resp.raise_for_status()
+            raise RuntimeError(
+                f"{method.upper()} {url} still returning {resp.status_code} after {waited:.0f}s of waiting"
+            )
+        if log:
+            log(f"HTTP {resp.status_code}; waiting {wait:.0f}s ({waited + wait:.0f}s of {max_wait:.0f}s)")
         sleep(wait)
-    assert resp is not None
-    resp.raise_for_status()
-    raise RuntimeError(f"{method.upper()} {url} still returning {resp.status_code} after {_MAX_ATTEMPTS} attempts")
+        waited += wait
+        attempt += 1
 
 
 @dataclass(frozen=True)
@@ -127,13 +148,16 @@ def fetch_manifest(
     session: HttpSession | None = None,
     sleep: Callable[[float], None] | None = None,
     timeout: float = 3600,
+    max_wait: float = DEFAULT_MAX_WAIT,
+    log: Callable[[str], None] | None = None,
 ) -> bytes:
     """Request one manifest and follow its job to the payload bytes.
 
     Polls while the job reports ``Status`` 301, waiting ``Retry-After`` seconds
     (at least one) between polls, and downloads the 302 ``Location`` at once,
     because that URL is signed and expires. Each HTTP call goes through
-    :func:`_request`, so a 429 or gateway error is retried with backoff. Raises
+    :func:`_request`, so a 429 or gateway error is waited out for up to
+    ``max_wait`` seconds per call, each wait reported through ``log``. Raises
     ``TimeoutError`` if the job has not finished after ``timeout`` seconds of
     polling, and ``RuntimeError`` on any other job status.
     """
@@ -146,6 +170,8 @@ def fetch_manifest(
         "put",
         MANIFEST_URL,
         sleep,
+        max_wait,
+        log,
         params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_title)},
         timeout=120,
     )
@@ -157,11 +183,11 @@ def fetch_manifest(
             raise TimeoutError(f"manifest job for {dataset_title!r} ({fmt}) still running after {waited:.0f}s")
         sleep(wait)
         waited += wait
-        resp = _request(http, "get", body["Location"], sleep, timeout=120)
+        resp = _request(http, "get", body["Location"], sleep, max_wait, log, timeout=120)
         body = resp.json()
     if body.get("Status") != 302:
         raise RuntimeError(f"unexpected manifest job response for {dataset_title!r} ({fmt}): {body}")
-    return _request(http, "get", body["Location"], sleep, timeout=1800).content
+    return _request(http, "get", body["Location"], sleep, max_wait, log, timeout=1800).content
 
 
 def count_rows(fmt: str, payload: bytes) -> int:
