@@ -41,7 +41,7 @@ def input_file(tmp_path):
 def ndjson_input(tmp_path):
     """Create a test NDJSON input file."""
     records = [
-        {"file_md5sum": "abc123", "file_name": "s.test", "file_format": ".test"},
+        {"file_md5sum": "a" * 32, "file_name": "s.test", "file_format": ".test"},
     ]
     path = tmp_path / "input.ndjson"
     path.write_text("\n".join(json.dumps(r) for r in records))
@@ -79,7 +79,7 @@ class TestFilterRecords:
         assert all(r["file_format"] == ".test" for r in filtered)
 
     def test_filters_by_filename(self, tmp_path):
-        records = [{"file_md5sum": "x", "file_name": "foo.test"}]
+        records = [{"file_md5sum": "a" * 32, "file_name": "foo.test"}]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
         config = _make_config()
@@ -87,28 +87,56 @@ class TestFilterRecords:
         filtered = pipeline._filter_records(pipeline._load_input())
         assert len(filtered) == 1
 
-    def test_missing_md5_is_routed_not_dropped(self, tmp_path):
-        # md5 is classifier-relevant: an extension-matching record with no md5 must
-        # reach processing (to be written as validation_failed), not be filtered out.
-        records = [{"file_name": "foo.test", "file_format": ".test"}]
+    @pytest.mark.parametrize(
+        "md5",
+        [None, "", "ABCDEF0123456789abcdef0123456789", "abc123", "a" * 31, 12345],
+        ids=["null", "empty", "uppercase", "too-short", "31-chars", "non-string"],
+    )
+    def test_record_without_usable_md5_is_excluded_at_load(self, tmp_path, md5):
+        """A record with no usable md5 never reaches routing: it is excluded at load
+        (#376), so it cannot be written as a row for a file the run could never fetch."""
+        records = [{"file_name": "foo.test", "file_format": ".test", "file_md5sum": md5}]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
         config = _make_config()
         pipeline = ClassifyPipeline(config, path, tmp_path / "out.json")
-        filtered = pipeline._filter_records(pipeline._load_input())
-        assert len(filtered) == 1
+        assert pipeline._load_input() == []
+
+    def test_record_with_absent_md5_key_is_excluded_at_load(self, tmp_path):
+        """An absent file_md5sum key is excluded like a null one (#376)."""
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": [{"file_name": "foo.test", "file_format": ".test"}]}))
+        pipeline = ClassifyPipeline(_make_config(), path, tmp_path / "out.json")
+        assert pipeline._load_input() == []
+
+    def test_well_formed_md5_survives_the_exclusion(self, tmp_path):
+        """The exclusion is narrow: a well-formed md5 is routed exactly as before."""
+        records = [{"file_name": "foo.test", "file_format": ".test", "file_md5sum": "a" * 32}]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        pipeline = ClassifyPipeline(_make_config(), path, tmp_path / "out.json")
+        assert pipeline._filter_records(pipeline._load_input()) == records
 
     def test_non_dict_record_is_filtered_out_without_crashing(self, tmp_path):
-        records = ["a bare string", None, {"file_name": "ok.test", "file_format": ".test"}]
+        """_filter_records tolerates a non-dict element on its own, independent of the
+        load-time exclusion — hence the raw list rather than a round trip through
+        _load_input, which now removes non-dicts before routing ever sees them."""
+        keeper = {"file_name": "ok.test", "file_format": ".test", "file_md5sum": "a" * 32}
+        records = ["a bare string", None, keeper]
+        pipeline = ClassifyPipeline(_make_config(), tmp_path / "in.json", tmp_path / "out.json")
+        assert pipeline._filter_records(records) == [keeper]
+
+    def test_non_dict_record_is_excluded_at_load(self, tmp_path):
+        """A non-dict element cannot carry a checksum, so the #376 exclusion removes it
+        at load — before the catch-all classifier, which reads records with .get."""
         path = tmp_path / "in.json"
-        path.write_text(json.dumps({"results": records}))
-        config = _make_config()
-        pipeline = ClassifyPipeline(config, path, tmp_path / "out.json")
-        filtered = pipeline._filter_records(pipeline._load_input())
-        assert filtered == [{"file_name": "ok.test", "file_format": ".test"}]
+        keeper = {"file_name": "ok.test", "file_format": ".test", "file_md5sum": "a" * 32}
+        path.write_text(json.dumps({"results": ["a bare string", None, keeper]}))
+        pipeline = ClassifyPipeline(_make_config(), path, tmp_path / "out.json")
+        assert pipeline._load_input() == [keeper]
 
     def test_skips_flagged(self, tmp_path):
-        records = [{"file_md5sum": "x", "file_name": "foo.test", "skip": True}]
+        records = [{"file_md5sum": "a" * 32, "file_name": "foo.test", "skip": True}]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))
         config = _make_config()
@@ -253,10 +281,21 @@ class TestPipelineRun:
         assert meta["successful"] == 1
         assert results[0]["classifications"]["data_modality"]["value"] == "genomic"
 
-    def test_missing_md5_record_is_written_as_validation_failed(self, tmp_path):
-        """A record routed by extension but missing md5 (classifier-relevant) is
-        written as validation_failed through a full run, not dropped (#155/#161)."""
-        config = _make_config()
+    def test_missing_md5_record_produces_no_row_and_is_never_fetched(self, tmp_path):
+        """A record with no md5 yields no classification row at all, and the run neither
+        fetches it nor probes the evidence cache for it (#376, AC1).
+
+        The spies are the point: a row that merely says not_classified would still have
+        misrepresented a file the run could never address, and a fetch attempt would
+        have burned a request on a URL that cannot be built.
+        """
+        fetched = []
+
+        def _spy_fetcher(evidence_dir, md5, **kw):
+            fetched.append(md5)
+            return f"header_for_{md5}"
+
+        config = _make_config(fetcher=_spy_fetcher)
         input_path = tmp_path / "in.json"
         input_path.write_text(
             json.dumps(
@@ -268,30 +307,60 @@ class TestPipelineRun:
             )
         )
         output = tmp_path / "out.json"
-        results = ClassifyPipeline(
-            config,
-            input_path,
-            output,
-            evidence_base=tmp_path / "evidence",
-        ).run()
+        pipeline = ClassifyPipeline(config, input_path, output, evidence_base=tmp_path / "evidence")
 
-        assert len(results) == 1
+        probed = []
+        real_is_cached = pipeline._is_cached
+
+        def _spy_is_cached(md5sum):
+            probed.append(md5sum)
+            return real_is_cached(md5sum)
+
+        pipeline._is_cached = _spy_is_cached
+        results = pipeline.run()
+
+        assert results == []
+        assert fetched == []
+        assert probed == []
+        # No records to process, so the run writes no output file at all.
+        assert not output.exists()
+
+    def test_run_writes_rows_only_for_records_with_a_usable_md5(self, tmp_path):
+        """The exclusion removes the checksum-less record and leaves the rest of the run
+        untouched — the neighbouring valid record still classifies normally (#376, AC5)."""
+        input_path = tmp_path / "in.json"
+        input_path.write_text(
+            json.dumps(
+                {
+                    "results": [
+                        _valid_record(file_name="x.test", file_format=".test", file_md5sum=None),
+                        _valid_record(file_name="y.test", file_format=".test", file_md5sum="b" * 32),
+                    ]
+                }
+            )
+        )
+        output = tmp_path / "out.json"
+        results = ClassifyPipeline(_make_config(), input_path, output, evidence_base=tmp_path / "evidence").run()
+
+        assert [r["file_name"] for r in results] == ["y.test"]
         meta = json.loads(output.read_text())["metadata"]
-        assert meta["validation_failed"] == 1
-        assert meta["successful"] == 0
-        reasons = [e["reason"] for e in results[0]["classifications"]["data_modality"]["evidence"]]
-        assert any("file_md5sum" in r for r in reasons)
+        assert meta["total_to_process"] == 1
+        assert meta["successful"] == 1
+        assert meta["validation_failed"] == 0
 
-    def test_skip_cached_keeps_invalid_records_and_tolerates_unhashable_md5(self, tmp_path):
-        """skip_cached must not drop validation_failed records (they are never cached)
-        and must not crash on an InvalidRecord whose md5 drifted to an unhashable
-        type — only classifiable records are skip-filtered against the cached set."""
+    def test_skip_cached_keeps_invalid_records(self, tmp_path):
+        """skip_cached must not drop validation_failed records — they are never cached,
+        so only classifiable records are skip-filtered against the cached set.
+
+        The invalid record's drift is on file_size, not md5: a record whose md5 drifted
+        is excluded at load now (#376), so it can no longer reach this filter at all.
+        """
         from meta_disco.evidence import get_evidence_path
 
         cached_md5 = "a" * 32
         valid = _valid_record(file_md5sum=cached_md5, file_name="v.test", file_format=".test")
-        # Blocking drift (non-int file_size) + an unhashable md5 (a list).
-        invalid = _valid_record(file_name="i.test", file_format=".test", file_size="big", file_md5sum=["x"])
+        # Blocking drift on a classifier-relevant field the exclusion does not cover.
+        invalid = _valid_record(file_name="i.test", file_format=".test", file_size="big", file_md5sum="b" * 32)
         input_path = tmp_path / "in.json"
         input_path.write_text(json.dumps({"results": [valid, invalid]}))
 

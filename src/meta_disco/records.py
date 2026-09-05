@@ -14,6 +14,11 @@ filtered records into two typed streams at the boundary:
   identity fields in one constructor and carries the blocking reasons for the
   ``validation_failed`` row.
 
+A record with no usable ``file_md5sum`` reaches neither stream: it is excluded before
+the split (``exclusions.has_usable_checksum``, #376), because it can be neither fetched
+nor cache-keyed and a row echoing a null md5 would have no usable identity. So every
+``InvalidRecord`` carries a well-formed md5 and is invalid on some other field.
+
 The split criterion is ``classification_blocking_reasons`` (unchanged from #161):
 a record that violates the full contract only on a field the classifier never
 reads (e.g. ``drs_uri``) is *not* diverted — it still classifies, and the
@@ -56,7 +61,8 @@ class ClassifierRecord:
 
     Built only from a record with no ``classification_blocking_reasons``, so
     ``file_name``/``file_format`` are ``str``, ``file_size`` is a non-negative
-    ``int``, and ``file_md5sum`` is a well-formed md5 ``str`` — all by construction.
+    ``int``, and ``file_md5sum`` is a well-formed md5 ``str`` — all by construction
+    (the md5 doubly so: a record without one is excluded at load, #376).
     That post-condition is what lets the fetch/classify path drop the per-field
     guards #171 added.
 

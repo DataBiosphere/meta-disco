@@ -46,6 +46,11 @@ _RECORD_LOC = "<record>"
 # Keep in sync with the fields ClassifierRecord exposes to the fetch/classify path
 # (records.py). A field the run consumes but omitted here would let a record bad on
 # that field build a ClassifierRecord and fetch, instead of divert to validation_failed.
+#
+# file_md5sum is listed because it genuinely is classifier-relevant and the standalone
+# gate must fail on it — but on the run path a record bad on it never reaches this
+# check: it is excluded at load (exclusions.has_usable_checksum, #376), so it is
+# neither fetched nor written as a validation_failed row.
 CLASSIFIER_RELEVANT_FIELDS = frozenset(
     {
         "file_md5sum",
@@ -99,6 +104,10 @@ def classification_blocking_reasons(record) -> list[str]:
     so the run diverts a record to ``validation_failed`` only when it truly cannot
     classify it. The other violations are real drift — surfaced loudly by the
     standalone ``validate_metadata`` gate over the whole corpus, not here.
+
+    A ``file_md5sum`` violation is reported here like any other, but on the run path it
+    cannot arrive: such a record is excluded before routing (#376). This function is
+    also called directly by tests and by the gate, hence the branch still being live.
     """
     return [r for r in validate_record(record) if _reason_field(r) in _BLOCKING_FIELDS]
 
@@ -148,6 +157,12 @@ def validation_failed_classifications(reasons: list[str]) -> dict:
     each of the five dimensions carries ``not_classified`` status and the
     validation reasons as evidence. It is never dropped — a missing row is
     indistinguishable from a file that was never seen (issue #155).
+
+    The one violation that does *not* produce such a row is a missing or malformed
+    ``file_md5sum``: that record has no identity to write and could never have been
+    fetched, so it is excluded from the run entirely and named in the run's
+    ``excluded_files.json`` instead (#376). The unprocessable report
+    (:mod:`meta_disco.unprocessable`) is where both cases are read side by side.
 
     Every dimension is blanked deliberately, even ones the filename alone could
     support: a contract violation means the record's provenance is untrusted

@@ -11,9 +11,11 @@ call the classifier directly.
 These tests pin the three together.
 """
 
+import json
 from pathlib import Path
 
-from meta_disco.classify_run import build_parallel_jobs
+from meta_disco.classify_run import _record_exclusions, build_parallel_jobs
+from meta_disco.exclusions import EXCLUDED_FILE
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
@@ -112,3 +114,55 @@ def test_every_registered_file_type_has_a_makefile_target():
         assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
             f"classify-{ftype} is defined but not listed as a `classify-headers` prerequisite or in .PHONY."
         )
+
+
+class TestExclusionsAreRecorded:
+    """The run must name the files it excluded — they appear in no other output (#376)."""
+
+    def _input(self, tmp_path, records):
+        path = tmp_path / "metadata.json"
+        path.write_text(json.dumps({"files": records}))
+        return path
+
+    def test_writes_every_excluded_file_with_its_identity(self, tmp_path):
+        records = [
+            {"file_name": "ok.bam", "file_md5sum": "a" * 32, "dataset_title": "Study A"},
+            {
+                "file_name": "no-md5.bam",
+                "file_md5sum": None,
+                "dataset_title": "Study A",
+                "entry_id": "e9",
+                "file_id": "f9",
+                "drs_uri": "drs://x/f9",
+                "file_size": 12,
+            },
+        ]
+        run_dir = tmp_path / "run"
+        assert _record_exclusions(self._input(tmp_path, records), run_dir) == 1
+
+        payload = json.loads((run_dir / EXCLUDED_FILE).read_text())
+        assert payload["metadata"] == {"total_input": 2, "excluded": 1, "complete": True}
+        (row,) = payload["excluded"]
+        assert row["file_name"] == "no-md5.bam"
+        assert row["entry_id"] == "e9"
+        assert row["file_id"] == "f9"
+        assert row["drs_uri"] == "drs://x/f9"
+        assert row["file_size"] == 12
+
+    def test_writes_the_file_even_when_nothing_was_excluded(self, tmp_path):
+        """A run that excluded nothing must be distinguishable from one that predates
+        the exclusion, so the file is written either way."""
+        records = [{"file_name": "ok.bam", "file_md5sum": "a" * 32}]
+        run_dir = tmp_path / "run"
+        assert _record_exclusions(self._input(tmp_path, records), run_dir) == 0
+
+        payload = json.loads((run_dir / EXCLUDED_FILE).read_text())
+        assert payload["excluded"] == []
+        assert payload["metadata"]["total_input"] == 1
+
+
+def test_exclusions_file_is_not_read_as_a_classification():
+    """Otherwise the coverage, validation, consistency and corpus-diff readers would
+    treat an excluded file as a classified one (#376, AC2)."""
+    assert EXCLUDED_FILE not in CLASSIFICATION_FILES
+    assert EXCLUDED_FILE not in {path.name for _, path, _ in _jobs()}

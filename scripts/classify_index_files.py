@@ -20,6 +20,7 @@ from meta_disco.models import (
     field_label,
     status_for_value,
 )
+from meta_disco.pipeline import load_classifiable_records
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -101,10 +102,9 @@ def propagate_to_index_files(
     """Propagate metadata from parent files to index files."""
 
     # Load source metadata
-    with metadata_path.open() as f:
-        data = json.load(f)
-
-    files = data if isinstance(data, list) else data.get("files", data.get("results", []))
+    # Records with no usable file_md5sum are excluded here, at the shared load path,
+    # so no classification output can name a file the run could never fetch (#376).
+    files = load_classifiable_records(metadata_path)
     print(f"Loaded {len(files):,} files from metadata")
 
     # Load classifications

@@ -15,7 +15,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+from meta_disco.exclusions import write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.pipeline import partition_snapshot
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
 # out to live at <root>/scripts/, so the subprocess cwd is the repo root three levels up.
@@ -85,6 +87,30 @@ def run_script(script_name: str, output_path: Path, extra_args: list[str] | None
     return script_name, True
 
 
+def _record_exclusions(metadata: Path, output_dir: Path) -> int:
+    """Write the run's ``excluded_files.json`` and return how many records it names.
+
+    Every producer excludes checksum-less records on its own, at the shared load path
+    (``pipeline.load_classifiable_records``), so the run is correct whether or not this
+    runs — a standalone ``make classify-bam`` excludes the same records and writes no
+    such file. What this adds is the *record*: an excluded file appears in no
+    classification output, so unless the run names it here it is named nowhere (#376,
+    AC2). The file is written even when nothing was excluded, so a reader can tell a
+    run that excluded nothing from a run that predates the exclusion.
+
+    Reads the input a second time (each producer parses it in its own process anyway),
+    which is a few seconds against a multi-hour run.
+    """
+    _records, excluded = partition_snapshot(metadata)
+    total_input = len(_records) + len(excluded)
+    path = write_excluded(output_dir, excluded, total_input=total_input)
+    if excluded:
+        print(f"Excluded {len(excluded):,} of {total_input:,} records with no usable file_md5sum -> {path}")
+    else:
+        print(f"No records excluded ({total_input:,} checked) -> {path}")
+    return len(excluded)
+
+
 def run_all_classifications(
     metadata: Path, output_dir_base: Path, evidence_base: Path, workers: int | None = None
 ) -> bool:
@@ -97,6 +123,11 @@ def run_all_classifications(
     Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded.
+
+    Before Phase 1 it writes ``excluded_files.json`` naming every input record with no
+    usable ``file_md5sum`` (#376). Those records are excluded from classification by
+    every producer independently; this file is where they are named, since they appear
+    in no classification output.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = output_dir_base / timestamp
@@ -105,6 +136,8 @@ def run_all_classifications(
     print(f"Re-running classifications with timestamp: {timestamp}")
     print(f"Output directory: {output_dir}")
     print(f"Evidence cache: {evidence_base}")
+
+    _record_exclusions(metadata, output_dir)
 
     parallel_jobs = build_parallel_jobs(metadata, output_dir, evidence_base, workers)
 

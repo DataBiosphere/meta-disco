@@ -108,3 +108,26 @@ class TestGateExit:
         rc = validate_metadata.main(["-i", str(tmp_path / "nope.json")])
         assert rc == 2
         assert "not found" in capsys.readouterr().out
+
+
+class TestChecksumGate:
+    """AC4: the gate `make classify` now depends on must fail on an unusable checksum,
+    naming the offending records — otherwise the long run starts on a corpus that will
+    shed files (#376)."""
+
+    @pytest.mark.parametrize(
+        "md5",
+        [None, "", "abc123", "A" * 32],
+        ids=["null", "empty", "malformed", "uppercase"],
+    )
+    def test_unusable_checksum_fails_the_gate(self, tmp_path, capsys, md5):
+        path = _write(tmp_path / "m.json", [_valid(), _valid(entry_id="e2", file_md5sum=md5)])
+        assert validate_metadata.main(["-i", str(path)]) == 1
+        out = capsys.readouterr().out
+        assert "file_md5sum" in out
+        assert "e2" in out  # the offending record is named
+
+    def test_a_corpus_of_well_formed_checksums_passes(self, tmp_path, capsys):
+        path = _write(tmp_path / "m.json", [_valid(), _valid(entry_id="e2", file_md5sum="b" * 32)])
+        assert validate_metadata.main(["-i", str(path)]) == 0
+        assert "OK — no problems." in capsys.readouterr().out

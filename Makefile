@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -24,6 +24,7 @@ help:
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
+	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
 	@echo "  make all-reports        Generate all reports (coverage + validation)"
@@ -69,7 +70,11 @@ format:
 format-check:
 	uv run ruff format --check src/ scripts/ tests/
 
-classify:
+# The input-contract gate is a real prerequisite, not a documented habit (#376):
+# `make classify` fails before the multi-hour run if any record violates the contract,
+# so a corpus that would shed files cannot start one. Records with no usable
+# file_md5sum are excluded from classification entirely, and the gate names them.
+classify: validate-metadata
 	uv run python scripts/rerun_all_classifications.py
 
 classify-hprc:
@@ -86,7 +91,9 @@ download:
 	uv run python scripts/download_anvil_manifest.py --catalog $(CATALOG)
 
 # Pre-run gate: validate a downloaded metadata file against the input contract
-# (issue #161). Non-zero exit on any shape violation. Run after `make download`.
+# (issue #161). Non-zero exit on any shape violation. Run it directly after
+# `make download`; `make classify` also runs it as a prerequisite (#376), so a long
+# run cannot start on a corpus that violates the contract.
 validate-metadata:
 	uv run python scripts/validate_metadata.py
 
@@ -131,6 +138,11 @@ classify-bed:
 consistency-report:
 	uv run python scripts/check_consistency.py
 
+# What the run could not classify, and why (#376): checksum-less files excluded from
+# classification, input-contract violations, and content that could not be read.
+unprocessable-report:
+	uv run python scripts/generate_unprocessable_report.py
+
 coverage-report:
 	uv run python scripts/generate_coverage_report.py
 
@@ -146,7 +158,7 @@ validation-report:
 corpus-diff:
 	uv run python scripts/compare_corpus.py $(ARGS)
 
-all-reports: validate-hprc coverage-report validation-report consistency-report
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py
