@@ -211,8 +211,9 @@ class TestWriteAndReadExcluded:
         ids=["truncated", "empty", "garbage"],
     )
     def test_unparseable_file_yields_no_files_rather_than_raising(self, tmp_path, text):
-        """write_excluded is not atomic, so a run killed mid-write leaves a truncated
-        file — `make all-reports` must still run rather than die on it."""
+        """write_excluded replaces the file atomically, so a torn write is not the source
+        here — a hand-edited or externally truncated file is. Either way `make
+        all-reports` must still run rather than die on it."""
         (tmp_path / EXCLUDED_FILE).write_text(text)
         index = read_excluded(tmp_path)
         assert index.files == []

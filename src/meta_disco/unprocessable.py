@@ -251,8 +251,10 @@ def _render_excluded(data: RunUnprocessable) -> list[str]:
         ]
         return lines
     if not data.excluded:
-        checked = f" ({data.total_input:,} input records checked)" if data.total_input else ""
-        lines += [f"None in this run{checked}.", ""]
+        # Reached only when the exclusions file is present (the absent case returned
+        # above), so the count is known and stated even when it is zero — an empty input
+        # is a real answer, not a missing one.
+        lines += [f"None in this run ({data.total_input:,} input records checked).", ""]
         return lines
 
     by_dataset: dict[str, list[ExcludedFile]] = defaultdict(list)
@@ -340,7 +342,9 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
         f"| **Total** | {total_cell} | |",
         "",
         f"Read from {data.total_records:,} classification record(s) in the run"
-        + (f", against {data.total_input:,} input record(s)." if data.total_input else "."),
+        # Same distinction as the excluded section: the input count is known exactly when
+        # the run recorded its exclusions, including when that count is zero.
+        + (f", against {data.total_input:,} input record(s)." if data.exclusions_present else "."),
         "",
         "## By reason",
         "",

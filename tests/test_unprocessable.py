@@ -208,6 +208,22 @@ class TestRenderReport:
         # The known reasons still total, marked as a lower bound.
         assert "| **Total** | **1+** | |" in report
 
+    def test_a_recorded_zero_input_still_states_the_count(self, tmp_path):
+        """A run over an empty input recorded 0 checked — a real answer. Testing
+        total_input for truthiness would have hidden it as though it were unknown."""
+        run_dir = _write_run(tmp_path, [])
+        write_excluded(run_dir, [], total_input=0)
+        report = render_report(gather(run_dir))
+
+        assert "None in this run (0 input records checked)." in report
+        assert "against 0 input record(s)." in report
+
+    def test_an_unrecorded_run_states_no_input_count(self, tmp_path):
+        """With no exclusions file there is no input count to state, so the summary line
+        must not imply one."""
+        report = render_report(gather(_write_run(tmp_path, [])))
+        assert "input record(s)." not in report
+
     def test_a_known_zero_is_rendered_as_zero(self, tmp_path):
         """A run that recorded its exclusions and shed nothing says 0, not "?"."""
         run_dir = _write_run(tmp_path, [])
