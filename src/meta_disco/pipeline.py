@@ -27,11 +27,13 @@ from .records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 def load_records(input_path: Path) -> list:
     """Load the record list from an input file's envelope.
 
-    Elements are not guaranteed to be dicts — an NDJSON line or a JSON array entry
-    may be any JSON value. Hence ``list``, not ``list[dict]``: this is the raw read,
-    used by the ``validate_metadata`` gate, which must see every element to report on
-    it. Classification producers read :func:`load_classifiable_records` instead, which
-    does narrow the element type.
+    Elements are not guaranteed to be dicts — an NDJSON line, or an entry inside the
+    envelope's ``files``/``results`` list, may be any JSON value. (The envelope itself
+    must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
+    Hence ``list``, not ``list[dict]``: this is the raw read, used by the
+    ``validate_metadata`` gate, which must see every element to report on it.
+    Classification producers read :func:`load_classifiable_records` instead, which does
+    narrow the element type.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
     ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the

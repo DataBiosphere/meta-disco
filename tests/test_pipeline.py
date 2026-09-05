@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from meta_disco.exclusions import read_excluded
 from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 from meta_disco.records import ClassifierRecord, InvalidRecord
 from tests.metadata_fixtures import valid_record as _valid_record
@@ -321,8 +322,11 @@ class TestPipelineRun:
         assert results == []
         assert fetched == []
         assert probed == []
-        # No records to process, so the run writes no output file at all.
+        # No records survive to process, so no classification output is written. The run
+        # does write excluded_files.json — that is the point: the record is named there
+        # rather than nowhere.
         assert not output.exists()
+        assert [f.file_name for f in read_excluded(output.parent).files] == ["x.test"]
 
     def test_run_writes_rows_only_for_records_with_a_usable_md5(self, tmp_path):
         """The exclusion removes the checksum-less record and leaves the rest of the run
