@@ -282,13 +282,17 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     contract's ``file_md5sum``). That is not guaranteed by the contract alone: a
     record violating it is not dropped but diverted to a ``validation_failed``
     row, which is still written with its md5 echoed as-is (#155), so a null md5
-    can in principle reach this reader. None did when last measured — 0 of 1.4M records
-    across every run on disk, 2026-09-04 (#375) — and #376 excludes such files
-    from classification, which makes it a guarantee rather than a measurement.
+    can in principle reach this reader. One that did would be normalized to the
+    empty string here, sharing a key with any other record of the same dataset
+    and name, and the two would be compared as one file. None did when last
+    measured — 0 of 1.4M records across every run on disk, 2026-09-04 (#375) —
+    and #376 excludes such files from classification, which makes it a guarantee
+    rather than a measurement.
 
-    Only md5 matters for the join: ``dataset_title`` is a qualifier and is
-    legitimately ``None`` for the HPRC source, so it is normalized to the empty
-    string rather than required — requiring it would drop that corpus entirely.
+    The join key is ``(dataset_title, file_name, md5sum)``; only md5 must be
+    *present*. ``dataset_title`` is a qualifier, legitimately ``None`` for the
+    HPRC source, so it is normalized to the empty string rather than required —
+    requiring it would drop that corpus entirely.
 
     Raises FileNotFoundError if the run directory does not exist — an empty result
     would otherwise read as a run with no coverage.
