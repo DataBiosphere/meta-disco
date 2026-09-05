@@ -238,7 +238,10 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
             continue
         dataset = _dataset_label(record.get("dataset_title"))
         group = rows[reason.key].setdefault(dataset, RowGroup(dataset=dataset))
-        group.add(str(record.get("file_name") or ""), max_examples)
+        # coerce_identity, not `str(x or "")`: a file_name of 0 or False is drift this
+        # report exists to surface, and the truthy form would hide it as an empty name —
+        # the same reason _dataset_label uses it.
+        group.add(coerce_identity(record.get("file_name")), max_examples)
 
     return RunUnprocessable(
         run_dir=run_dir,
@@ -257,7 +260,8 @@ def _render_excluded(data: RunUnprocessable) -> list[str]:
     if data.excluded_count is None:
         why = (
             "holds no `excluded_files.json`. Every producer has written that file since #376, "
-            "so this is a run directory from before then."
+            "so the run predates that, or ended before any producer loaded its input, or the "
+            "file was removed afterwards — which of those cannot be told from the directory."
             if not data.exclusions_present
             else "holds an `excluded_files.json` that could not be read, so no count from it "
             "can be trusted. Any rows that were still recoverable are listed below."

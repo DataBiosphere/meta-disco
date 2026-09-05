@@ -21,7 +21,7 @@ The record carries no well-formed `file_md5sum`, so it can be neither fetched (t
 
 **No row exists anywhere else** — this listing is the only record of these files.
 
-**Unknown** — this run directory holds no `excluded_files.json`. Every producer has written that file since #376, so this is a run directory from before then. Re-classify the corpus to get an answer.
+**Unknown** — this run directory holds no `excluded_files.json`. Every producer has written that file since #376, so the run predates that, or ended before any producer loaded its input, or the file was removed afterwards — which of those cannot be told from the directory. Re-classify the corpus to get an answer.
 
 ### Input-contract violation
 

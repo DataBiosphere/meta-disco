@@ -107,6 +107,12 @@ class TestGather:
         assert len(groups["Study A"].examples) == 3
         assert groups["Study B"].count == 1
 
+    def test_a_drifted_file_name_is_not_collapsed_to_empty(self, tmp_path):
+        """A file_name of 0 is drift the report exists to surface; `str(x or "")` would
+        have shown it as a blank example, hiding it."""
+        run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, 0, "Study A")])
+        assert gather(run_dir).rows[CONTENT_UNREADABLE.key]["Study A"].examples == ["0"]
+
     def test_a_missing_dataset_title_gets_a_named_bucket(self, tmp_path):
         """The HPRC source carries no dataset_title; those rows must stay visible."""
         run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "h.bam", None)])
@@ -245,7 +251,9 @@ class TestRenderReport:
         report must not silently render the second when it means the first."""
         report = render_report(gather(_write_run(tmp_path, [])))
         assert "**Unknown**" in report
-        assert "before then" in report
+        # States the possibilities rather than asserting one cause (CLAUDE.md: no
+        # speculation as fact) — a missing file is not proof the run predates #376.
+        assert "cannot be told from the directory" in report
 
     def test_an_unknown_excluded_count_is_not_rendered_as_zero(self, tmp_path):
         """The summary must not contradict its own body: a run with no exclusions file
