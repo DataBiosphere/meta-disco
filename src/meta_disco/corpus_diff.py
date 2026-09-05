@@ -202,17 +202,17 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
     malformed record is meant to surface.
 
     Every record is assumed to carry a ``file_md5sum``. The input contract
-    requires one and ``validate_metadata`` reports any record that lacks it, but
-    nothing forces that gate to run before this report (``make classify`` has no
-    such prerequisite), and a snapshot builder can emit a null by construction:
-    ``scripts/classify_hprc_files.py`` leaves ``file_md5sum`` as ``None`` for a
-    catalog row carrying no location. So the assumption is *measured*, not
-    enforced: as of 2026-09-04 no snapshot on disk held such a record — including
-    all 15,436 HPRC rows, every one of which had a location (#375). One that did
-    would be counted under the empty string, and two of them sharing a dataset
-    and name would read as ``unchanged``. #376 would turn the measurement into a
-    guarantee by excluding checksum-less files from processing; until it lands,
-    this is the accepted risk recorded on #375.
+    requires one, and ``validate_metadata`` reports any record that lacks it —
+    but nothing forces that gate to run before this report (``make classify``
+    has no such prerequisite). A snapshot builder can also emit a null by
+    construction: ``scripts/classify_hprc_files.py`` leaves ``file_md5sum`` as
+    ``None`` for a catalog row carrying no location. Such a record would be
+    counted under the empty string, and two of them sharing a dataset and name
+    would read as ``unchanged``. So the assumption is *measured*, not enforced:
+    as of 2026-09-04 no snapshot on disk held such a record — including all
+    15,436 HPRC rows, every one of which had a location (#375). #376 would turn
+    the measurement into a guarantee by excluding checksum-less files from
+    processing; until it lands, this is the accepted risk recorded on #375.
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -289,11 +289,11 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     empty string here, sharing a key with any other record of the same dataset
     and name, and the two would be compared as one file. None did when last
     measured — 0 of 1.4M records across every run on disk, 2026-09-04 (#375).
-    The one producer that can emit a null md5 by construction is the HPRC catalog
-    builder (``scripts/classify_hprc_files.py``, for a row carrying no location);
-    every HPRC row had one at that measurement. #376 would turn the measurement
-    into a guarantee by excluding checksum-less files from classification; until
-    it lands, this is the accepted risk recorded on #375.
+    The one producer that can emit a null md5 by construction is the HPRC
+    catalog builder (the mechanism is on ``_snapshot_index`` above); every HPRC
+    row had one at that measurement. #376 would turn the measurement into a
+    guarantee by excluding checksum-less files from classification; until it
+    lands, this is the accepted risk recorded on #375.
 
     The join key is ``(dataset_title, file_name, md5sum)``; only md5 must be
     *present*. ``dataset_title`` is a qualifier, legitimately ``None`` for the
