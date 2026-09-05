@@ -87,14 +87,13 @@ class TestFilterRecords:
         filtered = pipeline._filter_records(pipeline._load_input())
         assert len(filtered) == 1
 
-    @pytest.mark.parametrize(
-        "md5",
-        [None, "", "ABCDEF0123456789abcdef0123456789", "abc123", "a" * 31, 12345],
-        ids=["null", "empty", "uppercase", "too-short", "31-chars", "non-string"],
-    )
+    @pytest.mark.parametrize("md5", [None, "abc123"], ids=["null", "malformed"])
     def test_record_without_usable_md5_is_excluded_at_load(self, tmp_path, md5):
         """A record with no usable md5 never reaches routing: it is excluded at load
-        (#376), so it cannot be written as a row for a file the run could never fetch."""
+        (#376), so it cannot be written as a row for a file the run could never fetch.
+
+        Two representative values: the md5-shape axis is covered exhaustively against
+        the predicate in test_exclusions.py, so what this pins is the pipeline wiring."""
         records = [{"file_name": "foo.test", "file_format": ".test", "file_md5sum": md5}]
         path = tmp_path / "in.json"
         path.write_text(json.dumps({"results": records}))

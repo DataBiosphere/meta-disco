@@ -13,8 +13,7 @@ from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
 
-from .exclusions import MD5_RE as _MD5_RE
-from .exclusions import ExcludedFile, partition_records
+from .exclusions import MD5_RE, ExcludedFile, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
 from .header_classifier import classify_without_content
@@ -89,7 +88,7 @@ def partition_snapshot(input_path: Path) -> tuple[list[dict], list[ExcludedFile]
     return partition_records(load_records(input_path))
 
 
-def load_classifiable_records(input_path: Path) -> list[dict]:
+def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
     """Load an input file's records, minus the ones excluded for having no checksum.
 
     The shared load path for every classification producer — the header pipeline and
@@ -99,6 +98,14 @@ def load_classifiable_records(input_path: Path) -> list[dict]:
     input record no earlier producer named, so excluding only in the header pipeline
     would relocate the problem into ``remaining_classifications.json`` rather than
     solve it.
+
+    ``run_dir`` is the directory the caller is writing its output into. Given one, this
+    also writes that run's ``excluded_files.json`` — so applying the exclusion and
+    recording it are the same act, and a producer cannot shed a record without naming
+    it. A standalone ``make classify-bam`` therefore records its exclusions exactly as
+    a full run does. Every producer of a run writes the file, concurrently and with
+    identical content; ``write_excluded`` documents why that is safe. ``None`` is for a
+    caller with no run directory to write into (a test, an ad-hoc load).
 
     The ``validate_metadata`` gate deliberately does *not* call this — it reads
     :func:`load_records` unfiltered, or it could never report the very records it
@@ -110,6 +117,8 @@ def load_classifiable_records(input_path: Path) -> list[dict]:
     to defend against one.
     """
     records, excluded = partition_snapshot(input_path)
+    if run_dir is not None:
+        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:
         print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
     return records
@@ -391,8 +400,12 @@ class ClassifyPipeline:
         Reads through the shared ``load_classifiable_records`` (#376), so a record with
         no usable ``file_md5sum`` never reaches routing, validation, the evidence cache
         or a fetcher — and every element of the result is a ``dict``.
+
+        The run directory is this pipeline's output directory, so the load also records
+        what it excluded there — including on a standalone ``make classify-<type>`` run,
+        which no orchestrator wraps.
         """
-        return load_classifiable_records(self.input_path)
+        return load_classifiable_records(self.input_path, self.output_path.parent)
 
     def _filter_records(self, records: list) -> list[dict]:
         """Filter to records routed to this file type by extension.
@@ -462,7 +475,7 @@ class ClassifyPipeline:
         exclusion already required at load), but the guard means a null, non-string,
         or non-md5 value simply returns False rather than building a bogus path.
         """
-        if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
+        if not isinstance(md5sum, str) or not MD5_RE.match(md5sum):
             return False
         from .evidence import get_evidence_path
 

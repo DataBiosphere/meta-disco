@@ -19,7 +19,6 @@ from meta_disco.unprocessable import (
     CONTRACT_VIOLATION,
     NO_CHECKSUM,
     UNKNOWN_DATASET,
-    dataset_counts,
     gather,
     render_report,
 )
@@ -196,21 +195,29 @@ class TestRenderReport:
         """No exclusions file is a different statement from "excluded nothing", and the
         report must not silently render the second when it means the first."""
         report = render_report(gather(_write_run(tmp_path, [])))
-        assert "predates the exclusion" in report
+        assert "**Unknown**" in report
+        assert "before then" in report
+
+    def test_an_unknown_excluded_count_is_not_rendered_as_zero(self, tmp_path):
+        """The summary must not contradict its own body: a run with no exclusions file
+        shows "?" and is left out of the total, rather than claiming zero were shed."""
+        run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "gone.bam", "Study A")])
+        report = render_report(gather(run_dir))
+
+        assert f"| {NO_CHECKSUM.title} | ? | no — excluded |" in report
+        # The known reasons still total, marked as a lower bound.
+        assert "| **Total** | **1+** | |" in report
+
+    def test_a_known_zero_is_rendered_as_zero(self, tmp_path):
+        """A run that recorded its exclusions and shed nothing says 0, not "?"."""
+        run_dir = _write_run(tmp_path, [])
+        write_excluded(run_dir, [], total_input=5)
+        report = render_report(gather(run_dir))
+
+        assert f"| {NO_CHECKSUM.title} | 0 | no — excluded |" in report
+        assert "| **Total** | **0** | |" in report
 
     def test_pipes_in_a_dataset_title_do_not_break_the_table(self, tmp_path):
         run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "x.bam", "A | B")])
         report = render_report(gather(run_dir))
         assert "A \\| B" in report
-
-
-def test_dataset_counts_sums_across_reasons(tmp_path):
-    run_dir = _write_run(
-        tmp_path,
-        [
-            _reason_record(VALIDATION_RULE_ID, "bad.bam", "Study A"),
-            _reason_record(FETCH_FAILED_RULE_ID, "gone.bam", "Study A"),
-        ],
-    )
-    write_excluded(run_dir, [_excluded("no-md5.bam", dataset="Study A")], total_input=3)
-    assert dataset_counts(gather(run_dir))["Study A"] == 3

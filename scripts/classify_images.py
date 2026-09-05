@@ -21,7 +21,8 @@ def classify_images(metadata_path: Path, output_path: Path):
 
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
-    files = load_classifiable_records(metadata_path)
+    # The load also records what it excluded into the run directory this output lands in.
+    files = load_classifiable_records(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     engine = RuleEngine()

@@ -6,10 +6,10 @@ What run `output/anvil/20260904_010319` could not classify, and why (#376).
 
 | reason | files | row elsewhere? |
 |---|---:|---|
-| No usable checksum (excluded) | 0 | no — excluded |
+| No usable checksum (excluded) | ? | no — excluded |
 | Input-contract violation | 0 | yes |
 | Content unreadable | 23 | yes |
-| **Total** | **23** | |
+| **Total** | **23+** | |
 
 Read from 708,203 classification record(s) in the run.
 
@@ -21,7 +21,7 @@ The record carries no well-formed `file_md5sum`, so it can be neither fetched (t
 
 **No row exists anywhere else** — this listing is the only record of these files.
 
-This run predates the exclusion (#376) and wrote no `excluded_files.json`, so whether it shed any checksum-less file is unknown. Re-run to find out.
+**Unknown** — this run directory holds no `excluded_files.json`, so whether any checksum-less file was shed cannot be told from it. Every producer has written that file since #376, so this is a run directory from before then. Re-classify the corpus to get an answer.
 
 ### Input-contract violation
 

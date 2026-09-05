@@ -85,9 +85,11 @@ evidence}` entry — plus the controlled vocabulary:
   written as a row echoing a null md5 — such a row has no usable identity and
   would collide with any other in `corpus_diff` (#376). Exclusion happens once,
   at the shared load path (`pipeline.load_classifiable_records`), so every
-  producer inherits it; excluded files are named in the run's
-  `excluded_files.json` and listed individually by `make unprocessable-report`.
-  This is not the retired `dropped` concept (#155) — nothing goes unrecorded.
+  producer inherits it — and that same load writes the run's
+  `excluded_files.json`, so excluding a record and naming it are one act, down
+  to a standalone `make classify-bam`. `make unprocessable-report` lists them
+  individually. This is not the retired `dropped` concept (#155) — nothing goes
+  unrecorded.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
 - **Claim tiers**: A classification field's value is resolved from competing
   claims by tier (`evaluate_claims`, highest unique tier wins). Tiers 1–3 are

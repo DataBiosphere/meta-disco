@@ -30,14 +30,14 @@ tell them apart, and a third producer of that shape would be misattributed.
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .exclusions import ExcludedFile, read_excluded
 from .header_classifier import FETCH_FAILED_RULE_ID
 from .metadata_schema import VALIDATION_RULE_ID
-from .models import CLASSIFICATION_FIELDS
+from .models import CLASSIFICATION_FIELDS, field_evidence
 from .output_utils import iter_records
 from .summaries import escape_md_cell
 
@@ -101,14 +101,35 @@ CONTENT_UNREADABLE = Reason(
     row_exists="A row exists in the run's output, with the fetch failure as each dimension's evidence.",
 )
 
+# The reasons whose files still have a row in the run's classification output, and are
+# therefore read from those rows rather than from the exclusions file. Named separately
+# from REASONS so the loops that only make sense for them iterate a list that says so,
+# instead of iterating REASONS and skipping the odd member out.
+ROW_REASONS = (CONTRACT_VIOLATION, CONTENT_UNREADABLE)
+
 # Report order: excluded first, since it is the only category with no row elsewhere.
-REASONS = (NO_CHECKSUM, CONTRACT_VIOLATION, CONTENT_UNREADABLE)
+REASONS = (NO_CHECKSUM, *ROW_REASONS)
 
 # The evidence rule_id each row-backed reason is recognized by.
 _ROW_REASON_RULE_IDS = {
     VALIDATION_RULE_ID: CONTRACT_VIOLATION,
     FETCH_FAILED_RULE_ID: CONTENT_UNREADABLE,
 }
+
+
+def _dataset_label(dataset_title) -> str:
+    """The bucket a record's ``dataset_title`` is grouped under.
+
+    One definition so the excluded listing and the row-backed tables name the untitled
+    bucket identically — they are read side by side in one report.
+    """
+    return str(dataset_title or "") or UNKNOWN_DATASET
+
+
+def _section_header(reason: Reason) -> list[str]:
+    """The lines every reason's section opens with: title, what it means, whether a row
+    for it exists elsewhere."""
+    return [f"### {reason.title}", "", reason.explanation, "", reason.row_exists, ""]
 
 
 @dataclass
@@ -146,19 +167,16 @@ class RunUnprocessable:
 def _reason_for(record: dict) -> Reason | None:
     """The row-backed reason a classification record represents, or None if it is fine.
 
-    Reads the evidence ``rule_id`` on the classification fields. Both producers stamp
-    the same rule_id on every one of the five dimensions, so the first field carrying a
-    recognized id settles it; scanning them all rather than assuming a fixed field keeps
-    this correct if a producer ever marks a subset.
+    Reads the evidence ``rule_id`` on the classification fields, through
+    ``models.field_evidence`` — the same layout normalization every other reader of a
+    classification record uses, so this report sees a record's evidence wherever the
+    other readers would. Both producers stamp the same rule_id on every one of the five
+    dimensions, so the first field carrying a recognized id settles it; scanning them
+    all rather than assuming a fixed field keeps this correct if a producer ever marks
+    a subset.
     """
-    classifications = record.get("classifications")
-    if not isinstance(classifications, dict):
-        return None
     for dimension in CLASSIFICATION_FIELDS:
-        entry = classifications.get(dimension)
-        if not isinstance(entry, dict):
-            continue
-        for item in entry.get("evidence") or []:
+        for item in field_evidence(record, dimension):
             if isinstance(item, dict):
                 rule_id = item.get("rule_id")
                 if isinstance(rule_id, str) and rule_id in _ROW_REASON_RULE_IDS:
@@ -166,13 +184,31 @@ def _reason_for(record: dict) -> Reason | None:
     return None
 
 
+def reason_total(data: RunUnprocessable, reason: Reason) -> int:
+    """How many files ``data`` holds under one row-backed reason.
+
+    The single place the per-dataset groups are summed, so the report body, the summary
+    table and the CLI's stdout line cannot disagree — and so a caller names a
+    :class:`Reason` rather than repeating its ``key`` as a string literal.
+
+    Raises ValueError for :data:`NO_CHECKSUM`, whose files are not row-backed and are
+    counted from ``data.excluded`` instead. Returning ``0`` for it would be a wrong
+    answer with no signal, since its key is never in ``data.rows``.
+    """
+    if reason not in ROW_REASONS:
+        raise ValueError(f"{reason.key} is not row-backed; its count comes from data.excluded")
+    return sum(group.count for group in (data.rows.get(reason.key) or {}).values())
+
+
 def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnprocessable:
     """Collect every unprocessable file in ``run_dir``, from both sources.
 
     The excluded files come from the run's ``excluded_files.json``; the two row-backed
     reasons come from a single pass over the run's classification records via
-    ``output_utils.iter_records``, so this covers exactly the files the coverage and
-    consistency readers cover, and tolerates the same shapes.
+    ``output_utils.iter_records``, so this reads the same set of output files the
+    coverage and consistency readers do. It is *more* tolerant of shape than the
+    coverage loader, which iterates whatever it finds and raises: ``iter_records``
+    yields nothing from a file whose record list is not a list.
 
     Raises FileNotFoundError if the run directory does not exist — an empty report over
     a mistyped path would otherwise read as a run with nothing to report.
@@ -181,19 +217,15 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
         raise FileNotFoundError(f"Run directory not found: {run_dir}")
 
     index = read_excluded(run_dir)
-    rows: dict[str, dict[str, RowGroup]] = {reason.key: {} for reason in REASONS if reason is not NO_CHECKSUM}
+    rows: dict[str, dict[str, RowGroup]] = {reason.key: {} for reason in ROW_REASONS}
     total_records = 0
     for record in iter_records(run_dir):
         total_records += 1
         reason = _reason_for(record)
         if reason is None:
             continue
-        dataset = str(record.get("dataset_title") or "") or UNKNOWN_DATASET
-        groups = rows[reason.key]
-        group = groups.get(dataset)
-        if group is None:
-            group = RowGroup(dataset=dataset)
-            groups[dataset] = group
+        dataset = _dataset_label(record.get("dataset_title"))
+        group = rows[reason.key].setdefault(dataset, RowGroup(dataset=dataset))
         group.add(str(record.get("file_name") or ""), max_examples)
 
     return RunUnprocessable(
@@ -208,11 +240,13 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
 
 def _render_excluded(data: RunUnprocessable) -> list[str]:
     """Render the excluded category: every file named, grouped by dataset."""
-    lines = [f"### {NO_CHECKSUM.title}", "", NO_CHECKSUM.explanation, "", NO_CHECKSUM.row_exists, ""]
+    lines = _section_header(NO_CHECKSUM)
     if not data.exclusions_present:
         lines += [
-            "This run predates the exclusion (#376) and wrote no `excluded_files.json`, so "
-            "whether it shed any checksum-less file is unknown. Re-run to find out.",
+            "**Unknown** — this run directory holds no `excluded_files.json`, so whether any "
+            "checksum-less file was shed cannot be told from it. Every producer has written "
+            "that file since #376, so this is a run directory from before then. Re-classify "
+            "the corpus to get an answer.",
             "",
         ]
         return lines
@@ -223,7 +257,7 @@ def _render_excluded(data: RunUnprocessable) -> list[str]:
 
     by_dataset: dict[str, list[ExcludedFile]] = defaultdict(list)
     for excluded_file in data.excluded:
-        by_dataset[str(excluded_file.dataset_title or "") or UNKNOWN_DATASET].append(excluded_file)
+        by_dataset[_dataset_label(excluded_file.dataset_title)].append(excluded_file)
 
     lines += [f"**{len(data.excluded):,} file(s)** across {len(by_dataset):,} dataset(s), listed in full.", ""]
     for dataset in sorted(by_dataset):
@@ -246,9 +280,9 @@ def _render_excluded(data: RunUnprocessable) -> list[str]:
 
 def _render_rows(data: RunUnprocessable, reason: Reason, max_examples: int) -> list[str]:
     """Render one row-backed category: per-dataset counts with a bounded sample."""
-    lines = [f"### {reason.title}", "", reason.explanation, "", reason.row_exists, ""]
+    lines = _section_header(reason)
     groups = data.rows.get(reason.key) or {}
-    total = sum(group.count for group in groups.values())
+    total = reason_total(data, reason)
     if not total:
         lines += [f"None in this run ({data.total_records:,} classification records read).", ""]
         return lines
@@ -277,13 +311,17 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
     says so in words rather than showing an empty table — an absent section would read
     as "not checked".
     """
-    excluded_total = len(data.excluded)
-    row_totals = {
-        reason.key: sum(group.count for group in (data.rows.get(reason.key) or {}).values())
-        for reason in REASONS
-        if reason is not NO_CHECKSUM
+    # A run with no exclusions file has an unknown excluded count, not a zero one. It is
+    # rendered as "?" and left out of the total, so the summary cannot contradict the
+    # section below it — which says plainly that the answer is unknown.
+    excluded_known = data.exclusions_present
+    row_counts = {r.key: reason_total(data, r) for r in ROW_REASONS}
+    counts: dict[str, str] = {
+        NO_CHECKSUM.key: f"{len(data.excluded):,}" if excluded_known else "?",
+        **{key: f"{value:,}" for key, value in row_counts.items()},
     }
-    grand_total = excluded_total + sum(row_totals.values())
+    grand_total = (len(data.excluded) if excluded_known else 0) + sum(row_counts.values())
+    total_cell = f"**{grand_total:,}**" if excluded_known else f"**{grand_total:,}+**"
 
     lines = [
         "# Unprocessable files",
@@ -295,12 +333,11 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
         "| reason | files | row elsewhere? |",
         "|---|---:|---|",
     ]
-    counts = {NO_CHECKSUM.key: excluded_total, **row_totals}
     for reason in REASONS:
-        has_row = "no — excluded" if reason is NO_CHECKSUM else "yes"
-        lines.append(f"| {reason.title} | {counts[reason.key]:,} | {has_row} |")
+        has_row = "yes" if reason in ROW_REASONS else "no — excluded"
+        lines.append(f"| {reason.title} | {counts[reason.key]} | {has_row} |")
     lines += [
-        f"| **Total** | **{grand_total:,}** | |",
+        f"| **Total** | {total_cell} | |",
         "",
         f"Read from {data.total_records:,} classification record(s) in the run"
         + (f", against {data.total_input:,} input record(s)." if data.total_input else "."),
@@ -309,22 +346,6 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
         "",
     ]
     lines += _render_excluded(data)
-    for reason in REASONS:
-        if reason is not NO_CHECKSUM:
-            lines += _render_rows(data, reason, max_examples)
+    for reason in ROW_REASONS:
+        lines += _render_rows(data, reason, max_examples)
     return "\n".join(lines).rstrip() + "\n"
-
-
-def dataset_counts(data: RunUnprocessable) -> Counter:
-    """Total unprocessable files per dataset, across every reason.
-
-    Not part of the rendered report — a convenience for callers (and tests) that want
-    the cross-reason view the per-reason sections deliberately keep separate.
-    """
-    counts: Counter = Counter()
-    for excluded_file in data.excluded:
-        counts[str(excluded_file.dataset_title or "") or UNKNOWN_DATASET] += 1
-    for groups in data.rows.values():
-        for group in groups.values():
-            counts[group.dataset] += group.count
-    return counts

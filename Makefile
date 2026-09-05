@@ -71,9 +71,12 @@ format-check:
 	uv run ruff format --check src/ scripts/ tests/
 
 # The input-contract gate is a real prerequisite, not a documented habit (#376):
-# `make classify` fails before the multi-hour run if any record violates the contract,
-# so a corpus that would shed files cannot start one. Records with no usable
-# file_md5sum are excluded from classification entirely, and the gate names them.
+# `make classify` fails before the multi-hour run if any record violates the input
+# contract — the WHOLE contract, including fields the classifier never reads, not only
+# the ones that would make a record unclassifiable. So this refuses to start on any
+# drifted corpus, which is stricter than the run itself needs (#161 deliberately lets a
+# record bad on, say, drs_uri still classify). Records with no usable file_md5sum are
+# excluded from classification entirely (#376) and are one of the things this names.
 classify: validate-metadata
 	uv run python scripts/rerun_all_classifications.py
 

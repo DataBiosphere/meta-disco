@@ -7,6 +7,8 @@ start from a valid record and override only the fields under test, so a change t
 the contract's field set touches one place rather than every test file.
 """
 
+import json
+
 
 def valid_record(**overrides):
     """A record satisfying the input-metadata contract; override to introduce a defect."""
@@ -26,3 +28,15 @@ def valid_record(**overrides):
     }
     record.update(overrides)
     return record
+
+
+def write_metadata(path, records):
+    """Write records into the ``files`` envelope every classification producer reads.
+
+    The producers load through ``pipeline.load_classifiable_records`` (#376), which reads
+    the documented envelope — a bare top-level list is the shape the ``validate_metadata``
+    gate exists to reject. Shared so the envelope is pinned in one place rather than in
+    each producer's test module.
+    """
+    path.write_text(json.dumps({"files": records}))
+    return path

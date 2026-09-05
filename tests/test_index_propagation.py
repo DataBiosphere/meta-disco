@@ -11,19 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
 
 from meta_disco.models import CLASSIFIED, CONFLICT, NOT_CLASSIFIED, field_status, field_value
-
-
-def _write_metadata(path, records):
-    """Write records in the ``files`` envelope the shared input loader reads.
-
-    These classifiers used to accept a bare top-level JSON list of their own; they now
-    read through ``pipeline.load_classifiable_records`` like the header pipeline (#376),
-    which reads the documented envelope. That same change is why every ``file_md5sum``
-    in this file's fixtures is well-formed: a record without one is excluded from
-    classification entirely, so a placeholder md5 would leave the fixture empty.
-    """
-    path.write_text(json.dumps({"files": records}))
-    return path
+from tests.metadata_fixtures import write_metadata as _write_metadata
 
 
 class TestParentCandidateGeneration:

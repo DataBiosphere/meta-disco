@@ -14,7 +14,14 @@ import argparse
 from pathlib import Path
 
 from meta_disco.output_utils import find_latest_run
-from meta_disco.unprocessable import DEFAULT_EXAMPLES, gather, render_report
+from meta_disco.unprocessable import (
+    CONTENT_UNREADABLE,
+    CONTRACT_VIOLATION,
+    DEFAULT_EXAMPLES,
+    gather,
+    reason_total,
+    render_report,
+)
 
 DEFAULT_OUTPUT_DIR = Path("output/anvil")
 
@@ -48,8 +55,8 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_report(data, max_examples=args.examples))
 
-    unreadable = sum(g.count for g in (data.rows.get("content_unreadable") or {}).values())
-    violations = sum(g.count for g in (data.rows.get("contract_violation") or {}).values())
+    unreadable = reason_total(data, CONTENT_UNREADABLE)
+    violations = reason_total(data, CONTRACT_VIOLATION)
     print(
         f"Unprocessable files in {run_dir} — "
         f"{len(data.excluded):,} excluded, {violations:,} contract violations, {unreadable:,} unreadable"

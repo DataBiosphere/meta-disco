@@ -19,12 +19,18 @@ from meta_disco.exclusions import (
     write_excluded,
 )
 from meta_disco.output_utils import CLASSIFICATION_FILES
+from tests.metadata_fixtures import valid_record
 
 GOOD_MD5 = "0123456789abcdef0123456789abcdef"
 
 
 def _record(**overrides):
-    record = {
+    """A contract-shaped record, defaulted to a usable md5 and a full identity set.
+
+    Built from the shared ``valid_record`` so the identity fields ``ExcludedFile``
+    echoes stay tied to the input contract rather than to a hand-written literal.
+    """
+    defaults = {
         "file_name": "sample.bam",
         "file_format": ".bam",
         "file_size": 100,
@@ -34,8 +40,7 @@ def _record(**overrides):
         "drs_uri": "drs://example/f1",
         "dataset_title": "Study A",
     }
-    record.update(overrides)
-    return record
+    return valid_record(**{**defaults, **overrides})
 
 
 class TestHasUsableChecksum:
@@ -196,6 +201,19 @@ class TestWriteAndReadExcluded:
         """This is a report input, not a contract gate: a malformed file must not stop
         the report that would have shown it."""
         (tmp_path / EXCLUDED_FILE).write_text(json.dumps(payload))
+        index = read_excluded(tmp_path)
+        assert index.files == []
+        assert index.present is True
+
+    @pytest.mark.parametrize(
+        "text",
+        ['{"excluded": [{"file_name": "x.bam"}', "", "not json at all"],
+        ids=["truncated", "empty", "garbage"],
+    )
+    def test_unparseable_file_yields_no_files_rather_than_raising(self, tmp_path, text):
+        """write_excluded is not atomic, so a run killed mid-write leaves a truncated
+        file — `make all-reports` must still run rather than die on it."""
+        (tmp_path / EXCLUDED_FILE).write_text(text)
         index = read_excluded(tmp_path)
         assert index.files == []
         assert index.present is True

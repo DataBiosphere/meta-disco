@@ -13,24 +13,35 @@ an observability argument. Every excluded record is written to
 unprocessable report (``unprocessable.py``), which answers that argument directly
 where a silent drop did not.
 
+Excluding and recording are one act, not two: the shared loader that applies the
+predicate is also what writes the file, so a producer cannot shed a record without
+naming it. That holds for a standalone ``make classify-bam`` as much as for a full
+run — an earlier design had only the orchestrator record, which left every per-type
+target silently dropping.
+
 The one thing that must never happen is an excluded record reaching a
 classification output: ``corpus_diff`` joins runs on ``(dataset_title, file_name,
 md5sum)`` and normalizes a null md5 to the empty string, so two checksum-less rows
 would key alike and could be reported as content-identical — the one claim a parity
 table must never make without evidence (#375).
 
-This module holds no intra-package imports on purpose: ``pipeline`` imports
-:data:`MD5_RE` from here, and the shared loader that applies :func:`partition_records`
-lives in ``pipeline`` (``load_classifiable_records``), so the dependency runs one way.
+This module depends only on ``records`` (for the shared identity coercion), so
+``pipeline`` can import :data:`MD5_RE` from here without a cycle. The shared loader
+that applies :func:`partition_records` lives in ``pipeline``
+(``load_classifiable_records``), so the dependency runs one way.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
+
+from .records import coerce_identity
 
 # A well-formed md5: lowercase hex, 32 chars, and nothing else. The single definition
 # of the shape. Only such a value can address the S3 mirror or key real cached evidence,
@@ -73,9 +84,11 @@ class ExcludedFile:
     """One record excluded from classification, with whatever identity it does have.
 
     An excluded record appears in no classification output, so this is the only place
-    it is named — hence carrying every identity field the input contract defines
-    besides the unusable checksum itself (``entry_id``, ``file_id``, ``file_name``,
-    ``drs_uri``, ``dataset_title``, ``file_size``). Values are echoed as the record
+    it is named. It carries the four identifiers the contract defines besides the
+    unusable checksum (``entry_id``, ``file_id``, ``file_name``, ``drs_uri``) plus the
+    two fields that make a listing readable (``dataset_title``, which the report groups
+    by, and ``file_size``). ``dataset_id`` and ``file_format`` are deliberately left
+    out: neither adds reach for a person chasing the file. Values are echoed as the record
     carried them and typed ``Any``: a record excluded for a drifted md5 may well have
     drifted elsewhere too, and this row exists to show that, not to normalize it.
     ``file_name`` is the exception — the report groups and sorts on it, so it is
@@ -101,6 +114,10 @@ class ExcludedFile:
         there is nothing else to say about it. ``None`` maps to ``None`` rather than
         ``""`` for every field but ``file_name``, so "the record had no entry_id" stays
         distinguishable from "it had an empty one".
+
+        ``file_name`` goes through ``records.coerce_identity``, the same null-to-``""``
+        rule the ``validation_failed`` row echoes drifted identities by, so the two
+        output paths cannot disagree about how a drifted name is rendered.
         """
         if not isinstance(record, dict):
             return cls(
@@ -112,9 +129,8 @@ class ExcludedFile:
                 file_size=None,
                 reason=reason,
             )
-        file_name = record.get("file_name")
         return cls(
-            file_name="" if file_name is None else str(file_name),
+            file_name=coerce_identity(record.get("file_name")),
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
             file_id=record.get("file_id"),
@@ -135,18 +151,15 @@ class ExcludedFile:
     def from_dict(cls, row: dict) -> ExcludedFile:
         """Rebuild from a serialized row, defaulting any key the file omits.
 
+        A serialized row has the same key names as the record it was built from, so this
+        reuses :meth:`from_record` rather than re-enumerating the fields — which is what
+        keeps adding a field to this class a one-line change. It only has to recover the
+        ``reason``, which the row carries and a raw record does not.
+
         Tolerant on purpose: the report reads exclusions files written by earlier runs,
         and a row missing a key it did not carry must render rather than raise.
         """
-        return cls(
-            file_name=str(row.get("file_name") or ""),
-            dataset_title=row.get("dataset_title"),
-            entry_id=row.get("entry_id"),
-            file_id=row.get("file_id"),
-            drs_uri=row.get("drs_uri"),
-            file_size=row.get("file_size"),
-            reason=str(row.get("reason") or NO_CHECKSUM_REASON),
-        )
+        return cls.from_record(row, reason=str(row.get("reason") or NO_CHECKSUM_REASON))
 
 
 def partition_records(records: list) -> tuple[list[dict], list[ExcludedFile]]:
@@ -193,6 +206,15 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     exclusion". The ``metadata`` block carries the count, which is why the per-type
     ``RunMetadata`` blocks do not — exclusion is decided once over the whole input, so
     a per-type copy of a corpus-wide number would read as a per-type figure.
+
+    **Written by every producer, concurrently, and that is safe.** Each producer of a
+    run writes this as it loads (``pipeline.load_classifiable_records``), and a full
+    ``make classify`` runs nine of them in parallel into one run directory. They all
+    read the same input and apply the same predicate, so they all compute the same
+    content — the writes are idempotent, and the only hazard is a reader catching a
+    half-written file. Hence the write-then-``os.replace``: the rename is atomic within
+    a directory, so a concurrent reader sees either the previous file or a complete new
+    one, never a partial one. Last writer wins, and every writer had the same answer.
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / EXCLUDED_FILE
@@ -200,11 +222,26 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
         "metadata": {
             "total_input": total_input,
             "excluded": len(excluded),
+            # A constant, not state: this file is replaced atomically, so there is no
+            # partial case for it to describe. It is emitted so the envelope matches the
+            # classification outputs beside it, whose readers expect the key.
             "complete": True,
         },
         "excluded": [e.to_dict() for e in excluded],
     }
-    path.write_text(json.dumps(payload, indent=2))
+    # Write to a sibling temp file, then rename onto the target: see the docstring for
+    # why. mkstemp (not NamedTemporaryFile) because the file must outlive its handle to
+    # be renamed; it shares a directory with the target so the rename stays within one
+    # filesystem, and is removed if anything fails before it.
+    fd, tmp_name = tempfile.mkstemp(dir=run_dir, prefix=f".{EXCLUDED_FILE}.", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(payload, handle, indent=2)
+        tmp_path.replace(path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
     return path
 
 
@@ -215,11 +252,20 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     file whose ``excluded`` key is not a list, or whose rows are not dicts, yields the
     rows it can read and drops the rest — this is a report input, not a contract gate,
     so a malformed file must not stop the report that would show it.
+
+    That tolerance covers unparseable JSON too, not just well-formed JSON of the wrong
+    shape. :func:`write_excluded` replaces the file atomically, so a torn write is not
+    the expected source — a hand-edited or externally truncated file is. Either way
+    ``make all-reports`` must still run, so such a file reads as ``present=True`` with
+    no rows: the file exists, and nothing readable is in it.
     """
     path = run_dir / EXCLUDED_FILE
     if not path.is_file():
         return ExcludedIndex(files=[], total_input=0, present=False)
-    data = json.loads(path.read_text())
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return ExcludedIndex(files=[], total_input=0, present=True)
     if not isinstance(data, dict):
         return ExcludedIndex(files=[], total_input=0, present=True)
     metadata = data.get("metadata")

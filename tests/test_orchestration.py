@@ -11,11 +11,10 @@ call the classifier directly.
 These tests pin the three together.
 """
 
-import json
 from pathlib import Path
 
-from meta_disco.classify_run import _record_exclusions, build_parallel_jobs
-from meta_disco.exclusions import EXCLUDED_FILE
+from meta_disco.classify_run import _report_exclusions, build_parallel_jobs
+from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
@@ -116,49 +115,30 @@ def test_every_registered_file_type_has_a_makefile_target():
         )
 
 
-class TestExclusionsAreRecorded:
-    """The run must name the files it excluded — they appear in no other output (#376)."""
+class TestExclusionsAreReported:
+    """The orchestrator surfaces what the producers recorded (#376).
 
-    def _input(self, tmp_path, records):
-        path = tmp_path / "metadata.json"
-        path.write_text(json.dumps({"files": records}))
-        return path
+    It no longer computes the exclusions itself — each producer writes the file as it
+    loads — so what is pinned here is that the orchestrator reads that file rather than
+    reporting a number of its own, and that it distinguishes "nothing excluded" from
+    "no producer got far enough to record anything".
+    """
 
-    def test_writes_every_excluded_file_with_its_identity(self, tmp_path):
-        records = [
-            {"file_name": "ok.bam", "file_md5sum": "a" * 32, "dataset_title": "Study A"},
-            {
-                "file_name": "no-md5.bam",
-                "file_md5sum": None,
-                "dataset_title": "Study A",
-                "entry_id": "e9",
-                "file_id": "f9",
-                "drs_uri": "drs://x/f9",
-                "file_size": 12,
-            },
-        ]
-        run_dir = tmp_path / "run"
-        assert _record_exclusions(self._input(tmp_path, records), run_dir) == 1
+    def test_reports_the_recorded_count(self, tmp_path, capsys):
+        write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "no-md5.bam"})], total_input=4)
+        assert _report_exclusions(tmp_path) == 1
+        assert "Excluded 1 of 4 records" in capsys.readouterr().out
 
-        payload = json.loads((run_dir / EXCLUDED_FILE).read_text())
-        assert payload["metadata"] == {"total_input": 2, "excluded": 1, "complete": True}
-        (row,) = payload["excluded"]
-        assert row["file_name"] == "no-md5.bam"
-        assert row["entry_id"] == "e9"
-        assert row["file_id"] == "f9"
-        assert row["drs_uri"] == "drs://x/f9"
-        assert row["file_size"] == 12
+    def test_reports_a_recorded_zero(self, tmp_path, capsys):
+        write_excluded(tmp_path, [], total_input=9)
+        assert _report_exclusions(tmp_path) == 0
+        assert "No records excluded (9 checked)." in capsys.readouterr().out
 
-    def test_writes_the_file_even_when_nothing_was_excluded(self, tmp_path):
-        """A run that excluded nothing must be distinguishable from one that predates
-        the exclusion, so the file is written either way."""
-        records = [{"file_name": "ok.bam", "file_md5sum": "a" * 32}]
-        run_dir = tmp_path / "run"
-        assert _record_exclusions(self._input(tmp_path, records), run_dir) == 0
-
-        payload = json.loads((run_dir / EXCLUDED_FILE).read_text())
-        assert payload["excluded"] == []
-        assert payload["metadata"]["total_input"] == 1
+    def test_a_missing_file_is_not_reported_as_zero_excluded(self, tmp_path, capsys):
+        """No file means no producer reached its input load — a different fact from
+        "this run excluded nothing", and the operator needs to see which it was."""
+        assert _report_exclusions(tmp_path) == 0
+        assert "Exclusions not recorded" in capsys.readouterr().out
 
 
 def test_exclusions_file_is_not_read_as_a_classification():
