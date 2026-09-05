@@ -188,14 +188,29 @@ def partition_records(records: list) -> tuple[list[dict], list[ExcludedFile]]:
 class ExcludedIndex:
     """A run's exclusions file, as read back by the report.
 
-    ``present`` distinguishes a run that excluded nothing (file written, empty list)
-    from a run predating #376 (no file at all) — the report says different things
-    about the two, and a bare empty list could not tell them apart.
+    Three states, not two, because "we know this run excluded nothing" is a different
+    claim from "we cannot tell what this run excluded", and reporting the second as the
+    first is exactly the kind of unevidenced assertion #376 exists to stop:
+
+    * ``present=False`` — no file at all, so a run predating #376.
+    * ``present=True, readable=False`` — a file that could not be parsed, or whose shape
+      is not the one written. Whatever rows were recoverable are in ``files``, but no
+      count from it can be trusted.
+    * ``present=True, readable=True`` — the counts are known, including a known zero.
+
+    Read :attr:`counts_known` rather than either flag when the question is "can I state
+    a number from this?".
     """
 
     files: list[ExcludedFile]
     total_input: int
     present: bool
+    readable: bool = True
+
+    @property
+    def counts_known(self) -> bool:
+        """Whether this index can support a stated count (as opposed to "unknown")."""
+        return self.present and self.readable
 
 
 def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: int) -> Path:
@@ -248,30 +263,39 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
 def read_excluded(run_dir: Path) -> ExcludedIndex:
     """Read a run's exclusions file, tolerating absence and unexpected shapes.
 
-    A run directory with no exclusions file yields ``present=False`` and no files. A
-    file whose ``excluded`` key is not a list, or whose rows are not dicts, yields the
-    rows it can read and drops the rest — this is a report input, not a contract gate,
-    so a malformed file must not stop the report that would show it.
+    A run directory with no exclusions file yields ``present=False`` and no files.
 
-    That tolerance covers unparseable JSON too, not just well-formed JSON of the wrong
-    shape. :func:`write_excluded` replaces the file atomically, so a torn write is not
-    the expected source — a hand-edited or externally truncated file is. Either way
-    ``make all-reports`` must still run, so such a file reads as ``present=True`` with
-    no rows: the file exists, and nothing readable is in it.
+    A file that exists but cannot be trusted — unparseable JSON, a non-dict envelope, an
+    ``excluded`` key that is not a list, or a row within it that is not a dict — yields
+    ``readable=False`` along with whatever rows were recoverable. It never raises: this
+    is a report input, not a contract gate, so a malformed file must not stop the report
+    that would show it. But it must not be *read* as a zero either, which is why
+    ``readable`` exists rather than the rows simply coming back empty.
+
+    :func:`write_excluded` replaces the file atomically, so a torn write is not the
+    expected source of an unreadable file — a hand-edited or externally truncated one is.
     """
     path = run_dir / EXCLUDED_FILE
     if not path.is_file():
         return ExcludedIndex(files=[], total_input=0, present=False)
+    unreadable = ExcludedIndex(files=[], total_input=0, present=True, readable=False)
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError:
-        return ExcludedIndex(files=[], total_input=0, present=True)
+        return unreadable
     if not isinstance(data, dict):
-        return ExcludedIndex(files=[], total_input=0, present=True)
+        return unreadable
+    rows = data.get("excluded", [])
+    if not isinstance(rows, list):
+        return unreadable
+    # A non-dict row means the file is damaged, so its counts cannot be trusted — but the
+    # rows that did survive are still worth showing, hence recovering them rather than
+    # returning the empty `unreadable`.
+    files = [ExcludedFile.from_dict(row) for row in rows if isinstance(row, dict)]
+    if len(files) != len(rows):
+        return ExcludedIndex(files=files, total_input=0, present=True, readable=False)
     metadata = data.get("metadata")
     total_input = metadata.get("total_input", 0) if isinstance(metadata, dict) else 0
-    rows = data.get("excluded", [])
-    files = [ExcludedFile.from_dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
     return ExcludedIndex(
         files=files,
         total_input=total_input if isinstance(total_input, int) else 0,

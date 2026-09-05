@@ -97,12 +97,16 @@ def _report_exclusions(output_dir: Path) -> int:
     so without this a full run would never show it.
 
     A missing file means no producer got as far as loading its input — every Phase 1 job
-    failed early — which is worth saying rather than reporting zero.
+    failed early — which is worth saying rather than reporting zero. So is a file that
+    cannot be read: neither is the same fact as "this run excluded nothing".
     """
     index = read_excluded(output_dir)
     if not index.present:
         print("Exclusions not recorded — no producer reached its input load.")
         return 0
+    if not index.readable:
+        print(f"Exclusions file at {output_dir / EXCLUDED_FILE} could not be read — count unknown.")
+        return len(index.files)
     if index.files:
         print(
             f"Excluded {len(index.files):,} of {index.total_input:,} records "

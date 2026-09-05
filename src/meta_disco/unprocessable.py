@@ -150,15 +150,20 @@ class RowGroup:
 class RunUnprocessable:
     """Everything a run could not classify, grouped by reason.
 
-    ``excluded`` holds the full :class:`ExcludedFile` list; ``rows`` maps a row-backed
-    reason key to its per-dataset groups. ``exclusions_present`` records whether the run
-    wrote an exclusions file at all — a run predating #376 wrote none, which is a
-    different statement from "excluded nothing" and is rendered differently.
+    ``excluded`` holds the :class:`ExcludedFile` rows that were recoverable; ``rows``
+    maps a row-backed reason key to its per-dataset groups.
+
+    ``excluded_known`` is whether a count can be stated at all. It is False both for a
+    run predating #376 (no exclusions file) and for one whose file could not be read —
+    two different reasons for the same answer, "unknown", which is a different statement
+    from "excluded nothing" and is rendered differently. ``exclusions_present``
+    separates those two reasons so the report can say which it is.
     """
 
     run_dir: Path
     excluded: list[ExcludedFile]
     exclusions_present: bool
+    excluded_known: bool
     total_input: int
     rows: dict[str, dict[str, RowGroup]]
     total_records: int
@@ -232,6 +237,7 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
         run_dir=run_dir,
         excluded=index.files,
         exclusions_present=index.present,
+        excluded_known=index.counts_known,
         total_input=index.total_input,
         rows=rows,
         total_records=total_records,
@@ -241,27 +247,43 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
 def _render_excluded(data: RunUnprocessable) -> list[str]:
     """Render the excluded category: every file named, grouped by dataset."""
     lines = _section_header(NO_CHECKSUM)
-    if not data.exclusions_present:
+    if not data.excluded_known:
+        why = (
+            "holds no `excluded_files.json`. Every producer has written that file since #376, "
+            "so this is a run directory from before then."
+            if not data.exclusions_present
+            else "holds an `excluded_files.json` that could not be read, so no count from it "
+            "can be trusted. Any rows that were still recoverable are listed below."
+        )
         lines += [
-            "**Unknown** — this run directory holds no `excluded_files.json`, so whether any "
-            "checksum-less file was shed cannot be told from it. Every producer has written "
-            "that file since #376, so this is a run directory from before then. Re-classify "
-            "the corpus to get an answer.",
+            f"**Unknown** — this run directory {why} Re-classify the corpus to get an answer.",
             "",
         ]
+        lines += _excluded_tables(data.excluded) if data.excluded else []
         return lines
     if not data.excluded:
-        # Reached only when the exclusions file is present (the absent case returned
-        # above), so the count is known and stated even when it is zero — an empty input
-        # is a real answer, not a missing one.
+        # Reached only when the count is known (the unknown cases returned above), so it
+        # is stated even when it is zero — an empty input is a real answer, not a missing
+        # one.
         lines += [f"None in this run ({data.total_input:,} input records checked).", ""]
         return lines
 
+    lines += _excluded_tables(data.excluded)
+    return lines
+
+
+def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
+    """Every excluded file named, grouped by dataset, one table per dataset.
+
+    Split out because it is rendered both for a run whose exclusions are known and for
+    one whose file was damaged — in the second case the rows that survived are still
+    worth naming, since no other output holds them.
+    """
     by_dataset: dict[str, list[ExcludedFile]] = defaultdict(list)
-    for excluded_file in data.excluded:
+    for excluded_file in excluded:
         by_dataset[_dataset_label(excluded_file.dataset_title)].append(excluded_file)
 
-    lines += [f"**{len(data.excluded):,} file(s)** across {len(by_dataset):,} dataset(s), listed in full.", ""]
+    lines = [f"**{len(excluded):,} file(s)** across {len(by_dataset):,} dataset(s), listed in full.", ""]
     for dataset in sorted(by_dataset):
         files = by_dataset[dataset]
         lines += [f"#### {escape_md_cell(dataset)} — {len(files):,} file(s)", ""]
@@ -316,7 +338,7 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
     # A run with no exclusions file has an unknown excluded count, not a zero one. It is
     # rendered as "?" and left out of the total, so the summary cannot contradict the
     # section below it — which says plainly that the answer is unknown.
-    excluded_known = data.exclusions_present
+    excluded_known = data.excluded_known
     row_counts = {r.key: reason_total(data, r) for r in ROW_REASONS}
     counts: dict[str, str] = {
         NO_CHECKSUM.key: f"{len(data.excluded):,}" if excluded_known else "?",
@@ -344,7 +366,7 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
         f"Read from {data.total_records:,} classification record(s) in the run"
         # Same distinction as the excluded section: the input count is known exactly when
         # the run recorded its exclusions, including when that count is zero.
-        + (f", against {data.total_input:,} input record(s)." if data.exclusions_present else "."),
+        + (f", against {data.total_input:,} input record(s)." if data.excluded_known else "."),
         "",
         "## By reason",
         "",

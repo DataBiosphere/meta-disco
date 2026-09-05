@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from meta_disco.exclusions import ExcludedFile, write_excluded
+from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.header_classifier import FETCH_FAILED_RULE_ID
 from meta_disco.metadata_schema import VALIDATION_RULE_ID
 from meta_disco.models import all_not_classified, build_field_entry
@@ -217,6 +217,33 @@ class TestRenderReport:
 
         assert "None in this run (0 input records checked)." in report
         assert "against 0 input record(s)." in report
+
+    def test_an_unreadable_exclusions_file_is_not_read_as_a_known_zero(self, tmp_path):
+        """A damaged file is a different fact from "excluded nothing". Reporting the
+        second when we mean the first is the unevidenced claim this whole change exists
+        to stop — and the rows that survived are still named, since nothing else holds
+        them."""
+        run_dir = _write_run(tmp_path, [])
+        # Valid JSON, but a row that is not a record: the count is untrustworthy while
+        # the intact row is still recoverable.
+        (run_dir / EXCLUDED_FILE).write_text(json.dumps({"excluded": ["nope", {"file_name": "half.bam"}]}))
+        report = render_report(gather(run_dir))
+
+        assert "**Unknown**" in report
+        assert "could not be read" in report
+        assert "half.bam" in report
+        assert f"| {NO_CHECKSUM.title} | ? | no — excluded |" in report
+        assert "input records checked" not in report
+
+    def test_an_unparseable_exclusions_file_reports_unknown_with_nothing_to_list(self, tmp_path):
+        """Truncated JSON yields no recoverable rows at all — still unknown, not zero."""
+        run_dir = _write_run(tmp_path, [])
+        (run_dir / EXCLUDED_FILE).write_text('{"excluded": [{"file_name": "x.bam"}], "meta')
+        report = render_report(gather(run_dir))
+
+        assert "**Unknown**" in report
+        assert "could not be read" in report
+        assert "listed in full" not in report
 
     def test_an_unrecorded_run_states_no_input_count(self, tmp_path):
         """With no exclusions file there is no input count to state, so the summary line

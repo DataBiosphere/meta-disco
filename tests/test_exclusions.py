@@ -196,14 +196,23 @@ class TestWriteAndReadExcluded:
         assert index.present is True
         assert [f.file_name for f in index.files] == ["x.bam", ""]
 
-    @pytest.mark.parametrize("payload", [{"excluded": None}, {"excluded": "oops"}, {}, [1, 2, 3]])
+    @pytest.mark.parametrize("payload", [{"excluded": None}, {"excluded": "oops"}, [1, 2, 3]])
     def test_malformed_file_yields_no_files_rather_than_raising(self, tmp_path, payload):
         """This is a report input, not a contract gate: a malformed file must not stop
-        the report that would have shown it."""
+        the report that would have shown it — but its counts must not be read as known."""
         (tmp_path / EXCLUDED_FILE).write_text(json.dumps(payload))
         index = read_excluded(tmp_path)
         assert index.files == []
         assert index.present is True
+        assert index.counts_known is False
+
+    def test_an_envelope_with_no_excluded_key_reads_as_a_known_zero(self, tmp_path):
+        """A missing `excluded` key defaults to an empty list — the shape write_excluded
+        emits for a run that excluded nothing, so it is known, not unreadable."""
+        (tmp_path / EXCLUDED_FILE).write_text(json.dumps({"metadata": {"total_input": 3}}))
+        index = read_excluded(tmp_path)
+        assert index.counts_known is True
+        assert index.total_input == 3
 
     @pytest.mark.parametrize(
         "text",
@@ -218,10 +227,24 @@ class TestWriteAndReadExcluded:
         index = read_excluded(tmp_path)
         assert index.files == []
         assert index.present is True
+        # Present but unreadable: no count from it can be stated as known.
+        assert index.readable is False
+        assert index.counts_known is False
 
-    def test_non_dict_rows_are_skipped(self, tmp_path):
+    def test_non_dict_rows_are_skipped_and_the_count_is_not_trusted(self, tmp_path):
+        """The surviving rows are still worth showing — no other output holds them — but a
+        file that lost rows cannot support a stated count."""
         (tmp_path / EXCLUDED_FILE).write_text(json.dumps({"excluded": ["nope", 1, {"file_name": "ok.bam"}]}))
-        assert [f.file_name for f in read_excluded(tmp_path).files] == ["ok.bam"]
+        index = read_excluded(tmp_path)
+        assert [f.file_name for f in index.files] == ["ok.bam"]
+        assert index.counts_known is False
+
+    def test_a_well_formed_file_reads_as_known(self, tmp_path):
+        write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "x.bam"})], total_input=2)
+        index = read_excluded(tmp_path)
+        assert index.counts_known is True
+        assert index.readable is True
+        assert index.present is True
 
 
 def test_exclusions_file_is_not_a_classification_file():
