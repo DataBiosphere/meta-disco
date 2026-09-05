@@ -13,7 +13,8 @@ These tests pin the three together.
 
 from pathlib import Path
 
-from meta_disco.classify_run import build_parallel_jobs
+from meta_disco.classify_run import _report_exclusions, build_parallel_jobs
+from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
@@ -112,3 +113,43 @@ def test_every_registered_file_type_has_a_makefile_target():
         assert f"classify-{ftype} " in makefile or f"classify-{ftype}\n" in makefile, (
             f"classify-{ftype} is defined but not listed as a `classify-headers` prerequisite or in .PHONY."
         )
+
+
+class TestExclusionsAreReported:
+    """The orchestrator surfaces what the producers recorded (#376).
+
+    It no longer computes the exclusions itself — each producer writes the file as it
+    loads — so what is pinned here is that the orchestrator reads that file rather than
+    reporting a number of its own, and that it distinguishes "nothing excluded" from
+    "no producer got far enough to record anything".
+    """
+
+    def test_reports_the_recorded_count(self, tmp_path, capsys):
+        write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "no-md5.bam"})], total_input=4)
+        assert _report_exclusions(tmp_path) == 1
+        assert "Excluded 1 of 4 records" in capsys.readouterr().out
+
+    def test_reports_a_recorded_zero(self, tmp_path, capsys):
+        write_excluded(tmp_path, [], total_input=9)
+        assert _report_exclusions(tmp_path) == 0
+        assert "No records excluded (9 checked)." in capsys.readouterr().out
+
+    def test_a_missing_file_reports_an_unknown_count_not_zero(self, tmp_path, capsys):
+        """No file means no producer reached its input load — a different fact from
+        "this run excluded nothing", and the operator needs to see which it was."""
+        assert _report_exclusions(tmp_path) is None
+        assert "Exclusions not recorded" in capsys.readouterr().out
+
+    def test_an_unreadable_file_returns_none_not_a_recovered_subset(self, tmp_path, capsys):
+        """The rows that survived are not the run's excluded count, so the return value
+        must not offer them as one."""
+        (tmp_path / EXCLUDED_FILE).write_text('{"excluded": ["nope", {"file_name": "half.bam"}]}')
+        assert _report_exclusions(tmp_path) is None
+        assert "could not be read" in capsys.readouterr().out
+
+
+def test_exclusions_file_is_not_read_as_a_classification():
+    """Otherwise the coverage, validation, consistency and corpus-diff readers would
+    treat an excluded file as a classified one (#376, AC2)."""
+    assert EXCLUDED_FILE not in CLASSIFICATION_FILES
+    assert EXCLUDED_FILE not in {path.name for _, path, _ in _jobs()}

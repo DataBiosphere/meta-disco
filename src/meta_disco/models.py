@@ -224,6 +224,23 @@ def field_detail(record: dict, field_name: str) -> dict:
     return {key: value for key, value in entry.items() if key not in ENTRY_KEYS}
 
 
+def field_evidence(record: dict, field_name: str) -> list:
+    """The evidence list on a field entry; empty when there is none.
+
+    Completes the ``field_value`` / ``field_status`` / ``field_detail`` family so a
+    consumer reading *why* a field says what it does goes through the same layout
+    normalization as one reading the value (``_field_entry``), rather than reaching
+    into ``record["classifications"][field]["evidence"]`` itself. Returns ``[]`` for an
+    entry that is not a dict (the flat layout has nowhere to put evidence) and for one
+    whose ``evidence`` is missing or not a list.
+    """
+    entry = _field_entry(record, field_name)
+    if not isinstance(entry, dict):
+        return []
+    evidence = entry.get("evidence")
+    return evidence if isinstance(evidence, list) else []
+
+
 def field_label(record: dict, field_name: str) -> str | None:
     """Display label for a field: its value when classified, else its status.
 

@@ -6,7 +6,6 @@ which carries extension filters, fetcher, classifier, and summary printer.
 """
 
 import json
-import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
 
+from .exclusions import MD5_RE, ExcludedFile, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
 from .header_classifier import classify_without_content
@@ -23,18 +23,17 @@ from .metadata_schema import (
 )
 from .records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 
-# A well-formed md5: lowercase hex, 32 chars — the same shape the input contract
-# (metadata.yaml file_md5sum) requires. Only such a value can key real cached
-# evidence; anything else is headed to validation_failed.
-_MD5_RE = re.compile(r"^[0-9a-f]{32}$")
-
 
 def load_records(input_path: Path) -> list:
     """Load the record list from an input file's envelope.
 
-    Elements are not guaranteed to be dicts — an NDJSON line or a JSON array entry
-    may be any JSON value; ``_filter_records`` tolerates non-dicts. Hence ``list``,
-    not ``list[dict]``.
+    Elements are not guaranteed to be dicts — an NDJSON line, or an entry inside the
+    envelope's ``files``/``results`` list, may be any JSON value. (The envelope itself
+    must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
+    Hence ``list``, not ``list[dict]``: this is the raw read, used by the
+    ``validate_metadata`` gate, which must see every element to report on it.
+    Classification producers read :func:`load_classifiable_records` instead, which does
+    narrow the element type.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
     ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
@@ -73,6 +72,58 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
                 raise TypeError(f"'{key}' must be a list of records, got {type(records).__name__}")
             return metadata, records
     raise ValueError("JSON object must contain a 'results' or 'files' key")
+
+
+def partition_snapshot(input_path: Path) -> tuple[list[dict], list[ExcludedFile]]:
+    """Load an input file and split it into classifiable records and excluded ones.
+
+    The one place the #376 exclusion is applied to a file on disk. A record with no
+    usable ``file_md5sum`` cannot be fetched or cache-keyed, so it is excluded from
+    classification entirely rather than written as a row with no usable identity
+    (see :mod:`meta_disco.exclusions`).
+
+    Returns both sides because the orchestrator needs them both: the classifiable
+    records are what a run processes, and the excluded ones are what it writes to
+    ``excluded_files.json``. A producer that only needs the former calls
+    :func:`load_classifiable_records`.
+    """
+    return partition_records(load_records(input_path))
+
+
+def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
+    """Load an input file's records, minus the ones excluded for having no checksum.
+
+    The shared load path for every classification producer — the header pipeline and
+    the four standalone scripts (images, auxiliary, index, remaining) — so a
+    checksum-less record cannot reach any ``*_classifications.json`` (#376, AC1). The
+    catch-all (``classify_remaining_files.py``) matters most here: it classifies every
+    input record no earlier producer named, so excluding only in the header pipeline
+    would relocate the problem into ``remaining_classifications.json`` rather than
+    solve it.
+
+    ``run_dir`` is the directory the caller is writing its output into. Given one, this
+    also writes that run's ``excluded_files.json`` — so applying the exclusion and
+    recording it are the same act, and a producer cannot shed a record without naming
+    it. A standalone ``make classify-bam`` therefore records its exclusions exactly as
+    a full run does. Every producer of a run writes the file, concurrently and with
+    identical content; ``write_excluded`` documents why that is safe. ``None`` is for a
+    caller with no run directory to write into (a test, an ad-hoc load).
+
+    The ``validate_metadata`` gate deliberately does *not* call this — it reads
+    :func:`load_records` unfiltered, or it could never report the very records it
+    exists to report.
+
+    Unlike :func:`load_records`, every element of the result is a ``dict``: a non-dict
+    element cannot carry a checksum, so the exclusion removes it. That is why the
+    producers downstream — the catch-all reads records with ``.get`` — no longer need
+    to defend against one.
+    """
+    records, excluded = partition_snapshot(input_path)
+    if run_dir is not None:
+        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
+    if excluded:
+        print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
+    return records
 
 
 class RecordOutcome(NamedTuple):
@@ -345,20 +396,33 @@ class ClassifyPipeline:
 
     # --- Internal ---
 
-    def _load_input(self) -> list:
-        """Load NDJSON or JSON input, extracting the records array (elements may be
-        non-dict; see ``load_records``)."""
-        return load_records(self.input_path)
+    def _load_input(self) -> list[dict]:
+        """Load NDJSON or JSON input, minus the records excluded for having no checksum.
+
+        Reads through the shared ``load_classifiable_records`` (#376), so a record with
+        no usable ``file_md5sum`` never reaches routing, validation, the evidence cache
+        or a fetcher — and every element of the result is a ``dict``.
+
+        The run directory is this pipeline's output directory, so the load also records
+        what it excluded there — including on a standalone ``make classify-<type>`` run,
+        which no orchestrator wraps.
+        """
+        return load_classifiable_records(self.input_path, self.output_path.parent)
 
     def _filter_records(self, records: list) -> list[dict]:
         """Filter to records routed to this file type by extension.
 
-        Routing is by ``file_format``/``file_name`` extension only. A missing or
-        invalid ``file_md5sum`` is *not* filtered out: md5 is classifier-relevant, so
-        such a record reaches ``_process_single_record`` and is written as
-        ``validation_failed`` rather than silently dropped (issues #155/#161). A
-        non-dict element cannot be routed by extension and cannot crash the filter;
-        the whole-corpus ``validate_metadata`` gate reports it.
+        Routing is by ``file_format``/``file_name`` extension only. A record with no
+        usable ``file_md5sum`` never reaches here at all — ``_load_input`` excluded it
+        (#376), and it is named in the run's ``excluded_files.json`` instead. A
+        contract violation on any *other* classifier-relevant field does reach here and
+        is written as ``validation_failed`` rather than silently dropped (issues
+        #155/#161).
+
+        The non-dict guard is now defense in depth rather than a live path: ``run()``
+        feeds this from ``_load_input``, whose elements are all dicts. It is kept so the
+        method stays safe for a caller that hands it a raw record list, and the
+        whole-corpus ``validate_metadata`` gate is what reports such an element.
         """
         exts = self.config.extensions
 
@@ -387,6 +451,11 @@ class ClassifyPipeline:
         diverted here; that drift is surfaced by the whole-corpus ``validate_metadata``
         gate. Input order is preserved so the combined work list keeps the ordering
         the progress and ``limit`` steps assume.
+
+        ``file_md5sum`` is one of the classifier-relevant fields, but a record bad on
+        it can no longer reach this split: ``_load_input`` excludes it first (#376). So
+        every item on both sides here carries a well-formed md5, and an
+        ``InvalidRecord`` is always invalid on some *other* field.
         """
         work: list[ClassifierRecord | InvalidRecord] = []
         for record in records:
@@ -404,11 +473,11 @@ class ClassifyPipeline:
         evidence, and ``get_evidence_path`` builds a filesystem path from the md5
         (``md5sum[:2]`` / ``{md5sum}.json``). The type/format guard makes that path
         construction safe regardless of the caller: today every caller passes a
-        ``ClassifierRecord``'s md5 (a valid md5 by construction), but the guard means
-        a null, non-string, or non-md5 value simply returns False rather than
-        building a bogus path.
+        ``ClassifierRecord``'s md5 (a valid md5 by construction, and one the #376
+        exclusion already required at load), but the guard means a null, non-string,
+        or non-md5 value simply returns False rather than building a bogus path.
         """
-        if not isinstance(md5sum, str) or not _MD5_RE.match(md5sum):
+        if not isinstance(md5sum, str) or not MD5_RE.match(md5sum):
             return False
         from .evidence import get_evidence_path
 
@@ -458,6 +527,10 @@ class ClassifyPipeline:
         the classifier does not read was never diverted, and drift on records
         ``_filter_records`` did not route is surfaced by the whole-corpus
         ``validate_metadata`` gate, not here.
+
+        A record with no usable ``file_md5sum`` never reaches either branch: it was
+        excluded at load (#376) and is named in the run's ``excluded_files.json``, so
+        nothing here fetches it or probes the evidence cache for it.
 
         A ``ClassifierRecord`` reads typed attributes — ``file_md5sum`` is a valid
         md5 ``str``, ``file_name``/``file_format`` are ``str``, ``file_size`` an
