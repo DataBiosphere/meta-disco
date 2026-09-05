@@ -131,6 +131,55 @@ class TestGather:
             gather(tmp_path / "nope")
 
 
+class TestExcludedCount:
+    """The count is `None` when unknown, so a renderer cannot default it to zero.
+
+    Every renderer written so far that reached for `len(data.excluded)` instead got this
+    wrong, which is why the accessor exists.
+    """
+
+    def test_none_when_the_run_recorded_nothing(self, tmp_path):
+        assert gather(_write_run(tmp_path, [])).excluded_count is None
+
+    def test_none_when_the_exclusions_file_is_unreadable(self, tmp_path):
+        run_dir = _write_run(tmp_path, [])
+        (run_dir / EXCLUDED_FILE).write_text("not json")
+        assert gather(run_dir).excluded_count is None
+
+    def test_zero_when_the_run_recorded_a_zero(self, tmp_path):
+        run_dir = _write_run(tmp_path, [])
+        write_excluded(run_dir, [], total_input=4)
+        assert gather(run_dir).excluded_count == 0
+
+    def test_the_count_when_the_run_recorded_files(self, tmp_path):
+        run_dir = _write_run(tmp_path, [])
+        write_excluded(run_dir, [_excluded("a.bam"), _excluded("b.bam")], total_input=9)
+        assert gather(run_dir).excluded_count == 2
+
+    def test_recoverable_rows_do_not_make_a_damaged_file_countable(self, tmp_path):
+        """The rows are still listed, but their number is not the run's excluded count."""
+        run_dir = _write_run(tmp_path, [])
+        (run_dir / EXCLUDED_FILE).write_text(json.dumps({"excluded": ["nope", {"file_name": "half.bam"}]}))
+        data = gather(run_dir)
+        assert len(data.excluded) == 1
+        assert data.excluded_count is None
+
+
+class TestDatasetLabel:
+    def test_a_drifted_but_present_title_keeps_its_own_bucket(self, tmp_path):
+        """`0` is a title the catalog actually carried — drift this report exists to
+        surface, not the same thing as having no title at all."""
+        run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "x.bam", 0)])
+        groups = gather(run_dir).rows[CONTENT_UNREADABLE.key]
+        assert "0" in groups
+        assert UNKNOWN_DATASET not in groups
+
+    @pytest.mark.parametrize("title", [None, ""], ids=["null", "empty"])
+    def test_an_absent_or_empty_title_falls_into_the_untitled_bucket(self, tmp_path, title):
+        run_dir = _write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "x.bam", title)])
+        assert UNKNOWN_DATASET in gather(run_dir).rows[CONTENT_UNREADABLE.key]
+
+
 class TestRenderReport:
     def test_every_reason_gets_a_section_with_its_explanation(self, tmp_path):
         run_dir = _write_run(tmp_path, [])

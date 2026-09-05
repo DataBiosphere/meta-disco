@@ -111,9 +111,9 @@ class TestGateExit:
 
 
 class TestChecksumGate:
-    """AC4: the gate `make classify` now depends on must fail on an unusable checksum,
-    naming the offending records — otherwise the long run starts on a corpus that will
-    shed files (#376)."""
+    """AC4: `make classify` now depends on this gate, and the gate must fail on an
+    unusable checksum, naming the offending records — otherwise the long run starts on a
+    corpus that will shed files (#376)."""
 
     @pytest.mark.parametrize(
         "md5",

@@ -57,9 +57,14 @@ def main():
 
     unreadable = reason_total(data, CONTENT_UNREADABLE)
     violations = reason_total(data, CONTRACT_VIOLATION)
+    # data.excluded_count, never len(data.excluded): an unrecorded or damaged exclusions
+    # file has no rows to count, and printing "0 excluded" for it would state something
+    # the run does not know.
+    excluded = data.excluded_count
+    excluded_label = "unknown" if excluded is None else f"{excluded:,}"
     print(
         f"Unprocessable files in {run_dir} — "
-        f"{len(data.excluded):,} excluded, {violations:,} contract violations, {unreadable:,} unreadable"
+        f"{excluded_label} excluded, {violations:,} contract violations, {unreadable:,} unreadable"
     )
     print(f"Written to {args.output}")
 

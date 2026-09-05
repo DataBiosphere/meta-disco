@@ -39,6 +39,7 @@ from .header_classifier import FETCH_FAILED_RULE_ID
 from .metadata_schema import VALIDATION_RULE_ID
 from .models import CLASSIFICATION_FIELDS, field_evidence
 from .output_utils import iter_records
+from .records import coerce_identity
 from .summaries import escape_md_cell
 
 # Datasets and examples are capped so a category running to thousands of files stays a
@@ -122,8 +123,14 @@ def _dataset_label(dataset_title) -> str:
 
     One definition so the excluded listing and the row-backed tables name the untitled
     bucket identically — they are read side by side in one report.
+
+    Only an absent (``None``) or empty title falls into the untitled bucket. A present
+    but drifted one — ``0``, ``False`` — keeps its own bucket via
+    ``records.coerce_identity``, the same rule the output rows echo identities by: a
+    ``dataset_title`` of ``0`` is drift this report exists to surface, and folding it in
+    with the genuinely untitled would hide it.
     """
-    return str(dataset_title or "") or UNKNOWN_DATASET
+    return coerce_identity(dataset_title) or UNKNOWN_DATASET
 
 
 def _section_header(reason: Reason) -> list[str]:
@@ -167,6 +174,20 @@ class RunUnprocessable:
     total_input: int
     rows: dict[str, dict[str, RowGroup]]
     total_records: int
+
+    @property
+    def excluded_count(self) -> int | None:
+        """How many files this run excluded, or ``None`` when that is not known.
+
+        **Every renderer of this number must read it here**, not ``len(self.excluded)``.
+        The list is the rows that were *recoverable*, which is zero both for a run that
+        excluded nothing and for one whose record could not be read — so taking its
+        length silently converts "unknown" into a confident "0". Three renderings of
+        this count have now been written (the report body, its summary table, the CLI
+        line) and each one that reached for the list got that wrong; ``None`` forces the
+        question to be answered instead of defaulted.
+        """
+        return len(self.excluded) if self.excluded_known else None
 
 
 def _reason_for(record: dict) -> Reason | None:
@@ -247,7 +268,7 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
 def _render_excluded(data: RunUnprocessable) -> list[str]:
     """Render the excluded category: every file named, grouped by dataset."""
     lines = _section_header(NO_CHECKSUM)
-    if not data.excluded_known:
+    if data.excluded_count is None:
         why = (
             "holds no `excluded_files.json`. Every producer has written that file since #376, "
             "so this is a run directory from before then."
@@ -338,14 +359,14 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
     # A run with no exclusions file has an unknown excluded count, not a zero one. It is
     # rendered as "?" and left out of the total, so the summary cannot contradict the
     # section below it — which says plainly that the answer is unknown.
-    excluded_known = data.excluded_known
+    excluded_count = data.excluded_count
     row_counts = {r.key: reason_total(data, r) for r in ROW_REASONS}
     counts: dict[str, str] = {
-        NO_CHECKSUM.key: f"{len(data.excluded):,}" if excluded_known else "?",
+        NO_CHECKSUM.key: "?" if excluded_count is None else f"{excluded_count:,}",
         **{key: f"{value:,}" for key, value in row_counts.items()},
     }
-    grand_total = (len(data.excluded) if excluded_known else 0) + sum(row_counts.values())
-    total_cell = f"**{grand_total:,}**" if excluded_known else f"**{grand_total:,}+**"
+    grand_total = (excluded_count or 0) + sum(row_counts.values())
+    total_cell = f"**{grand_total:,}+**" if excluded_count is None else f"**{grand_total:,}**"
 
     lines = [
         "# Unprocessable files",
@@ -366,7 +387,7 @@ def render_report(data: RunUnprocessable, *, max_examples: int = DEFAULT_EXAMPLE
         f"Read from {data.total_records:,} classification record(s) in the run"
         # Same distinction as the excluded section: the input count is known exactly when
         # the run recorded its exclusions, including when that count is zero.
-        + (f", against {data.total_input:,} input record(s)." if data.excluded_known else "."),
+        + (f", against {data.total_input:,} input record(s)." if data.excluded_count is not None else "."),
         "",
         "## By reason",
         "",
