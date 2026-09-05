@@ -239,6 +239,34 @@ class TestWriteAndReadExcluded:
         assert [f.file_name for f in index.files] == ["ok.bam"]
         assert index.counts_known is False
 
+    @pytest.mark.parametrize(
+        "text",
+        ["not json", '{"excluded": "oops"}', '{"excluded": ["nope", {"file_name": "half.bam"}]}'],
+        ids=["unparseable", "wrong-shape", "damaged-row"],
+    )
+    def test_count_is_none_when_the_file_cannot_be_trusted(self, tmp_path, text):
+        """`count` is the one derivation of this number, shared by the report and the
+        console. It must never offer a recovered subset — or an empty list — as though it
+        were the run's excluded count."""
+        (tmp_path / EXCLUDED_FILE).write_text(text)
+        assert read_excluded(tmp_path).count is None
+
+    def test_count_is_none_when_there_is_no_file(self, tmp_path):
+        assert read_excluded(tmp_path).count is None
+
+    def test_count_is_zero_for_a_recorded_zero(self, tmp_path):
+        """A known zero is a real answer and must not read as unknown."""
+        write_excluded(tmp_path, [], total_input=6)
+        assert read_excluded(tmp_path).count == 0
+
+    def test_count_is_the_number_of_recorded_files(self, tmp_path):
+        write_excluded(
+            tmp_path,
+            [ExcludedFile.from_record({"file_name": "a.bam"}), ExcludedFile.from_record({"file_name": "b.bam"})],
+            total_input=7,
+        )
+        assert read_excluded(tmp_path).count == 2
+
     def test_a_well_formed_file_reads_as_known(self, tmp_path):
         write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "x.bam"})], total_input=2)
         index = read_excluded(tmp_path)

@@ -86,8 +86,13 @@ def run_script(script_name: str, output_path: Path, extra_args: list[str] | None
     return script_name, True
 
 
-def _report_exclusions(output_dir: Path) -> int:
+def _report_exclusions(output_dir: Path) -> int | None:
     """Print what the run's producers recorded as excluded; return that count.
+
+    Returns ``None`` when the count is not known — no file, or one that could not be
+    read — rather than a zero or a recovered subset that a caller could mistake for the
+    real figure. The value comes from :attr:`ExcludedIndex.count`, the single derivation
+    shared with the report, so the console and the markdown cannot disagree.
 
     Reads rather than recomputes. Each producer writes ``excluded_files.json`` as it
     loads (``pipeline.load_classifiable_records``), which is what makes the record
@@ -103,18 +108,16 @@ def _report_exclusions(output_dir: Path) -> int:
     index = read_excluded(output_dir)
     if not index.present:
         print("Exclusions not recorded — no producer reached its input load.")
-        return 0
-    if not index.readable:
+    elif not index.readable:
         print(f"Exclusions file at {output_dir / EXCLUDED_FILE} could not be read — count unknown.")
-        return len(index.files)
-    if index.files:
+    elif index.count:
         print(
-            f"Excluded {len(index.files):,} of {index.total_input:,} records "
+            f"Excluded {index.count:,} of {index.total_input:,} records "
             f"with no usable file_md5sum -> {output_dir / EXCLUDED_FILE}"
         )
     else:
         print(f"No records excluded ({index.total_input:,} checked).")
-    return len(index.files)
+    return index.count
 
 
 def run_all_classifications(

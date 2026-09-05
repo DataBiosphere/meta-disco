@@ -160,34 +160,20 @@ class RunUnprocessable:
     ``excluded`` holds the :class:`ExcludedFile` rows that were recoverable; ``rows``
     maps a row-backed reason key to its per-dataset groups.
 
-    ``excluded_known`` is whether a count can be stated at all. It is False both for a
-    run predating #376 (no exclusions file) and for one whose file could not be read —
-    two different reasons for the same answer, "unknown", which is a different statement
-    from "excluded nothing" and is rendered differently. ``exclusions_present``
-    separates those two reasons so the report can say which it is.
+    ``excluded_count`` is the number of files excluded, or ``None`` when that is not
+    known — carried straight from :attr:`ExcludedIndex.count`, which is the one place it
+    is derived, rather than recomputed here. It is ``None`` both for a run predating #376
+    (no exclusions file) and for one whose file could not be read; ``exclusions_present``
+    separates those two reasons so the report can say which unknown it is.
     """
 
     run_dir: Path
     excluded: list[ExcludedFile]
     exclusions_present: bool
-    excluded_known: bool
+    excluded_count: int | None
     total_input: int
     rows: dict[str, dict[str, RowGroup]]
     total_records: int
-
-    @property
-    def excluded_count(self) -> int | None:
-        """How many files this run excluded, or ``None`` when that is not known.
-
-        **Every renderer of this number must read it here**, not ``len(self.excluded)``.
-        The list is the rows that were *recoverable*, which is zero both for a run that
-        excluded nothing and for one whose record could not be read — so taking its
-        length silently converts "unknown" into a confident "0". Three renderings of
-        this count have now been written (the report body, its summary table, the CLI
-        line) and each one that reached for the list got that wrong; ``None`` forces the
-        question to be answered instead of defaulted.
-        """
-        return len(self.excluded) if self.excluded_known else None
 
 
 def _reason_for(record: dict) -> Reason | None:
@@ -258,7 +244,7 @@ def gather(run_dir: Path, *, max_examples: int = DEFAULT_EXAMPLES) -> RunUnproce
         run_dir=run_dir,
         excluded=index.files,
         exclusions_present=index.present,
-        excluded_known=index.counts_known,
+        excluded_count=index.count,
         total_input=index.total_input,
         rows=rows,
         total_records=total_records,

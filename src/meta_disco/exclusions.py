@@ -198,8 +198,8 @@ class ExcludedIndex:
       count from it can be trusted.
     * ``present=True, readable=True`` — the counts are known, including a known zero.
 
-    Read :attr:`counts_known` rather than either flag when the question is "can I state
-    a number from this?".
+    Read :attr:`count` rather than ``len(files)`` whenever the question is "how many did
+    this run exclude?" — see that property for why.
     """
 
     files: list[ExcludedFile]
@@ -211,6 +211,19 @@ class ExcludedIndex:
     def counts_known(self) -> bool:
         """Whether this index can support a stated count (as opposed to "unknown")."""
         return self.present and self.readable
+
+    @property
+    def count(self) -> int | None:
+        """How many files this run excluded, or ``None`` when that is not known.
+
+        **Every consumer of this number reads it here**, not ``len(self.files)``. The
+        list holds the rows that were *recoverable*, which is empty both for a run that
+        excluded nothing and for one whose record is absent or damaged — so its length
+        silently turns "unknown" into a confident zero. Returning ``None`` forces each
+        consumer to answer the question rather than default it, which is what four
+        review rounds of this exact mistake argued for.
+        """
+        return len(self.files) if self.counts_known else None
 
 
 def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: int) -> Path:

@@ -134,11 +134,18 @@ class TestExclusionsAreReported:
         assert _report_exclusions(tmp_path) == 0
         assert "No records excluded (9 checked)." in capsys.readouterr().out
 
-    def test_a_missing_file_is_not_reported_as_zero_excluded(self, tmp_path, capsys):
+    def test_a_missing_file_reports_an_unknown_count_not_zero(self, tmp_path, capsys):
         """No file means no producer reached its input load — a different fact from
         "this run excluded nothing", and the operator needs to see which it was."""
-        assert _report_exclusions(tmp_path) == 0
+        assert _report_exclusions(tmp_path) is None
         assert "Exclusions not recorded" in capsys.readouterr().out
+
+    def test_an_unreadable_file_returns_none_not_a_recovered_subset(self, tmp_path, capsys):
+        """The rows that survived are not the run's excluded count, so the return value
+        must not offer them as one."""
+        (tmp_path / EXCLUDED_FILE).write_text('{"excluded": ["nope", {"file_name": "half.bam"}]}')
+        assert _report_exclusions(tmp_path) is None
+        assert "could not be read" in capsys.readouterr().out
 
 
 def test_exclusions_file_is_not_read_as_a_classification():
