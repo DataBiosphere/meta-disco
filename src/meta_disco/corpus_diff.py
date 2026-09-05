@@ -29,7 +29,6 @@ totals here match the ones the coverage report prints.
 
 from __future__ import annotations
 
-import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -162,16 +161,6 @@ def _is_value(label: Label) -> bool:
     return label is not None and label not in STATUS_LABELS
 
 
-def _unidentified() -> str:
-    """A stand-in md5 for a record that has none, unique across every call.
-
-    Two records without an md5 must not compare equal — inside one snapshot or
-    across the two being compared — so the placeholder is random rather than a
-    per-file counter, which would collide between the old and new sides.
-    """
-    return f"\x00unidentified-{uuid.uuid4().hex}"
-
-
 def _as_int(value) -> int | None:
     """Coerce an envelope count to ``int``, or ``None`` when it is not a number.
 
@@ -210,9 +199,20 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
 
     Non-dict entries and records missing a name are skipped: this is a parity
     report, not the input-contract gate (``validate_metadata``), which is where a
-    malformed record is meant to surface. A record that has a name but no md5 is
-    kept and made unmatchable, so it is never reported as content-identical to
-    anything.
+    malformed record is meant to surface.
+
+    Every record is assumed to carry a ``file_md5sum``. The input contract
+    requires one, and ``validate_metadata`` reports any record that lacks it —
+    but nothing forces that gate to run before this report (``make classify``
+    has no such prerequisite). A snapshot builder can also emit a null by
+    construction: ``scripts/classify_hprc_files.py`` leaves ``file_md5sum`` as
+    ``None`` for a catalog row carrying no location. Such a record would be
+    counted under the empty string, and two of them sharing a dataset and name
+    would read as ``unchanged``. So the assumption is *measured*, not enforced:
+    as of 2026-09-04 no snapshot on disk held such a record — including all
+    15,436 HPRC rows, every one of which had a location (#375). #376 would turn
+    the measurement into a guarantee by excluding checksum-less files from
+    processing; until it lands, this is the accepted risk recorded on #375.
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -222,16 +222,7 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
         if not file_name:
             continue
         dataset = str(record.get("dataset_title") or "")
-        md5 = str(record.get("file_md5sum") or "")
-        if not md5:
-            # Without an md5 there is no evidence this file matches anything. A
-            # shared empty string would let two such records cancel as
-            # ``unchanged`` — the one claim this table must never make without
-            # proof — so each gets a placeholder that cannot equal another. The
-            # record still counts toward its dataset's totals, landing in
-            # md5_changed or removed/added rather than being dropped.
-            md5 = _unidentified()
-        index[(dataset, str(file_name))][md5] += 1
+        index[(dataset, str(file_name))][str(record.get("file_md5sum") or "")] += 1
     return index
 
 
@@ -290,6 +281,25 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
+    Every record is assumed to carry an ``md5sum`` (the output echo of the input
+    contract's ``file_md5sum``). That is not guaranteed by the contract alone: a
+    record violating it is not dropped but diverted to a ``validation_failed``
+    row, which is still written with its md5 echoed as-is (#155), so a null md5
+    can in principle reach this reader. One that did would be normalized to the
+    empty string here, sharing a key with any other record of the same dataset
+    and name, and the two would be compared as one file. None did when last
+    measured — 0 of 1.4M records across every run on disk, 2026-09-04 (#375).
+    The one producer that can emit a null md5 by construction is the HPRC
+    catalog builder (the mechanism is on ``_snapshot_index`` above); every HPRC
+    row had one at that measurement. #376 would turn the measurement into a
+    guarantee by excluding checksum-less files from classification; until it
+    lands, this is the accepted risk recorded on #375.
+
+    The join key is ``(dataset_title, file_name, md5sum)``; only md5 must be
+    *present*. ``dataset_title`` is a qualifier, legitimately ``None`` for the
+    HPRC source, so it is normalized to the empty string rather than required —
+    requiring it would drop that corpus entirely.
+
     Raises FileNotFoundError if the run directory does not exist — an empty result
     would otherwise read as a run with no coverage.
     """
@@ -302,18 +312,10 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     # a fresh tuple and five fresh strings per record.
     interned: dict[Labels, Labels] = {}
     for record in iter_records(run_dir):
-        md5 = str(record.get("md5sum") or "")
-        if not md5:
-            # md5 is the content half of the identity; without it two records
-            # cannot be shown to be the same file, so each gets a placeholder that
-            # joins to nothing. Only md5 is required: ``dataset_title`` is a
-            # qualifier and is legitimately absent for the HPRC source, so
-            # requiring it would drop that corpus entirely.
-            md5 = _unidentified()
         key: FileKey = (
             str(record.get("dataset_title") or ""),
             str(record.get("file_name") or ""),
-            md5,
+            str(record.get("md5sum") or ""),
         )
         label_tuple: Labels = tuple(field_label(record, field) for field in CLASSIFICATION_FIELDS)
         labels[key][interned.setdefault(label_tuple, label_tuple)] += 1
