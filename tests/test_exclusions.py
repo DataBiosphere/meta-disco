@@ -206,13 +206,53 @@ class TestWriteAndReadExcluded:
         assert index.present is True
         assert index.counts_known is False
 
-    def test_an_envelope_with_no_excluded_key_reads_as_a_known_zero(self, tmp_path):
-        """A missing `excluded` key defaults to an empty list — the shape write_excluded
-        emits for a run that excluded nothing, so it is known, not unreadable."""
+    def test_an_envelope_with_no_excluded_key_is_not_the_written_shape(self, tmp_path):
+        """write_excluded always emits `"excluded": []` for a run that shed nothing, so an
+        absent key means the file was not written by this code — unreadable, not a zero."""
         (tmp_path / EXCLUDED_FILE).write_text(json.dumps({"metadata": {"total_input": 3}}))
+        assert read_excluded(tmp_path).counts_known is False
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"excluded": []},
+            {"excluded": [], "metadata": "oops"},
+            {"excluded": [], "metadata": {}},
+            {"excluded": [], "metadata": {"total_input": "3", "excluded": 0}},
+            {"excluded": [], "metadata": {"total_input": True, "excluded": 0}},
+            {"excluded": [], "metadata": {"total_input": -1, "excluded": 0}},
+            {"excluded": [], "metadata": {"total_input": 3}},
+            {"excluded": [], "metadata": {"total_input": 3, "excluded": 2}},
+            {"excluded": [{"file_name": "a.bam"}], "metadata": {"total_input": 3, "excluded": 9}},
+        ],
+        ids=[
+            "no-metadata",
+            "metadata-not-an-object",
+            "empty-metadata",
+            "total_input-a-string",
+            "total_input-a-bool",
+            "total_input-negative",
+            "no-excluded-count",
+            "count-disagrees-with-empty-rows",
+            "count-disagrees-with-rows",
+        ],
+    )
+    def test_a_metadata_block_that_is_not_the_written_shape_is_unreadable(self, tmp_path, payload):
+        """A count that disagrees with the rows beside it, or is missing or ill-typed,
+        means an edited or damaged file — reporting "0 checked" from one would be the
+        confident-but-wrong statement `readable` exists to prevent."""
+        (tmp_path / EXCLUDED_FILE).write_text(json.dumps(payload))
         index = read_excluded(tmp_path)
-        assert index.counts_known is True
-        assert index.total_input == 3
+        assert index.counts_known is False
+        assert index.count is None
+
+    def test_rows_survive_an_untrustworthy_metadata_block(self, tmp_path):
+        """The rows are still the only record of those files, so they are recovered even
+        when the block beside them cannot be trusted."""
+        (tmp_path / EXCLUDED_FILE).write_text(
+            json.dumps({"excluded": [{"file_name": "a.bam"}], "metadata": {"total_input": 3, "excluded": 9}})
+        )
+        assert [f.file_name for f in read_excluded(tmp_path).files] == ["a.bam"]
 
     @pytest.mark.parametrize(
         "text",

@@ -39,7 +39,7 @@ import re
 import tempfile
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from .records import coerce_identity
 
@@ -62,6 +62,16 @@ EXCLUDED_FILE = "excluded_files.json"
 # The single reason this module excludes a record. Rendered in the report and stored
 # on every ``ExcludedFile``; a second reason would come with its own constant.
 NO_CHECKSUM_REASON = "no usable file_md5sum"
+
+
+def _is_count(value: Any) -> TypeGuard[int]:
+    """Whether ``value`` is a usable record count: a non-negative, non-bool ``int``.
+
+    ``bool`` is excluded explicitly because it subclasses ``int`` in Python, so a
+    ``total_input`` of ``True`` would otherwise pass as the count 1. A ``TypeGuard`` so a
+    caller that has checked a value can then use it as the ``int`` it is.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def has_usable_checksum(record: Any) -> bool:
@@ -278,9 +288,11 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
 
     A run directory with no exclusions file yields ``present=False`` and no files.
 
-    A file that exists but cannot be trusted — unparseable JSON, a non-dict envelope, an
-    ``excluded`` key that is not a list, or a row within it that is not a dict — yields
-    ``readable=False`` along with whatever rows were recoverable. It never raises: this
+    A file that exists but cannot be trusted yields ``readable=False`` along with
+    whatever rows were recoverable. That covers unparseable JSON, a non-dict envelope, an
+    ``excluded`` key that is missing or not a list, a row within it that is not a dict,
+    and a ``metadata`` block that is absent or disagrees with those rows — every
+    departure from the shape :func:`write_excluded` emits. It never raises: this
     is a report input, not a contract gate, so a malformed file must not stop the report
     that would show it. But it must not be *read* as a zero either, which is why
     ``readable`` exists rather than the rows simply coming back empty.
@@ -298,19 +310,28 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
         return unreadable
     if not isinstance(data, dict):
         return unreadable
-    rows = data.get("excluded", [])
+    rows = data.get("excluded")
     if not isinstance(rows, list):
         return unreadable
-    # A non-dict row means the file is damaged, so its counts cannot be trusted — but the
-    # rows that did survive are still worth showing, hence recovering them rather than
-    # returning the empty `unreadable`.
+
+    # Rows that are not records mean a damaged file, so no count from it can be trusted —
+    # but the rows that did survive are still worth showing, since no other output holds
+    # them. Hence recovering them rather than returning the empty `unreadable`.
     files = [ExcludedFile.from_dict(row) for row in rows if isinstance(row, dict)]
+    recovered = ExcludedIndex(files=files, total_input=0, present=True, readable=False)
     if len(files) != len(rows):
-        return ExcludedIndex(files=files, total_input=0, present=True, readable=False)
+        return recovered
+
+    # The metadata block gets the same scrutiny as the rows. `write_excluded` always
+    # emits `total_input` and an `excluded` count, so a file missing either — or carrying
+    # one that disagrees with the rows beside it — was not written by this code and has
+    # been edited or damaged in a way JSON parsing cannot see. Reporting "0 checked" from
+    # such a file would be exactly the confident-but-wrong statement `readable` exists to
+    # prevent, so it is unreadable rather than a defaulted zero.
     metadata = data.get("metadata")
-    total_input = metadata.get("total_input", 0) if isinstance(metadata, dict) else 0
-    return ExcludedIndex(
-        files=files,
-        total_input=total_input if isinstance(total_input, int) else 0,
-        present=True,
-    )
+    if not isinstance(metadata, dict):
+        return recovered
+    total_input = metadata.get("total_input")
+    if not _is_count(total_input) or metadata.get("excluded") != len(files) or not _is_count(metadata["excluded"]):
+        return recovered
+    return ExcludedIndex(files=files, total_input=total_input, present=True)
