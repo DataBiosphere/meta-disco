@@ -76,12 +76,18 @@ def _umask_file_mode() -> int:
     ``os.umask`` has no getter: reading it means setting it and putting it back. That
     read-restore pair is why this is called once at import rather than per write —
     ``os.umask`` is process-wide, so the window would briefly affect any *other* thread
-    creating a file, and the pipeline does run thread pools that write. At import there
-    are no other threads yet, so the window is provably empty. The transient value is
-    restrictive rather than 0, so a file created in it would err private rather than open.
+    creating a file, and the pipeline does run thread pools that write.
+
+    That the window is empty is a property of how this repo starts, not something this
+    module can enforce: every importer of ``exclusions`` is a module-level import, and
+    both thread pools (``classify_run``, ``pipeline``) start well after their module's
+    imports finish on the main thread. A consumer that imported this module lazily from
+    a thread would reopen the window. Two things bound that rather than prevent it: the
+    transient value is restrictive rather than 0, so anything created inside the window
+    errs private rather than open, and the window is two syscalls wide.
 
     A process that changes its umask after importing this module keeps the value cached
-    here. No caller does.
+    here. No caller in this repo does.
     """
     umask = os.umask(0o077)
     os.umask(umask)
@@ -308,9 +314,9 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     fd, tmp_name = tempfile.mkstemp(dir=run_dir, prefix=f".{EXCLUDED_FILE}.", suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
-        # mkstemp creates 0600 so a temp file cannot leak its contents; right for a temp
-        # file, wrong for a run artifact, and the rename would carry it onto the final
-        # name (#379). Set before the rename — chmod *after* it would leave the published
+        # mkstemp creates 0600 so another user cannot read a temp file mid-write; right
+        # for a temp file, wrong for a run artifact, and the rename would carry it onto
+        # the final name (#379). Set before the rename — chmod *after* it would leave the published
         # name briefly owner-only — and on the descriptor, which needs no path lookup and
         # so cannot be redirected between the create and the chmod.
         os.fchmod(fd, _FILE_MODE)
