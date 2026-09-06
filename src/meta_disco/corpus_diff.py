@@ -201,18 +201,20 @@ def _snapshot_index(records: list) -> dict[tuple[str, str], Counter[str]]:
     report, not the input-contract gate (``validate_metadata``), which is where a
     malformed record is meant to surface.
 
-    Every record is assumed to carry a ``file_md5sum``. The input contract
-    requires one, and ``validate_metadata`` reports any record that lacks it —
-    but nothing forces that gate to run before this report (``make classify``
-    has no such prerequisite). A snapshot builder can also emit a null by
-    construction: ``scripts/classify_hprc_files.py`` leaves ``file_md5sum`` as
-    ``None`` for a catalog row carrying no location. Such a record would be
-    counted under the empty string, and two of them sharing a dataset and name
-    would read as ``unchanged``. So the assumption is *measured*, not enforced:
-    as of 2026-09-04 no snapshot on disk held such a record — including all
-    15,436 HPRC rows, every one of which had a location (#375). #376 would turn
-    the measurement into a guarantee by excluding checksum-less files from
-    processing; until it lands, this is the accepted risk recorded on #375.
+    Records here are *input* snapshot records, not run output, so a null
+    ``file_md5sum`` is possible in a way it is not downstream: this function indexes
+    the corpus as downloaded. ``scripts/classify_hprc_files.py`` leaves
+    ``file_md5sum`` as ``None`` for a catalog row carrying no location, and a drifted
+    AnVIL download could do the same. Such a record is counted under the empty string,
+    and two of them sharing a dataset and name would read as ``unchanged``.
+
+    Two things now bound that. ``make classify`` runs the ``validate_metadata`` gate as
+    a prerequisite (#376), so a snapshot carrying such a record fails before it is
+    classified; and any that reaches a run is excluded from classification rather than
+    written as a row (``exclusions.has_usable_checksum``), so it cannot reach
+    ``run_labels``. Neither stops a checksum-less record from being *indexed* here if
+    one is present in a snapshot on disk — the gate is what keeps that snapshot from
+    becoming a corpus.
     """
     index: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for record in records:
@@ -281,19 +283,17 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
-    Every record is assumed to carry an ``md5sum`` (the output echo of the input
-    contract's ``file_md5sum``). That is not guaranteed by the contract alone: a
-    record violating it is not dropped but diverted to a ``validation_failed``
-    row, which is still written with its md5 echoed as-is (#155), so a null md5
-    can in principle reach this reader. One that did would be normalized to the
-    empty string here, sharing a key with any other record of the same dataset
-    and name, and the two would be compared as one file. None did when last
-    measured — 0 of 1.4M records across every run on disk, 2026-09-04 (#375).
-    The one producer that can emit a null md5 by construction is the HPRC
-    catalog builder (the mechanism is on ``_snapshot_index`` above); every HPRC
-    row had one at that measurement. #376 would turn the measurement into a
-    guarantee by excluding checksum-less files from classification; until it
-    lands, this is the accepted risk recorded on #375.
+    Every record carries an ``md5sum`` (the output echo of the input contract's
+    ``file_md5sum``), and it is well-formed. That is enforced, not assumed: a record
+    with no usable ``file_md5sum`` is excluded from classification at the shared load
+    path every producer reads through (``pipeline.load_classifiable_records``, #376),
+    so it reaches no ``*_classifications.json`` and therefore no run this function
+    reads. Such a record would otherwise normalize to the empty string here, share a
+    key with any other record of the same dataset and name, and be compared as one
+    file — which is why #375 could drop the downstream placeholder guard.
+
+    The enforcement is what makes that safe; a run directory written before #376
+    landed carries no such guarantee.
 
     The join key is ``(dataset_title, file_name, md5sum)``; only md5 must be
     *present*. ``dataset_title`` is a qualifier, legitimately ``None`` for the

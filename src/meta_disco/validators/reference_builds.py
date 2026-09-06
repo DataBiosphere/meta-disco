@@ -124,7 +124,7 @@ from .header_extractors import is_lifted, parse_sam_header, parse_vcf_header, sa
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
 # rather than recorded as one. Either case is accepted here (the SAM
 # specification does not require one) and normalised below; contrast
-# ``pipeline._MD5_RE``, which is lowercase-only because it validates md5s this
+# ``exclusions.MD5_RE``, which is lowercase-only because it validates md5s this
 # project generated rather than ones a third party wrote.
 _M5_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 

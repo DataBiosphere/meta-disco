@@ -42,8 +42,10 @@ uv run pytest tests/
 ### Classification (run from root directory)
 
 ```bash
-# Validate a freshly downloaded metadata file against the input contract before
-# a long run (issue #161). Non-zero exit + grouped summary on any shape violation.
+# Validate a freshly downloaded metadata file against the input contract (issue
+# #161). Non-zero exit + grouped summary on any shape violation. `make classify`
+# runs it as a prerequisite (#376), so a long run cannot start on a corpus that
+# violates the contract; run it directly to check a download before committing.
 make validate-metadata
 
 # Full pipeline over all file types, in parallel
@@ -51,6 +53,10 @@ make classify
 
 # One file type (network required for header fetches)
 make classify-bam        # or classify-vcf / classify-fastq / classify-fasta / classify-gfa
+
+# What a run could not classify, and why: excluded (no checksum), contract
+# violations, unreadable content (issue #376)
+make unprocessable-report
 
 # Tests and lint
 make test
@@ -73,6 +79,17 @@ evidence}` entry — plus the controlled vocabulary:
 
 - **Accuracy over efficiency**: Always prefer reading actual file content (headers, indices, range requests) over guessing from filenames. If there is an exact method to determine a classification — even if it requires downloading headers or running compute — use it.
 - **Accuracy over coverage**: It is better to leave a file as `not_classified` than to guess wrong. Only classify when evidence supports it.
+- **No identity, no classification**: a record with no well-formed `file_md5sum`
+  cannot be fetched (the content URL is built from it) or cached (the evidence
+  cache is keyed by it), so it is *excluded* from classification rather than
+  written as a row echoing a null md5 — such a row has no usable identity and
+  would collide with any other in `corpus_diff` (#376). Exclusion happens once,
+  at the shared load path (`pipeline.load_classifiable_records`), so every
+  producer inherits it — and that same load writes the run's
+  `excluded_files.json`, so excluding a record and naming it are one act, down
+  to a standalone `make classify-bam`. `make unprocessable-report` lists them
+  individually. This is not the retired `dropped` concept (#155) — nothing goes
+  unrecorded.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
 - **Claim tiers**: A classification field's value is resolved from competing
   claims by tier (`evaluate_claims`, highest unique tier wins). Tiers 1–3 are

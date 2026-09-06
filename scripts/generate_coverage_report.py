@@ -225,7 +225,15 @@ def main():
             )
             out.write(f"Processed **{total:,}** files")
             if unprocessed > 0:
-                out.write(f" ({unprocessed:,} not yet handled by any classifier)")
+                # This difference is source files minus classified records. It mixes
+                # files no classifier routed with files the run deliberately excluded
+                # for having no usable checksum (#376), which are not the same thing —
+                # so it points at the report that separates them rather than naming
+                # only one of the two causes.
+                out.write(
+                    f" ({unprocessed:,} with no classification record — "
+                    "see [unprocessable files](unprocessable-report.md) for why)"
+                )
             out.write(".\n\n")
             for title, count in dataset_counts.most_common():
                 out.write(f"- {title} ({count:,} files)\n")

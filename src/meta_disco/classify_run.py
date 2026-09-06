@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
@@ -85,6 +86,42 @@ def run_script(script_name: str, output_path: Path, extra_args: list[str] | None
     return script_name, True
 
 
+def _report_exclusions(output_dir: Path) -> int | None:
+    """Print what the run's producers recorded as excluded; return that count.
+
+    Returns ``None`` when the count is not known — no file, or one that could not be
+    read — rather than a zero or a recovered subset that a caller could mistake for the
+    real figure. The value comes from :attr:`ExcludedIndex.count`, the single derivation
+    shared with the report, so the console and the markdown cannot disagree.
+
+    Reads rather than recomputes. Each producer writes ``excluded_files.json`` as it
+    loads (``pipeline.load_classifiable_records``), which is what makes the record
+    unconditional — a standalone ``make classify-<type>`` records its exclusions too,
+    with no orchestrator involved. So the orchestrator's job here is only to surface the
+    number: ``run_script`` captures each producer's stdout and prints it only on failure,
+    so without this a full run would never show it.
+
+    A missing file leaves the count unknown, which is worth saying rather than reporting
+    zero — as does a file that cannot be read. Neither is the same fact as "this run
+    excluded nothing". In a full run the likeliest cause of absence is that every Phase 1
+    job failed before loading its input, but the directory alone cannot establish that,
+    so the message names the path and leaves the cause open.
+    """
+    index = read_excluded(output_dir)
+    if not index.present:
+        print(f"Excluded count unknown — no {output_dir / EXCLUDED_FILE} was written.")
+    elif not index.readable:
+        print(f"Exclusions file at {output_dir / EXCLUDED_FILE} could not be read — count unknown.")
+    elif index.count:
+        print(
+            f"Excluded {index.count:,} of {index.total_input:,} records "
+            f"with no usable file_md5sum -> {output_dir / EXCLUDED_FILE}"
+        )
+    else:
+        print(f"No records excluded ({index.total_input:,} checked).")
+    return index.count
+
+
 def run_all_classifications(
     metadata: Path, output_dir_base: Path, evidence_base: Path, workers: int | None = None
 ) -> bool:
@@ -97,6 +134,12 @@ def run_all_classifications(
     Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded.
+
+    Every producer writes ``excluded_files.json`` into the run directory as it loads,
+    naming each input record with no usable ``file_md5sum`` (#376) — the file is where
+    those records are named, since they appear in no classification output. This
+    function only reports the count after Phase 1, because each producer's own stdout is
+    captured.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = output_dir_base / timestamp
@@ -118,6 +161,8 @@ def run_all_classifications(
         for future in as_completed(futures):
             _script_name, ok = future.result()
             success &= ok
+
+    _report_exclusions(output_dir)
 
     # Phase 2: Index classification (inherits from parent file classifications)
     index_output = output_dir / "index_classifications.json"
