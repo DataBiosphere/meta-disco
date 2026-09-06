@@ -64,6 +64,39 @@ EXCLUDED_FILE = "excluded_files.json"
 NO_CHECKSUM_REASON = "no usable file_md5sum"
 
 
+def _umask_file_mode() -> int:
+    """The mode ``open(path, "w")`` produces under this process's umask.
+
+    ``excluded_files.json`` is published at this mode so it matches the classification
+    artifacts beside it, which are written through ``Path.open("w")`` and so are
+    umask-derived. A hard-coded ``0o644`` would match them under the usual umask 022 and
+    be *more* permissive than them under a restrictive one — inverting the bug rather
+    than fixing it (#379).
+
+    ``os.umask`` has no getter: reading it means setting it and putting it back. That
+    read-restore pair is why this is called once at import rather than per write —
+    ``os.umask`` is process-wide, so the window would briefly affect any *other* thread
+    creating a file, and the pipeline does run thread pools that write.
+
+    That the window is empty is a property of how this repo starts, not something this
+    module can enforce: every importer of ``exclusions`` is a module-level import, and
+    both thread pools (``classify_run``, ``pipeline``) start well after their module's
+    imports finish on the main thread. A consumer that imported this module lazily from
+    a thread would reopen the window. Two things bound that rather than prevent it: the
+    transient value is restrictive rather than 0, so anything created inside the window
+    errs private rather than open, and the window is two syscalls wide.
+
+    A process that changes its umask after importing this module keeps the value cached
+    here. No caller in this repo does.
+    """
+    umask = os.umask(0o077)
+    os.umask(umask)
+    return 0o666 & ~umask
+
+
+_FILE_MODE = _umask_file_mode()
+
+
 def _is_count(value: Any) -> TypeGuard[int]:
     """Whether ``value`` is a usable record count: a non-negative, non-bool ``int``.
 
@@ -255,6 +288,9 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     half-written file. Hence the write-then-``os.replace``: the rename is atomic within
     a directory, so a concurrent reader sees either the previous file or a complete new
     one, never a partial one. Last writer wins, and every writer had the same answer.
+
+    The file is written at :data:`_FILE_MODE`, matching the classification artifacts
+    beside it — ``mkstemp`` would otherwise publish it owner-only (#379).
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / EXCLUDED_FILE
@@ -270,13 +306,26 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
         "excluded": [e.to_dict() for e in excluded],
     }
     # Write to a sibling temp file, then rename onto the target: see the docstring for
-    # why. mkstemp (not NamedTemporaryFile) because the file must outlive its handle to
-    # be renamed; it shares a directory with the target so the rename stays within one
+    # why. mkstemp because the temp name must be unique — nine producers write this file
+    # concurrently, and a fixed ".tmp" name would let one rename a file another still
+    # holds open. It also opens O_EXCL, so a name planted in advance cannot be followed.
+    # The temp shares a directory with the target so the rename stays within one
     # filesystem, and is removed if anything fails before it.
     fd, tmp_name = tempfile.mkstemp(dir=run_dir, prefix=f".{EXCLUDED_FILE}.", suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
+        # The descriptor is wrapped first so the context manager owns it from here on:
+        # fchmod can fail (a filesystem that does not support it, EPERM), and doing it
+        # before the wrap would leave the mkstemp descriptor unclosed on that path, since
+        # the handler below only unlinks the file.
         with os.fdopen(fd, "w") as handle:
+            # mkstemp creates 0600 so another user cannot read a temp file mid-write;
+            # right for a temp file, wrong for a run artifact, and the rename would carry
+            # it onto the final name (#379). Set before the rename — chmod *after* it
+            # would leave the published name briefly owner-only — and on the descriptor,
+            # which needs no path lookup and so cannot be redirected between create and
+            # chmod.
+            os.fchmod(handle.fileno(), _FILE_MODE)
             json.dump(payload, handle, indent=2)
         tmp_path.replace(path)
     except BaseException:

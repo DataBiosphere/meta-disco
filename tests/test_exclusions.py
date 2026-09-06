@@ -6,10 +6,14 @@ named in the run's ``excluded_files.json``.
 """
 
 import json
+import os
+import stat
+import tempfile
 
 import pytest
 
 from meta_disco.exclusions import (
+    _FILE_MODE,
     EXCLUDED_FILE,
     NO_CHECKSUM_REASON,
     ExcludedFile,
@@ -162,6 +166,60 @@ class TestExcludedFile:
         assert rebuilt.file_name == "x.bam"
         assert rebuilt.entry_id is None
         assert rebuilt.reason == NO_CHECKSUM_REASON
+
+
+class TestFileMode:
+    """The exclusions file must be as readable as the artifacts beside it (#379).
+
+    `mkstemp` creates 0600 by design, and the atomic rename carried that onto the
+    published file — invisible locally, but unreadable to a CI account or another UID
+    reading a run directory someone else produced.
+    """
+
+    def test_the_written_file_matches_its_sibling_artifacts(self, tmp_path):
+        """The acceptance criterion, tested the way it is worded. The stand-in is written
+        the way every classification output is — through ``Path.open("w")`` — and named
+        from CLASSIFICATION_FILES so it is a real artifact name rather than a literal."""
+        sibling = tmp_path / CLASSIFICATION_FILES[0]
+        with sibling.open("w") as f:
+            json.dump({}, f)
+        write_excluded(tmp_path, [], total_input=0)
+
+        written = stat.S_IMODE((tmp_path / EXCLUDED_FILE).stat().st_mode)
+        assert written == stat.S_IMODE(sibling.stat().st_mode)
+
+    def test_a_failing_chmod_still_closes_the_descriptor(self, tmp_path, monkeypatch):
+        """The failure path unlinks the temp file; a descriptor leaked past that would
+        outlive it. fchmod can fail for real — a filesystem that does not support it."""
+        captured = {}
+        real_mkstemp = tempfile.mkstemp
+
+        def spy_mkstemp(*args, **kwargs):
+            fd, name = real_mkstemp(*args, **kwargs)
+            captured["fd"] = fd
+            return fd, name
+
+        def boom(*_args):
+            raise OSError("fchmod unsupported")
+
+        monkeypatch.setattr(tempfile, "mkstemp", spy_mkstemp)
+        monkeypatch.setattr(os, "fchmod", boom)
+
+        with pytest.raises(OSError):
+            write_excluded(tmp_path, [], total_input=0)
+
+        with pytest.raises(OSError):  # EBADF: the descriptor was closed
+            os.fstat(captured["fd"])
+        assert list(tmp_path.iterdir()) == []  # and the temp file was cleaned up
+
+    def test_rewriting_an_existing_file_keeps_the_mode(self, tmp_path):
+        """The rename replaces the file rather than writing through it, so each write
+        publishes a fresh inode — the mode has to be set every time, not just the first."""
+        write_excluded(tmp_path, [], total_input=0)
+        (tmp_path / EXCLUDED_FILE).chmod(0o600)
+        write_excluded(tmp_path, [], total_input=1)
+
+        assert stat.S_IMODE((tmp_path / EXCLUDED_FILE).stat().st_mode) == _FILE_MODE
 
 
 class TestWriteAndReadExcluded:
