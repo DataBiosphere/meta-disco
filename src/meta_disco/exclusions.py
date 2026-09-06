@@ -314,13 +314,18 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     fd, tmp_name = tempfile.mkstemp(dir=run_dir, prefix=f".{EXCLUDED_FILE}.", suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
-        # mkstemp creates 0600 so another user cannot read a temp file mid-write; right
-        # for a temp file, wrong for a run artifact, and the rename would carry it onto
-        # the final name (#379). Set before the rename — chmod *after* it would leave the published
-        # name briefly owner-only — and on the descriptor, which needs no path lookup and
-        # so cannot be redirected between the create and the chmod.
-        os.fchmod(fd, _FILE_MODE)
+        # The descriptor is wrapped first so the context manager owns it from here on:
+        # fchmod can fail (a filesystem that does not support it, EPERM), and doing it
+        # before the wrap would leave the mkstemp descriptor unclosed on that path, since
+        # the handler below only unlinks the file.
         with os.fdopen(fd, "w") as handle:
+            # mkstemp creates 0600 so another user cannot read a temp file mid-write;
+            # right for a temp file, wrong for a run artifact, and the rename would carry
+            # it onto the final name (#379). Set before the rename — chmod *after* it
+            # would leave the published name briefly owner-only — and on the descriptor,
+            # which needs no path lookup and so cannot be redirected between create and
+            # chmod.
+            os.fchmod(handle.fileno(), _FILE_MODE)
             json.dump(payload, handle, indent=2)
         tmp_path.replace(path)
     except BaseException:
