@@ -291,8 +291,8 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     A file that exists but cannot be trusted yields ``readable=False`` along with
     whatever rows were recoverable. That covers unparseable JSON, a non-dict envelope, an
     ``excluded`` key that is missing or not a list, a row within it that is not a dict,
-    and a ``metadata`` block that is absent or disagrees with those rows — every
-    departure from the shape :func:`write_excluded` emits. None of those raise: this is a
+    and a ``metadata`` block that is absent, disagrees with those rows, or contradicts
+    itself — every departure from the shape :func:`write_excluded` emits. None of those raise: this is a
     report input, not a contract gate, so a malformed file must not stop the report that
     would show it. But it must not be *read* as a zero either, which is why ``readable``
     exists rather than the rows simply coming back empty.
@@ -313,7 +313,10 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     unreadable = ExcludedIndex(files=[], total_input=0, present=True, readable=False)
     try:
         data = json.loads(path.read_text())
-    except json.JSONDecodeError:
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        # Bytes that are not UTF-8, and text that is not JSON, are both malformed content
+        # rather than a broken environment — the same side of the line as a truncated
+        # file, and so tolerated rather than raised (see the OSError note above).
         return unreadable
     if not isinstance(data, dict):
         return unreadable
@@ -344,6 +347,14 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     # correct, but a reordering away from a KeyError, and read as a bug by a reviewer.
     total_input = metadata.get("total_input")
     recorded_count = metadata.get("excluded")
-    if not _is_count(total_input) or not _is_count(recorded_count) or recorded_count != len(files):
+    if (
+        not _is_count(total_input)
+        or not _is_count(recorded_count)
+        or recorded_count != len(files)
+        # A run cannot exclude more records than it read, so a block claiming otherwise
+        # is internally inconsistent however well-formed each field is on its own.
+        # Without this, `{total_input: 0, excluded: 2}` would report "Excluded 2 of 0".
+        or recorded_count > total_input
+    ):
         return recovered
     return ExcludedIndex(files=files, total_input=total_input, present=True)

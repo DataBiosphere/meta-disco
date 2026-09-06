@@ -246,6 +246,35 @@ class TestWriteAndReadExcluded:
         assert index.counts_known is False
         assert index.count is None
 
+    def test_invalid_utf8_is_tolerated_like_any_other_malformed_content(self, tmp_path):
+        """Bytes that are not UTF-8 are malformed content, not a broken environment, so
+        they land on the tolerated side of the line rather than raising."""
+        (tmp_path / EXCLUDED_FILE).write_bytes(b'{"excluded": [], "metadata": \xff\xfe}')
+        index = read_excluded(tmp_path)
+        assert index.present is True
+        assert index.counts_known is False
+
+    def test_excluding_more_than_were_read_is_internally_inconsistent(self, tmp_path):
+        """A run cannot exclude more records than it read. Without this the report would
+        state "Excluded 2 of 0"."""
+        (tmp_path / EXCLUDED_FILE).write_text(
+            json.dumps(
+                {
+                    "excluded": [{"file_name": "a.bam"}, {"file_name": "b.bam"}],
+                    "metadata": {"total_input": 0, "excluded": 2},
+                }
+            )
+        )
+        assert read_excluded(tmp_path).counts_known is False
+
+    def test_excluding_every_record_read_is_consistent(self, tmp_path):
+        """The bound is `>`, not `>=`: a corpus in which every record lacks a checksum is
+        degenerate but coherent, and must still report."""
+        write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "a.bam"})], total_input=1)
+        index = read_excluded(tmp_path)
+        assert index.counts_known is True
+        assert index.count == 1
+
     @pytest.mark.parametrize(
         "metadata",
         [{}, {"total_input": 3}, {"excluded": 0}, {"total_input": 3, "excluded": 0}],
