@@ -202,7 +202,9 @@ class ExcludedIndex:
     claim from "we cannot tell what this run excluded", and reporting the second as the
     first is exactly the kind of unevidenced assertion #376 exists to stop:
 
-    * ``present=False`` — no file at all, so a run predating #376.
+    * ``present=False`` — no file at all. Most likely a run directory predating #376, but
+      a run that ended before any producer loaded its input, or a file removed afterwards,
+      look identical from here; the directory cannot say which.
     * ``present=True, readable=False`` — a file that could not be parsed, or whose shape
       is not the one written. Whatever rows were recoverable are in ``files``, but no
       count from it can be trusted.
@@ -240,8 +242,8 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     """Write a run's exclusions to ``excluded_files.json``; returns the path.
 
     Written unconditionally, including when nothing was excluded: the file's presence
-    is what lets a reader tell "this run excluded nothing" from "this run predates the
-    exclusion". The ``metadata`` block carries the count, which is why the per-type
+    is what lets a reader tell "this run excluded nothing" from "this run recorded
+    nothing". The ``metadata`` block carries the count, which is why the per-type
     ``RunMetadata`` blocks do not — exclusion is decided once over the whole input, so
     a per-type copy of a corpus-wide number would read as a per-type figure.
 

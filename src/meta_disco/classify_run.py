@@ -101,13 +101,15 @@ def _report_exclusions(output_dir: Path) -> int | None:
     number: ``run_script`` captures each producer's stdout and prints it only on failure,
     so without this a full run would never show it.
 
-    A missing file means no producer got as far as loading its input — every Phase 1 job
-    failed early — which is worth saying rather than reporting zero. So is a file that
-    cannot be read: neither is the same fact as "this run excluded nothing".
+    A missing file leaves the count unknown, which is worth saying rather than reporting
+    zero — as does a file that cannot be read. Neither is the same fact as "this run
+    excluded nothing". In a full run the likeliest cause of absence is that every Phase 1
+    job failed before loading its input, but the directory alone cannot establish that,
+    so the message names the path and leaves the cause open.
     """
     index = read_excluded(output_dir)
     if not index.present:
-        print("Exclusions not recorded — no producer reached its input load.")
+        print(f"Excluded count unknown — no {output_dir / EXCLUDED_FILE} was written.")
     elif not index.readable:
         print(f"Exclusions file at {output_dir / EXCLUDED_FILE} could not be read — count unknown.")
     elif index.count:

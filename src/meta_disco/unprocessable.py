@@ -162,8 +162,9 @@ class RunUnprocessable:
 
     ``excluded_count`` is the number of files excluded, or ``None`` when that is not
     known — carried straight from :attr:`ExcludedIndex.count`, which is the one place it
-    is derived, rather than recomputed here. It is ``None`` both for a run predating #376
-    (no exclusions file) and for one whose file could not be read; ``exclusions_present``
+    is derived, rather than recomputed here. It is ``None`` both for a run with no
+    exclusions file (most often one predating #376) and for one whose file could not be
+    read; ``exclusions_present``
     separates those two reasons so the report can say which unknown it is.
     """
 
