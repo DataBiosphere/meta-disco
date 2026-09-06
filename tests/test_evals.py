@@ -7,6 +7,11 @@ appear in the output file.
 
 For rule-engine-only classifiers (BED, images, auxiliary), the input
 is a FileInfo and the output is an ExtendedClassificationResult.
+
+Each fixture below is a real file: an md5 that the corpus snapshot contains and whose
+fetched evidence is in the local cache. Both can rot when the catalog moves, so every
+call goes through a guarded wrapper (:func:`~tests.corpus_fixtures.require_corpus_file`)
+that skips with the cause named rather than falling through to a live fetch (#381).
 """
 
 import sys
@@ -17,14 +22,15 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 # Import the actual script functions
-from classify_bam_files import classify_single_file as classify_bam
-from classify_fasta_files import classify_single_fasta as classify_fasta
-from classify_fastq_files import classify_single_fastq as classify_fastq
-from classify_vcf_files import classify_single_vcf as classify_vcf
+from classify_bam_files import classify_single_file as _classify_bam
+from classify_fasta_files import classify_single_fasta as _classify_fasta
+from classify_fastq_files import classify_single_fastq as _classify_fastq
+from classify_vcf_files import classify_single_vcf as _classify_vcf
 
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
 from meta_disco.file_name import FileName
+from meta_disco.file_types import BAM_CONFIG, FASTA_CONFIG, FASTQ_CONFIG, VCF_CONFIG
 from meta_disco.header_classifier import classify_from_gfa_segment_tags
 from meta_disco.models import (
     NOT_APPLICABLE,
@@ -34,8 +40,40 @@ from meta_disco.models import (
     field_value,
 )
 from meta_disco.rule_engine import CONTENT_TIER, RuleEngine, evaluate_claims
+from tests.corpus_fixtures import require_corpus_file
 
 engine = RuleEngine()
+
+
+# Guarded wrappers around the four script functions. Each checks the fixture against the
+# corpus snapshot and the evidence cache before classifying, so a fixture the corpus has
+# dropped skips with that reason instead of 404ing its way to an inscrutable failure.
+# The tests call these under the script functions' own names, so a test body reads as a
+# direct call to the code under test.
+
+
+def classify_bam(md5sum, file_name, **kwargs):
+    """Classify a BAM/CRAM fixture, skipping when the corpus can no longer supply it."""
+    require_corpus_file(md5sum, BAM_CONFIG.name)
+    return _classify_bam(md5sum, file_name, **kwargs)
+
+
+def classify_vcf(md5sum, file_name, **kwargs):
+    """Classify a VCF fixture, skipping when the corpus can no longer supply it."""
+    require_corpus_file(md5sum, VCF_CONFIG.name)
+    return _classify_vcf(md5sum, file_name, **kwargs)
+
+
+def classify_fastq(md5sum, file_name, **kwargs):
+    """Classify a FASTQ fixture, skipping when the corpus can no longer supply it."""
+    require_corpus_file(md5sum, FASTQ_CONFIG.name)
+    return _classify_fastq(md5sum, file_name, **kwargs)
+
+
+def classify_fasta(md5sum, file_name, **kwargs):
+    """Classify a FASTA fixture, skipping when the corpus can no longer supply it."""
+    require_corpus_file(md5sum, FASTA_CONFIG.name)
+    return _classify_fasta(md5sum, file_name, **kwargs)
 
 
 def get_val(record, field):
@@ -70,24 +108,42 @@ def assert_output_format(record):
 class TestBamE2E:
     """End-to-end BAM classification from cached headers."""
 
-    def test_grch38_aligned_bam(self):
-        """HG03516.GRCh38_no_alt.bam — 239.6 GB ONT BAM aligned to GRCh38."""
-        result = classify_bam(
-            "000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam", file_size=239579784536, file_format=".bam"
+    @staticmethod
+    def classify_grch38_cram():
+        """simons_data_sample_207.cram — 125.5 GB Illumina CRAM aligned to GRCh38.
+
+        Three tests below read this one fixture, so it is pinned here once: a re-pin at
+        the next catalog migration is a single edit, not three identical ones.
+        """
+        return classify_bam(
+            "a52a5f60403a9f7796ec8f0d87bd9081",
+            "simons_data_sample_207.cram",
+            file_size=125476999922,
+            file_format=".cram",
         )
+
+    def test_grch38_aligned_bam(self):
+        """A GRCh38-aligned Illumina CRAM classifies on all five dimensions."""
+        result = self.classify_grch38_cram()
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "reference_assembly") == "GRCh38"
-        assert get_val(result, "platform") in ("ILLUMINA", "ONT", "PACBIO")
+        assert get_val(result, "platform") == "ILLUMINA"
         assert get_val(result, "data_modality") == "genomic"  # from aligned reference contigs
+        assert get_val(result, "data_type") == "alignments"
         assert get_val(result, "assay_type") == "WGS"
 
-    def test_pacbio_hifi_unaligned(self):
-        """PacBio reads BAM — 229.4 GB, unaligned, reference N/A."""
+    def test_pacbio_unaligned_reads(self):
+        """PacBio reads BAM — 363.9 GB, unaligned, reference N/A.
+
+        The filename carries no `hifi`/`pacbio` token, so nothing claims a modality and
+        the post-hoc assay inference — which needs one — leaves assay_type unclassified.
+        Platform comes from the header's @RG PL alone.
+        """
         result = classify_bam(
-            "0004e46159f2fc28224533d71d828108",
-            "r54329U_20220207_223353_A01.reads.bam",
-            file_size=229421051106,
+            "722143247e28f39ccac721728e4a0076",
+            "m84046_230630_233157_s3.bc2069--bc2069.bam",
+            file_size=363856209058,
             file_format=".bam",
         )
         assert result is not None
@@ -111,9 +167,7 @@ class TestBamE2E:
 
     def test_no_stale_evidence(self):
         """reference_assembly should not have stale not_classified evidence."""
-        result = classify_bam(
-            "000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam", file_size=239579784536, file_format=".bam"
-        )
+        result = self.classify_grch38_cram()
         assert result is not None
         cls = result["classifications"]
         ref_evidence = cls["reference_assembly"]["evidence"]
@@ -133,9 +187,7 @@ class TestBamE2E:
 
     def test_platform_detection_meaningful(self):
         """Platform detection from @RG PL: should classify a platform value."""
-        result = classify_bam(
-            "000ebc5cfdeb4e799aa047e2c54022af", "HG03516.GRCh38_no_alt.bam", file_size=239579784536, file_format=".bam"
-        )
+        result = self.classify_grch38_cram()
         assert result is not None
         cls = result["classifications"]
         platform_val = cls["platform"]["value"]
@@ -200,9 +252,9 @@ class TestVcfE2E:
         assert "vcf_contig_length" in rule_ids, f"Expected vcf_contig_length, got {rule_ids}"
 
     def test_sniffles_sv_vcf(self):
-        """HG02723 Sniffles SV VCF — 35 MB structural variant detection."""
+        """Sniffles SV VCF — 13.7 MB uncompressed structural variant calls."""
         result = classify_vcf(
-            "0203bdde8d2f9bba858dce981a409bd5", "HG02723.hifiasm_pat.sniffles.vcf", file_size=35257072, is_gzipped=False
+            "4869136a1c7b5b7d01a8b5b7d8f8cca6", "sniffles_sv.vcf", file_size=13726785, is_gzipped=False
         )
         assert result is not None
         assert_output_format(result)
@@ -689,7 +741,17 @@ class TestGfaSegmentTagParsing:
 
 @pytest.mark.e2e
 class TestFastaE2E:
-    """End-to-end FASTA classification from cached contig names."""
+    """End-to-end FASTA classification from cached contig names.
+
+    Only the contig shapes the current corpus can still supply are exercised here. The
+    reference-genome, mitochondrial and empty-gzip fixtures this class used to hold have
+    no counterpart the fetch path can reproduce: every FASTA in the anvil15 catalog is a
+    whole-genome file of 773 MB or more, whose 256 KiB head yields a single contig. The
+    catalog does still hold reference genomes — it is the *contig list* those fixtures
+    needed that is unreachable, not the files. Those cases moved to
+    ``test_header_classifier.TestFastaContigClassification``, which drives
+    ``classify_from_fasta_header`` with the contig lists directly (#381).
+    """
 
     def test_hprc_paternal_assembly(self):
         """HG00673.paternal.f1_assembly_v1.fa.gz — 851 MB HPRC de novo assembly."""
@@ -703,94 +765,26 @@ class TestFastaE2E:
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
         assert field_status(result, "assay_type") == NOT_APPLICABLE
 
-    def test_verkko_diploid_assembly(self):
-        """HG02300_verkko_gfase_diploid.fasta.gz — verkko assembler output."""
-        result = classify_fasta(
-            "0fb14e01d1f886f8ebb6d5ea0f5a7853", "HG02300_verkko_gfase_diploid.fasta.gz", file_size=0
-        )
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
-
     def test_hapdup_contigs(self):
-        """hapdup_contigs_2.fasta — hapdup output, contig name is just "0".
-        Real evidence: single contig "0" from S3 range request.
-        Classification relies on filename "hapdup" keyword (tier 2 rule)."""
-        result = classify_fasta("1eff1ed22b7b2d794b9e4d2edc9b4bfa", "hapdup_contigs_2.fasta", file_size=0)
+        """hapdup_contigs_2.fasta — 2.9 GB hapdup output, contig name is just "0".
+
+        Real evidence: a single contig "0" from an S3 range request, which matches no
+        assembler pattern, so the classification rests on the filename "hapdup" keyword
+        (tier 2 rule) rather than on content.
+        """
+        result = classify_fasta("2503de005f3cc18709847c27ebb92b52", "hapdup_contigs_2.fasta", file_size=2920261541)
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
         assert get_val(result, "data_type") == "assembly"
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
 
-    def test_grch38_reference_genome(self):
-        """grch38.XX.fasta — 3.2 GB GRCh38 reference genome."""
-        result = classify_fasta("c20f4108273910a8eac78b6f2d5cb2b3", "grch38.XX.fasta", file_size=3249604816)
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly.reference"
-        assert get_val(result, "reference_assembly") == "GRCh38"
-        assert field_status(result, "assay_type") == NOT_APPLICABLE
-
-    def test_chm13_reference_genome(self):
-        """chm13v2.0.fasta — 3.2 GB CHM13 T2T reference."""
-        result = classify_fasta("597207bc60de08a8535b0fcc23466ebc", "chm13v2.0.fasta", file_size=3156259347)
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly.reference"
-        assert get_val(result, "reference_assembly") == "CHM13"
-        assert field_status(result, "assay_type") == NOT_APPLICABLE
-
-    def test_hifiasm_mito_contigs(self):
-        """HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz — 26 KB, 7 mitochondrial contigs."""
+    def test_genbank_assembly(self):
+        """HG00621.paternal.f1_assembly_v2_genbank.fa.gz — 835.8 MB GenBank-accessioned assembly."""
         result = classify_fasta(
-            "e3518b0e9056278b3e3e77fca0d20739", "HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz", file_size=25943
-        )
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
-
-    def test_verkko_mito_contigs(self):
-        """HG002_verkko_gfase_mito.fasta.gz — 38 KB, 12 verkko contigs."""
-        result = classify_fasta("77918ce8d61e250943bd2b363caee845", "HG002_verkko_gfase_mito.fasta.gz", file_size=37923)
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
-
-    def test_verkko_mito_single_contig(self):
-        """HG02809_verkko_asm_mito_exemplar.fasta.gz — 3.5 KB single contig."""
-        result = classify_fasta(
-            "dbfd70b99346b4897a2d6f27dee309c9", "HG02809_verkko_asm_mito_exemplar.fasta.gz", file_size=3538
-        )
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
-
-    def test_empty_gzip_fasta(self):
-        """HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz — valid gzip, 20 bytes."""
-        result = classify_fasta(
-            "7029066c27ac6f5ef18d660d5741979a", "HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz", file_size=20
-        )
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "data_modality") == "genomic"
-        assert get_val(result, "data_type") == "assembly"
-        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
-
-    def test_genbank_single_region(self):
-        """hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa — 2.3 MB single GenBank region."""
-        result = classify_fasta(
-            "5255a14542a8931eb6b393af8486a2b9", "hg002-f1-assembly-v2-genbank-dip-s2c20h1l-mat.fa", file_size=2310976
+            "ab44168d3352e2f99b9afa163f2d3124",
+            "HG00621.paternal.f1_assembly_v2_genbank.fa.gz",
+            file_size=835826203,
         )
         assert result is not None
         assert_output_format(result)

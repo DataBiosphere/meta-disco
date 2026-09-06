@@ -30,6 +30,7 @@ from meta_disco.header_classifier import (
     # Result models
     FastqReadMetadata,
     # Classification functions
+    classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_header,
     classify_from_tar_members,
@@ -989,3 +990,135 @@ class TestTarClassifier:
         """A non-tar / empty head read as no members → not_classified, not a crash."""
         result = classify_from_tar_members([])
         assert field_status(result, "data_type") == NOT_CLASSIFIED
+
+
+# =============================================================================
+# FASTA CONTIG CLASSIFICATION
+# =============================================================================
+
+
+class TestFastaContigClassification:
+    """classify_from_fasta_header: classify a FASTA by the contig names in its head.
+
+    These cases used to live in ``test_evals.TestFastaE2E``, pinned to real files. No
+    fixture in the anvil15 catalog can reproduce their contig lists: every FASTA in it is
+    a whole-genome file of 773 MB or more, and a 256 KiB head of one yields exactly one
+    contig (971 of the 973 cached FASTA evidence records hold a single name; the other
+    two hold two). The catalog does still contain reference genomes — what it cannot
+    supply through the fetch path is the multi-contig head they would need. So the shapes
+    below are driven directly instead (#381).
+
+    The mitochondrial contig counts and exemplar names are real, recovered from the
+    ``output/anvil/20260321_002155`` run, which classified those files before they left
+    the corpus; the siblings follow each exemplar's own naming pattern.
+    """
+
+    # A whole-genome reference's primary chromosomes. Every assembly in
+    # REFERENCE_CONTIG_LENGTHS shares these names, so a filename signal is what
+    # separates them — which is exactly what the first two tests exercise.
+    REFERENCE_CHROMOSOMES = [f"chr{n}" for n in range(1, 23)] + ["chrX", "chrY", "chrM"]
+
+    def test_grch38_reference_genome(self):
+        """Reference chromosomes plus a GRCh38 filename → a GRCh38 reference genome.
+
+        Replaces the e2e fixture grch38.XX.fasta. This exercises the classifier only: the
+        ``>= 20`` reference-contig threshold it depends on cannot be met by any file the
+        pipeline classifies today, because a 256 KiB head of a whole-genome FASTA yields
+        one contig (#382). Passing here is not evidence the production path works.
+        """
+        result = classify_from_fasta_header(self.REFERENCE_CHROMOSOMES, name=FileName.parse("grch38.XX.fasta"))
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly.reference"
+        assert val(result, "reference_assembly") == "GRCh38"
+        assert field_status(result, "assay_type") == NOT_APPLICABLE
+
+    def test_chm13_reference_genome(self):
+        """The same chromosomes with a CHM13 filename → a CHM13 reference genome.
+
+        Replaces the e2e fixture chm13v2.0.fasta; unreachable in production for the same
+        reason as the GRCh38 case above (#382).
+        """
+        result = classify_from_fasta_header(self.REFERENCE_CHROMOSOMES, name=FileName.parse("chm13v2.0.fasta"))
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly.reference"
+        assert val(result, "reference_assembly") == "CHM13"
+        assert field_status(result, "assay_type") == NOT_APPLICABLE
+
+    def test_reference_contigs_without_a_filename_signal_stay_ambiguous(self):
+        """Honesty: the contigs say "a reference", but not which one.
+
+        GRCh37, GRCh38 and CHM13 all use these chromosome names, so with no filename to
+        break the tie the file is still a reference genome — the data_type claim stands —
+        while reference_assembly is left unclassified rather than guessed.
+        """
+        result = classify_from_fasta_header(self.REFERENCE_CHROMOSOMES, name=FileName.parse("unnamed.fasta"))
+        assert val(result, "data_type") == "assembly.reference"
+        assert field_status(result, "reference_assembly") == NOT_CLASSIFIED
+
+    def test_verkko_mito_contigs(self):
+        """12 verkko-named contigs → de novo assembly, no reference.
+
+        Replaces the e2e fixture HG002_verkko_gfase_mito.fasta.gz (38 KB); the exemplar
+        haplotype1-0000068 is its recorded contig name.
+        """
+        contigs = [f"haplotype1-{n:07d}" for n in range(68, 80)]
+        result = classify_from_fasta_header(contigs, name=FileName.parse("HG002_verkko_gfase_mito.fasta.gz"))
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly"
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_hifiasm_mito_contigs(self):
+        """7 hifiasm-named contigs → de novo assembly, no reference.
+
+        Replaces the e2e fixture HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz (26 KB);
+        the exemplar h1tg000083l is its recorded contig name.
+        """
+        contigs = [f"h1tg0000{n}l" for n in range(83, 90)]
+        result = classify_from_fasta_header(
+            contigs, name=FileName.parse("HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz")
+        )
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly"
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_single_assembler_contig(self):
+        """One assembler contig is enough to call de novo assembly.
+
+        Replaces the e2e fixture HG02809_verkko_asm_mito_exemplar.fasta.gz (3.5 KB);
+        mat-0000222 is its recorded contig name.
+        """
+        result = classify_from_fasta_header(
+            ["mat-0000222"], name=FileName.parse("HG02809_verkko_asm_mito_exemplar.fasta.gz")
+        )
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly"
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_verkko_diploid_assembly(self):
+        """A verkko diploid assembly, classified from its contig naming.
+
+        Replaces the e2e fixture HG02300_verkko_gfase_diploid.fasta.gz.
+        """
+        result = classify_from_fasta_header(
+            ["haplotype1-0000001", "haplotype2-0000001"],
+            name=FileName.parse("HG02300_verkko_gfase_diploid.fasta.gz"),
+        )
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly"
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+
+    def test_no_contigs_falls_back_to_the_filename(self):
+        """An empty contig list is a readable result, not a failure: the filename rules
+        still classify the file, and no content claim is invented on top of them.
+
+        Replaces the e2e fixture HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz — a valid
+        20-byte gzip whose decompressed content holds no header line.
+        """
+        result = classify_from_fasta_header([], name=FileName.parse("HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz"))
+        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == "assembly"
+        assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        # Nothing was read, so none of the three content classifiers may have claimed.
+        content_rules = {"fasta_reference_contigs", "fasta_assembler_contigs", "fasta_transcript_contigs"}
+        matched = val(result, "matched_rules")
+        assert matched is not None and content_rules.isdisjoint(matched)
