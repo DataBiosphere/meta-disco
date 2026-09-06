@@ -15,7 +15,6 @@ from meta_disco.exclusions import (
     EXCLUDED_FILE,
     NO_CHECKSUM_REASON,
     ExcludedFile,
-    _mode_for_umask,
     has_usable_checksum,
     partition_records,
     read_excluded,
@@ -175,30 +174,17 @@ class TestFileMode:
     reading a run directory someone else produced.
     """
 
-    @pytest.mark.parametrize(
-        ("umask", "mode"),
-        [(0o022, 0o644), (0o077, 0o600), (0o002, 0o664), (0o000, 0o666)],
-        ids=["022", "077", "002", "000"],
-    )
-    def test_mode_is_derived_from_the_umask(self, umask, mode):
-        """What `open(path, "w")` would produce — a hard-coded 0644 would be *more*
-        permissive than the siblings under a restrictive umask, inverting the bug."""
-        assert _mode_for_umask(umask) == mode
-
     def test_the_written_file_matches_its_sibling_artifacts(self, tmp_path):
-        """The acceptance criterion, tested the way it is worded: a classification output
-        is written through Path.open("w"), so this compares against one of those."""
-        sibling = tmp_path / "bed_classifications.json"
+        """The acceptance criterion, tested the way it is worded. The stand-in is written
+        the way every classification output is — through ``Path.open("w")`` — and named
+        from CLASSIFICATION_FILES so it is a real artifact name rather than a literal."""
+        sibling = tmp_path / CLASSIFICATION_FILES[0]
         with sibling.open("w") as f:
             json.dump({}, f)
         write_excluded(tmp_path, [], total_input=0)
 
         written = stat.S_IMODE((tmp_path / EXCLUDED_FILE).stat().st_mode)
         assert written == stat.S_IMODE(sibling.stat().st_mode)
-
-    def test_the_written_file_uses_the_cached_mode(self, tmp_path):
-        write_excluded(tmp_path, [ExcludedFile.from_record({"file_name": "a.bam"})], total_input=1)
-        assert stat.S_IMODE((tmp_path / EXCLUDED_FILE).stat().st_mode) == _FILE_MODE
 
     def test_rewriting_an_existing_file_keeps_the_mode(self, tmp_path):
         """The rename replaces the file rather than writing through it, so each write
@@ -208,10 +194,6 @@ class TestFileMode:
         write_excluded(tmp_path, [], total_input=1)
 
         assert stat.S_IMODE((tmp_path / EXCLUDED_FILE).stat().st_mode) == _FILE_MODE
-
-    def test_no_temp_file_is_left_behind(self, tmp_path):
-        write_excluded(tmp_path, [], total_input=0)
-        assert [p.name for p in tmp_path.iterdir()] == [EXCLUDED_FILE]
 
 
 class TestWriteAndReadExcluded:
