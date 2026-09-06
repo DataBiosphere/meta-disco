@@ -13,7 +13,7 @@ from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
 
-from .exclusions import MD5_RE, ExcludedFile, partition_records, write_excluded
+from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
 from .header_classifier import classify_without_content
@@ -74,26 +74,11 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 
-def partition_snapshot(input_path: Path) -> tuple[list[dict], list[ExcludedFile]]:
-    """Load an input file and split it into classifiable records and excluded ones.
-
-    The one place the #376 exclusion is applied to a file on disk. A record with no
-    usable ``file_md5sum`` cannot be fetched or cache-keyed, so it is excluded from
-    classification entirely rather than written as a row with no usable identity
-    (see :mod:`meta_disco.exclusions`).
-
-    Returns both sides because the orchestrator needs them both: the classifiable
-    records are what a run processes, and the excluded ones are what it writes to
-    ``excluded_files.json``. A producer that only needs the former calls
-    :func:`load_classifiable_records`.
-    """
-    return partition_records(load_records(input_path))
-
-
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
     """Load an input file's records, minus the ones excluded for having no checksum.
 
-    The shared load path for every classification producer — the header pipeline and
+    The one place the #376 exclusion is applied to a file on disk, and the shared load
+    path for every classification producer — the header pipeline and
     the four standalone scripts (images, auxiliary, index, remaining) — so a
     checksum-less record cannot reach any ``*_classifications.json`` (#376, AC1). The
     catch-all (``classify_remaining_files.py``) matters most here: it classifies every
@@ -118,7 +103,7 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
     """
-    records, excluded = partition_snapshot(input_path)
+    records, excluded = partition_records(load_records(input_path))
     if run_dir is not None:
         write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:
