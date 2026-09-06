@@ -1,6 +1,6 @@
 # Self-Consistency Report
 
-Run: **output/anvil/20260904_010319** — 708,203 records, 8 rules  
+Run: **output/anvil/20260905_234159** — 708,203 records, 8 rules  
 **Total violations: 0**
 
 Cross-field invariants over classified records (#314). *Active* is how many records a rule tested; a rule with 0 active is **vacuous** (no matching data in this run), not verified-clean.

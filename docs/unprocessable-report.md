@@ -1,17 +1,17 @@
 # Unprocessable files
 
-What run `output/anvil/20260904_010319` could not classify, and why (#376).
+What run `output/anvil/20260905_234159` could not classify, and why (#376).
 
 ## Summary
 
 | reason | files | row elsewhere? |
 |---|---:|---|
-| No usable checksum (excluded) | ? | no — excluded |
+| No usable checksum (excluded) | 0 | no — excluded |
 | Input-contract violation | 0 | yes |
 | Content unreadable | 23 | yes |
-| **Total** | **23+** | |
+| **Total** | **23** | |
 
-Read from 708,203 classification record(s) in the run.
+Read from 708,203 classification record(s) in the run, against 708,088 input record(s).
 
 ## By reason
 
@@ -21,7 +21,7 @@ The record carries no well-formed `file_md5sum`, so it can be neither fetched (t
 
 **No row exists anywhere else** — this listing is the only record of these files.
 
-**Unknown** — this run directory holds no `excluded_files.json`. Every producer has written that file since #376, so the run predates that, or ended before any producer loaded its input, or the file was removed afterwards — which of those cannot be told from the directory. Re-classify the corpus to get an answer.
+None in this run (708,088 input records checked).
 
 ### Input-contract violation
 
@@ -41,4 +41,4 @@ A row exists in the run's output, with the fetch failure as each dimension's evi
 
 | dataset | files | examples |
 |---|---:|---|
-| ANVIL_T2T | 23 | `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr1.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr16.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr4.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr8.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr10.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz` … (+18 more) |
+| ANVIL_T2T | 23 | `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr16.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr1.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr10.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr7.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz`, `20201028_CCDG_14151_B01_GRM_WGS_2020-08-05_chr8.recalibrated_variants_GRCh38p13_unique_75mer_coverage.vcf.gz` … (+18 more) |
