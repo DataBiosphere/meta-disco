@@ -293,11 +293,19 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     A file that exists but cannot be trusted yields ``readable=False`` along with
     whatever rows were recoverable. That covers unparseable JSON, a non-dict envelope, an
     ``excluded`` key that is missing or not a list, a row within it that is not a dict,
-    and a ``metadata`` block that is absent, disagrees with those rows, or contradicts
-    itself — every departure from the shape :func:`write_excluded` emits. None of those raise: this is a
-    report input, not a contract gate, so a malformed file must not stop the report that
-    would show it. But it must not be *read* as a zero either, which is why ``readable``
-    exists rather than the rows simply coming back empty.
+    and a ``metadata`` block that is absent, or whose ``total_input`` and ``excluded``
+    counts are missing, ill-typed, or disagree with the rows or with each other.
+
+    That is the set of departures that can make a *count* untrustworthy, which is what
+    this function's answer is for — not every difference from what :func:`write_excluded`
+    emits. ``complete`` is deliberately not checked: it is written as a constant and
+    carries no information (see :func:`write_excluded`), so its absence says nothing
+    about whether the counts beside it can be believed.
+
+    None of those raise: this is a report input, not a contract gate, so a malformed file
+    must not stop the report that would show it. But it must not be *read* as a zero
+    either, which is why ``readable`` exists rather than the rows simply coming back
+    empty.
 
     An ``OSError`` from opening the file — a permission problem, an unreadable mount —
     does propagate. That is deliberate and is the one thing here not treated as
