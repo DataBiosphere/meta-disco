@@ -338,7 +338,12 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     metadata = data.get("metadata")
     if not isinstance(metadata, dict):
         return recovered
+    # Each key is read once into a local, so no clause depends on an earlier one having
+    # short-circuited. The previous form indexed `metadata["excluded"]` in a later `or`
+    # clause, which was safe only because an absent key made an earlier clause true —
+    # correct, but a reordering away from a KeyError, and read as a bug by a reviewer.
     total_input = metadata.get("total_input")
-    if not _is_count(total_input) or metadata.get("excluded") != len(files) or not _is_count(metadata["excluded"]):
+    recorded_count = metadata.get("excluded")
+    if not _is_count(total_input) or not _is_count(recorded_count) or recorded_count != len(files):
         return recovered
     return ExcludedIndex(files=files, total_input=total_input, present=True)

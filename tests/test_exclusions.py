@@ -246,6 +246,18 @@ class TestWriteAndReadExcluded:
         assert index.counts_known is False
         assert index.count is None
 
+    @pytest.mark.parametrize(
+        "metadata",
+        [{}, {"total_input": 3}, {"excluded": 0}, {"total_input": 3, "excluded": 0}],
+        ids=["neither-key", "no-excluded-key", "no-total_input-key", "both-but-disagreeing"],
+    )
+    def test_a_partial_metadata_block_never_raises(self, tmp_path, metadata):
+        """Each metadata key is read with .get into a local, so no absent key can raise —
+        the check must not depend on clause ordering to stay safe."""
+        (tmp_path / EXCLUDED_FILE).write_text(json.dumps({"excluded": [{"file_name": "a.bam"}], "metadata": metadata}))
+        index = read_excluded(tmp_path)  # must not raise
+        assert index.counts_known is False
+
     def test_an_unopenable_file_raises_rather_than_reading_as_unknown(self, tmp_path):
         """A file we cannot open is an environment fault, not malformed data, and this
         project fails loudly on those — reporting "unknown" would turn a broken mount
