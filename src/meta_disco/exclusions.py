@@ -64,6 +64,33 @@ EXCLUDED_FILE = "excluded_files.json"
 NO_CHECKSUM_REASON = "no usable file_md5sum"
 
 
+def _mode_for_umask(umask: int) -> int:
+    """The mode ``open(path, "w")`` would produce under ``umask``.
+
+    Pure, so the derivation can be tested across umask values without changing the
+    process's own umask or reloading this module (#379).
+    """
+    return 0o666 & ~umask
+
+
+# The process umask, read once at import. ``os.umask`` has no getter — reading it means
+# setting it and putting it back — so it is read here, on the main thread at import,
+# rather than inside ``write_excluded``, which runs concurrently. The transient value is
+# restrictive rather than 0 so that a file created in that window (there is none today)
+# would err private rather than open.
+#
+# A process that changes its umask *after* importing this module keeps the value cached
+# here. No caller does, and the alternative is a read-restore race in the write path.
+_UMASK = os.umask(0o077)
+os.umask(_UMASK)
+
+# The mode ``excluded_files.json`` is written with: what its sibling artifacts in the
+# same run directory get, since they are written through ``Path.open("w")`` and so are
+# umask-derived. A hard-coded 0o644 would match them under the usual umask 022 and be
+# *more* permissive than them under a restrictive one (#379).
+_FILE_MODE = _mode_for_umask(_UMASK)
+
+
 def _is_count(value: Any) -> TypeGuard[int]:
     """Whether ``value`` is a usable record count: a non-negative, non-bool ``int``.
 
@@ -255,6 +282,9 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     half-written file. Hence the write-then-``os.replace``: the rename is atomic within
     a directory, so a concurrent reader sees either the previous file or a complete new
     one, never a partial one. Last writer wins, and every writer had the same answer.
+
+    The file is written at :data:`_FILE_MODE`, matching the classification artifacts
+    beside it — ``mkstemp`` would otherwise publish it owner-only (#379).
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / EXCLUDED_FILE
@@ -276,6 +306,12 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     fd, tmp_name = tempfile.mkstemp(dir=run_dir, prefix=f".{EXCLUDED_FILE}.", suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
+        # mkstemp creates 0600 so a secret cannot leak through a predictable temp path —
+        # the right default for a temp file, wrong for a run artifact, and the rename
+        # would carry it onto the final name (#379). fchmod on the descriptor rather than
+        # chmod on the path: there is then no instant at which the published name exists
+        # at the wrong mode, and nothing for a concurrent writer to race.
+        os.fchmod(fd, _FILE_MODE)
         with os.fdopen(fd, "w") as handle:
             json.dump(payload, handle, indent=2)
         tmp_path.replace(path)

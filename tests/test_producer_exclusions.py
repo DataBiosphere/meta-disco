@@ -12,6 +12,7 @@ the four standalone scripts.
 """
 
 import json
+import stat
 import sys
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from classify_images import classify_images
 from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
 
-from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
+from meta_disco.exclusions import _FILE_MODE, EXCLUDED_FILE, read_excluded
 from tests.metadata_fixtures import valid_record, write_metadata
 
 GOOD_MD5 = "a" * 32
@@ -205,3 +206,6 @@ class TestEveryProducerRecordsWhatItExcluded:
         assert index.total_input == 51
         # No temp files left behind by the write-then-rename.
         assert [p.name for p in run_dir.iterdir()] == [EXCLUDED_FILE]
+        # Whichever writer won published at the shared mode, not mkstemp's 0600 (#379):
+        # atomicity and mode are properties of the same write and are pinned together.
+        assert stat.S_IMODE((run_dir / EXCLUDED_FILE).stat().st_mode) == _FILE_MODE
