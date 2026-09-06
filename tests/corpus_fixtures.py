@@ -8,8 +8,9 @@ module such a fixture fell through to a live S3 range request that 404'd, and th
 suite reported a puzzling fetch failure instead of naming the cause.
 
 :func:`require_corpus_file` turns both cases into a skip whose reason says which one
-it is. It also keeps the eval tests off the network altogether: a fixture with no
-cached evidence is one whose classify call would fetch, so it skips rather than try.
+it is. It also keeps the eval tests off the network altogether: it asks the cache the
+same question the fetcher will — ``CachedEvidence.load``, not merely "does a file
+exist" — so a fixture whose classify call would fetch skips rather than try.
 Every fetching call in ``test_evals.py`` goes through a wrapper that calls this first.
 """
 
@@ -21,11 +22,32 @@ from pathlib import Path
 
 import pytest
 
+from meta_disco.evidence import (
+    BamEvidence,
+    CachedEvidence,
+    FastaEvidence,
+    FastqEvidence,
+    VcfEvidence,
+    get_evidence_path,
+)
+
 # The corpus snapshot `make classify` runs against, and the evidence cache it writes.
 # Both are CWD-relative, mirroring the code's own defaults (Makefile, pipeline.py), so
 # the guard looks exactly where a real run would.
 SNAPSHOT = Path("data/anvil/anvil_files_metadata.json")
 EVIDENCE_BASE = Path("data/evidence/anvil")
+
+# The typed record each fetcher caches, keyed by FileTypeConfig.name. FileTypeConfig
+# binds the fetcher rather than the evidence class, and each fetcher names its class
+# internally, so the association is restated here. A file type missing from this map
+# raises rather than skipping: an unguarded eval test is worth an error, a silently
+# skipped one is not.
+EVIDENCE_CLASSES: dict[str, type[CachedEvidence]] = {
+    "bam": BamEvidence,
+    "vcf": VcfEvidence,
+    "fastq": FastqEvidence,
+    "fasta": FastaEvidence,
+}
 
 _MD5_FIELD = re.compile(rb'"file_md5sum":\s*"([0-9a-f]{32})"')
 _CHUNK = 4 * 1024 * 1024
@@ -39,9 +61,9 @@ _MIN_FIELD_BYTES = 48
 _OVERLAP = _MIN_FIELD_BYTES + 16
 
 
-@lru_cache(maxsize=1)
-def snapshot_md5s() -> frozenset[bytes]:
-    """Every ``file_md5sum`` in the corpus snapshot, or an empty set if it is absent.
+@lru_cache
+def snapshot_md5s(snapshot: Path) -> frozenset[bytes]:
+    """Every ``file_md5sum`` in ``snapshot``, or an empty set if it is absent.
 
     Scanned with a regex over fixed-size chunks rather than ``json.load``: the snapshot
     is ~376 MB and holds ~708K records, which would parse into hundreds of MB of dicts
@@ -50,19 +72,24 @@ def snapshot_md5s() -> frozenset[bytes]:
     :data:`_OVERLAP` bytes so a match spanning a boundary is not missed; the result is a
     set, so seeing a digest twice in the overlap is harmless.
 
+    The path is a parameter rather than a read of :data:`SNAPSHOT` so the cache is keyed
+    by what the result depends on: repointing the module global cannot serve a previous
+    path's digests, which would read as "fixture missing" and skip the test silently.
+    Only the real corpus is a large entry; a test's temporary snapshot costs nothing.
+
     An absent snapshot yields an empty set, which :func:`require_corpus_file` reads as
     "cannot check" rather than "the corpus contains nothing" — a checkout without the
     downloaded corpus must not report every fixture as drifted.
     """
-    if not SNAPSHOT.is_file():
+    if not snapshot.is_file():
         return frozenset()
 
     found: set[bytes] = set()
-    with SNAPSHOT.open("rb") as handle:
+    with snapshot.open("rb") as handle:
         tail = b""
         while chunk := handle.read(_CHUNK):
             buffer = tail + chunk
-            found.update(match.group(1) for match in _MD5_FIELD.finditer(buffer))
+            found.update(_MD5_FIELD.findall(buffer))
             tail = buffer[-_OVERLAP:]
     return frozenset(found)
 
@@ -74,23 +101,30 @@ def require_corpus_file(md5sum: str, file_type: str) -> None:
 
     * The digest is not in the corpus snapshot — the catalog moved and the fixture
       points at a file AnVIL no longer serves. Re-pin it.
-    * The digest has no cached evidence under ``data/evidence/anvil/<file_type>/`` —
-      classifying it would fetch from S3.
+    * The digest has no usable cached evidence under
+      ``data/evidence/anvil/<file_type>/`` — classifying it would fetch from S3.
+
+    The second check loads the record rather than stat-ing its path, because those are
+    not the same question. ``CachedEvidence.load`` returns ``None`` — sending the fetcher
+    to the network — for a file that is present but truncated, not valid JSON, or missing
+    this type's keys, and ``save`` is not atomic, so an interrupted ``make classify``
+    leaves exactly such a file behind.
 
     When the snapshot is absent only the second check applies, so a checkout without the
     downloaded corpus still runs whatever its cache can answer rather than reporting
     every fixture as drifted.
     """
-    known = snapshot_md5s()
+    known = snapshot_md5s(SNAPSHOT)
     if known and md5sum.encode() not in known:
         pytest.skip(
             f"fixture md5 {md5sum} is absent from the corpus snapshot {SNAPSHOT} — "
             "the catalog moved under it; re-pin the fixture (issue #381)"
         )
 
-    evidence = EVIDENCE_BASE / file_type / md5sum[:2] / f"{md5sum}.json"
-    if not evidence.is_file():
+    evidence_dir = EVIDENCE_BASE / file_type
+    if EVIDENCE_CLASSES[file_type].load(evidence_dir, md5sum) is None:
         pytest.skip(
-            f"fixture md5 {md5sum} has no cached evidence at {evidence} — "
-            "classifying it would require a live S3 fetch (issue #381)"
+            f"fixture md5 {md5sum} has no usable cached evidence at "
+            f"{get_evidence_path(evidence_dir, md5sum)} — classifying it would require "
+            "a live S3 fetch (issue #381)"
         )

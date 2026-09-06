@@ -30,6 +30,7 @@ from classify_vcf_files import classify_single_vcf as _classify_vcf
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
 from meta_disco.file_name import FileName
+from meta_disco.file_types import BAM_CONFIG, FASTA_CONFIG, FASTQ_CONFIG, VCF_CONFIG
 from meta_disco.header_classifier import classify_from_gfa_segment_tags
 from meta_disco.models import (
     NOT_APPLICABLE,
@@ -53,25 +54,25 @@ engine = RuleEngine()
 
 def classify_bam(md5sum, file_name, **kwargs):
     """Classify a BAM/CRAM fixture, skipping when the corpus can no longer supply it."""
-    require_corpus_file(md5sum, "bam")
+    require_corpus_file(md5sum, BAM_CONFIG.name)
     return _classify_bam(md5sum, file_name, **kwargs)
 
 
 def classify_vcf(md5sum, file_name, **kwargs):
     """Classify a VCF fixture, skipping when the corpus can no longer supply it."""
-    require_corpus_file(md5sum, "vcf")
+    require_corpus_file(md5sum, VCF_CONFIG.name)
     return _classify_vcf(md5sum, file_name, **kwargs)
 
 
 def classify_fastq(md5sum, file_name, **kwargs):
     """Classify a FASTQ fixture, skipping when the corpus can no longer supply it."""
-    require_corpus_file(md5sum, "fastq")
+    require_corpus_file(md5sum, FASTQ_CONFIG.name)
     return _classify_fastq(md5sum, file_name, **kwargs)
 
 
 def classify_fasta(md5sum, file_name, **kwargs):
     """Classify a FASTA fixture, skipping when the corpus can no longer supply it."""
-    require_corpus_file(md5sum, "fasta")
+    require_corpus_file(md5sum, FASTA_CONFIG.name)
     return _classify_fasta(md5sum, file_name, **kwargs)
 
 
@@ -107,19 +108,29 @@ def assert_output_format(record):
 class TestBamE2E:
     """End-to-end BAM classification from cached headers."""
 
-    def test_grch38_aligned_bam(self):
-        """simons_data_sample_207.cram — 125.5 GB Illumina CRAM aligned to GRCh38."""
-        result = classify_bam(
+    @staticmethod
+    def classify_grch38_cram():
+        """simons_data_sample_207.cram — 125.5 GB Illumina CRAM aligned to GRCh38.
+
+        Three tests below read this one fixture, so it is pinned here once: a re-pin at
+        the next catalog migration is a single edit, not three identical ones.
+        """
+        return classify_bam(
             "a52a5f60403a9f7796ec8f0d87bd9081",
             "simons_data_sample_207.cram",
             file_size=125476999922,
             file_format=".cram",
         )
+
+    def test_grch38_aligned_bam(self):
+        """A GRCh38-aligned Illumina CRAM classifies on all five dimensions."""
+        result = self.classify_grch38_cram()
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "reference_assembly") == "GRCh38"
-        assert get_val(result, "platform") in ("ILLUMINA", "ONT", "PACBIO")
+        assert get_val(result, "platform") == "ILLUMINA"
         assert get_val(result, "data_modality") == "genomic"  # from aligned reference contigs
+        assert get_val(result, "data_type") == "alignments"
         assert get_val(result, "assay_type") == "WGS"
 
     def test_pacbio_unaligned_reads(self):
@@ -156,12 +167,7 @@ class TestBamE2E:
 
     def test_no_stale_evidence(self):
         """reference_assembly should not have stale not_classified evidence."""
-        result = classify_bam(
-            "a52a5f60403a9f7796ec8f0d87bd9081",
-            "simons_data_sample_207.cram",
-            file_size=125476999922,
-            file_format=".cram",
-        )
+        result = self.classify_grch38_cram()
         assert result is not None
         cls = result["classifications"]
         ref_evidence = cls["reference_assembly"]["evidence"]
@@ -181,12 +187,7 @@ class TestBamE2E:
 
     def test_platform_detection_meaningful(self):
         """Platform detection from @RG PL: should classify a platform value."""
-        result = classify_bam(
-            "a52a5f60403a9f7796ec8f0d87bd9081",
-            "simons_data_sample_207.cram",
-            file_size=125476999922,
-            file_format=".cram",
-        )
+        result = self.classify_grch38_cram()
         assert result is not None
         cls = result["classifications"]
         platform_val = cls["platform"]["value"]
@@ -744,8 +745,10 @@ class TestFastaE2E:
 
     Only the contig shapes the current corpus can still supply are exercised here. The
     reference-genome, mitochondrial and empty-gzip fixtures this class used to hold have
-    no counterpart in the anvil15 catalog — every FASTA in it is a whole-genome file of
-    773 MB or more, whose 256 KiB head yields a single contig — so those cases moved to
+    no counterpart the fetch path can reproduce: every FASTA in the anvil15 catalog is a
+    whole-genome file of 773 MB or more, whose 256 KiB head yields a single contig. The
+    catalog does still hold reference genomes — it is the *contig list* those fixtures
+    needed that is unreachable, not the files. Those cases moved to
     ``test_header_classifier.TestFastaContigClassification``, which drives
     ``classify_from_fasta_header`` with the contig lists directly (#381).
     """

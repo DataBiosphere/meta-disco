@@ -8,12 +8,12 @@ Every test drives the guard against a temporary snapshot and cache rather than t
 corpus, so they run anywhere, CI included.
 """
 
-import json
-
 import pytest
 
+from meta_disco.evidence import BamEvidence, get_evidence_path
 from tests import corpus_fixtures
 from tests.corpus_fixtures import require_corpus_file, snapshot_md5s
+from tests.metadata_fixtures import valid_record, write_metadata
 
 # Two well-formed digests, "present" and "absent" only with respect to the temporary
 # snapshot each test builds — nothing here reads the real corpus. They are the real
@@ -28,25 +28,23 @@ ABSENT = "000ebc5cfdeb4e799aa047e2c54022af"
 def corpus(tmp_path, monkeypatch):
     """Point the guard at a temporary snapshot containing PRESENT, and an empty cache.
 
-    Returns the evidence-cache root so a test can add a cached record to it. The
-    snapshot-scan cache is cleared on the way in and out, since it is keyed on nothing
-    but the (now monkeypatched) module-level path.
+    Returns the evidence-cache root so a test can add a cached record to it. The scan's
+    cache needs no clearing: it is keyed by path, and each test gets a fresh ``tmp_path``.
     """
-    snapshot = tmp_path / "anvil_files_metadata.json"
-    snapshot.write_text(json.dumps({"files": [{"file_name": "x.cram", "file_md5sum": PRESENT}]}))
+    snapshot = write_metadata(tmp_path / "anvil_files_metadata.json", [valid_record(file_md5sum=PRESENT)])
     evidence = tmp_path / "evidence"
     monkeypatch.setattr(corpus_fixtures, "SNAPSHOT", snapshot)
     monkeypatch.setattr(corpus_fixtures, "EVIDENCE_BASE", evidence)
-    snapshot_md5s.cache_clear()
-    yield evidence
-    snapshot_md5s.cache_clear()
+    return evidence
 
 
 def _cache(evidence_root, md5sum, file_type="bam"):
-    """Write a stand-in cached-evidence file where the guard looks for one."""
-    path = evidence_root / file_type / md5sum[:2] / f"{md5sum}.json"
-    path.parent.mkdir(parents=True)
-    path.write_text("{}")
+    """Cache a loadable BAM evidence record where the guard looks for one.
+
+    Written through the real ``save``, so what the guard reads back is what a fetcher
+    would have left — the point of the check being a load rather than a stat.
+    """
+    BamEvidence(md5sum=md5sum, file_name="x.cram", header_text="@HD\tVN:1.6").save(evidence_root / file_type)
 
 
 def test_absent_md5_skips_naming_the_snapshot(corpus):
@@ -61,7 +59,7 @@ def test_uncached_md5_skips_naming_the_fetch(corpus):
     """A current md5 with no cached evidence would hit S3 — skip rather than fetch."""
     with pytest.raises(pytest.skip.Exception) as excinfo:
         require_corpus_file(PRESENT, "bam")
-    assert "no cached evidence" in str(excinfo.value)
+    assert "no usable cached evidence" in str(excinfo.value)
 
 
 def test_current_and_cached_md5_does_not_skip(corpus):
@@ -75,7 +73,29 @@ def test_cache_is_per_file_type(corpus):
     _cache(corpus, PRESENT, "bam")
     with pytest.raises(pytest.skip.Exception) as excinfo:
         require_corpus_file(PRESENT, "fasta")
-    assert "no cached evidence" in str(excinfo.value)
+    assert "no usable cached evidence" in str(excinfo.value)
+
+
+def test_truncated_cache_record_skips(corpus):
+    """A present-but-unloadable record is a fetch waiting to happen, so it must skip.
+
+    ``CachedEvidence.save`` is not atomic, so an interrupted ``make classify`` can leave
+    a half-written record on disk. It exists, but ``load`` returns None and the fetcher
+    goes to S3 — the failure this guard exists to prevent, hiding behind a file that is
+    there. A stat-based check would let this through.
+    """
+    _cache(corpus, PRESENT)
+    path = get_evidence_path(corpus / "bam", PRESENT)
+    path.write_text(path.read_text()[: len(path.read_text()) // 2])  # truncate mid-JSON
+    with pytest.raises(pytest.skip.Exception) as excinfo:
+        require_corpus_file(PRESENT, "bam")
+    assert "no usable cached evidence" in str(excinfo.value)
+
+
+def test_unknown_file_type_raises_rather_than_skipping(corpus):
+    """A typo'd file type must not read as "nothing cached" and silently skip the test."""
+    with pytest.raises(KeyError):
+        require_corpus_file(PRESENT, "nosuchtype")
 
 
 def test_missing_snapshot_checks_only_the_cache(tmp_path, monkeypatch):
@@ -87,17 +107,13 @@ def test_missing_snapshot_checks_only_the_cache(tmp_path, monkeypatch):
     evidence = tmp_path / "evidence"
     monkeypatch.setattr(corpus_fixtures, "SNAPSHOT", tmp_path / "does-not-exist.json")
     monkeypatch.setattr(corpus_fixtures, "EVIDENCE_BASE", evidence)
-    snapshot_md5s.cache_clear()
-    try:
-        assert snapshot_md5s() == frozenset()
-        _cache(evidence, ABSENT)
-        require_corpus_file(ABSENT, "bam")  # absent from the (unreadable) snapshot, but cached
-    finally:
-        snapshot_md5s.cache_clear()
+    assert snapshot_md5s(corpus_fixtures.SNAPSHOT) == frozenset()
+    _cache(evidence, ABSENT)
+    require_corpus_file(ABSENT, "bam")  # absent from the (unreadable) snapshot, but cached
 
 
 @pytest.mark.parametrize("separator", ["", " ", "  " * 4])
-def test_digest_split_across_a_read_boundary_is_found(tmp_path, monkeypatch, separator):
+def test_digest_split_across_a_read_boundary_is_found(tmp_path, separator):
     """The chunked scan must not lose a match that straddles two chunks.
 
     The field is padded to end 8 bytes past the first boundary, so the leading chunk
@@ -110,9 +126,4 @@ def test_digest_split_across_a_read_boundary_is_found(tmp_path, monkeypatch, sep
     assert len(field) <= corpus_fixtures._OVERLAP, "test field must fit within the overlap"
     snapshot = tmp_path / "snapshot.json"
     snapshot.write_text(" " * (corpus_fixtures._CHUNK - len(field) + 8) + field)
-    monkeypatch.setattr(corpus_fixtures, "SNAPSHOT", snapshot)
-    snapshot_md5s.cache_clear()
-    try:
-        assert PRESENT.encode() in snapshot_md5s()
-    finally:
-        snapshot_md5s.cache_clear()
+    assert PRESENT.encode() in snapshot_md5s(snapshot)

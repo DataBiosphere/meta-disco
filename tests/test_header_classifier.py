@@ -1000,12 +1000,13 @@ class TestTarClassifier:
 class TestFastaContigClassification:
     """classify_from_fasta_header: classify a FASTA by the contig names in its head.
 
-    These cases used to live in ``test_evals.TestFastaE2E``, pinned to real files. The
-    anvil15 catalog holds no counterpart for any of them: every FASTA in it is a
-    whole-genome file of 773 MB or more, and a 256 KiB head of one yields exactly one
+    These cases used to live in ``test_evals.TestFastaE2E``, pinned to real files. No
+    fixture in the anvil15 catalog can reproduce their contig lists: every FASTA in it is
+    a whole-genome file of 773 MB or more, and a 256 KiB head of one yields exactly one
     contig (971 of the 973 cached FASTA evidence records hold a single name; the other
-    two hold two). So the reference-genome and small-assembly shapes below are no longer
-    reachable through the fetch path and are driven directly instead (#381).
+    two hold two). The catalog does still contain reference genomes — what it cannot
+    supply through the fetch path is the multi-contig head they would need. So the shapes
+    below are driven directly instead (#381).
 
     The mitochondrial contig counts and exemplar names are real, recovered from the
     ``output/anvil/20260321_002155`` run, which classified those files before they left
@@ -1020,7 +1021,10 @@ class TestFastaContigClassification:
     def test_grch38_reference_genome(self):
         """Reference chromosomes plus a GRCh38 filename → a GRCh38 reference genome.
 
-        Replaces the e2e fixture grch38.XX.fasta.
+        Replaces the e2e fixture grch38.XX.fasta. This exercises the classifier only: the
+        ``>= 20`` reference-contig threshold it depends on cannot be met by any file the
+        pipeline classifies today, because a 256 KiB head of a whole-genome FASTA yields
+        one contig (#382). Passing here is not evidence the production path works.
         """
         result = classify_from_fasta_header(self.REFERENCE_CHROMOSOMES, name=FileName.parse("grch38.XX.fasta"))
         assert val(result, "data_modality") == "genomic"
@@ -1031,7 +1035,8 @@ class TestFastaContigClassification:
     def test_chm13_reference_genome(self):
         """The same chromosomes with a CHM13 filename → a CHM13 reference genome.
 
-        Replaces the e2e fixture chm13v2.0.fasta.
+        Replaces the e2e fixture chm13v2.0.fasta; unreachable in production for the same
+        reason as the GRCh38 case above (#382).
         """
         result = classify_from_fasta_header(self.REFERENCE_CHROMOSOMES, name=FileName.parse("chm13v2.0.fasta"))
         assert val(result, "data_modality") == "genomic"
@@ -1057,7 +1062,6 @@ class TestFastaContigClassification:
         haplotype1-0000068 is its recorded contig name.
         """
         contigs = [f"haplotype1-{n:07d}" for n in range(68, 80)]
-        assert len(contigs) == 12
         result = classify_from_fasta_header(contigs, name=FileName.parse("HG002_verkko_gfase_mito.fasta.gz"))
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "assembly"
@@ -1070,7 +1074,6 @@ class TestFastaContigClassification:
         the exemplar h1tg000083l is its recorded contig name.
         """
         contigs = [f"h1tg0000{n}l" for n in range(83, 90)]
-        assert len(contigs) == 7
         result = classify_from_fasta_header(
             contigs, name=FileName.parse("HG002.hifiasm_0.19.0_trio.diploid.mito.fa.gz")
         )
@@ -1115,3 +1118,7 @@ class TestFastaContigClassification:
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "assembly"
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
+        # Nothing was read, so none of the three content classifiers may have claimed.
+        content_rules = {"fasta_reference_contigs", "fasta_assembler_contigs", "fasta_transcript_contigs"}
+        matched = val(result, "matched_rules")
+        assert matched is not None and content_rules.isdisjoint(matched)
