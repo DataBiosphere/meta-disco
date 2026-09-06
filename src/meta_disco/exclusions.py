@@ -292,10 +292,17 @@ def read_excluded(run_dir: Path) -> ExcludedIndex:
     whatever rows were recoverable. That covers unparseable JSON, a non-dict envelope, an
     ``excluded`` key that is missing or not a list, a row within it that is not a dict,
     and a ``metadata`` block that is absent or disagrees with those rows — every
-    departure from the shape :func:`write_excluded` emits. It never raises: this
-    is a report input, not a contract gate, so a malformed file must not stop the report
-    that would show it. But it must not be *read* as a zero either, which is why
-    ``readable`` exists rather than the rows simply coming back empty.
+    departure from the shape :func:`write_excluded` emits. None of those raise: this is a
+    report input, not a contract gate, so a malformed file must not stop the report that
+    would show it. But it must not be *read* as a zero either, which is why ``readable``
+    exists rather than the rows simply coming back empty.
+
+    An ``OSError`` from opening the file — a permission problem, an unreadable mount —
+    does propagate. That is deliberate and is the one thing here not treated as
+    tolerable: it says the environment is wrong, not that the data is malformed, and this
+    project fails loudly on the former (the same reason a fetcher raises ``FetchError``
+    rather than returning ``None``). Silently reporting "unknown" would turn a broken
+    filesystem into a quiet gap in the report.
 
     :func:`write_excluded` replaces the file atomically, so a torn write is not the
     expected source of an unreadable file — a hand-edited or externally truncated one is.

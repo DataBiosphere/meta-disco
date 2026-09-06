@@ -283,6 +283,21 @@ def _render_excluded(data: RunUnprocessable) -> list[str]:
     return lines
 
 
+def _size_cell(file_size) -> str:
+    """Render a ``file_size`` for the excluded table, showing drift rather than hiding it.
+
+    A real size is thousands-separated. Anything else present is shown as itself: an
+    ``isinstance(x, int)`` test alone would render a drifted ``True`` as ``1`` — ``bool``
+    subclasses ``int`` — and a bare ``"—"`` would report a drifted string as no size at
+    all. Only a genuinely absent size renders as ``—``.
+    """
+    if file_size is None:
+        return "—"
+    if isinstance(file_size, int) and not isinstance(file_size, bool):
+        return f"{file_size:,}"
+    return escape_md_cell(str(file_size))
+
+
 def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
     """Every excluded file named, grouped by dataset, one table per dataset.
 
@@ -305,7 +320,7 @@ def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
                     escape_md_cell(f.file_name) or "—",
                     escape_md_cell(str(f.entry_id)) if f.entry_id is not None else "—",
                     escape_md_cell(str(f.file_id)) if f.file_id is not None else "—",
-                    f"{f.file_size:,}" if isinstance(f.file_size, int) else "—",
+                    _size_cell(f.file_size),
                     escape_md_cell(str(f.drs_uri)) if f.drs_uri is not None else "—",
                 )
             )

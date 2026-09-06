@@ -75,8 +75,13 @@ format-check:
 # contract — the WHOLE contract, including fields the classifier never reads, not only
 # the ones that would make a record unclassifiable. So this refuses to start on any
 # drifted corpus, which is stricter than the run itself needs (#161 deliberately lets a
-# record bad on, say, drs_uri still classify). Records with no usable file_md5sum are
-# excluded from classification entirely (#376) and are one of the things this names.
+# record bad on, say, drs_uri still classify).
+#
+# It is not quite a superset of the #376 exclusion, so it does not name every record the
+# run would exclude: the contract's generated validator anchors with `$`, which matches
+# before a trailing newline, while exclusions.MD5_RE anchors with `\Z`. A file_md5sum of
+# "<32 hex>\n" therefore passes this gate and is still excluded from classification. That
+# record is named in the run's excluded_files.json instead.
 classify: validate-metadata
 	uv run python scripts/rerun_all_classifications.py
 

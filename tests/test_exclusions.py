@@ -246,6 +246,19 @@ class TestWriteAndReadExcluded:
         assert index.counts_known is False
         assert index.count is None
 
+    def test_an_unopenable_file_raises_rather_than_reading_as_unknown(self, tmp_path):
+        """A file we cannot open is an environment fault, not malformed data, and this
+        project fails loudly on those — reporting "unknown" would turn a broken mount
+        into a quiet gap in the report."""
+        path = tmp_path / EXCLUDED_FILE
+        path.write_text(json.dumps({"excluded": [], "metadata": {"total_input": 0, "excluded": 0}}))
+        path.chmod(0o000)
+        try:
+            with pytest.raises(OSError):
+                read_excluded(tmp_path)
+        finally:
+            path.chmod(0o644)
+
     def test_rows_survive_an_untrustworthy_metadata_block(self, tmp_path):
         """The rows are still the only record of those files, so they are recovered even
         when the block beside them cannot be trusted."""

@@ -220,6 +220,20 @@ class TestRenderReport:
         assert "#### Study A — 2 file(s)" in report
         assert "#### Study B — 1 file(s)" in report
 
+    @pytest.mark.parametrize(
+        ("size", "cell"),
+        [(1234, "1,234"), (0, "0"), (None, "—"), (True, "True"), (False, "False"), ("big", "big")],
+        ids=["int", "zero", "absent", "true", "false", "string"],
+    )
+    def test_a_drifted_file_size_is_shown_not_hidden(self, tmp_path, size, cell):
+        """`isinstance(x, int)` alone would render a drifted True as 1, since bool
+        subclasses int; a bare em-dash would report a drifted string as no size at all."""
+        run_dir = _write_run(tmp_path, [])
+        write_excluded(run_dir, [_excluded("a.bam", file_size=size)], total_input=1)
+        report = render_report(gather(run_dir))
+
+        assert f"| a.bam | e1 | f1 | {cell} |" in report
+
     def test_row_backed_reasons_are_counted_not_listed(self, tmp_path):
         records = [_reason_record(FETCH_FAILED_RULE_ID, f"f{i}.bam", "Study A") for i in range(30)]
         run_dir = _write_run(tmp_path, records)
