@@ -912,10 +912,16 @@ def _dataset(survey: Survey, title: str) -> DatasetSurvey | None:
 
 
 def _brief_null_fields(survey: Survey) -> list[tuple[str, str]]:
-    """The brief says these are null on every row; report each place they are not."""
+    """The brief says these are null on every row; report each place they are not.
+
+    The brief says "ancestry"; the compact manifest spells it two ways —
+    ``reported_ethnicity`` and ``genetic_ancestry`` — so both are checked, under
+    distinct labels so the message names whichever column was populated.
+    """
     labels = {
         "donors.phenotypic_sex": "donor sex",
-        "donors.reported_ethnicity": "donor ancestry",
+        "donors.reported_ethnicity": "donor reported ethnicity",
+        "donors.genetic_ancestry": "donor genetic ancestry",
         "biosamples.biosample_type": "biosample type",
         "biosamples.anatomical_site": "anatomical site",
     }

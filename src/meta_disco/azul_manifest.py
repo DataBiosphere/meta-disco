@@ -486,10 +486,11 @@ def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
 
     One JSON object per line, ``{"type": ..., "value": {...}}``. Both harmonized
     ``anvil_*`` entities and the submitter's own tables come through here; the
-    caller decides which types it cares about. A line whose JSON will not parse,
-    or that is not that shape, raises with its line number rather than being
-    skipped — a survey that silently dropped entities would understate coverage,
-    which is the one thing it must not do.
+    caller decides which types it cares about. A blank line carries no entity and
+    is passed over. Any other line whose JSON will not parse, or that is not that
+    shape, raises with its line number rather than being skipped — a survey that
+    silently dropped entities would understate coverage, which is the one thing
+    it must not do.
     """
     with path.open(encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):

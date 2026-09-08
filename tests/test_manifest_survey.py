@@ -34,6 +34,8 @@ COMPACT_COLUMNS = [
     "datasets.registered_identifier",
     "donors.donor_id",
     "donors.phenotypic_sex",
+    "donors.reported_ethnicity",
+    "donors.genetic_ancestry",
     "biosamples.biosample_id",
     "biosamples.anatomical_site",
     "biosamples.biosample_type",
@@ -570,6 +572,18 @@ def test_contradiction_records_the_brief_where_a_field_is_populated(tmp_path):
     brief = [c for c in found if "comparability-gap" in c[0]]
     assert len(brief) == 1
     assert "donor sex 100% in D" in brief[0][2]
+
+
+def test_brief_ancestry_claim_checks_both_spellings(tmp_path):
+    # The brief says "ancestry" and the compact manifest spells it two ways. A
+    # value in either one contradicts the claim, and the message says which.
+    write_sidecar(tmp_path, {"D": 1})
+    write_manifests(tmp_path, "D", [{"donors.genetic_ancestry": "EUR"}], [anvil_file("f1")])
+    found = ms.contradictions(ms.run_survey(tmp_path, CATALOG))
+    brief = [c for c in found if "comparability-gap" in c[0]]
+    assert len(brief) == 1
+    assert "donor genetic ancestry 100% in D" in brief[0][2]
+    assert "reported ethnicity" not in brief[0][2]
 
 
 def test_contradiction_records_the_join_arriving_whole(tmp_path):
