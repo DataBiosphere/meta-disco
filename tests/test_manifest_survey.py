@@ -510,7 +510,7 @@ def test_contradiction_records_the_traversal_not_the_manifest(tmp_path):
     found = ms.contradictions(surveyed(tmp_path))
     traversal = [c for c in found if "#337" in c[0]]
     assert len(traversal) == 1
-    assert "Single hop reaches 1 files" in traversal[0][2]
+    assert "Single hop reaches 1 file," in traversal[0][2]  # not "1 files"
     assert "transitive closure over the same activities reaches 2" in traversal[0][2]
 
 

@@ -921,7 +921,8 @@ def _verbatim_not_weaker(survey: Survey) -> list[tuple[str, str]]:
             found.append(
                 (
                     f", on {dataset.title}",
-                    f"Single hop reaches {reach.single_hop_donor:,} files, but transitive closure over the "
+                    f"Single hop reaches {reach.single_hop_donor:,} "
+                    f"{_plural(reach.single_hop_donor, 'file')}, but transitive closure over the "
                     f"same activities reaches {reach.transitive_donor:,} against the compact join's "
                     f"{join:,}. The shortfall is the traversal, not the manifest.",
                 )
