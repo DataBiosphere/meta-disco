@@ -1,5 +1,7 @@
 """Summary printers for classification results."""
 
+from typing import Literal
+
 from .models import field_label, field_value
 
 
@@ -11,6 +13,30 @@ def escape_md_cell(text: str) -> str:
     reshape the table. Shared by every report that renders one.
     """
     return text.replace("|", "\\|").replace("\n", " ")
+
+
+def md_table(header: list[str], rows: list[list[str]], align: Literal["left", "right"] = "left") -> list[str]:
+    """One markdown table as a list of lines: header, separator rule, then the rows.
+
+    Every cell goes through :func:`escape_md_cell`. ``align`` sets the alignment
+    of the columns after the first, which stays left — the leading column is a
+    label in every report that uses this, and the rest are usually counts.
+    Callers pass rows already formatted as strings; this does no number
+    formatting of its own.
+
+    ``align`` is a :data:`~typing.Literal` so that a misspelling is a type error
+    at the call site rather than a table that quietly renders the other way: the
+    two spellings are indistinguishable at runtime, since anything that is not
+    ``"left"`` right-aligns.
+    """
+    # Three characters either way. GFM accepts a single hyphen, but a three-dash
+    # cell is what every other report in this repo emits and what the stricter
+    # markdown parsers require, so it costs nothing to stay in that dialect.
+    rule = "---" if align == "left" else "---:"
+    lines = ["| " + " | ".join(escape_md_cell(cell) for cell in header) + " |"]
+    lines.append("|" + "|".join([" --- "] + [f" {rule} "] * (len(header) - 1)) + "|")
+    lines.extend("| " + " | ".join(escape_md_cell(cell) for cell in row) + " |" for row in rows)
+    return lines
 
 
 def _print_field_table(title: str, counts: dict, width: int = 35):
