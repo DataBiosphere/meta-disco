@@ -17,12 +17,12 @@
     },
     {
       "claim": "The verbatim entity chain reaches fewer files than the compact join, so verbatim is not a superset of compact.",
-      "measured": "Single hop reaches 9,603 files, but transitive closure over the same activities reaches 25,616 against the compact join's 25,616. The shortfall is the traversal, not the manifest.",
+      "measured": "Single hop reaches 9,603 files of 26,016 (37%), but transitive closure over the same activities reaches 25,616 (98%), against the compact join's 25,616 of 26,016 compact rows (98%). The shortfall is the traversal, not the manifest.",
       "source": "#337 / #368 (azul_manifest docstring), on ANVIL_1000G_high_coverage_2019"
     },
     {
       "claim": "The verbatim entity chain reaches fewer files than the compact join, so verbatim is not a superset of compact.",
-      "measured": "Single hop reaches 4,432 files, but transitive closure over the same activities reaches 4,746 against the compact join's 4,746. The shortfall is the traversal, not the manifest.",
+      "measured": "Single hop reaches 4,432 files of 23,185 (19%), but transitive closure over the same activities reaches 4,746 (20%), against the compact join's 4,746 of 23,185 compact rows (20%). The shortfall is the traversal, not the manifest.",
       "source": "#337 / #368 (azul_manifest docstring), on ANVIL_HPRC"
     },
     {
@@ -392,6 +392,10 @@
               "filled": 23,
               "rate": 1.0
             },
+            "used_biosample_id": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "used_file_id": {
               "filled": 23,
               "rate": 1.0
@@ -409,13 +413,41 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 3202,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3202,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 3202,
@@ -462,6 +494,18 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 1,
               "rate": 1.0
@@ -491,6 +535,10 @@
               "filled": 3202,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 3202,
               "rate": 1.0
@@ -498,6 +546,14 @@
             "part_of_dataset_id": {
               "filled": 3202,
               "rate": 1.0
+            },
+            "phenotypic_sex": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 3202,
@@ -516,6 +572,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 11493,
               "rate": 1.0
@@ -552,6 +612,10 @@
               "filled": 11493,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 11493,
               "rate": 1.0
@@ -573,13 +637,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -1389,13 +1469,41 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 6404,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 6404,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 6404,
@@ -1446,6 +1554,14 @@
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 1,
               "rate": 1.0
@@ -1475,6 +1591,10 @@
               "filled": 3202,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 3202,
               "rate": 1.0
@@ -1482,6 +1602,14 @@
             "part_of_dataset_id": {
               "filled": 3202,
               "rate": 1.0
+            },
+            "phenotypic_sex": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 3202,
@@ -1500,6 +1628,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 26016,
               "rate": 1.0
@@ -1536,6 +1668,10 @@
               "filled": 26016,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 26016,
               "rate": 1.0
@@ -1557,13 +1693,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -2451,13 +2603,41 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 57,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 57,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 57,
@@ -2504,6 +2684,18 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 1,
               "rate": 1.0
@@ -2533,6 +2725,10 @@
               "filled": 57,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 47,
               "rate": 0.8245614035087719
@@ -2544,6 +2740,10 @@
             "phenotypic_sex": {
               "filled": 47,
               "rate": 0.8245614035087719
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 47,
@@ -2562,6 +2762,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 23185,
               "rate": 1.0
@@ -2598,6 +2802,10 @@
               "filled": 23185,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 23185,
               "rate": 1.0
@@ -2619,13 +2827,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -3577,6 +3801,10 @@
               "filled": 3,
               "rate": 1.0
             },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 3,
               "rate": 1.0
@@ -3588,6 +3816,22 @@
             "datarepo_row_id": {
               "filled": 3,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 3,
@@ -3618,6 +3862,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -3633,6 +3881,10 @@
             "owner": {
               "filled": 1,
               "rate": 1.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
             },
             "registered_identifier": {
               "filled": 1,
@@ -3667,6 +3919,10 @@
               "filled": 3,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 3,
               "rate": 1.0
@@ -3700,6 +3956,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 12534,
               "rate": 1.0
@@ -3736,6 +3996,10 @@
               "filled": 12534,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 12534,
               "rate": 1.0
@@ -3757,9 +4021,17 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
             },
             "project_id": {
               "filled": 1,
@@ -3768,6 +4040,10 @@
             "registered_identifier": {
               "filled": 1,
               "rate": 1.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -3789,6 +4065,14 @@
             "activity_type": {
               "filled": 6,
               "rate": 1.0
+            },
+            "assay_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
             },
             "datarepo_row_id": {
               "filled": 6,
@@ -3975,6 +4259,10 @@
               "filled": 6,
               "rate": 1.0
             },
+            "capture_region_bed_file": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_processing_pipeline": {
               "filled": 6,
               "rate": 1.0
@@ -3986,6 +4274,14 @@
             "date_data_generation": {
               "filled": 6,
               "rate": 1.0
+            },
+            "exome_capture_platform": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "functional_equivalence_standard": {
+              "filled": 0,
+              "rate": 0.0
             },
             "ingest_provenance": {
               "filled": 6,
@@ -4051,6 +4347,10 @@
               "filled": 6,
               "rate": 1.0
             },
+            "target_insert_size": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "tissue_source": {
               "filled": 6,
               "rate": 1.0
@@ -4068,6 +4368,30 @@
         "subject": {
           "dimension_fields": [],
           "fields": {
+            "affected_status": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "affected_status_detail": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "age_at_dna_collection": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "age_baseline": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "age_of_onset": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "age_unspecified": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3,
               "rate": 1.0
@@ -4079,6 +4403,10 @@
             "dbgap_subject_id": {
               "filled": 3,
               "rate": 1.0
+            },
+            "disease_description": {
+              "filled": 0,
+              "rate": 0.0
             },
             "ingest_provenance": {
               "filled": 3,
@@ -4099,6 +4427,10 @@
             "sex": {
               "filled": 3,
               "rate": 1.0
+            },
+            "study_nickname": {
+              "filled": 0,
+              "rate": 0.0
             },
             "subject_id": {
               "filled": 3,
@@ -4521,13 +4853,41 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 3202,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3202,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 3202,
@@ -4574,6 +4934,18 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 1,
               "rate": 1.0
@@ -4603,6 +4975,10 @@
               "filled": 3202,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 3202,
               "rate": 1.0
@@ -4614,6 +4990,10 @@
             "phenotypic_sex": {
               "filled": 3202,
               "rate": 1.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 3202,
@@ -4632,6 +5012,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 289204,
               "rate": 1.0
@@ -4668,6 +5052,10 @@
               "filled": 289204,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 289204,
               "rate": 1.0
@@ -4689,13 +5077,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -4714,13 +5118,25 @@
         "chromosome": {
           "dimension_fields": [],
           "fields": {
+            "chm13_pass_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "chm13_pass_vcf_gz": {
               "filled": 24,
               "rate": 1.0
             },
+            "chm13_raw_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "chm13_raw_vcf_gz": {
               "filled": 24,
               "rate": 1.0
+            },
+            "chm13_recalibrated_vcf": {
+              "filled": 0,
+              "rate": 0.0
             },
             "chm13_recalibrated_vcf_gz": {
               "filled": 24,
@@ -4734,9 +5150,17 @@
               "filled": 24,
               "rate": 1.0
             },
+            "grch38_pass_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "grch38_pass_vcf_gz": {
               "filled": 24,
               "rate": 1.0
+            },
+            "grch38_recalibrated_vcf": {
+              "filled": 0,
+              "rate": 0.0
             },
             "grch38_recalibrated_vcf_gz": {
               "filled": 24,
@@ -4865,6 +5289,10 @@
               "filled": 31155,
               "rate": 1.0
             },
+            "genotyped_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "ingest_provenance": {
               "filled": 31155,
               "rate": 1.0
@@ -4907,6 +5335,294 @@
         "participant": {
           "dimension_fields": [],
           "fields": {
+            "chr10_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr10_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr10_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr11_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr11_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr11_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr12_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr12_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr12_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr13_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr13_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr13_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr14_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr14_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr14_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr15_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr15_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr15_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr16_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr16_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr16_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr17_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr17_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr17_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr18_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr18_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr18_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr19_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr19_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr19_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr1_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr1_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr1_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr20_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr20_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr20_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr21_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr21_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr21_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr22_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr22_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr22_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr2_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr2_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr2_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr3_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr3_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr3_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr4_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr4_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr4_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr5_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr5_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr5_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr6_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr6_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr6_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr7_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr7_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr7_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr8_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr8_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr8_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr9_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr9_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chr9_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chrx_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chrx_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chrx_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chry_hc_bgzip": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chry_hc_tabix": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "chry_hc_vcf": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "cram": {
               "filled": 3202,
               "rate": 1.0
@@ -6571,6 +7287,10 @@
               "filled": 98144,
               "rate": 1.0
             },
+            "used_biosample_id": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "used_file_id": {
               "filled": 98144,
               "rate": 1.0
@@ -6608,6 +7328,18 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 1,
               "rate": 1.0
@@ -6629,6 +7361,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 309979,
               "rate": 1.0
@@ -6665,6 +7401,10 @@
               "filled": 309979,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 309979,
               "rate": 1.0
@@ -6686,13 +7426,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -7180,6 +7936,10 @@
               "filled": 756,
               "rate": 1.0
             },
+            "used_biosample_id": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "used_file_id": {
               "filled": 756,
               "rate": 1.0
@@ -7201,6 +7961,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -7212,6 +7976,18 @@
             "dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 1,
@@ -7234,6 +8010,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3591,
               "rate": 1.0
@@ -7270,6 +8050,10 @@
               "filled": 3591,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 3591,
               "rate": 1.0
@@ -7291,13 +8075,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -7843,13 +8643,29 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 224,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 224,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_age_at_collection_lower_bound": {
               "filled": 220,
@@ -7892,6 +8708,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -7904,9 +8724,21 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "registered_identifier": {
               "filled": 1,
               "rate": 1.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -7933,6 +8765,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 1,
               "rate": 1.0
@@ -7944,6 +8780,10 @@
             "phenotypic_sex": {
               "filled": 1,
               "rate": 1.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 1,
@@ -7967,6 +8807,10 @@
             }
           ],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 1992,
               "rate": 1.0
@@ -8035,6 +8879,10 @@
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
             },
             "project_id": {
               "filled": 1,
@@ -8626,6 +9474,10 @@
               "filled": 2112,
               "rate": 1.0
             },
+            "ingest_provenance": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "used_biosample_id": {
               "filled": 2112,
               "rate": 1.0
@@ -8688,13 +9540,29 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 410,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 410,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_age_at_collection_lower_bound": {
               "filled": 410,
@@ -8737,6 +9605,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -8749,9 +9621,21 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "registered_identifier": {
               "filled": 1,
               "rate": 1.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -8778,6 +9662,10 @@
               "filled": 2,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 2,
               "rate": 1.0
@@ -8789,6 +9677,10 @@
             "phenotypic_sex": {
               "filled": 2,
               "rate": 1.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 2,
@@ -8812,6 +9704,10 @@
             }
           ],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3752,
               "rate": 1.0
@@ -8881,6 +9777,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
@@ -8934,6 +9834,10 @@
               "filled": 410,
               "rate": 1.0
             },
+            "ingest_provenance": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "version": {
               "filled": 410,
               "rate": 1.0
@@ -8958,6 +9862,10 @@
             "donor_type": {
               "filled": 2,
               "rate": 1.0
+            },
+            "ingest_provenance": {
+              "filled": 0,
+              "rate": 0.0
             },
             "organism_type": {
               "filled": 2,
@@ -9042,6 +9950,10 @@
               "filled": 3752,
               "rate": 1.0
             },
+            "ingest_provenance": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "reference_assembly": {
               "filled": 2932,
               "rate": 0.7814498933901919
@@ -9091,6 +10003,10 @@
             "funded_by": {
               "filled": 1,
               "rate": 1.0
+            },
+            "ingest_provenance": {
+              "filled": 0,
+              "rate": 0.0
             },
             "principal_investigator": {
               "filled": 1,
@@ -9605,6 +10521,10 @@
               "filled": 230,
               "rate": 0.9829059829059829
             },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 234,
               "rate": 1.0
@@ -9616,6 +10536,22 @@
             "datarepo_row_id": {
               "filled": 234,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 234,
@@ -9646,6 +10582,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -9657,6 +10597,18 @@
             "dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 1,
@@ -9687,6 +10639,14 @@
               "filled": 234,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "organism_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "part_of_dataset_id": {
               "filled": 234,
               "rate": 1.0
@@ -9694,6 +10654,10 @@
             "phenotypic_sex": {
               "filled": 232,
               "rate": 0.9914529914529915
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 234,
@@ -9712,6 +10676,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 16271,
               "rate": 1.0
@@ -9748,6 +10716,10 @@
               "filled": 16271,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 16271,
               "rate": 1.0
@@ -9769,13 +10741,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -11143,9 +12131,17 @@
               "filled": 230,
               "rate": 1.0
             },
+            "shear_method": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "similarity": {
               "filled": 230,
               "rate": 1.0
+            },
+            "size_selection": {
+              "filled": 0,
+              "rate": 0.0
             },
             "study": {
               "filled": 230,
@@ -12230,6 +13226,10 @@
               "filled": 800,
               "rate": 0.9720534629404617
             },
+            "used_file_id": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "version": {
               "filled": 823,
               "rate": 1.0
@@ -12247,6 +13247,10 @@
               "filled": 1935,
               "rate": 1.0
             },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 1935,
               "rate": 1.0
@@ -12258,6 +13262,22 @@
             "datarepo_row_id": {
               "filled": 1935,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
             },
             "donor_id": {
               "filled": 1935,
@@ -12288,6 +13308,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -12300,9 +13324,21 @@
               "filled": 1,
               "rate": 1.0
             },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "registered_identifier": {
               "filled": 1,
               "rate": 1.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -12329,6 +13365,10 @@
               "filled": 183,
               "rate": 1.0
             },
+            "genetic_ancestry": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "organism_type": {
               "filled": 183,
               "rate": 1.0
@@ -12340,6 +13380,10 @@
             "phenotypic_sex": {
               "filled": 183,
               "rate": 1.0
+            },
+            "reported_ethnicity": {
+              "filled": 0,
+              "rate": 0.0
             },
             "source_datarepo_row_ids": {
               "filled": 183,
@@ -12428,9 +13472,17 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
             },
             "project_id": {
               "filled": 1,
@@ -12439,6 +13491,14 @@
             "registered_identifier": {
               "filled": 1,
               "rate": 1.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "title": {
+              "filled": 0,
+              "rate": 0.0
             },
             "version": {
               "filled": 1,
@@ -13195,6 +14255,10 @@
               "filled": 831,
               "rate": 1.0
             },
+            "used_biosample_id": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "used_file_id": {
               "filled": 831,
               "rate": 1.0
@@ -13212,13 +14276,45 @@
         "anvil_biosample": {
           "dimension_fields": [],
           "fields": {
+            "anatomical_site": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "apriori_cell_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "biosample_id": {
               "filled": 1510,
               "rate": 1.0
             },
+            "biosample_type": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 1510,
               "rate": 1.0
+            },
+            "disease": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_lower_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_unit": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_age_at_collection_upper_bound": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "donor_id": {
+              "filled": 0,
+              "rate": 0.0
             },
             "part_of_dataset_id": {
               "filled": 1510,
@@ -13245,6 +14341,10 @@
               "filled": 1,
               "rate": 1.0
             },
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "data_use_permission": {
               "filled": 1,
               "rate": 1.0
@@ -13256,6 +14356,22 @@
             "dataset_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "owner": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,
@@ -13274,6 +14390,10 @@
         "anvil_file": {
           "dimension_fields": [],
           "fields": {
+            "data_modality": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "datarepo_row_id": {
               "filled": 3285,
               "rate": 1.0
@@ -13310,6 +14430,10 @@
               "filled": 3285,
               "rate": 1.0
             },
+            "reference_assembly": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "source_datarepo_row_ids": {
               "filled": 3285,
               "rate": 1.0
@@ -13331,13 +14455,29 @@
               "filled": 1,
               "rate": 1.0
             },
+            "funded_by": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "generated_dataset_id": {
               "filled": 1,
               "rate": 1.0
             },
+            "principal_investigator": {
+              "filled": 0,
+              "rate": 0.0
+            },
             "project_id": {
               "filled": 1,
               "rate": 1.0
+            },
+            "registered_identifier": {
+              "filled": 0,
+              "rate": 0.0
+            },
+            "source_datarepo_row_ids": {
+              "filled": 0,
+              "rate": 0.0
             },
             "title": {
               "filled": 1,

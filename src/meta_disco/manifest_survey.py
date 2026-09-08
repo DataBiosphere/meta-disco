@@ -226,10 +226,15 @@ class TableCoverage:
 
     ``fields`` counts, per field name, the rows where that field held something
     (:func:`_is_filled`); a field absent from a row counts as unfilled, so a rate
-    is always out of ``rows``. ``files_named`` counts the dataset's own
-    ``anvil_file`` ids this table points at, by any handle :class:`FileKeys`
-    indexes — a bare id, a DRS URI, or an unambiguous file name. Files the table
-    names but the dataset does not hold are not counted.
+    is always out of ``rows``. A field the manifest carries but never fills is
+    kept at zero rather than dropped, so it reports as 0% instead of vanishing —
+    a column the table promises and the data does not deliver is a finding, and
+    :func:`survey_compact` already reports the compact columns that way.
+
+    ``files_named`` counts the dataset's own ``anvil_file`` ids this table points
+    at, by any handle :class:`FileKeys` indexes — a bare id, a DRS URI, or an
+    unambiguous file name. Files the table names but the dataset does not hold
+    are not counted.
     """
 
     name: str
@@ -243,6 +248,16 @@ class TableCoverage:
         return not self.name.startswith(_HARMONIZED_PREFIX)
 
     @property
+    def filled_fields(self) -> list[tuple[str, int]]:
+        """The populated fields, most filled first, ties broken by name."""
+        return sorted(((name, n) for name, n in self.fields.items() if n), key=lambda item: (-item[1], item[0]))
+
+    @property
+    def never_filled_fields(self) -> list[str]:
+        """The fields this table carries and fills on no row at all, in name order."""
+        return sorted(name for name, n in self.fields.items() if not n)
+
+    @property
     def dimension_fields(self) -> list[tuple[str, str]]:
         """``(field, dimension)`` for each populated field named in :data:`FIELD_TOKENS`.
 
@@ -250,9 +265,7 @@ class TableCoverage:
         not counted: the question this answers is what an importer could read,
         not what the table's header promises.
         """
-        return sorted(
-            (name, FIELD_TOKENS[name]) for name, filled in self.fields.items() if filled and name in FIELD_TOKENS
-        )
+        return sorted((name, FIELD_TOKENS[name]) for name, _n in self.filled_fields if name in FIELD_TOKENS)
 
     @property
     def carries_dimension(self) -> bool:
@@ -279,6 +292,22 @@ class Reach:
     single_hop_donor: int = 0
     transitive_biosample: int = 0
     transitive_donor: int = 0
+
+    @property
+    def single_hop_donor_rate(self) -> float:
+        return self.single_hop_donor / self.files if self.files else 0.0
+
+    @property
+    def transitive_donor_rate(self) -> float:
+        """Share of the dataset's ``anvil_file`` entities the transitive walk links to a donor.
+
+        Out of ``files``, never out of ``compact_rows``: this and the compact
+        join's rate are the only comparable form of the two donor counts, which
+        are measured per file and per row respectively and are not always the
+        same total. Comparing the raw counts, or dividing one by the other's
+        denominator, can exceed 100% or reverse the comparison outright.
+        """
+        return self.transitive_donor / self.files if self.files else 0.0
 
 
 @dataclass
@@ -573,9 +602,14 @@ def survey_verbatim(path: Path) -> tuple[list[TableCoverage], Reach, int]:
     biosample_has_donor: dict[str, bool] = {}
     for entity_type, value in iter_verbatim_entities(path):
         counts[entity_type] += 1
+        # Hoisted out of the loop below: one lookup per row rather than per value,
+        # over ~23M values on this corpus.
+        counted = fields[entity_type]
         for name, item in value.items():
             if _is_filled(item):
-                fields[entity_type][name] += 1
+                counted[name] += 1
+            elif name not in counted:
+                counted[name] = 0  # seen but never filled — kept, so it reports as 0%
         if entity_type == VERBATIM_FILE:
             file_ids.add(keys.add(value))
         elif entity_type == VERBATIM_BIOSAMPLE:
@@ -831,13 +865,10 @@ def readiness(dataset: DatasetSurvey) -> dict[str, tuple[str, str]]:
     by_name = len(dataset.name_encoding_tables)
     consent = min(dataset.rate(GOVERNANCE_CONSENT), dataset.rate(GOVERNANCE_DUO))
     phs = dataset.rate(GOVERNANCE_PHS)
-    # Each count against its own denominator: the compact join is per compact row,
-    # the transitive walk per anvil_file entity, and the two are not always the
-    # same number. Dividing one by the other's total can exceed 100%.
+    # Each count against its own denominator — see Reach.transitive_donor_rate.
     compact_donor = dataset.filled(JOIN_DONOR)
-    donor_rate = compact_donor / dataset.compact_rows if dataset.compact_rows else 0.0
-    transitive_rate = dataset.reach.transitive_donor / dataset.reach.files if dataset.reach.files else 0.0
-    beside = f"verbatim transitive {_pct(transitive_rate)}%"
+    donor_rate = dataset.rate(JOIN_DONOR)
+    beside = f"verbatim transitive {_pct(dataset.reach.transitive_donor_rate)}%"
     basis = f"{_pct(rate)}% of verbatim files, {tables} {_plural(tables, 'table')} ({by_name} by name)"
     return {
         "dimensions": (_verdict(rate), basis),
@@ -911,20 +942,25 @@ def _verbatim_not_weaker(survey: Survey) -> list[tuple[str, str]]:
 
     Both halves are needed. A single-hop shortfall alone does not refute the
     claim: where transitive closure still falls short of the compact join, the
-    claim holds for that dataset and a refutation would be false.
+    claim holds for that dataset and a refutation would be false. That second
+    half is a comparison of rates — see :meth:`Reach.transitive_donor_rate` —
+    and the message prints each count with the denominator it was taken against,
+    so the evidence shown is the evidence the comparison used.
     """
     found = []
     for dataset in survey.datasets:
         reach = dataset.reach
         join = dataset.filled(JOIN_DONOR)
-        if reach.single_hop_donor < reach.transitive_donor and reach.transitive_donor >= join:
+        if reach.single_hop_donor < reach.transitive_donor and reach.transitive_donor_rate >= dataset.rate(JOIN_DONOR):
             found.append(
                 (
                     f", on {dataset.title}",
                     f"Single hop reaches {reach.single_hop_donor:,} "
-                    f"{_plural(reach.single_hop_donor, 'file')}, but transitive closure over the "
-                    f"same activities reaches {reach.transitive_donor:,} against the compact join's "
-                    f"{join:,}. The shortfall is the traversal, not the manifest.",
+                    f"{_plural(reach.single_hop_donor, 'file')} of {reach.files:,} "
+                    f"({_pct(reach.single_hop_donor_rate)}%), but transitive closure over the same "
+                    f"activities reaches {reach.transitive_donor:,} ({_pct(reach.transitive_donor_rate)}%), "
+                    f"against the compact join's {join:,} of {dataset.compact_rows:,} compact rows "
+                    f"({_pct(dataset.rate(JOIN_DONOR))}%). The shortfall is the traversal, not the manifest.",
                 )
             )
     return found
@@ -1164,7 +1200,8 @@ def _verbatim_section(survey: Survey) -> list[str]:
         "",
         "Every entity `type` in each dataset's verbatim manifest with its row count. `anvil_*` "
         "types are Azul's harmonized entities; everything else is the submitter's own Terra "
-        "table, carried through unaltered.",
+        "table, carried through unaltered. Each submitter table lists its fields with the share "
+        "of rows that fill them, and separately the fields it carries but never fills anywhere.",
         "",
     ]
     for dataset in survey.datasets:
@@ -1198,13 +1235,19 @@ def _verbatim_section(survey: Survey) -> list[str]:
         )
         out += [""]
         for table in submitter:
-            if not table.fields:
-                continue
-            fields = ", ".join(
-                f"`{name}` {_pct(count / table.rows if table.rows else 0)}%"
-                for name, count in sorted(table.fields.items(), key=lambda item: (-item[1], item[0]))
+            rates = ", ".join(
+                f"`{name}` {_pct(count / table.rows if table.rows else 0)}%" for name, count in table.filled_fields
             )
-            out += [f"- **`{table.name}`** ({table.rows:,} {_plural(table.rows, 'row')}): {fields}"]
+            out += [
+                f"- **`{table.name}`** ({table.rows:,} {_plural(table.rows, 'row')}): "
+                + (rates or "no field is filled on any row")
+            ]
+            # The never-filled fields get their own line rather than a 0% tail on
+            # that one: T2T's `participant` carries 72 of them, and inlining those
+            # would bury the rates.
+            empty = table.never_filled_fields
+            if empty:
+                out += [f"  - never filled ({len(empty)}): " + ", ".join(f"`{name}`" for name in empty)]
         out += [""]
     return out
 

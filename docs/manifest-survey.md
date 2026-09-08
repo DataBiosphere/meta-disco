@@ -133,7 +133,7 @@ Across every dataset: `(empty)` 25,734,133. Any spelling in the absence rule tha
 
 ## Verbatim entity census
 
-Every entity `type` in each dataset's verbatim manifest with its row count. `anvil_*` types are Azul's harmonized entities; everything else is the submitter's own Terra table, carried through unaltered.
+Every entity `type` in each dataset's verbatim manifest with its row count. `anvil_*` types are Azul's harmonized entities; everything else is the submitter's own Terra table, carried through unaltered. Each submitter table lists its fields with the share of rows that fill them, and separately the fields it carries but never fills anywhere.
 
 ### ANVIL_1000G_PRIMED_data_model
 
@@ -247,8 +247,10 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 - **`file_inventory`** (12,534 rows): `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `full_extension` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `content_type` 39%
 - **`workspace_attributes`** (24 rows): `attribute` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `version` 100%, `value` 96%
 - **`sequencing`** (6 rows): `alignment_method` 100%, `analyte_type` 100%, `data_processing_pipeline` 100%, `datarepo_row_id` 100%, `date_data_generation` 100%, `ingest_provenance` 100%, `library_prep_kit_method` 100%, `number_of_independent_libraries` 100%, `read_length` 100%, `reference_genome_build` 100%, `sample_id` 100%, `seq_filename` 100%, `sequencer_id` 100%, `sequencing_assay` 100%, `sequencing_id` 100%, `sequencing_id_fileref` 100%, `sequencing_platform` 100%, `sequencing_strategy` 100%, `sex` 100%, `submitter_id` 100%, `target_depth` 100%, `tissue_source` 100%, `version` 100%
+  - never filled (4): `capture_region_bed_file`, `exome_capture_platform`, `functional_equivalence_standard`, `target_insert_size`
 - **`sample`** (3 rows): `datarepo_row_id` 100%, `dbgap_sample_id` 100%, `ingest_provenance` 100%, `sample_id` 100%, `sample_provider` 100%, `sample_source` 100%, `subject_id` 100%, `version` 100%
 - **`subject`** (3 rows): `datarepo_row_id` 100%, `dbgap_study_id` 100%, `dbgap_subject_id` 100%, `ingest_provenance` 100%, `race_ethnicity` 100%, `race_ethnicity_detail` 100%, `sequencing_center` 100%, `sex` 100%, `subject_id` 100%, `version` 100%
+  - never filled (8): `affected_status`, `affected_status_detail`, `age_at_dna_collection`, `age_baseline`, `age_of_onset`, `age_unspecified`, `disease_description`, `study_nickname`
 - **`duos_dataset_registration`** (1 row): `dataset_id` 100%, `description` 100%, `duos_id` 100%, `version` 100%
 
 ### ANVIL_T2T
@@ -270,9 +272,12 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 
 - **`file_inventory`** (290,135 rows): `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` >99%, `content_type` >99%
 - **`interval`** (31,155 rows): `chromosome` 100%, `datarepo_row_id` 100%, `genomics_db_tar` 100%, `genotyped_bcftools_index` 100%, `genotyped_bgzip` 100%, `ingest_provenance` 100%, `interval_id` 100%, `margined_end` 100%, `margined_start` 100%, `start` 100%, `t_end` 100%, `version` 100%
+  - never filled (1): `genotyped_vcf`
 - **`participant`** (3,202 rows): `cram` 100%, `cram_index` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `mosdepth_global_dist` 100%, `mosdepth_regions_bed` 100%, `mosdepth_regions_bed_idx` 100%, `mosdepth_regions_dist` 100%, `mosdepth_summary` 100%, `participant_id` 100%, `read_1_fastq` 100%, `read_2_fastq` 100%, `samtools_stats` 100%, `sex` 100%, `version` 100%
+  - never filled (72): `chr10_hc_bgzip`, `chr10_hc_tabix`, `chr10_hc_vcf`, `chr11_hc_bgzip`, `chr11_hc_tabix`, `chr11_hc_vcf`, `chr12_hc_bgzip`, `chr12_hc_tabix`, `chr12_hc_vcf`, `chr13_hc_bgzip`, `chr13_hc_tabix`, `chr13_hc_vcf`, `chr14_hc_bgzip`, `chr14_hc_tabix`, `chr14_hc_vcf`, `chr15_hc_bgzip`, `chr15_hc_tabix`, `chr15_hc_vcf`, `chr16_hc_bgzip`, `chr16_hc_tabix`, `chr16_hc_vcf`, `chr17_hc_bgzip`, `chr17_hc_tabix`, `chr17_hc_vcf`, `chr18_hc_bgzip`, `chr18_hc_tabix`, `chr18_hc_vcf`, `chr19_hc_bgzip`, `chr19_hc_tabix`, `chr19_hc_vcf`, `chr1_hc_bgzip`, `chr1_hc_tabix`, `chr1_hc_vcf`, `chr20_hc_bgzip`, `chr20_hc_tabix`, `chr20_hc_vcf`, `chr21_hc_bgzip`, `chr21_hc_tabix`, `chr21_hc_vcf`, `chr22_hc_bgzip`, `chr22_hc_tabix`, `chr22_hc_vcf`, `chr2_hc_bgzip`, `chr2_hc_tabix`, `chr2_hc_vcf`, `chr3_hc_bgzip`, `chr3_hc_tabix`, `chr3_hc_vcf`, `chr4_hc_bgzip`, `chr4_hc_tabix`, `chr4_hc_vcf`, `chr5_hc_bgzip`, `chr5_hc_tabix`, `chr5_hc_vcf`, `chr6_hc_bgzip`, `chr6_hc_tabix`, `chr6_hc_vcf`, `chr7_hc_bgzip`, `chr7_hc_tabix`, `chr7_hc_vcf`, `chr8_hc_bgzip`, `chr8_hc_tabix`, `chr8_hc_vcf`, `chr9_hc_bgzip`, `chr9_hc_tabix`, `chr9_hc_vcf`, `chrx_hc_bgzip`, `chrx_hc_tabix`, `chrx_hc_vcf`, `chry_hc_bgzip`, `chry_hc_tabix`, `chry_hc_vcf`
 - **`workspace_attributes`** (79 rows): `attribute` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `version` 100%, `value` 65%
 - **`chromosome`** (24 rows): `chm13_pass_vcf_gz` 100%, `chm13_raw_vcf_gz` 100%, `chm13_recalibrated_vcf_gz` 100%, `chromosome_id` 100%, `datarepo_row_id` 100%, `grch38_pass_vcf_gz` 100%, `grch38_recalibrated_vcf_gz` 100%, `ingest_provenance` 100%, `version` 100%
+  - never filled (5): `chm13_pass_vcf`, `chm13_raw_vcf`, `chm13_recalibrated_vcf`, `grch38_pass_vcf`, `grch38_recalibrated_vcf`
 - **`duos_dataset_registration`** (1 row): `dataset_id` 100%, `description` 100%, `duos_id` 100%, `version` 100%
 
 ### ANVIL_T2T_CHRY
@@ -368,12 +373,17 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `project` | submitter | 1 | 0 | — | — |
 
 - **`file`** (3,752 rows): `associated_biosample_id` 100%, `datarepo_row_id` 100%, `file_format` 100%, `file_id` 100%, `file_md5sum` 100%, `file_name` 100%, `file_ref` 100%, `file_size` 100%, `version` 100%, `reference_assembly` 78%
+  - never filled (1): `ingest_provenance`
 - **`activity`** (2,112 rows): `activity_id` 100%, `activity_type` 100%, `datarepo_row_id` 100%, `generated_file_id` 100%, `used_biosample_id` 100%, `version` 100%, `used_file_id` 81%
+  - never filled (1): `ingest_provenance`
 - **`biosample`** (410 rows): `biosample_id` 100%, `datarepo_row_id` 100%, `donor_age_at_collection_lower_bound` 100%, `donor_age_at_collection_unit` 100%, `donor_age_at_collection_upper_bound` 100%, `donor_id` 100%, `version` 100%
+  - never filled (1): `ingest_provenance`
 - **`donor`** (2 rows): `datarepo_row_id` 100%, `donor_id` 100%, `donor_type` 100%, `organism_type` 100%, `phenotypic_sex` 100%, `version` 100%
+  - never filled (1): `ingest_provenance`
 - **`ingestion_reference`** (2 rows): `datarepo_row_id` 100%, `key` 100%, `value` 100%, `version` 100%
 - **`duos_dataset_registration`** (1 row): `dataset_id` 100%, `description` 100%, `duos_id` 100%, `version` 100%
 - **`project`** (1 row): `datarepo_row_id` 100%, `funded_by` 100%, `principal_investigator` 100%, `project_id` 100%, `registered_identifier` 100%, `title` 100%, `version` 100%
+  - never filled (1): `ingest_provenance`
 
 ### AnVIL_HPRC_R2
 
@@ -437,6 +447,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 - **`to_ref_grch38_winnowmap_bai`** (462 rows): `datarepo_row_id` 100%, `haplotype` 100%, `ingest_provenance` 100%, `location` 100%, `sample_id` 100%, `to_ref_grch38_winnowmap_bai_id` 100%, `version` 100%
 - **`sample_metadata`** (234 rows): `biosample_id` 100%, `contributors` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `project` 100%, `sample_metadata_id` 100%, `trio_available` 100%, `version` 100%, `sex` 99%, `collection` 99%, `population_abbreviation` 98%, `population_descriptor` 98%, `tissue` 98%, `paternal_id` 56%, `maternal_id` 55%, `family_id` 53%, `alternative_id` 1%, `notes` <1%
 - **`kinnex`** (230 rows): `barcode` 100%, `basecaller_version` 100%, `bioproject_accession` 100%, `ccs_algorithm` 100%, `cell_type` 100%, `check_flncreads` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `iso_filename` 100%, `iso_library_id` 100%, `jasmine_version` 100%, `kinnex_id` 100%, `library_id` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `lima_version` 100%, `ntsm_score` 100%, `path` 100%, `pbtrim_version` 100%, `platform` 100%, `platform_unit_1` 100%, `polymerase_version` 100%, `pool` 100%, `production` 100%, `refine_version` 100%, `sample_id` 100%, `seq_plate_chemistry_version` 100%, `similarity` 100%, `study` 100%, `title` 100%, `total_reads` 100%, `version` 100%, `platform_unit_2` 79%
+  - never filled (2): `shear_method`, `size_selection`
 - **`illumina`** (200 rows): `coverage` 100%, `datarepo_row_id` 100%, `family_id` 100%, `filetype` 100%, `gender` 100%, `illumina_id` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_construction_protocol` 100%, `library_layout` 100%, `library_strategy` 100%, `maternal_id` 100%, `other_comments` 100%, `paternal_id` 100%, `path` 100%, `phasing` 100%, `phenotype` 100%, `platform` 100%, `read_length` 100%, `relationship` 100%, `sample_id` 100%, `second_order` 100%, `siblings` 100%, `third_order` 100%, `total_bp` 100%, `total_gbp` 100%, `version` 100%
 - **`alignments_v2`** (12 rows): `alignment` 100%, `alignments_v2_id` 100%, `datarepo_row_id` 100%, `file_size` 100%, `filetype` 100%, `hprc_version` 100%, `ingest_provenance` 100%, `location` 100%, `pipeline` 100%, `reference_coordinates` 100%, `version` 100%
 - **`workspace_attributes`** (8 rows): `attribute` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `version` 100%, `value` 88%
@@ -569,13 +580,13 @@ Where these measurements disagree with something already written down. Each is r
 
 **Claimed:** The verbatim entity chain reaches fewer files than the compact join, so verbatim is not a superset of compact.
 
-**Measured:** Single hop reaches 9,603 files, but transitive closure over the same activities reaches 25,616 against the compact join's 25,616. The shortfall is the traversal, not the manifest.
+**Measured:** Single hop reaches 9,603 files of 26,016 (37%), but transitive closure over the same activities reaches 25,616 (98%), against the compact join's 25,616 of 26,016 compact rows (98%). The shortfall is the traversal, not the manifest.
 
 ### #337 / #368 (azul_manifest docstring), on ANVIL_HPRC
 
 **Claimed:** The verbatim entity chain reaches fewer files than the compact join, so verbatim is not a superset of compact.
 
-**Measured:** Single hop reaches 4,432 files, but transitive closure over the same activities reaches 4,746 against the compact join's 4,746. The shortfall is the traversal, not the manifest.
+**Measured:** Single hop reaches 4,432 files of 23,185 (19%), but transitive closure over the same activities reaches 4,746 (20%), against the compact join's 4,746 of 23,185 compact rows (20%). The shortfall is the traversal, not the manifest.
 
 ### #384 (this issue's own body)
 
