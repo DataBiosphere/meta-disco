@@ -7,7 +7,7 @@ This document measures. It classifies nothing and proposes no mapping — that i
 ## Datasets and row counts
 
 | key | dataset | compact rows | snapshot file count | agree |
-| --- | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: |
 | D1 | ANVIL_1000G_PRIMED_data_model | 11,493 | 11,493 | yes |
 | D2 | ANVIL_1000G_high_coverage_2019 | 26,016 | 26,016 | yes |
 | D3 | ANVIL_HPRC | 23,185 | 23,185 | yes |
@@ -32,7 +32,7 @@ Percentage of each dataset's rows where the column holds something. A cell count
 Keys: **D1** 1000G_PRIMED_data_model, **D2** 1000G_high_coverage_2019, **D3** HPRC, **D4** NIA_CARD_Coriell_Cell_Lines_Open, **D5** T2T, **D6** T2T_CHRY, **D7** nhp_dGTEx_V1, **D8** ENCORE_293T, **D9** ENCORE_RS293, **D10** HPRC_R2, **D11** IGVF_Mouse_R1, **D12** MAGE
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
-| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | bundles.bundle_uuid | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | bundles.bundle_version | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | sources.source_id | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
@@ -99,7 +99,7 @@ Keys: **D1** 1000G_PRIMED_data_model, **D2** 1000G_high_coverage_2019, **D3** HP
 These are the columns a classifier would not need to exist if they were filled. Their emptiness has been the standing justification for inferring at all; here it is measured.
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
-| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | files.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | >99 | 0 |
 | files.reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 78 | 78 | 0 | 3 | 0 |
 | activities.assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -112,7 +112,7 @@ These are the columns a classifier would not need to exist if they were filled. 
 `donors.donor_id`, `biosamples.biosample_id` and `activities.activity_id` are filled at an identical rate on 12 of 12 datasets, so the join arrives whole or not at all: a dataset that can reach a donor can reach its biosample and the activity that produced the file, and one that cannot reach any of them is missing all three.
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
-| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | donors.donor_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
 | biosamples.biosample_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
 | activities.activity_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
@@ -122,7 +122,7 @@ These are the columns a classifier would not need to exist if they were filled. 
 What #336 wants to import.
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
-| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | datasets.consent_group | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | datasets.data_use_permission | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | datasets.registered_identifier | 0 | 0 | 0 | 100 | 0 | 0 | 0 | 100 | 100 | 0 | 100 | 0 |
@@ -138,7 +138,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_1000G_PRIMED_data_model
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 11,493 | — | — | — |
 | `file_inventory` | submitter | 11,493 | 11,493 | — | — |
 | `sequencing_file` | submitter | 8,634 | 8,634 | — | — |
@@ -170,7 +170,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_1000G_high_coverage_2019
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 26,016 | — | — | — |
 | `file_inventory` | submitter | 26,016 | 26,016 | — | — |
 | `anvil_activity` | harmonized | 25,863 | — | — | — |
@@ -198,7 +198,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_HPRC
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 23,185 | — | — | — |
 | `file_inventory` | submitter | 23,185 | 23,185 | — | — |
 | `anvil_activity` | harmonized | 1,897 | — | — | — |
@@ -230,7 +230,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_NIA_CARD_Coriell_Cell_Lines_Open
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 12,534 | — | — | — |
 | `file_inventory` | submitter | 12,534 | 12,534 | — | — |
 | `workspace_attributes` | submitter | 24 | 0 | — | — |
@@ -254,7 +254,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_T2T
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `file_inventory` | submitter | 290,135 | 289,204 | — | — |
 | `anvil_file` | harmonized | 289,204 | — | — | — |
 | `anvil_activity` | harmonized | 119,454 | — | — | — |
@@ -278,7 +278,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_T2T_CHRY
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 309,979 | — | — | — |
 | `file_inventory` | submitter | 309,979 | 309,979 | — | — |
 | `anvil_activity` | harmonized | 98,144 | — | — | — |
@@ -310,7 +310,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### ANVIL_nhp_dGTEx_V1
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 3,591 | — | — | — |
 | `file_inventory` | submitter | 3,591 | 3,591 | — | — |
 | `anvil_activity` | harmonized | 756 | — | — | — |
@@ -326,7 +326,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### AnVIL_ENCORE_293T
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 1,992 | — | — | `reference_assembly` → reference_assembly |
 | `file` | submitter | 1,992 | 1,992 | — | `reference_assembly` → reference_assembly |
 | `activity` | submitter | 1,100 | 1,096 | — | — |
@@ -352,7 +352,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### AnVIL_ENCORE_RS293
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 3,752 | — | — | `reference_assembly` → reference_assembly |
 | `file` | submitter | 3,752 | 3,752 | — | `reference_assembly` → reference_assembly |
 | `activity` | submitter | 2,112 | 2,112 | — | — |
@@ -378,7 +378,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### AnVIL_HPRC_R2
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 16,271 | — | — | — |
 | `file_inventory` | submitter | 16,271 | 16,271 | — | — |
 | `anvil_activity` | harmonized | 15,769 | — | — | — |
@@ -446,7 +446,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### AnVIL_IGVF_Mouse_R1
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 6,786 | — | — | `reference_assembly` → reference_assembly |
 | `file` | submitter | 6,786 | 6,786 | — | `assay_titles` → assay_type; `reference_assembly` → reference_assembly; `sequencing_platform` → platform |
 | `anvil_biosample` | harmonized | 1,935 | — | — | — |
@@ -470,7 +470,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 ### AnVIL_MAGE
 
 | type | origin | rows | files named | name encodes | dimension fields |
-| --- | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: |
 | `anvil_file` | harmonized | 3,285 | — | — | — |
 | `file_metadata` | submitter | 3,285 | 3,285 | — | — |
 | `anvil_biosample` | harmonized | 1,510 | — | — | — |
@@ -506,7 +506,7 @@ Three measurements of one question, per dataset.
 - **verbatim, transitive** — the file is in a connected component of the file/activity graph that contains an activity naming a biosample, where an activity connects every file it used or generated. Undirected, so it is an upper bound; single hop bounds the same quantity from below.
 
 | dataset | files | compact biosample | compact donor | 1-hop biosample | 1-hop donor | transitive biosample | transitive donor |
-| --- | --: | --: | --: | --: | --: | --: | --: |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 1000G_PRIMED_data_model | 11,493 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 1000G_high_coverage_2019 | 26,016 | 25,616 | 25,616 | 9,603 | 9,603 | 25,616 | 25,616 |
 | HPRC | 23,185 | 4,746 | 4,746 | 4,432 | 4,432 | 4,746 | 4,746 |

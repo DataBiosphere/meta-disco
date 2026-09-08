@@ -586,6 +586,16 @@ def test_no_contradiction_when_nothing_disagrees(tmp_path):
     assert ms.contradictions(ms.run_survey(tmp_path, CATALOG)) == []
 
 
+def test_table_separator_cells_are_three_characters(tmp_path):
+    # Some markdown parsers require at least three dashes in a delimiter cell.
+    lines = ms.render_report(surveyed(tmp_path)).splitlines()
+    rules = [line for line in lines if set(line) <= set("|-: ") and "-" in line]
+    assert rules
+    for rule in rules:
+        for cell in rule.strip("|").split("|"):
+            assert len(cell.strip()) >= 3, rule
+
+
 def test_report_renders_and_escapes_a_pipe_in_a_title(tmp_path):
     write_sidecar(tmp_path, {"a|b": 1})
     write_manifests(tmp_path, "a|b", [{"files.file_id": "f1"}], [anvil_file("f1")])
@@ -650,6 +660,29 @@ def test_percentages_do_not_round_to_a_misleading_100_or_0():
     assert ms._pct(0.0) == "0"
     assert ms._pct(0.0005) == "<1"
     assert ms._pct(0.91) == "91"
+
+
+def test_a_manifest_with_no_rows_still_reports_its_columns(tmp_path):
+    # A header and no data rows: the columns exist and are 0% filled, which is a
+    # different statement from the dataset having no columns at all.
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("\t".join(COMPACT_COLUMNS) + "\n")
+    rows, columns, _spellings = ms.survey_compact(compact_path(tmp_path))
+    assert rows == 0
+    assert [c.column for c in columns] == COMPACT_COLUMNS
+    assert all(c.filled == 0 and c.rate == 0.0 for c in columns)
+
+
+def test_a_short_compact_row_reports_its_line_not_a_typeerror(tmp_path):
+    # A row missing trailing columns leaves them None; int(None) on file_size
+    # raises TypeError, which must arrive wrapped with the line number.
+    from meta_disco.azul_manifest import iter_compact_records
+
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    header = ["files.document_id", "files.file_id", "files.file_name", "files.file_format", "files.file_size"]
+    compact_path(tmp_path).write_text("\t".join(header) + "\nd1\tf1\ta.bam\tBAM\n")
+    with pytest.raises(ValueError, match="line 2"):
+        list(iter_compact_records(compact_path(tmp_path)))
 
 
 def test_compact_row_with_surplus_fields_names_the_line(tmp_path):

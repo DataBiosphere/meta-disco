@@ -22,7 +22,10 @@ def md_table(header: list[str], rows: list[list[str]], align: str = "left") -> l
     Callers pass rows already formatted as strings; this does no number
     formatting of its own.
     """
-    rule = "---" if align == "left" else "--:"
+    # Three characters either way. GFM accepts a single hyphen, but a three-dash
+    # cell is what every other report in this repo emits and what the stricter
+    # markdown parsers require, so it costs nothing to stay in that dialect.
+    rule = "---" if align == "left" else "---:"
     lines = ["| " + " | ".join(escape_md_cell(cell) for cell in header) + " |"]
     lines.append("|" + "|".join([" --- "] + [f" {rule} "] * (len(header) - 1)) + "|")
     lines.extend("| " + " | ".join(escape_md_cell(cell) for cell in row) + " |" for row in rows)

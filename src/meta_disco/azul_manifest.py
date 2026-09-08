@@ -454,12 +454,30 @@ def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
             yield n, row
 
 
+def compact_header(path: Path) -> list[str]:
+    """The column names of one compact manifest, from its header line alone.
+
+    Reading the header rather than inferring it from the first data row is what
+    lets a caller report a manifest that has a header and no rows: its columns
+    exist and are 0% filled, which is a different statement from having no
+    columns at all.
+    """
+    with path.open(newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f, delimiter="\t").fieldnames or [])
+
+
 def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
-    """Every record in one compact manifest on disk, in manifest order, streamed."""
+    """Every record in one compact manifest on disk, in manifest order, streamed.
+
+    ``TypeError`` is caught alongside the other two: a row with fewer fields than
+    the header leaves its trailing columns ``None``, and ``int(None)`` on
+    ``files.file_size`` raises ``TypeError``, which would otherwise escape
+    without the line number that makes it actionable.
+    """
     for n, row in iter_compact_rows(path):
         try:
             yield record_from_compact_row(row)
-        except (KeyError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
 
 
