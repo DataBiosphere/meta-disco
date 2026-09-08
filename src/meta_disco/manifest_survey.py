@@ -1,0 +1,1217 @@
+"""What the AnVIL manifests on disk actually carry, measured (issue #384).
+
+#368 downloaded two manifests per dataset — a 60-column ``compact.tsv`` and a
+``verbatim.jsonl`` of raw entities — and nothing read them. Three issues each
+propose consuming a slice (#369 dimensions from submitter tables, #336
+governance fields, #361 donor edges), and each assumed a coverage picture nobody
+had written down. This module measures that picture from the manifests on disk,
+with no network, and renders it as ``docs/manifest-survey.md`` beside a JSON
+sidecar carrying every number the markdown rounds.
+
+It measures four things per dataset:
+
+- **Compact column coverage.** The non-empty fill rate of each of the 60 compact
+  columns. A cell counts as absent if it is empty or one of the placeholder
+  spellings in :data:`ABSENT_CELLS`; which spellings actually occurred is itself
+  reported, so the rule is auditable rather than assumed.
+- **Verbatim entity census.** Every entity ``type`` with its row count, and for
+  every submitter (non-``anvil_*``) table the fields present with their fill
+  rates, how many of the dataset's files that table names, and what — if
+  anything — it says about a dimension, whether in its *name*
+  (:data:`NAME_TOKENS`) or in a populated field (:data:`FIELD_TOKENS`).
+- **Reach.** How many files can be resolved to a biosample and to a donor, three
+  ways: through the compact join, through the verbatim activity chain one hop,
+  and through the verbatim activity chain transitively. The three disagree, and
+  the disagreement is the point — see :func:`_verbatim_reach`.
+- **Consumer readiness.** Per dataset, whether it can support each of #369,
+  #336 and #361, each verdict backed by one of the numbers above.
+
+This module measures and reports. It classifies nothing, and deliberately holds
+no mapping from a submitter table to a dimension value: :data:`NAME_TOKENS` says
+"this table's name mentions CHM13", not "these files are CHM13", and
+:data:`FIELD_TOKENS` says "this column exists and is populated", not what its
+values mean. Turning any of this into classification is #369's work, not this
+survey's.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from .azul_manifest import (
+    FORMAT_COMPACT,
+    FORMAT_VERBATIM,
+    FORMATS,
+    iter_compact_rows,
+    iter_verbatim_entities,
+    load_sidecar,
+    manifest_path,
+)
+from .summaries import escape_md_cell
+
+# A compact cell holding one of these, stripped and lowercased, is absent. AC2 of
+# #384 names empty, ``null`` and ``NA``; the rest are the other spellings a
+# JSON-ish serializer reaches for when it has nothing. Every one of these that
+# actually occurs is reported per dataset, so a value wrongly swallowed by this
+# rule — a literal biosample type of "None", say — shows up as a count rather
+# than silently deflating a fill rate.
+ABSENT_CELLS = frozenset({"", "null", "na", "n/a", "none", "[]", "{}"})
+
+# The compact columns that carry Azul's materialized join from a file to the rest
+# of the model. #361 needs the first two; the third is measured beside them to
+# check whether they can come apart. On anvil15 they do not — every dataset fills
+# all three at the same rate or none of them — which :func:`contradictions` tests
+# rather than assumes, since #384's own table reported them diverging.
+JOIN_DONOR = "donors.donor_id"
+JOIN_BIOSAMPLE = "biosamples.biosample_id"
+JOIN_ACTIVITY = "activities.activity_id"
+
+# What #336 wants to import. Consent and DUO are the verdict; the phs accession is
+# reported beside it, because it is the one of the three that is not universal.
+GOVERNANCE_CONSENT = "datasets.consent_group"
+GOVERNANCE_DUO = "datasets.data_use_permission"
+GOVERNANCE_PHS = "datasets.registered_identifier"
+
+# The harmonized dimension columns whose emptiness is the standing justification
+# for inferring at all. Reported as a block so the claim is measured, not asserted.
+DIMENSION_COLUMNS = (
+    "files.data_modality",
+    "files.reference_assembly",
+    "activities.assay_type",
+    "activities.data_modality",
+    "activities.reference_assembly",
+    "datasets.data_modality",
+)
+
+# Readiness bands, stated here and restated in the rendered doc so a verdict can
+# be checked against its backing number.
+READY_HIGH = 0.90
+READY_LOW = 0.10
+
+# Tokens in a submitter table's *name* that encode one of the five dimensions.
+# Split the name on non-alphanumeric boundaries, lowercase, and look each token
+# up here. This is a reading aid for #369 — it says what a name mentions, never
+# what a file is — so it holds only tokens whose meaning is unambiguous in a
+# table name. Entity-shaped tokens (``sample``, ``participant``, ``donor``) name
+# no dimension and are absent on purpose.
+NAME_TOKENS: dict[str, tuple[str, str]] = {
+    # reference_assembly
+    "chm13": ("reference_assembly", "CHM13"),
+    "chm13v2": ("reference_assembly", "CHM13"),
+    "grch38": ("reference_assembly", "GRCh38"),
+    "hg38": ("reference_assembly", "GRCh38"),
+    "grch37": ("reference_assembly", "GRCh37"),
+    "hg19": ("reference_assembly", "GRCh37"),
+    # platform
+    "hifi": ("platform", "PacBio HiFi"),
+    "deepconsensus": ("platform", "PacBio HiFi"),
+    "kinnex": ("platform", "PacBio Kinnex"),
+    "ont": ("platform", "Oxford Nanopore"),
+    "nanopore": ("platform", "Oxford Nanopore"),
+    "illumina": ("platform", "Illumina"),
+    # assay_type
+    "hic": ("assay_type", "Hi-C"),
+    # data_modality
+    "methylation": ("data_modality", "epigenomic.methylation"),
+    # data_type
+    "assembly": ("data_type", "assembly"),
+    "alignments": ("data_type", "aligned reads"),
+    "chains": ("data_type", "chain"),
+    "liftoff": ("data_type", "annotation"),
+    "annotation": ("data_type", "annotation"),
+    "segdups": ("data_type", "segmental duplications"),
+    "censat": ("data_type", "satellite annotation"),
+    "centromeres": ("data_type", "centromere annotation"),
+    "gaps": ("data_type", "gap annotation"),
+    "repeat": ("data_type", "repeat annotation"),
+    "masker": ("data_type", "repeat annotation"),
+    "interval": ("data_type", "interval"),
+    "sequences": ("data_type", "sequence"),
+    "plink": ("data_type", "plink"),
+    "minigraph": ("data_type", "pangenome graph"),
+    "cactus": ("data_type", "pangenome graph"),
+    "pggb": ("data_type", "pangenome graph"),
+}
+
+# Submitter field names that carry a dimension outright. Matched on the whole
+# field name, never as a substring: ``assembly`` is the reference a row's files
+# were aligned to, while ``assembly_fai`` and ``assembly_date`` are not
+# references at all, and a substring rule would take all three. Like
+# :data:`NAME_TOKENS` this is a reading aid — it says the column exists and is
+# populated, not what its values mean, which is #369's mapping to write.
+FIELD_TOKENS: dict[str, str] = {
+    "assembly": "reference_assembly",
+    "reference_assembly": "reference_assembly",
+    "reference_coordinates": "reference_assembly",
+    "reference_genome_build": "reference_assembly",
+    "instrument_model": "platform",
+    "instrument_platform": "platform",
+    "platform": "platform",
+    "seq_platform": "platform",
+    "sequencing_platform": "platform",
+    "assay_term": "assay_type",
+    "assay_titles": "assay_type",
+    "library_selection": "assay_type",
+    "library_strategy": "assay_type",
+    "preferred_assay_titles": "assay_type",
+    "sequencing_assay": "assay_type",
+    "sequencing_strategy": "assay_type",
+    "library_source": "data_modality",
+    "data_type": "data_type",
+}
+
+_NAME_SPLIT = re.compile(r"[^0-9a-z]+")
+# The Azul file id inside a DRS URI: ``drs://drs.anv0:v2_<uuid>``. A submitter
+# table points at files either this way or by the bare id, so both are looked for.
+_DRS_FILE_ID = re.compile(r"v2_([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})", re.IGNORECASE)
+
+VERBATIM_FILE = "anvil_file"
+VERBATIM_ACTIVITY = "anvil_activity"
+VERBATIM_BIOSAMPLE = "anvil_biosample"
+_HARMONIZED_PREFIX = "anvil_"
+
+
+# --- measured shapes ----------------------------------------------------------
+
+
+@dataclass
+class ColumnCoverage:
+    """One compact column's fill across one dataset."""
+
+    column: str
+    filled: int
+    rows: int
+
+    @property
+    def rate(self) -> float:
+        return self.filled / self.rows if self.rows else 0.0
+
+
+@dataclass
+class TableCoverage:
+    """One verbatim entity type across one dataset.
+
+    ``fields`` counts, per field name, the rows where that field held something
+    (:func:`_is_filled`); a field absent from a row counts as unfilled, so a rate
+    is always out of ``rows``. ``files_named`` counts the dataset's own
+    ``anvil_file`` ids this table points at, by bare id or through a DRS URI —
+    files the table names but the dataset does not hold are not counted.
+    """
+
+    name: str
+    rows: int
+    fields: dict[str, int] = field(default_factory=dict)
+    files_named: int = 0
+    encodes: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def is_submitter(self) -> bool:
+        return not self.name.startswith(_HARMONIZED_PREFIX)
+
+    @property
+    def dimension_fields(self) -> list[tuple[str, str]]:
+        """``(field, dimension)`` for each populated field named in :data:`FIELD_TOKENS`.
+
+        A field present on every row but never filled carries nothing, so it is
+        not counted: the question this answers is what an importer could read,
+        not what the table's header promises.
+        """
+        return sorted(
+            (name, FIELD_TOKENS[name]) for name, filled in self.fields.items() if filled and name in FIELD_TOKENS
+        )
+
+    @property
+    def carries_dimension(self) -> bool:
+        """Whether the table's name or its populated fields point at a dimension."""
+        return bool(self.encodes or self.dimension_fields)
+
+
+@dataclass
+class Reach:
+    """How many of a dataset's files resolve to a biosample and to a donor.
+
+    Three measurements of the same question, deliberately kept apart:
+    ``compact_*`` reads Azul's materialized join; ``single_hop_*`` walks the
+    verbatim chain only to the activity that generated the file; ``transitive_*``
+    walks the verbatim file/activity graph as far as it connects.
+    """
+
+    files: int = 0
+    compact_biosample: int = 0
+    compact_donor: int = 0
+    compact_activity: int = 0
+    single_hop_biosample: int = 0
+    single_hop_donor: int = 0
+    transitive_biosample: int = 0
+    transitive_donor: int = 0
+
+
+@dataclass
+class DatasetSurvey:
+    """Everything measured for one dataset."""
+
+    title: str
+    compact_rows: int = 0
+    snapshot_files: int = 0
+    columns: list[ColumnCoverage] = field(default_factory=list)
+    absent_spellings: Counter = field(default_factory=Counter)
+    tables: list[TableCoverage] = field(default_factory=list)
+    reach: Reach = field(default_factory=Reach)
+    # Files named by at least one dimension-carrying submitter table, counted as a
+    # union of ids rather than a sum of per-table counts — the tables overlap.
+    dimension_files: int = 0
+
+    @property
+    def submitter_tables(self) -> list[TableCoverage]:
+        return [t for t in self.tables if t.is_submitter]
+
+    def column(self, name: str) -> ColumnCoverage | None:
+        return next((c for c in self.columns if c.column == name), None)
+
+    def rate(self, name: str) -> float:
+        found = self.column(name)
+        return found.rate if found else 0.0
+
+    @property
+    def name_encoding_tables(self) -> list[TableCoverage]:
+        """Submitter tables whose *name* encodes a dimension."""
+        return [t for t in self.submitter_tables if t.encodes]
+
+    @property
+    def dimension_tables(self) -> list[TableCoverage]:
+        """Submitter tables pointing at a dimension by name or by field — #369's raw material."""
+        return [t for t in self.submitter_tables if t.carries_dimension]
+
+    @property
+    def dimension_file_rate(self) -> float:
+        """Share of the dataset's files named by at least one dimension-carrying table.
+
+        An upper bound on what an import from submitter tables could reach, not a
+        promise that what it reads would be right — a populated
+        ``reference_assembly`` column can still hold a value no vocabulary knows.
+        """
+        return self.dimension_files / self.reach.files if self.reach.files else 0.0
+
+
+@dataclass
+class Survey:
+    """The whole run: one entry per dataset, plus what it was measured from."""
+
+    catalog: str
+    datasets: list[DatasetSurvey] = field(default_factory=list)
+    snapshot_total: int = 0
+
+    @property
+    def measured_total(self) -> int:
+        return sum(d.compact_rows for d in self.datasets)
+
+
+# --- absence ------------------------------------------------------------------
+
+
+def cell_absent(cell: str) -> bool:
+    """Whether a compact cell holds nothing, by :data:`ABSENT_CELLS`."""
+    return cell.strip().lower() in ABSENT_CELLS
+
+
+def _is_filled(value: Any) -> bool:
+    """Whether a verbatim field holds something.
+
+    ``None``, an empty string or whitespace, and an empty list/dict are nothing.
+    ``0`` and ``False`` are values — a coverage of 0.0 or a ``has_replicates`` of
+    false is data the submitter recorded, not a gap.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return not cell_absent(value)
+    if isinstance(value, (list, dict, tuple, set)):
+        return len(value) > 0
+    return True
+
+
+# --- compact ------------------------------------------------------------------
+
+
+def survey_compact(path: Path) -> tuple[int, list[ColumnCoverage], Counter, dict[str, int]]:
+    """Measure one compact manifest: rows, per-column fill, absent spellings, join reach.
+
+    Streams the file; the largest compact manifest is 270 MB. The returned join
+    counts are keyed by the three ``JOIN_*`` column names, counting rows whose
+    cell is present.
+    """
+    rows = 0
+    filled: Counter = Counter()
+    spellings: Counter = Counter()
+    join = {JOIN_DONOR: 0, JOIN_BIOSAMPLE: 0, JOIN_ACTIVITY: 0}
+    columns: list[str] = []
+    for _n, row in iter_compact_rows(path):
+        rows += 1
+        if not columns:
+            columns = list(row)
+        for name, cell in row.items():
+            if cell is None:
+                spellings["(missing column)"] += 1
+                continue
+            if cell_absent(cell):
+                spellings[cell.strip().lower() or "(empty)"] += 1
+                continue
+            filled[name] += 1
+            if name in join:
+                join[name] += 1
+    coverage = [ColumnCoverage(column=name, filled=filled[name], rows=rows) for name in columns]
+    return rows, coverage, spellings, join
+
+
+# --- verbatim -----------------------------------------------------------------
+
+
+class _Components:
+    """Union-find over file ids, for the transitive reach.
+
+    Files touched by one activity are in one component, so "which files does
+    this activity's biosample reach" becomes a mark on a component root rather
+    than a graph walk per file. Ids are indexed to ints; a file id referenced by
+    an activity but absent from ``anvil_file`` still gets an index, because a
+    path through a file the dataset does not itself hold is still a path.
+    """
+
+    def __init__(self) -> None:
+        self._index: dict[str, int] = {}
+        self._parent: list[int] = []
+
+    def index(self, key: str) -> int:
+        found = self._index.get(key)
+        if found is None:
+            found = len(self._parent)
+            self._index[key] = found
+            self._parent.append(found)
+        return found
+
+    def known(self, key: str) -> int | None:
+        return self._index.get(key)
+
+    def find(self, item: int) -> int:
+        parent = self._parent
+        root = item
+        while parent[root] != root:
+            root = parent[root]
+        while parent[item] != root:  # path compression
+            parent[item], item = root, parent[item]
+        return root
+
+    def union(self, left: int, right: int) -> None:
+        left_root, right_root = self.find(left), self.find(right)
+        if left_root != right_root:
+            self._parent[right_root] = left_root
+
+
+def _table_encodes(name: str) -> list[tuple[str, str]]:
+    """What a submitter table's name says about a dimension, by :data:`NAME_TOKENS`.
+
+    Returns ``(dimension, value)`` pairs in the order the tokens appear in the
+    name, at most one per dimension — a name mentioning both ``chm13`` and
+    ``grch38`` would be ambiguous about the reference, so both are kept and the
+    caller can see the ambiguity rather than have it resolved silently here.
+    """
+    found: list[tuple[str, str]] = []
+    for token in _NAME_SPLIT.split(name.lower()):
+        meaning = NAME_TOKENS.get(token)
+        if meaning is not None and meaning not in found:
+            found.append(meaning)
+    return found
+
+
+class FileKeys:
+    """Every string that identifies one of a dataset's files, mapped to its ``file_id``.
+
+    A submitter table points at a file by whichever handle the submitter had, and
+    the handles are not one namespace. Three are indexed:
+
+    - the ``anvil_file.file_id`` itself;
+    - the uuid inside that file's DRS URI. On some datasets it *is* the file id
+      (MAGE), and on others it is unrelated to it — ENCORE and IGVF Mouse share
+      no uuid at all between the two, so matching a submitter table's DRS URIs
+      against file ids alone finds every file on MAGE and none on either of those;
+    - the file name, but only where it identifies exactly one file. A name shared
+      by two files identifies neither, so a colliding name is dropped rather than
+      resolved arbitrarily.
+
+    Files are added one at a time as the manifest streams past, and :meth:`resolved`
+    closes the index — the name collisions are only known once every file has been
+    seen, so nothing may be looked up before then.
+    """
+
+    def __init__(self) -> None:
+        self._keys: dict[str, str] = {}
+        self._names: dict[str, str | None] = {}
+
+    def add(self, value: dict[str, Any]) -> str:
+        """Index one ``anvil_file`` entity, and return its ``file_id``."""
+        file_id = value["file_id"]
+        self._keys[file_id] = file_id
+        for handle in (value.get("drs_uri"), value.get("file_ref")):
+            if isinstance(handle, str):
+                for match in _DRS_FILE_ID.finditer(handle):
+                    self._keys[match.group(1).lower()] = file_id
+        name = value.get("file_name")
+        if isinstance(name, str) and name:
+            # A name already claimed by a different file identifies neither.
+            self._names[name] = None if self._names.get(name, file_id) != file_id else file_id
+        return file_id
+
+    def resolved(self) -> dict[str, str]:
+        """The finished index. An id or DRS uuid wins over a file name that collides with it."""
+        keys = dict(self._keys)
+        for name, file_id in self._names.items():
+            if file_id is not None and name not in keys:
+                keys[name] = file_id
+        return keys
+
+
+def _file_ids_in(value: dict[str, Any], keys: dict[str, str]) -> set[str]:
+    """The dataset's own files this verbatim row points at, as ``file_id`` values.
+
+    Each string in the row is looked up whole — a bare id, a DRS URI, a file name
+    — and any DRS uuid embedded in it is looked up too. Only handles :func:`_file_keys`
+    recognizes resolve, so a stray uuid in an unrelated field cannot inflate the count.
+    """
+    found: set[str] = set()
+    for item in value.values():
+        for text in item if isinstance(item, list) else [item]:
+            if not isinstance(text, str):
+                continue
+            resolved = keys.get(text)
+            if resolved is not None:
+                found.add(resolved)
+            for match in _DRS_FILE_ID.finditer(text):
+                resolved = keys.get(match.group(1).lower())
+                if resolved is not None:
+                    found.add(resolved)
+    return found
+
+
+def survey_verbatim(path: Path) -> tuple[list[TableCoverage], Reach, int]:
+    """Measure one verbatim manifest: entity census, submitter fields, reach.
+
+    Two streaming passes. The first counts entity types and fields, and collects
+    the file ids and the biosample-to-donor map; the second needs those, so it
+    walks the file again to resolve which files each submitter table names and
+    to build the activity graph. Two passes over half a gigabyte cost seconds and
+    keep the whole manifest out of memory, which one pass would not.
+
+    Returns the per-type coverage, the reach, and how many of the dataset's files
+    at least one dimension-carrying table names — a union over file ids, since a
+    file named by both ``hifi`` and ``assembly`` is one file, not two.
+    """
+    counts: Counter = Counter()
+    fields: dict[str, Counter] = defaultdict(Counter)
+    file_ids: set[str] = set()
+    keys = FileKeys()
+    biosample_has_donor: dict[str, bool] = {}
+    for entity_type, value in iter_verbatim_entities(path):
+        counts[entity_type] += 1
+        for name, item in value.items():
+            if _is_filled(item):
+                fields[entity_type][name] += 1
+        if entity_type == VERBATIM_FILE:
+            file_ids.add(keys.add(value))
+        elif entity_type == VERBATIM_BIOSAMPLE:
+            biosample_has_donor[value["biosample_id"]] = bool(value.get("donor_id"))
+
+    named: dict[str, set[str]] = defaultdict(set)
+    reach = _verbatim_reach(path, file_ids, keys.resolved(), biosample_has_donor, named)
+
+    tables = [
+        TableCoverage(
+            name=name,
+            rows=rows,
+            fields=dict(fields[name]),
+            files_named=len(named[name]),
+            encodes=_table_encodes(name) if not name.startswith(_HARMONIZED_PREFIX) else [],
+        )
+        for name, rows in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    dimension_files: set[str] = set()
+    for table in tables:
+        if table.is_submitter and table.carries_dimension:
+            dimension_files |= named[table.name]
+    return tables, reach, len(dimension_files)
+
+
+def _verbatim_reach(
+    path: Path,
+    file_ids: set[str],
+    file_keys: dict[str, str],
+    biosample_has_donor: dict[str, bool],
+    named: dict[str, set[str]],
+) -> Reach:
+    """Walk the verbatim manifest's second pass: activity graph and table→file links.
+
+    Two reach measurements come out of it, and they are different questions:
+
+    - **single hop** — a file counts if the activity that *generated* it names a
+      biosample directly. This is the traversal behind the 9,603 figure #337
+      recorded for 1000G and #368's docstring repeated.
+    - **transitive** — a file counts if any activity in its connected component
+      names a biosample, where an activity connects every file it used or
+      generated. Following an activity's inputs back to the biosample they came
+      from is what an importer resolving provenance would do, so this is the
+      honest answer to "can verbatim reach a donor for this file", and on 1000G
+      it is 25,616 where single hop is 9,603.
+
+    The transitive walk is undirected: it does not distinguish a file's ancestors
+    from its descendants, so a file sharing an activity with a biosample-linked
+    file counts as reaching. That makes it an upper bound; the single-hop count
+    bounds the same quantity from below, and reporting both is #384's AC4.
+
+    ``named`` is filled in place with, per submitter entity type, the dataset
+    file ids that type's rows point at, resolved through ``file_keys``.
+    """
+    components = _Components()
+    marks: list[tuple[int, bool, bool]] = []
+    single_hop_biosample: set[str] = set()
+    single_hop_donor: set[str] = set()
+
+    for entity_type, value in iter_verbatim_entities(path):
+        if not entity_type.startswith(_HARMONIZED_PREFIX):
+            named[entity_type] |= _file_ids_in(value, file_keys)
+            continue
+        if entity_type != VERBATIM_ACTIVITY:
+            continue
+        used = [f for f in (value.get("used_file_id") or []) if isinstance(f, str)]
+        generated = [f for f in (value.get("generated_file_id") or []) if isinstance(f, str)]
+        biosamples = [b for b in (value.get("used_biosample_id") or []) if isinstance(b, str)]
+
+        seed: int | None = None
+        for file_id in used + generated:
+            index = components.index(file_id)
+            if seed is None:
+                seed = index
+            else:
+                components.union(seed, index)
+
+        if not biosamples:
+            continue
+        has_donor = any(biosample_has_donor.get(b) for b in biosamples)
+        if seed is not None:
+            marks.append((seed, True, has_donor))
+        # Single hop reaches only what this one activity produced.
+        single_hop_biosample.update(generated)
+        if has_donor:
+            single_hop_donor.update(generated)
+
+    # Components are final only now; a later activity may have merged two of them.
+    reaches_biosample: set[int] = set()
+    reaches_donor: set[int] = set()
+    for seed, biosample, donor in marks:
+        root = components.find(seed)
+        if biosample:
+            reaches_biosample.add(root)
+        if donor:
+            reaches_donor.add(root)
+
+    reach = Reach(files=len(file_ids))
+    for file_id in file_ids:
+        index = components.known(file_id)
+        if index is not None:
+            root = components.find(index)
+            reach.transitive_biosample += root in reaches_biosample
+            reach.transitive_donor += root in reaches_donor
+    reach.single_hop_biosample = len(single_hop_biosample & file_ids)
+    reach.single_hop_donor = len(single_hop_donor & file_ids)
+    return reach
+
+
+# --- the run ------------------------------------------------------------------
+
+
+def missing_manifests(root: Path, catalog: str) -> list[str]:
+    """Manifests the sidecar names that are not on disk, as ``dataset (format)`` lines.
+
+    An empty sidecar is itself reported: a survey of nothing is a failure, not an
+    empty document.
+    """
+    sidecar = load_sidecar(root, catalog)
+    datasets = sidecar.get("datasets") or {}
+    if not datasets:
+        return [f"{catalog}: no manifests recorded in the sidecar under {root}"]
+    return [
+        f"{title} ({fmt}): {manifest_path(root, catalog, title, fmt)}"
+        for title in sorted(datasets)
+        for fmt in FORMATS
+        if not manifest_path(root, catalog, title, fmt).is_file()
+    ]
+
+
+def run_survey(root: Path, catalog: str) -> Survey:
+    """Measure every dataset the sidecar names. Assumes :func:`missing_manifests` passed."""
+    sidecar = load_sidecar(root, catalog)
+    entries: dict[str, Any] = sidecar.get("datasets") or {}
+    survey = Survey(catalog=catalog)
+    for title in sorted(entries):
+        rows, columns, spellings, join = survey_compact(manifest_path(root, catalog, title, FORMAT_COMPACT))
+        tables, reach, dimension_files = survey_verbatim(manifest_path(root, catalog, title, FORMAT_VERBATIM))
+        reach.compact_donor = join[JOIN_DONOR]
+        reach.compact_biosample = join[JOIN_BIOSAMPLE]
+        reach.compact_activity = join[JOIN_ACTIVITY]
+        snapshot = int(entries[title].get("file_count") or 0)
+        survey.datasets.append(
+            DatasetSurvey(
+                title=title,
+                compact_rows=rows,
+                snapshot_files=snapshot,
+                columns=columns,
+                absent_spellings=spellings,
+                tables=tables,
+                reach=reach,
+                dimension_files=dimension_files,
+            )
+        )
+        survey.snapshot_total += snapshot
+    return survey
+
+
+# --- formatting ---------------------------------------------------------------
+
+
+def _pct(value: float) -> str:
+    """A rate as a percentage without its sign, keeping a nonzero rate visibly nonzero.
+
+    A dataset where 6 files of 12,534 carry a donor is not the same as one where
+    none do, and rounding would print both as ``0``; this prints ``<1``.
+    """
+    if value <= 0:
+        return "0"
+    if value < 0.005:
+        return "<1"
+    return f"{value * 100:.0f}"
+
+
+def _plural(count: int, noun: str) -> str:
+    return noun if count == 1 else f"{noun}s"
+
+
+# --- readiness ----------------------------------------------------------------
+
+
+def _verdict(rate: float) -> str:
+    if rate >= READY_HIGH:
+        return "yes"
+    if rate >= READY_LOW:
+        return "partial"
+    return "no"
+
+
+def readiness(dataset: DatasetSurvey) -> dict[str, tuple[str, str]]:
+    """Per consumer, a verdict and the number backing it.
+
+    - ``dimensions`` (#369) — the share of files named by a submitter table that
+      points at a dimension, either through its own name (``hifi``, ``chains_to_
+      chm13_mc``) or through a populated field named for one (``reference_
+      assembly``, ``instrument_model``). Both count: a table saying what its
+      files are in a column is as importable as one saying it in its name.
+    - ``governance`` (#336) — consent group and data use permission, the lower of
+      the two. The phs accession is reported beside it rather than folded in: it
+      is the one of the three that is not universal, and a dataset without it can
+      still have its consent imported.
+    - ``edges`` (#361) — the best donor reach available from either manifest.
+    """
+    rate = dataset.dimension_file_rate
+    tables = len(dataset.dimension_tables)
+    by_name = len(dataset.name_encoding_tables)
+    consent = min(dataset.rate(GOVERNANCE_CONSENT), dataset.rate(GOVERNANCE_DUO))
+    phs = dataset.rate(GOVERNANCE_PHS)
+    donor = max(dataset.reach.compact_donor, dataset.reach.transitive_donor)
+    donor_rate = donor / dataset.compact_rows if dataset.compact_rows else 0.0
+    basis = f"{_pct(rate)}% of files, {tables} {_plural(tables, 'table')} ({by_name} by name)"
+    return {
+        "dimensions": (_verdict(rate), basis),
+        "governance": (_verdict(consent), f"consent/DUO {_pct(consent)}%, phs {_pct(phs)}%"),
+        "edges": (_verdict(donor_rate), f"{donor:,} of {dataset.compact_rows:,} files ({_pct(donor_rate)}%)"),
+    }
+
+
+# --- contradictions -----------------------------------------------------------
+
+
+def contradictions(survey: Survey) -> list[tuple[str, str, str]]:
+    """Where this survey disagrees with a claim already written down (#384 AC6).
+
+    Each entry is ``(source, the prior claim, what the manifests say)``. The
+    claims are declared here and re-checked against every run, so a later
+    manifest pull that resolves one of them stops reporting it instead of
+    leaving stale prose in the document.
+    """
+    found: list[tuple[str, str, str]] = []
+
+    # 1. docs/briefs/comparability-gap.html, "Donor sex, ancestry, biosample type,
+    #    anatomical site ... are null on every indexed row."
+    fields = {
+        "donors.phenotypic_sex": "donor sex",
+        "donors.reported_ethnicity": "donor ancestry",
+        "biosamples.biosample_type": "biosample type",
+        "biosamples.anatomical_site": "anatomical site",
+    }
+    populated = [
+        f"{label} {_pct(dataset.rate(column))}% in {dataset.title}"
+        for column, label in fields.items()
+        for dataset in survey.datasets
+        if dataset.rate(column) > 0
+    ]
+    if populated:
+        found.append(
+            (
+                "docs/briefs/comparability-gap.html",
+                "Donor sex, ancestry, biosample type and anatomical site are null on every indexed row.",
+                "Not null in the compact manifest: " + "; ".join(populated) + ". The brief measured a "
+                "different extract than these manifests, or an older catalog; it needs scoping to whichever "
+                "it measured.",
+            )
+        )
+
+    # 2. #337 / #368: "on 1000G the join reaches a donor for 25,616 files, the
+    #    entity chain for 9,603" — read as verbatim being weaker than compact.
+    for dataset in survey.datasets:
+        reach = dataset.reach
+        if reach.single_hop_donor < reach.transitive_donor:
+            found.append(
+                (
+                    f"#337 / #368 (azul_manifest docstring), on {dataset.title}",
+                    "The verbatim entity chain reaches fewer files than the compact join, so verbatim is not "
+                    "a superset of compact.",
+                    f"Single hop reaches {reach.single_hop_donor:,} files, but transitive closure over the "
+                    f"same activities reaches {reach.transitive_donor:,} against the compact join's "
+                    f"{reach.compact_donor:,}. The shortfall is the traversal, not the manifest.",
+                )
+            )
+
+    # 3. #384's own body: HPRC_R2's per-file-type tables are "~20 ... each 462 rows".
+    for dataset in survey.datasets:
+        if dataset.title != "AnVIL_HPRC_R2":
+            continue
+        off = [t for t in dataset.submitter_tables if t.encodes and t.rows != 462]
+        if off:
+            listed = ", ".join(f"{t.name} {t.rows:,}" for t in sorted(off, key=lambda t: -t.rows)[:5])
+            found.append(
+                (
+                    "#384 (this issue's own body)",
+                    "AnVIL_HPRC_R2 carries ~20 per-file-type tables, each 462 rows.",
+                    f"{len(off)} of them are not 462 rows: {listed}. The 462 figure holds for the "
+                    "per-assembly derived tables only.",
+                )
+            )
+
+    # 4. #384's own body again: HPRC_R2's join reported as 91% donor and biosample
+    #    but 23% activity. If the three join columns never come apart, the
+    #    activity figure was measured some other way.
+    together = [d for d in survey.datasets if d.rate(JOIN_DONOR) == d.rate(JOIN_BIOSAMPLE) == d.rate(JOIN_ACTIVITY)]
+    hprc_r2 = next((d for d in survey.datasets if d.title == "AnVIL_HPRC_R2"), None)
+    if hprc_r2 is not None and hprc_r2 in together:
+        found.append(
+            (
+                "#384 (this issue's own body)",
+                "AnVIL_HPRC_R2's compact join is 91% for donor and biosample but 23% for activity.",
+                f"`{JOIN_ACTIVITY}` is filled on {_pct(hprc_r2.rate(JOIN_ACTIVITY))}% of its rows, the same "
+                f"share as donor and biosample. Across all {len(survey.datasets)} datasets "
+                f"{len(together)} fill the three join columns at an identical rate, so the join arrives "
+                "whole or not at all — which is what #361 should plan against.",
+            )
+        )
+    return found
+
+
+# --- rendering ----------------------------------------------------------------
+
+
+def _short(title: str) -> str:
+    """A dataset title with its AnVIL prefix dropped, for a table header."""
+    for prefix in ("ANVIL_", "AnVIL_"):
+        if title.startswith(prefix):
+            return title[len(prefix) :]
+    return title
+
+
+def _table(header: list[str], rows: list[list[str]], align: str = "left") -> list[str]:
+    rule = "---" if align == "left" else "--:"
+    out = ["| " + " | ".join(escape_md_cell(h) for h in header) + " |"]
+    out.append("|" + "|".join([" --- "] + [f" {rule} "] * (len(header) - 1)) + "|")
+    out.extend("| " + " | ".join(escape_md_cell(c) for c in row) + " |" for row in rows)
+    return out
+
+
+def render_report(survey: Survey) -> str:
+    """The whole survey as markdown."""
+    datasets = survey.datasets
+    labels = [_short(d.title) for d in datasets]
+    keys = [f"D{i}" for i in range(1, len(datasets) + 1)]
+    out: list[str] = [
+        "# What the AnVIL manifests carry",
+        "",
+        f"Measured from the `{survey.catalog}` manifests on disk by "
+        "`scripts/generate_manifest_survey.py` (issue #384). No network: every figure below "
+        "comes from `data/anvil/manifest/`. Regenerate with `make manifest-survey`; the same "
+        "numbers unrounded are in `docs/manifest-survey.json`.",
+        "",
+        "This document measures. It classifies nothing and proposes no mapping — that is #369, "
+        "#336 and #361, which it exists to scope.",
+        "",
+    ]
+
+    out += ["## Datasets and row counts", ""]
+    out += _table(
+        ["key", "dataset", "compact rows", "snapshot file count", "agree"],
+        [
+            [
+                key,
+                d.title,
+                f"{d.compact_rows:,}",
+                f"{d.snapshot_files:,}",
+                "yes" if d.compact_rows == d.snapshot_files else "**no**",
+            ]
+            for key, d in zip(keys, datasets, strict=True)
+        ],
+        align="right",
+    )
+    agreement = (
+        "matching the snapshot exactly"
+        if survey.measured_total == survey.snapshot_total
+        else f"**against the snapshot's {survey.snapshot_total:,}**"
+    )
+    out += [
+        "",
+        f"{len(datasets)} datasets, {survey.measured_total:,} compact rows in total, {agreement}.",
+        "",
+        "A note on the sidecar: `manifests.json` records a verbatim `rows` count that is the "
+        "number of `anvil_file` entities, not the number of lines — a verbatim manifest holds "
+        "every entity, so it has several times as many lines as the dataset has files.",
+        "",
+    ]
+
+    out += _compact_section(survey, keys, labels)
+    out += _verbatim_section(survey)
+    out += _reach_section(survey)
+    out += _readiness_section(survey)
+    out += _contradictions_section(survey)
+    return "\n".join(out) + "\n"
+
+
+def _compact_section(survey: Survey, keys: list[str], labels: list[str]) -> list[str]:
+    datasets = survey.datasets
+    out = [
+        "## Compact column coverage",
+        "",
+        "Percentage of each dataset's rows where the column holds something. A cell counts as "
+        f"absent if, stripped and lowercased, it is one of {sorted(ABSENT_CELLS)!r}. Columns are "
+        "the compact manifest's own 60, in manifest order.",
+        "",
+        "Keys: " + ", ".join(f"**{k}** {label}" for k, label in zip(keys, labels, strict=True)),
+        "",
+    ]
+    columns = [c.column for c in datasets[0].columns] if datasets else []
+    out += _table(
+        ["column", *keys],
+        [[column, *[_pct(d.rate(column)) for d in datasets]] for column in columns],
+        align="right",
+    )
+
+    out += [
+        "",
+        "### The harmonized dimension columns",
+        "",
+        "These are the columns a classifier would not need to exist if they were filled. Their "
+        "emptiness has been the standing justification for inferring at all; here it is measured.",
+        "",
+    ]
+    out += _table(
+        ["column", *keys],
+        [[column, *[_pct(d.rate(column)) for d in datasets]] for column in DIMENSION_COLUMNS],
+        align="right",
+    )
+
+    together = [d for d in datasets if d.rate(JOIN_DONOR) == d.rate(JOIN_BIOSAMPLE) == d.rate(JOIN_ACTIVITY)]
+    out += [
+        "",
+        "### The provenance join",
+        "",
+        f"`{JOIN_DONOR}`, `{JOIN_BIOSAMPLE}` and `{JOIN_ACTIVITY}` are filled at an identical rate on "
+        f"{len(together)} of {len(datasets)} datasets"
+        + (
+            ", so the join arrives whole or not at all: a dataset that can reach a donor can reach its "
+            "biosample and the activity that produced the file, and one that cannot reach any of them "
+            "is missing all three."
+            if len(together) == len(datasets)
+            else ", so it can come apart; see the per-column table above for where."
+        ),
+        "",
+    ]
+    out += _table(
+        ["column", *keys],
+        [[column, *[_pct(d.rate(column)) for d in datasets]] for column in (JOIN_DONOR, JOIN_BIOSAMPLE, JOIN_ACTIVITY)],
+        align="right",
+    )
+
+    out += [
+        "",
+        "### Governance columns",
+        "",
+        "What #336 wants to import.",
+        "",
+    ]
+    out += _table(
+        ["column", *keys],
+        [
+            [column, *[_pct(d.rate(column)) for d in datasets]]
+            for column in (GOVERNANCE_CONSENT, GOVERNANCE_DUO, GOVERNANCE_PHS)
+        ],
+        align="right",
+    )
+
+    spellings: Counter = Counter()
+    for dataset in datasets:
+        spellings.update(dataset.absent_spellings)
+    observed = ", ".join(f"`{name}` {count:,}" for name, count in spellings.most_common())
+    out += [
+        "",
+        "### Which absent spellings actually occur",
+        "",
+        f"Across every dataset: {observed or 'none'}. Any spelling in the absence rule that does "
+        "not appear here cost nothing; one that appears in quantity is worth checking against the "
+        "column it came from, in case a real value is being read as a gap.",
+        "",
+    ]
+    return out
+
+
+def _verbatim_section(survey: Survey) -> list[str]:
+    out = [
+        "## Verbatim entity census",
+        "",
+        "Every entity `type` in each dataset's verbatim manifest with its row count. `anvil_*` "
+        "types are Azul's harmonized entities; everything else is the submitter's own Terra "
+        "table, carried through unaltered.",
+        "",
+    ]
+    for dataset in survey.datasets:
+        out += [f"### {dataset.title}", ""]
+        submitter = dataset.submitter_tables
+        if not submitter:
+            out += [
+                "No submitter tables at all — only harmonized `anvil_*` entities. Verbatim adds "
+                "nothing here that compact does not already carry.",
+                "",
+            ]
+        rows = []
+        for table in dataset.tables:
+            encodes = "; ".join(f"{dimension} = {value}" for dimension, value in table.encodes)
+            carried = "; ".join(f"`{name}` → {dimension}" for name, dimension in table.dimension_fields)
+            rows.append(
+                [
+                    f"`{table.name}`",
+                    "submitter" if table.is_submitter else "harmonized",
+                    f"{table.rows:,}",
+                    f"{table.files_named:,}" if table.is_submitter else "—",
+                    encodes or "—",
+                    carried or "—",
+                ]
+            )
+        out += _table(
+            ["type", "origin", "rows", "files named", "name encodes", "dimension fields"], rows, align="right"
+        )
+        out += [""]
+        for table in submitter:
+            if not table.fields:
+                continue
+            fields = ", ".join(
+                f"`{name}` {_pct(count / table.rows if table.rows else 0)}%"
+                for name, count in sorted(table.fields.items(), key=lambda item: (-item[1], item[0]))
+            )
+            out += [f"- **`{table.name}`** ({table.rows:,} {_plural(table.rows, 'row')}): {fields}"]
+        out += [""]
+    return out
+
+
+def _reach_section(survey: Survey) -> list[str]:
+    out = [
+        "## Reach: how many files resolve to a biosample and a donor",
+        "",
+        "Three measurements of one question, per dataset.",
+        "",
+        "- **compact** — the file's own row carries a non-empty `biosamples.biosample_id` / "
+        "`donors.donor_id`. This is Azul's materialized join.",
+        "- **verbatim, single hop** — the file appears in some `anvil_activity`'s "
+        "`generated_file_id`, and that same activity names a `used_biosample_id`. This is the "
+        "traversal behind the 9,603 figure #337 recorded for 1000G.",
+        "- **verbatim, transitive** — the file is in a connected component of the "
+        "file/activity graph that contains an activity naming a biosample, where an activity "
+        "connects every file it used or generated. Undirected, so it is an upper bound; single "
+        "hop bounds the same quantity from below.",
+        "",
+    ]
+    rows = []
+    for dataset in survey.datasets:
+        reach = dataset.reach
+        rows.append(
+            [
+                _short(dataset.title),
+                f"{reach.files:,}",
+                f"{reach.compact_biosample:,}",
+                f"{reach.compact_donor:,}",
+                f"{reach.single_hop_biosample:,}",
+                f"{reach.single_hop_donor:,}",
+                f"{reach.transitive_biosample:,}",
+                f"{reach.transitive_donor:,}",
+            ]
+        )
+    out += _table(
+        [
+            "dataset",
+            "files",
+            "compact biosample",
+            "compact donor",
+            "1-hop biosample",
+            "1-hop donor",
+            "transitive biosample",
+            "transitive donor",
+        ],
+        rows,
+        align="right",
+    )
+    out += [""]
+    return out
+
+
+def _readiness_section(survey: Survey) -> list[str]:
+    out = [
+        "## Consumer readiness",
+        "",
+        f"`yes` at or above {READY_HIGH:.0%}, `partial` at or above {READY_LOW:.0%}, `no` below "
+        "it. Every cell carries the number it was judged on.",
+        "",
+        "- **#369 dimension import** — share of files named by a submitter table that points at "
+        "a dimension, through its own name (`hifi`, `chains_to_chm13_mc`) or through a populated "
+        "field named for one (`reference_assembly`, `instrument_model`). The count in brackets "
+        "says how many of those tables carry it in the name, which is the stronger signal: a "
+        "name applies to every row, a field only to the rows where it is filled.",
+        "- **#336 governance import** — consent group and data use permission, whichever is lower, "
+        "with the phs accession reported beside it.",
+        "- **#361 donor edges** — the best donor reach of either manifest.",
+        "",
+    ]
+    rows = []
+    for dataset in survey.datasets:
+        verdicts = readiness(dataset)
+        rows.append(
+            [
+                _short(dataset.title),
+                f"{verdicts['dimensions'][0]} ({verdicts['dimensions'][1]})",
+                f"{verdicts['governance'][0]} ({verdicts['governance'][1]})",
+                f"{verdicts['edges'][0]} ({verdicts['edges'][1]})",
+            ]
+        )
+    out += _table(["dataset", "#369 dimensions", "#336 governance", "#361 donor edges"], rows)
+
+    verdicts = {d.title: readiness(d) for d in survey.datasets}
+    none_of_them = [_short(d.title) for d in survey.datasets if all(v[0] == "no" for v in verdicts[d.title].values())]
+    no_dimensions = [_short(d.title) for d in survey.datasets if verdicts[d.title]["dimensions"][0] == "no"]
+    no_edges = [_short(d.title) for d in survey.datasets if verdicts[d.title]["edges"][0] == "no"]
+    governance = {v["governance"][0] for v in verdicts.values()}
+    out += [
+        "",
+        ("Supports none of the three: " + ", ".join(none_of_them) + ".")
+        if none_of_them
+        else "Every dataset supports at least one of the three.",
+        "",
+        "Governance is the flat one: consent group and data use permission are complete on every "
+        "row of every dataset, so #336 is unblocked corpus-wide and only the phs accession varies. "
+        if governance == {"yes"}
+        else "Governance coverage is not uniform; see the table.",
+        "",
+    ]
+    if no_dimensions:
+        out += ["No dimension import from submitter tables: " + ", ".join(no_dimensions) + ".", ""]
+    if no_edges:
+        out += ["No donor edges from either manifest: " + ", ".join(no_edges) + ".", ""]
+    return out
+
+
+def _contradictions_section(survey: Survey) -> list[str]:
+    found = contradictions(survey)
+    out = [
+        "## Contradictions",
+        "",
+        "Where these measurements disagree with something already written down. Each is "
+        "re-checked on every run, so one that a later manifest pull resolves stops appearing "
+        "here rather than lingering as stale prose.",
+        "",
+    ]
+    if not found:
+        out += ["Nothing measured here disagrees with a recorded claim.", ""]
+        return out
+    for source, claim, measured in found:
+        out += [f"### {source}", "", f"**Claimed:** {claim}", "", f"**Measured:** {measured}", ""]
+    return out
+
+
+# --- the JSON sidecar ---------------------------------------------------------
+
+
+def survey_data(survey: Survey) -> dict[str, Any]:
+    """Every number the markdown rounds, for a consumer that would rather not parse it."""
+    return {
+        "catalog": survey.catalog,
+        "snapshot_total": survey.snapshot_total,
+        "measured_total": survey.measured_total,
+        "thresholds": {"yes": READY_HIGH, "partial": READY_LOW},
+        "absent_cells": sorted(ABSENT_CELLS),
+        "datasets": {
+            dataset.title: {
+                "compact_rows": dataset.compact_rows,
+                "snapshot_files": dataset.snapshot_files,
+                "dimension_files": dataset.dimension_files,
+                "dimension_file_rate": dataset.dimension_file_rate,
+                "compact_columns": {
+                    column.column: {"filled": column.filled, "rows": column.rows, "rate": column.rate}
+                    for column in dataset.columns
+                },
+                "absent_spellings": dict(dataset.absent_spellings),
+                "verbatim_types": {
+                    table.name: {
+                        "rows": table.rows,
+                        "origin": "submitter" if table.is_submitter else "harmonized",
+                        "files_named": table.files_named,
+                        "name_encodes": [{"dimension": d, "value": v} for d, v in table.encodes],
+                        "dimension_fields": [{"field": f, "dimension": d} for f, d in table.dimension_fields],
+                        "fields": {
+                            name: {"filled": count, "rate": count / table.rows if table.rows else 0.0}
+                            for name, count in sorted(table.fields.items())
+                        },
+                    }
+                    for table in dataset.tables
+                },
+                "reach": {
+                    "files": dataset.reach.files,
+                    "compact_biosample": dataset.reach.compact_biosample,
+                    "compact_donor": dataset.reach.compact_donor,
+                    "compact_activity": dataset.reach.compact_activity,
+                    "single_hop_biosample": dataset.reach.single_hop_biosample,
+                    "single_hop_donor": dataset.reach.single_hop_donor,
+                    "transitive_biosample": dataset.reach.transitive_biosample,
+                    "transitive_donor": dataset.reach.transitive_donor,
+                },
+                "readiness": {
+                    consumer: {"verdict": verdict, "basis": basis}
+                    for consumer, (verdict, basis) in readiness(dataset).items()
+                },
+            }
+            for dataset in survey.datasets
+        },
+        "contradictions": [
+            {"source": source, "claim": claim, "measured": measured}
+            for source, claim, measured in contradictions(survey)
+        ],
+    }

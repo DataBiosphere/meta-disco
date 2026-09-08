@@ -9,15 +9,19 @@ input records:
   activity columns). This is the source of ``anvil_files_metadata.json``.
 - ``verbatim.jsonl`` — one ``{"type", "value"}`` line per entity: the harmonized
   ``anvil_*`` entities plus the submitter's own Terra tables, unaltered. Stored
-  beside the compact manifest as the import-primary source; nothing here reads
-  it beyond counting its ``anvil_file`` lines for parity.
+  beside the compact manifest as the import-primary source. This module reads it
+  only to count ``anvil_file`` lines for parity and to stream its entities
+  (:func:`iter_verbatim_entities`); what those entities mean is #384's survey.
 
 The two are complementary, not nested: verbatim carries every entity but not
-Azul's join, so a per-file record cannot be rebuilt from it for every dataset
-(measured on #337: on 1000G the join reaches a donor for 25,616 files, the
-entity chain for 9,603). Verbatim entities also carry no dataset field, which is
-why manifests are requested one dataset at a time — the request's filter is
-what attributes a raw table to its dataset.
+Azul's join pre-materialized, so rebuilding a per-file record from it means
+walking the activity chain yourself. How far that walk goes decides what it
+costs: on 1000G the compact join reaches a donor for 25,616 files, and so does
+the verbatim chain under transitive closure — but only 9,603 files are reached
+if the walk stops at the activity that directly generated the file, which is the
+single-hop figure #337 recorded and #384 re-measured. Verbatim entities also
+carry no dataset field, which is why manifests are requested one dataset at a
+time — the request's filter is what attributes a raw table to its dataset.
 
 A manifest is a job, not a download: ``PUT /fetch/manifest/files`` answers with
 JSON carrying ``Status`` 301 and a ``Location`` to poll after ``Retry-After``
@@ -395,14 +399,53 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
+    """Every row of one compact manifest on disk as its raw cells, with its line number.
+
+    The cells are exactly what Azul wrote — every column, unmapped and
+    unconverted, a multi-valued cell still ``||``-joined and an absent one still
+    the empty string. :func:`iter_compact_records` narrows this to the
+    classifier's input contract; #384's survey needs the full 60 columns, so the
+    two share this reader rather than parsing the manifest twice over.
+
+    The line number is the file's own (the header is line 1), for error
+    messages that a person can act on.
+    """
+    with path.open(newline="", encoding="utf-8") as f:
+        yield from enumerate(csv.DictReader(f, delimiter="\t"), start=2)
+
+
 def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
     """Every record in one compact manifest on disk, in manifest order, streamed."""
-    with path.open(newline="", encoding="utf-8") as f:
-        for n, row in enumerate(csv.DictReader(f, delimiter="\t"), start=2):
+    for n, row in iter_compact_rows(path):
+        try:
+            yield record_from_compact_row(row)
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
+
+
+def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Every ``(type, value)`` pair in one verbatim manifest on disk, streamed.
+
+    One JSON object per line, ``{"type": ..., "value": {...}}``. Both harmonized
+    ``anvil_*`` entities and the submitter's own tables come through here; the
+    caller decides which types it cares about. A line whose JSON will not parse,
+    or that is not that shape, raises with its line number rather than being
+    skipped — a survey that silently dropped entities would understate coverage,
+    which is the one thing it must not do.
+    """
+    with path.open(encoding="utf-8") as f:
+        for n, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
             try:
-                yield record_from_compact_row(row)
-            except (KeyError, ValueError) as exc:
-                raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
+                entity = json.loads(line)
+                entity_type, value = entity["type"], entity["value"]
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
+            if not isinstance(value, dict):
+                raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
+            yield entity_type, value
 
 
 def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: datetime) -> dict[str, Any]:
