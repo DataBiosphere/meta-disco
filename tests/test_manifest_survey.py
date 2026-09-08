@@ -781,6 +781,17 @@ def test_a_separators_only_line_is_a_full_row_not_a_short_one(tmp_path):
     assert spellings["(empty)"] == 3
 
 
+def test_a_row_ending_in_a_separator_is_full_width(tmp_path):
+    # Its last cell is the empty string, not None — a value the manifest wrote,
+    # not a missing column. The guard reads the last column, so this is the row
+    # that would break if it confused "empty" with "absent".
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t\n")
+    rows, _columns, spellings = ms.survey_compact(compact_path(tmp_path))
+    assert rows == 1
+    assert spellings["(empty)"] == 1
+
+
 def test_a_short_row_of_one_field_says_field_not_fields(tmp_path):
     manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
     compact_path(tmp_path).write_text("a\tb\tc\n1\n")

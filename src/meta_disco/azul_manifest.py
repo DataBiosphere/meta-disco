@@ -462,7 +462,9 @@ def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
         columns = reader.fieldnames or []
         width = len(columns)
         # A short row is detected on its last column alone: DictReader pads only
-        # *trailing* columns, so a filled last cell means every cell is filled.
+        # *trailing* columns, so a last cell that is not ``None`` means no cell
+        # is. Not the same as filled — a row ending in a separator has an empty
+        # last cell, which is a value the manifest wrote, not a missing column.
         # The full list of missing names costs a pass over the row, and is worth
         # it only in the message — this runs over 17.4M cells on the largest
         # manifest, where survey_compact already hand-inlines its own hot test.
