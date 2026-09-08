@@ -825,6 +825,15 @@ def test_verbatim_reader_raises_on_a_line_it_cannot_use(tmp_path):
         list(iter_verbatim_entities(path))
 
 
+def test_verbatim_reader_raises_on_a_type_that_is_not_a_name(tmp_path):
+    # A null `type` would reach every caller that asks whether the name starts
+    # with `anvil_`; it is refused here, where the line number is still known.
+    path = tmp_path / "untyped.jsonl"
+    path.write_text('{"type": null, "value": {"file_id": "f1"}}\n')
+    with pytest.raises(ValueError, match="line 1: entity type is NoneType"):
+        list(iter_verbatim_entities(path))
+
+
 def test_verbatim_reader_skips_blank_lines(tmp_path):
     path = tmp_path / "padded.jsonl"
     path.write_text('\n{"type": "anvil_file", "value": {"file_id": "f1"}}\n\n')

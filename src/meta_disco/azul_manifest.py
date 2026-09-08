@@ -501,6 +501,8 @@ def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
                 entity_type, value = entity["type"], entity["value"]
             except (json.JSONDecodeError, KeyError, TypeError) as exc:
                 raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
+            if not isinstance(entity_type, str):
+                raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
             if not isinstance(value, dict):
                 raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
             yield entity_type, value
