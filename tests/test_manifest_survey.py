@@ -738,15 +738,17 @@ def test_a_manifest_with_no_rows_still_reports_its_columns(tmp_path):
     assert all(c.filled == 0 and c.rate == 0.0 for c in columns)
 
 
-def test_a_short_compact_row_reports_its_line_not_a_typeerror(tmp_path):
-    # A row missing trailing columns leaves them None; int(None) on file_size
-    # raises TypeError, which must arrive wrapped with the line number.
+def test_a_short_compact_row_is_refused_before_it_can_be_mapped(tmp_path):
+    # This used to reach record_from_compact_row and surface as int(None) on
+    # file_size. iter_compact_rows refuses the row first now (#387), so the error
+    # names the line for a better reason — the mapper never sees a None.
     from meta_disco.azul_manifest import iter_compact_records
 
     manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
     header = ["files.document_id", "files.file_id", "files.file_name", "files.file_format", "files.file_size"]
     compact_path(tmp_path).write_text("\t".join(header) + "\nd1\tf1\ta.bam\tBAM\n")
-    with pytest.raises(ValueError, match="line 2"):
+    expected = re.escape("line 2: 4 fields for a 5-column header, missing files.file_size")
+    with pytest.raises(ValueError, match=expected):
         list(iter_compact_records(compact_path(tmp_path)))
 
 
@@ -754,6 +756,56 @@ def test_compact_row_with_surplus_fields_names_the_line(tmp_path):
     manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
     compact_path(tmp_path).write_text("a\tb\n1\t2\n1\t2\t3\n")
     with pytest.raises(ValueError, match="line 3"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
+def test_compact_row_with_missing_fields_names_the_line_and_the_columns(tmp_path):
+    # The mirror of the surplus case. A short row is a malformed manifest, not a
+    # row with absent cells: Azul writes every column, and an absent value is
+    # written as the empty string. Refusing it here is what lets every cell be
+    # typed `str` (#387).
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t3\n4\t5\n")
+    with pytest.raises(ValueError, match="line 3: 2 fields for a 3-column header, missing c"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
+def test_a_separators_only_line_is_a_full_row_not_a_short_one(tmp_path):
+    # It parses as width empty cells, so it is yielded and counted like any other
+    # row. Pinned because the guard's docstring turns on the distinction: only a
+    # line with *fewer* separators than the header is short.
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t3\n\t\t\n")
+    rows, _columns, spellings = ms.survey_compact(compact_path(tmp_path))
+    assert rows == 2
+    assert spellings["(empty)"] == 3
+
+
+def test_a_row_ending_in_a_separator_is_full_width(tmp_path):
+    # Its last cell is the empty string, not None — a value the manifest wrote,
+    # not a missing column. The guard reads the last column, so this is the row
+    # that would break if it confused "empty" with "absent".
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t\n")
+    rows, _columns, spellings = ms.survey_compact(compact_path(tmp_path))
+    assert rows == 1
+    assert spellings["(empty)"] == 1
+
+
+def test_a_short_row_of_one_field_says_field_not_fields(tmp_path):
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\n")
+    with pytest.raises(ValueError, match="line 2: 1 field for a 3-column header, missing b, c"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
+def test_compact_line_numbers_survive_a_blank_line(tmp_path):
+    # A blank line is dropped by csv.DictReader before the width guard sees it,
+    # so it neither raises nor is yielded — but the row after it is still on its
+    # own file line, which is the number the error has to name.
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t3\n\n4\t5\n")
+    with pytest.raises(ValueError, match="line 4: 2 fields for a 3-column header, missing c"):
         ms.survey_compact(compact_path(tmp_path))
 
 
