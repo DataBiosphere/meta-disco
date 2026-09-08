@@ -423,6 +423,11 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def _fields(count: int) -> str:
+    """``"1 field"`` / ``"2 fields"`` — the width messages can land on either."""
+    return f"{count} field{'' if count == 1 else 's'}"
+
+
 def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
     """Every row of one compact manifest on disk as its raw cells, with its line number.
 
@@ -445,22 +450,32 @@ def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
     written as the empty string, and the 12 manifests measured for #384 have no
     short row at all.
 
-    A wholly blank line is the one exception, and is not a row — ``csv.DictReader``
-    drops it before it reaches here, so it neither raises nor is yielded. A line
-    of only whitespace or separators is a short row, and does raise.
+    Two lines that look empty are not short rows. A wholly blank one is dropped
+    by the underlying :mod:`csv` reader, inside the same ``next()`` that returns
+    the row after it — which is why the line number still names that row and not
+    the blank. A line of separators alone parses as a full row of empty cells and
+    is yielded like any other; only a line with fewer separators than the header,
+    whitespace or not, is short and raises.
     """
     with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
-        width = len(reader.fieldnames or [])
+        columns = reader.fieldnames or []
+        width = len(columns)
+        # A short row is detected on its last column alone: DictReader pads only
+        # *trailing* columns, so a filled last cell means every cell is filled.
+        # The full list of missing names costs a pass over the row, and is worth
+        # it only in the message — this runs over 17.4M cells on the largest
+        # manifest, where survey_compact already hand-inlines its own hot test.
+        last = columns[-1] if columns else None
         for row in reader:
             n = reader.line_num
             surplus = row.pop(None, None)
             if surplus is not None:
-                raise ValueError(f"{path.name} line {n}: {width + len(surplus)} fields for a {width}-column header")
-            missing = [name for name, cell in row.items() if cell is None]
-            if missing:
+                raise ValueError(f"{path.name} line {n}: {_fields(width + len(surplus))} for a {width}-column header")
+            if last is not None and row[last] is None:
+                missing = [name for name, cell in row.items() if cell is None]
                 raise ValueError(
-                    f"{path.name} line {n}: {width - len(missing)} fields for a {width}-column header, "
+                    f"{path.name} line {n}: {_fields(width - len(missing))} for a {width}-column header, "
                     f"missing {', '.join(missing)}"
                 )
             yield n, row
