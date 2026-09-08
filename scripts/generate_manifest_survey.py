@@ -27,6 +27,7 @@ from meta_disco.manifest_survey import (
     missing_manifests,
     render_report,
     run_survey,
+    sidecar_is_empty,
     survey_data,
 )
 
@@ -46,6 +47,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("docs/manifest-survey.md"), help="Markdown report path")
     parser.add_argument("--json", type=Path, default=Path("docs/manifest-survey.json"), help="JSON sidecar path")
     args = parser.parse_args()
+
+    if sidecar_is_empty(args.data_dir, args.catalog):
+        print(
+            f"Cannot survey {args.catalog}: its sidecar under {args.data_dir} names no datasets. "
+            "Run `make download` first.",
+            file=sys.stderr,
+        )
+        return 1
 
     missing = missing_manifests(args.data_dir, args.catalog)
     if missing:

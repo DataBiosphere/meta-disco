@@ -577,6 +577,25 @@ def survey_verbatim(path: Path) -> tuple[list[TableCoverage], Reach, int]:
     return tables, reach, len(dimension_files)
 
 
+def _id_list(value: dict[str, Any], key: str, path: Path) -> list[str]:
+    """One activity's multi-valued id field, as the ids it holds.
+
+    Raises on a bare string rather than accepting it: Python would iterate it
+    character by character, unioning single-character ids into the component
+    graph and quietly corrupting the reach numbers. Every anvil15 activity
+    carries lists here, but the sibling harmonized fields (``file_id``,
+    ``biosample_id``) are single-valued, so a manifest that changed shape should
+    stop the survey rather than publish a wrong figure — the same stance
+    :func:`iter_verbatim_entities` takes on a line it cannot read.
+    """
+    found = value.get(key)
+    if found is None:
+        return []
+    if not isinstance(found, list):
+        raise ValueError(f"{path.name}: anvil_activity {key} is {type(found).__name__}, not a list")
+    return [item for item in found if isinstance(item, str)]
+
+
 def _verbatim_reach(
     path: Path,
     file_ids: set[str],
@@ -617,9 +636,9 @@ def _verbatim_reach(
             continue
         if entity_type != VERBATIM_ACTIVITY:
             continue
-        used = [f for f in (value.get("used_file_id") or []) if isinstance(f, str)]
-        generated = [f for f in (value.get("generated_file_id") or []) if isinstance(f, str)]
-        biosamples = [b for b in (value.get("used_biosample_id") or []) if isinstance(b, str)]
+        used = _id_list(value, "used_file_id", path)
+        generated = _id_list(value, "generated_file_id", path)
+        biosamples = _id_list(value, "used_biosample_id", path)
 
         seed: int | None = None
         for file_id in used + generated:
@@ -667,19 +686,27 @@ def _verbatim_reach(
 def missing_manifests(root: Path, catalog: str) -> list[str]:
     """Manifests the sidecar names that are not on disk, as ``dataset (format)`` lines.
 
-    An empty sidecar is itself reported: a survey of nothing is a failure, not an
-    empty document.
+    Empty when the sidecar names nothing at all — that is :func:`sidecar_is_empty`'s
+    question, not this one. Reporting it here as a missing manifest would make the
+    caller say one manifest is missing when none was ever named.
     """
-    sidecar = load_sidecar(root, catalog)
-    datasets = sidecar.get("datasets") or {}
-    if not datasets:
-        return [f"{catalog}: no manifests recorded in the sidecar under {root}"]
+    datasets = load_sidecar(root, catalog).get("datasets") or {}
     return [
         f"{title} ({fmt}): {manifest_path(root, catalog, title, fmt)}"
         for title in sorted(datasets)
         for fmt in FORMATS
         if not manifest_path(root, catalog, title, fmt).is_file()
     ]
+
+
+def sidecar_is_empty(root: Path, catalog: str) -> bool:
+    """Whether the catalog's sidecar names no dataset at all.
+
+    Distinct from having missing manifests: nothing was ever downloaded here, so
+    there is no incomplete set to name — a survey of nothing is still a failure,
+    but a differently shaped one.
+    """
+    return not (load_sidecar(root, catalog).get("datasets") or {})
 
 
 def run_survey(root: Path, catalog: str) -> Survey:
@@ -711,15 +738,22 @@ def run_survey(root: Path, catalog: str) -> Survey:
 
 
 def _pct(value: float) -> str:
-    """A rate as a percentage without its sign, keeping a nonzero rate visibly nonzero.
+    """A rate as a percentage without its sign, keeping both ends honest.
 
     A dataset where 6 files of 12,534 carry a donor is not the same as one where
-    none do, and rounding would print both as ``0``; this prints ``<1``.
+    none do, and rounding would print both as ``0``; this prints ``<1``. The same
+    goes for the top: this document uses 100% to mean complete — the governance
+    sentence is gated on exactly that — so a rate that merely rounds to 100
+    prints ``>99`` instead. Only 0 prints as ``0`` and only 1.0 as ``100``.
     """
     if value <= 0:
         return "0"
     if value < 0.005:
         return "<1"
+    if value >= 1:
+        return "100"
+    if value > 0.995:
+        return ">99"
     return f"{value * 100:.0f}"
 
 
@@ -767,13 +801,22 @@ def readiness(dataset: DatasetSurvey) -> dict[str, tuple[str, str]]:
     by_name = len(dataset.name_encoding_tables)
     consent = min(dataset.rate(GOVERNANCE_CONSENT), dataset.rate(GOVERNANCE_DUO))
     phs = dataset.rate(GOVERNANCE_PHS)
-    donor = max(dataset.filled(JOIN_DONOR), dataset.reach.transitive_donor)
-    donor_rate = donor / dataset.compact_rows if dataset.compact_rows else 0.0
+    # Each count against its own denominator: the compact join is per compact row,
+    # the transitive walk per anvil_file entity, and the two are not always the
+    # same number. Dividing one by the other's total can exceed 100%.
+    compact_donor = dataset.filled(JOIN_DONOR)
+    compact_rate = compact_donor / dataset.compact_rows if dataset.compact_rows else 0.0
+    transitive_rate = dataset.reach.transitive_donor / dataset.reach.files if dataset.reach.files else 0.0
+    if compact_rate >= transitive_rate:
+        donor, donor_rate, source = compact_donor, compact_rate, f"{dataset.compact_rows:,} compact rows"
+    else:
+        donor = dataset.reach.transitive_donor
+        donor_rate, source = transitive_rate, f"{dataset.reach.files:,} verbatim files"
     basis = f"{_pct(rate)}% of verbatim files, {tables} {_plural(tables, 'table')} ({by_name} by name)"
     return {
         "dimensions": (_verdict(rate), basis),
         "governance": (_verdict(consent), f"consent/DUO {_pct(consent)}%, phs {_pct(phs)}%"),
-        "edges": (_verdict(donor_rate), f"{donor:,} of {dataset.compact_rows:,} compact rows ({_pct(donor_rate)}%)"),
+        "edges": (_verdict(donor_rate), f"{donor:,} of {source} ({_pct(donor_rate)}%)"),
     }
 
 
@@ -819,7 +862,10 @@ def contradictions(survey: Survey) -> list[tuple[str, str, str]]:
     #    entity chain for 9,603" — read as verbatim being weaker than compact.
     for dataset in survey.datasets:
         reach = dataset.reach
-        if reach.single_hop_donor < reach.transitive_donor:
+        # Both halves are needed. A single-hop shortfall alone does not refute the
+        # claim: if transitive closure still falls short of the compact join, the
+        # claim holds for that dataset and publishing a refutation would be wrong.
+        if reach.single_hop_donor < reach.transitive_donor and reach.transitive_donor >= dataset.filled(JOIN_DONOR):
             found.append(
                 (
                     f"#337 / #368 (azul_manifest docstring), on {dataset.title}",
@@ -1146,8 +1192,17 @@ def _readiness_section(survey: Survey) -> list[str]:
     )
 
     none_of_them = [_short(d.title) for d, v in judged if all(entry[0] == "no" for entry in v.values())]
-    no_dimensions = [_short(d.title) for d, v in judged if v["dimensions"][0] == "no"]
-    no_edges = [_short(d.title) for d, v in judged if v["edges"][0] == "no"]
+    # "no" is a band (below the bar), not a zero. A dataset at 6% belongs in the
+    # under-the-bar list, never in a sentence that says it has none — the table
+    # directly above prints its non-zero number.
+    zero_dimensions = [_short(d.title) for d, _v in judged if d.dimension_files == 0]
+    under_dimensions = [_short(d.title) for d, v in judged if v["dimensions"][0] == "no" and d.dimension_files > 0]
+    zero_edges = [_short(d.title) for d, _v in judged if max(d.filled(JOIN_DONOR), d.reach.transitive_donor) == 0]
+    under_edges = [
+        _short(d.title)
+        for d, v in judged
+        if v["edges"][0] == "no" and max(d.filled(JOIN_DONOR), d.reach.transitive_donor) > 0
+    ]
     complete = all(d.rate(GOVERNANCE_CONSENT) == 1.0 and d.rate(GOVERNANCE_DUO) == 1.0 for d in survey.datasets)
     out += [
         "",
@@ -1161,10 +1216,20 @@ def _readiness_section(survey: Survey) -> list[str]:
         else "Consent group and data use permission are not complete everywhere; see the table.",
         "",
     ]
-    if no_dimensions:
-        out += ["No dimension import from submitter tables: " + ", ".join(no_dimensions) + ".", ""]
-    if no_edges:
-        out += ["No donor edges from either manifest: " + ", ".join(no_edges) + ".", ""]
+    if zero_dimensions:
+        out += ["No dimension-carrying submitter table at all: " + ", ".join(zero_dimensions) + ".", ""]
+    if under_dimensions:
+        out += [
+            f"Some dimension-carrying tables but under the {READY_LOW:.0%} bar: " + ", ".join(under_dimensions) + ".",
+            "",
+        ]
+    if zero_edges:
+        out += ["No donor reachable from either manifest: " + ", ".join(zero_edges) + ".", ""]
+    if under_edges:
+        out += [
+            f"Some donors reachable but under the {READY_LOW:.0%} bar: " + ", ".join(under_edges) + ".",
+            "",
+        ]
     return out
 
 

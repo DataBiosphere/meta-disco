@@ -47,11 +47,11 @@ Keys: **D1** 1000G_PRIMED_data_model, **D2** 1000G_high_coverage_2019, **D3** HP
 | datasets.registered_identifier | 0 | 0 | 0 | 100 | 0 | 0 | 0 | 100 | 100 | 0 | 100 | 0 |
 | datasets.title | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | datasets.data_modality | 100 | 100 | 100 | 0 | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| donors.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| donors.source_datarepo_row_ids | 0 | 98 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| donors.donor_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| donors.organism_type | 0 | 98 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 0 | 100 | 0 |
-| donors.phenotypic_sex | 0 | 0 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
+| donors.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| donors.source_datarepo_row_ids | 0 | 98 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| donors.donor_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| donors.organism_type | 0 | 98 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 0 | >99 | 0 |
+| donors.phenotypic_sex | 0 | 0 | 18 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
 | donors.reported_ethnicity | 0 | 0 | 0 | <1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | donors.genetic_ancestry | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | diagnoses.document_id | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -64,26 +64,26 @@ Keys: **D1** 1000G_PRIMED_data_model, **D2** 1000G_high_coverage_2019, **D3** HP
 | diagnoses.onset_age | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | diagnoses.phenotype | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | diagnoses.phenopacket | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| biosamples.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| biosamples.source_datarepo_row_ids | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| biosamples.biosample_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| biosamples.anatomical_site | 0 | 0 | 0 | <1 | 0 | 0 | 0 | 0 | 0 | 91 | 100 | 0 |
+| biosamples.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| biosamples.source_datarepo_row_ids | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| biosamples.biosample_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| biosamples.anatomical_site | 0 | 0 | 0 | <1 | 0 | 0 | 0 | 0 | 0 | 91 | >99 | 0 |
 | biosamples.apriori_cell_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| biosamples.biosample_type | 0 | 0 | 0 | <1 | 0 | 0 | 0 | 0 | 0 | 91 | 100 | 0 |
+| biosamples.biosample_type | 0 | 0 | 0 | <1 | 0 | 0 | 0 | 0 | 0 | 91 | >99 | 0 |
 | biosamples.disease | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | biosamples.donor_age_at_collection_unit | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100 | 100 | 0 | 0 | 0 |
-| biosamples.donor_age_at_collection | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| activities.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| activities.source_datarepo_row_ids | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| activities.activity_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| activities.activity_type | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 23 | 100 | 0 |
+| biosamples.donor_age_at_collection | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| activities.document_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| activities.source_datarepo_row_ids | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| activities.activity_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| activities.activity_type | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 23 | >99 | 0 |
 | activities.assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | activities.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | activities.reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | files.document_id | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | files.source_datarepo_row_ids | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | files.file_id | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
-| files.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100 | 0 |
+| files.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | >99 | 0 |
 | files.file_format | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | files.file_size | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
 | files.file_md5sum | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
@@ -100,7 +100,7 @@ These are the columns a classifier would not need to exist if they were filled. 
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
 | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
-| files.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100 | 0 |
+| files.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | >99 | 0 |
 | files.reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 78 | 78 | 0 | 3 | 0 |
 | activities.assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | activities.data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -113,9 +113,9 @@ These are the columns a classifier would not need to exist if they were filled. 
 
 | column | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 | D11 | D12 |
 | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
-| donors.donor_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| biosamples.biosample_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
-| activities.activity_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | 100 | 0 |
+| donors.donor_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| biosamples.biosample_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
+| activities.activity_id | 0 | 98 | 20 | <1 | 11 | 0 | 0 | 100 | 100 | 91 | >99 | 0 |
 
 ### Governance columns
 
@@ -157,7 +157,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 
 - **`file_inventory`** (11,493 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `full_extension` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%
-- **`sequencing_file`** (8,634 rows): `datarepo_row_id` 100%, `file_path` 100%, `file_type` 100%, `ingest_provenance` 100%, `md5sum` 100%, `sequencing_dataset_id` 100%, `sequencing_file_id` 100%, `version` 100%, `chromosome` 100%
+- **`sequencing_file`** (8,634 rows): `datarepo_row_id` 100%, `file_path` 100%, `file_type` 100%, `ingest_provenance` 100%, `md5sum` 100%, `sequencing_dataset_id` 100%, `sequencing_file_id` 100%, `version` 100%, `chromosome` >99%
 - **`population_descriptor`** (3,202 rows): `country_of_recruitment` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `population_descriptor` 100%, `population_descriptor_id` 100%, `population_label` 100%, `subject_id` 100%, `version` 100%
 - **`sample`** (3,202 rows): `datarepo_row_id` 100%, `ingest_provenance` 100%, `sample_id` 100%, `subject_id` 100%, `tissue_source` 100%, `version` 100%
 - **`subject`** (3,202 rows): `consent_code` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `reported_sex` 100%, `study_nickname` 100%, `subject_id` 100%, `version` 100%
@@ -187,9 +187,9 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 
 - **`file_inventory`** (26,016 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `full_extension` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%
-- **`participant`** (3,202 rows): `center_name` 100%, `datarepo_row_id` 100%, `experiment_id` 100%, `ingest_provenance` 100%, `insert_size` 100%, `instrument_model` 100%, `instrument_platform` 100%, `library_layout` 100%, `library_name` 100%, `md5sum` 100%, `participant` 100%, `participant_id` 100%, `population` 100%, `run_id` 100%, `run_name` 100%, `sample_name` 100%, `study_id` 100%, `study_name` 100%, `submission_date` 100%, `submission_id` 100%, `version` 100%, `gvcf` 100%, `gvcf_tbi` 100%
+- **`participant`** (3,202 rows): `center_name` 100%, `datarepo_row_id` 100%, `experiment_id` 100%, `ingest_provenance` 100%, `insert_size` 100%, `instrument_model` 100%, `instrument_platform` 100%, `library_layout` 100%, `library_name` 100%, `md5sum` 100%, `participant` 100%, `participant_id` 100%, `population` 100%, `run_id` 100%, `run_name` 100%, `sample_name` 100%, `study_id` 100%, `study_name` 100%, `submission_date` 100%, `submission_id` 100%, `version` 100%, `gvcf` >99%, `gvcf_tbi` >99%
 - **`pedigree`** (3,202 rows): `datarepo_row_id` 100%, `familyid` 100%, `fatherid` 100%, `ingest_provenance` 100%, `motherid` 100%, `pedigree_id` 100%, `population` 100%, `sex` 100%, `superpopulation` 100%, `version` 100%
-- **`sample`** (3,202 rows): `cram` 100%, `datarepo_row_id` 100%, `gvcf` 100%, `ingest_provenance` 100%, `insert_size` 100%, `instrument_model` 100%, `library_construction_protocol` 100%, `library_layout` 100%, `library_name` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `participant` 100%, `sample_alias` 100%, `sample_id` 100%, `version` 100%, `gvcf_tbi` 100%, `gvcf_index` <1%
+- **`sample`** (3,202 rows): `cram` 100%, `datarepo_row_id` 100%, `gvcf` 100%, `ingest_provenance` 100%, `insert_size` 100%, `instrument_model` 100%, `library_construction_protocol` 100%, `library_layout` 100%, `library_name` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `participant` 100%, `sample_alias` 100%, `sample_id` 100%, `version` 100%, `gvcf_tbi` >99%, `gvcf_index` <1%
 - **`qc_result_sample`** (3,184 rows): `cram` 100%, `datarepo_row_id` 100%, `freemix` 100%, `ingest_provenance` 100%, `mean_coverage` 100%, `median_absolute_deviation` 100%, `median_insert_size` 100%, `pct_10x` 100%, `pct_20x` 100%, `pct_30x` 100%, `pct_chimeras` 100%, `percent_duplication` 100%, `q20_bases` 100%, `qc_result_sample` 100%, `qc_result_sample_id` 100%, `qc_status` 100%, `read1_pf_mismatch_rate` 100%, `read2_pf_mismatch_rate` 100%, `version` 100%
 - **`workspace_attributes`** (24 rows): `attribute` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `version` 100%, `value` 88%
 - **`sample_set`** (2 rows): `datarepo_row_id` 100%, `ingest_provenance` 100%, `sample_set_id` 100%, `samples` 100%, `version` 100%, `downsampled_gds` 50%, `downsampled_vcf` 50%
@@ -216,7 +216,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 | `pggb` | submitter | 1 | 3 | data_type = pangenome graph | — |
 
-- **`file_inventory`** (23,185 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` 100%
+- **`file_inventory`** (23,185 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` >99%
 - **`sample`** (57 rows): `cohort` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `maternal_id` 100%, `paternal_id` 100%, `sample_id` 100%, `version` 100%, `hifi` 91%, `mat_ilmn` 89%, `pat_ilmn` 89%, `child_ilmn` 86%, `bionano_cmap` 74%, `hic` 74%, `bionano_bnx` 72%, `nanopore` 68%, `notes` 18%, `strandseq` 14%
 - **`assembly_annotation`** (47 rows): `all_flagger` 100%, `assembly_annotation_id` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `mat_asat` 100%, `mat_dna_brnn` 100%, `mat_hsat` 100%, `mat_repeat_masker` 100%, `mat_seg_dups` 100%, `mat_trf` 100%, `pat_asat` 100%, `pat_dna_brnn` 100%, `pat_hsat` 100%, `pat_repeat_masker` 100%, `pat_seg_dups` 100%, `pat_trf` 100%, `unreliable_only_flagger` 100%, `unreliable_only_no_mt_flagger` 100%, `version` 100%, `mat_chm13_cat_genes` 94%, `mat_hg38_cat_genes` 94%, `pat_chm13_cat_genes` 94%, `pat_hg38_cat_genes` 94%
 - **`assembly_sample`** (47 rows): `assembly_sample_id` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `mat_chm13_aln_bai` 100%, `mat_chm13_aln_bam` 100%, `mat_fasta` 100%, `mat_grch38_aln_bai` 100%, `mat_grch38_aln_bam` 100%, `pat_chm13_aln_bai` 100%, `pat_chm13_aln_bam` 100%, `pat_fasta` 100%, `pat_grch38_aln_bai` 100%, `pat_grch38_aln_bam` 100%, `version` 100%
@@ -268,7 +268,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_project` | harmonized | 1 | — | — | — |
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 
-- **`file_inventory`** (290,135 rows): `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` 100%, `content_type` 100%
+- **`file_inventory`** (290,135 rows): `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` >99%, `content_type` >99%
 - **`interval`** (31,155 rows): `chromosome` 100%, `datarepo_row_id` 100%, `genomics_db_tar` 100%, `genotyped_bcftools_index` 100%, `genotyped_bgzip` 100%, `ingest_provenance` 100%, `interval_id` 100%, `margined_end` 100%, `margined_start` 100%, `start` 100%, `t_end` 100%, `version` 100%
 - **`participant`** (3,202 rows): `cram` 100%, `cram_index` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `mosdepth_global_dist` 100%, `mosdepth_regions_bed` 100%, `mosdepth_regions_bed_idx` 100%, `mosdepth_regions_dist` 100%, `mosdepth_summary` 100%, `participant_id` 100%, `read_1_fastq` 100%, `read_2_fastq` 100%, `samtools_stats` 100%, `sex` 100%, `version` 100%
 - **`workspace_attributes`** (79 rows): `attribute` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `version` 100%, `value` 65%
@@ -415,11 +415,11 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 
 - **`file_inventory`** (16,271 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `full_extension` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%
-- **`hic`** (3,002 rows): `assembly` 100%, `bioproject_accession` 100%, `coverage` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `hic_id` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_id` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `ntsm_score` 100%, `path` 100%, `platform` 100%, `production` 100%, `sample_id` 100%, `shear_method` 100%, `study` 100%, `title` 100%, `total_bp` 100%, `total_gbp` 100%, `version` 100%, `biosample_accession` 100%, `accession` 56%
+- **`hic`** (3,002 rows): `assembly` 100%, `bioproject_accession` 100%, `coverage` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `hic_id` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_id` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `ntsm_score` 100%, `path` 100%, `platform` 100%, `production` 100%, `sample_id` 100%, `shear_method` 100%, `study` 100%, `title` 100%, `total_bp` 100%, `total_gbp` 100%, `version` 100%, `biosample_accession` >99%, `accession` 56%
 - **`hifi`** (1,069 rows): `basecaller` 100%, `basecaller_version` 100%, `ccs_algorithm` 100%, `coverage` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `hifi_id` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_source` 100%, `library_strategy` 100%, `max` 100%, `mean` 100%, `min` 100%, `mm_remove` 100%, `mm_review` 100%, `mm_tag` 100%, `n25` 100%, `n50` 100%, `n75` 100%, `path` 100%, `platform` 100%, `production` 100%, `quartile_25` 100%, `quartile_50` 100%, `quartile_75` 100%, `sample_id` 100%, `total_bp` 100%, `total_gbp` 100%, `total_reads` 100%, `version` 100%, `bioproject_accession` 96%, `study` 96%, `library_id` 94%, `library_layout` 94%, `library_selection` 94%, `shear_method` 94%, `size_selection` 94%, `accession` 90%, `biosample_accession` 90%, `polymerase_version` 87%, `seq_plate_chemistry_version` 87%, `lima_float_version` 60%, `lima_version` 60%, `deepconsensus_coverage` 49%, `deepconsensus_filename` 49%, `deepconsensus_path` 49%, `ntsm_score` 46%, `primrose_filename` 16%
-- **`ont`** (929 rows): `basecaller` 100%, `basecaller_model` 100%, `basecaller_version` 100%, `coverage` 100%, `coverage_over_100kb` 100%, `coverage_over_1mb` 100%, `coverage_over_200kb` 100%, `coverage_over_300kb` 100%, `coverage_over_400kb` 100%, `coverage_over_500kb` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_id` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `n50` 100%, `ont_id` 100%, `path` 100%, `platform` 100%, `production` 100%, `sample_id` 100%, `seq_kit` 100%, `sequencing_chemistry` 100%, `shear_method` 100%, `size_selection` 100%, `total_gbp` 100%, `version` 100%, `whales` 100%, `ntsm_score` 100%, `bioproject_accession` 95%, `study` 95%, `biosample_accession` 86%, `accession` 77%
+- **`ont`** (929 rows): `basecaller` 100%, `basecaller_model` 100%, `basecaller_version` 100%, `coverage` 100%, `coverage_over_100kb` 100%, `coverage_over_1mb` 100%, `coverage_over_200kb` 100%, `coverage_over_300kb` 100%, `coverage_over_400kb` 100%, `coverage_over_500kb` 100%, `data_type` 100%, `datarepo_row_id` 100%, `design_description` 100%, `filetype` 100%, `generator_contact` 100%, `generator_facility` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_id` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `n50` 100%, `ont_id` 100%, `path` 100%, `platform` 100%, `production` 100%, `sample_id` 100%, `seq_kit` 100%, `sequencing_chemistry` 100%, `shear_method` 100%, `size_selection` 100%, `total_gbp` 100%, `version` 100%, `whales` 100%, `ntsm_score` >99%, `bioproject_accession` 95%, `study` 95%, `biosample_accession` 86%, `accession` 77%
 - **`deepconsensus`** (619 rows): `basecaller` 100%, `basecaller_version` 100%, `coverage` 100%, `data_type` 100%, `datarepo_row_id` 100%, `deepconsensus_id` 100%, `design_description` 100%, `filetype` 100%, `ingest_provenance` 100%, `instrument_model` 100%, `library_layout` 100%, `library_selection` 100%, `library_source` 100%, `library_strategy` 100%, `max` 100%, `mean` 100%, `min` 100%, `n25` 100%, `n50` 100%, `n75` 100%, `path` 100%, `platform` 100%, `production` 100%, `quartile_25` 100%, `quartile_50` 100%, `quartile_75` 100%, `sample_id` 100%, `total_bp` 100%, `total_gbp` 100%, `total_reads` 100%, `version` 100%, `bioproject_accession` 99%, `study` 99%, `biosample_accession` 98%, `generator_contact` 98%, `generator_facility` 98%, `library_id` 98%, `shear_method` 98%, `size_selection` 98%, `title` 98%, `polymerase_version` 77%, `seq_plate_chemistry_version` 77%, `accession` 69%, `ntsm_score` 53%, `notes` 1%
-- **`assembly`** (466 rows): `assembly` 100%, `assembly_fai` 100%, `assembly_gzi` 100%, `assembly_id` 100%, `assembly_md5` 100%, `datarepo_row_id` 100%, `genbank_accession` 100%, `haplotype` 100%, `ingest_provenance` 100%, `sample_id` 100%, `source` 100%, `version` 100%, `assembly_date` 100%, `assembly_method` 100%, `assembly_method_version` 100%, `phasing` 100%
+- **`assembly`** (466 rows): `assembly` 100%, `assembly_fai` 100%, `assembly_gzi` 100%, `assembly_id` 100%, `assembly_md5` 100%, `datarepo_row_id` 100%, `genbank_accession` 100%, `haplotype` 100%, `ingest_provenance` 100%, `sample_id` 100%, `source` 100%, `version` 100%, `assembly_date` >99%, `assembly_method` >99%, `assembly_method_version` >99%, `phasing` >99%
 - **`alignments_winnowmap`** (462 rows): `alignments_winnowmap_id` 100%, `datarepo_row_id` 100%, `haplotype` 100%, `ingest_provenance` 100%, `location` 100%, `sample_id` 100%, `version` 100%
 - **`censat`** (462 rows): `censat_id` 100%, `datarepo_row_id` 100%, `haplotype` 100%, `ingest_provenance` 100%, `location` 100%, `sample_id` 100%, `version` 100%
 - **`censat_centromeres`** (462 rows): `censat_centromeres_id` 100%, `datarepo_row_id` 100%, `haplotype` 100%, `ingest_provenance` 100%, `location` 100%, `sample_id` 100%, `version` 100%
@@ -460,7 +460,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_project` | harmonized | 1 | — | — | — |
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
 
-- **`file`** (6,786 rows): `content_type` 100%, `datarepo_row_id` 100%, `file_format` 100%, `file_id` 100%, `file_md5sum` 100%, `file_name` 100%, `file_path` 100%, `file_set` 100%, `file_size` 100%, `igvf_portal_url` 100%, `summary` 100%, `type` 100%, `version` 100%, `assay_titles` 100%, `sequencing_kit` 59%, `sequencing_platform` 59%, `sequencing_run` 59%, `flowcell_id` 58%, `mean_read_length` 58%, `illumina_read_type` 58%, `seqspecs` 58%, `lane` 56%, `derived_from` 13%, `workflows` 12%, `transcriptome_annotation` 12%, `reference_assembly` 3%, `file_format_type` <1%
+- **`file`** (6,786 rows): `content_type` 100%, `datarepo_row_id` 100%, `file_format` 100%, `file_id` 100%, `file_md5sum` 100%, `file_name` 100%, `file_path` 100%, `file_set` 100%, `file_size` 100%, `igvf_portal_url` 100%, `summary` 100%, `type` 100%, `version` 100%, `assay_titles` >99%, `sequencing_kit` 59%, `sequencing_platform` 59%, `sequencing_run` 59%, `flowcell_id` 58%, `mean_read_length` 58%, `illumina_read_type` 58%, `seqspecs` 58%, `lane` 56%, `derived_from` 13%, `workflows` 12%, `transcriptome_annotation` 12%, `reference_assembly` 3%, `file_format_type` <1%
 - **`sample`** (1,935 rows): `biosample_type` 100%, `datarepo_row_id` 100%, `donors` 100%, `igvf_portal_url` 100%, `sample_id` 100%, `sample_terms` 100%, `summary` 100%, `type` 100%, `version` 100%, `donor_age_at_collection_unit` 84%, `donor_age_at_collection_unit_lower_bound` 84%, `donor_age_at_collection_unit_upper_bound` 84%, `embryonic` 84%, `barcode_map` 16%, `multiplexed_samples` 16%
 - **`file_set`** (823 rows): `award` 100%, `datarepo_row_id` 100%, `file_set_id` 100%, `file_set_type` 100%, `files` 100%, `igvf_portal_url` 100%, `lab` 100%, `summary` 100%, `type` 100%, `version` 100%, `samples` 97%, `assay_titles` 97%, `preferred_assay_titles` 97%, `description` 62%, `input_file_sets` 60%, `sample_summary` 60%, `assay_term` 38%, `sequencing_library_types` 37%
 - **`donor`** (183 rows): `datarepo_row_id` 100%, `donor_id` 100%, `igvf_portal_url` 100%, `organism_type` 100%, `phenotypic_sex` 100%, `strain` 100%, `strain_background` 100%, `type` 100%, `version` 100%
@@ -526,21 +526,25 @@ Three measurements of one question, per dataset.
 | HPRC | no (6% of verbatim files, 5 tables (5 by name)) | yes (consent/DUO 100%, phs 0%) | partial (4,746 of 23,185 compact rows (20%)) |
 | NIA_CARD_Coriell_Cell_Lines_Open | no (<1% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | no (6 of 12,534 compact rows (<1%)) |
 | T2T | partial (32% of verbatim files, 1 table (1 by name)) | yes (consent/DUO 100%, phs 0%) | partial (32,020 of 289,204 compact rows (11%)) |
-| T2T_CHRY | yes (100% of verbatim files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 compact rows (0%)) |
+| T2T_CHRY | yes (>99% of verbatim files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 compact rows (0%)) |
 | nhp_dGTEx_V1 | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,591 compact rows (0%)) |
 | ENCORE_293T | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (1,992 of 1,992 compact rows (100%)) |
 | ENCORE_RS293 | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (3,752 of 3,752 compact rows (100%)) |
 | HPRC_R2 | yes (91% of verbatim files, 23 tables (23 by name)) | yes (consent/DUO 100%, phs 0%) | yes (14,843 of 16,271 compact rows (91%)) |
-| IGVF_Mouse_R1 | yes (100% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 compact rows (100%)) |
+| IGVF_Mouse_R1 | yes (100% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 compact rows (>99%)) |
 | MAGE | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,285 compact rows (0%)) |
 
 Every dataset supports at least one of the three.
 
 Governance is the flat one: consent group and data use permission are filled on every row of every dataset, so #336 is unblocked corpus-wide and only the phs accession varies.
 
-No dimension import from submitter tables: HPRC, NIA_CARD_Coriell_Cell_Lines_Open, nhp_dGTEx_V1, MAGE.
+No dimension-carrying submitter table at all: nhp_dGTEx_V1, MAGE.
 
-No donor edges from either manifest: 1000G_PRIMED_data_model, NIA_CARD_Coriell_Cell_Lines_Open, T2T_CHRY, nhp_dGTEx_V1, MAGE.
+Some dimension-carrying tables but under the 10% bar: HPRC, NIA_CARD_Coriell_Cell_Lines_Open.
+
+No donor reachable from either manifest: 1000G_PRIMED_data_model, T2T_CHRY, nhp_dGTEx_V1, MAGE.
+
+Some donors reachable but under the 10% bar: NIA_CARD_Coriell_Cell_Lines_Open.
 
 ## Contradictions
 
@@ -550,7 +554,7 @@ Where these measurements disagree with something already written down. Each is r
 
 **Claimed:** Donor sex, ancestry, biosample type and anatomical site are null on every indexed row.
 
-**Measured:** Not null in the compact manifest: donor sex 18% in ANVIL_HPRC; donor sex <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; donor sex 11% in ANVIL_T2T; donor sex 100% in AnVIL_ENCORE_293T; donor sex 100% in AnVIL_ENCORE_RS293; donor sex 91% in AnVIL_HPRC_R2; donor sex 100% in AnVIL_IGVF_Mouse_R1; donor ancestry <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; biosample type <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; biosample type 91% in AnVIL_HPRC_R2; biosample type 100% in AnVIL_IGVF_Mouse_R1; anatomical site <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; anatomical site 91% in AnVIL_HPRC_R2; anatomical site 100% in AnVIL_IGVF_Mouse_R1. The brief measured a different extract than these manifests, or an older catalog; it needs scoping to whichever it measured.
+**Measured:** Not null in the compact manifest: donor sex 18% in ANVIL_HPRC; donor sex <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; donor sex 11% in ANVIL_T2T; donor sex 100% in AnVIL_ENCORE_293T; donor sex 100% in AnVIL_ENCORE_RS293; donor sex 91% in AnVIL_HPRC_R2; donor sex >99% in AnVIL_IGVF_Mouse_R1; donor ancestry <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; biosample type <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; biosample type 91% in AnVIL_HPRC_R2; biosample type >99% in AnVIL_IGVF_Mouse_R1; anatomical site <1% in ANVIL_NIA_CARD_Coriell_Cell_Lines_Open; anatomical site 91% in AnVIL_HPRC_R2; anatomical site >99% in AnVIL_IGVF_Mouse_R1. The brief measured a different extract than these manifests, or an older catalog; it needs scoping to whichever it measured.
 
 ### #337 / #368 (azul_manifest docstring), on ANVIL_1000G_high_coverage_2019
 

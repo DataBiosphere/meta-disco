@@ -418,9 +418,24 @@ def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
 
     The line number is the file's own (the header is line 1), for error
     messages that a person can act on.
+
+    A row with more fields than the header raises, naming the line, rather than
+    being yielded: :class:`csv.DictReader` collects the surplus under a ``None``
+    key as a *list*, so passing it on hands every consumer a cell that is not a
+    string and a column that is not a name. A row with fewer fields is fine and
+    is yielded — the missing trailing columns come through as ``None``, which
+    reads as absent.
     """
     with path.open(newline="", encoding="utf-8") as f:
-        yield from enumerate(csv.DictReader(f, delimiter="\t"), start=2)
+        reader = csv.DictReader(f, delimiter="\t")
+        for n, row in enumerate(reader, start=2):
+            surplus = row.get(None)
+            if surplus is not None:
+                raise ValueError(
+                    f"{path.name} line {n}: {len(reader.fieldnames or []) + len(surplus)} fields "
+                    f"for a {len(reader.fieldnames or [])}-column header"
+                )
+            yield n, row
 
 
 def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:

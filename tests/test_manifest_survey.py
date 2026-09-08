@@ -530,7 +530,85 @@ def test_script_refuses_an_incomplete_set_and_names_what_is_missing(tmp_path, mo
 def test_script_refuses_an_empty_sidecar(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["generate_manifest_survey.py", "--data-dir", str(tmp_path)])
     assert cli.main() == 1
-    assert "no manifests recorded" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "names no datasets" in err
+    # Not smuggled through the missing-manifest list, which would have claimed
+    # one manifest was named when none was.
+    assert "manifest(s) named in the sidecar" not in err
+    assert ms.sidecar_is_empty(tmp_path, CATALOG)
+
+
+def test_percentages_do_not_round_to_a_misleading_100_or_0():
+    # 100 means complete and 0 means none; anything else must look like neither.
+    assert ms._pct(1.0) == "100"
+    assert ms._pct(0.9957) == ">99"
+    assert ms._pct(0.0) == "0"
+    assert ms._pct(0.0005) == "<1"
+    assert ms._pct(0.91) == "91"
+
+
+def test_compact_row_with_surplus_fields_names_the_line(tmp_path):
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\n1\t2\n1\t2\t3\n")
+    with pytest.raises(ValueError, match="line 3"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
+def test_a_scalar_where_an_id_list_belongs_raises(tmp_path):
+    # Python would iterate a bare string character by character, unioning
+    # single-character ids into the graph and corrupting the reach numbers.
+    write_manifests(
+        tmp_path,
+        "D",
+        [{"files.file_id": "f1"}],
+        [anvil_file("f1"), ("anvil_activity", {"activity_id": "a", "generated_file_id": "f1"})],
+    )
+    with pytest.raises(ValueError, match="generated_file_id is str"):
+        ms.survey_verbatim(verbatim_path(tmp_path))
+
+
+def test_no_traversal_contradiction_when_transitive_still_falls_short(tmp_path):
+    # Single hop < transitive, but transitive < the compact join: the prior claim
+    # holds here, so publishing a refutation would be wrong.
+    write_sidecar(tmp_path, {"D": 3})
+    write_manifests(
+        tmp_path,
+        "D",
+        [
+            {"donors.donor_id": "dn1", "biosamples.biosample_id": "bs1", "activities.activity_id": "ac1"},
+            {"donors.donor_id": "dn1", "biosamples.biosample_id": "bs1", "activities.activity_id": "ac1"},
+            {"donors.donor_id": "dn1", "biosamples.biosample_id": "bs1", "activities.activity_id": "ac1"},
+        ],
+        [
+            anvil_file("fastq"),
+            anvil_file("bam"),
+            anvil_file("orphan"),
+            ("anvil_biosample", {"biosample_id": "bs1", "donor_id": ["dn1"]}),
+            activity(used=[], generated=["fastq"], biosamples=["bs1"]),
+            activity(used=["fastq"], generated=["bam"]),
+        ],
+    )
+    survey = ms.run_survey(tmp_path, CATALOG)
+    dataset = survey.datasets[0]
+    assert dataset.reach.single_hop_donor == 1 < dataset.reach.transitive_donor == 2
+    assert dataset.filled(ms.JOIN_DONOR) == 3  # the compact join still reaches further
+    assert [c for c in ms.contradictions(survey) if "#337" in c[0]] == []
+
+
+def test_under_the_bar_is_not_reported_as_none(tmp_path):
+    # A dimension-carrying table naming 1 of 20 files scores 5% — a "no" verdict,
+    # which is a band below the bar, not a zero. The table prints the 5%, so a
+    # sentence claiming the dataset has none would contradict it.
+    write_sidecar(tmp_path, {"D": 20})
+    write_manifests(
+        tmp_path,
+        "D",
+        [{"files.file_id": f"f{i}"} for i in range(20)],
+        [anvil_file(f"f{i}") for i in range(20)] + [("hifi", {"hifi_id": "s", "path": "f1"})],
+    )
+    report = ms.render_report(ms.run_survey(tmp_path, CATALOG))
+    assert "No dimension-carrying submitter table at all" not in report
+    assert "under the 10% bar" in report
 
 
 # --- the reader this leans on -------------------------------------------------
