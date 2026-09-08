@@ -436,8 +436,7 @@ def survey_compact(path: Path) -> tuple[int, list[ColumnCoverage], Counter]:
         rows += 1
         for name, cell in row.items():
             if not cell:
-                # None is a short row: csv.DictReader leaves missing trailing columns unset.
-                spellings["(missing column)" if cell is None else "(empty)"] += 1
+                spellings["(empty)"] += 1
                 continue
             if len(cell) <= _LONGEST_ABSENT or cell[0].isspace() or cell[-1].isspace():
                 stripped = cell.strip().lower()

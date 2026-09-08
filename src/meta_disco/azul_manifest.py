@@ -432,24 +432,36 @@ def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
     classifier's input contract; #384's survey needs the full 60 columns, so the
     two share this reader rather than parsing the manifest twice over.
 
-    The line number is the file's own (the header is line 1), for error
-    messages that a person can act on.
+    The line number is the file's own (the header is line 1), for error messages
+    that a person can act on. It comes from the reader rather than from counting
+    yielded rows, which would drift past any line the reader dropped.
 
-    A row with more fields than the header raises, naming the line, rather than
-    being yielded: :class:`csv.DictReader` collects the surplus under a ``None``
-    key as a *list*, so passing it on hands every consumer a cell that is not a
-    string and a column that is not a name. A row with fewer fields is fine and
-    is yielded — the missing trailing columns come through as ``None``, which
-    reads as absent.
+    A row that does not have exactly the header's fields raises, naming the line,
+    rather than being yielded — which is what lets every cell be typed ``str``.
+    :class:`csv.DictReader` represents the two mismatches differently and neither
+    is a cell a consumer can use: surplus fields arrive under a ``None`` key as a
+    *list*, and missing trailing columns arrive as ``None`` values. A short row is
+    a malformed manifest rather than a row with absent cells: an absent value is
+    written as the empty string, and the 12 manifests measured for #384 have no
+    short row at all.
+
+    A wholly blank line is the one exception, and is not a row — ``csv.DictReader``
+    drops it before it reaches here, so it neither raises nor is yielded. A line
+    of only whitespace or separators is a short row, and does raise.
     """
     with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
-        for n, row in enumerate(reader, start=2):
-            surplus = row.get(None)
+        width = len(reader.fieldnames or [])
+        for row in reader:
+            n = reader.line_num
+            surplus = row.pop(None, None)
             if surplus is not None:
+                raise ValueError(f"{path.name} line {n}: {width + len(surplus)} fields for a {width}-column header")
+            missing = [name for name, cell in row.items() if cell is None]
+            if missing:
                 raise ValueError(
-                    f"{path.name} line {n}: {len(reader.fieldnames or []) + len(surplus)} fields "
-                    f"for a {len(reader.fieldnames or [])}-column header"
+                    f"{path.name} line {n}: {width - len(missing)} fields for a {width}-column header, "
+                    f"missing {', '.join(missing)}"
                 )
             yield n, row
 
@@ -469,10 +481,14 @@ def compact_header(path: Path) -> list[str]:
 def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
     """Every record in one compact manifest on disk, in manifest order, streamed.
 
-    ``TypeError`` is caught alongside the other two: a row with fewer fields than
-    the header leaves its trailing columns ``None``, and ``int(None)`` on
-    ``files.file_size`` raises ``TypeError``, which would otherwise escape
-    without the line number that makes it actionable.
+    The exceptions are caught only to be re-raised carrying the manifest line
+    number, which is what makes them actionable. ``KeyError`` is a column the
+    mapper requires that the header lacks, or a ``files.is_supplementary``
+    spelling that is not Azul's ``True``/``False``; ``ValueError`` is ``int()``
+    on a ``files.file_size`` that is not a number. ``TypeError`` is kept as a
+    guard rather than for a known path: it was how a short row used to surface,
+    and :func:`iter_compact_rows` now refuses those outright, already naming the
+    line.
     """
     for n, row in iter_compact_rows(path):
         try:

@@ -757,6 +757,27 @@ def test_compact_row_with_surplus_fields_names_the_line(tmp_path):
         ms.survey_compact(compact_path(tmp_path))
 
 
+def test_compact_row_with_missing_fields_names_the_line_and_the_columns(tmp_path):
+    # The mirror of the surplus case. A short row is a malformed manifest, not a
+    # row with absent cells: Azul writes every column, and an absent value is
+    # written as the empty string. Refusing it here is what lets every cell be
+    # typed `str` (#387).
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t3\n4\t5\n")
+    with pytest.raises(ValueError, match="line 3: 2 fields for a 3-column header, missing c"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
+def test_compact_line_numbers_survive_a_blank_line(tmp_path):
+    # A blank line is dropped by csv.DictReader before the width guard sees it,
+    # so it neither raises nor is yielded — but the row after it is still on its
+    # own file line, which is the number the error has to name.
+    manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
+    compact_path(tmp_path).write_text("a\tb\tc\n1\t2\t3\n\n4\t5\n")
+    with pytest.raises(ValueError, match="line 4: 2 fields for a 3-column header, missing c"):
+        ms.survey_compact(compact_path(tmp_path))
+
+
 def test_a_scalar_where_an_id_list_belongs_raises(tmp_path):
     # Python would iterate a bare string character by character, unioning
     # single-character ids into the graph and corrupting the reach numbers.
