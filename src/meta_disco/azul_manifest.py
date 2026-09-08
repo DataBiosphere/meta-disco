@@ -66,6 +66,13 @@ FORMATS = (FORMAT_COMPACT, FORMAT_VERBATIM)
 FORMAT_SUFFIX = {FORMAT_COMPACT: "compact.tsv", FORMAT_VERBATIM: "verbatim.jsonl"}
 SIDECAR = "manifests.json"
 
+# Verbatim entity types this package names. The manifest carries many more —
+# every submitter table — but these three are the harmonized entities whose
+# shape is part of the format rather than of one submitter's workspace.
+VERBATIM_FILE = "anvil_file"
+VERBATIM_ACTIVITY = "anvil_activity"
+VERBATIM_BIOSAMPLE = "anvil_biosample"
+
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 # How a compact cell spells a boolean (all 708,088 anvil15 rows use one of these).
@@ -330,7 +337,8 @@ def count_rows(fmt: str, path: Path) -> int:
     with path.open("rb") as f:
         if fmt == FORMAT_COMPACT:
             return max(sum(1 for _ in f) - 1, 0)
-        return sum(1 for line in f if b'"anvil_file"' in line and json.loads(line).get("type") == "anvil_file")
+        needle = f'"{VERBATIM_FILE}"'.encode()
+        return sum(1 for line in f if needle in line and json.loads(line).get("type") == VERBATIM_FILE)
 
 
 def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], int]) -> list[str]:

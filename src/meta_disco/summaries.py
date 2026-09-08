@@ -13,6 +13,22 @@ def escape_md_cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
+def md_table(header: list[str], rows: list[list[str]], align: str = "left") -> list[str]:
+    """One markdown table as a list of lines: header, separator rule, then the rows.
+
+    Every cell goes through :func:`escape_md_cell`. ``align`` sets the alignment
+    of the columns after the first, which stays left — the leading column is a
+    label in every report that uses this, and the rest are usually counts.
+    Callers pass rows already formatted as strings; this does no number
+    formatting of its own.
+    """
+    rule = "---" if align == "left" else "--:"
+    lines = ["| " + " | ".join(escape_md_cell(cell) for cell in header) + " |"]
+    lines.append("|" + "|".join([" --- "] + [f" {rule} "] * (len(header) - 1)) + "|")
+    lines.extend("| " + " | ".join(escape_md_cell(cell) for cell in row) + " |" for row in rows)
+    return lines
+
+
 def _print_field_table(title: str, counts: dict, width: int = 35):
     print(f"\n{title}:")
     for key, count in sorted(counts.items(), key=lambda x: -x[1]):

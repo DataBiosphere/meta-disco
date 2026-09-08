@@ -27,7 +27,7 @@ A note on the sidecar: `manifests.json` records a verbatim `rows` count that is 
 
 ## Compact column coverage
 
-Percentage of each dataset's rows where the column holds something. A cell counts as absent if, stripped and lowercased, it is one of ['', '[]', 'n/a', 'na', 'none', 'null', '{}']. Columns are the compact manifest's own 60, in manifest order.
+Percentage of each dataset's rows where the column holds something. A cell counts as absent if, stripped and lowercased, it is one of ['', '[]', 'n/a', 'na', 'none', 'null', '{}']. Columns are the manifests' own 60, in manifest order; a dataset missing one of them reads as 0 for it.
 
 Keys: **D1** 1000G_PRIMED_data_model, **D2** 1000G_high_coverage_2019, **D3** HPRC, **D4** NIA_CARD_Coriell_Cell_Lines_Open, **D5** T2T, **D6** T2T_CHRY, **D7** nhp_dGTEx_V1, **D8** ENCORE_293T, **D9** ENCORE_RS293, **D10** HPRC_R2, **D11** IGVF_Mouse_R1, **D12** MAGE
 
@@ -515,28 +515,28 @@ Three measurements of one question, per dataset.
 
 `yes` at or above 90%, `partial` at or above 10%, `no` below it. Every cell carries the number it was judged on.
 
-- **#369 dimension import** — share of files named by a submitter table that points at a dimension, through its own name (`hifi`, `chains_to_chm13_mc`) or through a populated field named for one (`reference_assembly`, `instrument_model`). The count in brackets says how many of those tables carry it in the name, which is the stronger signal: a name applies to every row, a field only to the rows where it is filled.
+- **#369 dimension import** — share of the dataset's verbatim files named by a submitter table that points at a dimension, through its own name (`hifi`, `chains_to_chm13_mc`) or through a populated field named for one (`reference_assembly`, `instrument_model`). The count in brackets says how many of those tables carry it in the name, which is the stronger signal: a name applies to every row, a field only to the rows where it is filled.
 - **#336 governance import** — consent group and data use permission, whichever is lower, with the phs accession reported beside it.
 - **#361 donor edges** — the best donor reach of either manifest.
 
 | dataset | #369 dimensions | #336 governance | #361 donor edges |
 | --- | --- | --- | --- |
-| 1000G_PRIMED_data_model | partial (74% of files, 2 tables (1 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 11,493 files (0%)) |
-| 1000G_high_coverage_2019 | partial (37% of files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | yes (25,616 of 26,016 files (98%)) |
-| HPRC | no (6% of files, 5 tables (5 by name)) | yes (consent/DUO 100%, phs 0%) | partial (4,746 of 23,185 files (20%)) |
-| NIA_CARD_Coriell_Cell_Lines_Open | no (<1% of files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | no (6 of 12,534 files (<1%)) |
-| T2T | partial (32% of files, 1 table (1 by name)) | yes (consent/DUO 100%, phs 0%) | partial (32,020 of 289,204 files (11%)) |
-| T2T_CHRY | yes (100% of files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 files (0%)) |
-| nhp_dGTEx_V1 | no (0% of files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,591 files (0%)) |
-| ENCORE_293T | yes (100% of files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (1,992 of 1,992 files (100%)) |
-| ENCORE_RS293 | yes (100% of files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (3,752 of 3,752 files (100%)) |
-| HPRC_R2 | yes (91% of files, 23 tables (23 by name)) | yes (consent/DUO 100%, phs 0%) | yes (14,843 of 16,271 files (91%)) |
-| IGVF_Mouse_R1 | yes (100% of files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 files (100%)) |
-| MAGE | no (0% of files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,285 files (0%)) |
+| 1000G_PRIMED_data_model | partial (74% of verbatim files, 2 tables (1 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 11,493 compact rows (0%)) |
+| 1000G_high_coverage_2019 | partial (37% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | yes (25,616 of 26,016 compact rows (98%)) |
+| HPRC | no (6% of verbatim files, 5 tables (5 by name)) | yes (consent/DUO 100%, phs 0%) | partial (4,746 of 23,185 compact rows (20%)) |
+| NIA_CARD_Coriell_Cell_Lines_Open | no (<1% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | no (6 of 12,534 compact rows (<1%)) |
+| T2T | partial (32% of verbatim files, 1 table (1 by name)) | yes (consent/DUO 100%, phs 0%) | partial (32,020 of 289,204 compact rows (11%)) |
+| T2T_CHRY | yes (100% of verbatim files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 compact rows (0%)) |
+| nhp_dGTEx_V1 | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,591 compact rows (0%)) |
+| ENCORE_293T | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (1,992 of 1,992 compact rows (100%)) |
+| ENCORE_RS293 | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (3,752 of 3,752 compact rows (100%)) |
+| HPRC_R2 | yes (91% of verbatim files, 23 tables (23 by name)) | yes (consent/DUO 100%, phs 0%) | yes (14,843 of 16,271 compact rows (91%)) |
+| IGVF_Mouse_R1 | yes (100% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 compact rows (100%)) |
+| MAGE | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,285 compact rows (0%)) |
 
 Every dataset supports at least one of the three.
 
-Governance is the flat one: consent group and data use permission are complete on every row of every dataset, so #336 is unblocked corpus-wide and only the phs accession varies. 
+Governance is the flat one: consent group and data use permission are filled on every row of every dataset, so #336 is unblocked corpus-wide and only the phs accession varies.
 
 No dimension import from submitter tables: HPRC, NIA_CARD_Coriell_Cell_Lines_Open, nhp_dGTEx_V1, MAGE.
 
@@ -568,7 +568,7 @@ Where these measurements disagree with something already written down. Each is r
 
 **Claimed:** AnVIL_HPRC_R2 carries ~20 per-file-type tables, each 462 rows.
 
-**Measured:** 8 of them are not 462 rows: hic 3,002, hifi 1,069, ont 929, deepconsensus 619, assembly 466. The 462 figure holds for the per-assembly derived tables only.
+**Measured:** 8 of them are not 462 rows: hic 3,002, hifi 1,069, ont 929, deepconsensus 619, assembly 466. The tables do not share a row count; 462 is the count of the largest group, not of all of them.
 
 ### #384 (this issue's own body)
 

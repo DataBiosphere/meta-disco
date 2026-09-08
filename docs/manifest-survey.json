@@ -27,7 +27,7 @@
     },
     {
       "claim": "AnVIL_HPRC_R2 carries ~20 per-file-type tables, each 462 rows.",
-      "measured": "8 of them are not 462 rows: hic 3,002, hifi 1,069, ont 929, deepconsensus 619, assembly 466. The 462 figure holds for the per-assembly derived tables only.",
+      "measured": "8 of them are not 462 rows: hic 3,002, hifi 1,069, ont 929, deepconsensus 619, assembly 466. The tables do not share a row count; 462 is the count of the largest group, not of all of them.",
       "source": "#384 (this issue's own body)"
     },
     {
@@ -347,9 +347,6 @@
       "dimension_file_rate": 0.7449752022970504,
       "dimension_files": 8562,
       "reach": {
-        "compact_activity": 0,
-        "compact_biosample": 0,
-        "compact_donor": 0,
         "files": 11493,
         "single_hop_biosample": 0,
         "single_hop_donor": 0,
@@ -358,11 +355,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "74% of files, 2 tables (1 by name)",
+          "basis": "74% of verbatim files, 2 tables (1 by name)",
           "verdict": "partial"
         },
         "edges": {
-          "basis": "0 of 11,493 files (0%)",
+          "basis": "0 of 11,493 compact rows (0%)",
           "verdict": "no"
         },
         "governance": {
@@ -1326,9 +1323,6 @@
       "dimension_file_rate": 0.3691190036900369,
       "dimension_files": 9603,
       "reach": {
-        "compact_activity": 25616,
-        "compact_biosample": 25616,
-        "compact_donor": 25616,
         "files": 26016,
         "single_hop_biosample": 9603,
         "single_hop_donor": 9603,
@@ -1337,11 +1331,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "37% of files, 2 tables (0 by name)",
+          "basis": "37% of verbatim files, 2 tables (0 by name)",
           "verdict": "partial"
         },
         "edges": {
-          "basis": "25,616 of 26,016 files (98%)",
+          "basis": "25,616 of 26,016 compact rows (98%)",
           "verdict": "yes"
         },
         "governance": {
@@ -2391,9 +2385,6 @@
       "dimension_file_rate": 0.06120336424412336,
       "dimension_files": 1419,
       "reach": {
-        "compact_activity": 4746,
-        "compact_biosample": 4746,
-        "compact_donor": 4746,
         "files": 23185,
         "single_hop_biosample": 4432,
         "single_hop_donor": 4432,
@@ -2402,11 +2393,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "6% of files, 5 tables (5 by name)",
+          "basis": "6% of verbatim files, 5 tables (5 by name)",
           "verdict": "no"
         },
         "edges": {
-          "basis": "4,746 of 23,185 files (20%)",
+          "basis": "4,746 of 23,185 compact rows (20%)",
           "verdict": "partial"
         },
         "governance": {
@@ -3557,9 +3548,6 @@
       "dimension_file_rate": 0.0004786979415988511,
       "dimension_files": 6,
       "reach": {
-        "compact_activity": 6,
-        "compact_biosample": 6,
-        "compact_donor": 6,
         "files": 12534,
         "single_hop_biosample": 0,
         "single_hop_donor": 0,
@@ -3568,11 +3556,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "<1% of files, 1 table (0 by name)",
+          "basis": "<1% of verbatim files, 1 table (0 by name)",
           "verdict": "no"
         },
         "edges": {
-          "basis": "6 of 12,534 files (<1%)",
+          "basis": "6 of 12,534 compact rows (<1%)",
           "verdict": "no"
         },
         "governance": {
@@ -4467,9 +4455,6 @@
       "dimension_file_rate": 0.32318017731428333,
       "dimension_files": 93465,
       "reach": {
-        "compact_activity": 32020,
-        "compact_biosample": 32020,
-        "compact_donor": 32020,
         "files": 289204,
         "single_hop_biosample": 32020,
         "single_hop_donor": 32020,
@@ -4478,11 +4463,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "32% of files, 1 table (1 by name)",
+          "basis": "32% of verbatim files, 1 table (1 by name)",
           "verdict": "partial"
         },
         "edges": {
-          "basis": "32,020 of 289,204 files (11%)",
+          "basis": "32,020 of 289,204 compact rows (11%)",
           "verdict": "partial"
         },
         "governance": {
@@ -5329,9 +5314,6 @@
       "dimension_file_rate": 0.9999096713003139,
       "dimension_files": 309951,
       "reach": {
-        "compact_activity": 0,
-        "compact_biosample": 0,
-        "compact_donor": 0,
         "files": 309979,
         "single_hop_biosample": 0,
         "single_hop_donor": 0,
@@ -5340,11 +5322,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "100% of files, 8 tables (8 by name)",
+          "basis": "100% of verbatim files, 8 tables (8 by name)",
           "verdict": "yes"
         },
         "edges": {
-          "basis": "0 of 309,979 files (0%)",
+          "basis": "0 of 309,979 compact rows (0%)",
           "verdict": "no"
         },
         "governance": {
@@ -7153,9 +7135,6 @@
       "dimension_file_rate": 0.0,
       "dimension_files": 0,
       "reach": {
-        "compact_activity": 0,
-        "compact_biosample": 0,
-        "compact_donor": 0,
         "files": 3591,
         "single_hop_biosample": 0,
         "single_hop_donor": 0,
@@ -7164,11 +7143,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "0% of files, 0 tables (0 by name)",
+          "basis": "0% of verbatim files, 0 tables (0 by name)",
           "verdict": "no"
         },
         "edges": {
-          "basis": "0 of 3,591 files (0%)",
+          "basis": "0 of 3,591 compact rows (0%)",
           "verdict": "no"
         },
         "governance": {
@@ -7761,9 +7740,6 @@
       "dimension_file_rate": 1.0,
       "dimension_files": 1992,
       "reach": {
-        "compact_activity": 1992,
-        "compact_biosample": 1992,
-        "compact_donor": 1992,
         "files": 1992,
         "single_hop_biosample": 1992,
         "single_hop_donor": 1992,
@@ -7772,11 +7748,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "100% of files, 1 table (0 by name)",
+          "basis": "100% of verbatim files, 1 table (0 by name)",
           "verdict": "yes"
         },
         "edges": {
-          "basis": "1,992 of 1,992 files (100%)",
+          "basis": "1,992 of 1,992 compact rows (100%)",
           "verdict": "yes"
         },
         "governance": {
@@ -8609,9 +8585,6 @@
       "dimension_file_rate": 1.0,
       "dimension_files": 3752,
       "reach": {
-        "compact_activity": 3752,
-        "compact_biosample": 3752,
-        "compact_donor": 3752,
         "files": 3752,
         "single_hop_biosample": 3752,
         "single_hop_donor": 3752,
@@ -8620,11 +8593,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "100% of files, 1 table (0 by name)",
+          "basis": "100% of verbatim files, 1 table (0 by name)",
           "verdict": "yes"
         },
         "edges": {
-          "basis": "3,752 of 3,752 files (100%)",
+          "basis": "3,752 of 3,752 compact rows (100%)",
           "verdict": "yes"
         },
         "governance": {
@@ -9457,9 +9430,6 @@
       "dimension_file_rate": 0.9129740028271157,
       "dimension_files": 14855,
       "reach": {
-        "compact_activity": 14843,
-        "compact_biosample": 14843,
-        "compact_donor": 14843,
         "files": 16271,
         "single_hop_biosample": 14843,
         "single_hop_donor": 14843,
@@ -9468,11 +9438,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "91% of files, 23 tables (23 by name)",
+          "basis": "91% of verbatim files, 23 tables (23 by name)",
           "verdict": "yes"
         },
         "edges": {
-          "basis": "14,843 of 16,271 files (91%)",
+          "basis": "14,843 of 16,271 compact rows (91%)",
           "verdict": "yes"
         },
         "governance": {
@@ -12215,9 +12185,6 @@
       "dimension_file_rate": 1.0,
       "dimension_files": 6786,
       "reach": {
-        "compact_activity": 6757,
-        "compact_biosample": 6757,
-        "compact_donor": 6757,
         "files": 6786,
         "single_hop_biosample": 6757,
         "single_hop_donor": 6757,
@@ -12226,11 +12193,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "100% of files, 2 tables (0 by name)",
+          "basis": "100% of verbatim files, 2 tables (0 by name)",
           "verdict": "yes"
         },
         "edges": {
-          "basis": "6,757 of 6,786 files (100%)",
+          "basis": "6,757 of 6,786 compact rows (100%)",
           "verdict": "yes"
         },
         "governance": {
@@ -13187,9 +13154,6 @@
       "dimension_file_rate": 0.0,
       "dimension_files": 0,
       "reach": {
-        "compact_activity": 0,
-        "compact_biosample": 0,
-        "compact_donor": 0,
         "files": 3285,
         "single_hop_biosample": 0,
         "single_hop_donor": 0,
@@ -13198,11 +13162,11 @@
       },
       "readiness": {
         "dimensions": {
-          "basis": "0% of files, 0 tables (0 by name)",
+          "basis": "0% of verbatim files, 0 tables (0 by name)",
           "verdict": "no"
         },
         "edges": {
-          "basis": "0 of 3,285 files (0%)",
+          "basis": "0 of 3,285 compact rows (0%)",
           "verdict": "no"
         },
         "governance": {

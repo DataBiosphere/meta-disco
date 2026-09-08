@@ -8,9 +8,11 @@ file to a donor, and whether each dataset can support #369, #336 and #361.
 
 Offline — it reads what ``make download`` already put on disk and fetches
 nothing. A manifest the sidecar names but that is not on disk is an error, not a
-gap to survey around: the run exits non-zero naming every one of them, because a
-coverage figure measured over an incomplete set would understate coverage
-silently. The logic lives in ``meta_disco.manifest_survey``; this is the CLI.
+gap to survey around: the run exits non-zero naming every one of them. Per-column
+fill rates would survive a missing dataset, but the corpus totals the report
+states against the snapshot count would not, and a survey that quietly covered
+eleven of twelve datasets is the wrong thing to hand #369, #336 or #361. The
+logic lives in ``meta_disco.manifest_survey``; this is the CLI.
 
     uv run python scripts/generate_manifest_survey.py
     uv run python scripts/generate_manifest_survey.py --catalog anvil15 --output docs/manifest-survey.md
