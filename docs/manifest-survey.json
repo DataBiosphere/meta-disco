@@ -359,7 +359,7 @@
           "verdict": "partial"
         },
         "edges": {
-          "basis": "0 of 11,493 compact rows (0%)",
+          "basis": "0 of 11,493 compact rows (0%), verbatim transitive 0%",
           "verdict": "no"
         },
         "governance": {
@@ -725,7 +725,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "plink"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -1335,7 +1335,7 @@
           "verdict": "partial"
         },
         "edges": {
-          "basis": "25,616 of 26,016 compact rows (98%)",
+          "basis": "25,616 of 26,016 compact rows (98%), verbatim transitive 98%",
           "verdict": "yes"
         },
         "governance": {
@@ -2397,7 +2397,7 @@
           "verdict": "no"
         },
         "edges": {
-          "basis": "4,746 of 23,185 compact rows (20%)",
+          "basis": "4,746 of 23,185 compact rows (20%), verbatim transitive 20%",
           "verdict": "partial"
         },
         "governance": {
@@ -2745,7 +2745,7 @@
             },
             {
               "dimension": "data_type",
-              "value": "annotation"
+              "value": "annotations"
             }
           ],
           "origin": "submitter",
@@ -2943,7 +2943,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "pangenome graph"
+              "value": "pangenome"
             }
           ],
           "origin": "submitter",
@@ -3033,7 +3033,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "pangenome graph"
+              "value": "pangenome"
             }
           ],
           "origin": "submitter",
@@ -3124,7 +3124,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "pangenome graph"
+              "value": "pangenome"
             }
           ],
           "origin": "submitter",
@@ -3560,7 +3560,7 @@
           "verdict": "no"
         },
         "edges": {
-          "basis": "6 of 12,534 compact rows (<1%)",
+          "basis": "6 of 12,534 compact rows (<1%), verbatim transitive 0%",
           "verdict": "no"
         },
         "governance": {
@@ -4467,7 +4467,7 @@
           "verdict": "partial"
         },
         "edges": {
-          "basis": "32,020 of 289,204 compact rows (11%)",
+          "basis": "32,020 of 289,204 compact rows (11%), verbatim transitive 11%",
           "verdict": "partial"
         },
         "governance": {
@@ -4898,7 +4898,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "interval"
+              "value": "interval_set"
             }
           ],
           "origin": "submitter",
@@ -5326,7 +5326,7 @@
           "verdict": "yes"
         },
         "edges": {
-          "basis": "0 of 309,979 compact rows (0%)",
+          "basis": "0 of 309,979 compact rows (0%), verbatim transitive 0%",
           "verdict": "no"
         },
         "governance": {
@@ -5756,7 +5756,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "interval"
+              "value": "interval_set"
             },
             {
               "dimension": "reference_assembly",
@@ -5818,7 +5818,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "interval"
+              "value": "interval_set"
             },
             {
               "dimension": "reference_assembly",
@@ -7147,7 +7147,7 @@
           "verdict": "no"
         },
         "edges": {
-          "basis": "0 of 3,591 compact rows (0%)",
+          "basis": "0 of 3,591 compact rows (0%), verbatim transitive 0%",
           "verdict": "no"
         },
         "governance": {
@@ -7752,7 +7752,7 @@
           "verdict": "yes"
         },
         "edges": {
-          "basis": "1,992 of 1,992 compact rows (100%)",
+          "basis": "1,992 of 1,992 compact rows (100%), verbatim transitive 100%",
           "verdict": "yes"
         },
         "governance": {
@@ -8597,7 +8597,7 @@
           "verdict": "yes"
         },
         "edges": {
-          "basis": "3,752 of 3,752 compact rows (100%)",
+          "basis": "3,752 of 3,752 compact rows (100%), verbatim transitive 100%",
           "verdict": "yes"
         },
         "governance": {
@@ -9442,7 +9442,7 @@
           "verdict": "yes"
         },
         "edges": {
-          "basis": "14,843 of 16,271 compact rows (91%)",
+          "basis": "14,843 of 16,271 compact rows (91%), verbatim transitive 91%",
           "verdict": "yes"
         },
         "governance": {
@@ -9509,7 +9509,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "aligned reads"
+              "value": "alignments"
             }
           ],
           "origin": "submitter",
@@ -9551,7 +9551,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "aligned reads"
+              "value": "alignments"
             }
           ],
           "origin": "submitter",
@@ -9910,7 +9910,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "satellite annotation"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -9952,11 +9952,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "satellite annotation"
-            },
-            {
-              "dimension": "data_type",
-              "value": "centromere annotation"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -9998,7 +9994,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "chain"
+              "value": null
             },
             {
               "dimension": "reference_assembly",
@@ -10044,7 +10040,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "chain"
+              "value": null
             },
             {
               "dimension": "reference_assembly",
@@ -10267,7 +10263,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "PacBio HiFi"
+              "value": "PACBIO"
             }
           ],
           "origin": "submitter",
@@ -10395,7 +10391,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "gap annotation"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -10558,7 +10554,7 @@
           "name_encodes": [
             {
               "dimension": "assay_type",
-              "value": "Hi-C"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -10809,7 +10805,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "PacBio HiFi"
+              "value": "PACBIO"
             }
           ],
           "origin": "submitter",
@@ -10944,7 +10940,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "Illumina"
+              "value": "ILLUMINA"
             }
           ],
           "origin": "submitter",
@@ -11172,7 +11168,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "PacBio Kinnex"
+              "value": "PACBIO"
             }
           ],
           "origin": "submitter",
@@ -11214,7 +11210,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "annotation"
+              "value": "annotations"
             }
           ],
           "origin": "submitter",
@@ -11417,7 +11413,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "Oxford Nanopore"
+              "value": "ONT"
             }
           ],
           "origin": "submitter",
@@ -11459,7 +11455,7 @@
           "name_encodes": [
             {
               "dimension": "platform",
-              "value": "Oxford Nanopore"
+              "value": "ONT"
             },
             {
               "dimension": "data_modality",
@@ -11505,7 +11501,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "repeat annotation"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -11547,7 +11543,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "repeat annotation"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -11670,7 +11666,7 @@
           "name_encodes": [
             {
               "dimension": "data_type",
-              "value": "segmental duplications"
+              "value": null
             }
           ],
           "origin": "submitter",
@@ -12197,7 +12193,7 @@
           "verdict": "yes"
         },
         "edges": {
-          "basis": "6,757 of 6,786 compact rows (>99%)",
+          "basis": "6,757 of 6,786 compact rows (>99%), verbatim transitive >99%",
           "verdict": "yes"
         },
         "governance": {
@@ -13166,7 +13162,7 @@
           "verdict": "no"
         },
         "edges": {
-          "basis": "0 of 3,285 compact rows (0%)",
+          "basis": "0 of 3,285 compact rows (0%), verbatim transitive 0%",
           "verdict": "no"
         },
         "governance": {

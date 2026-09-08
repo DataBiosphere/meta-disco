@@ -19,6 +19,8 @@ from meta_disco.azul_manifest import (
     manifest_path,
     save_sidecar,
 )
+from meta_disco.models import CLASSIFICATION_FIELDS
+from meta_disco.schema_vocab import dimension_values
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -196,16 +198,62 @@ def test_census_separates_submitter_tables_from_harmonized(tmp_path):
 
 
 def test_table_name_encodes_dimensions():
+    # `chains` names a real content kind the schema has no term for: the dimension
+    # is recorded, the value is null, and nothing is invented to fill it.
     assert ms._table_encodes("chains_to_chm13_mc") == [
-        ("data_type", "chain"),
+        ("data_type", None),
         ("reference_assembly", "CHM13"),
     ]
-    assert ("platform", "Oxford Nanopore") in ms._table_encodes("ont_methylation")
+    assert ("platform", "ONT") in ms._table_encodes("ont_methylation")
     assert ms._table_encodes("participant") == []
     # An ambiguous name keeps both references rather than picking one.
     encoded = ms._table_encodes("chm13_vs_grch38")
     assert ("reference_assembly", "CHM13") in encoded
     assert ("reference_assembly", "GRCh38") in encoded
+
+
+def test_name_token_values_are_schema_vocabulary():
+    """Every term this survey publishes must be one classification.yaml defines.
+
+    The survey exists to be consumed by #369; a value it invented would be one
+    #369 then had to translate. Mirrors tests/test_rule_vocabulary.py, which
+    holds the rule engine to the same schema.
+    """
+    for token, (dimension, value) in ms.NAME_TOKENS.items():
+        assert dimension in CLASSIFICATION_FIELDS, f"{token} names a dimension that does not exist"
+        if value is not None:
+            assert value in dimension_values(dimension), f"{token} -> {value!r} is not in {dimension}_enum"
+
+
+def test_field_token_dimensions_are_real_dimensions():
+    for name, dimension in ms.FIELD_TOKENS.items():
+        assert dimension in CLASSIFICATION_FIELDS, f"{name} names a dimension that does not exist"
+
+
+def test_vocabulary_gaps_are_reported_not_hidden(tmp_path):
+    write_sidecar(tmp_path, {"D": 1})
+    write_manifests(
+        tmp_path,
+        "D",
+        [{"files.file_id": "f1"}],
+        [anvil_file("f1"), ("chains_to_chm13_mc", {"chain_id": "c", "path": "f1"})],
+    )
+    report = ms.render_report(ms.run_survey(tmp_path, CATALOG))
+    assert "Table names the vocabulary cannot express" in report
+    assert "`chains`" in report
+    assert ms.NO_VOCABULARY_TERM in report
+
+
+def test_no_vocabulary_gap_section_when_every_token_maps(tmp_path):
+    write_sidecar(tmp_path, {"D": 1})
+    write_manifests(
+        tmp_path,
+        "D",
+        [{"files.file_id": "f1"}],
+        [anvil_file("f1"), ("assembly", {"assembly_id": "a", "path": "f1"})],
+    )
+    report = ms.render_report(ms.run_survey(tmp_path, CATALOG))
+    assert "Table names the vocabulary cannot express" not in report
 
 
 def test_dimension_fields_need_to_be_populated(tmp_path):
@@ -380,6 +428,38 @@ def test_readiness_reports_the_number_behind_each_verdict(tmp_path):
     assert "verbatim files" in verdicts["dimensions"][1]
 
 
+def test_edges_verdict_rests_on_the_join_not_the_upper_bound(tmp_path):
+    """The transitive walk is an upper bound, so it informs but does not decide.
+
+    Here the compact join reaches one file of four and the transitive walk
+    reaches two. The verdict follows the join (25%, partial), and the transitive
+    figure is reported beside it rather than promoting the dataset.
+    """
+    write_sidecar(tmp_path, {"D": 4})
+    write_manifests(
+        tmp_path,
+        "D",
+        [{"donors.donor_id": "dn1", "biosamples.biosample_id": "bs1", "activities.activity_id": "ac1"}]
+        + [{"files.file_id": f"f{i}"} for i in range(3)],
+        [
+            anvil_file("fastq"),
+            anvil_file("bam"),
+            anvil_file("spare1"),
+            anvil_file("spare2"),
+            ("anvil_biosample", {"biosample_id": "bs1", "donor_id": ["dn1"]}),
+            activity(used=[], generated=["fastq"], biosamples=["bs1"]),
+            activity(used=["fastq"], generated=["bam"]),
+        ],
+    )
+    dataset = ms.run_survey(tmp_path, CATALOG).datasets[0]
+    assert dataset.filled(ms.JOIN_DONOR) == 1
+    assert dataset.reach.transitive_donor == 2
+    verdict, basis = ms.readiness(dataset)["edges"]
+    assert verdict == "partial"  # 1 of 4, not 2 of 4
+    assert "1 of 4 compact rows (25%)" in basis
+    assert "verbatim transitive 50%" in basis
+
+
 # --- end to end ---------------------------------------------------------------
 
 
@@ -473,6 +553,31 @@ def test_no_join_contradiction_when_the_columns_do_come_apart(tmp_path):
     )
     found = ms.contradictions(ms.run_survey(tmp_path, CATALOG))
     assert [c for c in found if "compact join" in c[1]] == []
+
+
+def test_a_claim_about_a_dataset_survives_a_recased_title(tmp_path):
+    # The corpus carries both ANVIL_ and AnVIL_ prefixes, so an exact-case lookup
+    # is a check that silently stops running if the catalog re-cases a title.
+    write_sidecar(tmp_path, {"ANVIL_HPRC_r2": 2})
+    write_manifests(
+        tmp_path,
+        "ANVIL_HPRC_r2",
+        [
+            {"donors.donor_id": "dn1", "biosamples.biosample_id": "bs1", "activities.activity_id": "ac1"},
+            {"files.file_id": "f2"},
+        ],
+        [anvil_file("f1"), anvil_file("f2")],
+    )
+    found = ms.contradictions(ms.run_survey(tmp_path, CATALOG))
+    assert [c for c in found if "compact join" in c[1]] != []
+
+
+def test_every_prior_claim_declares_a_source_and_a_check():
+    # A claim is a row in PRIOR_CLAIMS, so adding or retiring one is data.
+    assert ms.PRIOR_CLAIMS
+    for prior in ms.PRIOR_CLAIMS:
+        assert prior.source and prior.claim
+        assert callable(prior.check)
 
 
 def test_no_contradiction_when_nothing_disagrees(tmp_path):

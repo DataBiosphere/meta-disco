@@ -147,7 +147,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `population_descriptor` | submitter | 3,202 | 0 | — | — |
 | `sample` | submitter | 3,202 | 0 | — | — |
 | `subject` | submitter | 3,202 | 0 | — | — |
-| `plink_file_wide` | submitter | 2,854 | 8,562 | data_type = plink | — |
+| `plink_file_wide` | submitter | 2,854 | 8,562 | data_type = (no vocabulary term) | — |
 | `sequencing_dataset` | submitter | 126 | 0 | — | `reference_assembly` → reference_assembly; `seq_platform` → platform; `sequencing_assay` → assay_type |
 | `sample_set` | submitter | 64 | 0 | — | — |
 | `anvil_activity` | harmonized | 23 | — | — | — |
@@ -205,16 +205,16 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_biosample` | harmonized | 57 | — | — | — |
 | `anvil_donor` | harmonized | 57 | — | — | — |
 | `sample` | submitter | 57 | 4,432 | — | — |
-| `assembly_annotation` | submitter | 47 | 881 | data_type = assembly; data_type = annotation | — |
+| `assembly_annotation` | submitter | 47 | 881 | data_type = assembly; data_type = annotations | — |
 | `assembly_sample` | submitter | 47 | 469 | data_type = assembly | — |
 | `participant` | submitter | 47 | 0 | — | — |
 | `workspace_attributes` | submitter | 37 | 0 | — | — |
-| `minigraph_cactus` | submitter | 6 | 60 | data_type = pangenome graph | — |
-| `minigraph` | submitter | 2 | 6 | data_type = pangenome graph | — |
+| `minigraph_cactus` | submitter | 6 | 60 | data_type = pangenome | — |
+| `minigraph` | submitter | 2 | 6 | data_type = pangenome | — |
 | `anvil_dataset` | harmonized | 1 | — | — | — |
 | `anvil_project` | harmonized | 1 | — | — | — |
 | `duos_dataset_registration` | submitter | 1 | 0 | — | — |
-| `pggb` | submitter | 1 | 3 | data_type = pangenome graph | — |
+| `pggb` | submitter | 1 | 3 | data_type = pangenome | — |
 
 - **`file_inventory`** (23,185 rows): `content_type` 100%, `crc32c` 100%, `datarepo_row_id` 100%, `file_id` 100%, `file_ref` 100%, `ingest_provenance` 100%, `md5_hash` 100%, `name` 100%, `path` 100%, `size_in_bytes` 100%, `uri` 100%, `version` 100%, `full_extension` >99%
 - **`sample`** (57 rows): `cohort` 100%, `datarepo_row_id` 100%, `ingest_provenance` 100%, `maternal_id` 100%, `paternal_id` 100%, `sample_id` 100%, `version` 100%, `hifi` 91%, `mat_ilmn` 89%, `pat_ilmn` 89%, `child_ilmn` 86%, `bionano_cmap` 74%, `hic` 74%, `bionano_bnx` 72%, `nanopore` 68%, `notes` 18%, `strandseq` 14%
@@ -258,7 +258,7 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `file_inventory` | submitter | 290,135 | 289,204 | — | — |
 | `anvil_file` | harmonized | 289,204 | — | — | — |
 | `anvil_activity` | harmonized | 119,454 | — | — | — |
-| `interval` | submitter | 31,155 | 93,465 | data_type = interval | — |
+| `interval` | submitter | 31,155 | 93,465 | data_type = interval_set | — |
 | `anvil_biosample` | harmonized | 3,202 | — | — | — |
 | `anvil_donor` | harmonized | 3,202 | — | — | — |
 | `participant` | submitter | 3,202 | 32,020 | — | — |
@@ -282,8 +282,8 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_file` | harmonized | 309,979 | — | — | — |
 | `file_inventory` | submitter | 309,979 | 309,979 | — | — |
 | `anvil_activity` | harmonized | 98,144 | — | — | — |
-| `PAR_interval_CHM13v2` | submitter | 31,158 | 62,316 | data_type = interval; reference_assembly = CHM13 | — |
-| `PAR_interval_GRCh38` | submitter | 30,864 | 30,864 | data_type = interval; reference_assembly = GRCh38 | — |
+| `PAR_interval_CHM13v2` | submitter | 31,158 | 62,316 | data_type = interval_set; reference_assembly = CHM13 | — |
+| `PAR_interval_GRCh38` | submitter | 30,864 | 30,864 | data_type = interval_set; reference_assembly = GRCh38 | — |
 | `1KGP_CHM13v2_sample` | submitter | 3,202 | 184,105 | reference_assembly = CHM13 | — |
 | `SGDP_CHM13v2_sample` | submitter | 279 | 16,324 | reference_assembly = CHM13 | — |
 | `SGDP_GRCh38_sample` | submitter | 279 | 16,324 | reference_assembly = GRCh38 | — |
@@ -382,22 +382,22 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_file` | harmonized | 16,271 | — | — | — |
 | `file_inventory` | submitter | 16,271 | 16,271 | — | — |
 | `anvil_activity` | harmonized | 15,769 | — | — | — |
-| `hic` | submitter | 3,002 | 3,002 | assay_type = Hi-C | `assembly` → reference_assembly; `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
-| `hifi` | submitter | 1,069 | 1,596 | platform = PacBio HiFi | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
-| `ont` | submitter | 929 | 929 | platform = Oxford Nanopore | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
-| `deepconsensus` | submitter | 619 | 619 | platform = PacBio HiFi | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
+| `hic` | submitter | 3,002 | 3,002 | assay_type = (no vocabulary term) | `assembly` → reference_assembly; `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
+| `hifi` | submitter | 1,069 | 1,596 | platform = PACBIO | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
+| `ont` | submitter | 929 | 929 | platform = ONT | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
+| `deepconsensus` | submitter | 619 | 619 | platform = PACBIO | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
 | `assembly` | submitter | 466 | 1,864 | data_type = assembly | `assembly` → reference_assembly |
-| `alignments_winnowmap` | submitter | 462 | 462 | data_type = aligned reads | — |
-| `censat` | submitter | 462 | 462 | data_type = satellite annotation | — |
-| `censat_centromeres` | submitter | 462 | 462 | data_type = satellite annotation; data_type = centromere annotation | — |
-| `chains_to_chm13_mc` | submitter | 462 | 462 | data_type = chain; reference_assembly = CHM13 | — |
-| `chains_to_grch38_mc` | submitter | 462 | 462 | data_type = chain; reference_assembly = GRCh38 | — |
-| `gaps` | submitter | 462 | 462 | data_type = gap annotation | — |
-| `liftoff_genes` | submitter | 462 | 462 | data_type = annotation | — |
-| `ont_methylation` | submitter | 462 | 462 | platform = Oxford Nanopore; data_modality = epigenomic.methylation | — |
-| `repeat_masker_bed` | submitter | 462 | 462 | data_type = repeat annotation | — |
-| `repeat_masker_out` | submitter | 462 | 462 | data_type = repeat annotation | — |
-| `segdups` | submitter | 462 | 462 | data_type = segmental duplications | — |
+| `alignments_winnowmap` | submitter | 462 | 462 | data_type = alignments | — |
+| `censat` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
+| `censat_centromeres` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
+| `chains_to_chm13_mc` | submitter | 462 | 462 | data_type = (no vocabulary term); reference_assembly = CHM13 | — |
+| `chains_to_grch38_mc` | submitter | 462 | 462 | data_type = (no vocabulary term); reference_assembly = GRCh38 | — |
+| `gaps` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
+| `liftoff_genes` | submitter | 462 | 462 | data_type = annotations | — |
+| `ont_methylation` | submitter | 462 | 462 | platform = ONT; data_modality = epigenomic.methylation | — |
+| `repeat_masker_bed` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
+| `repeat_masker_out` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
+| `segdups` | submitter | 462 | 462 | data_type = (no vocabulary term) | — |
 | `t2t_sequences` | submitter | 462 | 462 | data_type = sequence | — |
 | `to_ref_chm13_winnowmap` | submitter | 462 | 462 | reference_assembly = CHM13 | — |
 | `to_ref_grch38_winnowmap` | submitter | 462 | 462 | reference_assembly = GRCh38 | — |
@@ -405,9 +405,9 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_biosample` | harmonized | 234 | — | — | — |
 | `anvil_donor` | harmonized | 234 | — | — | — |
 | `sample_metadata` | submitter | 234 | 0 | — | — |
-| `kinnex` | submitter | 230 | 230 | platform = PacBio Kinnex | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
-| `illumina` | submitter | 200 | 200 | platform = Illumina | `instrument_model` → platform; `library_strategy` → assay_type; `platform` → platform |
-| `alignments_v2` | submitter | 12 | 12 | data_type = aligned reads | `reference_coordinates` → reference_assembly |
+| `kinnex` | submitter | 230 | 230 | platform = PACBIO | `data_type` → data_type; `instrument_model` → platform; `library_selection` → assay_type; `library_source` → data_modality; `library_strategy` → assay_type; `platform` → platform |
+| `illumina` | submitter | 200 | 200 | platform = ILLUMINA | `instrument_model` → platform; `library_strategy` → assay_type; `platform` → platform |
+| `alignments_v2` | submitter | 12 | 12 | data_type = alignments | `reference_coordinates` → reference_assembly |
 | `workspace_attributes` | submitter | 8 | 0 | — | — |
 | `ingestion_reference` | submitter | 2 | 0 | — | — |
 | `anvil_dataset` | harmonized | 1 | — | — | — |
@@ -488,6 +488,15 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 - **`ingestion_reference`** (2 rows): `datarepo_row_id` 100%, `key` 100%, `value` 100%, `version` 100%
 - **`duos_dataset_registration`** (1 row): `dataset_id` 100%, `description` 100%, `duos_id` 100%, `version` 100%
 
+### Table names the vocabulary cannot express
+
+Tokens in use whose dimension is clear but for which `classification.yaml` has no term. The survey records the dimension and leaves the value null rather than inventing a string, so nothing downstream reads a term the schema does not define. Each of these is a submitter classification #369 would have to either map to an existing term or add one for.
+
+| dimension | tokens in use |
+| --- | --- |
+| assay_type | `hic` |
+| data_type | `censat`, `centromeres`, `chains`, `gaps`, `masker`, `plink`, `repeat`, `segdups` |
+
 ## Reach: how many files resolve to a biosample and a donor
 
 Three measurements of one question, per dataset.
@@ -517,22 +526,22 @@ Three measurements of one question, per dataset.
 
 - **#369 dimension import** — share of the dataset's verbatim files named by a submitter table that points at a dimension, through its own name (`hifi`, `chains_to_chm13_mc`) or through a populated field named for one (`reference_assembly`, `instrument_model`). The count in brackets says how many of those tables carry it in the name, which is the stronger signal: a name applies to every row, a field only to the rows where it is filled.
 - **#336 governance import** — consent group and data use permission, whichever is lower, with the phs accession reported beside it.
-- **#361 donor edges** — the best donor reach of either manifest.
+- **#361 donor edges** — the compact join's donor reach. The verbatim transitive walk is reported beside it but does not set the verdict: it is an upper bound, and a go/no-go should not rest on one.
 
 | dataset | #369 dimensions | #336 governance | #361 donor edges |
 | --- | --- | --- | --- |
-| 1000G_PRIMED_data_model | partial (74% of verbatim files, 2 tables (1 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 11,493 compact rows (0%)) |
-| 1000G_high_coverage_2019 | partial (37% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | yes (25,616 of 26,016 compact rows (98%)) |
-| HPRC | no (6% of verbatim files, 5 tables (5 by name)) | yes (consent/DUO 100%, phs 0%) | partial (4,746 of 23,185 compact rows (20%)) |
-| NIA_CARD_Coriell_Cell_Lines_Open | no (<1% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | no (6 of 12,534 compact rows (<1%)) |
-| T2T | partial (32% of verbatim files, 1 table (1 by name)) | yes (consent/DUO 100%, phs 0%) | partial (32,020 of 289,204 compact rows (11%)) |
-| T2T_CHRY | yes (>99% of verbatim files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 compact rows (0%)) |
-| nhp_dGTEx_V1 | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,591 compact rows (0%)) |
-| ENCORE_293T | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (1,992 of 1,992 compact rows (100%)) |
-| ENCORE_RS293 | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (3,752 of 3,752 compact rows (100%)) |
-| HPRC_R2 | yes (91% of verbatim files, 23 tables (23 by name)) | yes (consent/DUO 100%, phs 0%) | yes (14,843 of 16,271 compact rows (91%)) |
-| IGVF_Mouse_R1 | yes (100% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 compact rows (>99%)) |
-| MAGE | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,285 compact rows (0%)) |
+| 1000G_PRIMED_data_model | partial (74% of verbatim files, 2 tables (1 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 11,493 compact rows (0%), verbatim transitive 0%) |
+| 1000G_high_coverage_2019 | partial (37% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | yes (25,616 of 26,016 compact rows (98%), verbatim transitive 98%) |
+| HPRC | no (6% of verbatim files, 5 tables (5 by name)) | yes (consent/DUO 100%, phs 0%) | partial (4,746 of 23,185 compact rows (20%), verbatim transitive 20%) |
+| NIA_CARD_Coriell_Cell_Lines_Open | no (<1% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | no (6 of 12,534 compact rows (<1%), verbatim transitive 0%) |
+| T2T | partial (32% of verbatim files, 1 table (1 by name)) | yes (consent/DUO 100%, phs 0%) | partial (32,020 of 289,204 compact rows (11%), verbatim transitive 11%) |
+| T2T_CHRY | yes (>99% of verbatim files, 8 tables (8 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 309,979 compact rows (0%), verbatim transitive 0%) |
+| nhp_dGTEx_V1 | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,591 compact rows (0%), verbatim transitive 0%) |
+| ENCORE_293T | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (1,992 of 1,992 compact rows (100%), verbatim transitive 100%) |
+| ENCORE_RS293 | yes (100% of verbatim files, 1 table (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (3,752 of 3,752 compact rows (100%), verbatim transitive 100%) |
+| HPRC_R2 | yes (91% of verbatim files, 23 tables (23 by name)) | yes (consent/DUO 100%, phs 0%) | yes (14,843 of 16,271 compact rows (91%), verbatim transitive 91%) |
+| IGVF_Mouse_R1 | yes (100% of verbatim files, 2 tables (0 by name)) | yes (consent/DUO 100%, phs 100%) | yes (6,757 of 6,786 compact rows (>99%), verbatim transitive >99%) |
+| MAGE | no (0% of verbatim files, 0 tables (0 by name)) | yes (consent/DUO 100%, phs 0%) | no (0 of 3,285 compact rows (0%), verbatim transitive 0%) |
 
 Every dataset supports at least one of the three.
 

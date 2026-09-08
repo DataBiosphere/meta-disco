@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -53,8 +54,8 @@ from .azul_manifest import (
     VERBATIM_FILE,
     iter_compact_rows,
     iter_verbatim_entities,
-    load_sidecar,
     manifest_path,
+    sidecar_datasets,
 )
 from .summaries import md_table
 
@@ -100,13 +101,27 @@ DIMENSION_COLUMNS = (
 READY_HIGH = 0.90
 READY_LOW = 0.10
 
-# Tokens in a submitter table's *name* that encode one of the five dimensions.
+# Tokens in a submitter table's *name* that point at one of the five dimensions,
+# mapped to the schema's term for what the name says — or to ``None`` where the
+# controlled vocabulary has no term for it.
+#
+# The values are ``classification.yaml``'s, checked against it by
+# ``test_manifest_survey``: this survey must not mint a second vocabulary that
+# #369 would then have to translate. Where the schema has no term the entry is
+# ``None`` rather than a freshly invented string, and the report lists those
+# separately — a table name that classifies something the vocabulary cannot
+# express is a finding for #369, not a gap to paper over here.
+#
+# Some terms are coarser than the name: ``hifi`` and ``kinnex`` both map to
+# ``PACBIO`` because that is the granularity ``platform_enum`` has. The token
+# itself stays visible in the report, so the distinction is not lost, only
+# un-vocabularized.
+#
 # Split the name on non-alphanumeric boundaries, lowercase, and look each token
-# up here. This is a reading aid for #369 — it says what a name mentions, never
-# what a file is — so it holds only tokens whose meaning is unambiguous in a
-# table name. Entity-shaped tokens (``sample``, ``participant``, ``donor``) name
-# no dimension and are absent on purpose.
-NAME_TOKENS: dict[str, tuple[str, str]] = {
+# up. This says what a name mentions, never what a file is. Entity-shaped tokens
+# (``sample``, ``participant``, ``donor``) name no dimension and are absent on
+# purpose.
+NAME_TOKENS: dict[str, tuple[str, str | None]] = {
     # reference_assembly
     "chm13": ("reference_assembly", "CHM13"),
     "chm13v2": ("reference_assembly", "CHM13"),
@@ -115,34 +130,37 @@ NAME_TOKENS: dict[str, tuple[str, str]] = {
     "grch37": ("reference_assembly", "GRCh37"),
     "hg19": ("reference_assembly", "GRCh37"),
     # platform
-    "hifi": ("platform", "PacBio HiFi"),
-    "deepconsensus": ("platform", "PacBio HiFi"),
-    "kinnex": ("platform", "PacBio Kinnex"),
-    "ont": ("platform", "Oxford Nanopore"),
-    "nanopore": ("platform", "Oxford Nanopore"),
-    "illumina": ("platform", "Illumina"),
-    # assay_type
-    "hic": ("assay_type", "Hi-C"),
+    "hifi": ("platform", "PACBIO"),
+    "deepconsensus": ("platform", "PACBIO"),
+    "kinnex": ("platform", "PACBIO"),
+    "ont": ("platform", "ONT"),
+    "nanopore": ("platform", "ONT"),
+    "illumina": ("platform", "ILLUMINA"),
+    # assay_type — assay_type_enum has no Hi-C term.
+    "hic": ("assay_type", None),
     # data_modality
     "methylation": ("data_modality", "epigenomic.methylation"),
     # data_type
     "assembly": ("data_type", "assembly"),
-    "alignments": ("data_type", "aligned reads"),
-    "chains": ("data_type", "chain"),
-    "liftoff": ("data_type", "annotation"),
-    "annotation": ("data_type", "annotation"),
-    "segdups": ("data_type", "segmental duplications"),
-    "censat": ("data_type", "satellite annotation"),
-    "centromeres": ("data_type", "centromere annotation"),
-    "gaps": ("data_type", "gap annotation"),
-    "repeat": ("data_type", "repeat annotation"),
-    "masker": ("data_type", "repeat annotation"),
-    "interval": ("data_type", "interval"),
+    "alignments": ("data_type", "alignments"),
+    "liftoff": ("data_type", "annotations"),
+    "annotation": ("data_type", "annotations"),
+    "interval": ("data_type", "interval_set"),
     "sequences": ("data_type", "sequence"),
-    "plink": ("data_type", "plink"),
-    "minigraph": ("data_type", "pangenome graph"),
-    "cactus": ("data_type", "pangenome graph"),
-    "pggb": ("data_type", "pangenome graph"),
+    "minigraph": ("data_type", "pangenome"),
+    "cactus": ("data_type", "pangenome"),
+    "pggb": ("data_type", "pangenome"),
+    # data_type the vocabulary cannot express. Each is a real content kind a
+    # table name asserts; naming what they would map to is #369's decision, not
+    # this survey's, so they carry the dimension and no term.
+    "chains": ("data_type", None),
+    "segdups": ("data_type", None),
+    "censat": ("data_type", None),
+    "centromeres": ("data_type", None),
+    "gaps": ("data_type", None),
+    "repeat": ("data_type", None),
+    "masker": ("data_type", None),
+    "plink": ("data_type", None),
 }
 
 # Submitter field names that carry a dimension outright. Matched on the whole
@@ -171,6 +189,10 @@ FIELD_TOKENS: dict[str, str] = {
     "library_source": "data_modality",
     "data_type": "data_type",
 }
+
+# What the report prints where a table name classifies something the controlled
+# vocabulary has no term for. Spelled once so the report and #369 agree on it.
+NO_VOCABULARY_TERM = "(no vocabulary term)"
 
 _NAME_SPLIT = re.compile(r"[^0-9a-z]+")
 # The Azul file id inside a DRS URI: ``drs://drs.anv0:v2_<uuid>``. A submitter
@@ -213,7 +235,7 @@ class TableCoverage:
     rows: int
     fields: dict[str, int] = field(default_factory=dict)
     files_named: int = 0
-    encodes: list[tuple[str, str]] = field(default_factory=list)
+    encodes: list[tuple[str, str | None]] = field(default_factory=list)
 
     @property
     def is_submitter(self) -> bool:
@@ -440,7 +462,7 @@ class _Components:
             self._parent[right_root] = left_root
 
 
-def _table_encodes(name: str) -> list[tuple[str, str]]:
+def _table_encodes(name: str) -> list[tuple[str, str | None]]:
     """What a submitter table's name says about a dimension, by :data:`NAME_TOKENS`.
 
     Returns ``(dimension, value)`` pairs in the order the tokens appear in the
@@ -448,7 +470,7 @@ def _table_encodes(name: str) -> list[tuple[str, str]]:
     mentioning both ``chm13`` and ``grch38`` keeps both references, so the caller
     sees the ambiguity instead of having it resolved silently here.
     """
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str, str | None]] = []
     for token in _NAME_SPLIT.split(name.lower()):
         meaning = NAME_TOKENS.get(token)
         if meaning is not None and meaning not in found:
@@ -690,7 +712,7 @@ def missing_manifests(root: Path, catalog: str) -> list[str]:
     question, not this one. Reporting it here as a missing manifest would make the
     caller say one manifest is missing when none was ever named.
     """
-    datasets = load_sidecar(root, catalog).get("datasets") or {}
+    datasets = sidecar_datasets(root, catalog)
     return [
         f"{title} ({fmt}): {manifest_path(root, catalog, title, fmt)}"
         for title in sorted(datasets)
@@ -706,18 +728,17 @@ def sidecar_is_empty(root: Path, catalog: str) -> bool:
     there is no incomplete set to name — a survey of nothing is still a failure,
     but a differently shaped one.
     """
-    return not (load_sidecar(root, catalog).get("datasets") or {})
+    return not sidecar_datasets(root, catalog)
 
 
 def run_survey(root: Path, catalog: str) -> Survey:
     """Measure every dataset the sidecar names. Assumes :func:`missing_manifests` passed."""
-    sidecar = load_sidecar(root, catalog)
-    entries: dict[str, Any] = sidecar.get("datasets") or {}
+    entries = sidecar_datasets(root, catalog)
     survey = Survey(catalog=catalog)
     for title in sorted(entries):
         rows, columns, spellings = survey_compact(manifest_path(root, catalog, title, FORMAT_COMPACT))
         tables, reach, dimension_files = survey_verbatim(manifest_path(root, catalog, title, FORMAT_VERBATIM))
-        snapshot = int(entries[title].get("file_count") or 0)
+        snapshot = entries[title].file_count
         survey.datasets.append(
             DatasetSurvey(
                 title=title,
@@ -794,7 +815,15 @@ def readiness(dataset: DatasetSurvey) -> dict[str, tuple[str, str]]:
       the two. The phs accession is reported beside it rather than folded in: it
       is the one of the three that is not universal, and a dataset without it can
       still have its consent imported.
-    - ``edges`` (#361) — the best donor reach available from either manifest.
+    - ``edges`` (#361) — the compact join's donor reach, with the verbatim
+      transitive walk reported beside it but not used for the verdict. The
+      transitive walk is an upper bound (it is undirected, so a file sharing an
+      activity with a donor-linked file counts), and under the project's
+      accuracy-over-coverage principle a go/no-go should not rest on an upper
+      bound. On anvil15 this costs nothing — the compact join reaches at least as
+      far as the transitive walk on every dataset — but on a corpus where
+      verbatim reached further, this would say so in the basis rather than
+      silently promoting the optimistic number to the verdict.
     """
     rate = dataset.dimension_file_rate
     tables = len(dataset.dimension_tables)
@@ -805,37 +834,54 @@ def readiness(dataset: DatasetSurvey) -> dict[str, tuple[str, str]]:
     # the transitive walk per anvil_file entity, and the two are not always the
     # same number. Dividing one by the other's total can exceed 100%.
     compact_donor = dataset.filled(JOIN_DONOR)
-    compact_rate = compact_donor / dataset.compact_rows if dataset.compact_rows else 0.0
+    donor_rate = compact_donor / dataset.compact_rows if dataset.compact_rows else 0.0
     transitive_rate = dataset.reach.transitive_donor / dataset.reach.files if dataset.reach.files else 0.0
-    if compact_rate >= transitive_rate:
-        donor, donor_rate, source = compact_donor, compact_rate, f"{dataset.compact_rows:,} compact rows"
-    else:
-        donor = dataset.reach.transitive_donor
-        donor_rate, source = transitive_rate, f"{dataset.reach.files:,} verbatim files"
+    beside = f"verbatim transitive {_pct(transitive_rate)}%"
     basis = f"{_pct(rate)}% of verbatim files, {tables} {_plural(tables, 'table')} ({by_name} by name)"
     return {
         "dimensions": (_verdict(rate), basis),
         "governance": (_verdict(consent), f"consent/DUO {_pct(consent)}%, phs {_pct(phs)}%"),
-        "edges": (_verdict(donor_rate), f"{donor:,} of {source} ({_pct(donor_rate)}%)"),
+        "edges": (
+            _verdict(donor_rate),
+            f"{compact_donor:,} of {dataset.compact_rows:,} compact rows ({_pct(donor_rate)}%), {beside}",
+        ),
     }
 
 
 # --- contradictions -----------------------------------------------------------
 
 
-def contradictions(survey: Survey) -> list[tuple[str, str, str]]:
-    """Where this survey disagrees with a claim already written down (#384 AC6).
+@dataclass(frozen=True)
+class PriorClaim:
+    """One claim written down somewhere, and how to test it against a survey.
 
-    Each entry is ``(source, the prior claim, what the manifests say)``. The
-    claims are declared here and re-checked against every run, so a later
-    manifest pull that resolves one of them stops reporting it instead of
-    leaving stale prose in the document.
+    ``check`` returns one entry per disagreement, ``(source detail, what the
+    manifests say)`` — empty when the survey agrees, or when the data the claim
+    is about is not in this catalog. The detail is appended to ``source`` so a
+    per-dataset check can name its dataset.
+
+    Claims are data so that recording a new one, or retiring a resolved one, is
+    a row in :data:`PRIOR_CLAIMS` rather than a branch inside a function.
     """
-    found: list[tuple[str, str, str]] = []
 
-    # 1. docs/briefs/comparability-gap.html, "Donor sex, ancestry, biosample type,
-    #    anatomical site ... are null on every indexed row."
-    fields = {
+    source: str
+    claim: str
+    check: Callable[[Survey], list[tuple[str, str]]]
+
+
+def _dataset(survey: Survey, title: str) -> DatasetSurvey | None:
+    """One dataset by title, case-insensitively.
+
+    The corpus carries both ``ANVIL_`` and ``AnVIL_`` prefixes, so an exact-case
+    lookup is a check that stops running without saying so if the catalog
+    re-cases a title.
+    """
+    return next((d for d in survey.datasets if d.title.casefold() == title.casefold()), None)
+
+
+def _brief_null_fields(survey: Survey) -> list[tuple[str, str]]:
+    """The brief says these are null on every row; report each place they are not."""
+    labels = {
         "donors.phenotypic_sex": "donor sex",
         "donors.reported_ethnicity": "donor ancestry",
         "biosamples.biosample_type": "biosample type",
@@ -843,73 +889,121 @@ def contradictions(survey: Survey) -> list[tuple[str, str, str]]:
     }
     populated = [
         f"{label} {_pct(dataset.rate(column))}% in {dataset.title}"
-        for column, label in fields.items()
+        for column, label in labels.items()
         for dataset in survey.datasets
         if dataset.rate(column) > 0
     ]
-    if populated:
-        found.append(
-            (
-                "docs/briefs/comparability-gap.html",
-                "Donor sex, ancestry, biosample type and anatomical site are null on every indexed row.",
-                "Not null in the compact manifest: " + "; ".join(populated) + ". The brief measured a "
-                "different extract than these manifests, or an older catalog; it needs scoping to whichever "
-                "it measured.",
-            )
+    if not populated:
+        return []
+    return [
+        (
+            "",
+            "Not null in the compact manifest: " + "; ".join(populated) + ". The brief measured a "
+            "different extract than these manifests, or an older catalog; it needs scoping to whichever "
+            "it measured.",
         )
+    ]
 
-    # 2. #337 / #368: "on 1000G the join reaches a donor for 25,616 files, the
-    #    entity chain for 9,603" — read as verbatim being weaker than compact.
+
+def _verbatim_not_weaker(survey: Survey) -> list[tuple[str, str]]:
+    """Report each dataset where the shortfall is the traversal, not the manifest.
+
+    Both halves are needed. A single-hop shortfall alone does not refute the
+    claim: where transitive closure still falls short of the compact join, the
+    claim holds for that dataset and a refutation would be false.
+    """
+    found = []
     for dataset in survey.datasets:
         reach = dataset.reach
-        # Both halves are needed. A single-hop shortfall alone does not refute the
-        # claim: if transitive closure still falls short of the compact join, the
-        # claim holds for that dataset and publishing a refutation would be wrong.
-        if reach.single_hop_donor < reach.transitive_donor and reach.transitive_donor >= dataset.filled(JOIN_DONOR):
+        join = dataset.filled(JOIN_DONOR)
+        if reach.single_hop_donor < reach.transitive_donor and reach.transitive_donor >= join:
             found.append(
                 (
-                    f"#337 / #368 (azul_manifest docstring), on {dataset.title}",
-                    "The verbatim entity chain reaches fewer files than the compact join, so verbatim is not "
-                    "a superset of compact.",
+                    f", on {dataset.title}",
                     f"Single hop reaches {reach.single_hop_donor:,} files, but transitive closure over the "
                     f"same activities reaches {reach.transitive_donor:,} against the compact join's "
-                    f"{dataset.filled(JOIN_DONOR):,}. The shortfall is the traversal, not the manifest.",
+                    f"{join:,}. The shortfall is the traversal, not the manifest.",
                 )
             )
-
-    # 3. #384's own body: HPRC_R2's per-file-type tables are "~20 ... each 462 rows".
-    for dataset in survey.datasets:
-        if dataset.title != "AnVIL_HPRC_R2":
-            continue
-        off = [t for t in dataset.submitter_tables if t.encodes and t.rows != 462]
-        if off:
-            listed = ", ".join(f"{t.name} {t.rows:,}" for t in sorted(off, key=lambda t: -t.rows)[:5])
-            found.append(
-                (
-                    "#384 (this issue's own body)",
-                    "AnVIL_HPRC_R2 carries ~20 per-file-type tables, each 462 rows.",
-                    f"{len(off)} of them are not 462 rows: {listed}. The tables do not share a row "
-                    "count; 462 is the count of the largest group, not of all of them.",
-                )
-            )
-
-    # 4. #384's own body again: HPRC_R2's join reported as 91% donor and biosample
-    #    but 23% activity. If the three join columns never come apart, the
-    #    activity figure was measured some other way.
-    together = join_uniform(survey.datasets)
-    hprc_r2 = next((d for d in survey.datasets if d.title == "AnVIL_HPRC_R2"), None)
-    if hprc_r2 is not None and hprc_r2.join_uniform:
-        found.append(
-            (
-                "#384 (this issue's own body)",
-                "AnVIL_HPRC_R2's compact join is 91% for donor and biosample but 23% for activity.",
-                f"`{JOIN_ACTIVITY}` is filled on {_pct(hprc_r2.rate(JOIN_ACTIVITY))}% of its rows, the same "
-                f"share as donor and biosample. Across all {len(survey.datasets)} datasets "
-                f"{len(together)} fill the three join columns at an identical rate, so the join arrives "
-                "whole or not at all — which is what #361 should plan against.",
-            )
-        )
     return found
+
+
+def _hprc_r2_table_rows(survey: Survey) -> list[tuple[str, str]]:
+    """The claim gives one row count for every per-file-type table; check they share it."""
+    dataset = _dataset(survey, "AnVIL_HPRC_R2")
+    if dataset is None:
+        return []
+    off = [t for t in dataset.name_encoding_tables if t.rows != _HPRC_R2_CLAIMED_ROWS]
+    if not off:
+        return []
+    listed = ", ".join(f"{t.name} {t.rows:,}" for t in sorted(off, key=lambda t: -t.rows)[:5])
+    return [
+        (
+            "",
+            f"{len(off)} of them are not {_HPRC_R2_CLAIMED_ROWS} rows: {listed}. The tables do not share "
+            f"a row count; {_HPRC_R2_CLAIMED_ROWS} is the count of the largest group, not of all of them.",
+        )
+    ]
+
+
+def _hprc_r2_join_diverges(survey: Survey) -> list[tuple[str, str]]:
+    """The claim has the join columns diverging; check whether they ever do."""
+    dataset = _dataset(survey, "AnVIL_HPRC_R2")
+    if dataset is None or not dataset.join_uniform:
+        return []
+    together = join_uniform(survey.datasets)
+    return [
+        (
+            "",
+            f"`{JOIN_ACTIVITY}` is filled on {_pct(dataset.rate(JOIN_ACTIVITY))}% of its rows, the same "
+            f"share as donor and biosample. Across all {len(survey.datasets)} datasets "
+            f"{len(together)} fill the three join columns at an identical rate, so the join arrives "
+            "whole or not at all — which is what #361 should plan against.",
+        )
+    ]
+
+
+# The row count #384's body attributes to every one of HPRC_R2's per-file-type tables.
+_HPRC_R2_CLAIMED_ROWS = 462
+
+PRIOR_CLAIMS: tuple[PriorClaim, ...] = (
+    PriorClaim(
+        source="docs/briefs/comparability-gap.html",
+        claim="Donor sex, ancestry, biosample type and anatomical site are null on every indexed row.",
+        check=_brief_null_fields,
+    ),
+    PriorClaim(
+        source="#337 / #368 (azul_manifest docstring)",
+        claim="The verbatim entity chain reaches fewer files than the compact join, so verbatim is not "
+        "a superset of compact.",
+        check=_verbatim_not_weaker,
+    ),
+    PriorClaim(
+        source="#384 (this issue's own body)",
+        claim=f"AnVIL_HPRC_R2 carries ~20 per-file-type tables, each {_HPRC_R2_CLAIMED_ROWS} rows.",
+        check=_hprc_r2_table_rows,
+    ),
+    PriorClaim(
+        source="#384 (this issue's own body)",
+        claim="AnVIL_HPRC_R2's compact join is 91% for donor and biosample but 23% for activity.",
+        check=_hprc_r2_join_diverges,
+    ),
+)
+
+
+def contradictions(survey: Survey) -> list[tuple[str, str, str]]:
+    """Where this survey disagrees with a claim already written down (#384 AC6).
+
+    Each entry is ``(source, the prior claim, what the manifests say)``, from
+    running every :data:`PRIOR_CLAIMS` check against the survey. A claim a later
+    manifest pull resolves stops being reported, instead of leaving stale prose
+    in the document.
+    """
+    return [
+        (prior.source + detail, prior.claim, measured)
+        for prior in PRIOR_CLAIMS
+        for detail, measured in prior.check(survey)
+    ]
 
 
 # --- rendering ----------------------------------------------------------------
@@ -981,6 +1075,7 @@ def render_report(survey: Survey) -> str:
 
     out += _compact_section(survey, keys)
     out += _verbatim_section(survey)
+    out += _vocabulary_gaps(survey)
     out += _reach_section(survey)
     out += _readiness_section(survey)
     out += _contradictions_section(survey)
@@ -1081,7 +1176,10 @@ def _verbatim_section(survey: Survey) -> list[str]:
             ]
         rows = []
         for table in dataset.tables:
-            encodes = "; ".join(f"{dimension} = {value}" for dimension, value in table.encodes)
+            encodes = "; ".join(
+                f"{dimension} = {value}" if value else f"{dimension} = {NO_VOCABULARY_TERM}"
+                for dimension, value in table.encodes
+            )
             carried = "; ".join(f"`{name}` → {dimension}" for name, dimension in table.dimension_fields)
             rows.append(
                 [
@@ -1107,6 +1205,43 @@ def _verbatim_section(survey: Survey) -> list[str]:
             out += [f"- **`{table.name}`** ({table.rows:,} {_plural(table.rows, 'row')}): {fields}"]
         out += [""]
     return out
+
+
+def _vocabulary_gaps(survey: Survey) -> list[str]:
+    """The table-name tokens in use whose meaning the schema has no term for.
+
+    A finding for #369 in its own right: these are classifications a submitter
+    already made, in a name, that ``classification.yaml`` cannot currently
+    record. Only tokens that actually occur in a table name somewhere in the
+    corpus are listed — an unused entry in :data:`NAME_TOKENS` is not a gap.
+    """
+    seen: dict[str, set[str]] = defaultdict(set)
+    for dataset in survey.datasets:
+        for table in dataset.name_encoding_tables:
+            for token in _NAME_SPLIT.split(table.name.lower()):
+                meaning = NAME_TOKENS.get(token)
+                if meaning is not None and meaning[1] is None:
+                    seen[meaning[0]].add(token)
+    if not seen:
+        return []
+    out = [
+        "### Table names the vocabulary cannot express",
+        "",
+        "Tokens in use whose dimension is clear but for which `classification.yaml` has no "
+        "term. The survey records the dimension and leaves the value null rather than inventing "
+        "a string, so nothing downstream reads a term the schema does not define. Each of these "
+        "is a submitter classification #369 would have to either map to an existing term or add "
+        "one for.",
+        "",
+    ]
+    out += md_table(
+        ["dimension", "tokens in use"],
+        [
+            [dimension, ", ".join(f"`{token}`" for token in sorted(tokens))]
+            for dimension, tokens in sorted(seen.items())
+        ],
+    )
+    return [*out, ""]
 
 
 def _reach_section(survey: Survey) -> list[str]:
@@ -1174,7 +1309,9 @@ def _readiness_section(survey: Survey) -> list[str]:
         "name applies to every row, a field only to the rows where it is filled.",
         "- **#336 governance import** — consent group and data use permission, whichever is lower, "
         "with the phs accession reported beside it.",
-        "- **#361 donor edges** — the best donor reach of either manifest.",
+        "- **#361 donor edges** — the compact join's donor reach. The verbatim transitive walk is "
+        "reported beside it but does not set the verdict: it is an upper bound, and a go/no-go "
+        "should not rest on one.",
         "",
     ]
     judged = [(d, readiness(d)) for d in survey.datasets]
@@ -1197,12 +1334,11 @@ def _readiness_section(survey: Survey) -> list[str]:
     # directly above prints its non-zero number.
     zero_dimensions = [_short(d.title) for d, _v in judged if d.dimension_files == 0]
     under_dimensions = [_short(d.title) for d, v in judged if v["dimensions"][0] == "no" and d.dimension_files > 0]
-    zero_edges = [_short(d.title) for d, _v in judged if max(d.filled(JOIN_DONOR), d.reach.transitive_donor) == 0]
-    under_edges = [
-        _short(d.title)
-        for d, v in judged
-        if v["edges"][0] == "no" and max(d.filled(JOIN_DONOR), d.reach.transitive_donor) > 0
-    ]
+    # Zero means neither manifest reaches a donor; the verdict rests on the join
+    # alone, but "none at all" must account for both or it would overstate.
+    reachable = {d.title: max(d.filled(JOIN_DONOR), d.reach.transitive_donor) for d, _v in judged}
+    zero_edges = [_short(d.title) for d, _v in judged if reachable[d.title] == 0]
+    under_edges = [_short(d.title) for d, v in judged if v["edges"][0] == "no" and reachable[d.title] > 0]
     complete = all(d.rate(GOVERNANCE_CONSENT) == 1.0 and d.rate(GOVERNANCE_DUO) == 1.0 for d in survey.datasets)
     out += [
         "",
@@ -1278,6 +1414,8 @@ def survey_data(survey: Survey) -> dict[str, Any]:
                         "rows": table.rows,
                         "origin": "submitter" if table.is_submitter else "harmonized",
                         "files_named": table.files_named,
+                        # value is null where the vocabulary has no term for what the
+                        # name says; the dimension is still known. #369 reads both.
                         "name_encodes": [{"dimension": d, "value": v} for d, v in table.encodes],
                         "dimension_fields": [{"field": f, "dimension": d} for f, d in table.dimension_fields],
                         "fields": {

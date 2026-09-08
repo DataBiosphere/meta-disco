@@ -305,6 +305,22 @@ def load_sidecar(root: Path, catalog: str) -> dict[str, Any]:
     return {"catalog": catalog, "datasets": {}}
 
 
+def sidecar_datasets(root: Path, catalog: str) -> dict[str, Dataset]:
+    """Each dataset the catalog's sidecar records, keyed by title.
+
+    The read-only view of :func:`load_sidecar`, so a consumer that only wants
+    "which datasets, how many files each" does not unpack the sidecar's inner
+    shape itself — this module owns that shape because it writes it. The
+    downloader still takes the raw dict from ``load_sidecar``: it *edits* the
+    sidecar in place, which a view of immutable :class:`Dataset` values cannot
+    express.
+    """
+    entries: dict[str, Any] = load_sidecar(root, catalog).get("datasets") or {}
+    return {
+        title: Dataset(title=title, file_count=int(entry.get("file_count") or 0)) for title, entry in entries.items()
+    }
+
+
 def save_sidecar(root: Path, catalog: str, sidecar: dict[str, Any]) -> None:
     directory = manifest_dir(root, catalog)
     directory.mkdir(parents=True, exist_ok=True)

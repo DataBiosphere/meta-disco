@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -25,6 +25,7 @@ help:
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
 	@echo "  make manifest-survey    Survey what the downloaded manifests carry (offline)"
+	@echo "  make download-and-survey Pull manifests, then survey what they carry"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
@@ -162,6 +163,10 @@ coverage-report:
 # is why it is not part of all-reports.
 manifest-survey:
 	uv run python scripts/generate_manifest_survey.py
+
+# The survey reads what `make download` leaves on disk, so the two belong
+# together after a catalog refresh — the same shape as classify-and-report.
+download-and-survey: download manifest-survey
 
 validation-report:
 	uv run python scripts/generate_validation_report.py
