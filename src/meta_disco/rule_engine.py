@@ -187,14 +187,18 @@ def make_claim(
     ``join_key`` and ``match_exact`` record which key attached the claim to our
     file and whether the match was exact (#390 — identity is the risky step, and
     it is per claim, not per source, so the two are not factorable into a claim
-    file's envelope the way ``source`` is).
+    file's envelope the way ``source`` is). These three are not yet tied to
+    ``source``, so nothing stops a rule or content claim from carrying a
+    ``join_key`` for a join that never happened. Deliberately left open until the
+    first importer (#369/#394) shows what the constraint should be — the guard is
+    cheap to add then and cheap to get wrong now.
 
     Keys whose argument is None are omitted from the returned dict, so a rule
     claim serializes exactly as it did before this record was extended, apart
     from its ``source_type``.
     """
-    producer = rule_id if rule_id is not None else (source.name if source is not None else None)
-    if producer is None:
+    producer = rule_id or (source.name if source is not None else None)
+    if not producer:
         raise ValueError(
             f"claim must identify its producer with rule_id or source (reason={reason!r}, source_type={source_type!r})"
         )
@@ -597,9 +601,12 @@ def _resolved(
 def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     """Evaluate competing claims for a single classification field.
 
-    Each claim *declares* either a real value or a status (not_applicable /
-    not_classified — see ``_claim_declaration``). Resolution runs in declaration
-    space and the winner is split back into a real value + status.
+    A claim *declares* either a real value or a status (not_applicable /
+    not_classified — see ``_claim_declaration``), or it declares nothing: a claim
+    carrying a ``claim_state`` (#392) records that a source was consulted and
+    produced no vocabulary value, and is dropped below with the markers rather
+    than resolved. Resolution runs in declaration space over what is left, and
+    the winner is split back into a real value + status.
 
     Resolution rules:
     - No claims → not_classified
@@ -617,17 +624,20 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     the terminal rule — no special case needed here (issue #226).
 
     Args:
-        claims: List of evidence dicts, each declaring a ``value`` or a ``status``.
-                An assertive claim that reaches the disagreement path must carry a
-                ``tier`` (raises ``KeyError`` otherwise — #228); ``rule_id`` /
-                ``reason`` are optional here. Synthetic markers (which carry a
-                ``marker`` kind, no tier) are dropped before the tier math.
+        claims: List of evidence dicts. Those declaring a ``value`` or a
+                ``status`` are resolved; an assertive claim that reaches the
+                disagreement path must carry a ``tier`` (raises ``KeyError``
+                otherwise — #228); ``rule_id`` / ``reason`` are optional here.
+                Synthetic markers (which carry a ``marker`` kind, no tier) and
+                ``claim_state`` claims (which declare nothing) are dropped before
+                the tier math.
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
         competing_values (non-None iff conflict).
     """
-    # Drop synthetic markers (placeholder / conflict) and empty claims, but keep
+    # Drop synthetic markers (placeholder / conflict) and everything that declares
+    # nothing — an empty claim, or a claim_state claim (#392) — but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown) —
     # those are real claims, not markers.
     real_claims = [c for c in claims if _claim_declaration(c) is not None and not _is_synthetic_marker(c)]
@@ -985,7 +995,13 @@ class RuleEngine:
         then = rule.then
         then_status = rule.then_status
         reason = rule.rationale or ""
-        source_type = _RULE_SOURCE_TYPES[rule.scope]
+        source_type = _RULE_SOURCE_TYPES.get(rule.scope)
+        if source_type is None:
+            raise ValueError(
+                f"rule {rule.id!r} has scope {rule.scope!r}, which no source_type describes "
+                f"(known: {sorted(_RULE_SOURCE_TYPES)}). Decide what kind of source such a rule is "
+                f"and add it to _RULE_SOURCE_TYPES."
+            )
         for fld in result._CLASSIFICATION_FIELDS:
             value = then.get(fld)
             status = then_status.get(fld) if then_status else None

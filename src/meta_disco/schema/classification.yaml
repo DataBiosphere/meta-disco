@@ -210,8 +210,12 @@ classes:
       than repeating them on every claim — one shape, factored, not a second one.
     attributes:
       name:
+        required: true
         description: >-
-          Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``.
+          Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``. Required:
+          a source object with no name identifies nothing, and ``to_dict`` omits
+          null members, so an unnamed source would serialize as a bare url or
+          column with no owner.
       url:
         description: >-
           URL the source was read from, if it has one. Null for a source with no
