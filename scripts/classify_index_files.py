@@ -279,11 +279,14 @@ def propagate_to_index_files(
     def inherited_evidence(field_name, field_val, parent):
         """Build evidence entry for an inherited classification field.
 
-        Hand-built rather than routed through ``make_claim``: these claims carry no
-        tier, because an index file has exactly one claim per dimension and never
-        goes through ``evaluate_claims``. They do carry the ``source_type`` every
-        claim carries (#392) — this file's classification was inherited from a
-        related file, not determined for it.
+        Hand-built rather than routed through ``make_claim``, for two reasons.
+        These entries carry no tier — an index file has exactly one per dimension
+        and never goes through ``evaluate_claims`` — and the status branch can emit
+        ``conflict``, which ``make_claim`` rejects as a status no producer may
+        author. Both follow from what this is: a copy of the parent's *resolved*
+        answer, not a declaration for resolution to weigh. They do carry the
+        ``source_type`` every claim carries (#392) — this file's classification was
+        inherited from a related file, not determined for it.
         """
         if field_val and field_val not in _sentinels:
             return [

@@ -560,7 +560,7 @@ def classify_from_gfa_segment_tags(
         # `-mc-` case; add_claim re-resolves from the full list so the refinement
         # wins on its own. CONTENT_TIER (above the rule tiers) is the reserved level
         # for byte-derived claims — see rule_engine (#226). (See add_claim /
-        # _make_claim for the derive-from-claims and required-tier invariants.)
+        # make_claim for the derive-from-claims and required-tier invariants.)
         result.add_claim(
             "data_type",
             rule_id="rgfa_stable_rank_reference",

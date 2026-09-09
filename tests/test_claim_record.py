@@ -168,43 +168,46 @@ class TestCatalogClaim:
 class TestOneRecordAcrossProducers:
     """The three fit the same record, rather than three shapes that resemble one."""
 
-    @pytest.mark.parametrize(
-        "claim",
-        [
-            make_claim(
-                rule_id="contig_length_detection",
-                reason="contigs",
-                tier=CONTENT_TIER,
-                source_type=SOURCE_CONTIG_DETECTION,
-                value="GRCh38",
-            ),
-            make_claim(
-                reason="manifest",
-                source_type=SOURCE_REPOSITORY_METADATA,
-                source=ANVIL_MANIFEST,
-                state=DECLINED,
-            ),
-            make_claim(
-                reason="catalog",
-                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=HPRC_CATALOG,
-                tier=3,
-                value="PACBIO",
-                raw_value="Revio",
-                join_key=JOIN_KEY_FILE_NAME,
-                match_exact=False,
-            ),
-        ],
-        ids=["inference", "manifest", "catalog"],
-    )
-    def test_every_claim_carries_a_reason_and_a_source_type(self, claim):
-        assert claim["reason"]
-        assert claim["source_type"]
+    def test_the_three_producers_differ_only_in_what_they_fill_in(self):
+        # The point of the epic: one key set, occupied differently. Inference names
+        # a rule and no source; the manifest names a source and declares a state;
+        # the catalog names a source, maps a value, and records its join. No
+        # producer needs a key the others cannot use.
+        inference = make_claim(
+            rule_id="contig_length_detection",
+            reason="contigs",
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
+            value="GRCh38",
+        )
+        manifest = make_claim(
+            reason="manifest", source_type=SOURCE_REPOSITORY_METADATA, source=ANVIL_MANIFEST, state=DECLINED
+        )
+        catalog = make_claim(
+            reason="catalog",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=HPRC_CATALOG,
+            tier=3,
+            value="PACBIO",
+            raw_value="Revio",
+            join_key=JOIN_KEY_FILE_NAME,
+            match_exact=False,
+        )
+        assert set(inference) == {"rule_id", "reason", "tier", "value", "source_type"}
+        assert set(manifest) == {"reason", "claim_state", "source_type", "source"}
+        assert set(catalog) == {
+            "reason",
+            "tier",
+            "value",
+            "source_type",
+            "source",
+            "raw_value",
+            "join_key",
+            "match_exact",
+        }
 
-    @pytest.mark.parametrize("source", [ANVIL_MANIFEST, HPRC_CATALOG], ids=["manifest", "catalog"])
-    def test_source_omits_members_it_does_not_have(self, source):
+    def test_source_omits_members_it_does_not_have(self):
         # ClaimSource drops nulls, so a source with no column structure carries no
         # empty `column` key rather than a null one.
-        bare = ClaimSource(name=source.name)
-        assert bare.to_dict() == {"name": source.name}
-        assert set(source.to_dict()) == {"name", "url", "table", "column"}
+        assert ClaimSource(name="HPRC Data Explorer").to_dict() == {"name": "HPRC Data Explorer"}
+        assert set(HPRC_CATALOG.to_dict()) == {"name", "url", "table", "column"}

@@ -11,11 +11,13 @@ from .models import (
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    JOIN_KEYS,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
     SOURCE_SIGNAL_INFERENCE,
+    SOURCE_TYPES,
     ClaimSource,
     ClassificationResult,
     FileInfo,
@@ -24,7 +26,6 @@ from .models import (
     status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
-from .schema_vocab import join_key_values, source_type_values
 
 if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
@@ -40,17 +41,23 @@ if TYPE_CHECKING:
 # at this tier is #227).
 CONTENT_TIER = 4
 
-# The kind of source a rule claim comes from, by the rule's tier (#392). The rule
-# tiers are *defined* by what they read — 1 extension, 2 filename, 3 header — so
-# here, and only here, the tier determines the source kind. An extension is part
-# of the filename, so tiers 1 and 2 are both ``filename_rule``. Keys are exactly
-# ``RuleLoader.VALID_TIERS``, which the loader enforces, so a rule can never carry
-# a tier this mapping lacks; ``CONTENT_TIER`` is absent deliberately, being a
-# level no rule declares.
+# The kind of source a rule claim comes from, by the rule's ``scope`` (#392).
+# Scope, not tier: a rule's scope is its declaration of *what it reads*, whereas
+# tier is only its precedence, and the two do not line up — tier 1 holds two
+# filename-scope rules and tier 2 holds seven extension-scope rules. An extension
+# is part of the filename, so both of those scopes are ``filename_rule``.
+#
+# Keys are a subset of ``RuleLoader.VALID_SCOPES``: ``file_size`` is absent
+# because a rule matching on size alone reads neither a name nor a header, and no
+# source_type honestly describes it. No such rule exists today, and
+# test_rule_vocabulary pins every authored scope to this map, so authoring one
+# fails in the suite rather than mislabelling its provenance in the output.
 _RULE_SOURCE_TYPES = {
-    1: SOURCE_FILENAME_RULE,
-    2: SOURCE_FILENAME_RULE,
-    3: SOURCE_HEADER_RULE,
+    "extension": SOURCE_FILENAME_RULE,
+    "filename": SOURCE_FILENAME_RULE,
+    "header": SOURCE_HEADER_RULE,
+    "vcf_header": SOURCE_HEADER_RULE,
+    "fastq_header": SOURCE_HEADER_RULE,
 }
 
 
@@ -205,10 +212,9 @@ def make_claim(
         raise ValueError(
             f"claim from {producer!r} has unknown state {state!r} (expected one of {sorted(CLAIM_STATES)})"
         )
-    if source_type not in source_type_values():
+    if source_type not in SOURCE_TYPES:
         raise ValueError(
-            f"claim from {producer!r} has unknown source_type {source_type!r} "
-            f"(expected one of {sorted(source_type_values())})"
+            f"claim from {producer!r} has unknown source_type {source_type!r} (expected one of {sorted(SOURCE_TYPES)})"
         )
     # Tier is the resolution input, so it is required exactly where a claim
     # competes and rejected where it cannot.
@@ -216,9 +222,9 @@ def make_claim(
         raise ValueError(f"claim from {producer!r} declaring value/status must carry a tier")
     if state is not None and tier is not None:
         raise ValueError(f"claim from {producer!r} declaring state {state!r} must not carry a tier — it never competes")
-    if join_key is not None and join_key not in join_key_values():
+    if join_key is not None and join_key not in JOIN_KEYS:
         raise ValueError(
-            f"claim from {producer!r} has unknown join_key {join_key!r} (expected one of {sorted(join_key_values())})"
+            f"claim from {producer!r} has unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})"
         )
     if match_exact is not None and join_key is None:
         raise ValueError(f"claim from {producer!r} has match_exact without a join_key to qualify")
@@ -972,15 +978,14 @@ class RuleEngine:
         claim carries ``status`` (never a sentinel in the value slot — epic #116 /
         #136); evaluation happens later in _finalize_result via evaluate_claims().
 
-        The claim's ``source_type`` comes from the rule's tier via
-        ``_RULE_SOURCE_TYPES``. This is the one place a tier determines the kind of
-        source, and only because the rule tiers *are* defined by what they read
-        (#392) — every other producer states its kind explicitly.
+        The claim's ``source_type`` comes from the rule's ``scope`` via
+        ``_RULE_SOURCE_TYPES`` — scope being the rule's own declaration of what it
+        reads (#392). Every other producer states its kind explicitly.
         """
         then = rule.then
         then_status = rule.then_status
         reason = rule.rationale or ""
-        source_type = _RULE_SOURCE_TYPES[rule.tier]
+        source_type = _RULE_SOURCE_TYPES[rule.scope]
         for fld in result._CLASSIFICATION_FIELDS:
             value = then.get(fld)
             status = then_status.get(fld) if then_status else None

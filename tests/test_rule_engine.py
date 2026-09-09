@@ -26,6 +26,11 @@ from meta_disco.rule_engine import (
     make_claim,
 )
 
+# A stand-in external source for the claim-record tests. One definition rather
+# than an inline ClaimSource at each site, so the tests read as "some external
+# source" rather than as claims about this particular catalog's shape.
+EXTERNAL_SOURCE = ClaimSource(name="HPRC Data Explorer", table="files", column="assembly")
+
 
 @pytest.fixture
 def engine():
@@ -403,7 +408,7 @@ class TestMakeClaim:
             make_claim(
                 reason="x",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=ClaimSource(name="HPRC Data Explorer"),
+                source=EXTERNAL_SOURCE,
                 value="PACBIO",
                 state=UNMAPPED,
             )
@@ -440,7 +445,7 @@ class TestMakeClaim:
             make_claim(
                 reason="x",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=ClaimSource(name="HPRC Data Explorer"),
+                source=EXTERNAL_SOURCE,
                 state="declind",  # typo
             )
 
@@ -458,7 +463,7 @@ class TestMakeClaim:
                 reason="x",
                 tier=1,
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=ClaimSource(name="HPRC Data Explorer"),
+                source=EXTERNAL_SOURCE,
                 state=DECLINED,
             )
 
@@ -468,7 +473,7 @@ class TestMakeClaim:
                 reason="x",
                 tier=1,
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=ClaimSource(name="HPRC Data Explorer"),
+                source=EXTERNAL_SOURCE,
                 value="PACBIO",
                 join_key="filename",  # not the schema's file_name
             )
@@ -481,7 +486,7 @@ class TestMakeClaim:
                 reason="x",
                 tier=1,
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=ClaimSource(name="HPRC Data Explorer"),
+                source=EXTERNAL_SOURCE,
                 value="PACBIO",
                 match_exact=True,
             )
@@ -1024,11 +1029,9 @@ class TestClaimStatesDoNotResolve:
     which is the failure make_claim's unknown-status guard exists to prevent.
     """
 
-    CATALOG = ClaimSource(name="HPRC Data Explorer", table="files", column="assembly")
-
     def _state_claim(self, state):
         return make_claim(
-            reason="x", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=self.CATALOG, state=state, raw_value="Hi-C"
+            reason="x", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, state=state, raw_value="Hi-C"
         )
 
     @pytest.mark.parametrize("state", ["unmapped", "no_vocabulary_term", "declined"])
@@ -1065,7 +1068,7 @@ class TestClaimStatesDoNotResolve:
             "data_type",
             reason="alignments_v2.location is not an authority on data_type",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-            source=self.CATALOG,
+            source=EXTERNAL_SOURCE,
             state=DECLINED,
         )
         not_applicable = ExtendedClassificationResult()
@@ -1098,7 +1101,7 @@ class TestClaimStatesDoNotResolve:
             "data_type",
             reason="not an authority",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-            source=self.CATALOG,
+            source=EXTERNAL_SOURCE,
             state=DECLINED,
         )
         assert result.rules_matched == ["r"]
@@ -1113,7 +1116,7 @@ class TestClaimStatesDoNotResolve:
             "platform",
             reason="library_selection=RANDOM has no map entry",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-            source=self.CATALOG,
+            source=EXTERNAL_SOURCE,
             state=UNMAPPED,
             raw_value="RANDOM",
         )

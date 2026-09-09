@@ -359,19 +359,16 @@ slots:
   source_type:
     description: >-
       Kind of source that produced this claim (provenance, #90; populated on every
-      claim by #392). Deliberately not derivable from `tier`: `contig_detection`
-      and `content_read` share a tier, and `signal_inference` fires at a rule tier
-      without being a rule. Absent on a synthetic marker and on the note left by a
-      failed fetch or input contract, neither of which is a claim.
+      claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic
+      marker and on the note left by a failed fetch or input contract, neither of
+      which is a claim.
     range: source_type_enum
   claim_state:
     description: >-
-      Why a claim that consulted a source produced no vocabulary value (issue
-      #392). Present instead of `value` or `status`, and only on such a claim: a
-      claim that mapped successfully carries a `value`, and the two sentinels are
-      carried in `status` as before. A claim in one of these states declares
-      nothing, so it never competes in resolution and cannot make a field
-      conflict — it is a review queue and an audit trail, not an answer.
+      The state of a claim that produced no vocabulary value — see
+      `claim_state_enum` for what each state means. Present instead of `value` or
+      `status`, and only on such a claim: one that mapped successfully carries a
+      `value`, and the two sentinels are carried in `status` as before.
     range: claim_state_enum
   source:
     description: >-

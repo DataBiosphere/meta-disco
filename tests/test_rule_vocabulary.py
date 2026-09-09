@@ -407,32 +407,42 @@ def test_name_source_constants_match_schema_enum():
     assert {NAME_SOURCE_REFERENCE_FIELD, NAME_SOURCE_COMMAND_LINE} == schema_vocab.name_source_values()
 
 
-def test_source_type_constants_match_schema_enum():
-    # Every claim carries a `source_type` drawn from these constants, and
-    # make_claim validates against the schema's source_type_enum. Pin the two so a
-    # constant added on one side cannot drift from the other (#392).
+@pytest.mark.parametrize(
+    "constants,schema_values",
+    [
+        ("SOURCE_TYPES", schema_vocab.source_type_values),
+        ("CLAIM_STATES", schema_vocab.claim_state_values),
+        ("JOIN_KEYS", schema_vocab.join_key_values),
+    ],
+)
+def test_claim_vocabularies_match_their_schema_enums(constants, schema_values):
+    # make_claim validates against these in-code frozensets, so the schema is read
+    # here and not in the classification path. That only stays safe while the two
+    # agree — pin each pair so a value added on one side cannot drift (#392).
     from meta_disco import models
 
-    constants = {getattr(models, n) for n in dir(models) if n.startswith("SOURCE_")}
-    assert constants == schema_vocab.source_type_values()
+    assert getattr(models, constants) == schema_values()
 
 
-def test_claim_state_constants_match_schema_enum():
-    # The claim states are validated against the schema's claim_state_enum, and
-    # are deliberately disjoint from the status vocabulary: none of them may ever
-    # become a dimension's status (#392).
+def test_claim_states_are_never_dimension_statuses():
+    # The whole reason claim_state is its own slot: `declined` must never be a
+    # status a dimension can carry (#392).
     from meta_disco.models import CLAIM_STATES
 
-    assert schema_vocab.claim_state_values() == CLAIM_STATES
     assert not CLAIM_STATES & schema_vocab.status_values()
 
 
-def test_join_key_constants_match_schema_enum():
-    # The keys an external claim may be joined to one of our files by (#392/#390).
-    from meta_disco import models
+def test_every_authored_rule_scope_has_a_source_type():
+    # _apply_rule looks up `_RULE_SOURCE_TYPES[rule.scope]`, so a rule authored
+    # with a scope the map lacks would KeyError mid-classification. `file_size` is
+    # deliberately absent — no source_type honestly describes a size-only match —
+    # so authoring one fails here, where the question can be answered, rather than
+    # in the middle of a corpus run (#392).
+    from meta_disco.rule_engine import _RULE_SOURCE_TYPES
 
-    constants = {getattr(models, n) for n in dir(models) if n.startswith("JOIN_KEY_")}
-    assert constants == schema_vocab.join_key_values()
+    authored = {rule.scope for rule in get_unified_rules().rules}
+    assert authored <= set(_RULE_SOURCE_TYPES), f"scopes with no source_type: {authored - set(_RULE_SOURCE_TYPES)}"
+    assert set(_RULE_SOURCE_TYPES) <= RuleLoader.VALID_SCOPES
 
 
 def test_value_in_vocabulary_is_strict_dimension_only():
