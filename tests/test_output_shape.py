@@ -147,10 +147,25 @@ STUB_PAYLOADS = {
         line_count=2,
     ),
 }
-# Every evidence entry has a reason and is either a claim (rule_id) or a synthetic
-# resolution marker (marker); the two are mutually exclusive (issue #228).
-CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
+# Every evidence entry has a reason, and is either a synthetic resolution marker
+# (carries `marker`) or something a producer made — the two are mutually exclusive
+# (issue #228).
 MARKER_EVIDENCE_KEYS = {"marker", "reason"}
+# A non-marker entry names its producer. `rule_id` for one of ours; `source` for
+# an external one, which carries no rule_id because no rule made it (#392). Either
+# satisfies this, so the contract does not forbid the external shape `make_claim`
+# and the schema both accept — no such producer exists yet (#369/#394), and this
+# is the assertion that would otherwise fail on their first row.
+PRODUCER_KEYS = {"rule_id", "source"}
+# What makes an entry a *claim*: it declares something. A claim carries a
+# source_type naming the kind of source behind it (#392) — pinned here because
+# "every claim carries one" is the acceptance criterion, and a claim site added
+# without one would otherwise publish null provenance silently. Claim-ness is
+# defined by the declaration rather than by the producer handle, because the notes
+# left by a failed fetch (`classify_without_content`) and a failed input contract
+# (`validation_failed_classifications`) carry a rule_id and declare nothing — the
+# schema calls those evidence, not claims, and gives them no source_type.
+DECLARATION_KEYS = {"value", "status", "claim_state"}
 FIELD_KEYS = set(ENTRY_KEYS)
 # `build` (#340) is optional detail about a value, carried only by
 # reference_assembly and only when something survives into the identity: a
@@ -311,11 +326,18 @@ def test_output_structural_contract(output):
             )
             assert isinstance(entry["evidence"], list)
             for ev in entry["evidence"]:
-                expected = MARKER_EVIDENCE_KEYS if "marker" in ev else CLAIM_EVIDENCE_KEYS
-                assert set(ev) >= expected, f"{ftype}.{field} evidence: {set(ev)}"
-                assert not ("rule_id" in ev and "marker" in ev), (
-                    f"{ftype}.{field} evidence is both claim and marker: {ev}"
+                if "marker" in ev:
+                    assert set(ev) >= MARKER_EVIDENCE_KEYS, f"{ftype}.{field} marker: {set(ev)}"
+                else:
+                    assert "reason" in ev, f"{ftype}.{field} evidence has no reason: {set(ev)}"
+                    assert PRODUCER_KEYS & set(ev), f"{ftype}.{field} evidence names no producer: {set(ev)}"
+                assert not (PRODUCER_KEYS & set(ev) and "marker" in ev), (
+                    f"{ftype}.{field} evidence is both a producer's and a marker: {ev}"
                 )
+                if DECLARATION_KEYS & set(ev) and "marker" not in ev:
+                    assert ev.get("source_type") in schema_vocab.source_type_values(), (
+                        f"{ftype}.{field} claim has missing or unknown source_type: {ev}"
+                    )
 
 
 def test_output_values_in_vocabulary(output):

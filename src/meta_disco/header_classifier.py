@@ -15,7 +15,15 @@ from typing import TYPE_CHECKING
 
 from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
-from .models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, all_not_classified, build_field_entry
+from .models import (
+    CLASSIFIED,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    SOURCE_CONTENT_READ,
+    SOURCE_CONTIG_DETECTION,
+    all_not_classified,
+    build_field_entry,
+)
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -202,6 +210,7 @@ def classify_from_header(
             "reference_assembly",
             rule_id="contig_length_detection",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=reason,
             value=contig_ref,
         )
@@ -213,6 +222,7 @@ def classify_from_header(
                 "data_modality",
                 rule_id="aligned_to_reference",
                 tier=CONTENT_TIER,
+                source_type=SOURCE_CONTIG_DETECTION,
                 reason=f"Aligned to {contig_ref} — file contains genomic alignments",
                 value="genomic",
             )
@@ -295,6 +305,7 @@ def classify_from_vcf_header(
             "reference_assembly",
             rule_id="vcf_contig_length",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=reason,
             value=contig_ref,
         )
@@ -549,11 +560,12 @@ def classify_from_gfa_segment_tags(
         # `-mc-` case; add_claim re-resolves from the full list so the refinement
         # wins on its own. CONTENT_TIER (above the rule tiers) is the reserved level
         # for byte-derived claims — see rule_engine (#226). (See add_claim /
-        # _make_claim for the derive-from-claims and required-tier invariants.)
+        # make_claim for the derive-from-claims and required-tier invariants.)
         result.add_claim(
             "data_type",
             rule_id="rgfa_stable_rank_reference",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=(
                 f"{len(rank0)} rGFA {phrase} stable rank 0 "
                 f"(SR:i:0) on {preview} — graph defines a reference "
@@ -734,7 +746,17 @@ def classify_from_tar_members(
     def _claim_content(data_modality: str | None, data_type: str | None, reason: str) -> None:
         for fld, value in (("data_modality", data_modality), ("data_type", data_type)):
             if value is not None:
-                result.add_claim(fld, rule_id="tar_inner_format", tier=CONTENT_TIER, reason=reason, value=value)
+                # SOURCE_CONTENT_READ, not SOURCE_CONTIG_DETECTION as the other
+                # CONTENT_TIER sites use: this reads the archive head's member
+                # names, which are not contig declarations (#392).
+                result.add_claim(
+                    fld,
+                    rule_id="tar_inner_format",
+                    tier=CONTENT_TIER,
+                    source_type=SOURCE_CONTENT_READ,
+                    reason=reason,
+                    value=value,
+                )
 
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
@@ -829,6 +851,7 @@ def classify_from_fasta_header(
             "data_modality",
             rule_id="fasta_transcript_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
             value="transcriptomic.bulk",
         )
@@ -836,6 +859,7 @@ def classify_from_fasta_header(
             "data_type",
             rule_id="fasta_transcript_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="Transcript sequences in FASTA",
             value="sequence",
         )
@@ -875,6 +899,7 @@ def classify_from_fasta_header(
                     "reference_assembly",
                     rule_id="fasta_reference_contigs",
                     tier=CONTENT_TIER,
+                    source_type=SOURCE_CONTIG_DETECTION,
                     reason=ref_reason,
                     value=best_ref,
                 )
@@ -883,6 +908,7 @@ def classify_from_fasta_header(
                     "reference_assembly",
                     rule_id="fasta_reference_contigs",
                     tier=CONTENT_TIER,
+                    source_type=SOURCE_CONTIG_DETECTION,
                     reason=ref_reason,
                     status=NOT_CLASSIFIED,
                 )
@@ -890,6 +916,7 @@ def classify_from_fasta_header(
                 "data_modality",
                 rule_id="fasta_reference_contigs",
                 tier=CONTENT_TIER,
+                source_type=SOURCE_CONTIG_DETECTION,
                 reason="Contig names match known reference genome",
                 value="genomic",
             )
@@ -897,6 +924,7 @@ def classify_from_fasta_header(
                 "data_type",
                 rule_id="fasta_reference_contigs",
                 tier=CONTENT_TIER,
+                source_type=SOURCE_CONTIG_DETECTION,
                 reason="FASTA contains reference genome sequences",
                 value="assembly.reference",
             )
@@ -909,6 +937,7 @@ def classify_from_fasta_header(
             "data_modality",
             rule_id="fasta_assembler_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
             value="genomic",
         )
@@ -916,6 +945,7 @@ def classify_from_fasta_header(
             "data_type",
             rule_id="fasta_assembler_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="Contig names indicate assembler output",
             value="assembly",
         )
@@ -923,6 +953,7 @@ def classify_from_fasta_header(
             "reference_assembly",
             rule_id="fasta_assembler_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="De novo assembly — no reference genome applicable",
             status=NOT_APPLICABLE,
         )
@@ -934,6 +965,7 @@ def classify_from_fasta_header(
             "data_modality",
             rule_id="fasta_many_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
             value="genomic",
         )
@@ -941,6 +973,7 @@ def classify_from_fasta_header(
             "data_type",
             rule_id="fasta_many_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="High contig count suggests assembly",
             value="assembly",
         )
@@ -948,6 +981,7 @@ def classify_from_fasta_header(
             "reference_assembly",
             rule_id="fasta_many_contigs",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="De novo assembly — no reference genome applicable",
             status=NOT_APPLICABLE,
         )
@@ -961,6 +995,7 @@ def classify_from_fasta_header(
             "data_modality",
             rule_id="fasta_default_genomic",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason=f"FASTA with {num_contigs} contigs — defaulting to genomic",
             value="genomic",
         )
@@ -969,6 +1004,7 @@ def classify_from_fasta_header(
             "data_type",
             rule_id="fasta_default_genomic",
             tier=CONTENT_TIER,
+            source_type=SOURCE_CONTIG_DETECTION,
             reason="Unable to determine specific FASTA type from headers",
             value="sequence",
         )
@@ -1107,6 +1143,7 @@ def classify_from_bed_signals(
                 "reference_assembly",
                 rule_id="bed_coordinate_reference",
                 tier=CONTENT_TIER,
+                source_type=SOURCE_CONTIG_DETECTION,
                 reason=coord_rationale,
                 value=coord_ref,
             )
@@ -1115,6 +1152,7 @@ def classify_from_bed_signals(
                 "reference_assembly",
                 rule_id="bed_nonstandard_contigs",
                 tier=CONTENT_TIER,
+                source_type=SOURCE_CONTIG_DETECTION,
                 reason=coord_rationale,
                 status=NOT_APPLICABLE,
             )

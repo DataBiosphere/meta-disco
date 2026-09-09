@@ -6,8 +6,14 @@ from meta_disco.file_name import FileName, Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    DECLINED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_CONTIG_DETECTION,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_FILENAME_RULE,
+    UNMAPPED,
+    ClaimSource,
     FileInfo,
 )
 from meta_disco.rule_engine import (
@@ -16,9 +22,14 @@ from meta_disco.rule_engine import (
     ExtendedFileInfo,
     ResolutionReason,
     RuleEngine,
-    _make_claim,
     evaluate_claims,
+    make_claim,
 )
+
+# A stand-in external source for the claim-record tests. One definition rather
+# than an inline ClaimSource at each site, so the tests read as "some external
+# source" rather than as claims about this particular catalog's shape.
+EXTERNAL_SOURCE = ClaimSource(name="HPRC Data Explorer", table="files", column="assembly")
 
 
 @pytest.fixture
@@ -339,39 +350,146 @@ class TestSetFieldValidation:
 
 
 class TestMakeClaim:
-    """_make_claim enforces value-xor-status and a required tier."""
+    """make_claim enforces the claim record's invariants (issue #392).
+
+    The record grew from a rule-only one, so these cover both what it always
+    enforced (exactly one declaration, a known status, a tier on a competing
+    claim) and what the extension adds (a known source_type and state, a producer
+    handle, no tier on a claim that cannot compete).
+    """
 
     def test_value_claim_shape(self):
-        claim = _make_claim(rule_id="r", reason="because", tier=2, value="genomic")
-        assert claim == {"rule_id": "r", "reason": "because", "tier": 2, "value": "genomic"}
+        claim = make_claim(rule_id="r", reason="because", tier=2, source_type=SOURCE_FILENAME_RULE, value="genomic")
+        assert claim == {
+            "rule_id": "r",
+            "reason": "because",
+            "tier": 2,
+            "value": "genomic",
+            "source_type": SOURCE_FILENAME_RULE,
+        }
         assert "status" not in claim
 
     def test_status_claim_shape(self):
-        claim = _make_claim(rule_id="r", reason="n/a", tier=1, status=NOT_APPLICABLE)
-        assert claim == {"rule_id": "r", "reason": "n/a", "tier": 1, "status": NOT_APPLICABLE}
+        claim = make_claim(rule_id="r", reason="n/a", tier=1, source_type=SOURCE_FILENAME_RULE, status=NOT_APPLICABLE)
+        assert claim == {
+            "rule_id": "r",
+            "reason": "n/a",
+            "tier": 1,
+            "status": NOT_APPLICABLE,
+            "source_type": SOURCE_FILENAME_RULE,
+        }
         assert "value" not in claim
 
+    def test_rule_claim_carries_no_external_source_keys(self):
+        # A rule claim serializes as it always did plus source_type: the extension's
+        # keys are omitted when their argument is None, not emitted as nulls.
+        claim = make_claim(rule_id="r", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, value="genomic")
+        assert not {"source", "raw_value", "join_key", "match_exact", "claim_state"} & set(claim)
+
     def test_rejects_both_value_and_status(self):
-        with pytest.raises(ValueError, match="exactly one of value/status"):
-            _make_claim(rule_id="r", reason="x", tier=1, value="genomic", status=NOT_APPLICABLE)
+        with pytest.raises(ValueError, match="exactly one of value/status/state"):
+            make_claim(
+                rule_id="r",
+                reason="x",
+                tier=1,
+                source_type=SOURCE_FILENAME_RULE,
+                value="genomic",
+                status=NOT_APPLICABLE,
+            )
 
     def test_rejects_neither_value_nor_status(self):
-        with pytest.raises(ValueError, match="exactly one of value/status"):
-            _make_claim(rule_id="r", reason="x", tier=1)
+        with pytest.raises(ValueError, match="exactly one of value/status/state"):
+            make_claim(rule_id="r", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE)
 
-    def test_tier_is_required(self):
-        with pytest.raises(TypeError):
-            _make_claim(rule_id="r", reason="x", value="genomic")  # type: ignore[call-arg]
+    def test_rejects_value_and_state(self):
+        # The widened invariant covers the new arm too — a claim cannot both map to
+        # a value and report that it failed to map.
+        with pytest.raises(ValueError, match="exactly one of value/status/state"):
+            make_claim(
+                reason="x",
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+                state=UNMAPPED,
+            )
+
+    def test_tier_is_required_on_a_declaring_claim(self):
+        with pytest.raises(ValueError, match="must carry a tier"):
+            make_claim(rule_id="r", reason="x", source_type=SOURCE_FILENAME_RULE, value="genomic")
 
     def test_rejects_unknown_status(self):
         # A status claim declares a non-classified sentinel only; a typo would
         # otherwise be read as a real value and resolve the field CLASSIFIED to it.
         with pytest.raises(ValueError, match="unknown status"):
-            _make_claim(rule_id="r", reason="x", tier=1, status="not_classifed")  # typo
+            make_claim(
+                rule_id="r", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, status="not_classifed"
+            )  # typo
 
     def test_rejects_classified_as_status(self):
         with pytest.raises(ValueError, match="unknown status"):
-            _make_claim(rule_id="r", reason="x", tier=1, status=CLASSIFIED)
+            make_claim(rule_id="r", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, status=CLASSIFIED)
+
+    def test_source_type_is_required(self):
+        with pytest.raises(TypeError):
+            make_claim(rule_id="r", reason="x", tier=1, value="genomic")  # type: ignore[call-arg]
+
+    def test_rejects_unknown_source_type(self):
+        # Validated against the schema enum rather than passed through, for the same
+        # reason an unknown status is: a free string here would be published as
+        # provenance nobody can interpret.
+        with pytest.raises(ValueError, match="unknown source_type"):
+            make_claim(rule_id="r", reason="x", tier=1, source_type="filename_rules", value="genomic")
+
+    def test_rejects_unknown_state(self):
+        with pytest.raises(ValueError, match="unknown state"):
+            make_claim(
+                reason="x",
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                state="declind",  # typo
+            )
+
+    def test_requires_a_producer_handle(self):
+        # rule_id for one of ours, source for an external one — a claim with
+        # neither could not be traced back to whatever made it.
+        with pytest.raises(ValueError, match="must identify its producer"):
+            make_claim(reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, value="genomic")
+
+    def test_state_claim_rejects_a_tier(self):
+        # A state claim never competes, so a tier on it would be a number nothing
+        # reads — and an invitation to believe it ranks against the rule tiers.
+        with pytest.raises(ValueError, match="never competes"):
+            make_claim(
+                reason="x",
+                tier=1,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                state=DECLINED,
+            )
+
+    def test_rejects_unknown_join_key(self):
+        with pytest.raises(ValueError, match="unknown join_key"):
+            make_claim(
+                reason="x",
+                tier=1,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+                join_key="filename",  # not the schema's file_name
+            )
+
+    def test_rejects_match_exact_without_join_key(self):
+        # match_exact qualifies a join; on its own it says a match was exact
+        # without saying what was matched.
+        with pytest.raises(ValueError, match="match_exact without a join_key"):
+            make_claim(
+                reason="x",
+                tier=1,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+                match_exact=True,
+            )
 
 
 class TestAddClaim:
@@ -382,10 +500,12 @@ class TestAddClaim:
 
     def test_single_claim_appends_and_sets_value(self):
         result = ExtendedClassificationResult()
-        result.add_claim("data_type", rule_id="r1", reason="x", tier=1, value="reads")
+        result.add_claim("data_type", rule_id="r1", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, value="reads")
         assert result.data_type == "reads"
         assert result.status_of("data_type") == CLASSIFIED
-        assert result.field_evidence["data_type"] == [{"rule_id": "r1", "reason": "x", "tier": 1, "value": "reads"}]
+        assert result.field_evidence["data_type"] == [
+            {"rule_id": "r1", "reason": "x", "tier": 1, "value": "reads", "source_type": SOURCE_FILENAME_RULE}
+        ]
 
     def test_second_claim_accumulates_and_re_resolves(self):
         # Two calls accumulate (append, not replace) and the field re-derives from
@@ -394,8 +514,12 @@ class TestAddClaim:
         # stays consistent with _finalize_result. The resolution rule itself is
         # TestEvaluateClaims' job.
         result = ExtendedClassificationResult()
-        result.add_claim("reference_assembly", rule_id="a", reason="x", tier=2, value="GRCh38")
-        result.add_claim("reference_assembly", rule_id="b", reason="y", tier=2, value="GRCh37")
+        result.add_claim(
+            "reference_assembly", rule_id="a", reason="x", tier=2, source_type=SOURCE_FILENAME_RULE, value="GRCh38"
+        )
+        result.add_claim(
+            "reference_assembly", rule_id="b", reason="y", tier=2, source_type=SOURCE_FILENAME_RULE, value="GRCh37"
+        )
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         evidence = result.field_evidence["reference_assembly"]
@@ -414,7 +538,14 @@ class TestAddClaim:
         result.field_evidence["reference_assembly"].append(
             {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
-        result.add_claim("reference_assembly", rule_id="vcf_contig_length", reason="contigs", tier=4, value="GRCh38")
+        result.add_claim(
+            "reference_assembly",
+            rule_id="vcf_contig_length",
+            reason="contigs",
+            tier=4,
+            source_type=SOURCE_CONTIG_DETECTION,
+            value="GRCh38",
+        )
         assert result.reference_assembly == "GRCh38"
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
         assert rule_ids == ["vcf_contig_length"], f"stale placeholder not dropped: {rule_ids}"
@@ -430,7 +561,14 @@ class TestAddClaim:
         result.field_evidence["data_modality"].append(
             {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
-        result.add_claim("data_modality", rule_id="aligned_to_reference", reason="aligned", tier=4, value="genomic")
+        result.add_claim(
+            "data_modality",
+            rule_id="aligned_to_reference",
+            reason="aligned",
+            tier=4,
+            source_type=SOURCE_CONTIG_DETECTION,
+            value="genomic",
+        )
         assert result.data_modality == "genomic"
         rule_ids = [e["rule_id"] for e in result.field_evidence["data_modality"]]
         assert rule_ids == ["fastq_modality_unknown", "aligned_to_reference"], rule_ids
@@ -444,7 +582,14 @@ class TestAddClaim:
         result.field_evidence["reference_assembly"].append(
             {"marker": "not_classified", "reason": "No rule determined a value", "status": NOT_CLASSIFIED}
         )
-        result.add_claim("reference_assembly", rule_id="looked_but_unsure", reason="?", tier=4, status=NOT_CLASSIFIED)
+        result.add_claim(
+            "reference_assembly",
+            rule_id="looked_but_unsure",
+            reason="?",
+            tier=4,
+            source_type=SOURCE_CONTIG_DETECTION,
+            status=NOT_CLASSIFIED,
+        )
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
         assert rule_ids == ["looked_but_unsure"], f"synthetic placeholder not dropped: {rule_ids}"
@@ -467,7 +612,12 @@ class TestAddClaim:
             ]
         )
         result.add_claim(
-            "reference_assembly", rule_id="contig_length_detection", reason="contigs", tier=4, value="CHM13"
+            "reference_assembly",
+            rule_id="contig_length_detection",
+            reason="contigs",
+            tier=4,
+            source_type=SOURCE_CONTIG_DETECTION,
+            value="CHM13",
         )
         assert result.reference_assembly == "CHM13"
         rule_ids = [e["rule_id"] for e in result.field_evidence["reference_assembly"]]
@@ -478,7 +628,9 @@ class TestAddClaim:
         # than appending a claim under a typo'd field.
         result = ExtendedClassificationResult()
         with pytest.raises(ValueError, match="unknown classification field"):
-            result.add_claim("data_typo", rule_id="a", reason="x", tier=1, value="reads")
+            result.add_claim(
+                "data_typo", rule_id="a", reason="x", tier=1, source_type=SOURCE_FILENAME_RULE, value="reads"
+            )
 
 
 class TestDerivativeFiles:
@@ -865,6 +1017,112 @@ class TestEvaluateClaims:
         # Should have the rule's ID, not the generic "not_classified" placeholder
         assert "fastq_modality_unknown" in rule_ids
         assert "not_classified" not in rule_ids
+
+
+class TestClaimStatesDoNotResolve:
+    """A claim in a claim_state declares nothing to resolution (issue #392).
+
+    `unmapped` / `no_vocabulary_term` / `declined` record that a source was
+    consulted and produced no vocabulary value. They must stay visible in the
+    evidence while being inert to `evaluate_claims` — otherwise a `declined`
+    claim could win a field and resolve it to the literal string "declined",
+    which is the failure make_claim's unknown-status guard exists to prevent.
+    """
+
+    def _state_claim(self, state):
+        return make_claim(
+            reason="x", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, state=state, raw_value="Hi-C"
+        )
+
+    @pytest.mark.parametrize("state", ["unmapped", "no_vocabulary_term", "declined"])
+    def test_state_claim_alone_resolves_nothing(self, state):
+        result = evaluate_claims([self._state_claim(state)])
+        assert result.value is None
+        assert result.status == NOT_CLASSIFIED
+        assert result.is_conflict is False
+        # NO_CLAIMS, not SINGLE_CLAIM: to resolution the list was empty.
+        assert result.reason == ResolutionReason.NO_CLAIMS
+
+    def test_state_claim_does_not_override_a_real_value(self):
+        result = evaluate_claims(
+            [
+                {"rule_id": "r1", "value": "GRCh38", "tier": 2, "source_type": SOURCE_FILENAME_RULE},
+                self._state_claim(DECLINED),
+            ]
+        )
+        assert result.value == "GRCh38"
+        assert result.is_conflict is False
+
+    def test_two_state_claims_do_not_conflict(self):
+        # Two sources declining says nothing twice, not ambiguously.
+        result = evaluate_claims([self._state_claim(DECLINED), self._state_claim(UNMAPPED)])
+        assert result.is_conflict is False
+        assert result.status == NOT_CLASSIFIED
+
+    def test_declined_is_distinguishable_from_not_applicable_and_from_absence(self):
+        # All three leave the field without a value; the evidence tells them apart.
+        # not_applicable is a positive determination and is terminal in resolution;
+        # declined asserts nothing; an absent claim leaves nothing behind at all.
+        declined = ExtendedClassificationResult()
+        declined.add_claim(
+            "data_type",
+            reason="alignments_v2.location is not an authority on data_type",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=DECLINED,
+        )
+        not_applicable = ExtendedClassificationResult()
+        not_applicable.add_claim(
+            "data_type", rule_id="r", reason="n/a", tier=2, source_type=SOURCE_FILENAME_RULE, status=NOT_APPLICABLE
+        )
+        absent = ExtendedClassificationResult()
+
+        assert declined.status_of("data_type") == NOT_CLASSIFIED
+        assert not_applicable.status_of("data_type") == NOT_APPLICABLE
+        assert absent.status_of("data_type") == NOT_CLASSIFIED
+
+        # The declined claim survives in the evidence, so it is not the absent case.
+        # It sits beside the synthetic placeholder, which is still true of the field:
+        # nothing determined a value for it.
+        entries = declined.field_evidence["data_type"]
+        assert [e.get("claim_state") for e in entries] == [DECLINED, None]
+        assert entries[-1]["marker"] == "not_classified"
+        assert absent.field_evidence["data_type"] == []
+
+    def test_accessors_skip_a_claim_with_no_rule_id(self):
+        # An external claim names no rule, so rules_matched and reasons pass over
+        # it rather than raising — and rules_matched is read by infer_assay_type's
+        # matched_rules_any conditions, which are written against rule IDs.
+        result = ExtendedClassificationResult()
+        result.add_claim(
+            "platform", rule_id="r", reason="illumina", tier=2, source_type=SOURCE_FILENAME_RULE, value="ILLUMINA"
+        )
+        result.add_claim(
+            "data_type",
+            reason="not an authority",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=DECLINED,
+        )
+        assert result.rules_matched == ["r"]
+        assert result.reasons == ["illumina"]
+
+    def test_add_claim_records_a_state_without_changing_the_field(self):
+        result = ExtendedClassificationResult()
+        result.add_claim(
+            "platform", rule_id="r", reason="illumina", tier=2, source_type=SOURCE_FILENAME_RULE, value="ILLUMINA"
+        )
+        result.add_claim(
+            "platform",
+            reason="library_selection=RANDOM has no map entry",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=UNMAPPED,
+            raw_value="RANDOM",
+        )
+        assert result.platform == "ILLUMINA"
+        assert result.status_of("platform") == CLASSIFIED
+        assert [e.get("raw_value") for e in result.field_evidence["platform"]] == [None, "RANDOM"]
 
 
 class TestContentTier:

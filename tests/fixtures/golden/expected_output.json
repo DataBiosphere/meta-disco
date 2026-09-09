@@ -8,6 +8,7 @@
               {
                 "reason": "Inferred RNA-seq from platform/modality/file size signals",
                 "rule_id": "infer_assay_type",
+                "source_type": "signal_inference",
                 "tier": 3,
                 "value": "RNA-seq"
               }
@@ -20,6 +21,7 @@
               {
                 "reason": "Filename contains RNA-seq indicator",
                 "rule_id": "alignment_rnaseq_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "transcriptomic.bulk"
               }
@@ -32,6 +34,7 @@
               {
                 "reason": "Filename contains RNA-seq indicator",
                 "rule_id": "alignment_rnaseq_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "alignments"
               }
@@ -55,6 +58,7 @@
               {
                 "reason": "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment",
                 "rule_id": "unaligned_no_sq",
+                "source_type": "header_rule",
                 "status": "not_applicable",
                 "tier": 3
               }
@@ -93,6 +97,7 @@
               {
                 "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
                 "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -105,12 +110,14 @@
               {
                 "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
                 "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               },
               {
                 "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
                 "rule_id": "bed_regions",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "genomic"
               }
@@ -123,12 +130,14 @@
               {
                 "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
                 "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               },
               {
                 "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
                 "rule_id": "bed_regions",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "annotations"
               }
@@ -141,6 +150,7 @@
               {
                 "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
                 "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -153,6 +163,7 @@
               {
                 "reason": "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming",
                 "rule_id": "bed_coordinate_reference",
+                "source_type": "contig_detection",
                 "tier": 4,
                 "value": "GRCh37"
               }
@@ -191,6 +202,7 @@
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -203,12 +215,14 @@
               {
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "genomic"
               },
               {
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "genomic"
               }
@@ -221,18 +235,21 @@
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
+                "source_type": "filename_rule",
                 "tier": 1,
                 "value": "sequence"
               },
               {
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "assembly"
               },
               {
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "assembly"
               }
@@ -245,6 +262,7 @@
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
                 "rule_id": "fasta_base",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -257,12 +275,14 @@
               {
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
                 "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 2
               },
               {
                 "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
                 "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 2
               }
@@ -314,6 +334,7 @@
               {
                 "reason": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay",
                 "rule_id": "fastq_modality_unknown",
+                "source_type": "header_rule",
                 "status": "not_classified",
                 "tier": 3
               }
@@ -326,6 +347,7 @@
               {
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
                 "rule_id": "reads_base",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "reads"
               }
@@ -352,6 +374,7 @@
               {
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
                 "rule_id": "reads_base",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 2
               }
@@ -390,6 +413,7 @@
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
                 "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -402,6 +426,7 @@
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
                 "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
                 "tier": 1,
                 "value": "genomic"
               }
@@ -414,12 +439,14 @@
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
                 "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
                 "tier": 1,
                 "value": "pangenome"
               },
               {
                 "reason": "1 rGFA segment carries stable rank 0 (SR:i:0) on chr1 \u2014 graph defines a reference coordinate system",
                 "rule_id": "rgfa_stable_rank_reference",
+                "source_type": "contig_detection",
                 "tier": 4,
                 "value": "pangenome.reference"
               }
@@ -432,6 +459,7 @@
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
                 "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 1
               }
@@ -444,6 +472,7 @@
               {
                 "reason": "Filename contains GRCh38/hg38 reference indicator",
                 "rule_id": "filename_ref_grch38",
+                "source_type": "filename_rule",
                 "tier": 2,
                 "value": "GRCh38"
               }
@@ -493,6 +522,7 @@
               {
                 "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
                 "rule_id": "tar_inner_format",
+                "source_type": "content_read",
                 "tier": 4,
                 "value": "genomic"
               }
@@ -505,6 +535,7 @@
               {
                 "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
                 "rule_id": "tar_inner_format",
+                "source_type": "content_read",
                 "tier": 4,
                 "value": "variants"
               }
@@ -576,6 +607,7 @@
               {
                 "reason": "VCF files contain variant calls (genomic data)",
                 "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
                 "tier": 1,
                 "value": "genomic"
               }
@@ -588,6 +620,7 @@
               {
                 "reason": "VCF files contain variant calls (genomic data)",
                 "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
                 "tier": 1,
                 "value": "variants"
               }

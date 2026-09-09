@@ -407,6 +407,44 @@ def test_name_source_constants_match_schema_enum():
     assert {NAME_SOURCE_REFERENCE_FIELD, NAME_SOURCE_COMMAND_LINE} == schema_vocab.name_source_values()
 
 
+@pytest.mark.parametrize(
+    "constants,schema_values",
+    [
+        ("SOURCE_TYPES", schema_vocab.source_type_values),
+        ("CLAIM_STATES", schema_vocab.claim_state_values),
+        ("JOIN_KEYS", schema_vocab.join_key_values),
+    ],
+)
+def test_claim_vocabularies_match_their_schema_enums(constants, schema_values):
+    # make_claim validates against these in-code frozensets, so the schema is read
+    # here and not in the classification path. That only stays safe while the two
+    # agree — pin each pair so a value added on one side cannot drift (#392).
+    from meta_disco import models
+
+    assert getattr(models, constants) == schema_values()
+
+
+def test_claim_states_are_never_dimension_statuses():
+    # The whole reason claim_state is its own slot: `declined` must never be a
+    # status a dimension can carry (#392).
+    from meta_disco.models import CLAIM_STATES
+
+    assert not CLAIM_STATES & schema_vocab.status_values()
+
+
+def test_every_authored_rule_scope_has_a_source_type():
+    # _apply_rule looks up `_RULE_SOURCE_TYPES[rule.scope]`, so a rule authored
+    # with a scope the map lacks would KeyError mid-classification. `file_size` is
+    # deliberately absent — no source_type honestly describes a size-only match —
+    # so authoring one fails here, where the question can be answered, rather than
+    # in the middle of a corpus run (#392).
+    from meta_disco.rule_engine import _RULE_SOURCE_TYPES
+
+    authored = {rule.scope for rule in get_unified_rules().rules}
+    assert authored <= set(_RULE_SOURCE_TYPES), f"scopes with no source_type: {authored - set(_RULE_SOURCE_TYPES)}"
+    assert set(_RULE_SOURCE_TYPES) <= RuleLoader.VALID_SCOPES
+
+
 def test_value_in_vocabulary_is_strict_dimension_only():
     # Antecedent/output check: a real dimension value passes; a status does NOT —
     # a status in a when/condition (or an output value) is a bug (#115, Stage 3).
