@@ -148,8 +148,11 @@ STUB_PAYLOADS = {
     ),
 }
 # Every evidence entry has a reason and is either a claim (rule_id) or a synthetic
-# resolution marker (marker); the two are mutually exclusive (issue #228).
-CLAIM_EVIDENCE_KEYS = {"rule_id", "reason"}
+# resolution marker (marker); the two are mutually exclusive (issue #228). A claim
+# also carries a source_type naming the kind of source behind it (#392) — pinned
+# here because "every claim carries one" is the acceptance criterion, and a claim
+# site added without one would otherwise publish null provenance silently.
+CLAIM_EVIDENCE_KEYS = {"rule_id", "reason", "source_type"}
 MARKER_EVIDENCE_KEYS = {"marker", "reason"}
 FIELD_KEYS = set(ENTRY_KEYS)
 # `build` (#340) is optional detail about a value, carried only by
@@ -315,6 +318,9 @@ def test_output_structural_contract(output):
                 assert set(ev) >= expected, f"{ftype}.{field} evidence: {set(ev)}"
                 assert not ("rule_id" in ev and "marker" in ev), (
                     f"{ftype}.{field} evidence is both claim and marker: {ev}"
+                )
+                assert ev.get("source_type") in schema_vocab.source_type_values() or "marker" in ev, (
+                    f"{ftype}.{field} claim has unknown source_type: {ev}"
                 )
 
 

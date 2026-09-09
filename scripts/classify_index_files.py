@@ -15,6 +15,7 @@ from meta_disco.models import (
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_DERIVATION_INHERITANCE,
     build_field_entry,
     field_detail,
     field_label,
@@ -276,13 +277,21 @@ def propagate_to_index_files(
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
 
     def inherited_evidence(field_name, field_val, parent):
-        """Build evidence entry for an inherited classification field."""
+        """Build evidence entry for an inherited classification field.
+
+        Hand-built rather than routed through ``make_claim``: these claims carry no
+        tier, because an index file has exactly one claim per dimension and never
+        goes through ``evaluate_claims``. They do carry the ``source_type`` every
+        claim carries (#392) — this file's classification was inherited from a
+        related file, not determined for it.
+        """
         if field_val and field_val not in _sentinels:
             return [
                 {
                     "rule_id": "inherited_from_parent",
                     "reason": f"Inherited from parent file: {parent}",
                     "value": field_val,
+                    "source_type": SOURCE_DERIVATION_INHERITANCE,
                 }
             ]
         status = _inherited_status(field_val)
@@ -295,7 +304,14 @@ def propagate_to_index_files(
             reason = f"Parent file {parent} had conflicting evidence for {field_name}"
         else:
             reason = f"Parent file {parent} had no value for {field_name}"
-        return [{"rule_id": "inherited_from_parent", "reason": reason, "status": status}]
+        return [
+            {
+                "rule_id": "inherited_from_parent",
+                "reason": reason,
+                "status": status,
+                "source_type": SOURCE_DERIVATION_INHERITANCE,
+            }
+        ]
 
     def _inherited_status(field_val):
         """Status for an inherited label. ``status_for_value`` knows the two

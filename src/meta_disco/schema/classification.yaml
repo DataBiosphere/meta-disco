@@ -192,23 +192,66 @@ classes:
           reference names the same one, and (for VCF) the file carries no liftover
           INFO fields. Null when ``name`` is null.
 
+  ClaimSource:
+    description: >-
+      Identity of a source that produced a claim, for a source that is not one of
+      our rules (issue #392): an external catalog, a submitter manifest, a curator
+      table. Names the source, the table or file within it, and the column the raw
+      value was read from — the granularity at which a mapping is reviewed and at
+      which a column can be `declined` as an authority for a dimension.
+
+      A claim from one of our own rules carries `rule_id` instead and needs no
+      source object; a claim carries at least one of the two.
+
+      Declared as class-local ``attributes`` rather than global ``slots``:
+      ``name``, ``url``, ``table`` and ``column`` are words too generic to own in
+      a shared namespace, and nothing outside this class needs them. Claim files
+      (#401) carry these same four fields once per file in their envelope rather
+      than repeating them on every claim — one shape, factored, not a second one.
+    attributes:
+      name:
+        description: >-
+          Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``.
+      url:
+        description: >-
+          URL the source was read from, if it has one. Null for a source with no
+          published address, such as a curator table held in this repository.
+      table:
+        description: >-
+          The table or file within the source that the claim came from, e.g. an
+          AnVIL verbatim manifest table name. Null when the source is a single
+          undivided file.
+      column:
+        description: >-
+          The column within that table the raw value was read from. Null when the
+          source has no column structure.
+
   Evidence:
     description: >-
-      One piece of supporting evidence. Either a claim from a rule or content
-      classifier (carries rule_id + tier), or a synthetic resolution marker
-      (carries marker, no rule_id) recording that no claim was made or that
-      claims conflicted.
+      One piece of supporting evidence. Either a claim (declares a value, a
+      status, or a claim_state, and carries a source_type), or a synthetic
+      resolution marker (carries marker, no rule_id) recording that no claim was
+      made or that claims conflicted.
+
+      A claim from one of our rules or content classifiers carries rule_id + tier;
+      a claim from an external source (issue #392) carries source instead, with
+      the raw value it read and how it was matched to our file. Evidence that is
+      neither — the note left when a fetch or the input contract failed — carries
+      a rule_id and a reason but declares nothing.
     slots:
       - rule_id
       - marker
       - reason
       - value
       - status
+      - claim_state
       - tier
       - competing_values
       - source_type
-      - authority
-      - reference
+      - source
+      - raw_value
+      - join_key
+      - match_exact
     slot_usage:
       # A rule's claimed value / status for this dimension, and the rule tier it
       # fired at. status is optional on evidence (only sentinel-bearing evidence
@@ -314,12 +357,48 @@ slots:
     multivalued: true
     range: string
   source_type:
-    description: "Kind of source that produced this evidence (provenance, #90)."
+    description: >-
+      Kind of source that produced this claim (provenance, #90; populated on every
+      claim by #392). Deliberately not derivable from `tier`: `contig_detection`
+      and `content_read` share a tier, and `signal_inference` fires at a rule tier
+      without being a rule. Absent on a synthetic marker and on the note left by a
+      failed fetch or input contract, neither of which is a claim.
     range: source_type_enum
-  authority:
-    description: The authority the claim rests on.
-  reference:
-    description: A URL or identifier backing the claim, if any.
+  claim_state:
+    description: >-
+      Why a claim that consulted a source produced no vocabulary value (issue
+      #392). Present instead of `value` or `status`, and only on such a claim: a
+      claim that mapped successfully carries a `value`, and the two sentinels are
+      carried in `status` as before. A claim in one of these states declares
+      nothing, so it never competes in resolution and cannot make a field
+      conflict — it is a review queue and an audit trail, not an answer.
+    range: claim_state_enum
+  source:
+    description: >-
+      The external source that produced this claim, for a claim that is not from
+      one of our rules. Absent on a rule or content claim, which carries `rule_id`.
+    range: ClaimSource
+    inlined: true
+  raw_value:
+    description: >-
+      What the source actually said, before mapping — `Revio` beside a mapped
+      `PACBIO`. The mapping is the reviewable decision, and storing only the
+      mapped value makes it unauditable. Also present on an `unmapped` or
+      `no_vocabulary_term` claim, where it is the whole content of the claim.
+    range: string
+  join_key:
+    description: >-
+      Which key attached this claim to our file. Recorded per claim rather than
+      per source because identity is the risky step and sources publish different
+      keys: md5 collides on 1.28% of the corpus and the HPRC catalog publishes
+      only file names (#390). Absent on a claim our own inference produced, which
+      was never joined to anything.
+    range: join_key_enum
+  match_exact:
+    description: >-
+      Whether the join on `join_key` was an exact match rather than a normalized
+      or partial one. Absent whenever `join_key` is.
+    range: boolean
 
   # --- DerivationEdge sub-fields ---
   relation:
@@ -460,15 +539,93 @@ enums:
       any:
 
   source_type_enum:
-    description: "Kind of source behind a piece of evidence (provenance model, #90)."
+    description: >-
+      Kind of source behind a claim (provenance model, #90). Every claim carries
+      one (#392). Distinct from `tier`, which is the resolution input: two kinds
+      share `CONTENT_TIER`, and one fires at a rule tier without being a rule.
     permissible_values:
-      header_rule:
       filename_rule:
+        description: >-
+          A rule matching on the file name or its extension (tiers 1-2 of
+          unified_rules.yaml). The extension is part of the name, so both tiers
+          are this kind.
+      header_rule:
+        description: >-
+          A rule matching on fetched header content (tier 3 of
+          unified_rules.yaml).
       contig_detection:
-      external_ground_truth:
-      repository_metadata:
+        description: >-
+          Read from the contig or sequence declarations in the file's own bytes —
+          SAM ``@SQ``, VCF ``##contig``, FASTA sequence names, GFA ``SN`` segment
+          tags, BED contig names and coordinates.
+      content_read:
+        description: >-
+          Read from the file's bytes, but not from contig declarations — today the
+          member names in an archive head. Separate from `contig_detection` so
+          neither has to describe the other.
+      signal_inference:
+        description: >-
+          Derived from dimensions this file has already resolved, plus its format
+          and size, rather than read from the file — the assay_type inference.
       derivation_inheritance:
+        description: >-
+          Inherited from a related file rather than determined for this one, as an
+          index file inherits its parent's classification.
+      external_ground_truth:
+        description: >-
+          An external catalog or authority published outside AnVIL, e.g. the HPRC
+          Data Explorer.
+      repository_metadata:
+        description: >-
+          Metadata the repository publishes about the file, e.g. an AnVIL verbatim
+          manifest table.
       wrangler_annotation:
+        description: >-
+          A human curator's decision, recorded deliberately rather than inferred.
+
+  claim_state_enum:
+    description: >-
+      Why a claim that consulted a source produced no vocabulary value (issue
+      #392). Each state was observed in the spike over three real producers on
+      `AnVIL_HPRC_R2`. None of them declares a value, so none competes in
+      resolution. `mapped` is not a member: a claim that mapped carries a `value`,
+      and `not_applicable` / `not_classified` remain statuses, unchanged.
+    permissible_values:
+      unmapped:
+        description: >-
+          The source said something and no map entry covers it, e.g.
+          `library_selection=RANDOM`. The review queue: a mapping may be owed.
+      no_vocabulary_term:
+        description: >-
+          The raw value was mapped deliberately to nothing because the vocabulary
+          has no term for it, e.g. `Hi-C`, `CenSat`. A recorded decision, not a
+          gap in the mapping.
+      declined:
+        description: >-
+          This column is not an authority on this dimension, so no claim is made
+          from it whatever it says. A property of the (source, column, dimension)
+          triple, not of a value: `alignments_v2.location` points at pangenome
+          graphs and at a VCF of variants under one column, so neither a
+          value-level mapping nor a finer key can fix it.
+
+  join_key_enum:
+    description: >-
+      The key by which an external source's claim was attached to one of our files
+      (issue #392). Sources publish different keys and they differ in
+      trustworthiness, so which one was used is recorded per claim (#390).
+    permissible_values:
+      file_path:
+        description: Full path — the entry identity, and the only unique key.
+      file_md5sum:
+        description: >-
+          Content checksum. Not unique across the corpus: 2,026 md5s are
+          registered in more than one dataset.
+      drs_uri:
+        description: DRS URI, where the source publishes one.
+      file_name:
+        description: >-
+          Bare file name. The weakest key and the only one some catalogs publish —
+          79.6% coverage on HPRC_R2.
 
   evidence_marker_enum:
     description: >-

@@ -101,6 +101,19 @@ evidence}` entry — plus the controlled vocabulary:
   Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded number
   (issue #226).
 
+- **One claim record, any source**: build every claim through
+  `rule_engine.make_claim` (or `add_claim`, which wraps it) — our rules, the
+  content classifiers, and any external source alike. It enforces the record's
+  invariants: exactly one of `value` / `status` / `state`, a `tier` on a claim
+  that competes and none on one that cannot, and a producer handle (`rule_id`
+  for one of ours, a `ClaimSource` for an external source). Every claim carries
+  a `source_type`; state it explicitly from the `SOURCE_*` constants rather than
+  deriving it from `tier`, which cannot tell `contig_detection` from
+  `content_read` (both at `CONTENT_TIER`) nor either from `signal_inference`
+  (issue #392). The three claim states (`unmapped` / `no_vocabulary_term` /
+  `declined`) declare nothing to resolution: they record that a source was
+  consulted and yielded no vocabulary value, and never win or conflict.
+
 ## Surprises
 
 You may encounter an environment, tool, dependency, or constraint that the

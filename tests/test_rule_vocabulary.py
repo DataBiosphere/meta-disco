@@ -407,6 +407,34 @@ def test_name_source_constants_match_schema_enum():
     assert {NAME_SOURCE_REFERENCE_FIELD, NAME_SOURCE_COMMAND_LINE} == schema_vocab.name_source_values()
 
 
+def test_source_type_constants_match_schema_enum():
+    # Every claim carries a `source_type` drawn from these constants, and
+    # make_claim validates against the schema's source_type_enum. Pin the two so a
+    # constant added on one side cannot drift from the other (#392).
+    from meta_disco import models
+
+    constants = {getattr(models, n) for n in dir(models) if n.startswith("SOURCE_")}
+    assert constants == schema_vocab.source_type_values()
+
+
+def test_claim_state_constants_match_schema_enum():
+    # The claim states are validated against the schema's claim_state_enum, and
+    # are deliberately disjoint from the status vocabulary: none of them may ever
+    # become a dimension's status (#392).
+    from meta_disco.models import CLAIM_STATES
+
+    assert schema_vocab.claim_state_values() == CLAIM_STATES
+    assert not CLAIM_STATES & schema_vocab.status_values()
+
+
+def test_join_key_constants_match_schema_enum():
+    # The keys an external claim may be joined to one of our files by (#392/#390).
+    from meta_disco import models
+
+    constants = {getattr(models, n) for n in dir(models) if n.startswith("JOIN_KEY_")}
+    assert constants == schema_vocab.join_key_values()
+
+
 def test_value_in_vocabulary_is_strict_dimension_only():
     # Antecedent/output check: a real dimension value passes; a status does NOT —
     # a status in a when/condition (or an output value) is a bug (#115, Stage 3).

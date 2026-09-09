@@ -1,6 +1,6 @@
 """Data models for file classification."""
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from .file_name import FileName
 
@@ -23,6 +23,38 @@ CONFLICT = "conflict"
 # instead of re-spelling it — a status added above and not here would otherwise be
 # silently counted as a value.
 STATUS_LABELS = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED, CONFLICT})
+
+# Claim states (issue #392): why a claim that consulted a source produced no
+# vocabulary value. These are NOT statuses — a claim in one of these states
+# declares nothing, so it never competes in resolution and can never become a
+# dimension's status. Pinned to the schema's claim_state_enum by
+# test_rule_vocabulary.
+UNMAPPED = "unmapped"
+NO_VOCABULARY_TERM = "no_vocabulary_term"
+DECLINED = "declined"
+CLAIM_STATES = frozenset({UNMAPPED, NO_VOCABULARY_TERM, DECLINED})
+
+# Kinds of source behind a claim (issue #392), pinned to the schema's
+# source_type_enum by test_rule_vocabulary. Deliberately not derived from a
+# claim's tier: SOURCE_CONTIG_DETECTION and SOURCE_CONTENT_READ share
+# CONTENT_TIER, and SOURCE_SIGNAL_INFERENCE fires at a rule tier without being a
+# rule.
+SOURCE_FILENAME_RULE = "filename_rule"
+SOURCE_HEADER_RULE = "header_rule"
+SOURCE_CONTIG_DETECTION = "contig_detection"
+SOURCE_CONTENT_READ = "content_read"
+SOURCE_SIGNAL_INFERENCE = "signal_inference"
+SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
+SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
+SOURCE_REPOSITORY_METADATA = "repository_metadata"
+SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
+
+# Keys an external source's claim may be attached to one of our files by (issue
+# #392), pinned to the schema's join_key_enum by test_rule_vocabulary.
+JOIN_KEY_FILE_PATH = "file_path"
+JOIN_KEY_FILE_MD5SUM = "file_md5sum"
+JOIN_KEY_DRS_URI = "drs_uri"
+JOIN_KEY_FILE_NAME = "file_name"
 
 # The five classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
@@ -255,6 +287,40 @@ def field_label(record: dict, field_name: str) -> str | None:
     entry = _field_entry(record, field_name)
     status = _entry_status(entry)
     return _entry_value(entry) if status == CLASSIFIED else status
+
+
+@dataclass(frozen=True)
+class ClaimSource:
+    """Identity of an external source that produced a claim (issue #392).
+
+    The producer handle for a claim that is not from one of our rules — an
+    external catalog, a submitter manifest, a curator table. ``table`` and
+    ``column`` are the granularity at which a mapping is reviewed and at which a
+    column can be ``declined`` as an authority for a dimension.
+
+    Frozen because a source's identity is a fact about where a claim came from,
+    not state to edit after the claim is built; that also lets one instance be
+    shared by every claim read from the same table without aliasing risk.
+
+    Claim files (#401) carry these same four fields once per file in their
+    envelope rather than repeating them on every claim. This is that one shape,
+    factored out — not a second one.
+    """
+
+    name: str
+    url: str | None = None
+    table: str | None = None
+    column: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for output, dropping members the source does not have.
+
+        Unlike ``ReferenceBuild.to_dict``, null keys are omitted rather than kept:
+        a source either has a column structure or it does not, so there is no
+        "we looked and found nothing" state for a reader to distinguish from an
+        absent field. ``name`` is required and therefore always present.
+        """
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 @dataclass

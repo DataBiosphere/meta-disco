@@ -8,10 +8,15 @@ from typing import TYPE_CHECKING, Any
 
 from .file_name import FileName, Format
 from .models import (
+    CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_FILENAME_RULE,
+    SOURCE_HEADER_RULE,
+    SOURCE_SIGNAL_INFERENCE,
+    ClaimSource,
     ClassificationResult,
     FileInfo,
     _assert_coherent,
@@ -19,6 +24,7 @@ from .models import (
     status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
+from .schema_vocab import join_key_values, source_type_values
 
 if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
@@ -33,6 +39,19 @@ if TYPE_CHECKING:
 # lower tiers (issue #226; the migration of the content sites onto ``add_claim``
 # at this tier is #227).
 CONTENT_TIER = 4
+
+# The kind of source a rule claim comes from, by the rule's tier (#392). The rule
+# tiers are *defined* by what they read — 1 extension, 2 filename, 3 header — so
+# here, and only here, the tier determines the source kind. An extension is part
+# of the filename, so tiers 1 and 2 are both ``filename_rule``. Keys are exactly
+# ``RuleLoader.VALID_TIERS``, which the loader enforces, so a rule can never carry
+# a tier this mapping lacks; ``CONTENT_TIER`` is absent deliberately, being a
+# level no rule declares.
+_RULE_SOURCE_TYPES = {
+    1: SOURCE_FILENAME_RULE,
+    2: SOURCE_FILENAME_RULE,
+    3: SOURCE_HEADER_RULE,
+}
 
 
 @dataclass
@@ -98,47 +117,133 @@ class ExtendedFileInfo:
         )
 
 
-def _make_claim(
+def make_claim(
     *,
-    rule_id: str,
     reason: str,
-    tier: int,
+    source_type: str,
+    rule_id: str | None = None,
+    tier: int | None = None,
     value: str | None = None,
     status: str | None = None,
+    state: str | None = None,
+    source: ClaimSource | None = None,
+    raw_value: str | None = None,
+    join_key: str | None = None,
+    match_exact: bool | None = None,
 ) -> dict:
-    """Construct one claim dict for ``field_evidence``, enforcing value-xor-status.
+    """Construct one claim dict for ``field_evidence``, enforcing its invariants.
 
-    A claim declares exactly one of a real ``value`` or a ``status`` (the same
-    invariant ``rule_loader`` enforces for a rule's ``then`` vs ``then.status`` —
-    epic #116 / #136); declaring both or neither raises rather than silently
-    picking one. ``tier`` is a required keyword so a claim can never reach
-    ``evaluate_claims`` without one and fall back to its tier-0 default (#150 —
-    the silent default that let the #151 rGFA near-miss resolve to the wrong
-    value). Shared construction site for ``_apply_rule`` and
-    ``ExtendedClassificationResult.add_claim`` (other producers still hand-build
-    claims until they migrate to ``add_claim`` — see #227).
+    The single construction site for a claim from *any* source (issue #392) —
+    one of our rules, a content read, an external catalog, a submitter manifest,
+    a curator table. Extends the rule-only record it grew from rather than
+    running a second format alongside it, so every claim reaching
+    ``evaluate_claims`` and the output ``evidence`` array has one shape.
 
-    A ``status`` claim declares a non-classified sentinel only
+    **What a claim declares.** Exactly one of a real ``value``, a ``status``, or
+    a ``state`` — declaring two or none raises rather than silently picking one.
+    ``value``/``status`` is the original invariant (the same one ``rule_loader``
+    enforces for a rule's ``then`` vs ``then.status`` — epic #116 / #136), widened
+    by one arm. A ``status`` claim declares a non-classified sentinel only
     (``not_applicable`` / ``not_classified`` — the authorable statuses, never
-    ``classified``, which is expressed as a ``value`` claim). An unknown status
-    raises here; otherwise ``evaluate_claims`` would read the stray string as a
+    ``classified``, which is expressed as a ``value`` claim). A ``state`` claim
+    declares one of the claim states (``unmapped`` / ``no_vocabulary_term`` /
+    ``declined``): the source was consulted and produced no vocabulary value.
+    An unknown status or state raises here rather than being passed through as a
+    free string; otherwise ``evaluate_claims`` would read the stray string as a
     real value and resolve the field CLASSIFIED to it — a silent wrong answer.
+
+    A ``state`` claim declares nothing to resolution: ``_claim_declaration``
+    reads ``value`` then ``status``, so it returns None for one, and
+    ``evaluate_claims`` drops it before the tier math. It therefore cannot win a
+    field, cannot create a conflict, and leaves a field carrying only such claims
+    ``not_classified`` — while remaining visible in the evidence, and
+    distinguishable both from a ``not_applicable`` claim and from no claim at all.
+
+    **Who made it.** At least one producer handle is required: ``rule_id`` for one
+    of our rules or content classifiers, ``source`` for an external source. An
+    external claim is not given a fabricated rule id. ``source_type`` is required
+    on every claim and checked against the schema's ``source_type_enum``; it is
+    deliberately not derived from ``tier``, which cannot tell ``contig_detection``
+    from ``content_read`` (both at ``CONTENT_TIER``) nor either from
+    ``signal_inference`` (at a rule tier without being a rule).
+
+    **Tier.** Required on a claim that declares a ``value`` or ``status``, because
+    that claim competes in ``evaluate_claims`` and must never fall back to a
+    tier-0 default (#150 — the silent default that let the #151 rGFA near-miss
+    resolve to the wrong value). Rejected on a ``state`` claim, which does not
+    compete and would only be carrying a number nothing reads. Where an imported
+    claim ranks against the rule tiers is a resolution-policy question this record
+    does not answer (epic #391).
+
+    **What the source said, and how it was matched.** ``raw_value`` records the
+    source's own value before mapping, so ``Revio`` → ``PACBIO`` stays auditable;
+    ``join_key`` and ``match_exact`` record which key attached the claim to our
+    file and whether the match was exact (#390 — identity is the risky step, and
+    it is per claim, not per source, so the two are not factorable into a claim
+    file's envelope the way ``source`` is).
+
+    Keys whose argument is None are omitted from the returned dict, so a rule
+    claim serializes exactly as it did before this record was extended, apart
+    from its ``source_type``.
     """
-    if (value is None) == (status is None):
+    producer = rule_id if rule_id is not None else (source.name if source is not None else None)
+    if producer is None:
         raise ValueError(
-            f"claim for rule {rule_id!r} must declare exactly one of value/status "
-            f"(got value={value!r}, status={status!r})"
+            f"claim must identify its producer with rule_id or source (reason={reason!r}, source_type={source_type!r})"
+        )
+    declared = [d for d in (value, status, state) if d is not None]
+    if len(declared) != 1:
+        raise ValueError(
+            f"claim from {producer!r} must declare exactly one of value/status/state "
+            f"(got value={value!r}, status={status!r}, state={state!r})"
         )
     if status is not None and status not in (NOT_APPLICABLE, NOT_CLASSIFIED):
         raise ValueError(
-            f"claim for rule {rule_id!r} has unknown status {status!r} "
-            f"(expected {NOT_APPLICABLE!r} or {NOT_CLASSIFIED!r})"
+            f"claim from {producer!r} has unknown status {status!r} (expected {NOT_APPLICABLE!r} or {NOT_CLASSIFIED!r})"
         )
-    claim = {"rule_id": rule_id, "reason": reason, "tier": tier}
+    if state is not None and state not in CLAIM_STATES:
+        raise ValueError(
+            f"claim from {producer!r} has unknown state {state!r} (expected one of {sorted(CLAIM_STATES)})"
+        )
+    if source_type not in source_type_values():
+        raise ValueError(
+            f"claim from {producer!r} has unknown source_type {source_type!r} "
+            f"(expected one of {sorted(source_type_values())})"
+        )
+    # Tier is the resolution input, so it is required exactly where a claim
+    # competes and rejected where it cannot.
+    if state is None and tier is None:
+        raise ValueError(f"claim from {producer!r} declaring value/status must carry a tier")
+    if state is not None and tier is not None:
+        raise ValueError(f"claim from {producer!r} declaring state {state!r} must not carry a tier — it never competes")
+    if join_key is not None and join_key not in join_key_values():
+        raise ValueError(
+            f"claim from {producer!r} has unknown join_key {join_key!r} (expected one of {sorted(join_key_values())})"
+        )
+    if match_exact is not None and join_key is None:
+        raise ValueError(f"claim from {producer!r} has match_exact without a join_key to qualify")
+
+    claim: dict = {}
+    if rule_id is not None:
+        claim["rule_id"] = rule_id
+    claim["reason"] = reason
+    if tier is not None:
+        claim["tier"] = tier
     if value is not None:
         claim["value"] = value
-    else:
+    elif status is not None:
         claim["status"] = status
+    else:
+        claim["claim_state"] = state
+    claim["source_type"] = source_type
+    if source is not None:
+        claim["source"] = source.to_dict()
+    if raw_value is not None:
+        claim["raw_value"] = raw_value
+    if join_key is not None:
+        claim["join_key"] = join_key
+    if match_exact is not None:
+        claim["match_exact"] = match_exact
     return claim
 
 
@@ -231,20 +336,31 @@ class ExtendedClassificationResult:
         self,
         fld: str,
         *,
-        rule_id: str,
         reason: str,
-        tier: int,
+        source_type: str,
+        rule_id: str | None = None,
+        tier: int | None = None,
         value: str | None = None,
         status: str | None = None,
+        state: str | None = None,
+        source: ClaimSource | None = None,
+        raw_value: str | None = None,
+        join_key: str | None = None,
+        match_exact: bool | None = None,
     ) -> None:
         """Append a claim to a field and re-resolve the field's value from all its claims.
 
-        The claim is built through ``_make_claim`` (value-xor-status, required
-        ``tier``), appended to ``field_evidence[fld]``, and the field is then set
-        from ``evaluate_claims`` over the full list — so the field's value is
-        *derived* from its claims, never written alongside them (#150). A
-        same-tier disagreement therefore resolves to ``not_classified`` here,
-        rather than the last writer silently winning.
+        The claim is built through ``make_claim``, which enforces every invariant
+        of the record (exactly one of value/status/state, a known source_type, a
+        tier iff the claim competes, a producer handle — see that function);
+        it is appended to ``field_evidence[fld]``, and the field is then set from
+        ``evaluate_claims`` over the full list — so the field's value is *derived*
+        from its claims, never written alongside them (#150). A same-tier
+        disagreement therefore resolves to ``not_classified`` here, rather than the
+        last writer silently winning. A ``state`` claim declares nothing, so
+        appending one records the source's answer without changing the field —
+        and a field carrying only such claims keeps its synthetic
+        ``not_classified`` placeholder, which remains true of it.
 
         Callers use this *after* ``classify_extended`` has run, so
         ``_finalize_result`` may already have appended a synthetic
@@ -256,7 +372,19 @@ class ExtendedClassificationResult:
         claim just appended, so its evidence is never emptied.
         """
         self._require_field(fld)
-        claim = _make_claim(rule_id=rule_id, reason=reason, tier=tier, value=value, status=status)
+        claim = make_claim(
+            rule_id=rule_id,
+            reason=reason,
+            source_type=source_type,
+            tier=tier,
+            value=value,
+            status=status,
+            state=state,
+            source=source,
+            raw_value=raw_value,
+            join_key=join_key,
+            match_exact=match_exact,
+        )
         self.field_evidence[fld].append(claim)
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
@@ -321,6 +449,11 @@ class ExtendedClassificationResult:
         engine's ``infer_assay_type``.
 
         So a caller must not assume an ID here names a rule in unified_rules.yaml.
+
+        A claim from an external source carries a ``source`` rather than a
+        ``rule_id`` (#392) and is skipped for the same reason a marker is: it
+        names no rule, and this list is read by ``infer_assay_type``'s
+        ``matched_rules_any`` conditions, which are written against rule IDs.
         """
         seen = set()
         result = []
@@ -328,7 +461,9 @@ class ExtendedClassificationResult:
             for e in entries:
                 if _is_synthetic_marker(e):
                     continue
-                rid = e["rule_id"]
+                rid = e.get("rule_id")
+                if rid is None:
+                    continue
                 if rid not in seen:
                     seen.add(rid)
                     result.append(rid)
@@ -340,8 +475,10 @@ class ExtendedClassificationResult:
 
         Deduplication is by ``rule_id``, not by reason text, so two rules that
         happen to share a reason both appear — and one rule contributing to
-        several fields appears once. Synthetic markers carry no ``rule_id`` and
-        are skipped (they are not rules).
+        several fields appears once. Entries carrying no ``rule_id`` are skipped:
+        synthetic markers (not rules) and claims from an external source (#392),
+        which have nothing to deduplicate by. An external claim's reason is read
+        from the evidence itself, which keeps every claim, not from here.
         """
         seen = set()
         result = []
@@ -349,7 +486,9 @@ class ExtendedClassificationResult:
             for e in entries:
                 if _is_synthetic_marker(e):
                     continue
-                rid = e["rule_id"]
+                rid = e.get("rule_id")
+                if rid is None:
+                    continue
                 if rid not in seen:
                     seen.add(rid)
                     result.append(e.get("reason", ""))
@@ -513,8 +652,10 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
         )
 
     # Assertive declarations disagree — check tiers. Every assertive claim is built
-    # through _make_claim, which requires a tier, so read it directly: a missing tier
-    # is a bug that should raise here, not silently resolve at a phantom tier 0 (#228).
+    # through make_claim, which requires a tier on any claim that declares a value or
+    # status, so read it directly: a missing tier is a bug that should raise here, not
+    # silently resolve at a phantom tier 0 (#228). The tier-free claims make_claim also
+    # builds declare a claim_state, which is not a declaration, so they never reach here.
     max_tier = max(c["tier"] for c in assertive_claims)
     top_tier_claims = [c for c in assertive_claims if c["tier"] == max_tier]
     # Declarations are non-None here (real_claims already dropped None ones); the
@@ -830,20 +971,26 @@ class RuleEngine:
         claim appended to field_evidence — a value claim carries ``value``, a status
         claim carries ``status`` (never a sentinel in the value slot — epic #116 /
         #136); evaluation happens later in _finalize_result via evaluate_claims().
+
+        The claim's ``source_type`` comes from the rule's tier via
+        ``_RULE_SOURCE_TYPES``. This is the one place a tier determines the kind of
+        source, and only because the rule tiers *are* defined by what they read
+        (#392) — every other producer states its kind explicitly.
         """
         then = rule.then
         then_status = rule.then_status
         reason = rule.rationale or ""
+        source_type = _RULE_SOURCE_TYPES[rule.tier]
         for fld in result._CLASSIFICATION_FIELDS:
             value = then.get(fld)
             status = then_status.get(fld) if then_status else None
             if value is not None:
                 result.field_evidence[fld].append(
-                    _make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, value=value)
+                    make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, source_type=source_type, value=value)
                 )
             elif status is not None:
                 result.field_evidence[fld].append(
-                    _make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, status=status)
+                    make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, source_type=source_type, status=status)
                 )
 
     def infer_assay_type(self, result: ExtendedClassificationResult, file_info: ExtendedFileInfo) -> None:
@@ -910,16 +1057,19 @@ class RuleEngine:
 
             # All conditions passed — record the inference as a claim. add_claim
             # sets the field, drops the synthetic not_classified placeholder, and
-            # enforces _make_claim's value-xor-status invariant. tier 3: the
-            # inference derives from already-resolved signals (the header-derived
-            # platform is typically tier 3), so it carries a tier rather than the
-            # tier-0 default #228 will forbid; it never competes (the is_declared
-            # guard above means it only fires when no other claim determined
-            # assay_type), so the tier is for consistency, not resolution.
+            # enforces make_claim's invariants. tier 3: the inference derives from
+            # already-resolved signals (the header-derived platform is typically
+            # tier 3), so it carries a tier rather than the tier-0 default #228
+            # will forbid; it never competes (the is_declared guard above means it
+            # only fires when no other claim determined assay_type), so the tier is
+            # for consistency, not resolution. Its source kind is stated rather
+            # than read off that tier: this reads other dimensions' resolved
+            # values, plus the file's format and size — not a header (#392).
             result.add_claim(
                 "assay_type",
                 rule_id="infer_assay_type",
                 tier=3,
+                source_type=SOURCE_SIGNAL_INFERENCE,
                 reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
                 value=assay_rule.assay_type,
             )

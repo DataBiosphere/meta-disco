@@ -31,6 +31,13 @@ MARKER_ENUM = "evidence_marker_enum"
 # The reference-build ``name_source`` vocabulary (issue #354).
 NAME_SOURCE_ENUM = "reference_name_source_enum"
 
+# The claim-record vocabularies (issue #392): the kind of source behind a claim,
+# the states a claim can take when it consulted a source and produced no value,
+# and the keys an external claim can be joined to one of our files by.
+SOURCE_TYPE_ENUM = "source_type_enum"
+CLAIM_STATE_ENUM = "claim_state_enum"
+JOIN_KEY_ENUM = "join_key_enum"
+
 # ``when`` condition keys whose value must be a member of a dimension enum,
 # mapped to that dimension. The rule engine compares these against enum values at
 # match time, so a typo'd value silently never matches rather than erroring — the
@@ -150,6 +157,39 @@ def name_source_values() -> frozenset[str]:
     the schema path) if the schema is missing the enum.
     """
     return _enum_values(NAME_SOURCE_ENUM)
+
+
+def source_type_values() -> frozenset[str]:
+    """Return the permissible claim ``source_type`` values from the schema.
+
+    The single source of truth for the kind-of-source vocabulary (issue #392), so
+    ``models``' ``SOURCE_*`` constants stay pinned to the schema and ``make_claim``
+    rejects a source_type the schema does not define. Raises KeyError (with the
+    schema path) if the schema is missing the enum.
+    """
+    return _enum_values(SOURCE_TYPE_ENUM)
+
+
+def claim_state_values() -> frozenset[str]:
+    """Return the permissible ``claim_state`` values from the schema.
+
+    The single source of truth for the states a claim takes when it consulted a
+    source and produced no vocabulary value (unmapped / no_vocabulary_term /
+    declined, issue #392). Distinct from ``status_values`` — these never appear as
+    a dimension's status. Raises KeyError (with the schema path) if the schema is
+    missing the enum.
+    """
+    return _enum_values(CLAIM_STATE_ENUM)
+
+
+def join_key_values() -> frozenset[str]:
+    """Return the permissible ``join_key`` values from the schema.
+
+    The single source of truth for the keys an external claim may be attached to
+    one of our files by (issue #392/#390). Raises KeyError (with the schema path)
+    if the schema is missing the enum.
+    """
+    return _enum_values(JOIN_KEY_ENUM)
 
 
 def _enum_values(enum_name: str) -> frozenset[str]:
