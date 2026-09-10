@@ -11,11 +11,20 @@ call the classifier directly.
 These tests pin the three together.
 """
 
+import json
+from datetime import datetime
 from pathlib import Path
 
-from meta_disco.classify_run import _report_exclusions, build_parallel_jobs
+from meta_disco.claim_files import write_claim_file
+from meta_disco.classify_run import (
+    _report_claim_files,
+    _report_exclusions,
+    build_parallel_jobs,
+    run_all_classifications,
+)
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.models import ClaimFileEnvelope, ClaimSource
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
@@ -156,3 +165,55 @@ def test_exclusions_file_is_not_read_as_a_classification():
     treat an excluded file as a classified one (#376, AC2)."""
     assert EXCLUDED_FILE not in CLASSIFICATION_FILES
     assert EXCLUDED_FILE not in {path.name for _, path, _ in _jobs()}
+
+
+class TestTheRunReportsItsClaimFiles:
+    """A run says what it consumed, and stops for nothing (#401).
+
+    The claims go no further than the report until the join lands (#400b), so what is
+    pinned here is that the report happens and that it gates nothing: a run with no
+    claim files behaves exactly as it did before there were any, and a run facing one
+    built for another catalog says so and carries on. Whether that file has outlived
+    its catalog is not answerable here — it belongs to the importer's re-fetch
+    decision and to the catalog the run's output is offered back to.
+    """
+
+    def _claim_file(self, tmp_path, corpus_catalog):
+        write_claim_file(
+            tmp_path / "claims" / "anvil" / "manifest.ndjson",
+            ClaimFileEnvelope(
+                source=ClaimSource(name="AnVIL", table="alignments_v2"),
+                fetched_at=datetime(2026, 9, 1, 9, 14, 3),
+                source_version=corpus_catalog,
+                corpus_catalog=corpus_catalog,
+            ),
+            [],
+        )
+        return tmp_path / "claims"
+
+    def test_no_claim_files_is_reported_rather_than_passed_over(self, tmp_path, capsys):
+        _report_claim_files(tmp_path / "claims")
+        assert "none under" in capsys.readouterr().out
+
+    def test_each_claim_file_is_named_with_its_provenance(self, tmp_path, capsys):
+        _report_claim_files(self._claim_file(tmp_path, "anvil15"))
+        out = capsys.readouterr().out
+        assert "anvil/manifest.ndjson" in out.replace("\\", "/")
+        assert "for catalog anvil15" in out
+
+    def test_a_claim_file_from_another_catalog_is_reported_not_refused(self, tmp_path):
+        """A run classifying anvil15 still runs beside an anvil14 claim file.
+
+        Nothing on disk establishes which of the two is current — AnVIL deletes the
+        superseded catalog rather than keeping it to be compared against — so the run
+        records what it saw and leaves the judgement to the two places that can act
+        on it.
+        """
+        metadata = tmp_path / "anvil_files_metadata.json"
+        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+        output_base = tmp_path / "output"
+
+        run_all_classifications(
+            metadata, output_base, tmp_path / "evidence", claims_root=self._claim_file(tmp_path, "anvil14")
+        )
+        assert output_base.exists(), "the run must start regardless of a claim file's catalog"

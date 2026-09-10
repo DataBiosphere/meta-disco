@@ -1,6 +1,7 @@
 """Data models for file classification."""
 
 from dataclasses import dataclass, field, fields
+from datetime import datetime
 
 from .file_name import FileName
 
@@ -339,6 +340,60 @@ class ClaimSource:
         real once the importers land (#369/#394).
         """
         return {f.name: v for f in fields(self) if (v := getattr(self, f.name)) is not None}
+
+
+@dataclass(frozen=True)
+class ClaimFileEnvelope:
+    """What a claim file records once, for every claim in it (issue #401).
+
+    An importer runs out of band from classification — when a catalog refreshes,
+    with network — and writes a claim file; a run reads it. This is the header of
+    that artefact: where the claims came from, when, and from which version of the
+    source. The schema's ``ClaimFileEnvelope`` class is the definition of what the
+    members mean; this is the Python side of it, as ``ClaimSource`` is for a claim's
+    source. ``claim_files`` is the reader and writer.
+
+    ``source`` is a :class:`ClaimSource` and not a second spelling of one: name, url
+    and table are the same facts a claim carries, factored up to the file because
+    they are constant across it. ``column`` is the one member left per claim, since
+    one table's claims are read from several columns.
+
+    ``corpus_catalog`` is the AnVIL catalog generation this file was built for. It is
+    provenance, not a gate: the run reports it and imports regardless. What reads it
+    is the importer, deciding on its next pass whether the configured catalog has
+    moved on and the file must be re-fetched. It is null for a source with no
+    relationship to our catalog — the HPRC Data Explorer, ENA, IGSR — whose claims
+    are about files rather than about a snapshot of ours, and which have no catalog
+    generation to record; their ``source_version`` carries what they can say instead.
+
+    Frozen for the reason ``ClaimSource`` is: provenance is a fact about where the
+    claims came from, not state to edit after they are read.
+    """
+
+    source: ClaimSource
+    fetched_at: datetime
+    source_version: str
+    corpus_catalog: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line, dropping an absent ``corpus_catalog``.
+
+        Null members are omitted as in :meth:`ClaimSource.to_dict`, so a claim file
+        from a source unrelated to our catalog carries no ``corpus_catalog`` key at
+        all rather than an explicit null. The two members that are not already JSON
+        are encoded on the way out: ``source`` through its own ``to_dict``, and
+        ``fetched_at`` as an ISO 8601 string — the form
+        ``azul_manifest.metadata_block`` already writes a fetch time in, and the form
+        :func:`claim_files.read_envelope` parses back.
+
+        Keys come from ``fields()`` for the reason ``ClaimSource.to_dict`` and
+        ``ExcludedFile.to_dict`` do: a member added to the dataclass and not here
+        would otherwise be dropped from every claim file silently.
+        """
+        encoded = {"source": self.source.to_dict(), "fetched_at": self.fetched_at.isoformat()}
+        return {
+            f.name: encoded.get(f.name, value) for f in fields(self) if (value := getattr(self, f.name)) is not None
+        }
 
 
 @dataclass

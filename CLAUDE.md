@@ -117,6 +117,24 @@ evidence}` entry — plus the controlled vocabulary:
   declaration of what it reads — not tier. The three claim states (`unmapped` / `no_vocabulary_term` /
   `declined`) declare nothing to resolution: they record that a source was
   consulted and yielded no vocabulary value, and never win or conflict.
+- **Claim files carry their provenance, and the run reports it**: an importer
+  runs *out of band* from classification — when a catalog refreshes, with
+  network — and writes a claim file under `data/claims/<source>/`
+  (`claim_files.py`, issue #401); the run reads it, so the import step stays
+  offline and deterministic and either side can be re-run without forcing the
+  other. The file is NDJSON with the envelope on line 1: source name, url,
+  table, fetch date, source version, and the corpus catalog it was built for.
+  Write and read it through `write_claim_file` / `iter_claims`, never with a
+  whole-file `json.load` — the corpus is millions of claims (#374). A run
+  reports every claim file's source, version, catalog and age, and **imports
+  from all of them** — it never refuses one. Currency is not decidable offline:
+  the sources share no version to compare (HPRC has a major release and may
+  drift from it), and AnVIL deletes a superseded catalog rather than keeping it
+  to be matched against. The two places that can act on the question own it
+  instead — the importer compares its file's `corpus_catalog` against the
+  configured `CATALOG` when deciding to re-fetch, and the run's output records
+  which catalog it enhances, so an enhancement offered to a catalog that has
+  moved on is refused at that boundary.
 
 ## Surprises
 

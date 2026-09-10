@@ -230,6 +230,61 @@ classes:
           The column within that table the raw value was read from. Null when the
           source has no column structure.
 
+  ClaimFileEnvelope:
+    description: >-
+      What a claim file records once, for every claim in it (issue #401). An
+      importer runs out of band from classification — when a catalog refreshes,
+      with network — and writes a claim file of `Evidence` claims; a run reads it
+      and reports this provenance, so that what a run consumed, and how old it
+      was, is on the record.
+
+      Deliberately outside the `ClassificationRecord` tree, and referenced by no
+      slot in it: an envelope describes an artefact exchanged *between* runs and
+      never appears in a classified record. It is modeled here so that the file a
+      claim arrives in is defined where the claim itself is, rather than in an
+      importer. On disk the file is NDJSON — this envelope wrapped in a
+      `claim_file` key on line 1, one claim per line after it — because millions
+      of claims must not be read through a whole-file parse (#374);
+      `src/meta_disco/claim_files.py` is the reader and writer.
+
+      Declared as class-local `attributes` for the reason `ClaimSource` is: these
+      are words too generic to own in a shared namespace.
+    attributes:
+      source:
+        range: ClaimSource
+        required: true
+        description: >-
+          Which source the claims came from — name, url and the table within it.
+          The same object a claim carries, factored up to the file because those
+          three are constant across it; `column` is the one member that stays on
+          each claim, since one table's claims are read from several columns.
+      fetched_at:
+        required: true
+        description: >-
+          When the importer read the source, ISO 8601. A run reports the age of
+          every claim file it consumes from this, so that a person can see an
+          artefact going stale before it is wrong.
+      source_version:
+        required: true
+        description: >-
+          The version of the source the claims were taken from — a catalog
+          generation, a release tag, a publication date. Required even where the
+          source publishes no version of its own: a claim file that cannot say
+          what it was built from cannot be reasoned about later.
+      corpus_catalog:
+        description: >-
+          The AnVIL catalog generation this claim file was built for. Provenance
+          rather than a gate: a run reports it and imports regardless, because
+          nothing offline establishes which generation is current — AnVIL deletes
+          a superseded catalog rather than keeping it to be compared against. The
+          importer reads it on its next pass to decide whether the configured
+          catalog has moved on and the file must be re-fetched.
+
+          Null for a source with no relationship to our catalog — the HPRC Data
+          Explorer, ENA, IGSR — whose claims are about files rather than about a
+          snapshot of ours, and which have no catalog generation to record;
+          `source_version` carries what they can say instead.
+
   Evidence:
     description: >-
       One piece of supporting evidence. Either a claim (declares a value, a
