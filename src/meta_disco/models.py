@@ -381,7 +381,7 @@ class ClaimSource:
         return {f.name: v for f in fields(self) if (v := getattr(self, f.name)) is not None}
 
     @classmethod
-    def from_dict(cls, block: object, where: str) -> "ClaimSource":
+    def from_dict(cls, block: object, where: str, *, without: tuple[str, ...] = ()) -> "ClaimSource":
         """Rebuild a source from what :meth:`to_dict` wrote, validating each member.
 
         The inverse of ``to_dict`` and derived from ``fields()`` for the same
@@ -395,9 +395,23 @@ class ClaimSource:
         raises: an explicit ``"name": null`` survives a key check but identifies
         nothing, and a source whose table is ``0`` is a mis-serialized record rather
         than one to interpret.
+
+        A member this class does not have is refused rather than ignored. The schema
+        validates a claim file's source ``closed=True``, so a reader that quietly
+        dropped an unknown key would accept documents the schema rejects — the two
+        must refuse the same files (#401 review).
+
+        ``without`` names members that belong to the dataclass but not to *this*
+        position in the format, making them unknown keys rather than optional ones.
+        A claim file's envelope passes ``("column",)``: the schema models that
+        position as ``ClaimFileSource``, which has no column, because a column
+        belongs to a claim — one table's claims are read from several columns.
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: source is {type(block).__name__}, not an object")
+        known = {f.name for f in fields(cls)} - set(without)
+        if extra := sorted(set(block) - known):
+            raise ValueError(f"{where}: source has unknown member(s) {extra} (expected {sorted(known)})")
         # Which checker a member gets is decided per field at runtime, from whether the
         # dataclass gives it a default, so the values are only ever `str | None` to a
         # type checker — `required_str` raises rather than returning None, but that is
@@ -408,6 +422,7 @@ class ClaimSource:
                 block.get(f.name), f"source {f.name}", where
             )
             for f in fields(cls)
+            if f.name in known
         }
         return cls(**members)
 
@@ -507,9 +522,21 @@ class ClaimFileEnvelope:
         indistinguishable, which is the case where the age report matters most. The
         check is on the string rather than the parsed value, because midnight is a
         real time that a genuine fetch can have.
+
+        A member the envelope does not have is refused rather than ignored, and the
+        source is parsed ``without`` a column, so that this reader and the schema —
+        which validates the envelope ``closed=True`` against a column-free
+        ``ClaimFileSource`` — refuse the same documents. A ``"column": null`` on an
+        envelope source used to be accepted here and silently stripped while the
+        schema rejected it (#401 review). Refusing it here also puts the file and
+        line in the message, which :meth:`__post_init__` cannot do — it validates a
+        constructed envelope and has no idea where one came from.
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
+        known = {f.name for f in fields(cls)}
+        if extra := sorted(set(block) - known):
+            raise ValueError(f"{where}: envelope has unknown member(s) {extra} (expected {sorted(known)})")
         fetched_at = block.get("fetched_at")
         if not isinstance(fetched_at, str):
             raise ValueError(f"{where}: envelope fetched_at is {fetched_at!r}, not an ISO 8601 string")
@@ -527,7 +554,7 @@ class ClaimFileEnvelope:
                 "record when the fetch happened, not only the day it happened on"
             )
         return cls(
-            source=ClaimSource.from_dict(block.get("source"), where),
+            source=ClaimSource.from_dict(block.get("source"), where, without=("column",)),
             fetched_at=parsed,
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
             corpus_catalog=optional_str(block.get("corpus_catalog"), "envelope corpus_catalog", where),

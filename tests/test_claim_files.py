@@ -343,6 +343,22 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="must be named"):
             write_claim_file(tmp_path / "hprc" / "catalog.json", _envelope(), [_entry()])
 
+    @pytest.mark.parametrize("block", [{"rank": 9}, {"source": {"name": "HPRC", "column": None}}])
+    def test_an_unknown_envelope_member_is_refused_with_the_file_and_line(self, tmp_path, block):
+        """The schema validates the envelope `closed=True`; the reader must agree.
+
+        A `"column": null` on an envelope source used to be accepted here and
+        silently stripped while the schema rejected it. Refusing it in `from_dict`
+        also names the file and line, which `__post_init__` cannot — it validates a
+        constructed envelope and does not know where one came from.
+        """
+        path = tmp_path / "c.ndjson"
+        envelope = {**_envelope().to_dict(), **block}
+        path.write_text(json.dumps({ENVELOPE_KEY: envelope}) + "\n")
+
+        with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*unknown member"):
+            read_envelope(path)
+
     def test_a_utc_z_suffix_reads_back_on_every_supported_interpreter(self, tmp_path):
         """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
 
@@ -460,6 +476,25 @@ class TestAClaimIsRebuiltNotTrusted:
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match=r"not a string|not a boolean"):
+            list(iter_claims(path))
+
+    def test_an_unknown_member_beside_the_claim_is_refused(self, tmp_path):
+        """`make_claim` refuses an unknown key inside the claim; the line must match.
+
+        A reader that dropped one silently would normalize a malformed file into an
+        apparently valid claim.
+        """
+        path = tmp_path / "c.ndjson"
+        line = {
+            "field": "platform",
+            "join_key": JOIN_KEY_FILE_NAME,
+            "key_value": "HG002.bam",
+            "claim": {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1},
+            "rank": 9,
+        }
+        path.write_text(json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+
+        with pytest.raises(ValueError, match=r"unknown member\(s\) \['rank'\]"):
             list(iter_claims(path))
 
     @pytest.mark.parametrize("member", ["field", "join_key"])

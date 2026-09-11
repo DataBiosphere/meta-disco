@@ -95,6 +95,10 @@ _WRITE_BUFFER_BYTES = 1 << 20
 _WRITING = "claim"
 _READING = "line"
 
+# The four members of a claim line. `_claim_line` writes exactly these, so a file
+# carrying anything else beside them was not written by this module.
+_LINE_KEYS = frozenset({"field", "join_key", "key_value", "claim"})
+
 
 @dataclass(frozen=True, slots=True)
 class ClaimEntry:
@@ -446,6 +450,14 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
         field, join_key, key_value, claim = (entry["field"], entry["join_key"], entry["key_value"], entry["claim"])
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ValueError(f"{_where(name, _READING, n)}: not a claim: {exc!r}") from None
+    # A member the line does not have is refused, not dropped. `make_claim` already
+    # refuses an unknown key *inside* the claim, and a reader that silently discarded
+    # one beside it would normalize a malformed file into an apparently valid claim
+    # (#401 review).
+    if extra := sorted(set(entry) - _LINE_KEYS):
+        raise ValueError(
+            f"{_where(name, _READING, n)}: line has unknown member(s) {extra} (expected {sorted(_LINE_KEYS)})"
+        )
     _check_entry(name, _READING, n, field, join_key, key_value, claim)
     if "source" in claim:
         raise ValueError(
