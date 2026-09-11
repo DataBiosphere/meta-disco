@@ -200,8 +200,13 @@ classes:
       value was read from — the granularity at which a mapping is reviewed and at
       which a column can be `declined` as an authority for a dimension.
 
-      A claim from one of our own rules carries `rule_id` instead and needs no
-      source object; a claim carries at least one of the two.
+      A claim from one of our own rules carries `rule_id` and no source object.
+      An external claim carries this *and* a `rule_id`, which names the mapping
+      entry that turned the raw value into one of ours — an identity mapping
+      included, since a source value that happens to spell a vocabulary term is a
+      coincidence of spelling rather than an agreement about meaning. The one
+      external claim with no rule is `unmapped`, which means exactly that no entry
+      exists for the raw value (#401).
 
       Declared as class-local ``attributes`` rather than global ``slots``:
       ``name``, ``url``, ``dataset``, ``table`` and ``column`` are words too
@@ -465,9 +470,11 @@ classes:
       resolution marker (carries marker, no rule_id) recording that no claim was
       made or that claims conflicted.
 
-      A claim from one of our rules or content classifiers carries rule_id + tier;
-      a claim from an external source (issue #392) carries source instead, with
-      the raw value it read and how it was matched to our file. Evidence that is
+      A claim from one of our rules or content classifiers carries rule_id + tier.
+      A claim from an external source (issue #392) carries `source` as well as a
+      rule_id — the mapping entry it fired, not a rule of ours — and no tier,
+      because an import does not compete on the rule ladder (#401). It carries the
+      raw value it read and, once the join has run, how it was matched to our file. Evidence that is
       neither — the note left when a fetch or the input contract failed — carries
       a rule_id and a reason but declares nothing.
     slots:
