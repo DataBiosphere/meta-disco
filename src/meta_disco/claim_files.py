@@ -316,24 +316,51 @@ def _claim_line(file_source: dict, entry: ClaimEntry, name: str, n: int) -> dict
     a reader discovering that every claim it rehydrated was attributed to the wrong
     table.
 
+    The claim is put through ``make_claim`` before it is written, exactly as
+    :func:`_entry_from_line` does on the way back in. An importer can hand-build a
+    ``ClaimEntry``, and a claim missing ``source_type`` or ``tier`` would otherwise
+    write cleanly and be refused by the reader — the writer producing a file its own
+    reader will not take, which is the failure this contract exists to prevent
+    (#401 review).
+
     ``name`` and ``n`` locate the entry for a refusal and are formatted into one only
     when there is one (:func:`_where`) — this runs a few million times per source, and
     a label built per claim is a string nothing reads.
     """
     _check_entry(name, _WRITING, n, entry.field, entry.join_key, entry.key_value, entry.claim)
+    where = _where(name, _WRITING, n)
     claim = dict(entry.claim)
     source = claim.pop("source", None)
     if not isinstance(source, dict):
-        raise ValueError(
-            f"{_where(name, _WRITING, n)}: carries no source — a claim file holds claims from an external source"
-        )
+        raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
     if (bare := _without_column(source)) != file_source:
-        raise ValueError(
-            f"{_where(name, _WRITING, n)}: comes from {bare}, but this file's envelope names {file_source}"
-        )
+        raise ValueError(f"{where}: comes from {bare}, but this file's envelope names {file_source}")
+    _rebuild_claim(claim, ClaimSource.from_dict(source, where), where)
     if (column := source.get("column")) is not None:
         claim["column"] = column
     return {"field": entry.field, "join_key": entry.join_key, "key_value": entry.key_value, "claim": claim}
+
+
+def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
+    """Put a claim dict back through ``make_claim``, or raise naming ``where``.
+
+    The one place a claim that did not come from ``make_claim`` in this process is
+    made to satisfy it, used by both directions: the writer calls it so it cannot
+    publish a claim its reader refuses, the reader so a claim off disk is
+    reconstructed rather than trusted. ``claim`` is the claim without its ``source``,
+    which is passed separately because a claim file factors it into the envelope.
+
+    ``claim_state`` is the key ``make_claim`` writes; ``state`` is the argument it
+    takes, so the one rename happens here. Any other unexpected key reaches
+    ``make_claim`` as an unknown keyword and is refused as a malformed claim, which is
+    what it is.
+    """
+    kwargs = dict(claim)
+    state = kwargs.pop("claim_state", None)
+    try:
+        return make_claim(**kwargs, state=state, source=source)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{where}: not a valid claim: {exc}") from None
 
 
 def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEntry:
@@ -376,15 +403,13 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
             f"{_where(name, _READING, n)}: claim carries its own source {claim['source']!r} — "
             "the envelope names this file's source, and a line may only add a column to it"
         )
-    kwargs = dict(claim)
-    source = ClaimSource(**file_source, column=kwargs.pop("column", None))
-    # `claim_state` is the key make_claim writes; `state` is the argument it takes.
-    state = kwargs.pop("claim_state", None)
-    try:
-        rebuilt = make_claim(**kwargs, state=state, source=source)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{_where(name, _READING, n)}: not a valid claim: {exc}") from None
-    return ClaimEntry(field=field, join_key=join_key, key_value=key_value, claim=rebuilt)
+    where = _where(name, _READING, n)
+    body = dict(claim)
+    # Through `from_dict` rather than the constructor, so this line's own `column` is
+    # checked like every other source member — `"column": 7` would otherwise be
+    # accepted here and written back out as a claim.
+    source = ClaimSource.from_dict({**file_source, "column": body.pop("column", None)}, where)
+    return ClaimEntry(field=field, join_key=join_key, key_value=key_value, claim=_rebuild_claim(body, source, where))
 
 
 def _where(name: str, unit: str, n: int) -> str:
@@ -404,11 +429,14 @@ def _check_entry(name: str, unit: str, n: int, field: Any, join_key: Any, key_va
     cannot drift into accepting different files. ``name``/``unit``/``n`` say what to
     call the line if it is refused, and become a label only then.
     """
-    if field not in _FIELDS:
+    # Type before membership: an unhashable `field: []` or `join_key: {}` raises
+    # TypeError from the frozenset lookup, which escapes as a traceback instead of the
+    # ValueError naming the file and the line that this module promises.
+    if not isinstance(field, str) or field not in _FIELDS:
         raise ValueError(
             f"{_where(name, unit, n)}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})"
         )
-    if join_key not in JOIN_KEYS:
+    if not isinstance(join_key, str) or join_key not in JOIN_KEYS:
         raise ValueError(
             f"{_where(name, unit, n)}: unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})"
         )

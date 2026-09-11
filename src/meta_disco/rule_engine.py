@@ -224,6 +224,12 @@ def make_claim(
     # competes and rejected where it cannot.
     if state is None and tier is None:
         raise ValueError(f"claim from {producer!r} declaring value/status must carry a tier")
+    # And it must be a number `evaluate_claims` can order. A claim arriving from a
+    # file can carry `"tier": "1"`, which passes the None check and then fails inside
+    # the tier comparison, against a claim that has nothing to do with it. `bool` is
+    # an `int` in Python and is not a tier (#401 review).
+    if tier is not None and (not isinstance(tier, int) or isinstance(tier, bool)):
+        raise ValueError(f"claim from {producer!r} has tier {tier!r}, which is not an integer")
     if state is not None and tier is not None:
         raise ValueError(f"claim from {producer!r} declaring state {state!r} must not carry a tier — it never competes")
     if join_key is not None and join_key not in JOIN_KEYS:

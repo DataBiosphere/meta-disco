@@ -2,7 +2,7 @@
 
 A claim file is how an importer that ran yesterday, against a network catalog, hands
 claims to a run happening today. Three things have to hold for that to be safe, and
-they are what these test.
+they are what these tests cover.
 
 *It must say where it came from.* Provenance is per file, recorded once, and read
 back whole — including the ``ClaimSource`` each claim's own record carries, which the
@@ -297,6 +297,29 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="fetched_at"):
             _envelope(fetched_at="2026-09-01")
 
+    def test_an_envelope_whose_source_has_a_non_string_member_is_refused_when_it_is_built(self):
+        """Checking only `name` left the parity half-kept: `table=7` wrote, then failed on read.
+
+        The annotation says `str | None`, so the ignore is the point of the test: type
+        hints do not run, and an importer mapping a source's own JSON can hand over
+        whatever that JSON held.
+        """
+        with pytest.raises(ValueError, match="source table"):
+            _envelope(source=ClaimSource(name="HPRC", table=7))  # type: ignore[arg-type]
+
+    def test_a_hand_built_claim_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
+        """An importer can build a ClaimEntry by hand; the writer holds it to make_claim."""
+        entry = ClaimEntry(
+            field="platform",
+            join_key=JOIN_KEY_FILE_NAME,
+            key_value="HG002.bam",
+            claim={"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "source": {}},
+        )
+        entry.claim["source"] = HPRC_CATALOG.to_dict()
+
+        with pytest.raises(ValueError, match="must carry a tier"):
+            write_claim_file(tmp_path / "c.ndjson", _envelope(), [entry])
+
     def test_a_file_the_run_would_never_find_is_refused_at_write(self, tmp_path):
         """`discover` matches *.ndjson, so any other suffix is a silent no-op."""
         with pytest.raises(ValueError, match="must be named"):
@@ -378,6 +401,39 @@ class TestAClaimIsRebuiltNotTrusted:
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match="not a valid claim"):
+            list(iter_claims(path))
+
+    @pytest.mark.parametrize("tier", ["1", True, 1.5])
+    def test_a_tier_that_is_not_an_integer_is_refused(self, tmp_path, tier):
+        """A string tier passes the None check, then fails inside the tier comparison.
+
+        `evaluate_claims` would raise while ordering this claim against an unrelated
+        one, so the line that caused it is never named. `bool` is an `int` in Python
+        and is not a tier.
+        """
+        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": tier}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="not an integer"):
+            list(iter_claims(path))
+
+    def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
+        """The per-line `column` is a source member and is checked like the rest."""
+        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1, "column": 7}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="source column"):
+            list(iter_claims(path))
+
+    @pytest.mark.parametrize("member", ["field", "join_key"])
+    def test_an_unhashable_line_member_is_refused_by_name_not_by_traceback(self, tmp_path, member):
+        """`field: []` used to raise TypeError from the frozenset lookup, uncaught."""
+        path = tmp_path / "c.ndjson"
+        line = {"field": "platform", "join_key": JOIN_KEY_FILE_NAME, "key_value": "HG002.bam", "claim": {}}
+        line[member] = []
+        path.write_text(json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+
+        with pytest.raises(ValueError, match=r"c\.ndjson line 2"):
             list(iter_claims(path))
 
 
@@ -462,7 +518,7 @@ class TestTheRunReport:
     def test_a_naive_now_ages_an_aware_fetch_time(self, tmp_path, capsys):
         """A caller's clock and an envelope's need not agree on awareness.
 
-        They disagreeing used to raise inside `_describe`, which would have taken
+        That disagreement used to raise inside `_describe`, which would have taken
         every other file's line down with it — the opposite of what the report is for.
         """
         aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)

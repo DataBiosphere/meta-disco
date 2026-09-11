@@ -452,13 +452,20 @@ class ClaimFileEnvelope:
     def __post_init__(self) -> None:
         """Refuse an envelope that could not be read back, at the point it is built.
 
-        Type hints do not run, so ``source_version=None`` reaches here intact. Once
-        per claim file, so the checks are free relative to the write they precede.
+        Type hints do not run, so ``source_version=None`` reaches here intact. This
+        runs once per claim file, so its cost is nothing against the write it
+        precedes.
+
+        The source is checked by serializing it and reading it back through
+        :meth:`ClaimSource.from_dict` — the reader's own definition, applied to the
+        reader's own input — rather than by re-listing the members here. Checking only
+        ``name`` left the parity half-kept: a ``table`` of ``7`` was written happily
+        and refused on read (#401 review).
         """
         where = "claim file envelope"
         if not isinstance(self.source, ClaimSource):
             raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimSource")
-        required_str(self.source.name, "source name", where)
+        ClaimSource.from_dict(self.source.to_dict(), where)
         if not isinstance(self.fetched_at, datetime):
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
         required_str(self.source_version, "source_version", where)
