@@ -125,7 +125,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 Nothing in this document is enforced. No code reads it, and the pipeline it describes does not exist. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
 
-- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371.
+- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no evidence file.** #401's per-line record is still a claim carrying a mapped value. Amending it to an evidence row is unfiled.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
 - **There is no read-sources stage and no reconcile stage** (#402 and an unfiled issue). A run has the three inference phases and nothing else.
