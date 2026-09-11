@@ -25,9 +25,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 1.7 A curator writes rules. A curation decision is a rule like any other and is reviewed as one;
     a decision about a single file is a rule whose selection matches one file, not an exception to 1.1.
 
-## 2. Evidence
+## 2. Source evidence
 
-2.1 Evidence is `(file, slot, raw_value)` plus provenance: source, dataset, table, column.
+2.1 Evidence imported from a source is `(file, slot, raw_value)` plus provenance: source, dataset, table, column.
+    Inference's own signals — an extension, a filename, a header, a contig length — are not this shape,
+    and this section does not govern them.
 
 2.2 The importer decides **which slot** a table or column speaks to. It never decides what the value means.
 
