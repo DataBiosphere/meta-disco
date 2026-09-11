@@ -101,11 +101,13 @@ affected — but this is the one place the format leans on work that is not buil
 """
 
 import json
+import os
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
+from uuid import uuid4
 
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -116,6 +118,7 @@ from .models import (
     pop_optional_str,
 )
 from .rule_engine import make_claim
+from .schema_vocab import value_in_vocabulary
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from a
 # claim rather than distinguishable by position alone, so a truncated or concatenated
@@ -147,6 +150,9 @@ _encode = json.JSONEncoder(separators=(",", ":")).encode
 # the default 8 KB is a syscall every 50 claims or so across a multi-gigabyte
 # sequential write; a megabyte is one per 6,000.
 _WRITE_BUFFER_BYTES = 1 << 20
+
+# How far `read_envelope` will read looking for the end of line 1. See `_read_envelope`.
+_MAX_ENVELOPE_BYTES = 1 << 20
 
 # What each side calls the claim it is refusing (`_where`). A writer counts claims,
 # because it has no line numbers to give; a reader counts lines, because that is what
@@ -246,7 +252,14 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
+    # shared that name: both wrote, one renamed, the other's rename hit a file that
+    # was no longer there — and it returned a claim count for forty thousand claims
+    # that are not on disk, which is the one failure an import must not have. They
+    # now race only on the rename, where the loser's file is simply the older one
+    # (#401 review). A crash leaves a `.tmp` behind under a unique name; `discover`
+    # looks for `*.ndjson`, so no run reads it.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
     name = path.name
     # The source a claim in this file must have come from, by its column, as both the
     # record and the dict it serializes to. The envelope's source is constant for the
@@ -674,6 +687,20 @@ def _check_entry(where: str, field: Any, target_key_value: Any, claim: Any) -> N
             "which the join fills in — a claim file records the key to match on, "
             "not a match that has happened"
         )
+    # A mapped value must be one of ours. Mapping a source's raw value onto this
+    # vocabulary is the importer's whole job, and nothing downstream would catch a
+    # miss: `evaluate_claims` drops source-bearing claims, so a `platform` of
+    # `"Revio"` or `"pacbio"` would reach no output record and fail no schema gate —
+    # it would sit in a file looking like work, indefinitely (#401 review). The raw
+    # value is deliberately not checked: recording what the source said, unmapped, is
+    # what `raw_value` is for.
+    # A non-string `value` falls through to `make_claim`'s type check, which names the
+    # type rather than reporting a number as a word the dimension does not have.
+    if isinstance(value := claim.get("value"), str) and not value_in_vocabulary(field, value):
+        raise ValueError(
+            f"{where}: claim maps {field} to {value!r}, which is not a value of that dimension — "
+            "an importer maps a source's raw value onto our vocabulary, and keeps the raw one in raw_value"
+        )
 
 
 def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:
@@ -686,7 +713,19 @@ def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:
     a decode failure is reported as a malformed line, not raised from inside a file
     iterator.
     """
-    first = _decode(f.readline(), f"{path.name} line 1")
+    # Capped, because `readline` on a file with no newline in it reads the file: a
+    # 27 MB claim file written as one JSON array peaked at 193 MB before the shape
+    # check refused it, in the module whose reason for existing is that a corpus of
+    # claims must not be loaded whole (#374, #401 review). An envelope is a few
+    # hundred bytes; a megabyte is room for an implausibly long url and nothing like
+    # a corpus.
+    raw = f.readline(_MAX_ENVELOPE_BYTES)
+    if len(raw) == _MAX_ENVELOPE_BYTES and not raw.endswith(b"\n"):
+        raise ValueError(
+            f"{path.name} line 1: no line break in the first {_MAX_ENVELOPE_BYTES} bytes — "
+            "a claim file is one envelope and one claim per line, not a single JSON document"
+        )
+    first = _decode(raw, f"{path.name} line 1")
     if not first.strip():
         raise ValueError(f"{path.name}: line 1 must be the {ENVELOPE_KEY} envelope, and this file starts empty")
     return _envelope_from_line(path, first)

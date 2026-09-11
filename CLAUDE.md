@@ -137,6 +137,13 @@ evidence}` entry — plus the controlled vocabulary:
   file; only the **value** varies, so only that is per line — the same factoring
   that keeps the source's repository/url/table on the envelope while `column`
   stays per claim.
+- **A claim file cannot hold a value we have no word for**: `_check_entry` refuses a
+  mapped `value` outside the dimension's vocabulary, on write and on read alike.
+  Mapping a source's raw value onto our terms is the importer's whole job, and
+  nothing downstream would catch a miss — `evaluate_claims` drops source-bearing
+  claims, so a `platform` of `Revio`, or of `pacbio` with the wrong case, would reach
+  no output record and fail no schema gate. `raw_value` is deliberately not checked:
+  recording what the source actually said is what it is for.
 - **The importer owns the mapping; the run does equality lookup**: an importer
   maps its own key to the target's and writes `target_key_value` already in the
   target's value space, transforming where needed. That keeps corpus knowledge

@@ -27,6 +27,7 @@ spike's two external sources.
 """
 
 import json
+import threading
 from dataclasses import fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -36,6 +37,7 @@ import yaml
 
 from meta_disco import models
 from meta_disco.claim_files import (
+    _MAX_ENVELOPE_BYTES,
     DEFAULT_CLAIMS_ROOT,
     ENVELOPE_KEY,
     ClaimEntry,
@@ -251,6 +253,30 @@ class TestTheEnvelopeIsFactoredOut:
         assert not path.exists()
         assert list(tmp_path.iterdir()) == []
 
+    def test_two_writers_on_one_path_do_not_share_a_temporary(self, tmp_path):
+        """A shared `<name>.tmp` let one writer's rename delete the other's file.
+
+        The loser then returned a claim count for claims that are not on disk. They
+        race only on the rename now, where the loser is simply the older file.
+        """
+        path = tmp_path / "claims.ndjson"
+        seen = []
+
+        def entries(tag):
+            # Sampled from inside the stream, so both writers are mid-write at once.
+            for n in range(3):
+                seen.append(sorted(p.name for p in tmp_path.iterdir()))
+                yield _entry(name=f"{tag}{n}.bam")
+
+        first = threading.Thread(target=write_claim_file, args=(path, claim_file_envelope(), entries("a")))
+        first.start()
+        write_claim_file(path, claim_file_envelope(), entries("b"))
+        first.join()
+
+        both = max(seen, key=len)
+        assert sum(name.endswith(".tmp") for name in both) == 2, both
+        assert len(list(iter_claims(path))) == 3
+
     def test_a_rename_that_cannot_happen_leaves_no_temporary_behind(self, tmp_path):
         """A rename fails too, and a stray `.tmp` is a whole claim file nothing reads.
 
@@ -362,6 +388,18 @@ class TestMalformedFiles:
         assert deep.envelope is None and "RecursionError" in (deep.error or "")
         assert good.envelope is not None
         assert "envelope could not be read" in capsys.readouterr().out
+
+    def test_a_file_with_no_line_break_is_refused_before_it_is_read(self, tmp_path):
+        """`readline` on a file with no newline reads the file — the one thing this
+        module exists to avoid. A claim corpus written as one JSON array is the
+        reachable case: valid JSON, one line, and unbounded (#374).
+        """
+        path = tmp_path / "array.ndjson"
+        path.write_text("[" + ",".join(f'{{"n":{n}}}' for n in range(200_000)) + "]")
+        assert path.stat().st_size > _MAX_ENVELOPE_BYTES
+
+        with pytest.raises(ValueError, match="no line break in the first"):
+            read_envelope(path)
 
     def test_a_blank_line_carries_no_claim(self, tmp_path):
         path = tmp_path / "claims.ndjson"
@@ -673,6 +711,33 @@ class TestAClaimIsRebuiltNotTrusted:
         with pytest.raises(ValueError, match="which the join fills in"):
             write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [entry])
 
+    @pytest.mark.parametrize("value", ["Revio", "pacbio", "banana"])
+    def test_a_value_the_dimension_has_no_word_for_is_refused(self, tmp_path, value):
+        """Mapping onto our vocabulary is the importer's job, and nothing else checks it.
+
+        `evaluate_claims` drops source-bearing claims, so an unmapped-but-declared
+        value reaches no output record and fails no schema gate: a file full of
+        `"Revio"` would look like work indefinitely. `pacbio` is the case that makes
+        the point — right term, wrong case, and just as invisible.
+        """
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": value, "rule_id": "m1", "raw_value": "Revio"}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="not a value of that dimension"):
+            list(iter_claims(path))
+
+    def test_the_raw_value_is_not_checked_against_the_vocabulary(self, tmp_path):
+        """`raw_value` is what the source said. If it were one of ours it would not be raw."""
+        path = tmp_path / "claims.ndjson"
+        write_claim_file(path, claim_file_envelope(), [_entry(raw="Revio", value="PACBIO")])
+
+        assert [entry.claim["raw_value"] for entry in iter_claims(path)] == ["Revio"]
+
+    def test_a_claim_asserting_a_match_that_has_not_happened_is_refused_at_write(self, tmp_path):
+        """The writer refuses an unmapped value too, so no importer can publish one."""
+        with pytest.raises(ValueError, match="not a value of that dimension"):
+            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [_entry(value="Revio")])
+
     def test_a_line_carrying_its_own_source_is_refused_not_re_attributed(self, tmp_path):
         """The writer refuses a foreign source; a reader that overwrote one would undo that."""
         claim = {
@@ -904,7 +969,7 @@ class TestAClaimFileIsWrittenBySomeoneElse:
                 source_type=SOURCE_WRANGLER_ANNOTATION,
                 source=curator.as_claim_source("data_type"),
                 rule_id="curator_override_rev3",
-                value="variant_calls",
+                value="genotypes",
             ),
         )
         path = tmp_path / "curator.ndjson"
