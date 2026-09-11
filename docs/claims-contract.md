@@ -16,7 +16,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 1.3 The importer maps **structure**; the rule engine maps **meaning**.
 
-1.4 An importer transcribes a raw value **verbatim** — it does not normalize, translate, correct, or suppress it.
+1.4 Once a column is selected for a slot, an importer transcribes its raw value **verbatim** — it does not
+    normalize, translate, correct or suppress it. Declining to select a column at all is a different act,
+    made once and recorded in the slot map (2.4).
 
 1.5 An importer needs no knowledge of our controlled vocabulary, and may not contain one.
 
@@ -27,9 +29,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 2. Source evidence
 
-2.1 Evidence imported from a source is `(file, slot, raw_value)` plus provenance: source, dataset, table, column.
-    Inference's own signals — an extension, a filename, a header, a contig length — are not this shape,
-    and this section does not govern them.
+2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
+    It is produced keyed by whatever key the source publishes, and is attached to a **file** only at the join
+    (6.7) — which is what makes an unmatched or ambiguous row representable rather than unthinkable.
+    Inference's own signals — an extension, a filename, a header, a contig length, a file size — are not this
+    shape, and this section does not govern them.
 
 2.2 The importer decides **which slot** a table or column speaks to. It never decides what the value means.
 
@@ -40,13 +44,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Choosing to map a column and choosing not to are the same act; only the recorded reason makes either reviewable.
 
 2.5 Evidence **imported from a source** is fetched out of band, with network, and read offline and deterministically.
-    Inference fetches its own headers and content during the run, through the evidence cache, and always has.
+    Inference fetches its own headers and content during the run, through the evidence cache, where a classifier
+    needs them. Not every classifier does, and a fetch that fails falls back to classifying without content,
+    which yields `not_classified` rather than an error.
 
 2.6 A table name and a column name are evidence, the same as a cell value.
 
 ## 3. Claims
 
-3.1 A claim is a rule's declaration about a slot, derived from evidence. It declares a **value** or a **status**.
+3.1 A claim is a rule's declaration about a slot, derived either from source evidence (2.1) or from
+    inference's own signals. It declares a **value** or a **status**.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
@@ -56,11 +63,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     It sees nothing else — not the file's extension, not its header, not another source's claim.
     **Sources stay pure**: what a source is taken to have said never depends on what we think of the file.
     This is also what keeps one mapping working across every source.
-    Inference rules match their own signals — extension, filename, header, content — as they do today.
+    Inference rules match their own signals — extension, filename, header, content, file size — as they do today.
 
-3.5 Nothing fires by similarity. Matching is exact, over spellings a rule declares explicitly.
+3.5 A rule mapping imported evidence fires only on an exact match, over spellings it declares explicitly.
+    Nothing fires by similarity. Inference rules keep their own matchers, regexes included.
 
-3.6 `not_applicable` is a rule's to declare. No source asserts it in evidence.
+3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
+    No source asserts either in evidence.
 
 3.7 A raw value no rule matched produces no claim and enters the review queue.
 
@@ -74,15 +83,18 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     1. inference (filename, extension, header, content)
     2. canonical repository metadata (AnVIL harmonized fields)
     3. non-canonical repository metadata (submitter tables)
-    4. external repository (HPRC Data Explorer, ENA, IGSR, reference sources)
+    4. external repository (HPRC Data Explorer, ENA, IGSR)
     5. curator
+
+    Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
 4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank.
 
 4.3 Resolution has two stages: **within** a source by tier, then **across** sources by agreement.
 
 4.4 Sources that agree classify the slot, and every agreeing source is recorded.
-    A slot on which only one input speaks is classified from it: filling a gap is not a disagreement.
+    A slot on which only one input speaks takes that input's declaration — a value classifies it, a status is
+    preserved as that status. Filling a gap is not a disagreement.
 
 4.5 Inputs 1–4 that disagree produce a **conflict**. No value is asserted from them, and every competing
     declaration is recorded with the rule behind it.
@@ -92,16 +104,21 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     `not_applicable` **does** conflict with a value — it asserts the slot cannot apply to this file, which a
     value contradicts. That is a conflict like any other: no value asserted, both declarations recorded,
     reviewable. The engine's file-type knowledge is not silently overridden, and neither is a source.
+    Two statuses never conflict: `not_classified` yields to `not_applicable`, which is the more specific claim.
 
 4.7 A curator rule is recorded **separately** from the conflict it answers. It supplies the slot's value;
     the conflict among inputs 1–4 stays on the record, so a curated answer never erases the disagreement it settled.
 
 ## 5. Review
 
-5.1 Every conflict is listable, with its competing values and the rule behind each.
+5.1 Every conflict is listable, with every competing declaration and the rule behind each.
+    A conflict is not always two, and not always two values: a value against a status is one, and three
+    inputs can disagree.
 
-5.2 Every unmatched raw value is listable, with its source, dataset, table, column, and the number of files it affects.
-    Dataset is not optional: the same column name means different things in different datasets.
+5.2 Every unmatched raw value is listable, with its source, dataset, table, column, slot, and the number of
+    files it affects. Dataset is not optional: the same column name means different things in different
+    datasets. Slot is not optional either: by 2.3 one raw value can be mapped for one slot and unmatched
+    for another.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
@@ -122,24 +139,26 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
-6.6 A run with no source evidence produces a reconciled record identical to its inference record.
+6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
+    record identical to its inference record.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
 6.8 Resolution across sources is by agreement, and is not tier math.
     Tier resolution *within* a source applies to inference, which has competing rules at four tiers.
-    A source with at most one mapping entry per slot has nothing to resolve within it.
+    A source's own rows do not compete: the slot map selects the columns, and at most one mapping applies to
+    a given file and slot. Two that both apply is a slot-map error, not a resolution case.
 
 ---
 
 ## What is not true yet
 
-Nothing in this document is enforced. No code reads it, and the pipeline it describes does not exist. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
+No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently — `make_claim` refuses a claim that declares two things at once or carries a value outside the vocabulary, and the claim-file contract validates its own entries — but nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no evidence file.** #401's per-line record is still a claim carrying a mapped value. Amending it to an evidence row is unfiled.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
-- **There is no read-sources stage and no reconcile stage** (#402 and an unfiled issue). A run has the three inference phases and nothing else.
+- **There is no read-sources stage and no reconcile stage** (#402 and an unfiled issue). A run has the three inference phases, plus `report_claim_files`, which names the claim files it found and consumes none of them.
 - **There is no reconciled artifact.** Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
 
@@ -169,4 +188,6 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
   conflict, which is right if the number is small and wrong if it floods the queue.
+- Which input kind the reference validator is. It matches by contig lengths read from the file's own bytes, not by any identifier a repository publishes, so calling it input kind 4 pre-decides what #398 deliberately left open.
+- Whether 4.7 is representable. `Classification` carries one `value` and one `status`, with `value` null unless `status` is `classified`, so a curated value and a retained conflict cannot both live in the record as it stands. Either the conflict belongs to reconciliation metadata rather than the record, or the record changes.
 - Which consumers read which artifact. `corpus_diff`, the coverage / validation / consistency reports, the ENA validator on stored output (#330) and the eval fixtures each want inference or reconciled output, and today there is only one.
