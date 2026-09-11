@@ -576,6 +576,26 @@ class ClaimSource:
     table: str | None = None
     column: str | None = None
 
+    def __post_init__(self) -> None:
+        """Check the members, because a dataclass annotation is not a runtime check.
+
+        This is the one claim-file record that reaches output evidence without
+        passing through an envelope: ``ClaimFileSource`` and ``ClaimTarget`` are
+        validated by :meth:`ClaimFileEnvelope.__post_init__`, but a ``ClaimSource``
+        can be handed straight to ``make_claim``, and ``ClaimSource(name="HPRC",
+        dataset=7)`` would otherwise serialize a number into the schema's ``Evidence``
+        and only be caught at a file or schema boundary, if at all (#401 review).
+
+        Members are checked rather than the record round-tripped through
+        :meth:`from_dict`, which would call this again on the record it rebuilds. Per
+        source object and not per claim: a claim file builds one per column and every
+        claim read from that column shares it.
+        """
+        where = "claim source"
+        required_str(self.name, "name", where)
+        for member in ("url", "dataset", "table", "column"):
+            optional_str(getattr(self, member), member, where)
+
     def to_dict(self) -> dict:
         """Serialize for output, dropping members the source does not have."""
         return _flat_to_dict(self)
@@ -770,8 +790,8 @@ class ClaimFileEnvelope:
         required_str(self.source_key, "source_key", where)
         require_join_key(self.target_key, "target_key", where)
         # A key that is not unique across the target cannot be matched without a
-        # scope, and `file_name` is the one in the vocabulary that is not: absent on
-        # 37% of the corpus's records and non-unique on 69%, against 2 rows in 16,271
+        # scope, and `file_name` is the one in the vocabulary that is not: present on
+        # every record but non-unique on 69.4%, against 2 rows in 16,271
         # within a single dataset. Writing an unscoped one produces a file whose
         # claims the join cannot attach to a single row — refused here rather than
         # discovered when the join fans out (#401 review).

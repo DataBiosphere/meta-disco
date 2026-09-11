@@ -204,10 +204,11 @@ classes:
       source object; a claim carries at least one of the two.
 
       Declared as class-local ``attributes`` rather than global ``slots``:
-      ``name``, ``url``, ``table`` and ``column`` are words too generic to own in
-      a shared namespace, and nothing outside this class needs them. Claim files
-      (#401) carry these same four fields once per file in their envelope rather
-      than repeating them on every claim — one shape, factored, not a second one.
+      ``name``, ``url``, ``dataset``, ``table`` and ``column`` are words too
+      generic to own in a shared namespace, and nothing outside this class needs
+      them. Claim files (#401) carry all of these but ``column`` once per file in
+      their envelope, and put ``column`` on each claim — one shape, factored, not
+      a second one.
     attributes:
       name:
         required: true
