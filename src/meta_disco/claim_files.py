@@ -583,7 +583,13 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     try:
         entry = json.loads(line)
         field, target_key_value, claim = (entry["field"], entry["target_key_value"], entry["claim"])
-    except (json.JSONDecodeError, KeyError, TypeError, RecursionError) as exc:
+    # `ValueError` rather than `json.JSONDecodeError`, which is a subclass of it:
+    # `json.loads` also raises a bare `ValueError` for an integer past the
+    # interpreter's digit limit (4,300 by default, since 3.10.7), and that one escaped
+    # without the file and line this module promises on every malformed line. The
+    # decoder raises `RecursionError` past ~1000 levels of nesting, which is not a
+    # `ValueError` at all (#401 review).
+    except (ValueError, KeyError, TypeError, RecursionError) as exc:
         raise ValueError(f"{where}: not a claim: {exc!r}") from None
     # A member the line does not have is refused, not dropped. `make_claim` already
     # refuses an unknown key *inside* the claim, and a reader that silently discarded
@@ -688,7 +694,9 @@ def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
     where = f"{path.name} line 1"
     try:
         wrapper = json.loads(line)
-    except (json.JSONDecodeError, RecursionError) as exc:
+    # `ValueError` covers `json.JSONDecodeError` and the bare one the decoder raises
+    # for an over-long integer; `RecursionError` is neither. See `_entry_from_line`.
+    except (ValueError, RecursionError) as exc:
         raise ValueError(f"{where}: not a {ENVELOPE_KEY} envelope: {exc!r}") from None
     if not isinstance(wrapper, dict) or set(wrapper) != {ENVELOPE_KEY}:
         raise ValueError(

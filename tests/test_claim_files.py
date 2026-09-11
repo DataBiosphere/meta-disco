@@ -327,6 +327,24 @@ class TestMalformedFiles:
         with pytest.raises(ValueError, match=f"line {line}"):
             list(iter_claims(path))
 
+    @pytest.mark.parametrize("line", [1, 2])
+    def test_a_number_past_the_interpreter_s_digit_limit_is_refused_by_line(self, tmp_path, line):
+        """`json.loads` raises a bare ValueError, not a JSONDecodeError, past 4,300 digits.
+
+        A limit on integer parsing since 3.10.7, so this is not a future-interpreter
+        case. It escaped the decode handler and reached the caller without the file
+        and line every other malformed line carries.
+        """
+        big = "1" * 5000
+        envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()})
+        first = '{"claim_file":{"n":' + big + "}}" if line == 1 else envelope
+        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","claim":{"tier":' + big + "}}"
+        path = tmp_path / "claims.ndjson"
+        path.write_text(first + "\n" + second + "\n")
+
+        with pytest.raises(ValueError, match=f"line {line}"):
+            list(iter_claims(path))
+
     def test_a_file_nested_past_the_decoder_s_limit_is_reported_not_raised(self, tmp_path, capsys):
         """One unreadable claim file must not hide the ones beside it, or the run."""
         (tmp_path / "deep.ndjson").write_text('{"claim_file":' + "[" * 2000 + "]" * 2000 + "}\n")
