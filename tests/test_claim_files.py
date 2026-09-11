@@ -257,7 +257,9 @@ class TestTheEnvelopeIsFactoredOut:
         """A shared `<name>.tmp` let one writer's rename delete the other's file.
 
         The loser then returned a claim count for claims that are not on disk. They
-        race only on the rename now, where the loser is simply the older file.
+        race only on the rename now, and the file that survives is whole — but which
+        one survives is completion order, not catalog order, which is why the comment
+        on `tmp` says two importers must not share a path.
         """
         path = tmp_path / "claims.ndjson"
         seen = []

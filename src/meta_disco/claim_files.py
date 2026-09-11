@@ -256,8 +256,14 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     # shared that name: both wrote, one renamed, the other's rename hit a file that
     # was no longer there — and it returned a claim count for forty thousand claims
     # that are not on disk, which is the one failure an import must not have. They
-    # now race only on the rename, where the loser's file is simply the older one
-    # (#401 review). A crash leaves a `.tmp` behind under a unique name; `discover`
+    # now race only on the rename, which is atomic: a reader sees one whole file or
+    # the other, never a mixture, and no writer's rename can delete a file it did not
+    # write (#401 review). Which one survives is decided by completion order and
+    # nothing else — *not* by which catalog is newer, since a writer that started
+    # from an older one can finish later — so two importers must not be pointed at a
+    # single path expecting the newer to win. Nothing here can enforce that: the
+    # ordering an importer would need is its own, and it is a re-fetch decision
+    # (#369, #394). A crash leaves a `.tmp` behind under a unique name; `discover`
     # looks for `*.ndjson`, so no run reads it.
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
     name = path.name
