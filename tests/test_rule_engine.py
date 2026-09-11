@@ -7,6 +7,7 @@ from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     DECLINED,
+    NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_CONTIG_DETECTION,
@@ -533,6 +534,32 @@ class TestMakeClaim:
                 # a claim rebuilt by hand, where no checker has run.
                 match_exact="yes",  # type: ignore[arg-type]
             )
+
+    @pytest.mark.parametrize("state", [UNMAPPED, NO_VOCABULARY_TERM])
+    def test_rejects_a_value_shaped_state_with_no_raw_value(self, state):
+        # Both states are *about* a raw value — no mapping entry exists for it, or
+        # our vocabulary has no word for it. Without it the claim says only that
+        # something was not mapped, and neither the review queue nor the vocabulary
+        # decision (#399) has anything to act on.
+        with pytest.raises(ValueError, match="carries no raw_value"):
+            make_claim(
+                rule_id="map_v1" if state is NO_VOCABULARY_TERM else None,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                state=state,
+            )
+
+    def test_a_declined_column_needs_no_raw_value(self):
+        # `declined` declines a whole column as an authority for a dimension, so
+        # there is no one value it is about — the exception the rule above keeps.
+        claim = make_claim(
+            rule_id="decline_v1",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=DECLINED,
+        )
+
+        assert "raw_value" not in claim
 
     def test_rejects_a_rule_claim_with_no_reason(self):
         # A rule's reason is the text that makes output readable and is recoverable
@@ -1205,6 +1232,7 @@ class TestClaimStatesDoNotResolve:
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
             state=UNMAPPED,
+            raw_value="pore-c",
         )
         assert result.rules_matched == ["r"]
         assert result.reasons == ["illumina"]

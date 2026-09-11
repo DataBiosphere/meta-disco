@@ -12,6 +12,7 @@ from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     EXTERNAL_SOURCE_TYPES,
+    NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
@@ -317,6 +318,18 @@ def make_claim(
         raise ValueError(f"claim from {producer!r} has value {value!r}, which is not a string")
     if raw_value is not None and not isinstance(raw_value, str):
         raise ValueError(f"claim from {producer!r} has raw_value {raw_value!r}, which is not a string")
+    # `unmapped` and `no_vocabulary_term` are *about* a raw value: one says no mapping
+    # entry exists for it, the other that our vocabulary has no word for it. Without
+    # it the claim says only that something was not mapped, which makes the review
+    # queue and the vocabulary decision (#399) unactionable — and the schema already
+    # says raw_value is "the whole content of the claim" for these two. `declined` is
+    # the exception and stays optional: it declines a whole column as an authority,
+    # and there is no one value it is about (#401 review).
+    if state in (UNMAPPED, NO_VOCABULARY_TERM) and raw_value is None:
+        raise ValueError(
+            f"claim from {producer!r} is {state!r} but carries no raw_value — "
+            "the raw value is what the claim is about, and what a reviewer acts on"
+        )
     if rule_id is not None and not isinstance(rule_id, str):
         raise ValueError(f"claim from {producer!r} has rule_id {rule_id!r}, which is not a string")
     if match_exact is not None and not isinstance(match_exact, bool):
