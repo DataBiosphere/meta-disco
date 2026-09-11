@@ -11,18 +11,21 @@ from .models import (
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
-    JOIN_KEYS,
+    EXTERNAL_SOURCE_TYPES,
+    NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
     SOURCE_SIGNAL_INFERENCE,
     SOURCE_TYPES,
+    UNMAPPED,
     ClaimSource,
     ClassificationResult,
     FileInfo,
     _assert_coherent,
     build_field_entry,
+    require_join_key,
     status_for_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
@@ -126,8 +129,8 @@ class ExtendedFileInfo:
 
 def make_claim(
     *,
-    reason: str,
     source_type: str,
+    reason: str | None = None,
     rule_id: str | None = None,
     tier: int | None = None,
     value: str | None = None,
@@ -168,19 +171,28 @@ def make_claim(
 
     **Who made it.** At least one producer handle is required: ``rule_id`` for one
     of our rules or content classifiers, ``source`` for an external source. An
-    external claim is not given a fabricated rule id. ``source_type`` is required
+    external claim carries *both*, and they answer different questions: ``source`` is
+    where the raw value was read from, ``rule_id`` is the mapping rule that turned it
+    into a vocabulary term. It is required on one — including for an identity
+    mapping, since there is no implicit copy — except in state ``unmapped``, which
+    means exactly that no mapping entry fired (#401). No rule id is *fabricated* for
+    an external claim; the one it carries names a real, reviewable mapping. ``source_type`` is required
     on every claim and checked against the schema's ``source_type_enum``; it is
     deliberately not derived from ``tier``, which cannot tell ``contig_detection``
     from ``content_read`` (both at ``CONTENT_TIER``) nor either from
     ``signal_inference`` (at a rule tier without being a rule).
 
-    **Tier.** Required on a claim that declares a ``value`` or ``status``, because
-    that claim competes in ``evaluate_claims`` and must never fall back to a
+    **Tier.** Required on a claim that declares a ``value`` or ``status`` *and
+    competes* — that is, one of ours. A claim that competes must never fall back to a
     tier-0 default (#150 — the silent default that let the #151 rGFA near-miss
     resolve to the wrong value). Rejected on a ``state`` claim, which does not
-    compete and would only be carrying a number nothing reads. Where an imported
-    claim ranks against the rule tiers is a resolution-policy question this record
-    does not answer (epic #391).
+    compete and would only be carrying a number nothing reads, and rejected on a
+    claim from an external ``source``, which does not compete either: epic #391
+    settled on measured evidence that imports are not tier participants, so a tier on
+    one is a number the importer must invent and the policy discards.
+    ``evaluate_claims`` drops a claim carrying a ``source`` before the tier math, so
+    an imported claim is inert there — visible in the evidence, never winning and
+    never conflicting. Comparing the two resolutions is #396.
 
     **What the source said, and how it was matched.** ``raw_value`` records the
     source's own value before mapping, so ``Revio`` → ``PACBIO`` stays auditable;
@@ -197,6 +209,13 @@ def make_claim(
     claim serializes exactly as it did before this record was extended, apart
     from its ``source_type``.
     """
+    # Checked before `producer` reads `source.name`: `make_claim(source={"name": "R"})`
+    # otherwise raised `AttributeError` from that attribute access, or later from
+    # `to_dict`, rather than the validation error every other malformed member gets.
+    # `add_claim` is the public way in, so a caller outside this module can reach it
+    # (#401 review).
+    if source is not None and not isinstance(source, ClaimSource):
+        raise ValueError(f"claim source is a {type(source).__name__}, not a ClaimSource")
     producer = rule_id or (source.name if source is not None else None)
     if not producer:
         raise ValueError(
@@ -220,23 +239,114 @@ def make_claim(
         raise ValueError(
             f"claim from {producer!r} has unknown source_type {source_type!r} (expected one of {sorted(SOURCE_TYPES)})"
         )
-    # Tier is the resolution input, so it is required exactly where a claim
-    # competes and rejected where it cannot.
-    if state is None and tier is None:
+    # A source object and an external source type are one fact stated twice, so they
+    # are required to agree. Neither alone is enough: a claim naming `repository_
+    # metadata` with no `ClaimSource` would skip every import rule below — including
+    # the tier refusal — and `tier=999` would then outrank every rule in
+    # `evaluate_claims`, which is the silent override #391 rejected; and a source
+    # object under a rule's source type would be an import that resolution reads as
+    # one of ours (#401 review).
+    if (source is None) is (source_type in EXTERNAL_SOURCE_TYPES):
+        raise ValueError(
+            f"claim from {producer!r} has source_type {source_type!r} and "
+            f"{'no' if source is None else 'a'} ClaimSource — a claim from an external source carries both, "
+            f"and one of ours carries neither (external: {sorted(EXTERNAL_SOURCE_TYPES)})"
+        )
+    if source is not None:
+        # An imported claim does not compete on the tier ladder at all. Epic #391
+        # settled that on measured evidence: the 12 known disagreements on
+        # AnVIL_HPRC_R2 have inference claims at rule tiers 1-2, so admitting imports
+        # at CONTENT_TIER would have produced one conflict and eleven silent wrong
+        # overrides. Inference and imports resolve separately and are compared. A
+        # tier on such a claim is therefore a number an importer must invent and the
+        # policy discards — and a number a claim file could forge to outrank every
+        # rule. Rejected for the reason a state claim's is: it never competes (#401).
+        if tier is not None:
+            raise ValueError(
+                f"claim from {producer!r} carries a tier, but a claim from an external source does not "
+                "compete on the rule tiers — inference and imports are resolved separately and compared"
+            )
+        # It cites the mapping rule that produced it. There is no implicit copy:
+        # `PACBIO` -> `PACBIO` is an identity mapping and gets an entry like any
+        # other, because a source value that happens to spell a vocabulary term is a
+        # coincidence of spelling rather than an agreement about meaning. The one
+        # state with no rule is `unmapped`, which means exactly "no entry exists for
+        # this raw value" — which is what makes the review queue derivable rather
+        # than asserted (#401). The mapping table itself is #395/#399.
+        if state == UNMAPPED:
+            if rule_id is not None:
+                raise ValueError(
+                    f"claim from {producer!r} is {UNMAPPED!r} but cites rule {rule_id!r} — "
+                    f"{UNMAPPED!r} means no mapping entry fired"
+                )
+        elif not rule_id:
+            # `not rule_id` and not `is None`: an empty string is non-None, so it
+            # would otherwise satisfy the check while naming no rule at all.
+            raise ValueError(
+                f"claim from {producer!r} declares something but cites no mapping rule — "
+                f"an imported claim carries the rule_id that produced it, or state {UNMAPPED!r}"
+            )
+    # Tier is the resolution input for a claim that does compete, so it is required
+    # exactly where one does and rejected where it cannot.
+    if source is None and state is None and tier is None:
         raise ValueError(f"claim from {producer!r} declaring value/status must carry a tier")
+    # And it must be a number `evaluate_claims` can order. A claim arriving from a
+    # file can carry `"tier": "1"`, which passes the None check and then fails inside
+    # the tier comparison, against a claim that has nothing to do with it. `bool` is
+    # an `int` in Python and is not a tier (#401 review).
+    if tier is not None and (not isinstance(tier, int) or isinstance(tier, bool)):
+        raise ValueError(f"claim from {producer!r} has tier {tier!r}, which is not an integer")
     if state is not None and tier is not None:
         raise ValueError(f"claim from {producer!r} declaring state {state!r} must not carry a tier — it never competes")
-    if join_key is not None and join_key not in JOIN_KEYS:
-        raise ValueError(
-            f"claim from {producer!r} has unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})"
-        )
+    if join_key is not None:
+        require_join_key(join_key, "join_key", f"claim from {producer!r}")
     if match_exact is not None and join_key is None:
         raise ValueError(f"claim from {producer!r} has match_exact without a join_key to qualify")
+    # The members whose *type* nothing else pins. The vocabularies above check
+    # membership, which implies a string; these are free text and a boolean, so a
+    # claim built by hand could otherwise carry `value=7` or `match_exact="yes"` into
+    # resolution and out into the schema's Evidence, which says strings and a boolean
+    # (#401 review). `add_claim` is the reachable way in: a claim file cannot carry
+    # `match_exact` at all, since `_check_entry` refuses a post-join member outright.
+    # Cheap next to the membership tests this already runs.
+    # A rule's reason is the text that makes output readable and is not recoverable
+    # from anything else. An imported claim's is: it cites a mapping rule, and the
+    # text is resolved from that rule when the claim enters the stream — so the file
+    # carries the id rather than the prose repeated on a few million lines. Writing
+    # it is still allowed, for the curator table, whose reason ("checked against the
+    # marker paper") is not derivable either (#401). Resolving it is #395.
+    if reason is None and source is None:
+        raise ValueError(f"claim from {producer!r} has no reason — a rule claim carries the text it explains itself by")
+    if reason is not None and not isinstance(reason, str):
+        raise ValueError(f"claim from {producer!r} has reason {reason!r}, which is not a string")
+    # Unrolled rather than looped over a tuple of pairs: this runs a few million times
+    # per corpus run, and building that tuple was five allocations of it per call.
+    if value is not None and not isinstance(value, str):
+        raise ValueError(f"claim from {producer!r} has value {value!r}, which is not a string")
+    if raw_value is not None and not isinstance(raw_value, str):
+        raise ValueError(f"claim from {producer!r} has raw_value {raw_value!r}, which is not a string")
+    # `unmapped` and `no_vocabulary_term` are *about* a raw value: one says no mapping
+    # entry exists for it, the other that our vocabulary has no word for it. Without
+    # it the claim says only that something was not mapped, which makes the review
+    # queue and the vocabulary decision (#399) unactionable — and the schema already
+    # says raw_value is "the whole content of the claim" for these two. `declined` is
+    # the exception and stays optional: it declines a whole column as an authority,
+    # and there is no one value it is about (#401 review).
+    if state in (UNMAPPED, NO_VOCABULARY_TERM) and raw_value is None:
+        raise ValueError(
+            f"claim from {producer!r} is {state!r} but carries no raw_value — "
+            "the raw value is what the claim is about, and what a reviewer acts on"
+        )
+    if rule_id is not None and not isinstance(rule_id, str):
+        raise ValueError(f"claim from {producer!r} has rule_id {rule_id!r}, which is not a string")
+    if match_exact is not None and not isinstance(match_exact, bool):
+        raise ValueError(f"claim from {producer!r} has match_exact {match_exact!r}, which is not a boolean")
 
     claim: dict = {}
     if rule_id is not None:
         claim["rule_id"] = rule_id
-    claim["reason"] = reason
+    if reason is not None:
+        claim["reason"] = reason
     if tier is not None:
         claim["tier"] = tier
     if value is not None:
@@ -346,8 +456,8 @@ class ExtendedClassificationResult:
         self,
         fld: str,
         *,
-        reason: str,
         source_type: str,
+        reason: str | None = None,
         rule_id: str | None = None,
         tier: int | None = None,
         value: str | None = None,
@@ -364,8 +474,14 @@ class ExtendedClassificationResult:
         of the record (exactly one of value/status/state, a known source_type, a
         tier iff the claim competes, a producer handle — see that function);
         it is appended to ``field_evidence[fld]``, and the field is then set from
-        ``evaluate_claims`` over the full list — so the field's value is *derived*
-        from its claims, never written alongside them (#150). A same-tier
+        ``evaluate_claims`` over the list — so the field's value is *derived* from
+        its claims, never written alongside them (#150). "Derived from its claims"
+        means the ones that compete: ``evaluate_claims`` drops a claim carrying a
+        ``source`` (#401), so adding an imported claim records what the source said
+        without moving the field, exactly as adding a ``state`` claim does. A field
+        whose only claim is an imported one therefore stays ``not_classified``, with
+        the import visible beside the placeholder saying no rule determined a value —
+        which is true of it, and is what #396 will compare against. A same-tier
         disagreement therefore resolves to ``not_classified`` here, rather than the
         last writer silently winning. A ``state`` claim declares nothing, so
         appending one records the source's answer without changing the field —
@@ -460,10 +576,14 @@ class ExtendedClassificationResult:
 
         So a caller must not assume an ID here names a rule in unified_rules.yaml.
 
-        A claim from an external source carries a ``source`` rather than a
-        ``rule_id`` (#392) and is skipped for the same reason a marker is: it
-        names no rule, and this list is read by ``infer_assay_type``'s
-        ``matched_rules_any`` conditions, which are written against rule IDs.
+        **An imported claim now contributes one too.** It used to carry a ``source``
+        and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
+        cites the ``rule_id`` of the mapping that produced it, and only an
+        ``unmapped`` one still names nothing. ``infer_assay_type``'s
+        ``matched_rules_any`` conditions read this list and are written against our
+        own rule IDs, so a ``map_*`` id could satisfy — or fail to satisfy — one of
+        them. Nothing feeds an imported claim into ``field_evidence`` until the join
+        lands, so whether these belong here is #402's to settle.
         """
         seen = set()
         result = []
@@ -486,9 +606,21 @@ class ExtendedClassificationResult:
         Deduplication is by ``rule_id``, not by reason text, so two rules that
         happen to share a reason both appear — and one rule contributing to
         several fields appears once. Entries carrying no ``rule_id`` are skipped:
-        synthetic markers (not rules) and claims from an external source (#392),
-        which have nothing to deduplicate by. An external claim's reason is read
-        from the evidence itself, which keeps every claim, not from here.
+        synthetic markers, which are not rules, and an ``unmapped`` imported claim,
+        which by definition cites none.
+
+        **An imported claim is not filtered out here.** It carries the ``rule_id`` of
+        the mapping that produced it (#401), so it is not skipped like a marker, and
+        what it contributes is whatever ``reason`` it stores: prose for a curator
+        claim, which is allowed to carry one and does in the tests, and an empty
+        string for a mapped claim off a claim file, which stores the id alone and
+        leaves the text to be resolved from the mapping rule — which this accessor
+        does not do. ``add_claim`` is the public path that can put one
+        there today, and does so in the tests; nothing in the classification run takes
+        it, so no corpus output is affected until the join lands (#402). Whichever of
+        #395 or #402 first makes it routine owns deciding whether these belong here at
+        all. An external claim's reason is read from the evidence itself, which keeps
+        every claim, not from here.
         """
         seen = set()
         result = []
@@ -625,12 +757,14 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
 
     Args:
         claims: List of evidence dicts. Those declaring a ``value`` or a
-                ``status`` are resolved; an assertive claim that reaches the
-                disagreement path must carry a ``tier`` (raises ``KeyError``
-                otherwise — #228); ``rule_id`` / ``reason`` are optional here.
-                Synthetic markers (which carry a ``marker`` kind, no tier) and
-                ``claim_state`` claims (which declare nothing) are dropped before
-                the tier math.
+                ``status`` *and carrying a tier* are resolved; ``rule_id`` /
+                ``reason`` are optional here. Three kinds are dropped before the
+                tier math: synthetic markers (which carry a ``marker`` kind),
+                ``claim_state`` claims (which declare nothing), and claims carrying
+                a ``source`` — claims from an external source, which are inert here
+                rather than competing (#401). A *rule* claim with no tier still
+                raises ``KeyError`` on the disagreement path, which is #228's guard
+                against resolving at a phantom tier 0.
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
@@ -640,7 +774,22 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     # nothing — an empty claim, or a claim_state claim (#392) — but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown) —
     # those are real claims, not markers.
-    real_claims = [c for c in claims if _claim_declaration(c) is not None and not _is_synthetic_marker(c)]
+    #
+    # A claim from an external source is dropped too, and that is what makes an
+    # imported claim inert here (#401): `make_claim` rejects a tier on one, so it has
+    # nothing to compete with. This is the operational form of epic #391's decision
+    # that imports are not tier participants — without it an imported claim either
+    # reached `max(c["tier"] …)` and raised, or resolved a field by itself, which is
+    # the silent override the epic measured and rejected. It stays visible in
+    # field_evidence either way; comparing the two resolutions is #396.
+    #
+    # Keyed on `source` rather than on a missing tier, so that a *rule* claim with no
+    # tier still raises in the tier math below. That is #228's guard against a
+    # phantom tier 0 (#150/#151), and dropping such a claim silently instead would
+    # give the malformed case the treatment the deliberate one gets.
+    real_claims = [
+        c for c in claims if _claim_declaration(c) is not None and "source" not in c and not _is_synthetic_marker(c)
+    ]
 
     # Assertive = real-value declarations; a not_classified status means
     # "I looked but can't determine" and doesn't assert a value.

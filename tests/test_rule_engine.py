@@ -7,11 +7,13 @@ from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     DECLINED,
+    NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_CONTIG_DETECTION,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_FILENAME_RULE,
+    SOURCE_REPOSITORY_METADATA,
     UNMAPPED,
     ClaimSource,
     FileInfo,
@@ -457,34 +459,135 @@ class TestMakeClaim:
 
     def test_state_claim_rejects_a_tier(self):
         # A state claim never competes, so a tier on it would be a number nothing
-        # reads — and an invitation to believe it ranks against the rule tiers.
+        # reads — and an invitation to believe it ranks against the rule tiers. One
+        # of our own source types, so the claim reaches this guard rather than the
+        # import one, which refuses a tier for its own reason.
         with pytest.raises(ValueError, match="never competes"):
             make_claim(
+                rule_id="r",
                 reason="x",
                 tier=1,
-                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=EXTERNAL_SOURCE,
+                source_type=SOURCE_FILENAME_RULE,
                 state=DECLINED,
             )
 
-    def test_rejects_unknown_join_key(self):
-        with pytest.raises(ValueError, match="unknown join_key"):
+    def test_an_external_source_type_with_no_source_object_is_refused(self):
+        # The hole this closes: with no `ClaimSource`, such a claim skipped every
+        # import rule — including the tier refusal — so `tier=999` sailed through and
+        # outranked every rule in `evaluate_claims`. That is the silent override #391
+        # rejected on measured evidence, reachable from one keyword.
+        with pytest.raises(ValueError, match="and no ClaimSource"):
             make_claim(
+                rule_id="m",
+                reason="x",
+                tier=999,
+                source_type=SOURCE_REPOSITORY_METADATA,
+                value="PACBIO",
+            )
+
+    def test_a_source_object_under_one_of_our_source_types_is_refused(self):
+        # The other direction: a claim carrying an external source but typed as one
+        # of our rules is an import that resolution would weigh as inference.
+        with pytest.raises(ValueError, match="and a ClaimSource"):
+            make_claim(
+                rule_id="m",
                 reason="x",
                 tier=1,
+                source_type=SOURCE_FILENAME_RULE,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+            )
+
+    @pytest.mark.parametrize("tier", ["1", True, 1.5])
+    def test_rejects_a_tier_that_is_not_an_integer(self, tier):
+        """`evaluate_claims` orders claims by tier, so a non-integer one fails inside
+        the comparison — against a claim that has nothing to do with it. `bool` is an
+        `int` in Python and is not a tier.
+
+        Asserted on a *rule* claim: a claim from an external source is refused for
+        carrying a tier at all, before this check is reached.
+        """
+        with pytest.raises(ValueError, match="not an integer"):
+            make_claim(rule_id="r", reason="x", tier=tier, source_type=SOURCE_FILENAME_RULE, value="genomic")
+
+    def test_rejects_unknown_join_key(self):
+        with pytest.raises(ValueError, match="not a key of the target"):
+            make_claim(
+                rule_id="map_v1",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source=EXTERNAL_SOURCE,
                 value="PACBIO",
                 join_key="filename",  # not the schema's file_name
             )
 
+    def test_rejects_a_match_exact_that_is_not_a_boolean(self):
+        # `match_exact="yes"` would ride out into the schema's Evidence, which says a
+        # boolean. Nothing else pins the type: it is not drawn from a vocabulary.
+        with pytest.raises(ValueError, match="match_exact 'yes', which is not a boolean"):
+            make_claim(
+                rule_id="map_v1",
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+                join_key="file_name",
+                # The type checker refuses this, which is the point: the check is for
+                # a claim rebuilt by hand, where no checker has run.
+                match_exact="yes",  # type: ignore[arg-type]
+            )
+
+    @pytest.mark.parametrize("state", [UNMAPPED, NO_VOCABULARY_TERM])
+    def test_rejects_a_value_shaped_state_with_no_raw_value(self, state):
+        # Both states are *about* a raw value — no mapping entry exists for it, or
+        # our vocabulary has no word for it. Without it the claim says only that
+        # something was not mapped, and neither the review queue nor the vocabulary
+        # decision (#399) has anything to act on.
+        with pytest.raises(ValueError, match="carries no raw_value"):
+            make_claim(
+                rule_id="map_v1" if state is NO_VOCABULARY_TERM else None,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                state=state,
+            )
+
+    def test_a_declined_column_needs_no_raw_value(self):
+        # `declined` declines a whole column as an authority for a dimension, so
+        # there is no one value it is about — the exception the rule above keeps.
+        claim = make_claim(
+            rule_id="decline_v1",
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=DECLINED,
+        )
+
+        assert "raw_value" not in claim
+
+    def test_rejects_a_source_that_is_not_a_claim_source(self):
+        # `producer` reads `source.name` to name the claim in every message below, so
+        # a dict used to raise `AttributeError` from that attribute access — a
+        # traceback where every other malformed member gets a validation error.
+        with pytest.raises(ValueError, match="claim source is a dict, not a ClaimSource"):
+            make_claim(
+                rule_id="m",
+                source_type=SOURCE_REPOSITORY_METADATA,
+                # Refused by the type checker, which is the point: the guard is for a
+                # caller that is not type-checked, such as a claim rebuilt by hand.
+                source={"name": "HPRC Data Explorer"},  # type: ignore[arg-type]
+                value="PACBIO",
+            )
+
+    def test_rejects_a_rule_claim_with_no_reason(self):
+        # A rule's reason is the text that makes output readable and is recoverable
+        # from nothing else. An imported claim's is — it cites a mapping rule — which
+        # is why the requirement is on a claim with no source rather than on all.
+        with pytest.raises(ValueError, match="has no reason"):
+            make_claim(rule_id="bam_extension", source_type=SOURCE_FILENAME_RULE, value="BAM", tier=1)
+
     def test_rejects_match_exact_without_join_key(self):
         # match_exact qualifies a join; on its own it says a match was exact
         # without saying what was matched.
         with pytest.raises(ValueError, match="match_exact without a join_key"):
             make_claim(
-                reason="x",
-                tier=1,
+                rule_id="map_v1",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source=EXTERNAL_SOURCE,
                 value="PACBIO",
@@ -940,6 +1043,38 @@ class TestEvaluateClaims:
                 ]
             )
 
+    def test_an_imported_claim_is_inert_in_resolution(self):
+        """Imports are not tier participants (#391), so one cannot win or raise here.
+
+        `make_claim` rejects a tier on a claim from an external source, so such a
+        claim reaching the tier math would either raise on `max(c["tier"] …)` or —
+        alone — resolve the field by itself, which is the silent override the epic
+        measured and rejected. Comparing the two resolutions is #396.
+        """
+        imported = make_claim(
+            source_type=SOURCE_REPOSITORY_METADATA,
+            source=ClaimSource(name="HPRC", dataset="R2", table="t", column="platform"),
+            rule_id="map_v1",
+            raw_value="Revio",
+            value="PACBIO",
+        )
+        rule = make_claim(
+            rule_id="platform_illumina",
+            reason="PL:ILLUMINA",
+            tier=2,
+            source_type=SOURCE_FILENAME_RULE,
+            value="ILLUMINA",
+        )
+
+        # Disagreeing: the rule resolves the field, and the import neither wins nor
+        # creates a conflict.
+        both = evaluate_claims([rule, imported])
+        assert (both.value, both.is_conflict) == ("ILLUMINA", False)
+        # Alone: nothing competes, so the field stays unresolved rather than being
+        # decided by an import.
+        alone = evaluate_claims([imported])
+        assert (alone.value, alone.status) == (None, NOT_CLASSIFIED)
+
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""
         result = evaluate_claims(
@@ -1030,8 +1165,15 @@ class TestClaimStatesDoNotResolve:
     """
 
     def _state_claim(self, state):
+        # Every state but `unmapped` cites the mapping rule that decided it; `unmapped`
+        # means no entry fired, so it cites none (#401).
+        rule_id = None if state == "unmapped" else "map_v1"
         return make_claim(
-            reason="x", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, state=state, raw_value="Hi-C"
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=state,
+            raw_value="Hi-C",
+            rule_id=rule_id,
         )
 
     @pytest.mark.parametrize("state", ["unmapped", "no_vocabulary_term", "declined"])
@@ -1066,6 +1208,7 @@ class TestClaimStatesDoNotResolve:
         declined = ExtendedClassificationResult()
         declined.add_claim(
             "data_type",
+            rule_id="decline_alignments_v2_location_v1",
             reason="alignments_v2.location is not an authority on data_type",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
@@ -1099,10 +1242,11 @@ class TestClaimStatesDoNotResolve:
         )
         result.add_claim(
             "data_type",
-            reason="not an authority",
+            reason="the source said something with no entry in the mapping table",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
-            state=DECLINED,
+            state=UNMAPPED,
+            raw_value="pore-c",
         )
         assert result.rules_matched == ["r"]
         assert result.reasons == ["illumina"]

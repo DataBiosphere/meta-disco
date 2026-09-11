@@ -70,7 +70,7 @@ class TestManifestClaim:
 
     def test_mapped_claim_records_the_raw_value_and_the_join(self):
         claim = make_claim(
-            reason="platform mapped from the manifest's instrument model",
+            rule_id="map_anvil_instrument_model_v1",
             source_type=SOURCE_REPOSITORY_METADATA,
             source=ClaimSource(
                 name="AnVIL",
@@ -78,7 +78,6 @@ class TestManifestClaim:
                 table="sequencing_activities",
                 column="instrument_model",
             ),
-            tier=3,
             value="PACBIO",
             raw_value="Revio",
             join_key=JOIN_KEY_FILE_PATH,
@@ -90,8 +89,12 @@ class TestManifestClaim:
         assert claim["source"]["table"] == "sequencing_activities"
         assert claim["source"]["column"] == "instrument_model"
         assert (claim["join_key"], claim["match_exact"]) == (JOIN_KEY_FILE_PATH, True)
-        # No rule made this claim, and none is fabricated to carry it.
-        assert "rule_id" not in claim
+        # The mapping that produced it *is* a rule, so the claim names it — that is
+        # where `Revio -> PACBIO` is written down and reviewed, and citing it is what
+        # makes the claim reproducible (#401). It carries no tier: an imported claim
+        # does not compete on the rule tiers.
+        assert claim["rule_id"] == "map_anvil_instrument_model_v1"
+        assert "tier" not in claim
 
     def test_unmapped_claim_carries_what_the_source_said(self):
         # library_selection=RANDOM: the source said something and no map entry
@@ -109,6 +112,9 @@ class TestManifestClaim:
         assert claim["claim_state"] == UNMAPPED
         assert claim["raw_value"] == "RANDOM"
         assert not {"value", "status", "tier"} & set(claim)
+        # And no rule: `unmapped` means exactly that no mapping entry fired, which is
+        # what makes the review queue derivable rather than curated by hand (#401).
+        assert "rule_id" not in claim
 
     def test_declined_column_is_expressible_without_a_value(self):
         # The spike's 12 disagreements all came from one column: alignments_v2 has
@@ -117,6 +123,7 @@ class TestManifestClaim:
         # whatever it holds. No value-level mapping and no finer key can fix that,
         # which is why `declined` is a state and not a mapped-to value.
         claim = make_claim(
+            rule_id="decline_anvil_alignments_v2_location_v1",
             reason="alignments_v2.location is not an authority on data_type",
             source_type=SOURCE_REPOSITORY_METADATA,
             source=ANVIL_MANIFEST,
@@ -139,7 +146,7 @@ class TestCatalogClaim:
             reason="platform from the catalog's sequencing technology",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=HPRC_CATALOG,
-            tier=3,
+            rule_id="map_hprc_platform_v1",
             value="PACBIO",
             raw_value="Revio",
             join_key=JOIN_KEY_FILE_NAME,
@@ -153,6 +160,7 @@ class TestCatalogClaim:
         # deliberately to nothing is a recorded decision, distinct from `unmapped`,
         # which means a mapping may still be owed (#391 sub-issue 8).
         claim = make_claim(
+            rule_id="map_hprc_annotation_type_v1",
             reason="no data_type term for a centromeric satellite annotation",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=HPRC_CATALOG,
@@ -163,6 +171,10 @@ class TestCatalogClaim:
         )
         assert claim["claim_state"] == NO_VOCABULARY_TERM
         assert claim["raw_value"] == "CenSat"
+        # Mapped deliberately to nothing is still a mapping, so it names the rule
+        # that decided it — which is what distinguishes it from `unmapped` in the
+        # record itself, not only by the label (#401).
+        assert claim["rule_id"] == "map_hprc_annotation_type_v1"
 
 
 class TestOneRecordAcrossProducers:
@@ -181,23 +193,28 @@ class TestOneRecordAcrossProducers:
             value="GRCh38",
         )
         manifest = make_claim(
-            reason="manifest", source_type=SOURCE_REPOSITORY_METADATA, source=ANVIL_MANIFEST, state=DECLINED
+            rule_id="decline_v1",
+            reason="manifest",
+            source_type=SOURCE_REPOSITORY_METADATA,
+            source=ANVIL_MANIFEST,
+            state=DECLINED,
         )
         catalog = make_claim(
-            reason="catalog",
+            rule_id="map_v1",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=HPRC_CATALOG,
-            tier=3,
             value="PACBIO",
             raw_value="Revio",
             join_key=JOIN_KEY_FILE_NAME,
             match_exact=False,
         )
         assert set(inference) == {"rule_id", "reason", "tier", "value", "source_type"}
-        assert set(manifest) == {"reason", "claim_state", "source_type", "source"}
+        assert set(manifest) == {"rule_id", "reason", "claim_state", "source_type", "source"}
+        # The catalog claim's text is resolved from the rule it names rather than
+        # stored, so it carries no `reason`; and no `tier`, because it does not
+        # compete on the rule tiers (#401).
         assert set(catalog) == {
-            "reason",
-            "tier",
+            "rule_id",
             "value",
             "source_type",
             "source",
@@ -205,6 +222,24 @@ class TestOneRecordAcrossProducers:
             "join_key",
             "match_exact",
         }
+
+    @pytest.mark.parametrize(
+        "member,value,expected",
+        [
+            ("name", None, "name"),
+            ("name", "", "name"),
+            ("name", 7, "name"),
+            ("dataset", 7, "dataset"),
+            ("column", 7, "column"),
+        ],
+    )
+    def test_a_source_member_of_the_wrong_type_is_refused_when_it_is_built(self, member, value, expected):
+        # A dataclass annotation is not a runtime check, and this is the one
+        # claim-file record that reaches output evidence without passing an
+        # envelope — `ClaimSource(name="HPRC", dataset=7)` would serialize a number
+        # into the schema's `Evidence` and be caught at no boundary before it.
+        with pytest.raises(ValueError, match=f"claim source: {expected}"):
+            ClaimSource(**{"name": "HPRC", member: value})
 
     def test_source_omits_members_it_does_not_have(self):
         # ClaimSource drops nulls, so a source with no column structure carries no
