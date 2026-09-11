@@ -532,6 +532,18 @@ class TestAClaimIsRebuiltNotTrusted:
         with pytest.raises(ValueError, match="not a valid claim"):
             list(iter_claims(path))
 
+    def test_a_line_whose_column_is_an_explicit_null_is_refused(self, tmp_path):
+        """Absent is fine; a written-out null is a record the writer could not produce.
+
+        `dict.pop` with a default cannot tell the two apart, so collapsing them would
+        accept here what every other member refuses.
+        """
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": None}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="explicit null"):
+            list(iter_claims(path))
+
     def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
         """The per-line `column` is a source member and is checked like the rest."""
         claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": 7}

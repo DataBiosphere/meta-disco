@@ -71,8 +71,11 @@ of it after a single ``readline``::
 row in* ``target`` *whose* ``target_key`` *equals its* ``target_key_value``. The key
 *names* live on the envelope because they do not change within a file — every claim
 an importer writes is keyed the same way — so only the value is on the line. The
-same factoring keeps the source's repository, url and table on the envelope while
-``column`` stays per claim, since one table's claims are read from several columns.
+same factoring keeps the source's repository, dataset, url and table on the envelope
+while ``column`` stays per claim, since one table's claims are read from several
+columns. ``dataset`` crosses onto each claim as well as staying on the envelope: it
+is what makes a ``column`` legible, since the same column name means different things
+in different datasets.
 
 **The importer owns the mapping between the two keys** and writes
 ``target_key_value`` already in the target's value space; where a source's own value
@@ -99,7 +102,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from .models import CLASSIFICATION_FIELDS, ClaimFileEnvelope, ClaimFileSource, ClaimSource, optional_str
+from .models import (
+    CLASSIFICATION_FIELDS,
+    ClaimFileEnvelope,
+    ClaimFileSource,
+    ClaimSource,
+    optional_str,
+    pop_optional_str,
+)
 from .rule_engine import make_claim
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from a
@@ -434,9 +444,9 @@ def _claim_line(
 
     The claim keeps every key ``make_claim`` gave it except ``source``, which is
     replaced by that source's ``column`` alone — the only member that varies within
-    one file, and omitted too when the source has none. Writing the repository, url
-    and table on every line would be the envelope's content repeated a few million
-    times.
+    one file, and omitted too when the source has none. Writing the repository,
+    dataset, url and table on every line would be the envelope's content repeated a
+    few million times.
 
     That factoring is also a check: a claim whose source is not the source the
     envelope names does not belong in this file, and saying so here is cheaper than a
@@ -559,8 +569,8 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     body = dict(claim)
     # The column is checked here rather than trusted: `"column": 7` would otherwise
     # ride through as a claim's source member. `as_claim_source` then supplies the
-    # three facts the envelope holds.
-    source = envelope_source.as_claim_source(optional_str(body.pop("column", None), "source column", where))
+    # four facts the envelope holds.
+    source = envelope_source.as_claim_source(pop_optional_str(body, "column", "source column", where))
     return ClaimEntry(field=field, target_key_value=target_key_value, claim=_rebuild_claim(body, source, where))
 
 

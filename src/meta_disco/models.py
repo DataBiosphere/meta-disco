@@ -400,6 +400,22 @@ def require_join_key(value: object, label: str, where: str) -> str:
     return value
 
 
+def pop_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
+    """Remove an optional string member from ``block``, refusing an explicit null.
+
+    The same rule :func:`_flat_from_dict` applies to a member it reads, for one taken
+    out of a dict instead — a claim line's ``column``, which is the one source member
+    the line carries rather than the envelope. ``dict.pop`` with a default cannot tell
+    an absent key from a present null, and collapsing the two would accept a record
+    the writer could not have produced while every other member refuses it (#401
+    review).
+    """
+    value = block.pop(key, _ABSENT)
+    if value is None:
+        raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
+    return optional_str(None if value is _ABSENT else value, label, where)
+
+
 def _parse_fetched_at(value: object, where: str) -> datetime:
     """Parse a claim file's ``fetched_at``, or raise naming ``where``.
 
@@ -512,8 +528,8 @@ class ClaimSource:
     """Identity of an external source that produced a claim (issue #392).
 
     The producer handle for a claim that is not from one of our rules. The schema's
-    ``ClaimSource`` class is the definition of what the four members mean and why
-    the record is cut at this granularity; this is the Python side of it.
+    ``ClaimSource`` class is the definition of what its members mean and why the
+    record is cut at this granularity; this is the Python side of it.
 
     Four levels of *where*, narrowing: the source, the collection within it, the
     table within that, and the column the raw value was read from. ``dataset`` is
