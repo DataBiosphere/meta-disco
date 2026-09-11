@@ -561,6 +561,20 @@ class TestMakeClaim:
 
         assert "raw_value" not in claim
 
+    def test_rejects_a_source_that_is_not_a_claim_source(self):
+        # `producer` reads `source.name` to name the claim in every message below, so
+        # a dict used to raise `AttributeError` from that attribute access — a
+        # traceback where every other malformed member gets a validation error.
+        with pytest.raises(ValueError, match="claim source is a dict, not a ClaimSource"):
+            make_claim(
+                rule_id="m",
+                source_type=SOURCE_REPOSITORY_METADATA,
+                # Refused by the type checker, which is the point: the guard is for a
+                # caller that is not type-checked, such as a claim rebuilt by hand.
+                source={"name": "HPRC Data Explorer"},  # type: ignore[arg-type]
+                value="PACBIO",
+            )
+
     def test_rejects_a_rule_claim_with_no_reason(self):
         # A rule's reason is the text that makes output readable and is recoverable
         # from nothing else. An imported claim's is — it cites a mapping rule — which

@@ -441,7 +441,7 @@ classes:
         pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?|Z)?\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
-          a date alone. A run reports the age of every claim file it consumes from
+          a date alone. A run reports the age of every claim file it finds from
           this, so that a person can see an artefact going stale before it is
           wrong — and two imports on the same day, which is where that report
           matters most, are only distinguishable if the time is recorded. A

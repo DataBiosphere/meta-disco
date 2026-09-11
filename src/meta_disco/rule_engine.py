@@ -209,6 +209,13 @@ def make_claim(
     claim serializes exactly as it did before this record was extended, apart
     from its ``source_type``.
     """
+    # Checked before `producer` reads `source.name`: `make_claim(source={"name": "R"})`
+    # otherwise raised `AttributeError` from that attribute access, or later from
+    # `to_dict`, rather than the validation error every other malformed member gets.
+    # `add_claim` is the public way in, so a caller outside this module can reach it
+    # (#401 review).
+    if source is not None and not isinstance(source, ClaimSource):
+        raise ValueError(f"claim source is a {type(source).__name__}, not a ClaimSource")
     producer = rule_id or (source.name if source is not None else None)
     if not producer:
         raise ValueError(

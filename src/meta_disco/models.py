@@ -395,8 +395,10 @@ def required_str(value: object, label: str, where: str) -> str:
     dataset, a table, a catalog version — and none of them contains one, while every
     one is printed by ``claim_files._describe`` in the run's report, where an embedded
     newline is a second report line a claim file wrote. The schema refuses the same
-    value (the slots carry ``pattern: "^.+$"``, which a newline breaks), so without
-    this the reader would accept what the schema rejects (#401 review).
+    value — the slots carry ``pattern: "^[^\\r\\n]+\\Z"``, which excludes a line
+    terminator anywhere, including the trailing one that ``$`` would have allowed
+    through — so without this the reader would accept what the schema rejects
+    (#401 review).
 
     ``where`` locates the fault — a file and line for a reader, the constructing call
     for a writer — and prefixes every message.
