@@ -2,6 +2,7 @@
 
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
+from typing import Any
 
 from .file_name import FileName
 
@@ -392,14 +393,18 @@ class ClaimSource:
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: source is {type(block).__name__}, not an object")
-        return cls(
-            **{
-                f.name: (required_str if f.default is MISSING else optional_str)(
-                    block.get(f.name), f"source {f.name}", where
-                )
-                for f in fields(cls)
-            }
-        )
+        # Which checker a member gets is decided per field at runtime, from whether the
+        # dataclass gives it a default, so the values are only ever `str | None` to a
+        # type checker — `required_str` raises rather than returning None, but that is
+        # not visible through the splat. Widened here rather than at the helpers, which
+        # are precise on their own.
+        members: dict[str, Any] = {
+            f.name: (required_str if f.default is MISSING else optional_str)(
+                block.get(f.name), f"source {f.name}", where
+            )
+            for f in fields(cls)
+        }
+        return cls(**members)
 
 
 @dataclass(frozen=True)
