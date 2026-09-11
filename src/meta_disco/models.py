@@ -2,6 +2,7 @@
 
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
+from functools import cache
 from typing import Any
 
 from .file_name import FileName
@@ -378,6 +379,61 @@ def optional_str(value: object, label: str, where: str) -> str | None:
     return None if value is None else required_str(value, label, where)
 
 
+# Missing-key sentinel for `_flat_from_dict`. `None` cannot serve: `_flat_to_dict`
+# omits a null member, so an absent key and an explicit `"dataset": null` both read
+# as None through `dict.get`, and the second is a record we did not write.
+_ABSENT = object()
+
+
+def require_join_key(value: object, label: str, where: str) -> str:
+    """Return ``value`` as a key of the target, or raise naming ``label`` and ``where``.
+
+    One refusal for one vocabulary, used in both positions it appears in: a claim
+    file's envelope declaring which key it is keyed by (``target_key``), and a claim
+    recording which one attached it (``join_key``) once the join has run. Stating it
+    twice would mean two wordings for the same fault and two places to update when
+    the vocabulary moves — ``archive_accession`` is the live example, a derived fact
+    rather than a record field.
+    """
+    if not isinstance(value, str) or value not in JOIN_KEYS:
+        raise ValueError(f"{where}: {label} {value!r} is not a key of the target (expected one of {sorted(JOIN_KEYS)})")
+    return value
+
+
+def _parse_fetched_at(value: object, where: str) -> datetime:
+    """Parse a claim file's ``fetched_at``, or raise naming ``where``.
+
+    A trailing ``Z`` is normalized to ``+00:00`` first. ``datetime.fromisoformat``
+    rejects ``Z`` on Python 3.10 — this project's floor and what CI runs — while
+    accepting it from 3.11, and the importers coming in #369/#394 read web APIs that
+    emit it almost universally. Without this a claim file written on a 3.11 machine
+    parses there and fails on CI, which is a property of the interpreter rather than
+    of the file.
+
+    A time of day is required. ``fromisoformat`` accepts a bare ``2026-09-01`` and
+    silently returns midnight, so a date-only value would read back as a fetch
+    claiming to have happened at 00:00:00 — a precision the file never stated, and
+    one that makes two imports on the same day indistinguishable, which is the case
+    the age report exists for. The check is on the string rather than the parsed
+    value, because midnight is a real time a genuine fetch can have: an ISO 8601 date
+    is its first ten characters, so anything longer carries a separator and a time,
+    and ``isoformat()`` on a datetime always writes one.
+    """
+    if not isinstance(value, str):
+        raise ValueError(f"{where}: envelope fetched_at is {value!r}, not an ISO 8601 string")
+    normalized = value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
+    if len(value) <= _ISO_DATE_CHARS:
+        raise ValueError(
+            f"{where}: envelope fetched_at {value!r} is a date with no time of day — "
+            "record when the fetch happened, not only the day it happened on"
+        )
+    return parsed
+
+
 def _flat_to_dict(record) -> dict:
     """Serialize a flat dataclass of optional strings, dropping the absent ones.
 
@@ -388,44 +444,67 @@ def _flat_to_dict(record) -> dict:
 
     Null members are omitted rather than written as explicit nulls: these records
     either have a member or do not, and there is no "we looked and found nothing"
-    state for a reader to tell apart from an absent one.
+    state for a reader to tell apart from an absent one. (``ReferenceBuild.to_dict``
+    keeps its nulls for exactly that reason, which is why it is not one of these.)
     """
     return {f.name: v for f in fields(record) if (v := getattr(record, f.name)) is not None}
 
 
-def _flat_from_dict(cls, block: object, where: str, label: str, without: tuple[str, ...] = ()):
+@cache
+def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
+    """The per-class reading plan for :func:`_flat_from_dict`, computed once.
+
+    ``fields()`` walks the dataclass on every call and is not free; the members and
+    which checker each one gets cannot change for a class, so they are derived once
+    and cached. This runs per claim on the write path — a few million per source —
+    where rebuilding the name set was measurably the largest cost in the line.
+
+    Returns the known names, those names sorted for an error message, and
+    ``(name, checker)`` pairs: a member with no dataclass default is required.
+    """
+    members = tuple((f.name, required_str if f.default is MISSING else optional_str) for f in fields(cls))
+    names = frozenset(name for name, _ in members)
+    return names, tuple(sorted(names)), members
+
+
+def _reject_unknown(block: dict, known: frozenset, expected: tuple, where: str, label: str) -> None:
+    """Refuse a member the record does not have, rather than ignoring it.
+
+    The schema validates these records ``closed=True``, so a reader that quietly
+    dropped an unknown key would accept documents the schema rejects — the two must
+    refuse the same files (#401 review). Shared by the flat records and by
+    ``ClaimFileEnvelope``, so one refusal is worded one way.
+    """
+    if extra := sorted(set(block) - known):
+        raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {list(expected)})")
+
+
+def _flat_from_dict(cls, block: object, where: str, label: str):
     """Rebuild one of those records from what :func:`_flat_to_dict` wrote.
 
     The inverse, and derived from ``fields()`` for the same reason. Every member is
     checked: a required one (no dataclass default) must be a non-empty string, an
-    optional one must be absent or a non-empty string. An explicit ``null`` is
-    refused rather than read as absent — ``_flat_to_dict`` omits nulls, so a written
-    record never contains one, and a file that does was not written by us.
+    optional one must be absent or a non-empty string.
 
-    A member the class does not have is refused rather than ignored, because the
-    schema validates these records ``closed=True``: a reader that quietly dropped an
-    unknown key would accept documents the schema rejects (#401 review).
-
-    ``without`` names members that belong to the dataclass but not to *this* position
-    in the format, making them unknown keys there rather than optional ones — a claim
-    file's envelope parses its source ``without=("column",)``, since a column belongs
-    to a claim and one table's claims are read from several columns.
+    An explicit ``null`` is refused rather than read as absent. ``_flat_to_dict``
+    omits nulls, so a record we wrote never contains one, and a file that does was
+    not written by us — accepting it would silently normalize a shape the schema
+    rejects. Distinguishing the two needs a sentinel, because ``dict.get`` returns
+    ``None`` for both an absent key and a present null.
     """
     if not isinstance(block, dict):
         raise ValueError(f"{where}: {label} is {type(block).__name__}, not an object")
-    known = {f.name for f in fields(cls)} - set(without)
-    if extra := sorted(set(block) - known):
-        raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {sorted(known)})")
-    # Which checker a member gets is decided per field at runtime, from whether the
-    # dataclass gives it a default, so the values are only ever `str | None` to a type
-    # checker — `required_str` raises rather than returning None, but that is not
-    # visible through the splat.
-    members: dict[str, Any] = {
-        f.name: (required_str if f.default is MISSING else optional_str)(block.get(f.name), f"{label} {f.name}", where)
-        for f in fields(cls)
-        if f.name in known
-    }
-    return cls(**members)
+    known, expected, members = _flat_plan(cls)
+    _reject_unknown(block, known, expected, where, label)
+    # Values are only ever `str | None` to a type checker — `required_str` raises
+    # rather than returning None, but that is not visible through the splat.
+    values: dict[str, Any] = {}
+    for name, checker in members:
+        present = block.get(name, _ABSENT)
+        if present is None:
+            raise ValueError(f"{where}: {label} {name} is an explicit null — an absent member is omitted, not nulled")
+        values[name] = checker(None if present is _ABSENT else present, f"{label} {name}", where)
+    return cls(**values)
 
 
 @dataclass(frozen=True)
@@ -524,9 +603,17 @@ class ClaimTarget:
     ``file_name`` alone, 69% of the corpus's 708,088 rows carry a non-unique key, and
     20% remain non-unique even scoped by dataset *title* alone — but within
     ``AnVIL_HPRC_R2`` the collision rate is 2 rows in 16,271. A filename join is
-    unusable without a dataset scope and reliable with one. Null for a source whose
-    key is unique across the whole target (``file_id``, ``drs_uri``), where a
-    corpus-wide match is correct.
+    unusable without a dataset scope and reliable with one.
+
+    Null is correct only where the key is unique across the whole target. Measured,
+    that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on
+    every one of the 708,088 records. ``file_md5sum`` is *not*: it is non-unique on
+    1.7% of rows, because 2,026 md5s are registered in more than one dataset. Leaving
+    it unscoped is defensible for a claim about the file's *content*, since those
+    rows are the same bytes catalogued twice and a claim about them is true of all of
+    them, and wrong for a claim about one catalogued file. Nothing here enforces that
+    distinction; making the join record the ambiguity rather than silently fanning
+    out is #402's.
 
     ``version`` is which generation of the target the importer resolved against — an
     AnVIL catalog such as ``anvil15``. Null when the importer did not resolve against
@@ -630,12 +717,7 @@ class ClaimFileEnvelope:
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
         required_str(self.source_version, "source_version", where)
         required_str(self.source_key, "source_key", where)
-        required_str(self.target_key, "target_key", where)
-        if self.target_key not in JOIN_KEYS:
-            raise ValueError(
-                f"{where}: target_key {self.target_key!r} is not a key of the target "
-                f"(expected one of {sorted(JOIN_KEYS)})"
-            )
+        require_join_key(self.target_key, "target_key", where)
 
     @classmethod
     def from_dict(cls, block: object, where: str) -> "ClaimFileEnvelope":
@@ -668,32 +750,15 @@ class ClaimFileEnvelope:
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
-        known = {f.name for f in fields(cls)}
-        if extra := sorted(set(block) - known):
-            raise ValueError(f"{where}: envelope has unknown member(s) {extra} (expected {sorted(known)})")
-        fetched_at = block.get("fetched_at")
-        if not isinstance(fetched_at, str):
-            raise ValueError(f"{where}: envelope fetched_at is {fetched_at!r}, not an ISO 8601 string")
-        normalized = fetched_at.removesuffix("Z") + "+00:00" if fetched_at.endswith("Z") else fetched_at
-        try:
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError:
-            raise ValueError(f"{where}: envelope fetched_at {fetched_at!r} is not an ISO 8601 datetime") from None
-        # An ISO 8601 date is its first 10 characters; anything longer carries a
-        # separator and a time. `isoformat()` on a datetime always writes one, so our
-        # own writer cannot trip this.
-        if len(fetched_at) <= _ISO_DATE_CHARS:
-            raise ValueError(
-                f"{where}: envelope fetched_at {fetched_at!r} is a date with no time of day — "
-                "record when the fetch happened, not only the day it happened on"
-            )
+        known, expected, _ = _flat_plan(cls)
+        _reject_unknown(block, known, expected, where, "envelope")
         return cls(
             source=ClaimFileSource.from_dict(block.get("source"), where),
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
             source_key=required_str(block.get("source_key"), "envelope source_key", where),
             target=ClaimTarget.from_dict(block.get("target"), where),
             target_key=required_str(block.get("target_key"), "envelope target_key", where),
-            fetched_at=parsed,
+            fetched_at=_parse_fetched_at(block.get("fetched_at"), where),
         )
 
     def to_dict(self) -> dict:

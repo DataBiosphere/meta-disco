@@ -93,7 +93,7 @@ readable while the file stays small. The mapping table itself is #395/#399.
 """
 
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -187,7 +187,7 @@ class ClaimFileStatus:
 
     A run does not judge a claim file beyond this. Whether the claims still describe
     the catalog being classified is left to the importer, which compares its own
-    file's ``corpus_catalog`` against the configured one when deciding to re-fetch,
+    file's ``target.version`` against the configured catalog when deciding to re-fetch,
     and to the boundary where an enhancement is offered back to a catalog — which
     requires the run's output to record which catalog it enhances, and that is #404,
     not something this PR added. Nothing enforces it today.
@@ -228,6 +228,22 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     name = path.name
+    # The source a claim in this file must have come from, by its column, as both the
+    # record and the dict it serializes to. The envelope's source is constant for the
+    # file and one table's claims are read from a handful of columns, so this is a few
+    # objects per file rather than two per claim. Holding the dict too is what lets
+    # the check below be a dict compare rather than a parse: `ClaimSource.from_dict`
+    # per claim was the single largest cost in the write loop. (A plain dict closed
+    # over here rather than `lru_cache` on a method, which would keep the envelope
+    # alive for the process.)
+    by_column: dict[str | None, tuple[ClaimSource, dict]] = {}
+
+    def expected_source(column: str | None) -> tuple[ClaimSource, dict]:
+        if (known := by_column.get(column)) is None:
+            source = envelope.source.as_claim_source(column)
+            known = by_column[column] = (source, source.to_dict())
+        return known
+
     written = 0
     try:
         with tmp.open("w", encoding="utf-8", buffering=_WRITE_BUFFER_BYTES) as f:
@@ -235,7 +251,7 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
             f.write("\n")
             for entry in entries:
                 written += 1
-                f.write(_encode(_claim_line(envelope.source, entry, name, written)))
+                f.write(_encode(_claim_line(expected_source, entry, name, written)))
                 f.write("\n")
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -404,7 +420,9 @@ def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
     return f"{days} day{'s' if days != 1 else ''} ago"
 
 
-def _claim_line(envelope_source: ClaimFileSource, entry: ClaimEntry, name: str, n: int) -> dict:
+def _claim_line(
+    expected_source: Callable[[str | None], tuple[ClaimSource, dict]], entry: ClaimEntry, name: str, n: int
+) -> dict:
     """Serialize one entry, factoring its claim's source into the file's.
 
     The claim keeps every key ``make_claim`` gave it except ``source``, which is
@@ -431,16 +449,22 @@ def _claim_line(envelope_source: ClaimFileSource, entry: ClaimEntry, name: str, 
     when there is one (:func:`_where`) — this runs a few million times per source, and
     a label built per claim is a string nothing reads.
     """
-    _check_entry(name, _WRITING, n, entry.field, entry.target_key_value, entry.claim)
     where = _where(name, _WRITING, n)
+    _check_entry(where, entry.field, entry.target_key_value, entry.claim)
     claim = dict(entry.claim)
     source = claim.pop("source", None)
     if not isinstance(source, dict):
         raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
+    # A dict compare against the envelope's own serialization, not a parse. The
+    # claim's source came from `make_claim`, so it is already a `ClaimSource.to_dict`
+    # — equal to the expected one exactly when it is the same source. Parsing it back
+    # into a record first cost more than everything else on this line put together,
+    # to learn the same thing. `column` is checked because it is the one member that
+    # is this line's rather than the envelope's.
     column = optional_str(source.get("column"), "source column", where)
-    expected = envelope_source.as_claim_source(column)
-    if ClaimSource.from_dict(source, where) != expected:
-        raise ValueError(f"{where}: comes from {source}, but this file's envelope names {expected.to_dict()}")
+    expected, expected_dict = expected_source(column)
+    if source != expected_dict:
+        raise ValueError(f"{where}: comes from {source}, but this file's envelope names {expected_dict}")
     # What is written is the *rebuilt* claim, not the caller's dict. `make_claim`
     # omits a key whose argument is None, so a hand-built claim carrying an explicit
     # `"raw_value": None` would otherwise be written with that key and read back
@@ -518,30 +542,28 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     and is formatted with ``n`` into a label only on a refusal — see
     :func:`_claim_line` for why.
     """
+    where = _where(name, _READING, n)
     try:
         entry = json.loads(line)
         field, target_key_value, claim = (entry["field"], entry["target_key_value"], entry["claim"])
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ValueError(f"{_where(name, _READING, n)}: not a claim: {exc!r}") from None
+        raise ValueError(f"{where}: not a claim: {exc!r}") from None
     # A member the line does not have is refused, not dropped. `make_claim` already
     # refuses an unknown key *inside* the claim, and a reader that silently discarded
     # one beside it would normalize a malformed file into an apparently valid claim
     # (#401 review).
     if extra := sorted(set(entry) - _LINE_KEYS):
-        raise ValueError(
-            f"{_where(name, _READING, n)}: line has unknown member(s) {extra} (expected {sorted(_LINE_KEYS)})"
-        )
-    _check_entry(name, _READING, n, field, target_key_value, claim)
+        raise ValueError(f"{where}: line has unknown member(s) {extra} (expected {sorted(_LINE_KEYS)})")
+    _check_entry(where, field, target_key_value, claim)
     if "source" in claim:
         raise ValueError(
-            f"{_where(name, _READING, n)}: claim carries its own source {claim['source']!r} — "
+            f"{where}: claim carries its own source {claim['source']!r} — "
             "the envelope names this file's source, and a line may only add a column to it"
         )
-    where = _where(name, _READING, n)
     body = dict(claim)
-    # Through `from_dict` rather than the constructor, so this line's own `column` is
-    # checked like every other source member — `"column": 7` would otherwise be
-    # accepted here and written back out as a claim.
+    # The column is checked here rather than trusted: `"column": 7` would otherwise
+    # ride through as a claim's source member. `as_claim_source` then supplies the
+    # three facts the envelope holds.
     source = envelope_source.as_claim_source(optional_str(body.pop("column", None), "source column", where))
     return ClaimEntry(field=field, target_key_value=target_key_value, claim=_rebuild_claim(body, source, where))
 
@@ -556,12 +578,12 @@ def _where(name: str, unit: str, n: int) -> str:
     return f"{name} {unit} {n}"
 
 
-def _check_entry(name: str, unit: str, n: int, field: Any, target_key_value: Any, claim: Any) -> None:
+def _check_entry(where: str, field: Any, target_key_value: Any, claim: Any) -> None:
     """Check the three members of a claim line, in whichever direction it is crossing.
 
     One definition of the line's shape for the writer and the reader both, so the two
-    cannot drift into accepting different files. ``name``/``unit``/``n`` say what to
-    call the line if it is refused, and become a label only then.
+    cannot drift into accepting different files. ``where`` is what the caller calls
+    this line — ``…ndjson claim 3`` writing, ``…ndjson line 4`` reading.
 
     The *key* is not checked here: which key this file is keyed by is the envelope's
     ``target_key``, checked once when the envelope is built, and the line carries only
@@ -571,20 +593,21 @@ def _check_entry(name: str, unit: str, n: int, field: Any, target_key_value: Any
     # frozenset lookup, which escapes as a traceback instead of the ValueError naming
     # the file and the line that this module promises.
     if not isinstance(field, str) or field not in _FIELDS:
-        raise ValueError(
-            f"{_where(name, unit, n)}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})"
-        )
+        raise ValueError(f"{where}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})")
     if not isinstance(target_key_value, str) or not target_key_value:
         raise ValueError(
-            f"{_where(name, unit, n)}: target_key_value is {target_key_value!r} — "
-            "a claim with nothing to match on can attach to no row"
+            f"{where}: target_key_value is {target_key_value!r} — a claim with nothing to match on can attach to no row"
         )
     if not isinstance(claim, dict):
-        raise ValueError(f"{_where(name, unit, n)}: claim is {type(claim).__name__}, not an object")
-    if post_join := sorted(k for k in _POST_JOIN_KEYS if k in claim):
+        raise ValueError(f"{where}: claim is {type(claim).__name__}, not an object")
+    # Membership first, the sorted list only inside the raise: this runs on both
+    # paths, a few million times each, and every non-error call was allocating a
+    # generator and an empty list.
+    if "join_key" in claim or "match_exact" in claim:
         raise ValueError(
-            f"{_where(name, unit, n)}: claim carries {post_join}, which the join fills in — "
-            "a claim file records the key to match on, not a match that has happened"
+            f"{where}: claim carries {sorted(k for k in _POST_JOIN_KEYS if k in claim)}, "
+            "which the join fills in — a claim file records the key to match on, "
+            "not a match that has happened"
         )
 
 

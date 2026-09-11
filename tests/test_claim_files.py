@@ -77,7 +77,7 @@ FETCHED_AT = datetime(2026, 9, 1, 9, 14, 3)
 ISO_NOW = FETCHED_AT.isoformat()
 
 
-def _envelope(**overrides) -> ClaimFileEnvelope:
+def claim_file_envelope(**overrides) -> ClaimFileEnvelope:
     """An HPRC catalog envelope: filenames the catalog publishes, matched against
     AnVIL's ``file_name`` within the dataset that makes that key usable."""
     return ClaimFileEnvelope(
@@ -113,7 +113,7 @@ class TestRoundTrip:
 
     def test_envelope_carries_source_table_fetch_date_and_version(self, tmp_path):
         path = tmp_path / "hprc" / "sequencing_data.ndjson"
-        write_claim_file(path, _envelope(), [_entry()])
+        write_claim_file(path, claim_file_envelope(), [_entry()])
 
         envelope = read_envelope(path)
         assert envelope.source == HPRC_CATALOG
@@ -129,14 +129,14 @@ class TestRoundTrip:
         """The claim read back is the claim written, source and all."""
         path = tmp_path / "claims.ndjson"
         entry = _entry()
-        write_claim_file(path, _envelope(), [entry])
+        write_claim_file(path, claim_file_envelope(), [entry])
 
         assert list(iter_claims(path)) == [entry]
 
     def test_each_claim_gets_its_own_rehydrated_source(self, tmp_path):
         """The reader factors the source in per claim, so claims cannot alias one dict."""
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry(name="a.bam"), _entry(name="b.bam")])
+        write_claim_file(path, claim_file_envelope(), [_entry(name="a.bam"), _entry(name="b.bam")])
 
         first, second = (entry.claim["source"] for entry in iter_claims(path))
         assert first == second
@@ -146,7 +146,7 @@ class TestRoundTrip:
     def test_the_raw_value_survives_beside_the_mapped_one(self, tmp_path):
         """The mapping is the reviewable decision, so `Revio` must outlive the file."""
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry(raw="Revio", value="PACBIO")])
+        write_claim_file(path, claim_file_envelope(), [_entry(raw="Revio", value="PACBIO")])
 
         (claim,) = [entry.claim for entry in iter_claims(path)]
         assert (claim["raw_value"], claim["value"]) == ("Revio", "PACBIO")
@@ -165,13 +165,13 @@ class TestRoundTrip:
                 state=NO_VOCABULARY_TERM,
             ),
         )
-        write_claim_file(path, _envelope(), [entry])
+        write_claim_file(path, claim_file_envelope(), [entry])
 
         assert list(iter_claims(path)) == [entry]
 
     def test_the_count_written_is_returned(self, tmp_path):
         path = tmp_path / "claims.ndjson"
-        assert write_claim_file(path, _envelope(), [_entry(name=f"HG{n:04d}.bam") for n in range(7)]) == 7
+        assert write_claim_file(path, claim_file_envelope(), [_entry(name=f"HG{n:04d}.bam") for n in range(7)]) == 7
 
 
 class TestTheEnvelopeIsFactoredOut:
@@ -179,7 +179,7 @@ class TestTheEnvelopeIsFactoredOut:
 
     def test_a_written_claim_repeats_no_envelope_field(self, tmp_path):
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry(column="platform")])
+        write_claim_file(path, claim_file_envelope(), [_entry(column="platform")])
 
         claim = json.loads(path.read_text().splitlines()[1])["claim"]
         assert "source" not in claim
@@ -188,7 +188,7 @@ class TestTheEnvelopeIsFactoredOut:
     def test_line_one_is_the_envelope_and_is_labelled_as_one(self, tmp_path):
         """An envelope is told from a claim by its shape, not by being first."""
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry()])
+        write_claim_file(path, claim_file_envelope(), [_entry()])
 
         assert list(json.loads(path.read_text().splitlines()[0])) == [ENVELOPE_KEY]
 
@@ -196,13 +196,13 @@ class TestTheEnvelopeIsFactoredOut:
         """A file's claims must have come from the source its envelope names."""
         path = tmp_path / "claims.ndjson"
         with pytest.raises(ValueError, match="envelope names"):
-            write_claim_file(path, _envelope(), [_entry(source=ANVIL_MANIFEST)])
+            write_claim_file(path, claim_file_envelope(), [_entry(source=ANVIL_MANIFEST)])
 
     def test_nothing_is_left_behind_when_a_claim_is_refused(self, tmp_path):
         """The temp-file-and-rename write leaves the previous file, or none at all."""
         path = tmp_path / "claims.ndjson"
         with pytest.raises(ValueError):
-            write_claim_file(path, _envelope(), [_entry(source=ANVIL_MANIFEST)])
+            write_claim_file(path, claim_file_envelope(), [_entry(source=ANVIL_MANIFEST)])
 
         assert not path.exists()
         assert list(tmp_path.iterdir()) == []
@@ -211,7 +211,7 @@ class TestTheEnvelopeIsFactoredOut:
         """Factoring the source out is the file's business, not the importer's."""
         entry = _entry()
         before = json.loads(json.dumps(entry.claim))
-        write_claim_file(tmp_path / "claims.ndjson", _envelope(), [entry])
+        write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [entry])
 
         assert entry.claim == before
 
@@ -221,7 +221,7 @@ class TestMalformedFiles:
 
     def test_a_malformed_line_names_the_file_and_the_line(self, tmp_path):
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry(), _entry()])
+        write_claim_file(path, claim_file_envelope(), [_entry(), _entry()])
         path.write_text(path.read_text() + "{not json\n")
 
         with pytest.raises(ValueError, match=r"claims\.ndjson line 4: not a claim"):
@@ -230,7 +230,7 @@ class TestMalformedFiles:
     def test_claims_before_a_malformed_line_are_yielded_first(self, tmp_path):
         """Proof the reader streams: it cannot have parsed line 5 before yielding line 2."""
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry(name=f"HG{n}.bam") for n in range(3)])
+        write_claim_file(path, claim_file_envelope(), [_entry(name=f"HG{n}.bam") for n in range(3)])
         path.write_text(path.read_text() + "{not json\n")
 
         read = []
@@ -241,7 +241,7 @@ class TestMalformedFiles:
 
     def test_a_blank_line_carries_no_claim(self, tmp_path):
         path = tmp_path / "claims.ndjson"
-        write_claim_file(path, _envelope(), [_entry()])
+        write_claim_file(path, claim_file_envelope(), [_entry()])
         path.write_text(path.read_text() + "\n")
 
         assert len(list(iter_claims(path))) == 1
@@ -279,7 +279,7 @@ class TestMalformedFiles:
         that member and not an unrelated one that happened to be missing too.
         """
         path = tmp_path / "claims.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: {**_envelope().to_dict(), **envelope}}) + "\n")
+        path.write_text(json.dumps({ENVELOPE_KEY: {**claim_file_envelope().to_dict(), **envelope}}) + "\n")
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
@@ -288,9 +288,9 @@ class TestMalformedFiles:
         path = tmp_path / "claims.ndjson"
         entry = _entry()
         with pytest.raises(ValueError, match="unknown dimension"):
-            write_claim_file(path, _envelope(), [ClaimEntry("data_moddality", "x", entry.claim)])
+            write_claim_file(path, claim_file_envelope(), [ClaimEntry("data_moddality", "x", entry.claim)])
 
-        write_claim_file(path, _envelope(), [entry])
+        write_claim_file(path, claim_file_envelope(), [entry])
         path.write_text(path.read_text().replace('"platform"', '"data_moddality"', 1))
         with pytest.raises(ValueError, match="line 2: unknown dimension"):
             list(iter_claims(path))
@@ -299,13 +299,13 @@ class TestMalformedFiles:
         """A claim whose target_key_value is empty can attach to no row."""
         entry = _entry()
         with pytest.raises(ValueError, match="target_key_value"):
-            write_claim_file(tmp_path / "c.ndjson", _envelope(), [ClaimEntry(entry.field, "", entry.claim)])
+            write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [ClaimEntry(entry.field, "", entry.claim)])
 
     def test_an_envelope_naming_a_key_the_target_does_not_have_is_refused(self, tmp_path):
         """`target_key` is a key of the *target*. A source keyed by something else maps
         it to one of these itself rather than adding a term here."""
         with pytest.raises(ValueError, match="not a key of the target"):
-            _envelope(target_key="sample_id")
+            claim_file_envelope(target_key="sample_id")
 
 
 class TestAWriterCannotProduceWhatTheReaderRefuses:
@@ -321,15 +321,15 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
     def test_an_envelope_with_no_usable_version_is_refused_when_it_is_built(self, version):
         """`None` was the trap: `to_dict` drops nulls, so the key vanished entirely."""
         with pytest.raises(ValueError, match="source_version"):
-            _envelope(source_version=version)
+            claim_file_envelope(source_version=version)
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="source repository"):
-            _envelope(source=ClaimFileSource(repository=""))
+            claim_file_envelope(source=ClaimFileSource(repository=""))
 
     def test_an_envelope_with_a_non_datetime_fetch_time_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="fetched_at"):
-            _envelope(fetched_at="2026-09-01")
+            claim_file_envelope(fetched_at="2026-09-01")
 
     def test_an_envelope_cannot_name_a_column_at_all(self):
         """A column belongs to a claim, not to a file — the type says so.
@@ -348,7 +348,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         type hints do not run, and an importer mapping a source's own JSON can hand
         over whatever that JSON held."""
         with pytest.raises(ValueError, match="source table"):
-            _envelope(source=ClaimFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
+            claim_file_envelope(source=ClaimFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
 
     def test_a_hand_built_claim_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
         """An importer can build a ClaimEntry by hand; the writer holds it to make_claim."""
@@ -363,12 +363,12 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         )
 
         with pytest.raises(ValueError, match="cites no mapping rule"):
-            write_claim_file(tmp_path / "c.ndjson", _envelope(), [entry])
+            write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [entry])
 
     def test_a_file_the_run_would_never_find_is_refused_at_write(self, tmp_path):
         """`discover` matches *.ndjson, so any other suffix is a silent no-op."""
         with pytest.raises(ValueError, match="must be named"):
-            write_claim_file(tmp_path / "hprc" / "catalog.json", _envelope(), [_entry()])
+            write_claim_file(tmp_path / "hprc" / "catalog.json", claim_file_envelope(), [_entry()])
 
     @pytest.mark.parametrize("block", [{"rank": 9}, {"source": {"name": "HPRC", "column": None}}])
     def test_an_unknown_envelope_member_is_refused_with_the_file_and_line(self, tmp_path, block):
@@ -380,7 +380,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         constructed envelope and does not know where one came from.
         """
         path = tmp_path / "c.ndjson"
-        envelope = {**_envelope().to_dict(), **block}
+        envelope = {**claim_file_envelope().to_dict(), **block}
         path.write_text(json.dumps({ENVELOPE_KEY: envelope}) + "\n")
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*unknown member"):
@@ -400,7 +400,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         Otherwise the same malformed provenance is discarded rather than reported
         depending only on which side of one brace it sat.
         """
-        envelope = _envelope().to_dict()
+        envelope = claim_file_envelope().to_dict()
         payload = (
             [envelope if v == "ENVELOPE" else v for v in wrapper]
             if isinstance(wrapper, list)
@@ -420,7 +420,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         fail on CI.
         """
         path = tmp_path / "c.ndjson"
-        block = {**_envelope().to_dict(), "fetched_at": "2026-09-01T09:14:03Z"}
+        block = {**claim_file_envelope().to_dict(), "fetched_at": "2026-09-01T09:14:03Z"}
         path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
 
         assert read_envelope(path).fetched_at == datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
@@ -439,7 +439,7 @@ class TestAClaimIsRebuiltNotTrusted:
         path = tmp_path / "c.ndjson"
         line = {"field": "platform", "target_key_value": "HG002.bam", "claim": claim}
         path.write_text(
-            json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
+            json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
         )
         return path
 
@@ -554,20 +554,23 @@ class TestAClaimIsRebuiltNotTrusted:
             "claim": {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1"},
             "rank": 9,
         }
-        path.write_text(json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+        path.write_text(json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
 
         with pytest.raises(ValueError, match=r"unknown member\(s\) \['rank'\]"):
             list(iter_claims(path))
 
-    @pytest.mark.parametrize("member", ["field", "join_key"])
-    def test_an_unhashable_line_member_is_refused_by_name_not_by_traceback(self, tmp_path, member):
-        """`field: []` used to raise TypeError from the frozenset lookup, uncaught."""
-        path = tmp_path / "c.ndjson"
-        line = {"field": "platform", "join_key": JOIN_KEY_FILE_NAME, "key_value": "HG002.bam", "claim": {}}
-        line[member] = []
-        path.write_text(json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+    def test_an_unhashable_line_member_is_refused_by_name_not_by_traceback(self, tmp_path):
+        """`field: []` raises TypeError from the frozenset lookup unless type is checked first.
 
-        with pytest.raises(ValueError, match=r"c\.ndjson line 2"):
+        That escapes as a codec-style traceback rather than the ValueError naming the
+        file and the line, which is the one thing this module promises about a
+        malformed file.
+        """
+        path = tmp_path / "c.ndjson"
+        line = {"field": [], "target_key_value": "HG002.bam", "claim": {}}
+        path.write_text(json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+
+        with pytest.raises(ValueError, match=r"c\.ndjson line 2: unknown dimension"):
             list(iter_claims(path))
 
 
@@ -603,7 +606,7 @@ class TestTheRunReport:
         assert "none under" in capsys.readouterr().out
 
     def test_provenance_and_age_are_reported_per_file(self, tmp_path, capsys):
-        write_claim_file(tmp_path / "hprc" / "catalog.ndjson", _envelope(), [_entry()])
+        write_claim_file(tmp_path / "hprc" / "catalog.ndjson", claim_file_envelope(), [_entry()])
 
         statuses = report_claim_files(tmp_path, now=FETCHED_AT + timedelta(days=8))
         out = capsys.readouterr().out
@@ -619,7 +622,7 @@ class TestTheRunReport:
     def test_a_target_generation_is_reported_as_provenance(self, tmp_path, capsys):
         """The generation a file was built against is said, not checked."""
         target = ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil14")
-        write_claim_file(tmp_path / "anvil" / "manifest.ndjson", _envelope(target=target), [])
+        write_claim_file(tmp_path / "anvil" / "manifest.ndjson", claim_file_envelope(target=target), [])
 
         (status,) = report_claim_files(tmp_path)
         out = capsys.readouterr().out
@@ -627,17 +630,10 @@ class TestTheRunReport:
         assert "anvil14" in out
         assert "UNREADABLE" not in out
 
-    def test_a_source_with_no_catalog_reports_no_catalog(self, tmp_path, capsys):
-        """HPRC/ENA/IGSR claims are about files, not about a snapshot of ours."""
-        write_claim_file(tmp_path / "hprc" / "catalog.ndjson", _envelope(), [_entry()])
-
-        report_claim_files(tmp_path)
-        assert "for catalog" not in capsys.readouterr().out
-
     def test_an_unreadable_file_is_named_rather_than_hiding_the_rest(self, tmp_path, capsys):
         (tmp_path / "a").mkdir()
         (tmp_path / "a" / "broken.ndjson").write_text("{not json\n")
-        write_claim_file(tmp_path / "b" / "good.ndjson", _envelope(), [_entry()])
+        write_claim_file(tmp_path / "b" / "good.ndjson", claim_file_envelope(), [_entry()])
 
         broken, good = report_claim_files(tmp_path)
         assert broken.envelope is None and broken.error is not None
@@ -647,7 +643,7 @@ class TestTheRunReport:
     def test_an_aware_fetch_time_is_aged_without_a_type_error(self, tmp_path, capsys):
         """Ages are taken in the envelope's own timezone, so either kind subtracts."""
         aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
-        write_claim_file(tmp_path / "c.ndjson", _envelope(fetched_at=aware), [])
+        write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(fetched_at=aware), [])
 
         report_claim_files(tmp_path)
         out = capsys.readouterr().out
@@ -660,13 +656,13 @@ class TestTheRunReport:
         every other file's line down with it — the opposite of what the report is for.
         """
         aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
-        write_claim_file(tmp_path / "c.ndjson", _envelope(fetched_at=aware), [])
+        write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(fetched_at=aware), [])
 
         report_claim_files(tmp_path, now=datetime(2026, 9, 9, 9, 14, 3))
         assert "days ago" in capsys.readouterr().out
 
     def test_a_fetch_time_in_the_future_is_said_not_clamped(self, tmp_path, capsys):
-        write_claim_file(tmp_path / "c.ndjson", _envelope(), [])
+        write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [])
 
         report_claim_files(tmp_path, now=FETCHED_AT - timedelta(days=2))
         assert "dated in the future" in capsys.readouterr().out
@@ -708,8 +704,10 @@ class TestAClaimFileIsWrittenBySomeoneElse:
 
         envelope = read_envelope(path)
         assert envelope.source.url is None and envelope.source.dataset is None
-        # No dataset scope: an md5 is unique enough across the whole target that a
-        # corpus-wide match is correct.
+        # No dataset scope. An md5 is not unique corpus-wide (2,026 are registered
+        # in more than one dataset), but those rows are the same bytes catalogued
+        # twice, so a curator's claim about the content is true of all of them. What
+        # a join should do with that is #402's — see `ClaimTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_claims(path)) == [entry]
 

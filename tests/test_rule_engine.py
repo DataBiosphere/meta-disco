@@ -468,7 +468,7 @@ class TestMakeClaim:
             )
 
     def test_rejects_unknown_join_key(self):
-        with pytest.raises(ValueError, match="unknown join_key"):
+        with pytest.raises(ValueError, match="not a key of the target"):
             make_claim(
                 rule_id="map_v1",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
