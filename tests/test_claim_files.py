@@ -191,6 +191,27 @@ class TestRoundTrip:
         path = tmp_path / "claims.ndjson"
         assert write_claim_file(path, claim_file_envelope(), [_entry(name=f"HG{n:04d}.bam") for n in range(7)]) == 7
 
+    def test_a_lazy_source_is_streamed_not_gathered(self, tmp_path):
+        """An importer hands over a generator and the writer never holds the corpus.
+
+        A refusal part-way through is what makes the difference visible: the fourth
+        entry is one the writer will not take, so a writer that consumes as it goes
+        has asked for four and a writer that gathered first would have asked for all
+        seven. The corpus is millions of claims (#374), so this is the property that
+        keeps an importer from having to hold one.
+        """
+        produced = []
+
+        def entries():
+            for n in range(7):
+                produced.append(n)
+                yield _entry(name=f"HG{n:04d}.bam", source=ANVIL_MANIFEST if n == 3 else HPRC_CATALOG)
+
+        with pytest.raises(ValueError, match="claim 4"):
+            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), entries())
+
+        assert produced == [0, 1, 2, 3]
+
 
 class TestTheEnvelopeIsFactoredOut:
     """Name, url and table are recorded once; only `column` stays on a claim."""
