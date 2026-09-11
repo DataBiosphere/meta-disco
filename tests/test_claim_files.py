@@ -733,8 +733,8 @@ class TestAClaimIsRebuiltNotTrusted:
 
         assert [entry.claim["raw_value"] for entry in iter_claims(path)] == ["Revio"]
 
-    def test_a_claim_asserting_a_match_that_has_not_happened_is_refused_at_write(self, tmp_path):
-        """The writer refuses an unmapped value too, so no importer can publish one."""
+    def test_a_value_the_dimension_has_no_word_for_is_refused_at_write(self, tmp_path):
+        """The writer refuses it too, so no importer can publish one."""
         with pytest.raises(ValueError, match="not a value of that dimension"):
             write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [_entry(value="Revio")])
 
