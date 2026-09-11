@@ -88,6 +88,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
+    A source is an input kind only if it says something about **our files**. A table that describes the world —
+    an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
+    That is why the reference validator is input kind 1: it reads our bytes and looks the answer up.
+
 4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank.
 
 4.3 Resolution has two stages: **within** a source by tier, then **across** sources by agreement.
@@ -106,8 +110,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     reviewable. The engine's file-type knowledge is not silently overridden, and neither is a source.
     Two statuses never conflict: `not_classified` yields to `not_applicable`, which is the more specific claim.
 
-4.7 A curator rule is recorded **separately** from the conflict it answers. It supplies the slot's value;
-    the conflict among inputs 1–4 stays on the record, so a curated answer never erases the disagreement it settled.
+4.7 A curator rule **answers** a conflict; it does not erase it.
+    The record takes `classified` with the curator's value, and every competing declaration stays in its evidence.
+    The conflict itself — that these inputs disagreed, and how it was answered — belongs to the **reconciliation
+    output**, which is where 5.1 lists it. So a file can be classified and contested at once without the record
+    having to say two things in one field.
+    A conflict no curator has answered leaves the record `conflict` with no value, as today.
 
 ## 5. Review
 
@@ -188,6 +196,4 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
   conflict, which is right if the number is small and wrong if it floods the queue.
-- Which input kind the reference validator is. It matches by contig lengths read from the file's own bytes, not by any identifier a repository publishes, so calling it input kind 4 pre-decides what #398 deliberately left open.
-- Whether 4.7 is representable. `Classification` carries one `value` and one `status`, with `value` null unless `status` is `classified`, so a curated value and a retained conflict cannot both live in the record as it stands. Either the conflict belongs to reconciliation metadata rather than the record, or the record changes.
 - Which consumers read which artifact. `corpus_diff`, the coverage / validation / consistency reports, the ENA validator on stored output (#330) and the eval fixtures each want inference or reconciled output, and today there is only one.
