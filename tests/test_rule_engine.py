@@ -490,6 +490,28 @@ class TestMakeClaim:
                 join_key="filename",  # not the schema's file_name
             )
 
+    def test_rejects_a_match_exact_that_is_not_a_boolean(self):
+        # `match_exact="yes"` would ride out into the schema's Evidence, which says a
+        # boolean. Nothing else pins the type: it is not drawn from a vocabulary.
+        with pytest.raises(ValueError, match="match_exact 'yes', which is not a boolean"):
+            make_claim(
+                rule_id="map_v1",
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
+                join_key="file_name",
+                # The type checker refuses this, which is the point: the check is for
+                # a claim rebuilt by hand, where no checker has run.
+                match_exact="yes",  # type: ignore[arg-type]
+            )
+
+    def test_rejects_a_rule_claim_with_no_reason(self):
+        # A rule's reason is the text that makes output readable and is recoverable
+        # from nothing else. An imported claim's is — it cites a mapping rule — which
+        # is why the requirement is on a claim with no source rather than on all.
+        with pytest.raises(ValueError, match="has no reason"):
+            make_claim(rule_id="bam_extension", source_type=SOURCE_FILENAME_RULE, value="BAM", tier=1)
+
     def test_rejects_match_exact_without_join_key(self):
         # match_exact qualifies a join; on its own it says a match was exact
         # without saying what was matched.

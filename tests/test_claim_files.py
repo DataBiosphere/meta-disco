@@ -8,7 +8,7 @@ they are what these tests cover.
 back whole — including the ``ClaimSource`` each claim's own record carries, which the
 writer factors into the envelope and the reader puts back.
 
-*Its age must be visible.* A run says what it consumed and how old each one was. It
+*Its age must be visible.* A run says what it found and how old each one was. It
 does not adjudicate currency: nothing offline can, since the sources share no version
 to compare and AnVIL deletes a superseded catalog rather than keeping it to be matched
 against. That question belongs to the importer's re-fetch decision and to the catalog
@@ -22,7 +22,7 @@ the reader yields claims as it reads them and a malformed line fails naming the 
 and the line rather than taking the file down.
 
 Unit-level by intent: no importer exists yet (#369, #394) and the join to our files
-is #400b, so the producers here are hand-built claims from the ``AnVIL_HPRC_R2``
+is #402, so the producers here are hand-built claims from the ``AnVIL_HPRC_R2``
 spike's two external sources.
 """
 
@@ -367,8 +367,10 @@ class TestMalformedFiles:
     def test_an_envelope_missing_a_fact_is_refused(self, tmp_path, envelope, expected):
         """Every envelope member is checked on read: the report rests on all of them.
 
-        Each case overrides one member of a valid envelope, so what it asserts is
-        that member and not an unrelated one that happened to be missing too.
+        Each case overrides one member of a valid envelope — or, where the member
+        under test is inside ``source`` or ``target``, that whole nested record — so
+        what it asserts is the member named and not an unrelated one that happened to
+        be missing too.
         """
         path = tmp_path / "claims.ndjson"
         path.write_text(json.dumps({ENVELOPE_KEY: {**claim_file_envelope().to_dict(), **envelope}}) + "\n")
@@ -414,6 +416,21 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """`None` was the trap: `to_dict` drops nulls, so the key vanished entirely."""
         with pytest.raises(ValueError, match="source_version"):
             claim_file_envelope(source_version=version)
+
+    def test_an_envelope_keyed_by_file_name_needs_a_dataset_to_scope_it(self):
+        """The guard the whole filename join rests on: 69.4% of rows share a name.
+
+        Refused where it is built, not where it is joined, because a file written
+        without a scope is already unusable by the time a join reads it.
+        """
+        with pytest.raises(ValueError, match="needs a target dataset to scope it"):
+            claim_file_envelope(target=ClaimTarget(system="anvil", version="anvil15"), target_key="file_name")
+
+    def test_an_envelope_keyed_by_a_unique_key_needs_no_dataset(self):
+        """`file_id` is unique on every one of the 708,088 rows: no scope to add."""
+        envelope = claim_file_envelope(target=ClaimTarget(system="anvil", version="anvil15"), target_key="file_id")
+
+        assert envelope.target.dataset is None
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="source repository"):
@@ -574,6 +591,32 @@ class TestAClaimIsRebuiltNotTrusted:
         with pytest.raises(ValueError, match="exactly one of value/status/state"):
             list(iter_claims(path))
 
+    @pytest.mark.parametrize("member,value", [("join_key", "file_name"), ("match_exact", True)])
+    def test_a_claim_asserting_a_match_that_has_not_happened_is_refused(self, tmp_path, member, value):
+        """`join_key` and `match_exact` are the join's to fill in, not a file's.
+
+        A valid one is refused as firmly as a nonsense one: a claim file records the
+        key to match *on*, on its envelope, and a line claiming a match already
+        happened is claiming something no importer can know.
+        """
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", member: value}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="which the join fills in"):
+            list(iter_claims(path))
+
+    def test_a_claim_asserting_a_match_is_refused_at_write_too(self, tmp_path):
+        """The writer refuses it as well, so no importer can publish one."""
+        base = _entry()
+        entry = ClaimEntry(
+            field=base.field,
+            target_key_value=base.target_key_value,
+            claim={**base.claim, "join_key": JOIN_KEY_FILE_NAME, "match_exact": True},
+        )
+
+        with pytest.raises(ValueError, match="which the join fills in"):
+            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [entry])
+
     def test_a_line_carrying_its_own_source_is_refused_not_re_attributed(self, tmp_path):
         """The writer refuses a foreign source; a reader that overwrote one would undo that."""
         claim = {
@@ -593,6 +636,20 @@ class TestAClaimIsRebuiltNotTrusted:
 
         with pytest.raises(ValueError, match="not a valid claim"):
             list(iter_claims(path))
+
+    @pytest.mark.parametrize("member", ["url", "dataset", "table"])
+    def test_an_optional_source_member_that_is_an_explicit_null_is_refused(self, tmp_path, member):
+        """An *optional* member, so only the null branch can refuse it.
+
+        A required member's null is caught by the type check whether or not the null
+        branch exists, which is what makes those cases no evidence for this one.
+        """
+        source = {**claim_file_envelope().source.to_dict(), member: None}
+        path = tmp_path / "claims.ndjson"
+        path.write_text(json.dumps({ENVELOPE_KEY: {**claim_file_envelope().to_dict(), "source": source}}) + "\n")
+
+        with pytest.raises(ValueError, match=f"source {member} is an explicit null"):
+            read_envelope(path)
 
     def test_a_line_whose_column_is_an_explicit_null_is_refused(self, tmp_path):
         """Absent is fine; a written-out null is a record the writer could not produce.
@@ -697,7 +754,7 @@ class TestDiscovery:
 
 
 class TestTheRunReport:
-    """What a run says about the claim files it consumed.
+    """What a run says about the claim files it found.
 
     It reports and does not judge. A run cannot tell offline whether a claim file has
     outlived what it describes — the sources share no version to compare, and AnVIL
@@ -810,10 +867,11 @@ class TestAClaimFileIsWrittenBySomeoneElse:
 
         envelope = read_envelope(path)
         assert envelope.source.url is None and envelope.source.dataset is None
-        # No dataset scope. An md5 is not unique corpus-wide (2,026 are registered
-        # in more than one dataset), but those rows are the same bytes catalogued
-        # twice, so a curator's claim about the content is true of all of them. What
-        # a join should do with that is #402's — see `ClaimTarget.dataset`.
+        # No dataset scope. An md5 is not unique corpus-wide — 12,203 rows share
+        # one, two thirds of them inside a single dataset — but every row sharing an
+        # md5 has the same bytes, so a curator's claim about the content is true of
+        # all of them. What a join should do with that is #402's — see
+        # `ClaimTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_claims(path)) == [entry]
 

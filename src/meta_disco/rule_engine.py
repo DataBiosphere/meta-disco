@@ -282,10 +282,11 @@ def make_claim(
         raise ValueError(f"claim from {producer!r} has match_exact without a join_key to qualify")
     # The members whose *type* nothing else pins. The vocabularies above check
     # membership, which implies a string; these are free text and a boolean, so a
-    # claim rebuilt from a file could otherwise carry `value=7` or
-    # `match_exact="yes"` into resolution and out into the schema's Evidence, which
-    # says strings and a boolean (#401 review). Cheap next to the membership tests
-    # this already runs.
+    # claim built by hand could otherwise carry `value=7` or `match_exact="yes"` into
+    # resolution and out into the schema's Evidence, which says strings and a boolean
+    # (#401 review). `add_claim` is the reachable way in: a claim file cannot carry
+    # `match_exact` at all, since `_check_entry` refuses a post-join member outright.
+    # Cheap next to the membership tests this already runs.
     # A rule's reason is the text that makes output readable and is not recoverable
     # from anything else. An imported claim's is: it cites a mapping rule, and the
     # text is resolved from that rule when the claim enters the stream — so the file
@@ -574,10 +575,13 @@ class ExtendedClassificationResult:
         synthetic markers, which are not rules, and an ``unmapped`` imported claim,
         which by definition cites none.
 
-        **An imported claim is not filtered out here and contributes an empty
-        string.** It carries the ``rule_id`` of the mapping that produced it (#401)
-        but stores no ``reason`` — the text is resolved from that mapping rule, which
-        this accessor does not do. ``add_claim`` is the public path that can put one
+        **An imported claim is not filtered out here.** It carries the ``rule_id`` of
+        the mapping that produced it (#401), so it is not skipped like a marker, and
+        what it contributes is whatever ``reason`` it stores: prose for a curator
+        claim, which is allowed to carry one and does in the tests, and an empty
+        string for a mapped claim off a claim file, which stores the id alone and
+        leaves the text to be resolved from the mapping rule — which this accessor
+        does not do. ``add_claim`` is the public path that can put one
         there today, and does so in the tests; nothing in the classification run takes
         it, so no corpus output is affected until the join lands (#402). Whichever of
         #395 or #402 first makes it routine owns deciding whether these belong here at

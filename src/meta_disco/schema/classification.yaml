@@ -844,14 +844,16 @@ enums:
         description: Full path, where the target publishes one.
       file_md5sum:
         description: >-
-          Content checksum. Present on 98.7% of records and non-unique on 1.7% —
-          2,026 md5s are registered in more than one dataset. Note that a record
+          Content checksum. Present on every record and non-unique on 1.72% of
+          them (12,203 rows): 8,119 of those collide inside a single dataset and
+          4,084 across datasets, so a dataset scope narrows the ambiguity without
+          removing it. Note that a record
           whose md5 was synthesized from its URL rather than its content can never
           match one carrying a real checksum.
       file_name:
         description: >-
           Bare file name, and often the only key a catalog publishes. The weakest:
-          absent on 37% of records and non-unique on 69%. Collisions are wildly
+          present on every record but non-unique on 69.4%. Collisions are wildly
           per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3%
           within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a
           dataset scope, which is what `ClaimTarget.dataset` is for.

@@ -11,7 +11,7 @@ as the evidence cache, and either side can be re-run without forcing the other::
 This module is the artefact and its IO: the layout on disk, the envelope, the line
 format, the streaming writer and reader, and the report a run prints of what it
 consumed. Anything that needs to find or write a claim file should come through here
-rather than re-deriving the layout. Matching a claim to one of our files is #400b,
+rather than re-deriving the layout. Matching a claim to one of our files is #402,
 and the importers that will produce these files are #369 (AnVIL manifests) and #394
 (external catalogs).
 
@@ -138,8 +138,9 @@ _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 # used for it: that constructs a fresh encoder on every call.
 _encode = json.JSONEncoder(separators=(",", ":")).encode
 
-# Write buffer for a claim file. The default 8 KB would mean a syscall every few
-# claims across a multi-gigabyte sequential write.
+# Write buffer for a claim file. A written claim line measures around 170 bytes, so
+# the default 8 KB is a syscall every 50 claims or so across a multi-gigabyte
+# sequential write; a megabyte is one per 6,000.
 _WRITE_BUFFER_BYTES = 1 << 20
 
 # What each side calls the claim it is refusing (`_where`). A writer counts claims,
@@ -221,9 +222,10 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     would strand a complete claim file under a name nothing reads (#401 review).
 
     Every entry is validated against the envelope as it is written
-    (:func:`_claim_line`): an unknown dimension or join key, or a claim whose source
-    is not the source the envelope names, raises rather than being written and
-    discovered by a reader later. The envelope's own source is serialized once, here,
+    (:func:`_claim_line`): an unknown dimension, a ``join_key`` or ``match_exact`` of
+    any value at all — those are the join's to fill in, not a file's to assert — or a
+    claim whose source is not the source the envelope names, raises rather than being
+    written and discovered by a reader later. The envelope's own source is serialized once, here,
     and compared against per claim — it is constant for the file. The envelope was
     checked when it was built (``ClaimFileEnvelope.__post_init__``).
 
@@ -341,8 +343,10 @@ def report_claim_files(root: Path, now: datetime | None = None) -> list[ClaimFil
     """Report every claim file under ``root``, and return what each one's status is.
 
     Prints one line per file — source, table, version, the catalog it was built for
-    if it names one, fetch date and age — so a run says which claim files it consumed
-    and how old they were. Returns the statuses in the order printed.
+    if it names one, fetch date and age — so a run says which claim files it found
+    and how old they were. *Found* and not *consumed*: no claim reaches classification
+    until the join lands (#402), and this report is the whole of what a run does with
+    one today. Returns the statuses in the order printed.
 
     The report does not judge, and the run does not stop. Whether a claim file has
     outlived what it describes is not answerable from the file: the sources have no

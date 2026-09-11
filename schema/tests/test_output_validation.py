@@ -223,13 +223,6 @@ def test_claim_file_envelope_validates(envelope_validator):
     assert not report.results, "a well-formed envelope should validate: " + str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_names_both_sides_of_the_join(envelope_validator):
-    # The envelope's job: which source, which target, and which key pairs with which.
-    # A reader needs all four to know what a line's target_key_value matches against,
-    # and none of them is on the line.
-    assert {"source", "source_key", "target", "target_key"} <= set(_envelope())
-
-
 def test_claim_file_envelope_accepts_a_target_with_no_scope(envelope_validator):
     # Null for a source whose key is unique across the whole target (`file_id`,
     # `entry_id`, `drs_uri`), where a corpus-wide match is correct.
@@ -263,19 +256,19 @@ def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing
     assert report.results, f"an envelope missing {missing!r} should have failed"
 
 
-def test_claim_file_envelope_nested_records_are_inlined_not_references(envelope_validator):
-    # `inlined: true` on both slots: line 1 carries the whole source and target
-    # objects. Without it a class-valued slot reads as a reference, and these nested
-    # objects would be rejected or reshaped.
-    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
-    assert not report.results, "nested source and target objects must validate: " + str(
-        [r.message for r in report.results]
-    )
+@pytest.mark.parametrize("slot", ["source", "target"])
+@pytest.mark.parametrize("shape", ["a name", [{"repository": "HPRC"}]])
+def test_claim_file_envelope_refuses_a_nested_record_given_as_a_reference(envelope_validator, slot, shape):
+    # Line 1 carries the whole source and target objects, because a claim file is
+    # read by itself: there is no registry a name could be resolved against, and a
+    # list would say the file has two of something it has one of.
+    report = envelope_validator.validate(_envelope(**{slot: shape}), target_class="ClaimFileEnvelope")
+    assert report.results, f"a {slot} given as {shape!r} should have failed"
 
 
 def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
-    # `range: datetime`, so the schema refuses what ClaimFileEnvelope.from_dict
-    # refuses rather than accepting free text the reader will not take.
+    # The slot's pattern refuses what ClaimFileEnvelope.from_dict refuses rather
+    # than accepting free text the reader will not take.
     report = envelope_validator.validate(_envelope(fetched_at="yesterday"), target_class="ClaimFileEnvelope")
     assert report.results, "a non-datetime fetched_at should have failed"
 

@@ -74,11 +74,13 @@ SOURCE_TYPES = frozenset(
 # one of these and writes the value in the target's space, which is what keeps corpus
 # knowledge in the importer and transform logic out of the join.
 #
-# Measured on the AnVIL corpus (708,088 records) — the three that are both wholly
-# present and wholly unique are `file_id`, `entry_id` and `drs_uri`. `file_md5sum` is
-# unique on all but 1.7% of rows and absent on 9,059. `file_name` is absent on 37%
-# and non-unique on 69%, so it is usable only inside a dataset scope (2 collisions in
-# 16,271 within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model).
+# Measured on the AnVIL corpus (708,088 records, `anvil_files_metadata.ndjson`):
+# `file_id`, `entry_id`, `drs_uri`, `file_md5sum` and `file_name` are each present on
+# every record, and the first three are unique on every record too. What separates
+# them is uniqueness: `file_md5sum` is non-unique on 1.72% of rows and `file_name` on
+# 69.4%, so a filename is usable only inside a dataset scope (2 collisions in 16,271
+# within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model). No
+# record publishes `file_path` — it is here for a target that does.
 JOIN_KEY_FILE_PATH = "file_path"
 JOIN_KEY_FILE_MD5SUM = "file_md5sum"
 JOIN_KEY_DRS_URI = "drs_uri"
@@ -485,8 +487,12 @@ def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
 
     ``fields()`` walks the dataclass on every call and is not free; the members and
     which checker each one gets cannot change for a class, so they are derived once
-    and cached. This runs per claim on the write path — a few million per source —
-    where rebuilding the name set was measurably the largest cost in the line.
+    and cached. Measured, this is a cold path and the cache is insurance rather than
+    a win: reading a whole claim file calls it five times, once per record class, and
+    writing one never calls it at all — ``_flat_from_dict`` runs per *file*, on the
+    envelope. The helper that does run per claim is :func:`_flat_to_dict`, through
+    ``make_claim``'s ``source.to_dict()``, and it walks ``fields()`` uncached (#401
+    review).
 
     Returns the known names, those names sorted for an error message, and
     ``(name, checker)`` pairs: a member with no dataclass default is required.
@@ -651,12 +657,14 @@ class ClaimTarget:
     Null is correct only where the key is unique across the whole target. Measured,
     that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on
     every one of the 708,088 records. ``file_md5sum`` is *not*: it is non-unique on
-    1.7% of rows, because 2,026 md5s are registered in more than one dataset. Leaving
-    it unscoped is defensible for a claim about the file's *content*, since those
-    rows are the same bytes catalogued twice and a claim about them is true of all of
-    them, and wrong for a claim about one catalogued file. Nothing here enforces that
-    distinction; making the join record the ambiguity rather than silently fanning
-    out is #402's.
+    1.72% of rows, 12,203 of them. Two thirds of those are collisions **inside** one
+    dataset — 8,119 rows from 1,118 md5s — which a dataset scope would not separate
+    either; the remaining 4,084 rows are 2,026 md5s registered in more than one
+    dataset. Leaving it unscoped is defensible for a claim about the file's
+    *content*, which is true of every row that has those bytes however they are
+    catalogued, and wrong for a claim about one catalogued file. Nothing here
+    enforces that distinction; making the join record the ambiguity rather than
+    silently fanning out is #402's.
 
     ``version`` is which generation of the target the importer resolved against — an
     AnVIL catalog such as ``anvil15``. Null when the importer did not resolve against
