@@ -53,7 +53,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)` and may condition on provenance.
     It sees nothing else — not the file's extension, not its header, not another source's claim.
     **Sources stay pure**: what a source is taken to have said never depends on what we think of the file.
-    This is also what keeps one rule set working across every source.
+    This is also what keeps one mapping working across every source.
     Inference rules match their own signals — extension, filename, header, content — as they do today.
 
 3.5 Nothing fires by similarity. Matching is exact, over spellings a rule declares explicitly.
@@ -61,6 +61,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.6 `not_applicable` is a rule's to declare. No source asserts it in evidence.
 
 3.7 A raw value no rule matched produces no claim and enters the review queue.
+
+3.8 "Rule" means whatever makes a claim and is cited by it. A row in a translation table is one.
+    It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
+    tiers, file-attribute conditions or extension filtering.
 
 ## 4. Sources and resolution
 
@@ -117,7 +121,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
-6.8 Resolution within a source is by tier. Resolution across sources is by agreement, and is not tier math.
+6.8 Resolution across sources is by agreement, and is not tier math.
+    Tier resolution *within* a source applies to inference, which has competing rules at four tiers.
+    A source with at most one mapping entry per slot has nothing to resolve within it.
 
 ---
 
