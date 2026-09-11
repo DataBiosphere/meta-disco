@@ -261,9 +261,13 @@ classes:
       fetched_at:
         required: true
         description: >-
-          When the importer read the source, ISO 8601. A run reports the age of
-          every claim file it consumes from this, so that a person can see an
-          artefact going stale before it is wrong.
+          When the importer read the source, ISO 8601, with a time of day and not
+          a date alone. A run reports the age of every claim file it consumes from
+          this, so that a person can see an artefact going stale before it is
+          wrong — and two imports on the same day, which is where that report
+          matters most, are only distinguishable if the time is recorded. A
+          date-only value is refused rather than read as midnight, which would be
+          a precision the file never stated.
       source_version:
         required: true
         description: >-

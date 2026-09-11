@@ -309,6 +309,11 @@ def field_label(record: dict, field_name: str) -> str | None:
     return _entry_value(entry) if status == CLASSIFIED else status
 
 
+# Length of an ISO 8601 calendar date, `YYYY-MM-DD`. A datetime string is this plus a
+# separator and a time, so the date alone is exactly this long.
+_ISO_DATE_CHARS = 10
+
+
 def required_str(value: object, label: str, where: str) -> str:
     """Return ``value`` as a non-empty string, or raise naming ``label`` and ``where``.
 
@@ -488,6 +493,14 @@ class ClaimFileEnvelope:
         universally. Without this, a claim file written on a 3.11 machine parses
         there and fails on CI, which is a property of the interpreter rather than of
         the file (#401 review).
+
+        ``fetched_at`` must carry a time of day. ``fromisoformat`` accepts a bare
+        ``2026-09-01`` and silently returns midnight, so a date-only value would be
+        read back as a fetch that claims to have happened at 00:00:00 — a precision
+        the file never stated. Two imports on the same day would also be
+        indistinguishable, which is the case where the age report matters most. The
+        check is on the string rather than the parsed value, because midnight is a
+        real time that a genuine fetch can have.
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
@@ -499,6 +512,14 @@ class ClaimFileEnvelope:
             parsed = datetime.fromisoformat(normalized)
         except ValueError:
             raise ValueError(f"{where}: envelope fetched_at {fetched_at!r} is not an ISO 8601 datetime") from None
+        # An ISO 8601 date is its first 10 characters; anything longer carries a
+        # separator and a time. `isoformat()` on a datetime always writes one, so our
+        # own writer cannot trip this.
+        if len(fetched_at) <= _ISO_DATE_CHARS:
+            raise ValueError(
+                f"{where}: envelope fetched_at {fetched_at!r} is a date with no time of day — "
+                "record when the fetch happened, not only the day it happened on"
+            )
         return cls(
             source=ClaimSource.from_dict(block.get("source"), where),
             fetched_at=parsed,

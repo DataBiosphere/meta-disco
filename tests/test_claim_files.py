@@ -53,6 +53,10 @@ from meta_disco.rule_engine import make_claim
 HPRC_CATALOG = ClaimSource(name="HPRC Data Explorer", url="https://data.humanpangenome.org/", table="sequencing-data")
 ANVIL_MANIFEST = ClaimSource(name="AnVIL", url="https://service.explore.anvilproject.org/", table="alignments_v2")
 FETCHED_AT = datetime(2026, 9, 1, 9, 14, 3)
+# A fetch time as an envelope on disk carries it. Used wherever a case needs a
+# *valid* fetched_at so that it isolates the member actually under test — a bare
+# date is refused in its own right, for having no time of day.
+ISO_NOW = FETCHED_AT.isoformat()
 
 
 def _envelope(**overrides) -> ClaimFileEnvelope:
@@ -234,15 +238,16 @@ class TestMalformedFiles:
     @pytest.mark.parametrize(
         "envelope,expected",
         [
-            ({"source": {"url": "u"}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
+            ({"source": {"url": "u"}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
             ({"source": {"name": "HPRC"}, "source_version": "1"}, "fetched_at"),
             ({"source": {"name": "HPRC"}, "fetched_at": "yesterday", "source_version": "1"}, "not an ISO 8601"),
-            ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01"}, "source_version"),
-            ({"source": {"name": ""}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
-            ({"source": {"name": None}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
-            ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01", "source_version": ""}, "source_version"),
+            ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01", "source_version": "1"}, "no time of day"),
+            ({"source": {"name": "HPRC"}, "fetched_at": ISO_NOW}, "source_version"),
+            ({"source": {"name": ""}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
+            ({"source": {"name": None}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
+            ({"source": {"name": "HPRC"}, "fetched_at": ISO_NOW, "source_version": ""}, "source_version"),
             (
-                {"source": {"name": "HPRC", "table": 7}, "fetched_at": "2026-09-01", "source_version": "1"},
+                {"source": {"name": "HPRC", "table": 7}, "fetched_at": ISO_NOW, "source_version": "1"},
                 "source table",
             ),
         ],
