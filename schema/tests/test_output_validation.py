@@ -226,7 +226,10 @@ def _envelope(**overrides) -> dict:
     }
 
 
-@pytest.mark.parametrize("bad", ["", "HPRC\nforged entry"])
+# A trailing one as well as an interior one: `$` in a Python regex matches before a
+# final newline, so `^.+$` accepted "HPRC\n" while `required_str` refused it. The
+# patterns end in `\Z` for that reason (#401 review).
+@pytest.mark.parametrize("bad", ["", "HPRC\nforged entry", "HPRC\n"])
 @pytest.mark.parametrize("member", ["name", "dataset", "table", "column"])
 def test_a_claim_source_member_must_be_one_non_empty_line(validator, member, bad):
     # `ClaimSource.__post_init__` refuses both, and this is the class that reaches

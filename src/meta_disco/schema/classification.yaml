@@ -212,19 +212,19 @@ classes:
     attributes:
       name:
         required: true
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``. Required:
           a source object with no name identifies nothing, and ``to_dict`` omits
           null members, so an unnamed source would serialize as a bare url or
           column with no owner.
       url:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           URL the source was read from, if it has one. Null for a source with no
           published address, such as a curator table held in this repository.
       dataset:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The collection within the source that the claim came from — an AnVIL
           dataset title, an HPRC release, an ENA study accession. Null for a
@@ -235,13 +235,13 @@ classes:
           things in different datasets, and a consumer reading this evidence
           cannot go back to the file the claim arrived in (#401).
       table:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The table or file within the source that the claim came from, e.g. an
           AnVIL verbatim manifest table name. Null when the source is a single
           undivided file.
       column:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The column within that table the raw value was read from. Null when the
           source has no column structure.
@@ -268,24 +268,24 @@ classes:
     attributes:
       repository:
         required: true
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           What publishes the source — `AnVIL`, `HPRC Data Explorer`, `ENA`.
           Required and non-empty: a source that names no repository identifies
           nothing.
       dataset:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The collection within that repository the claims were read from. Null
           for a source with no such level.
       table:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The table or file within the dataset — `alignments_v2`,
           `sequencing-data`, ENA's `read_run`. Null for a source with no table
           structure. The column within it stays on each claim.
       url:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           Where the source was read from, if it has a public address. Null for a
           source with none, such as a curator table held in this repository.
@@ -306,12 +306,12 @@ classes:
     attributes:
       system:
         required: true
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The system the claims are about — `anvil` today. Required: a claim with
           no target is about nothing.
       dataset:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The scope the join runs within, in the *target's* name for it. Not
           decoration: keyed by `file_name` alone, 69% of the AnVIL corpus's
@@ -323,7 +323,7 @@ classes:
           Null for a source whose key is unique across the whole target
           (`file_id`, `entry_id`, `drs_uri`), where a corpus-wide match is correct.
       version:
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           Which generation of the target the importer resolved against — an AnVIL
           catalog such as `anvil15`. Null when the importer did not resolve
@@ -400,7 +400,7 @@ classes:
           reference rather than as the object the file holds.
       source_version:
         required: true
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The version of the source the claims were taken from — a release tag, a
           publication date, a catalog generation. Required even where the source
@@ -408,7 +408,7 @@ classes:
           was built from cannot be reasoned about later.
       source_key:
         required: true
-        pattern: "^.+$"
+        pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The key the *source* publishes its rows by, in the source's own name for
           it — `filename`, `run_accession`, `object_id`. Recorded as provenance:
@@ -433,7 +433,7 @@ classes:
           after inference has run.
       fetched_at:
         required: true
-        pattern: "^\\d{4}-\\d{2}-\\d{2}[T ].+$"
+        pattern: "^\\d{4}-\\d{2}-\\d{2}[T ][^\\r\\n]+\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
           a date alone. A run reports the age of every claim file it consumes from

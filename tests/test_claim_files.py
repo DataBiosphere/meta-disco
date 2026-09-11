@@ -49,10 +49,8 @@ from meta_disco.models import (
     NO_VOCABULARY_TERM,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
-    UNMAPPED,
     ClaimFileEnvelope,
     ClaimFileSource,
-    ClaimSource,
     ClaimTarget,
 )
 from meta_disco.rule_engine import make_claim
@@ -374,10 +372,11 @@ class TestMalformedFiles:
             ({"fetched_at": "2026-09-01Z"}, "time of day"),
             ({"fetched_at": "2026-09-01+00:00"}, "time of day"),
             ({"fetched_at": "2026-09-01X09:14:03"}, "time of day"),
-            # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts.
-            # Refused on both, so a claim file does not read differently by
-            # interpreter — the divergence the `Z` normalization exists to prevent.
-            ({"fetched_at": "20260901T091403"}, "ISO 8601"),
+            # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts —
+            # so it reaches the parse branch on one interpreter and the shape branch
+            # on the other. Refused by both, in words both branches share, which is
+            # the divergence the `Z` normalization exists to prevent.
+            ({"fetched_at": "20260901T091403"}, "is not an ISO 8601"),
             ({"source_version": ""}, "source_version"),
             ({"source_key": None}, "source_key"),
             ({"target": {"system": ""}}, "target system"),
@@ -453,7 +452,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
         assert envelope.target.dataset is None
 
-    @pytest.mark.parametrize("forged", ["HPRC\nfake.ndjson — forged source", "HPRC\rfake"])
+    @pytest.mark.parametrize("forged", ["HPRC\nfake.ndjson — forged source", "HPRC\rfake", "HPRC\n"])
     def test_a_source_member_carrying_a_line_break_is_refused(self, forged):
         """Every one of these is printed in the run's report, one file per line.
 

@@ -464,6 +464,10 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
     the age report exists for. The check is on the string rather than the parsed
     value, because midnight is a real time a genuine fetch can have.
 
+    Both branches name ISO 8601, because which one a value reaches depends on the
+    interpreter: ``20260901T091403`` fails the parse on 3.10 and reaches the shape
+    check on 3.11, where ``fromisoformat`` accepts basic format (#401 review).
+
     It is a *shape* check and not a length one: ``fromisoformat`` treats character 10
     as the date/time separator whatever character it is, so ``2026-09-01X09:14:03``
     parses, and a date can be longer than ten characters without carrying a time at
@@ -482,8 +486,8 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
         raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
     if not _ISO_DATETIME_START.match(value):
         raise ValueError(
-            f"{where}: envelope fetched_at {value!r} is not a date followed by T or a space and a "
-            "time of day — record when the fetch happened, not only the day it happened on"
+            f"{where}: envelope fetched_at {value!r} is not an ISO 8601 date followed by T or a "
+            "space and a time of day — record when the fetch happened, not only the day it happened on"
         )
     return parsed
 
