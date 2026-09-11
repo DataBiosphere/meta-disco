@@ -458,14 +458,43 @@ class TestMakeClaim:
 
     def test_state_claim_rejects_a_tier(self):
         # A state claim never competes, so a tier on it would be a number nothing
-        # reads — and an invitation to believe it ranks against the rule tiers.
+        # reads — and an invitation to believe it ranks against the rule tiers. One
+        # of our own source types, so the claim reaches this guard rather than the
+        # import one, which refuses a tier for its own reason.
         with pytest.raises(ValueError, match="never competes"):
             make_claim(
                 rule_id="r",
                 reason="x",
                 tier=1,
-                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+                source_type=SOURCE_FILENAME_RULE,
                 state=DECLINED,
+            )
+
+    def test_an_external_source_type_with_no_source_object_is_refused(self):
+        # The hole this closes: with no `ClaimSource`, such a claim skipped every
+        # import rule — including the tier refusal — so `tier=999` sailed through and
+        # outranked every rule in `evaluate_claims`. That is the silent override #391
+        # rejected on measured evidence, reachable from one keyword.
+        with pytest.raises(ValueError, match="and no ClaimSource"):
+            make_claim(
+                rule_id="m",
+                reason="x",
+                tier=999,
+                source_type=SOURCE_REPOSITORY_METADATA,
+                value="PACBIO",
+            )
+
+    def test_a_source_object_under_one_of_our_source_types_is_refused(self):
+        # The other direction: a claim carrying an external source but typed as one
+        # of our rules is an import that resolution would weigh as inference.
+        with pytest.raises(ValueError, match="and a ClaimSource"):
+            make_claim(
+                rule_id="m",
+                reason="x",
+                tier=1,
+                source_type=SOURCE_FILENAME_RULE,
+                source=EXTERNAL_SOURCE,
+                value="PACBIO",
             )
 
     @pytest.mark.parametrize("tier", ["1", True, 1.5])

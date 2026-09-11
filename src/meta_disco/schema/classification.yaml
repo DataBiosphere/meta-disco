@@ -363,6 +363,26 @@ classes:
 
       Declared as class-local `attributes` for the reason `ClaimSource` is: these
       are words too generic to own in a shared namespace.
+    rules:
+      - description: >-
+          A file keyed by `file_name` must name the dataset that scopes it. The key
+          is non-unique on 69.4% of the AnVIL corpus's 708,088 rows and on 20% even
+          scoped by dataset title, against 2 rows in 16,271 within
+          `AnVIL_HPRC_R2` — so an unscoped filename claim attaches to rows a join
+          cannot choose between. `ClaimFileEnvelope.__post_init__` refuses the same
+          envelope; this rule is what stops a producer validating against the schema
+          alone and publishing a file the reader will not read (#401 review).
+        preconditions:
+          slot_conditions:
+            target_key:
+              equals_string: file_name
+        postconditions:
+          slot_conditions:
+            target:
+              range_expression:
+                slot_conditions:
+                  dataset:
+                    required: true
     attributes:
       source:
         range: ClaimFileSource

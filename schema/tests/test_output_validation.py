@@ -33,6 +33,7 @@ from pathlib import Path
 import pytest
 import yaml
 from linkml.validator import Validator
+from linkml.validator.plugins.jsonschema_validation_plugin import JsonschemaValidationPlugin
 from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidationPlugin
 
 # schema/tests/ -> schema/ -> repo root. This gate deliberately validates the
@@ -83,10 +84,17 @@ def envelope_validator():
     refuse. Validating it `closed=False` would let `ClaimFileSource` and
     `ClaimSource` differ on paper while accepting the same documents — which is the
     mismatch the separate class exists to prevent.
+
+    Both plugins, because they enforce different halves of the contract: the pydantic
+    one checks slot ranges and patterns, and the jsonschema one is the only of the two
+    that enforces a class's ``rules`` — measured, not assumed. The envelope has one
+    rule (a ``file_name`` target needs ``target.dataset``), and under the pydantic
+    plugin alone the schema validated envelopes ``ClaimFileEnvelope.from_dict``
+    refuses, which is exactly the gap a producer would fall into (#401 review).
     """
     return Validator(
         schema=str(_SCHEMA),
-        validation_plugins=[PydanticValidationPlugin(closed=True)],
+        validation_plugins=[PydanticValidationPlugin(closed=True), JsonschemaValidationPlugin(closed=True)],
     )
 
 
@@ -230,6 +238,16 @@ def test_claim_file_envelope_accepts_a_target_with_no_scope(envelope_validator):
         _envelope(target={"system": "anvil"}, target_key="file_id"), target_class="ClaimFileEnvelope"
     )
     assert not report.results, str([r.message for r in report.results])
+
+
+def test_claim_file_envelope_refuses_an_unscoped_file_name_target(envelope_validator):
+    # The rule the reader has: `ClaimFileEnvelope.__post_init__` refuses the same
+    # envelope. Without it here a producer could validate a claim file against the
+    # schema, publish it, and have `read_envelope` refuse the file — the schema
+    # saying yes to something the only reader says no to.
+    bad = _envelope(target={"system": "anvil", "version": "anvil15"}, target_key="file_name")
+    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    assert report.results, "a file_name target with no dataset scope should have failed"
 
 
 def test_claim_file_envelope_refuses_a_target_key_outside_the_vocabulary(envelope_validator):

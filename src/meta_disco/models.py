@@ -50,6 +50,20 @@ SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
 SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
 SOURCE_REPOSITORY_METADATA = "repository_metadata"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
+# The kinds that name a source outside this repository. A claim with one of these
+# must carry a `ClaimSource`, and only such a claim may: it is what makes a claim an
+# import, and every import rule `make_claim` enforces — no tier, cite a mapping rule
+# — keys off it. Without the pairing a claim could declare itself repository metadata,
+# carry `tier=999` because it has no source object, and outrank every rule in
+# `evaluate_claims` — the silent override epic #391 rejected on measured evidence
+# (#401 review).
+EXTERNAL_SOURCE_TYPES = frozenset(
+    {
+        SOURCE_EXTERNAL_GROUND_TRUTH,
+        SOURCE_REPOSITORY_METADATA,
+        SOURCE_WRANGLER_ANNOTATION,
+    }
+)
 SOURCE_TYPES = frozenset(
     {
         SOURCE_FILENAME_RULE,
@@ -669,10 +683,12 @@ class ClaimTarget:
     AnVIL, and the file records which system it resolved its keys against.
 
     ``dataset`` is the scope the join runs within, and it is not decoration: keyed by
-    ``file_name`` alone, 69% of the corpus's 708,088 rows carry a non-unique key, and
-    20% remain non-unique even scoped by dataset *title* alone — but within
+    ``file_name`` alone, 69.4% of the corpus's 708,088 rows carry a non-unique key,
+    and 20% remain non-unique even scoped by dataset *title* alone — but within
     ``AnVIL_HPRC_R2`` the collision rate is 2 rows in 16,271. A filename join is
-    unusable without a dataset scope and reliable with one.
+    unusable without a dataset scope and workable with one: those 2 rows are
+    ambiguity the join must still record rather than resolve, which is #402's, and
+    this scope is what brings it down to something a person can look at.
 
     Null is correct only where the key is unique across the whole target. Measured,
     that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on

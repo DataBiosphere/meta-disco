@@ -11,6 +11,7 @@ from .models import (
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    EXTERNAL_SOURCE_TYPES,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
@@ -229,6 +230,19 @@ def make_claim(
     if source_type not in SOURCE_TYPES:
         raise ValueError(
             f"claim from {producer!r} has unknown source_type {source_type!r} (expected one of {sorted(SOURCE_TYPES)})"
+        )
+    # A source object and an external source type are one fact stated twice, so they
+    # are required to agree. Neither alone is enough: a claim naming `repository_
+    # metadata` with no `ClaimSource` would skip every import rule below — including
+    # the tier refusal — and `tier=999` would then outrank every rule in
+    # `evaluate_claims`, which is the silent override #391 rejected; and a source
+    # object under a rule's source type would be an import that resolution reads as
+    # one of ours (#401 review).
+    if (source is None) is (source_type in EXTERNAL_SOURCE_TYPES):
+        raise ValueError(
+            f"claim from {producer!r} has source_type {source_type!r} and "
+            f"{'no' if source is None else 'a'} ClaimSource — a claim from an external source carries both, "
+            f"and one of ours carries neither (external: {sorted(EXTERNAL_SOURCE_TYPES)})"
         )
     if source is not None:
         # An imported claim does not compete on the tier ladder at all. Epic #391
