@@ -244,7 +244,9 @@ def make_claim(
     # `match_exact="yes"` into resolution and out into the schema's Evidence, which
     # says strings and a boolean (#401 review). Cheap next to the membership tests
     # this already runs.
-    for label, member in (("reason", reason), ("value", value), ("raw_value", raw_value), ("rule_id", rule_id)):
+    if not isinstance(reason, str):
+        raise ValueError(f"claim from {producer!r} has reason {reason!r}, which is not a string")
+    for label, member in (("value", value), ("raw_value", raw_value), ("rule_id", rule_id)):
         if member is not None and not isinstance(member, str):
             raise ValueError(f"claim from {producer!r} has {label} {member!r}, which is not a string")
     if match_exact is not None and not isinstance(match_exact, bool):

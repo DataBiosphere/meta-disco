@@ -8,11 +8,14 @@ they are what these tests cover.
 back whole — including the ``ClaimSource`` each claim's own record carries, which the
 writer factors into the envelope and the reader puts back.
 
-*Its age must be visible.* A run says what it consumed and how old each one was, and
-imports from all of them. It does not adjudicate currency: nothing offline can, since
-the sources share no version to compare and AnVIL deletes a superseded catalog rather
-than keeping it to be matched against. That question belongs to the importer's
-re-fetch decision and to the catalog an enhancement is offered back to.
+*Its age must be visible.* A run says what it consumed and how old each one was. It
+does not adjudicate currency: nothing offline can, since the sources share no version
+to compare and AnVIL deletes a superseded catalog rather than keeping it to be matched
+against. That question belongs to the importer's re-fetch decision and to the catalog
+an enhancement is offered back to. Note what these tests therefore do *not* cover: a
+run reports its claim files and imports nothing from them — ``iter_claims`` has no
+caller in the run — so nothing here asserts that a claim reaches classification, and
+nothing does until the identity join lands (#402).
 
 *It must stream.* Millions of claims cannot go through a whole-file parse (#374), so
 the reader yields claims as it reads them and a malformed line fails naming the file

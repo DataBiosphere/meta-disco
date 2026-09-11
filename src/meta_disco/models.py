@@ -429,9 +429,10 @@ class ClaimFileEnvelope:
     one table's claims are read from several columns.
 
     ``corpus_catalog`` is the AnVIL catalog generation this file was built for. It is
-    provenance, not a gate: the run reports it and imports regardless. What reads it
-    is the importer, deciding on its next pass whether the configured catalog has
-    moved on and the file must be re-fetched. It is null for a source with no
+    provenance, not a gate: a run reports it and refuses nothing on it (and today
+    imports nothing at all — the join is #402). What reads it is the importer,
+    deciding on its next pass whether the configured catalog has moved on and the
+    file must be re-fetched. It is null for a source with no
     relationship to our catalog — the HPRC Data Explorer, ENA, IGSR — whose claims
     are about files rather than about a snapshot of ours, and which have no catalog
     generation to record; their ``source_version`` carries what they can say instead.

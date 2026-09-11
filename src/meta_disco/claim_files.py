@@ -15,14 +15,22 @@ rather than re-deriving the layout. Matching a claim to one of our files is #400
 and the importers that will produce these files are #369 (AnVIL manifests) and #394
 (external catalogs).
 
-**Currency is not decided here.** A run reports each file's source, version, catalog
-and age and imports from all of them. It cannot do better offline: the sources share
-no version to compare, and AnVIL deletes a superseded catalog rather than keeping it
-to be matched against. The two places that can act on the question own it instead —
-the importer, which compares its file's ``corpus_catalog`` against the configured one
-when deciding to re-fetch, and the run's output, which records the catalog it
-enhances so that an enhancement offered to a catalog that has moved on is refused at
-that boundary.
+**What a run does with these today.** It discovers them and reports each one's
+source, version, catalog and age — ``classify_run.run_all_classifications`` calls
+:func:`report_claim_files` and never :func:`iter_claims`. No claim reaches
+classification, so a run with claim files present writes the same output as one
+without. Matching claims to our files is #402; the writer and reader here exist so
+the producers (#369, #394) can be built against a settled contract before that lands.
+
+**Currency is not decided here**, and will not be when the join does: a run will
+import from every file it found and refuse none. It cannot do better offline — the
+sources share no version to compare, and AnVIL deletes a superseded catalog rather
+than keeping it to be matched against. The two places that can act on the question
+own it instead: the importer, which compares its file's ``corpus_catalog`` against
+the configured one when deciding to re-fetch, and the run's output, which is to
+record the catalog it enhances so that an enhancement offered to a catalog that has
+moved on is refused at that boundary — that one is #404 and is not built, so nothing
+enforces it yet.
 
 **The file.** One ``.ndjson`` file: line 1 is the envelope, every later line is one
 claim. NDJSON rather than a JSON array because 708,088 files by 5 dimensions by
@@ -46,7 +54,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, BinaryIO
 
 from .models import CLASSIFICATION_FIELDS, JOIN_KEYS, ClaimFileEnvelope, ClaimSource
 from .rule_engine import make_claim
@@ -119,10 +127,11 @@ class ClaimFileStatus:
     provenance of the ones behind it in the report.
 
     A run does not judge a claim file beyond this. Whether the claims still describe
-    the catalog being classified is settled downstream — the run's output records
-    which catalog it enhances, and an enhancement offered to a catalog that has moved
-    on is refused there — and by the importer, which compares its own file's
-    ``corpus_catalog`` against the configured one when deciding to re-fetch.
+    the catalog being classified is left to the importer, which compares its own
+    file's ``corpus_catalog`` against the configured one when deciding to re-fetch,
+    and to the boundary where an enhancement is offered back to a catalog — which
+    requires the run's output to record which catalog it enhances, and that is #404,
+    not something this PR added. Nothing enforces it today.
     """
 
     path: Path
@@ -184,7 +193,7 @@ def read_envelope(path: Path) -> ClaimFileEnvelope:
     costs one line and not the file. Raises ``ValueError`` naming the file when line
     1 is absent or is not an envelope.
     """
-    with path.open(encoding="utf-8") as f:
+    with path.open("rb") as f:
         return _read_envelope(path, f)
 
 
@@ -199,14 +208,34 @@ def iter_claims(path: Path) -> Iterator[ClaimEntry]:
     the line — the shape ``azul_manifest.iter_verbatim_entities`` uses, and for its
     reason: an import that silently dropped claims would understate what a source
     said, which is the one thing it must not do.
+
+    The file is opened as bytes and each line decoded here, rather than opened as
+    text. A text handle decodes inside its own iterator, so one corrupt byte in a
+    later record raised ``UnicodeDecodeError`` from the ``for`` statement — a codec
+    traceback with a byte offset, escaping the promise above that every bad line is
+    named by file and line number (#401 review).
     """
     name = path.name
-    with path.open(encoding="utf-8") as f:
+    with path.open("rb") as f:
         file_source = _without_column(_read_envelope(path, f).source.to_dict())
-        for n, line in enumerate(f, start=2):
+        for n, raw in enumerate(f, start=2):
+            line = _decode(raw, _where(name, _READING, n))
             if line.isspace():
                 continue
             yield _entry_from_line(name, n, line, file_source)
+
+
+def _decode(raw: bytes, where: str) -> str:
+    """One line of a claim file as text, or a ``ValueError`` naming it.
+
+    A claim file is written by another process, so a truncated write or a source that
+    handed an importer bytes in another encoding is a malformed *file*, reported like
+    any other malformed line — not a codec error from inside a file iterator.
+    """
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{where}: not valid UTF-8: {exc}") from None
 
 
 def discover(root: Path) -> list[Path]:
@@ -335,10 +364,15 @@ def _claim_line(file_source: dict, entry: ClaimEntry, name: str, n: int) -> dict
         raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
     if (bare := _without_column(source)) != file_source:
         raise ValueError(f"{where}: comes from {bare}, but this file's envelope names {file_source}")
-    _rebuild_claim(claim, ClaimSource.from_dict(source, where), where)
+    # What is written is the *rebuilt* claim, not the caller's dict. `make_claim`
+    # omits a key whose argument is None, so a hand-built claim carrying an explicit
+    # `"raw_value": None` would otherwise be written with that key and read back
+    # without it — validated on the way out and still not a round trip.
+    written = _rebuild_claim(claim, ClaimSource.from_dict(source, where), where)
+    written.pop("source", None)
     if (column := source.get("column")) is not None:
-        claim["column"] = column
-    return {"field": entry.field, "join_key": entry.join_key, "key_value": entry.key_value, "claim": claim}
+        written["column"] = column
+    return {"field": entry.field, "join_key": entry.join_key, "key_value": entry.key_value, "claim": written}
 
 
 def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
@@ -466,15 +500,17 @@ def _without_column(source: dict) -> dict:
     return {k: v for k, v in source.items() if k != "column"}
 
 
-def _read_envelope(path: Path, f: TextIO) -> ClaimFileEnvelope:
+def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:
     """Consume line 1 of an open claim file as its envelope.
 
     The one place a claim file's first line is turned into provenance, shared by
     :func:`read_envelope` (which wants only that) and :func:`iter_claims` (which
     reads on from there), so a file with no first line is refused in the same words
-    either way.
+    either way. ``f`` is a byte handle for the reason :func:`iter_claims` opens one:
+    a decode failure is reported as a malformed line, not raised from inside a file
+    iterator.
     """
-    first = f.readline()
+    first = _decode(f.readline(), f"{path.name} line 1")
     if not first.strip():
         raise ValueError(f"{path.name}: line 1 must be the {ENVELOPE_KEY} envelope, and this file starts empty")
     return _envelope_from_line(path, first)

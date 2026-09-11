@@ -171,3 +171,62 @@ def test_gate_rejects_out_of_enum_value(validator):
            "evidence": []}
     report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "an out-of-enum value should have failed validation"
+
+
+# --- ClaimFileEnvelope (#401) ------------------------------------------------
+#
+# The envelope is a standalone class: it describes an artefact exchanged *between*
+# runs and is referenced by no slot in ClassificationRecord, so the golden-output
+# gates above never reach it. Without these, a typo in its required members or
+# ranges would pass the schema gate even though this class defines the on-disk
+# claim-file contract (#401 review).
+
+
+def _envelope(**overrides) -> dict:
+    """A valid claim-file envelope as `ClaimFileEnvelope.to_dict` writes one."""
+    return {
+        "source": {"name": "HPRC Data Explorer", "url": "https://data.humanpangenome.org/",
+                   "table": "sequencing-data"},
+        "fetched_at": "2026-09-01T09:14:03",
+        "source_version": "2026-09-01",
+        **overrides,
+    }
+
+
+def test_claim_file_envelope_validates(validator):
+    report = validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+    assert not report.results, \
+        "a well-formed envelope should validate: " + str([r.message for r in report.results])
+
+
+def test_claim_file_envelope_accepts_an_absent_corpus_catalog(validator):
+    # Null for a source with no relationship to our catalog (HPRC, ENA, IGSR):
+    # to_dict omits the key entirely rather than writing an explicit null.
+    report = validator.validate(_envelope(corpus_catalog="anvil15"), target_class="ClaimFileEnvelope")
+    assert not report.results, str([r.message for r in report.results])
+
+
+@pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version"])
+def test_claim_file_envelope_requires_its_provenance(validator, missing):
+    # Each is required: a claim file that cannot say where it came from, when, or
+    # from what version cannot be reasoned about later.
+    bad = _envelope()
+    del bad[missing]
+    report = validator.validate(bad, target_class="ClaimFileEnvelope")
+    assert report.results, f"an envelope missing {missing!r} should have failed"
+
+
+def test_claim_file_envelope_source_is_inlined_not_a_reference(validator):
+    # `inlined: true` on the slot: line 1 carries the whole {name, url, table}
+    # object. Without it a class-valued slot reads as a reference, and this nested
+    # object would be rejected or reshaped.
+    report = validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+    assert not report.results, \
+        "a nested source object must validate: " + str([r.message for r in report.results])
+
+
+def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(validator):
+    # `range: datetime`, so the schema refuses what ClaimFileEnvelope.from_dict
+    # refuses rather than accepting free text the reader will not take.
+    report = validator.validate(_envelope(fetched_at="yesterday"), target_class="ClaimFileEnvelope")
+    assert report.results, "a non-datetime fetched_at should have failed"

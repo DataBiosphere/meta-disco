@@ -125,17 +125,22 @@ evidence}` entry — plus the controlled vocabulary:
   other. The file is NDJSON with the envelope on line 1: source name, url,
   table, fetch date, source version, and the corpus catalog it was built for.
   Write and read it through `write_claim_file` / `iter_claims`, never with a
-  whole-file `json.load` — the corpus is millions of claims (#374). A run
-  reports every claim file's source, version, catalog and age, and **imports
-  from all of them** — it never refuses one. Currency is not decidable offline:
-  the sources share no version to compare (HPRC has a major release and may
-  drift from it), and AnVIL deletes a superseded catalog rather than keeping it
-  to be matched against. The two places that can act on the question own it
-  instead — the importer compares its file's `corpus_catalog` against the
-  catalog the operator configured (`CATALOG` in the Makefile) when deciding to
-  re-fetch, and the run's output records
-  which catalog it enhances, so an enhancement offered to a catalog that has
-  moved on is refused at that boundary.
+  whole-file `json.load` — the corpus is millions of claims (#374). **Today a
+  run discovers its claim files and reports each one's source, version, catalog
+  and age, and nothing more**: `run_all_classifications` calls
+  `report_claim_files` and never `iter_claims`, so no claim reaches
+  classification and a run with claim files present produces the same output as
+  one without. Matching claims to our files is #402; when that lands the run
+  will import from every file it found and refuse none.
+  It refuses none because currency is not decidable offline: the sources share
+  no version to compare (HPRC has a major release and may drift from it), and
+  AnVIL deletes a superseded catalog rather than keeping it to be matched
+  against. The two places that can act on the question own it instead — the
+  importer compares its file's `corpus_catalog` against the catalog the
+  operator configured (`CATALOG` in the Makefile) when deciding to re-fetch,
+  and the run's output is to record which catalog it enhances so that an
+  enhancement offered to a catalog that has moved on is refused at that
+  boundary (**#404, not yet built** — no run output carries a catalog today).
 
 ## Surprises
 

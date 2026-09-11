@@ -253,12 +253,20 @@ classes:
       source:
         range: ClaimSource
         required: true
+        inlined: true
         description: >-
           Which source the claims came from — name, url and the table within it.
           The same object a claim carries, factored up to the file because those
           three are constant across it; `column` is the one member that stays on
-          each claim, since one table's claims are read from several columns.
+          each claim, since one table's claims are read from several columns —
+          an envelope naming a column is refused, since it could then disagree
+          with every line in the file.
+
+          `inlined` for the reason `Evidence.source` is: line 1 carries the whole
+          `{name, url, table}` object, and without the declaration a class-valued
+          slot is read as a reference rather than as the object the file holds.
       fetched_at:
+        range: datetime
         required: true
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
@@ -268,6 +276,11 @@ classes:
           matters most, are only distinguishable if the time is recorded. A
           date-only value is refused rather than read as midnight, which would be
           a precision the file never stated.
+
+          Typed `datetime` rather than inheriting the schema's `default_range:
+          string`, so that a consumer validating against this schema refuses the
+          same values `ClaimFileEnvelope.from_dict` refuses instead of accepting
+          free text the reader will not take.
       source_version:
         required: true
         description: >-
@@ -278,7 +291,7 @@ classes:
       corpus_catalog:
         description: >-
           The AnVIL catalog generation this claim file was built for. Provenance
-          rather than a gate: a run reports it and imports regardless, because
+          rather than a gate: a run reports it and refuses nothing on it, because
           nothing offline establishes which generation is current — AnVIL deletes
           a superseded catalog rather than keeping it to be compared against. The
           importer reads it on its next pass to decide whether the configured
