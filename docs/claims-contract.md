@@ -87,8 +87,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.5 Inputs 1–4 that disagree produce a **conflict**. No value is asserted from them, and every competing
     declaration is recorded with the rule behind it.
 
-4.6 Statuses reconcile on their own axis. A status declaration is not a competing value, and a status
-    against a value is not a two-value conflict.
+4.6 Statuses reconcile on their own axis, and the two behave differently.
+    `not_classified` never conflicts: it declares no answer, so another input having one fills a gap (4.4).
+    `not_applicable` **does** conflict with a value — it asserts the slot cannot apply to this file, which a
+    value contradicts. That is a conflict like any other: no value asserted, both declarations recorded,
+    reviewable. The engine's file-type knowledge is not silently overridden, and neither is a source.
 
 4.7 A curator rule is recorded **separately** from the conflict it answers. It supplies the slot's value;
     the conflict among inputs 1–4 stays on the record, so a curated answer never erases the disagreement it settled.
@@ -163,4 +166,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
 - How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. Both produce no claim today. #399 needs the first to be an explicit, reasoned decision that stays visible, which the contract does not yet give it a way to say.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
+- How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
+  with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
+  conflict, which is right if the number is small and wrong if it floods the queue.
 - Which consumers read which artifact. `corpus_diff`, the coverage / validation / consistency reports, the ENA validator on stored output (#330) and the eval fixtures each want inference or reconciled output, and today there is only one.
