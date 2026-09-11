@@ -42,11 +42,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 3. Claims
 
-3.1 A claim is a slot **value** derived from evidence by a rule.
+3.1 A claim is a rule's declaration about a slot, derived from evidence. It declares a **value** or a **status**.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
-3.3 A claim's value is a term in the controlled vocabulary, or it is not a claim.
+3.3 A claim that declares a value declares a term in the controlled vocabulary, or it is not a claim.
 
 3.4 Rules match on `(slot, raw_value)`. They may condition on provenance; normally they do not.
     This is what keeps one rule set working across every source.
@@ -124,5 +124,6 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
 - Whether input kind 2 (AnVIL harmonized fields) is read today at all.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
+- How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. Both produce no claim today. #399 needs the first to be an explicit, reasoned decision that stays visible, which the contract does not yet give it a way to say.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
 - Which consumers read which artifact. `corpus_diff`, the coverage / validation / consistency reports, the ENA validator on stored output (#330) and the eval fixtures each want inference or reconciled output, and today there is only one.
