@@ -117,30 +117,61 @@ evidence}` entry — plus the controlled vocabulary:
   declaration of what it reads — not tier. The three claim states (`unmapped` / `no_vocabulary_term` /
   `declined`) declare nothing to resolution: they record that a source was
   consulted and yielded no vocabulary value, and never win or conflict.
-- **Claim files carry their provenance, and the run reports it**: an importer
-  runs *out of band* from classification — when a catalog refreshes, with
-  network — and writes a claim file under `data/claims/<source>/`
-  (`claim_files.py`, issue #401); the run reads it, so the import step stays
-  offline and deterministic and either side can be re-run without forcing the
-  other. The file is NDJSON with the envelope on line 1: source name, url,
-  table, fetch date, source version, and the corpus catalog it was built for.
-  Write and read it through `write_claim_file` / `iter_claims`, never with a
-  whole-file `json.load` — the corpus is millions of claims (#374). **Today a
-  run discovers its claim files and reports each one's source, version, catalog
-  and age, and nothing more**: `run_all_classifications` calls
-  `report_claim_files` and never `iter_claims`, so no claim reaches
+- **A claim file names both sides of the join, and the envelope carries what
+  does not vary**: an importer runs *out of band* from classification — when a
+  catalog refreshes, with network — and writes a claim file under
+  `data/claims/<source>/` (`claim_files.py`, issue #401); the run reads it, so
+  the import step stays offline and deterministic and either side can be re-run
+  without forcing the other. NDJSON, written and read through
+  `write_claim_file` / `iter_claims` and never with a whole-file `json.load` —
+  the corpus is millions of claims (#374). Line 1 is the envelope:
+
+  ```
+  source{repository,dataset,table,url}  source_version  source_key
+  target{system,dataset,version}                        target_key   fetched_at
+  ```
+
+  and every later line is `{field, target_key_value, claim}`, read as *this row
+  is about the row in `target` whose `target_key` equals `target_key_value`*.
+  The key **names** are on the envelope because they do not change within a
+  file; only the **value** varies, so only that is per line — the same factoring
+  that keeps the source's repository/url/table on the envelope while `column`
+  stays per claim.
+- **The importer owns the mapping; the run does equality lookup**: an importer
+  maps its own key to the target's and writes `target_key_value` already in the
+  target's value space, transforming where needed. That keeps corpus knowledge
+  out of the importer and transform logic out of the join, and it is why a
+  source keyed by an ENA run accession adds no term to `JOIN_KEYS` — it maps
+  that accession to `archive_accession` itself. `target_key` is drawn from
+  `JOIN_KEYS`, which spans the target's record fields *and* facts classification
+  derives, so **the join runs after inference**. `target.dataset` is the scope
+  and is not decoration: `file_name` is non-unique on 69% of the corpus and on
+  20% even scoped by dataset title, but on 2 rows of 16,271 within
+  `AnVIL_HPRC_R2`.
+- **An imported claim carries no tier and cites its mapping rule**: imports are
+  not tier participants (#391, on measured evidence), so `make_claim` rejects a
+  `tier` on a claim whose producer is a `ClaimSource`, exactly as it rejects one
+  on a `state` claim — it never competes. It carries the `rule_id` of the
+  mapping that produced it, **including an identity mapping**: there is no
+  implicit copy, because a source value that happens to spell a vocabulary term
+  is a coincidence of spelling rather than an agreement about meaning. A claim
+  names a rule **iff** a mapping entry fired, which makes `unmapped` mean exactly
+  "no entry exists for this raw value" — checkable, and precisely the review
+  queue. The file stores the `rule_id`, not `reason` prose; the text is resolved
+  from the rule when the claim enters the stream, so **classification output is
+  unchanged and stays readable**. The mapping table is #395/#399.
+- **A run reports its claim files and refuses none**: `run_all_classifications`
+  calls `report_claim_files` and never `iter_claims`, so today no claim reaches
   classification and a run with claim files present produces the same output as
-  one without. Matching claims to our files is #402; when that lands the run
-  will import from every file it found and refuse none.
-  It refuses none because currency is not decidable offline: the sources share
-  no version to compare (HPRC has a major release and may drift from it), and
-  AnVIL deletes a superseded catalog rather than keeping it to be matched
-  against. The two places that can act on the question own it instead — the
-  importer compares its file's `corpus_catalog` against the catalog the
-  operator configured (`CATALOG` in the Makefile) when deciding to re-fetch,
-  and the run's output is to record which catalog it enhances so that an
-  enhancement offered to a catalog that has moved on is refused at that
-  boundary (**#404, not yet built** — no run output carries a catalog today).
+  one without — the join is #402. It will still refuse none when that lands,
+  because currency is not decidable offline: the sources share no version to
+  compare and AnVIL deletes a superseded catalog rather than keeping it to be
+  matched against. The two places that can act on it own it — the importer
+  compares its file's `target.version` against the configured catalog (`CATALOG`
+  in the Makefile) when deciding to re-fetch, and the run's output is to record
+  which catalog it enhances so an enhancement offered to a catalog that has
+  moved on is refused there (**#404, not yet built** — no run output carries a
+  catalog today).
 
 ## Surprises
 

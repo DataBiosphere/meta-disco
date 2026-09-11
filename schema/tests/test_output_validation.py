@@ -113,8 +113,7 @@ def _golden_entries():
     """Yield (label, dimension, entry) for every dimension entry in the golden."""
     for label, record in _golden_records():
         classifications = record.get("classifications")
-        assert isinstance(classifications, dict), \
-            f"{label}: record missing a 'classifications' dict"
+        assert isinstance(classifications, dict), f"{label}: record missing a 'classifications' dict"
         for dim in DIMENSION_CLASS:
             assert dim in classifications, f"{label}: missing dimension {dim!r}"
             yield f"{label}.{dim}", dim, classifications[dim]
@@ -134,8 +133,7 @@ def test_output_entries_validate_against_schema(validator):
             failures.append(f"{label}: {result.severity}: {result.message}")
 
     assert checked > 0, "no golden entries were validated"
-    assert not failures, "Pipeline output violates the classification schema:\n  " + \
-        "\n  ".join(failures)
+    assert not failures, "Pipeline output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
 def test_output_records_validate_against_schema(validator):
@@ -150,8 +148,7 @@ def test_output_records_validate_against_schema(validator):
             failures.append(f"{label}: {result.severity}: {result.message}")
 
     assert checked > 0, "no golden records were validated"
-    assert not failures, "Pipeline output violates the record schema:\n  " + \
-        "\n  ".join(failures)
+    assert not failures, "Pipeline output violates the record schema:\n  " + "\n  ".join(failures)
 
 
 def test_record_gate_rejects_missing_classifications(validator):
@@ -164,17 +161,16 @@ def test_record_gate_rejects_missing_classifications(validator):
 
 def test_record_gate_rejects_bad_dimension_value(validator):
     # A bad enum value nested inside the container must fail record validation.
-    entry = {"value": "not_a_real_modality", "status": "classified",
-             "evidence": []}
+    entry = {"value": "not_a_real_modality", "status": "classified", "evidence": []}
     ok = {"value": None, "status": "not_classified", "evidence": []}
-    classifications = {dim: (entry if dim == "data_modality" else ok)
-                       for dim in DIMENSION_CLASS}
+    classifications = {dim: (entry if dim == "data_modality" else ok) for dim in DIMENSION_CLASS}
     bad = {"md5sum": "x", "file_name": "f.bam", "classifications": classifications}
     report = validator.validate(bad, target_class="ClassificationRecord")
     # Assert it fails *because of* the bad enum value, not some unrelated reason —
     # otherwise a regression in nested enum validation could leave this test green.
-    assert any("not_a_real_modality" in r.message for r in report.results), \
+    assert any("not_a_real_modality" in r.message for r in report.results), (
         f"expected a failure citing the bad enum value, got: {[r.message for r in report.results]}"
+    )
 
 
 def test_gate_rejects_missing_status(validator):
@@ -185,8 +181,7 @@ def test_gate_rejects_missing_status(validator):
 
 
 def test_gate_rejects_out_of_enum_value(validator):
-    bad = {"value": "not_a_real_modality", "status": "classified",
-           "evidence": []}
+    bad = {"value": "not_a_real_modality", "status": "classified", "evidence": []}
     report = validator.validate(bad, target_class="DataModalityClassification")
     assert report.results, "an out-of-enum value should have failed validation"
 
@@ -201,39 +196,64 @@ def test_gate_rejects_out_of_enum_value(validator):
 
 
 def _envelope(**overrides) -> dict:
-    """A valid claim-file envelope as `ClaimFileEnvelope.to_dict` writes one."""
+    """A valid claim-file envelope as `ClaimFileEnvelope.to_dict` writes one.
+
+    The HPRC Data Explorer's R2 sequencing-data table, keyed by the filenames it
+    publishes, matched against AnVIL's `file_name` within the dataset that makes that
+    key usable.
+    """
     return {
-        "source": {"name": "HPRC Data Explorer", "url": "https://data.humanpangenome.org/",
-                   "table": "sequencing-data"},
-        "fetched_at": "2026-09-01T09:14:03",
+        "source": {
+            "repository": "HPRC Data Explorer",
+            "dataset": "R2",
+            "table": "sequencing-data",
+            "url": "https://data.humanpangenome.org/",
+        },
         "source_version": "2026-09-01",
+        "source_key": "filename",
+        "target": {"system": "anvil", "dataset": "AnVIL_HPRC_R2", "version": "anvil15"},
+        "target_key": "file_name",
+        "fetched_at": "2026-09-01T09:14:03",
         **overrides,
     }
 
 
 def test_claim_file_envelope_validates(envelope_validator):
     report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
-    assert not report.results, \
-        "a well-formed envelope should validate: " + str([r.message for r in report.results])
+    assert not report.results, "a well-formed envelope should validate: " + str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_accepts_a_declared_corpus_catalog(envelope_validator):
-    # An AnVIL claim file names the catalog generation it was built for.
-    report = envelope_validator.validate(_envelope(corpus_catalog="anvil15"), target_class="ClaimFileEnvelope")
+def test_claim_file_envelope_names_both_sides_of_the_join(envelope_validator):
+    # The envelope's job: which source, which target, and which key pairs with which.
+    # A reader needs all four to know what a line's target_key_value matches against,
+    # and none of them is on the line.
+    assert {"source", "source_key", "target", "target_key"} <= set(_envelope())
+
+
+def test_claim_file_envelope_accepts_a_target_with_no_scope(envelope_validator):
+    # Null for a source whose key is unique across the whole target (`file_id`,
+    # `entry_id`, `drs_uri`), where a corpus-wide match is correct.
+    report = envelope_validator.validate(
+        _envelope(target={"system": "anvil"}, target_key="file_id"), target_class="ClaimFileEnvelope"
+    )
     assert not report.results, str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_accepts_an_absent_corpus_catalog(envelope_validator):
-    # Null for a source with no relationship to our catalog (HPRC, ENA, IGSR):
-    # to_dict omits the key entirely rather than writing an explicit null, so the
-    # absent case is the fixture's own shape — asserted here rather than left to
-    # ride along on another test.
-    assert "corpus_catalog" not in _envelope()
-    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+def test_claim_file_envelope_refuses_a_target_key_outside_the_vocabulary(envelope_validator):
+    # `target_key` is a key of the *target*, drawn from join_key_enum. A source keyed
+    # by an ENA run accession maps it to one of these rather than adding a term here.
+    report = envelope_validator.validate(_envelope(target_key="run_accession"), target_class="ClaimFileEnvelope")
+    assert report.results, "a target_key outside join_key_enum should have failed"
+
+
+def test_claim_file_envelope_accepts_a_derived_target_key(envelope_validator):
+    # archive_accession is read from a fastq's read headers rather than from the
+    # input record, which is why the join runs after inference.
+    report = envelope_validator.validate(_envelope(target_key="archive_accession"), target_class="ClaimFileEnvelope")
     assert not report.results, str([r.message for r in report.results])
 
 
-@pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version"])
+@pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version", "source_key", "target", "target_key"])
 def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing):
     # Each is required: a claim file that cannot say where it came from, when, or
     # from what version cannot be reasoned about later.
@@ -243,13 +263,14 @@ def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing
     assert report.results, f"an envelope missing {missing!r} should have failed"
 
 
-def test_claim_file_envelope_source_is_inlined_not_a_reference(envelope_validator):
-    # `inlined: true` on the slot: line 1 carries the whole {name, url, table}
-    # object. Without it a class-valued slot reads as a reference, and this nested
-    # object would be rejected or reshaped.
+def test_claim_file_envelope_nested_records_are_inlined_not_references(envelope_validator):
+    # `inlined: true` on both slots: line 1 carries the whole source and target
+    # objects. Without it a class-valued slot reads as a reference, and these nested
+    # objects would be rejected or reshaped.
     report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
-    assert not report.results, \
-        "a nested source object must validate: " + str([r.message for r in report.results])
+    assert not report.results, "nested source and target objects must validate: " + str(
+        [r.message for r in report.results]
+    )
 
 
 def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
@@ -271,17 +292,19 @@ def test_claim_file_envelope_refuses_an_empty_source_version(envelope_validator)
     assert report.results, "an empty source_version should have failed"
 
 
-def test_claim_file_envelope_refuses_an_empty_corpus_catalog(envelope_validator):
+def test_claim_file_envelope_refuses_an_empty_target_version(envelope_validator):
     # Absent is fine; present-and-empty is not, matching `optional_str`.
-    report = envelope_validator.validate(_envelope(corpus_catalog=""), target_class="ClaimFileEnvelope")
-    assert report.results, "an empty corpus_catalog should have failed"
+    report = envelope_validator.validate(
+        _envelope(target={"system": "anvil", "version": ""}), target_class="ClaimFileEnvelope"
+    )
+    assert report.results, "an empty target version should have failed"
 
 
-def test_claim_file_envelope_refuses_a_nameless_source(envelope_validator):
+def test_claim_file_envelope_refuses_a_source_with_no_repository(envelope_validator):
     bad = _envelope()
     bad["source"] = {"url": "https://data.humanpangenome.org/"}
     report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
-    assert report.results, "a source with no name should have failed"
+    assert report.results, "a source with no repository should have failed"
 
 
 def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator):

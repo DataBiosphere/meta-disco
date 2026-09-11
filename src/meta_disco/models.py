@@ -62,12 +62,43 @@ SOURCE_TYPES = frozenset(
     }
 )
 
-# Keys an external source's claim may be attached to one of our files by (#392).
+# Keys a claim may be attached to a target row by (#392, extended in #401). One
+# vocabulary for two positions: a claim file's envelope declares which of these it is
+# keyed by (`target_key`), and a claim records which one actually attached it
+# (`join_key`) once the join has run.
+#
+# These are keys of the *target*, not names a source publishes. A source keyed by an
+# ENA run accession does not add a term here — its importer maps that accession to
+# one of these and writes the value in the target's space, which is what keeps corpus
+# knowledge in the importer and transform logic out of the join.
+#
+# Measured on the AnVIL corpus (708,088 records) — the three that are both wholly
+# present and wholly unique are `file_id`, `entry_id` and `drs_uri`. `file_md5sum` is
+# unique on all but 1.7% of rows and absent on 9,059. `file_name` is absent on 37%
+# and non-unique on 69%, so it is usable only inside a dataset scope (2 collisions in
+# 16,271 within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model).
 JOIN_KEY_FILE_PATH = "file_path"
 JOIN_KEY_FILE_MD5SUM = "file_md5sum"
 JOIN_KEY_DRS_URI = "drs_uri"
 JOIN_KEY_FILE_NAME = "file_name"
-JOIN_KEYS = frozenset({JOIN_KEY_FILE_PATH, JOIN_KEY_FILE_MD5SUM, JOIN_KEY_DRS_URI, JOIN_KEY_FILE_NAME})
+JOIN_KEY_FILE_ID = "file_id"
+JOIN_KEY_ENTRY_ID = "entry_id"
+# Not a field of the input record but a fact classification *derives* — read from a
+# fastq's read headers. ENA run accessions appear in no input file name at all, so a
+# claim from ENA or SRA can only be attached by this, which is why the join runs
+# after inference rather than over the input corpus.
+JOIN_KEY_ARCHIVE_ACCESSION = "archive_accession"
+JOIN_KEYS = frozenset(
+    {
+        JOIN_KEY_FILE_PATH,
+        JOIN_KEY_FILE_MD5SUM,
+        JOIN_KEY_DRS_URI,
+        JOIN_KEY_FILE_NAME,
+        JOIN_KEY_FILE_ID,
+        JOIN_KEY_ENTRY_ID,
+        JOIN_KEY_ARCHIVE_ACCESSION,
+    }
+)
 
 # The three vocabularies above are validated at runtime against these in-code
 # frozensets — the idiom STATUS_LABELS and reference_builds' NAME_SOURCE_* already
@@ -347,6 +378,56 @@ def optional_str(value: object, label: str, where: str) -> str | None:
     return None if value is None else required_str(value, label, where)
 
 
+def _flat_to_dict(record) -> dict:
+    """Serialize a flat dataclass of optional strings, dropping the absent ones.
+
+    Shared by the claim-file records (``ClaimSource``, ``ClaimFileSource``,
+    ``ClaimTarget``). Keys come from ``fields()`` rather than being listed, so a
+    member added to one of those dataclasses is emitted rather than silently dropped
+    from every claim file — the same reason ``ExcludedFile.to_dict`` derives its keys.
+
+    Null members are omitted rather than written as explicit nulls: these records
+    either have a member or do not, and there is no "we looked and found nothing"
+    state for a reader to tell apart from an absent one.
+    """
+    return {f.name: v for f in fields(record) if (v := getattr(record, f.name)) is not None}
+
+
+def _flat_from_dict(cls, block: object, where: str, label: str, without: tuple[str, ...] = ()):
+    """Rebuild one of those records from what :func:`_flat_to_dict` wrote.
+
+    The inverse, and derived from ``fields()`` for the same reason. Every member is
+    checked: a required one (no dataclass default) must be a non-empty string, an
+    optional one must be absent or a non-empty string. An explicit ``null`` is
+    refused rather than read as absent — ``_flat_to_dict`` omits nulls, so a written
+    record never contains one, and a file that does was not written by us.
+
+    A member the class does not have is refused rather than ignored, because the
+    schema validates these records ``closed=True``: a reader that quietly dropped an
+    unknown key would accept documents the schema rejects (#401 review).
+
+    ``without`` names members that belong to the dataclass but not to *this* position
+    in the format, making them unknown keys there rather than optional ones — a claim
+    file's envelope parses its source ``without=("column",)``, since a column belongs
+    to a claim and one table's claims are read from several columns.
+    """
+    if not isinstance(block, dict):
+        raise ValueError(f"{where}: {label} is {type(block).__name__}, not an object")
+    known = {f.name for f in fields(cls)} - set(without)
+    if extra := sorted(set(block) - known):
+        raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {sorted(known)})")
+    # Which checker a member gets is decided per field at runtime, from whether the
+    # dataclass gives it a default, so the values are only ever `str | None` to a type
+    # checker — `required_str` raises rather than returning None, but that is not
+    # visible through the splat.
+    members: dict[str, Any] = {
+        f.name: (required_str if f.default is MISSING else optional_str)(block.get(f.name), f"{label} {f.name}", where)
+        for f in fields(cls)
+        if f.name in known
+    }
+    return cls(**members)
+
+
 @dataclass(frozen=True)
 class ClaimSource:
     """Identity of an external source that produced a claim (issue #392).
@@ -354,6 +435,13 @@ class ClaimSource:
     The producer handle for a claim that is not from one of our rules. The schema's
     ``ClaimSource`` class is the definition of what the four members mean and why
     the record is cut at this granularity; this is the Python side of it.
+
+    It answers *who said this*. A claim file's envelope answers a wider question —
+    which collection within the source, and which target the claims are about — and
+    uses :class:`ClaimFileSource` for it. The two are not duplicates: ``repository``
+    fills ``name`` and ``table`` fills ``table`` when a claim is rebuilt from a
+    file, while the envelope's ``dataset`` never reaches a claim, because a dataset
+    is the scope a claim is matched within rather than part of who produced it.
 
     Frozen because a source's identity is a fact about where a claim came from,
     not state to edit after the claim is built; that also lets one instance be
@@ -366,65 +454,105 @@ class ClaimSource:
     column: str | None = None
 
     def to_dict(self) -> dict:
-        """Serialize for output, dropping members the source does not have.
-
-        Unlike ``ReferenceBuild.to_dict``, null keys are omitted rather than kept:
-        a source either has a column structure or it does not, so there is no
-        "we looked and found nothing" state for a reader to distinguish from an
-        absent field. ``name`` is required and therefore always present.
-
-        Keys come from ``fields()`` rather than ``asdict()``: this record is flat,
-        and ``asdict`` deep-copies recursively, which costs an order of magnitude
-        for nothing. It is called once per imported claim, so the difference is
-        real once the importers land (#369/#394).
-        """
-        return {f.name: v for f in fields(self) if (v := getattr(self, f.name)) is not None}
+        """Serialize for output, dropping members the source does not have."""
+        return _flat_to_dict(self)
 
     @classmethod
-    def from_dict(cls, block: object, where: str, *, without: tuple[str, ...] = ()) -> "ClaimSource":
-        """Rebuild a source from what :meth:`to_dict` wrote, validating each member.
+    def from_dict(cls, block: object, where: str) -> "ClaimSource":
+        """Rebuild a source from what :meth:`to_dict` wrote, validating each member."""
+        return _flat_from_dict(cls, block, where, "source")
 
-        The inverse of ``to_dict`` and derived from ``fields()`` for the same
-        reason: a member added to this dataclass is otherwise written by ``to_dict``
-        and silently dropped by a reader that names the members by hand. ``where``
-        locates the fault for a caller reading a file — ``claim_files`` passes the
-        file and line.
 
-        An absent optional member reads back as None, which is what ``to_dict``
-        meant by omitting it. A *present* member that is not a non-empty string
-        raises: an explicit ``"name": null`` survives a key check but identifies
-        nothing, and a source whose table is ``0`` is a mis-serialized record rather
-        than one to interpret.
+@dataclass(frozen=True)
+class ClaimFileSource:
+    """Where a whole claim file's claims were read from (issue #401).
 
-        A member this class does not have is refused rather than ignored. The schema
-        validates a claim file's source ``closed=True``, so a reader that quietly
-        dropped an unknown key would accept documents the schema rejects — the two
-        must refuse the same files (#401 review).
+    Three levels, because a source is not flat: a **repository** publishes
+    **datasets**, and a dataset has **tables**. The AnVIL manifests are
+    ``AnVIL / AnVIL_HPRC_R2 / alignments_v2``; the HPRC Data Explorer is
+    ``HPRC Data Explorer / R2 / sequencing-data``; ENA is
+    ``ENA / <study accession> / read_run`` — where ``read_run`` is literally the
+    ``result=`` parameter its API takes, and the fields it returns are the columns.
+    A source with no middle level leaves ``dataset`` null, as ``table`` may be null.
 
-        ``without`` names members that belong to the dataclass but not to *this*
-        position in the format, making them unknown keys rather than optional ones.
-        A claim file's envelope passes ``("column",)``: the schema models that
-        position as ``ClaimFileSource``, which has no column, because a column
-        belongs to a claim — one table's claims are read from several columns.
+    ``dataset`` earns its place twice. It is provenance, and it is what a claim's
+    :attr:`column` cannot be read without — the same column name means different
+    things in different datasets. It is also the reason the *target* carries a
+    dataset: see :class:`ClaimTarget`.
+
+    Distinct from :class:`ClaimSource` rather than reusing it. A claim's source
+    carries a ``column``, which belongs to the claim because one table's claims are
+    read from several columns; a file's source carries a ``dataset``, which belongs
+    to the file because every claim in it came from the same one. Modeling them as
+    one class would let an envelope name a column that could disagree with every
+    line in the file.
+    """
+
+    repository: str
+    dataset: str | None = None
+    table: str | None = None
+    url: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line, dropping members the source does not have."""
+        return _flat_to_dict(self)
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "ClaimFileSource":
+        """Rebuild a file's source from what :meth:`to_dict` wrote."""
+        return _flat_from_dict(cls, block, where, "source")
+
+    def as_claim_source(self, column: str | None) -> ClaimSource:
+        """The per-claim :class:`ClaimSource` a claim in this file carries.
+
+        The envelope's three facts minus ``dataset``, plus the column this particular
+        claim was read from. Called once per claim by the reader, which is why the
+        envelope stores these once rather than repeating them a few million times.
         """
-        if not isinstance(block, dict):
-            raise ValueError(f"{where}: source is {type(block).__name__}, not an object")
-        known = {f.name for f in fields(cls)} - set(without)
-        if extra := sorted(set(block) - known):
-            raise ValueError(f"{where}: source has unknown member(s) {extra} (expected {sorted(known)})")
-        # Which checker a member gets is decided per field at runtime, from whether the
-        # dataclass gives it a default, so the values are only ever `str | None` to a
-        # type checker — `required_str` raises rather than returning None, but that is
-        # not visible through the splat. Widened here rather than at the helpers, which
-        # are precise on their own.
-        members: dict[str, Any] = {
-            f.name: (required_str if f.default is MISSING else optional_str)(
-                block.get(f.name), f"source {f.name}", where
-            )
-            for f in fields(cls)
-            if f.name in known
-        }
-        return cls(**members)
+        return ClaimSource(name=self.repository, url=self.url, table=self.table, column=column)
+
+
+@dataclass(frozen=True)
+class ClaimTarget:
+    """The system a claim file's claims are *about* (issue #401).
+
+    A claim file says "the row in **this** system whose **this key** is **that
+    value**". The target names the system, so an importer is not implicitly bound to
+    AnVIL, and the file records which system it resolved its keys against.
+
+    ``dataset`` is the scope the join runs within, and it is not decoration: keyed by
+    ``file_name`` alone, 69% of the corpus's 708,088 rows carry a non-unique key, and
+    20% remain non-unique even scoped by dataset *title* alone — but within
+    ``AnVIL_HPRC_R2`` the collision rate is 2 rows in 16,271. A filename join is
+    unusable without a dataset scope and reliable with one. Null for a source whose
+    key is unique across the whole target (``file_id``, ``drs_uri``), where a
+    corpus-wide match is correct.
+
+    ``version`` is which generation of the target the importer resolved against — an
+    AnVIL catalog such as ``anvil15``. Null when the importer did not resolve against
+    a particular generation, which is the ordinary case for a source that simply
+    publishes names and values (HPRC, ENA) rather than reading our catalog. It is
+    provenance for the importer's own next pass, not a gate on the run: see
+    ``claim_files`` on why currency is not decidable offline.
+
+    The mapping from the source's own names to these is the **importer's**
+    knowledge. The source calls its collection ``R2``; the target calls the same
+    thing ``AnVIL_HPRC_R2``. The importer records both sides, and the run does
+    equality lookup only.
+    """
+
+    system: str
+    dataset: str | None = None
+    version: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line, dropping members the target does not have."""
+        return _flat_to_dict(self)
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "ClaimTarget":
+        """Rebuild a target from what :meth:`to_dict` wrote."""
+        return _flat_from_dict(cls, block, where, "target")
 
 
 @dataclass(frozen=True)
@@ -433,104 +561,110 @@ class ClaimFileEnvelope:
 
     An importer runs out of band from classification — when a catalog refreshes,
     with network — and writes a claim file; a run reads it. This is the header of
-    that artefact: where the claims came from, when, and from which version of the
-    source. The schema's ``ClaimFileEnvelope`` class is the definition of what the
-    members mean; this is the Python side of it, as ``ClaimSource`` is for a claim's
-    source. ``claim_files`` is the reader and writer.
+    that artefact, and it names **both sides of the join**, symmetrically::
 
-    ``source`` is a :class:`ClaimSource` and not a second spelling of one: name, url
-    and table are the same facts a claim carries, factored up to the file because
-    they are constant across it. ``column`` is the one member left per claim, since
-    one table's claims are read from several columns.
+        source            source_version      source_key
+        target                  target.version    target_key
 
-    ``corpus_catalog`` is the AnVIL catalog generation this file was built for. It is
-    provenance, not a gate: a run reports it and refuses nothing on it (and today
-    imports nothing at all — the join is #402). What reads it is the importer,
-    deciding on its next pass whether the configured catalog has moved on and the
-    file must be re-fetched. It is null for a source with no
-    relationship to our catalog — the HPRC Data Explorer, ENA, IGSR — whose claims
-    are about files rather than about a snapshot of ours, and which have no catalog
-    generation to record; their ``source_version`` carries what they can say instead.
+    A line then reads: *this row is about the row in* ``target`` *whose*
+    ``target_key`` *equals its* ``target_key_value`` *; here is the claim.*
 
-    Frozen for the reason ``ClaimSource`` is: provenance is a fact about where the
-    claims came from, not state to edit after they are read.
+    **The key names are here, not on the line.** They do not change within a file —
+    every claim an importer writes is keyed the same way — so repeating them on a
+    few million lines would be the envelope's content written out again. Only the
+    key *value* varies, so only that is on the line. It is the same factoring that
+    keeps ``ClaimSource``'s name, url and table here while ``column`` stays per
+    claim.
 
-    Validated on construction (:meth:`__post_init__`) against the same rules
-    :meth:`from_dict` applies on the way back in. The writer used to accept any
-    envelope while the reader accepted very little, so an importer could spend a
-    networked run writing millions of claims behind a header its own reader would
-    refuse — and find out at the next classification run, days later and far from
-    the cause. A ``source_version`` of ``None`` was the trap: it is not a string, and
-    ``to_dict`` drops null members, so the key vanished and the file read back as
-    "not an envelope" rather than naming the field (#401 review).
+    **The importer owns the mapping between the two keys**, and writes
+    ``target_key_value`` already in the target's value space. Where a source's own
+    value needs transforming to get there — pulling ``NA12878`` out of a path,
+    normalizing an accession — the importer does it. The run performs equality
+    lookup and nothing else, which is what keeps corpus knowledge out of the
+    importer and transform logic out of the join.
+
+    ``target_key`` names a key of the target system, drawn from its record fields
+    *and* from facts meta-disco derives: ENA run accessions appear in no input
+    ``file_name`` at all, but ``archive_accession`` is populated on thousands of
+    classified fastq records, read from the read headers. So the join runs after
+    inference — which is where the pipeline already puts import.
+
+    Frozen because provenance is a fact about where the claims came from, not state
+    to edit after they are read. Validated on construction
+    (:meth:`__post_init__`) against the same rules :meth:`from_dict` applies on the
+    way back in, so a writer cannot produce a file its own reader would refuse —
+    an importer would otherwise spend a networked run writing millions of claims
+    behind a header that fails at the next classification run, days later and far
+    from the cause.
     """
 
-    source: ClaimSource
-    fetched_at: datetime
+    source: ClaimFileSource
     source_version: str
-    corpus_catalog: str | None = None
+    source_key: str
+    target: ClaimTarget
+    target_key: str
+    fetched_at: datetime
 
     def __post_init__(self) -> None:
         """Refuse an envelope that could not be read back, at the point it is built.
 
-        Type hints do not run, so ``source_version=None`` reaches here intact. This
-        runs once per claim file, so its cost is nothing against the write it
-        precedes.
+        Type hints do not run, so a ``source_version`` of ``None`` reaches here
+        intact — and ``to_dict`` omits null members, so it would vanish from the file
+        and read back as a missing key rather than naming the field.
 
-        The source is checked by serializing it and reading it back through
-        :meth:`ClaimSource.from_dict` — the reader's own definition, applied to the
-        reader's own input — rather than by re-listing the members here. Checking only
-        ``name`` left the parity half-kept: a ``table`` of ``7`` was written happily
-        and refused on read (#401 review).
+        The two nested records are checked by serializing them and reading them back
+        through their own ``from_dict`` — the reader's definition applied to the
+        reader's input — rather than by re-listing their members here, which is how
+        an earlier version left the parity half-kept.
+
+        Runs once per claim file, so its cost is nothing beside the write it precedes.
         """
         where = "claim file envelope"
-        if not isinstance(self.source, ClaimSource):
-            raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimSource")
-        ClaimSource.from_dict(self.source.to_dict(), where)
-        if self.source.column is not None:
-            raise ValueError(
-                f"{where}: source names column {self.source.column!r}, but a column belongs to a claim, "
-                "not to the file — one table's claims are read from several columns"
-            )
+        if not isinstance(self.source, ClaimFileSource):
+            raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimFileSource")
+        if not isinstance(self.target, ClaimTarget):
+            raise ValueError(f"{where}: target is {type(self.target).__name__}, not a ClaimTarget")
+        ClaimFileSource.from_dict(self.source.to_dict(), where)
+        ClaimTarget.from_dict(self.target.to_dict(), where)
         if not isinstance(self.fetched_at, datetime):
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
         required_str(self.source_version, "source_version", where)
-        optional_str(self.corpus_catalog, "corpus_catalog", where)
+        required_str(self.source_key, "source_key", where)
+        required_str(self.target_key, "target_key", where)
+        if self.target_key not in JOIN_KEYS:
+            raise ValueError(
+                f"{where}: target_key {self.target_key!r} is not a key of the target "
+                f"(expected one of {sorted(JOIN_KEYS)})"
+            )
 
     @classmethod
     def from_dict(cls, block: object, where: str) -> "ClaimFileEnvelope":
         """Rebuild an envelope from what :meth:`to_dict` wrote, validating each member.
 
-        The inverse of ``to_dict``, and the only place a claim file's first line
-        becomes provenance. Every member is checked here rather than where a consumer
-        reads it: an envelope is read once per file and is what the report rests on,
-        so an unparseable ``fetched_at`` or a source with no name must fail as a
-        malformed claim file, not later as a report that cannot render.
+        The only place a claim file's first line becomes provenance. Every member is
+        checked here rather than where a consumer reads it: an envelope is read once
+        per file and is what the report rests on, so an unparseable ``fetched_at`` or
+        a source with no repository must fail as a malformed claim file, not later as
+        a report that cannot render.
 
-        A trailing ``Z`` is normalized to ``+00:00`` before parsing.
-        ``datetime.fromisoformat`` rejects ``Z`` on Python 3.10, which is this
-        project's floor and what CI runs, while accepting it from 3.11 — and the
-        importers coming in #369/#394 read web APIs that emit ``Z`` almost
-        universally. Without this, a claim file written on a 3.11 machine parses
-        there and fails on CI, which is a property of the interpreter rather than of
-        the file (#401 review).
+        A member the envelope does not have is refused rather than ignored, because
+        the schema validates this record ``closed=True``: a reader that quietly
+        dropped an unknown key would accept documents the schema rejects.
+
+        A trailing ``Z`` on ``fetched_at`` is normalized to ``+00:00`` before parsing.
+        ``datetime.fromisoformat`` rejects ``Z`` on Python 3.10, this project's floor
+        and what CI runs, while accepting it from 3.11 — and the importers coming in
+        #369/#394 read web APIs that emit it almost universally. Without this, a claim
+        file written on a 3.11 machine parses there and fails on CI, which is a
+        property of the interpreter rather than of the file.
 
         ``fetched_at`` must carry a time of day. ``fromisoformat`` accepts a bare
-        ``2026-09-01`` and silently returns midnight, so a date-only value would be
-        read back as a fetch that claims to have happened at 00:00:00 — a precision
-        the file never stated. Two imports on the same day would also be
-        indistinguishable, which is the case where the age report matters most. The
-        check is on the string rather than the parsed value, because midnight is a
-        real time that a genuine fetch can have.
-
-        A member the envelope does not have is refused rather than ignored, and the
-        source is parsed ``without`` a column, so that this reader and the schema —
-        which validates the envelope ``closed=True`` against a column-free
-        ``ClaimFileSource`` — refuse the same documents. A ``"column": null`` on an
-        envelope source used to be accepted here and silently stripped while the
-        schema rejected it (#401 review). Refusing it here also puts the file and
-        line in the message, which :meth:`__post_init__` cannot do — it validates a
-        constructed envelope and has no idea where one came from.
+        ``2026-09-01`` and silently returns midnight, so a date-only value would read
+        back as a fetch claiming to have happened at 00:00:00 — a precision the file
+        never stated, and one that makes two imports on the same day
+        indistinguishable, which is the case the age report exists for. The check is
+        on the string rather than the parsed value, because midnight is a real time a
+        genuine fetch can have.
         """
         if not isinstance(block, dict):
             raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
@@ -554,31 +688,33 @@ class ClaimFileEnvelope:
                 "record when the fetch happened, not only the day it happened on"
             )
         return cls(
-            source=ClaimSource.from_dict(block.get("source"), where, without=("column",)),
-            fetched_at=parsed,
+            source=ClaimFileSource.from_dict(block.get("source"), where),
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
-            corpus_catalog=optional_str(block.get("corpus_catalog"), "envelope corpus_catalog", where),
+            source_key=required_str(block.get("source_key"), "envelope source_key", where),
+            target=ClaimTarget.from_dict(block.get("target"), where),
+            target_key=required_str(block.get("target_key"), "envelope target_key", where),
+            fetched_at=parsed,
         )
 
     def to_dict(self) -> dict:
-        """Serialize for the envelope line, dropping an absent ``corpus_catalog``.
+        """Serialize for the envelope line.
 
-        Null members are omitted as in :meth:`ClaimSource.to_dict`, so a claim file
-        from a source unrelated to our catalog carries no ``corpus_catalog`` key at
-        all rather than an explicit null. The two members that are not already JSON
-        are encoded on the way out: ``source`` through its own ``to_dict``, and
-        ``fetched_at`` as an ISO 8601 string — the form
-        ``azul_manifest.metadata_block`` already writes a fetch time in, and the form
-        :func:`claim_files.read_envelope` parses back.
+        The three members that are not already JSON are encoded here: ``source`` and
+        ``target`` through their own ``to_dict``, and ``fetched_at`` as an ISO 8601
+        string — the form ``azul_manifest.metadata_block`` already writes a fetch time
+        in, and the form :meth:`from_dict` parses back.
 
-        Keys come from ``fields()`` for the reason ``ClaimSource.to_dict`` and
-        ``ExcludedFile.to_dict`` do: a member added to the dataclass and not here
-        would otherwise be dropped from every claim file silently.
+        Keys come from ``fields()`` for the reason the nested records' do: a member
+        added to the dataclass and not here would otherwise be dropped from every
+        claim file silently. Every member of this record is required, so none is
+        omitted — unlike the nested records, which drop the members they lack.
         """
-        encoded = {"source": self.source.to_dict(), "fetched_at": self.fetched_at.isoformat()}
-        return {
-            f.name: encoded.get(f.name, value) for f in fields(self) if (value := getattr(self, f.name)) is not None
+        encoded = {
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
+            "fetched_at": self.fetched_at.isoformat(),
         }
+        return {f.name: encoded.get(f.name, getattr(self, f.name)) for f in fields(self)}
 
 
 @dataclass

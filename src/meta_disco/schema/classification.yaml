@@ -232,39 +232,93 @@ classes:
 
   ClaimFileSource:
     description: >-
-      The source a whole claim file came from (issue #401) — the `source` on a
-      `ClaimFileEnvelope`.
+      Where a whole claim file's claims were read from (issue #401) — the `source`
+      on a `ClaimFileEnvelope`.
 
-      The same three facts `ClaimSource` carries, minus `column`. A column
-      belongs to a claim, not to a file: one table's claims are read from
-      several columns, so an envelope naming one could disagree with every line
-      in the file, and the reader refuses it. Modeled as its own class rather
-      than reusing `ClaimSource` so this schema refuses the same envelopes the
-      reader does — otherwise a claim file validates here and is then reported
-      unreadable by `read_envelope` (#401 review).
+      Three levels, because a source is not flat: a repository publishes datasets,
+      and a dataset has tables. The AnVIL manifests are `AnVIL / AnVIL_HPRC_R2 /
+      alignments_v2`; the HPRC Data Explorer is `HPRC Data Explorer / R2 /
+      sequencing-data`; ENA is `ENA / <study accession> / read_run`, where
+      `read_run` is literally the `result=` parameter its API takes and the fields
+      it returns are the columns. A source with no middle level leaves `dataset`
+      null, as `table` may be null.
 
-      The Python side reuses `models.ClaimSource` for both and enforces the
-      absent column in `ClaimFileEnvelope.__post_init__`; the two classes here
-      are what the *file* may contain in each position.
+      Distinct from `ClaimSource` rather than reusing it. A claim's source carries
+      a `column`, which belongs to the claim because one table's claims are read
+      from several columns; a file's source carries a `dataset`, which belongs to
+      the file because every claim in it came from the same one. Modeling them as
+      one class would let an envelope name a column that could disagree with every
+      line in the file.
     attributes:
-      name:
+      repository:
         required: true
         pattern: "^.+$"
         description: >-
-          What the source is called — `HPRC Data Explorer`, `AnVIL`. Required and
-          non-empty: a source with no name identifies nothing, and `required_str`
-          refuses the empty string on both sides of the file.
-      url:
+          What publishes the source — `AnVIL`, `HPRC Data Explorer`, `ENA`.
+          Required and non-empty: a source that names no repository identifies
+          nothing.
+      dataset:
         pattern: "^.+$"
         description: >-
-          Where the source lives, when it has a public address. Null for a source
-          with none — a curator table, say. Non-empty where present.
+          The collection within that repository the claims were read from. Null
+          for a source with no such level.
       table:
         pattern: "^.+$"
         description: >-
-          The table or file within that source the claims were read from —
-          `sequencing-data`, `alignments_v2`. Null for a source with no table
-          structure. Non-empty where present.
+          The table or file within the dataset — `alignments_v2`,
+          `sequencing-data`, ENA's `read_run`. Null for a source with no table
+          structure. The column within it stays on each claim.
+      url:
+        pattern: "^.+$"
+        description: >-
+          Where the source was read from, if it has a public address. Null for a
+          source with none, such as a curator table held in this repository.
+
+  ClaimTarget:
+    description: >-
+      The system a claim file's claims are *about* (issue #401) — the `target` on
+      a `ClaimFileEnvelope`.
+
+      A claim file says "the row in this system whose this key is that value". The
+      target names the system, so an importer is not implicitly bound to AnVIL and
+      the file records which system it resolved its keys against.
+
+      The mapping from the source's own names to these is the importer's
+      knowledge: the source calls its collection `R2`, the target calls the same
+      thing `AnVIL_HPRC_R2`. The importer records both sides and the run performs
+      equality lookup only.
+    attributes:
+      system:
+        required: true
+        pattern: "^.+$"
+        description: >-
+          The system the claims are about — `anvil` today. Required: a claim with
+          no target is about nothing.
+      dataset:
+        pattern: "^.+$"
+        description: >-
+          The scope the join runs within, in the *target's* name for it. Not
+          decoration: keyed by `file_name` alone, 69% of the AnVIL corpus's
+          708,088 rows carry a non-unique key, and 20% remain non-unique scoped by
+          dataset title alone — but within `AnVIL_HPRC_R2` the collision rate is 2
+          rows in 16,271. A filename join is unusable without a dataset scope and
+          reliable with one.
+
+          Null for a source whose key is unique across the whole target
+          (`file_id`, `entry_id`, `drs_uri`), where a corpus-wide match is correct.
+      version:
+        pattern: "^.+$"
+        description: >-
+          Which generation of the target the importer resolved against — an AnVIL
+          catalog such as `anvil15`. Null when the importer did not resolve
+          against a particular generation, which is the ordinary case for a source
+          that publishes names and values rather than reading our catalog.
+
+          Provenance for the importer's own next pass, not a gate on the run: a run
+          reports it and refuses nothing on it, because nothing offline
+          establishes which generation is current — AnVIL deletes a superseded
+          catalog rather than keeping it to be compared against.
+
 
   ClaimFileEnvelope:
     description: >-
@@ -273,6 +327,18 @@ classes:
       with network — and writes a claim file of `Evidence` claims; a run reads it
       and reports this provenance, so that what a run consumed, and how old it
       was, is on the record.
+
+      It names both sides of the join, symmetrically: `source` / `source_version`
+      / `source_key`, and `target` / `target.version` / `target_key`. A line then
+      reads "this row is about the row in `target` whose `target_key` equals its
+      `target_key_value`; here is the claim."
+
+      The key *names* are here rather than on each line because they do not change
+      within a file — every claim an importer writes is keyed the same way — so
+      repeating them on a few million lines would be this block written out again.
+      Only the key value varies, so only that is on the line. It is the same
+      factoring that keeps a source's repository, url and table here while
+      `column` stays on each claim.
 
       Deliberately outside the `ClassificationRecord` tree, and referenced by no
       slot in it: an envelope describes an artefact exchanged *between* runs and
@@ -291,20 +357,43 @@ classes:
         required: true
         inlined: true
         description: >-
-          Which source the claims came from — name, url and the table within it.
-          The same three facts a claim's `ClaimSource` carries, factored up to the
-          file because they are constant across it.
-
-          Its own class, and not `ClaimSource`, so that this schema refuses what
-          `ClaimFileEnvelope.__post_init__` refuses. `ClaimSource` has a `column`,
-          which belongs to a claim — one table's claims are read from several
-          columns — so an envelope carrying one could disagree with every line in
-          the file. Using `ClaimSource` here would let a claim file pass schema
-          validation and then be refused by `read_envelope`.
-
+          Where the claims were read from — repository, dataset and table.
           `inlined` for the reason `Evidence.source` is: line 1 carries the whole
-          `{name, url, table}` object, and without the declaration a class-valued
-          slot is read as a reference rather than as the object the file holds.
+          object, and without the declaration a class-valued slot is read as a
+          reference rather than as the object the file holds.
+      source_version:
+        required: true
+        pattern: "^.+$"
+        description: >-
+          The version of the source the claims were taken from — a release tag, a
+          publication date, a catalog generation. Required even where the source
+          publishes no version of its own: a claim file that cannot say what it
+          was built from cannot be reasoned about later.
+      source_key:
+        required: true
+        pattern: "^.+$"
+        description: >-
+          The key the *source* publishes its rows by, in the source's own name for
+          it — `filename`, `run_accession`, `object_id`. Recorded as provenance:
+          the values on each line are already in the target's space, so the run
+          never reads this, but a person auditing the file needs to know which
+          column of the source produced them.
+      target:
+        range: ClaimTarget
+        required: true
+        inlined: true
+        description: >-
+          The system the claims are about, the scope within it, and the generation
+          resolved against.
+      target_key:
+        range: join_key_enum
+        required: true
+        description: >-
+          Which key of the target each line's `target_key_value` is to be matched
+          against. Drawn from `join_key_enum`, which spans the target's own record
+          fields *and* facts classification derives — `archive_accession` is read
+          from a fastq's read headers, so a claim keyed by it can only be joined
+          after inference has run.
       fetched_at:
         range: datetime
         required: true
@@ -316,41 +405,6 @@ classes:
           matters most, are only distinguishable if the time is recorded. A
           date-only value is refused rather than read as midnight, which would be
           a precision the file never stated.
-
-          Typed `datetime` rather than inheriting the schema's `default_range:
-          string`, so that a consumer validating against this schema refuses the
-          same values `ClaimFileEnvelope.from_dict` refuses instead of accepting
-          free text the reader will not take.
-      source_version:
-        required: true
-        pattern: "^.+$"
-        description: >-
-          The version of the source the claims were taken from — a catalog
-          generation, a release tag, a publication date. Required even where the
-          source publishes no version of its own: a claim file that cannot say
-          what it was built from cannot be reasoned about later.
-
-          `pattern` because `required` alone admits the empty string, which
-          `required_str` refuses — without it a claim file passes this schema and
-          is then refused by `read_envelope`.
-      corpus_catalog:
-        pattern: "^.+$"
-        description: >-
-          The AnVIL catalog generation this claim file was built for. Provenance
-          rather than a gate: a run reports it and refuses nothing on it, because
-          nothing offline establishes which generation is current — AnVIL deletes
-          a superseded catalog rather than keeping it to be compared against. The
-          importer reads it on its next pass to decide whether the configured
-          catalog has moved on and the file must be re-fetched.
-
-          Absent for a source unrelated to our catalog. Where it *is* present it
-          must say something: `optional_str` refuses the empty string, so the
-          pattern refuses it here too.
-
-          Null for a source with no relationship to our catalog — the HPRC Data
-          Explorer, ENA, IGSR — whose claims are about files rather than about a
-          snapshot of ours, and which have no catalog generation to record;
-          `source_version` carries what they can say instead.
 
   Evidence:
     description: >-
@@ -733,22 +787,56 @@ enums:
 
   join_key_enum:
     description: >-
-      The key by which an external source's claim was attached to one of our files
-      (issue #392). Sources publish different keys and they differ in
-      trustworthiness, so which one was used is recorded per claim (#390).
+      A key by which a claim is attached to a row in the target system (issue
+      #392, extended in #401). One vocabulary in two positions: a claim file's
+      envelope declares which of these it is keyed by (`ClaimFileEnvelope.
+      target_key`), and a claim records which one actually attached it
+      (`Evidence.join_key`) once the join has run.
+
+      These are keys of the *target*, not names a source publishes. A source keyed
+      by an ENA run accession adds no term here: its importer maps that accession
+      to one of these and writes the value in the target's space, which is what
+      keeps corpus knowledge in the importer and transform logic out of the join.
+
+      Measured on the AnVIL corpus, 708,088 records. The keys differ enormously in
+      how far they can be trusted, which is why the one used is recorded per claim
+      (#390).
     permissible_values:
+      file_id:
+        description: >-
+          The target's own file identifier. Present on every record and unique on
+          every record — with `entry_id` and `drs_uri`, one of the three keys that
+          need no scope.
+      entry_id:
+        description: >-
+          The target's entry identifier. Present and unique on every record. The
+          scope that makes a weaker key usable: `(file_md5sum, entry_id)` and
+          `(file_name, entry_id)` are each unique corpus-wide.
+      drs_uri:
+        description: >-
+          DRS URI. Present and unique on every record of the AnVIL corpus.
       file_path:
-        description: Full path — the entry identity, and the only unique key.
+        description: Full path, where the target publishes one.
       file_md5sum:
         description: >-
-          Content checksum. Not unique across the corpus: 2,026 md5s are
-          registered in more than one dataset.
-      drs_uri:
-        description: DRS URI, where the source publishes one.
+          Content checksum. Present on 98.7% of records and non-unique on 1.7% —
+          2,026 md5s are registered in more than one dataset. Note that a record
+          whose md5 was synthesized from its URL rather than its content can never
+          match one carrying a real checksum.
       file_name:
         description: >-
-          Bare file name. The weakest key and the only one some catalogs publish —
-          79.6% coverage on HPRC_R2.
+          Bare file name, and often the only key a catalog publishes. The weakest:
+          absent on 37% of records and non-unique on 69%. Collisions are wildly
+          per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3%
+          within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a
+          dataset scope, which is what `ClaimTarget.dataset` is for.
+      archive_accession:
+        description: >-
+          Sequence-archive run accession (ENA, SRA). Not a field of the input
+          record but a fact classification *derives*, read from a fastq's read
+          headers — accessions appear in no input file name at all. A claim from
+          an archive can be attached only by this, which is why the join runs
+          after inference rather than over the input corpus.
 
   evidence_marker_enum:
     description: >-

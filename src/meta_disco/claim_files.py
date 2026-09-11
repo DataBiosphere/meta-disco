@@ -26,8 +26,8 @@ the producers (#369, #394) can be built against a settled contract before that l
 import from every file it found and refuse none. It cannot do better offline — the
 sources share no version to compare, and AnVIL deletes a superseded catalog rather
 than keeping it to be matched against. The two places that can act on the question
-own it instead: the importer, which compares its file's ``corpus_catalog`` against
-the configured one when deciding to re-fetch, and the run's output, which is to
+own it instead: the importer, which compares its file's ``target.version`` against
+the configured catalog when deciding to re-fetch, and the run's output, which is to
 record the catalog it enhances so that an enhancement offered to a catalog that has
 moved on is refused at that boundary — that one is #404 and is not built, so nothing
 enforces it yet.
@@ -38,15 +38,58 @@ several sources is millions of claims, and a whole-file ``json.load`` is already
 memory ceiling this corpus keeps hitting (#374); ``anvil_files_metadata.ndjson`` is
 the existing precedent. Putting the envelope on line 1 rather than in a sidecar
 keeps the claims inseparable from their provenance, and lets a reader have the whole
-of it after a single ``readline``.
+of it after a single ``readline``::
 
-**What a claim line carries, and what it does not.** The line holds the dimension,
-the source's *own* key and its value, and the claim itself. The key is the source's
-because an importer emits claims keyed by whatever the source publishes and needs no
-knowledge of our corpus (#400b); the claim's own ``join_key``/``match_exact`` are
-filled in by the join, when a match actually happens, not here. The claim's ``source``
-is factored into the envelope on write and rehydrated on read — name, url and table
-are constant across the file, so only ``column`` survives per line.
+    {
+        "claim_file": {
+            "source": {
+                "repository": "HPRC Data Explorer",
+                "dataset": "R2",
+                "table": "sequencing-data",
+                "url": "https://…",
+            },
+            "source_version": "2026-09-01",
+            "source_key": "filename",
+            "target": {"system": "anvil", "dataset": "AnVIL_HPRC_R2", "version": "anvil15"},
+            "target_key": "file_name",
+            "fetched_at": "2026-09-01T09:14:03",
+        }
+    }
+    {
+        "field": "platform",
+        "target_key_value": "HG002.hifi.bam",
+        "claim": {
+            "rule_id": "map_hprc_platform_v1",
+            "value": "PACBIO",
+            "raw_value": "Revio",
+            "column": "platform",
+            "source_type": "repository_metadata",
+        },
+    }
+
+**The envelope names both sides of the join.** A line reads: *this row is about the
+row in* ``target`` *whose* ``target_key`` *equals its* ``target_key_value``. The key
+*names* live on the envelope because they do not change within a file — every claim
+an importer writes is keyed the same way — so only the value is on the line. The
+same factoring keeps the source's repository, url and table on the envelope while
+``column`` stays per claim, since one table's claims are read from several columns.
+
+**The importer owns the mapping between the two keys** and writes
+``target_key_value`` already in the target's value space; where a source's own value
+needs transforming to get there, the importer does it. The run performs equality
+lookup and nothing else. That is what keeps corpus knowledge out of the importer and
+transform logic out of the join — and it is why a source keyed by an ENA run
+accession adds no term to the key vocabulary: it maps that accession to
+``archive_accession`` itself.
+
+**What a claim line does not carry.** No ``tier``: an imported claim does not compete
+on the rule tiers (#391), so a tier on one is a number the importer invents and the
+policy discards. No ``join_key`` or ``match_exact``: those are what the join fills in
+once a match has actually happened, and a file asserting them would be claiming a
+match that has not occurred. No ``reason`` prose: an imported claim cites the
+``rule_id`` of the mapping that produced it — including an identity mapping, since
+there is no implicit copy — and the text is resolved from that rule, so output stays
+readable while the file stays small. The mapping table itself is #395/#399.
 """
 
 import json
@@ -56,7 +99,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from .models import CLASSIFICATION_FIELDS, JOIN_KEYS, ClaimFileEnvelope, ClaimSource
+from .models import CLASSIFICATION_FIELDS, ClaimFileEnvelope, ClaimFileSource, ClaimSource, optional_str
 from .rule_engine import make_claim
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from a
@@ -95,30 +138,42 @@ _WRITE_BUFFER_BYTES = 1 << 20
 _WRITING = "claim"
 _READING = "line"
 
-# The four members of a claim line. `_claim_line` writes exactly these, so a file
-# carrying anything else beside them was not written by this module.
-_LINE_KEYS = frozenset({"field", "join_key", "key_value", "claim"})
+# The three members of a claim line. `_claim_line` writes exactly these, so a file
+# carrying anything else beside them was not written by this module. The key names
+# are not among them: they are on the envelope, constant for the file.
+_LINE_KEYS = frozenset({"field", "target_key_value", "claim"})
+
+# Claim members the join fills in, which a claim file must therefore not carry. A
+# producer writing them would be asserting a match that has not happened, and an
+# outer key of `file_name` beside an inner `join_key` of `file_md5sum` is two
+# contradictory join descriptions in one line (#401).
+_POST_JOIN_KEYS = ("join_key", "match_exact")
 
 
 @dataclass(frozen=True, slots=True)
 class ClaimEntry:
-    """One line of a claim file: a claim, its dimension, and the key it is keyed by.
+    """One line of a claim file: which dimension, which target row, and the claim.
 
-    ``field`` is one of ``CLASSIFICATION_FIELDS``. ``join_key`` names which key
-    ``key_value`` is (``file_name``, ``file_md5sum``, …) — the source's own key, not
-    a statement that anything matched. ``claim`` is a claim dict as
-    ``rule_engine.make_claim`` builds it, carrying the :class:`ClaimSource` it came
-    from; :func:`write_claim_file` factors that source into the envelope and
-    :func:`iter_claims` puts it back, so a caller on either side always holds a whole
-    claim.
+    Reads as: *this row is about the row in the envelope's* ``target`` *whose*
+    ``target_key`` *equals* ``target_key_value`` *; here is the claim.*
+
+    ``field`` is one of ``CLASSIFICATION_FIELDS``. ``target_key_value`` is the value
+    to match on, already in the target's value space — the importer owns the mapping
+    between its own key and the target's, and any transform needed to get there, so
+    the run performs equality lookup only. The key *names* are on the envelope,
+    because they do not change within a file; only the value varies per claim.
+
+    ``claim`` is a claim dict as ``rule_engine.make_claim`` builds it, carrying the
+    :class:`ClaimSource` it came from; :func:`write_claim_file` factors that source
+    into the envelope and :func:`iter_claims` puts it back, so a caller on either
+    side always holds a whole claim.
 
     ``slots=True`` because :func:`iter_claims` builds one of these per claim: a few
     million per source, each of which would otherwise carry its own ``__dict__``.
     """
 
     field: str
-    join_key: str
-    key_value: str
+    target_key_value: str
     claim: dict
 
 
@@ -172,7 +227,6 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    file_source = _without_column(envelope.source.to_dict())
     name = path.name
     written = 0
     try:
@@ -181,7 +235,7 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
             f.write("\n")
             for entry in entries:
                 written += 1
-                f.write(_encode(_claim_line(file_source, entry, name, written)))
+                f.write(_encode(_claim_line(envelope.source, entry, name, written)))
                 f.write("\n")
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -221,12 +275,12 @@ def iter_claims(path: Path) -> Iterator[ClaimEntry]:
     """
     name = path.name
     with path.open("rb") as f:
-        file_source = _without_column(_read_envelope(path, f).source.to_dict())
+        envelope_source = _read_envelope(path, f).source
         for n, raw in enumerate(f, start=2):
             line = _decode(raw, _where(name, _READING, n))
             if line.isspace():
                 continue
-            yield _entry_from_line(name, n, line, file_source)
+            yield _entry_from_line(name, n, line, envelope_source)
 
 
 def _decode(raw: bytes, where: str) -> str:
@@ -296,18 +350,34 @@ def report_claim_files(root: Path, now: datetime | None = None) -> list[ClaimFil
 
 
 def _describe(status: ClaimFileStatus, root: Path, now: datetime | None) -> str:
-    """One report line for one claim file: its provenance and age, or why it would not read."""
+    """One report line for one claim file: both sides of its join, and its age.
+
+    Reads as *what it came from* → *what it is about*, because a person checking a
+    run's claim files wants to see which corpus each one will attach to as much as
+    where it was fetched from.
+    """
     name = status.path.relative_to(root)
     if status.envelope is None:
         return f"UNREADABLE {name} — {status.error}"
     envelope = status.envelope
-    source = envelope.source
-    where = f"{source.name}/{source.table}" if source.table else source.name
-    built_for = f"for catalog {envelope.corpus_catalog}, " if envelope.corpus_catalog is not None else ""
     return (
-        f"{name} — {where}, version {envelope.source_version}, {built_for}"
-        f"fetched {envelope.fetched_at.isoformat()} ({_age_phrase(envelope.fetched_at, now)})"
+        f"{name} — {_join_side(envelope.source.to_dict(), envelope.source_key)}"
+        f" -> {_join_side(envelope.target.to_dict(), envelope.target_key)},"
+        f" version {envelope.source_version},"
+        f" fetched {envelope.fetched_at.isoformat()} ({_age_phrase(envelope.fetched_at, now)})"
     )
+
+
+def _join_side(members: dict, key: str) -> str:
+    """One side of the join as ``a/b/c[key]``, skipping the levels it does not have.
+
+    Both sides are flat records of optional strings, so one renderer serves them —
+    ``HPRC Data Explorer/R2/sequencing-data[filename]`` and
+    ``anvil/AnVIL_HPRC_R2[file_name]``. ``url`` is dropped: it is provenance a reader
+    can go and look at, not something to carry across every line of a report.
+    """
+    levels = [v for k, v in members.items() if k != "url" and v is not None]
+    return f"{'/'.join(levels)}[{key}]"
 
 
 def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
@@ -334,49 +404,52 @@ def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
     return f"{days} day{'s' if days != 1 else ''} ago"
 
 
-def _claim_line(file_source: dict, entry: ClaimEntry, name: str, n: int) -> dict:
+def _claim_line(envelope_source: ClaimFileSource, entry: ClaimEntry, name: str, n: int) -> dict:
     """Serialize one entry, factoring its claim's source into the file's.
 
-    ``file_source`` is the envelope's source without its column, serialized once by
-    :func:`write_claim_file`. The claim keeps every key ``make_claim`` gave it except
-    ``source``, which is replaced by that source's ``column`` alone — the only member
-    that varies within one file, and omitted too when the source has none. Writing
-    the other three on every line would be the envelope's content repeated a few
-    million times.
+    The claim keeps every key ``make_claim`` gave it except ``source``, which is
+    replaced by that source's ``column`` alone — the only member that varies within
+    one file, and omitted too when the source has none. Writing the repository, url
+    and table on every line would be the envelope's content repeated a few million
+    times.
 
     That factoring is also a check: a claim whose source is not the source the
-    envelope names does not belong in this file, and saying so here is cheaper than
-    a reader discovering that every claim it rehydrated was attributed to the wrong
-    table.
+    envelope names does not belong in this file, and saying so here is cheaper than a
+    reader discovering that every claim it rehydrated was attributed to the wrong
+    table. The comparison goes through
+    :meth:`ClaimFileSource.as_claim_source`, so the writer's notion of "the same
+    source" is the reader's own.
 
     The claim is put through ``make_claim`` before it is written, exactly as
     :func:`_entry_from_line` does on the way back in. An importer can hand-build a
-    ``ClaimEntry``, and a claim missing ``source_type`` or ``tier`` would otherwise
-    write cleanly and be refused by the reader — the writer producing a file its own
-    reader will not take, which is the failure this contract exists to prevent
-    (#401 review).
+    ``ClaimEntry``, and a claim citing no mapping rule, or carrying a tier it may not
+    have, would otherwise write cleanly and be refused by the reader — the writer
+    producing a file its own reader will not take, which is the failure this contract
+    exists to prevent.
 
     ``name`` and ``n`` locate the entry for a refusal and are formatted into one only
     when there is one (:func:`_where`) — this runs a few million times per source, and
     a label built per claim is a string nothing reads.
     """
-    _check_entry(name, _WRITING, n, entry.field, entry.join_key, entry.key_value, entry.claim)
+    _check_entry(name, _WRITING, n, entry.field, entry.target_key_value, entry.claim)
     where = _where(name, _WRITING, n)
     claim = dict(entry.claim)
     source = claim.pop("source", None)
     if not isinstance(source, dict):
         raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
-    if (bare := _without_column(source)) != file_source:
-        raise ValueError(f"{where}: comes from {bare}, but this file's envelope names {file_source}")
+    column = optional_str(source.get("column"), "source column", where)
+    expected = envelope_source.as_claim_source(column)
+    if ClaimSource.from_dict(source, where) != expected:
+        raise ValueError(f"{where}: comes from {source}, but this file's envelope names {expected.to_dict()}")
     # What is written is the *rebuilt* claim, not the caller's dict. `make_claim`
     # omits a key whose argument is None, so a hand-built claim carrying an explicit
     # `"raw_value": None` would otherwise be written with that key and read back
     # without it — validated on the way out and still not a round trip.
-    written = _rebuild_claim(claim, ClaimSource.from_dict(source, where), where)
+    written = _rebuild_claim(claim, expected, where)
     written.pop("source", None)
-    if (column := source.get("column")) is not None:
+    if column is not None:
         written["column"] = column
-    return {"field": entry.field, "join_key": entry.join_key, "key_value": entry.key_value, "claim": written}
+    return {"field": entry.field, "target_key_value": entry.target_key_value, "claim": written}
 
 
 def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
@@ -401,11 +474,11 @@ def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
         raise ValueError(f"{where}: not a valid claim: {exc}") from None
 
 
-def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEntry:
+def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSource) -> ClaimEntry:
     """Parse one claim line, rebuilding its claim through ``make_claim``.
 
-    ``file_source`` is the envelope's source without its column, serialized once by
-    :func:`iter_claims`. The claim comes back whole — that source, with this line's
+    ``envelope_source`` is the file's source, read once by :func:`iter_claims`. The
+    claim comes back whole — that source as a :class:`ClaimSource`, with this line's
     ``column`` — so a consumer reads the same claim the importer built and never has
     to consult the envelope itself.
 
@@ -447,7 +520,7 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
     """
     try:
         entry = json.loads(line)
-        field, join_key, key_value, claim = (entry["field"], entry["join_key"], entry["key_value"], entry["claim"])
+        field, target_key_value, claim = (entry["field"], entry["target_key_value"], entry["claim"])
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ValueError(f"{_where(name, _READING, n)}: not a claim: {exc!r}") from None
     # A member the line does not have is refused, not dropped. `make_claim` already
@@ -458,7 +531,7 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
         raise ValueError(
             f"{_where(name, _READING, n)}: line has unknown member(s) {extra} (expected {sorted(_LINE_KEYS)})"
         )
-    _check_entry(name, _READING, n, field, join_key, key_value, claim)
+    _check_entry(name, _READING, n, field, target_key_value, claim)
     if "source" in claim:
         raise ValueError(
             f"{_where(name, _READING, n)}: claim carries its own source {claim['source']!r} — "
@@ -469,8 +542,8 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
     # Through `from_dict` rather than the constructor, so this line's own `column` is
     # checked like every other source member — `"column": 7` would otherwise be
     # accepted here and written back out as a claim.
-    source = ClaimSource.from_dict({**file_source, "column": body.pop("column", None)}, where)
-    return ClaimEntry(field=field, join_key=join_key, key_value=key_value, claim=_rebuild_claim(body, source, where))
+    source = envelope_source.as_claim_source(optional_str(body.pop("column", None), "source column", where))
+    return ClaimEntry(field=field, target_key_value=target_key_value, claim=_rebuild_claim(body, source, where))
 
 
 def _where(name: str, unit: str, n: int) -> str:
@@ -483,33 +556,36 @@ def _where(name: str, unit: str, n: int) -> str:
     return f"{name} {unit} {n}"
 
 
-def _check_entry(name: str, unit: str, n: int, field: Any, join_key: Any, key_value: Any, claim: Any) -> None:
-    """Check the four members of a claim line, in whichever direction it is crossing.
+def _check_entry(name: str, unit: str, n: int, field: Any, target_key_value: Any, claim: Any) -> None:
+    """Check the three members of a claim line, in whichever direction it is crossing.
 
     One definition of the line's shape for the writer and the reader both, so the two
     cannot drift into accepting different files. ``name``/``unit``/``n`` say what to
     call the line if it is refused, and become a label only then.
+
+    The *key* is not checked here: which key this file is keyed by is the envelope's
+    ``target_key``, checked once when the envelope is built, and the line carries only
+    its value.
     """
-    # Type before membership: an unhashable `field: []` or `join_key: {}` raises
-    # TypeError from the frozenset lookup, which escapes as a traceback instead of the
-    # ValueError naming the file and the line that this module promises.
+    # Type before membership: an unhashable `field: []` raises TypeError from the
+    # frozenset lookup, which escapes as a traceback instead of the ValueError naming
+    # the file and the line that this module promises.
     if not isinstance(field, str) or field not in _FIELDS:
         raise ValueError(
             f"{_where(name, unit, n)}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})"
         )
-    if not isinstance(join_key, str) or join_key not in JOIN_KEYS:
+    if not isinstance(target_key_value, str) or not target_key_value:
         raise ValueError(
-            f"{_where(name, unit, n)}: unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})"
+            f"{_where(name, unit, n)}: target_key_value is {target_key_value!r} — "
+            "a claim with nothing to match on can attach to no row"
         )
-    if not isinstance(key_value, str) or not key_value:
-        raise ValueError(f"{_where(name, unit, n)}: no {join_key} value to key the claim by")
     if not isinstance(claim, dict):
         raise ValueError(f"{_where(name, unit, n)}: claim is {type(claim).__name__}, not an object")
-
-
-def _without_column(source: dict) -> dict:
-    """A source dict minus its column — the part a claim file's envelope factors out."""
-    return {k: v for k, v in source.items() if k != "column"}
+    if post_join := sorted(k for k in _POST_JOIN_KEYS if k in claim):
+        raise ValueError(
+            f"{_where(name, unit, n)}: claim carries {post_join}, which the join fills in — "
+            "a claim file records the key to match on, not a match that has happened"
+        )
 
 
 def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:

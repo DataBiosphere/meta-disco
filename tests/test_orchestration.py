@@ -23,7 +23,7 @@ from meta_disco.classify_run import (
 )
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.models import ClaimFileEnvelope, ClaimSource
+from meta_disco.models import JOIN_KEY_FILE_ID, ClaimFileEnvelope, ClaimFileSource, ClaimTarget
 from meta_disco.output_utils import CLASSIFICATION_FILES
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
@@ -176,14 +176,16 @@ class TestTheRunReportsItsClaimFiles:
     decision and to the catalog the run's output is offered back to.
     """
 
-    def _claim_file(self, tmp_path, corpus_catalog):
+    def _claim_file(self, tmp_path, target_version):
         write_claim_file(
             tmp_path / "claims" / "anvil" / "manifest.ndjson",
             ClaimFileEnvelope(
-                source=ClaimSource(name="AnVIL", table="alignments_v2"),
+                source=ClaimFileSource(repository="AnVIL", dataset="AnVIL_HPRC_R2", table="alignments_v2"),
+                source_version=target_version,
+                source_key="object_id",
+                target=ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version=target_version),
+                target_key=JOIN_KEY_FILE_ID,
                 fetched_at=datetime(2026, 9, 1, 9, 14, 3),
-                source_version=corpus_catalog,
-                corpus_catalog=corpus_catalog,
             ),
             [],
         )

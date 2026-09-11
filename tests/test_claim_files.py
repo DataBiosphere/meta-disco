@@ -27,6 +27,7 @@ spike's two external sources.
 """
 
 import json
+from dataclasses import fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -48,13 +49,27 @@ from meta_disco.models import (
     NO_VOCABULARY_TERM,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
+    UNMAPPED,
     ClaimFileEnvelope,
+    ClaimFileSource,
     ClaimSource,
+    ClaimTarget,
 )
 from meta_disco.rule_engine import make_claim
 
-HPRC_CATALOG = ClaimSource(name="HPRC Data Explorer", url="https://data.humanpangenome.org/", table="sequencing-data")
-ANVIL_MANIFEST = ClaimSource(name="AnVIL", url="https://service.explore.anvilproject.org/", table="alignments_v2")
+HPRC_CATALOG = ClaimFileSource(
+    repository="HPRC Data Explorer",
+    dataset="R2",
+    table="sequencing-data",
+    url="https://data.humanpangenome.org/",
+)
+ANVIL_MANIFEST = ClaimFileSource(
+    repository="AnVIL",
+    dataset="AnVIL_HPRC_R2",
+    table="alignments_v2",
+    url="https://service.explore.anvilproject.org/",
+)
+ANVIL_TARGET = ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil15")
 FETCHED_AT = datetime(2026, 9, 1, 9, 14, 3)
 # A fetch time as an envelope on disk carries it. Used wherever a case needs a
 # *valid* fetched_at so that it isolates the member actually under test — a bare
@@ -63,12 +78,16 @@ ISO_NOW = FETCHED_AT.isoformat()
 
 
 def _envelope(**overrides) -> ClaimFileEnvelope:
-    """An HPRC catalog envelope — a source with no relationship to our catalog."""
+    """An HPRC catalog envelope: filenames the catalog publishes, matched against
+    AnVIL's ``file_name`` within the dataset that makes that key usable."""
     return ClaimFileEnvelope(
         **{
             "source": HPRC_CATALOG,
-            "fetched_at": FETCHED_AT,
             "source_version": "2026-09-01",
+            "source_key": "filename",
+            "target": ANVIL_TARGET,
+            "target_key": JOIN_KEY_FILE_NAME,
+            "fetched_at": FETCHED_AT,
             **overrides,
         }
     )
@@ -78,15 +97,13 @@ def _entry(column="platform", raw="Revio", value="PACBIO", name="HG002.bam", sou
     """One mapped platform claim, keyed by the file name the catalog publishes."""
     return ClaimEntry(
         field="platform",
-        join_key=JOIN_KEY_FILE_NAME,
-        key_value=name,
+        target_key_value=name,
         claim=make_claim(
-            reason=f"{source.table}.{column} = {raw}",
             source_type=SOURCE_REPOSITORY_METADATA,
-            source=ClaimSource(name=source.name, url=source.url, table=source.table, column=column),
+            source=source.as_claim_source(column),
+            rule_id="map_hprc_platform_v1",
             raw_value=raw,
             value=value,
-            tier=1,
         ),
     )
 
@@ -100,10 +117,13 @@ class TestRoundTrip:
 
         envelope = read_envelope(path)
         assert envelope.source == HPRC_CATALOG
+        assert envelope.source.dataset == "R2"
         assert envelope.source.url == "https://data.humanpangenome.org/"
         assert envelope.fetched_at == FETCHED_AT
         assert envelope.source_version == "2026-09-01"
-        assert envelope.corpus_catalog is None
+        # Both sides of the join, and which key pairs with which.
+        assert (envelope.source_key, envelope.target_key) == ("filename", JOIN_KEY_FILE_NAME)
+        assert envelope.target == ANVIL_TARGET
 
     def test_a_claim_comes_back_whole(self, tmp_path):
         """The claim read back is the claim written, source and all."""
@@ -136,14 +156,11 @@ class TestRoundTrip:
         path = tmp_path / "claims.ndjson"
         entry = ClaimEntry(
             field="assay_type",
-            join_key=JOIN_KEY_FILE_MD5SUM,
-            key_value="d41d8cd98f00b204e9800998ecf8427e",
+            target_key_value="HG002.hic.bam",
             claim=make_claim(
-                reason="sequencing-data.assayType = Hi-C",
                 source_type=SOURCE_REPOSITORY_METADATA,
-                source=ClaimSource(
-                    name=HPRC_CATALOG.name, url=HPRC_CATALOG.url, table="sequencing-data", column="assayType"
-                ),
+                source=HPRC_CATALOG.as_claim_source("assayType"),
+                rule_id="map_hprc_assay_v1",
                 raw_value="Hi-C",
                 state=NO_VOCABULARY_TERM,
             ),
@@ -219,7 +236,7 @@ class TestMalformedFiles:
         read = []
         with pytest.raises(ValueError):
             for entry in iter_claims(path):
-                read.append(entry.key_value)
+                read.append(entry.target_key_value)
         assert read == ["HG0.bam", "HG1.bam", "HG2.bam"]
 
     def test_a_blank_line_carries_no_claim(self, tmp_path):
@@ -241,24 +258,28 @@ class TestMalformedFiles:
     @pytest.mark.parametrize(
         "envelope,expected",
         [
-            ({"source": {"url": "u"}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
-            ({"source": {"name": "HPRC"}, "source_version": "1"}, "fetched_at"),
-            ({"source": {"name": "HPRC"}, "fetched_at": "yesterday", "source_version": "1"}, "not an ISO 8601"),
-            ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01", "source_version": "1"}, "no time of day"),
-            ({"source": {"name": "HPRC"}, "fetched_at": ISO_NOW}, "source_version"),
-            ({"source": {"name": ""}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
-            ({"source": {"name": None}, "fetched_at": ISO_NOW, "source_version": "1"}, "source name"),
-            ({"source": {"name": "HPRC"}, "fetched_at": ISO_NOW, "source_version": ""}, "source_version"),
-            (
-                {"source": {"name": "HPRC", "table": 7}, "fetched_at": ISO_NOW, "source_version": "1"},
-                "source table",
-            ),
+            ({"source": {"url": "u"}}, "source repository"),
+            ({"source": {"repository": ""}}, "source repository"),
+            ({"source": {"repository": None}}, "source repository"),
+            ({"source": {"repository": "HPRC", "table": 7}}, "source table"),
+            ({"fetched_at": None}, "fetched_at"),
+            ({"fetched_at": "yesterday"}, "not an ISO 8601"),
+            ({"fetched_at": "2026-09-01"}, "no time of day"),
+            ({"source_version": ""}, "source_version"),
+            ({"source_key": None}, "source_key"),
+            ({"target": {"system": ""}}, "target system"),
+            ({"target": {"system": "anvil", "dataset": 7}}, "target dataset"),
+            ({"target_key": "sample_id"}, "not a key of the target"),
         ],
     )
     def test_an_envelope_missing_a_fact_is_refused(self, tmp_path, envelope, expected):
-        """Every envelope member is checked on read: the refusal decision rests on them."""
+        """Every envelope member is checked on read: the report rests on all of them.
+
+        Each case overrides one member of a valid envelope, so what it asserts is
+        that member and not an unrelated one that happened to be missing too.
+        """
         path = tmp_path / "claims.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: envelope}) + "\n")
+        path.write_text(json.dumps({ENVELOPE_KEY: {**_envelope().to_dict(), **envelope}}) + "\n")
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
@@ -267,19 +288,24 @@ class TestMalformedFiles:
         path = tmp_path / "claims.ndjson"
         entry = _entry()
         with pytest.raises(ValueError, match="unknown dimension"):
-            write_claim_file(path, _envelope(), [ClaimEntry("data_moddality", entry.join_key, "x", entry.claim)])
+            write_claim_file(path, _envelope(), [ClaimEntry("data_moddality", "x", entry.claim)])
 
         write_claim_file(path, _envelope(), [entry])
         path.write_text(path.read_text().replace('"platform"', '"data_moddality"', 1))
         with pytest.raises(ValueError, match="line 2: unknown dimension"):
             list(iter_claims(path))
 
-    def test_a_claim_with_an_unknown_join_key_is_refused(self, tmp_path):
+    def test_a_line_with_nothing_to_match_on_is_refused(self, tmp_path):
+        """A claim whose target_key_value is empty can attach to no row."""
         entry = _entry()
-        with pytest.raises(ValueError, match="unknown join_key"):
-            write_claim_file(
-                tmp_path / "c.ndjson", _envelope(), [ClaimEntry(entry.field, "sample_id", "x", entry.claim)]
-            )
+        with pytest.raises(ValueError, match="target_key_value"):
+            write_claim_file(tmp_path / "c.ndjson", _envelope(), [ClaimEntry(entry.field, "", entry.claim)])
+
+    def test_an_envelope_naming_a_key_the_target_does_not_have_is_refused(self, tmp_path):
+        """`target_key` is a key of the *target*. A source keyed by something else maps
+        it to one of these itself rather than adding a term here."""
+        with pytest.raises(ValueError, match="not a key of the target"):
+            _envelope(target_key="sample_id")
 
 
 class TestAWriterCannotProduceWhatTheReaderRefuses:
@@ -298,44 +324,45 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
             _envelope(source_version=version)
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
-        with pytest.raises(ValueError, match="source name"):
-            _envelope(source=ClaimSource(name=""))
+        with pytest.raises(ValueError, match="source repository"):
+            _envelope(source=ClaimFileSource(repository=""))
 
     def test_an_envelope_with_a_non_datetime_fetch_time_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="fetched_at"):
             _envelope(fetched_at="2026-09-01")
 
-    def test_an_envelope_naming_a_column_is_refused_when_it_is_built(self):
-        """A column belongs to a claim, not to the file.
+    def test_an_envelope_cannot_name_a_column_at_all(self):
+        """A column belongs to a claim, not to a file — the type says so.
 
-        `to_dict` would otherwise write it on line 1, where both sides strip it
-        before use — a member of the serialized envelope that nothing reads and that
-        can disagree with every claim in the file.
+        `ClaimFileSource` has no `column` member, so an envelope naming one is not a
+        value to be refused at runtime but a shape that cannot be expressed. One
+        table's claims are read from several columns, so a column on the envelope
+        could disagree with every line in the file.
         """
-        with pytest.raises(ValueError, match="belongs to a claim"):
-            _envelope(source=ClaimSource(name="HPRC", table="t", column="platform"))
+        assert "column" not in {f.name for f in fields(ClaimFileSource)}
+        with pytest.raises(TypeError):
+            ClaimFileSource(repository="HPRC", table="t", column="platform")  # type: ignore[call-arg]
 
     def test_an_envelope_whose_source_has_a_non_string_member_is_refused_when_it_is_built(self):
-        """Checking only `name` left the parity half-kept: `table=7` wrote, then failed on read.
-
-        The annotation says `str | None`, so the ignore is the point of the test: type
-        hints do not run, and an importer mapping a source's own JSON can hand over
-        whatever that JSON held.
-        """
+        """The annotation says `str | None`, so the ignore is the point of the test:
+        type hints do not run, and an importer mapping a source's own JSON can hand
+        over whatever that JSON held."""
         with pytest.raises(ValueError, match="source table"):
-            _envelope(source=ClaimSource(name="HPRC", table=7))  # type: ignore[arg-type]
+            _envelope(source=ClaimFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
 
     def test_a_hand_built_claim_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
         """An importer can build a ClaimEntry by hand; the writer holds it to make_claim."""
         entry = ClaimEntry(
             field="platform",
-            join_key=JOIN_KEY_FILE_NAME,
-            key_value="HG002.bam",
-            claim={"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "source": {}},
+            target_key_value="HG002.bam",
+            claim={
+                "source_type": SOURCE_REPOSITORY_METADATA,
+                "value": "PACBIO",
+                "source": HPRC_CATALOG.as_claim_source("platform").to_dict(),
+            },
         )
-        entry.claim["source"] = HPRC_CATALOG.to_dict()
 
-        with pytest.raises(ValueError, match="must carry a tier"):
+        with pytest.raises(ValueError, match="cites no mapping rule"):
             write_claim_file(tmp_path / "c.ndjson", _envelope(), [entry])
 
     def test_a_file_the_run_would_never_find_is_refused_at_write(self, tmp_path):
@@ -393,7 +420,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         fail on CI.
         """
         path = tmp_path / "c.ndjson"
-        block = {"source": {"name": "HPRC"}, "fetched_at": "2026-09-01T09:14:03Z", "source_version": "1"}
+        block = {**_envelope().to_dict(), "fetched_at": "2026-09-01T09:14:03Z"}
         path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
 
         assert read_envelope(path).fetched_at == datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
@@ -410,32 +437,45 @@ class TestAClaimIsRebuiltNotTrusted:
     def _write_raw(self, tmp_path, claim: dict) -> Path:
         """A claim file whose one line carries `claim` verbatim, bypassing the writer."""
         path = tmp_path / "c.ndjson"
-        line = {"field": "platform", "join_key": JOIN_KEY_FILE_NAME, "key_value": "HG002.bam", "claim": claim}
+        line = {"field": "platform", "target_key_value": "HG002.bam", "claim": claim}
         path.write_text(
             json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
         )
         return path
 
-    def test_a_claim_with_no_tier_is_refused(self, tmp_path):
-        """It would otherwise reach resolution and take the tier-0 default of #150/#151."""
-        path = self._write_raw(tmp_path, {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO"})
+    def test_a_claim_citing_no_mapping_rule_is_refused(self, tmp_path):
+        """Every imported claim that declares anything names the mapping that made it.
 
-        with pytest.raises(ValueError, match="must carry a tier"):
+        Including an identity mapping: there is no implicit copy, because a source
+        value that happens to spell a vocabulary term is a coincidence of spelling
+        rather than an agreement about meaning (#401).
+        """
+        path = self._write_raw(tmp_path, {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO"})
+
+        with pytest.raises(ValueError, match="cites no mapping rule"):
+            list(iter_claims(path))
+
+    def test_a_claim_carrying_a_tier_is_refused(self, tmp_path):
+        """An imported claim does not compete on the rule tiers, so a tier on one is a
+        number the policy discards — and one a file could forge to outrank every rule."""
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "tier": 999}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="does not"):
             list(iter_claims(path))
 
     def test_a_claim_with_an_unknown_source_type_is_refused(self, tmp_path):
-        path = self._write_raw(tmp_path, {"reason": "r", "source_type": "hearsay", "value": "PACBIO", "tier": 1})
+        path = self._write_raw(tmp_path, {"source_type": "hearsay", "value": "PACBIO", "rule_id": "m1"})
 
         with pytest.raises(ValueError, match="unknown source_type"):
             list(iter_claims(path))
 
     def test_a_claim_declaring_both_a_value_and_a_status_is_refused(self, tmp_path):
         claim = {
-            "reason": "r",
             "source_type": SOURCE_REPOSITORY_METADATA,
             "value": "PACBIO",
             "status": "not_applicable",
-            "tier": 1,
+            "rule_id": "m1",
         }
         path = self._write_raw(tmp_path, claim)
 
@@ -445,10 +485,9 @@ class TestAClaimIsRebuiltNotTrusted:
     def test_a_line_carrying_its_own_source_is_refused_not_re_attributed(self, tmp_path):
         """The writer refuses a foreign source; a reader that overwrote one would undo that."""
         claim = {
-            "reason": "r",
             "source_type": SOURCE_REPOSITORY_METADATA,
             "value": "PACBIO",
-            "tier": 1,
+            "rule_id": "m1",
             "source": {"name": "SOMEONE ELSE", "table": "other"},
         }
         path = self._write_raw(tmp_path, claim)
@@ -457,7 +496,7 @@ class TestAClaimIsRebuiltNotTrusted:
             list(iter_claims(path))
 
     def test_an_unknown_key_on_a_claim_is_refused(self, tmp_path):
-        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1, "rank": 9}
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "rank": 9}
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match="not a valid claim"):
@@ -471,15 +510,15 @@ class TestAClaimIsRebuiltNotTrusted:
         one, so the line that caused it is never named. `bool` is an `int` in Python
         and is not a tier.
         """
-        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": tier}
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "tier": tier}
         path = self._write_raw(tmp_path, claim)
 
-        with pytest.raises(ValueError, match="not an integer"):
+        with pytest.raises(ValueError, match="does not"):
             list(iter_claims(path))
 
     def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
         """The per-line `column` is a source member and is checked like the rest."""
-        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1, "column": 7}
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": 7}
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match="source column"):
@@ -487,7 +526,7 @@ class TestAClaimIsRebuiltNotTrusted:
 
     @pytest.mark.parametrize(
         "member,bad",
-        [("value", 7), ("raw_value", []), ("reason", 3), ("match_exact", "yes")],
+        [("value", 7), ("raw_value", []), ("reason", 3), ("rule_id", 9)],
     )
     def test_a_member_of_the_wrong_type_is_refused(self, tmp_path, member, bad):
         """The schema's Evidence says strings and a boolean; nothing else pinned these.
@@ -495,13 +534,11 @@ class TestAClaimIsRebuiltNotTrusted:
         A numeric `value` would otherwise reach resolution and be written to output as
         a classification.
         """
-        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1}
-        if member == "match_exact":
-            claim["join_key"] = JOIN_KEY_FILE_NAME
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1"}
         claim[member] = bad
         path = self._write_raw(tmp_path, claim)
 
-        with pytest.raises(ValueError, match=r"not a string|not a boolean"):
+        with pytest.raises(ValueError, match=r"not a string"):
             list(iter_claims(path))
 
     def test_an_unknown_member_beside_the_claim_is_refused(self, tmp_path):
@@ -513,9 +550,8 @@ class TestAClaimIsRebuiltNotTrusted:
         path = tmp_path / "c.ndjson"
         line = {
             "field": "platform",
-            "join_key": JOIN_KEY_FILE_NAME,
-            "key_value": "HG002.bam",
-            "claim": {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1},
+            "target_key_value": "HG002.bam",
+            "claim": {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1"},
             "rank": 9,
         }
         path.write_text(json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
@@ -573,18 +609,22 @@ class TestTheRunReport:
         out = capsys.readouterr().out
         assert [s.error for s in statuses] == [None]
         assert "hprc/catalog.ndjson" in out.replace("\\", "/")
-        assert "HPRC Data Explorer/sequencing-data" in out
+        # Both sides of the join, in the order a reader needs them: what it came from,
+        # then what it is about, each with the key that pairs them.
+        assert "HPRC Data Explorer/R2/sequencing-data[filename]" in out
+        assert "anvil/AnVIL_HPRC_R2/anvil15[file_name]" in out
         assert "version 2026-09-01" in out
         assert "8 days ago" in out
 
-    def test_a_declared_catalog_is_reported_as_provenance(self, tmp_path, capsys):
-        """The catalog a file was built for is said, not checked."""
-        write_claim_file(tmp_path / "anvil" / "manifest.ndjson", _envelope(corpus_catalog="anvil14"), [])
+    def test_a_target_generation_is_reported_as_provenance(self, tmp_path, capsys):
+        """The generation a file was built against is said, not checked."""
+        target = ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil14")
+        write_claim_file(tmp_path / "anvil" / "manifest.ndjson", _envelope(target=target), [])
 
         (status,) = report_claim_files(tmp_path)
         out = capsys.readouterr().out
         assert status.error is None
-        assert "for catalog anvil14" in out
+        assert "anvil14" in out
         assert "UNREADABLE" not in out
 
     def test_a_source_with_no_catalog_reports_no_catalog(self, tmp_path, capsys):
@@ -636,27 +676,41 @@ class TestAClaimFileIsWrittenBySomeoneElse:
     """The curator table (#397) is another claim file, not a special case."""
 
     def test_a_wrangler_table_with_no_url_round_trips(self, tmp_path):
-        curator = ClaimSource(name="meta-disco curator table", table="overrides")
+        # A curator table has no public address and no dataset level, and keys its
+        # overrides by the strongest key the target has rather than by a name.
+        curator = ClaimFileSource(repository="meta-disco curator table", table="overrides")
         entry = ClaimEntry(
             field="data_type",
-            join_key=JOIN_KEY_FILE_NAME,
-            key_value="HG002.wave.vcf.gz",
+            target_key_value="a" * 32,
             claim=make_claim(
+                # A curator's reason is not derivable from the mapping, so it is
+                # written — the one case where an imported claim carries prose (#401).
                 reason="curator override: alignments_v2.location is not an authority on data_type",
                 source_type=SOURCE_WRANGLER_ANNOTATION,
-                source=ClaimSource(name=curator.name, table="overrides", column="data_type"),
+                source=curator.as_claim_source("data_type"),
+                rule_id="curator_override_rev3",
                 value="variant_calls",
-                tier=1,
             ),
         )
         path = tmp_path / "curator.ndjson"
         write_claim_file(
             path,
-            ClaimFileEnvelope(source=curator, fetched_at=FETCHED_AT, source_version="rev-3"),
+            ClaimFileEnvelope(
+                source=curator,
+                source_version="rev-3",
+                source_key="file_md5sum",
+                target=ClaimTarget(system="anvil"),
+                target_key=JOIN_KEY_FILE_MD5SUM,
+                fetched_at=FETCHED_AT,
+            ),
             [entry],
         )
 
-        assert read_envelope(path).source.url is None
+        envelope = read_envelope(path)
+        assert envelope.source.url is None and envelope.source.dataset is None
+        # No dataset scope: an md5 is unique enough across the whole target that a
+        # corpus-wide match is correct.
+        assert envelope.target.dataset is None
         assert list(iter_claims(path)) == [entry]
 
 

@@ -460,18 +460,17 @@ class TestMakeClaim:
         # reads — and an invitation to believe it ranks against the rule tiers.
         with pytest.raises(ValueError, match="never competes"):
             make_claim(
+                rule_id="r",
                 reason="x",
                 tier=1,
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
-                source=EXTERNAL_SOURCE,
                 state=DECLINED,
             )
 
     def test_rejects_unknown_join_key(self):
         with pytest.raises(ValueError, match="unknown join_key"):
             make_claim(
-                reason="x",
-                tier=1,
+                rule_id="map_v1",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source=EXTERNAL_SOURCE,
                 value="PACBIO",
@@ -483,8 +482,7 @@ class TestMakeClaim:
         # without saying what was matched.
         with pytest.raises(ValueError, match="match_exact without a join_key"):
             make_claim(
-                reason="x",
-                tier=1,
+                rule_id="map_v1",
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source=EXTERNAL_SOURCE,
                 value="PACBIO",
@@ -1030,8 +1028,15 @@ class TestClaimStatesDoNotResolve:
     """
 
     def _state_claim(self, state):
+        # Every state but `unmapped` cites the mapping rule that decided it; `unmapped`
+        # means no entry fired, so it cites none (#401).
+        rule_id = None if state == "unmapped" else "map_v1"
         return make_claim(
-            reason="x", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, state=state, raw_value="Hi-C"
+            source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+            source=EXTERNAL_SOURCE,
+            state=state,
+            raw_value="Hi-C",
+            rule_id=rule_id,
         )
 
     @pytest.mark.parametrize("state", ["unmapped", "no_vocabulary_term", "declined"])
@@ -1066,6 +1071,7 @@ class TestClaimStatesDoNotResolve:
         declined = ExtendedClassificationResult()
         declined.add_claim(
             "data_type",
+            rule_id="decline_alignments_v2_location_v1",
             reason="alignments_v2.location is not an authority on data_type",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
@@ -1099,10 +1105,10 @@ class TestClaimStatesDoNotResolve:
         )
         result.add_claim(
             "data_type",
-            reason="not an authority",
+            reason="the source said something with no entry in the mapping table",
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
-            state=DECLINED,
+            state=UNMAPPED,
         )
         assert result.rules_matched == ["r"]
         assert result.reasons == ["illumina"]
