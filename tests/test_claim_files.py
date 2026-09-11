@@ -257,6 +257,18 @@ class TestMalformedFiles:
                 read.append(entry.target_key_value)
         assert read == ["HG0.bam", "HG1.bam", "HG2.bam"]
 
+    def test_an_invalid_byte_is_named_by_line_not_raised_as_a_codec_error(self, tmp_path):
+        """A text handle decodes inside its own iterator, so a bad byte in a later
+        record escaped as `UnicodeDecodeError` with a byte offset — a traceback
+        rather than the line-numbered ValueError this module promises. The file is
+        opened as bytes and decoded where the line number is known."""
+        path = tmp_path / "c.ndjson"
+        envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}).encode() + b"\n"
+        path.write_bytes(envelope + b'{"field":"platform","target_key_value":"\xff\xfe","claim":{}}\n')
+
+        with pytest.raises(ValueError, match=r"c\.ndjson line 2: not valid UTF-8"):
+            list(iter_claims(path))
+
     def test_a_blank_line_carries_no_claim(self, tmp_path):
         path = tmp_path / "claims.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry()])

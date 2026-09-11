@@ -12,6 +12,7 @@ from meta_disco.models import (
     SOURCE_CONTIG_DETECTION,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_FILENAME_RULE,
+    SOURCE_REPOSITORY_METADATA,
     UNMAPPED,
     ClaimSource,
     FileInfo,
@@ -937,6 +938,38 @@ class TestEvaluateClaims:
                     {"rule_id": "b", "value": "CHM13", "tier": 2},
                 ]
             )
+
+    def test_an_imported_claim_is_inert_in_resolution(self):
+        """Imports are not tier participants (#391), so one cannot win or raise here.
+
+        `make_claim` rejects a tier on a claim from an external source, so such a
+        claim reaching the tier math would either raise on `max(c["tier"] …)` or —
+        alone — resolve the field by itself, which is the silent override the epic
+        measured and rejected. Comparing the two resolutions is #396.
+        """
+        imported = make_claim(
+            source_type=SOURCE_REPOSITORY_METADATA,
+            source=ClaimSource(name="HPRC", dataset="R2", table="t", column="platform"),
+            rule_id="map_v1",
+            raw_value="Revio",
+            value="PACBIO",
+        )
+        rule = make_claim(
+            rule_id="platform_illumina",
+            reason="PL:ILLUMINA",
+            tier=2,
+            source_type=SOURCE_FILENAME_RULE,
+            value="ILLUMINA",
+        )
+
+        # Disagreeing: the rule resolves the field, and the import neither wins nor
+        # creates a conflict.
+        both = evaluate_claims([rule, imported])
+        assert (both.value, both.is_conflict) == ("ILLUMINA", False)
+        # Alone: nothing competes, so the field stays unresolved rather than being
+        # decided by an import.
+        alone = evaluate_claims([imported])
+        assert (alone.value, alone.status) == (None, NOT_CLASSIFIED)
 
     def test_not_classified_claims_ignored(self):
         """Claims declaring not_classified (status) don't assert a value."""

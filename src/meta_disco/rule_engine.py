@@ -524,17 +524,16 @@ class ExtendedClassificationResult:
         ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``, and the
         engine's ``infer_assay_type``.
 
-        So a caller must not assume an ID here names a rule in unified_rules.yaml —
-        and once the join lands (#402), an imported claim's mapping ``rule_id``
-        (#401) will appear here too. ``infer_assay_type``'s ``matched_rules_any``
-        conditions read this list, so a mapping id could satisfy one that was written
-        against our own rules. Nothing feeds an imported claim into ``field_evidence``
-        yet, so the question is #402's to settle.
+        So a caller must not assume an ID here names a rule in unified_rules.yaml.
 
-        A claim from an external source carries a ``source`` rather than a
-        ``rule_id`` (#392) and is skipped for the same reason a marker is: it
-        names no rule, and this list is read by ``infer_assay_type``'s
-        ``matched_rules_any`` conditions, which are written against rule IDs.
+        **An imported claim now contributes one too.** It used to carry a ``source``
+        and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
+        cites the ``rule_id`` of the mapping that produced it, and only an
+        ``unmapped`` one still names nothing. ``infer_assay_type``'s
+        ``matched_rules_any`` conditions read this list and are written against our
+        own rule IDs, so a ``map_*`` id could satisfy — or fail to satisfy — one of
+        them. Nothing feeds an imported claim into ``field_evidence`` until the join
+        lands, so whether these belong here is #402's to settle.
         """
         seen = set()
         result = []
@@ -704,12 +703,14 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
 
     Args:
         claims: List of evidence dicts. Those declaring a ``value`` or a
-                ``status`` are resolved; an assertive claim that reaches the
-                disagreement path must carry a ``tier`` (raises ``KeyError``
-                otherwise — #228); ``rule_id`` / ``reason`` are optional here.
-                Synthetic markers (which carry a ``marker`` kind, no tier) and
-                ``claim_state`` claims (which declare nothing) are dropped before
-                the tier math.
+                ``status`` *and carrying a tier* are resolved; ``rule_id`` /
+                ``reason`` are optional here. Three kinds are dropped before the
+                tier math: synthetic markers (which carry a ``marker`` kind),
+                ``claim_state`` claims (which declare nothing), and claims carrying
+                a ``source`` — claims from an external source, which are inert here
+                rather than competing (#401). A *rule* claim with no tier still
+                raises ``KeyError`` on the disagreement path, which is #228's guard
+                against resolving at a phantom tier 0.
 
     Returns:
         ClaimResolution with: value (real or None), status, reason, is_conflict,
@@ -719,7 +720,22 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     # nothing — an empty claim, or a claim_state claim (#392) — but keep
     # rule-authored not_classified declarations (e.g., fastq_modality_unknown) —
     # those are real claims, not markers.
-    real_claims = [c for c in claims if _claim_declaration(c) is not None and not _is_synthetic_marker(c)]
+    #
+    # A claim from an external source is dropped too, and that is what makes an
+    # imported claim inert here (#401): `make_claim` rejects a tier on one, so it has
+    # nothing to compete with. This is the operational form of epic #391's decision
+    # that imports are not tier participants — without it an imported claim either
+    # reached `max(c["tier"] …)` and raised, or resolved a field by itself, which is
+    # the silent override the epic measured and rejected. It stays visible in
+    # field_evidence either way; comparing the two resolutions is #396.
+    #
+    # Keyed on `source` rather than on a missing tier, so that a *rule* claim with no
+    # tier still raises in the tier math below. That is #228's guard against a
+    # phantom tier 0 (#150/#151), and dropping such a claim silently instead would
+    # give the malformed case the treatment the deliberate one gets.
+    real_claims = [
+        c for c in claims if _claim_declaration(c) is not None and "source" not in c and not _is_synthetic_marker(c)
+    ]
 
     # Assertive = real-value declarations; a not_classified status means
     # "I looked but can't determine" and doesn't assert a value.
