@@ -302,6 +302,16 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="fetched_at"):
             _envelope(fetched_at="2026-09-01")
 
+    def test_an_envelope_naming_a_column_is_refused_when_it_is_built(self):
+        """A column belongs to a claim, not to the file.
+
+        `to_dict` would otherwise write it on line 1, where both sides strip it
+        before use — a member of the serialized envelope that nothing reads and that
+        can disagree with every claim in the file.
+        """
+        with pytest.raises(ValueError, match="belongs to a claim"):
+            _envelope(source=ClaimSource(name="HPRC", table="t", column="platform"))
+
     def test_an_envelope_whose_source_has_a_non_string_member_is_refused_when_it_is_built(self):
         """Checking only `name` left the parity half-kept: `table=7` wrote, then failed on read.
 
@@ -428,6 +438,25 @@ class TestAClaimIsRebuiltNotTrusted:
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match="source column"):
+            list(iter_claims(path))
+
+    @pytest.mark.parametrize(
+        "member,bad",
+        [("value", 7), ("raw_value", []), ("reason", 3), ("match_exact", "yes")],
+    )
+    def test_a_member_of_the_wrong_type_is_refused(self, tmp_path, member, bad):
+        """The schema's Evidence says strings and a boolean; nothing else pinned these.
+
+        A numeric `value` would otherwise reach resolution and be written to output as
+        a classification.
+        """
+        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1}
+        if member == "match_exact":
+            claim["join_key"] = JOIN_KEY_FILE_NAME
+        claim[member] = bad
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match=r"not a string|not a boolean"):
             list(iter_claims(path))
 
     @pytest.mark.parametrize("member", ["field", "join_key"])

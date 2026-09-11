@@ -238,6 +238,17 @@ def make_claim(
         )
     if match_exact is not None and join_key is None:
         raise ValueError(f"claim from {producer!r} has match_exact without a join_key to qualify")
+    # The members whose *type* nothing else pins. The vocabularies above check
+    # membership, which implies a string; these are free text and a boolean, so a
+    # claim rebuilt from a file could otherwise carry `value=7` or
+    # `match_exact="yes"` into resolution and out into the schema's Evidence, which
+    # says strings and a boolean (#401 review). Cheap next to the membership tests
+    # this already runs.
+    for label, member in (("reason", reason), ("value", value), ("raw_value", raw_value), ("rule_id", rule_id)):
+        if member is not None and not isinstance(member, str):
+            raise ValueError(f"claim from {producer!r} has {label} {member!r}, which is not a string")
+    if match_exact is not None and not isinstance(match_exact, bool):
+        raise ValueError(f"claim from {producer!r} has match_exact {match_exact!r}, which is not a boolean")
 
     claim: dict = {}
     if rule_id is not None:

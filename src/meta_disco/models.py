@@ -471,6 +471,11 @@ class ClaimFileEnvelope:
         if not isinstance(self.source, ClaimSource):
             raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimSource")
         ClaimSource.from_dict(self.source.to_dict(), where)
+        if self.source.column is not None:
+            raise ValueError(
+                f"{where}: source names column {self.source.column!r}, but a column belongs to a claim, "
+                "not to the file — one table's claims are read from several columns"
+            )
         if not isinstance(self.fetched_at, datetime):
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
         required_str(self.source_version, "source_version", where)
