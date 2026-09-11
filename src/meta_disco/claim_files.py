@@ -376,11 +376,26 @@ def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEn
     ``evaluate_claims``; passing the parsed dict straight through would make this the
     one producer in the codebase that bypasses ``make_claim``, against CLAUDE.md's
     "one claim record, any source". A claim with no ``tier`` would then reach
-    resolution and take the tier-0 default that #150/#151 exist to prevent — and one
-    with a *fabricated* tier would outrank every rule. Rebuilding costs a
-    ``make_claim`` per claim on read and buys every invariant it enforces: exactly one
-    of value/status/state, a tier iff the claim competes, known status/state/
-    source_type/join_key, a producer handle (#401 review).
+    resolution and take the tier-0 default that #150/#151 exist to prevent.
+    Rebuilding costs a ``make_claim`` per claim on read and buys every invariant it
+    enforces: exactly one of value/status/state, a tier iff the claim competes and an
+    integer where there is one, known status/state/source_type/join_key, string-typed
+    free text, a producer handle (#401 review).
+
+    **What it does not buy is a trustworthy tier.** ``make_claim`` checks that a tier
+    is an integer, not that it is one of the tiers this engine has, so a claim file
+    can name ``999`` and — on the day imported claims reach ``evaluate_claims`` —
+    outrank every rule and content claim by being the unique highest. That is not
+    guarded here on purpose. Where an imported claim ranks is epic #391's question,
+    already answered on measured evidence: imports are *not* tier participants, and
+    the 12 known disagreements on ``AnVIL_HPRC_R2`` are why — they sit at rule tiers
+    1-2, so admitting imports at ``CONTENT_TIER`` would have produced 1 conflict and
+    11 silent wrong overrides. Under that policy an imported claim's tier is a number
+    nothing reads. Clamping it to a range here would encode a *reversible* policy
+    decision as an invariant of the record, in the one place that cannot know what
+    the allowed answer is; the guard belongs with the policy, in #396, which is also
+    what decides whether the number means anything at all. Nothing imported reaches
+    resolution until the join lands (#402).
 
     A line that carries its own ``source`` is refused rather than silently
     overwritten. The envelope names the file's source; a line may add a ``column`` to
