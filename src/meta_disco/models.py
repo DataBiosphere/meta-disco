@@ -565,9 +565,15 @@ def _flat_from_dict(cls, block: object, where: str, label: str):
 
     An explicit ``null`` is refused rather than read as absent. ``_flat_to_dict``
     omits nulls, so a record we wrote never contains one, and a file that does was
-    not written by us — accepting it would silently normalize a shape the schema
-    rejects. Distinguishing the two needs a sentinel, because ``dict.get`` returns
-    ``None`` for both an absent key and a present null.
+    not written by us — accepting it would silently normalize a shape this writer
+    could not have produced. Distinguishing the two needs a sentinel, because
+    ``dict.get`` returns ``None`` for both an absent key and a present null.
+
+    This is the one rule the schema does not share: LinkML models an optional slot as
+    nullable and ``gen-json-schema`` emits ``type: [string, null]`` for it, so an
+    explicit null passes the gate by construction and is refused here. Measured, it is
+    the only class of envelope the two disagree on, and the reader is the stricter
+    side — which is the safe direction (#401 review).
     """
     if not isinstance(block, dict):
         raise ValueError(f"{where}: {label} is {type(block).__name__}, not an object")

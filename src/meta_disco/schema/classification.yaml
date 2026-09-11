@@ -355,6 +355,18 @@ classes:
       reads "this row is about the row in `target` whose `target_key` equals its
       `target_key_value`; here is the claim."
 
+      **Where this gate is weaker than the reader.** Measured over 70 malformed
+      envelopes — every member empty, newlined, numeric, null or absent — the two
+      agree on 65. The five that differ are one class: an explicit null on an
+      optional member, such as `source: {repository: HPRC, table: null}`. LinkML
+      models an optional slot as nullable (`gen-json-schema` emits
+      `type: [string, null]`), so a null is valid here by construction, while
+      `_flat_from_dict` refuses it — `to_dict` omits a member it does not have, so a
+      written-out null is a record this writer could not have produced. The reader
+      is deliberately the stricter of the two; a producer that validates here and
+      writes explicit nulls will be refused at read. The other known divergence is
+      a calendar-invalid `fetched_at` (see that slot).
+
       The key *names* are here rather than on each line because they do not change
       within a file — every claim an importer writes is keyed the same way — so
       repeating them on a few million lines would be this block written out again.
