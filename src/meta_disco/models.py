@@ -383,11 +383,20 @@ def required_str(value: object, label: str, where: str) -> str:
     differently from each other. The empty string is refused too — a version or a
     name that identifies nothing.
 
+    A line break is refused with it. These members are identifiers — a repository, a
+    dataset, a table, a catalog version — and none of them contains one, while every
+    one is printed by ``claim_files._describe`` in the run's report, where an embedded
+    newline is a second report line a claim file wrote. The schema refuses the same
+    value (the slots carry ``pattern: "^.+$"``, which a newline breaks), so without
+    this the reader would accept what the schema rejects (#401 review).
+
     ``where`` locates the fault — a file and line for a reader, the constructing call
     for a writer — and prefixes every message.
     """
     if not isinstance(value, str) or not value:
         raise ValueError(f"{where}: {label} is {value!r}, not a non-empty string")
+    if "\n" in value or "\r" in value:
+        raise ValueError(f"{where}: {label} is {value!r}, which carries a line break")
     return value
 
 

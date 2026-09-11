@@ -453,6 +453,17 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
         assert envelope.target.dataset is None
 
+    @pytest.mark.parametrize("forged", ["HPRC\nfake.ndjson — forged source", "HPRC\rfake"])
+    def test_a_source_member_carrying_a_line_break_is_refused(self, forged):
+        """Every one of these is printed in the run's report, one file per line.
+
+        A newline in a repository name is a second report line the claim file wrote.
+        The schema refuses it too — the slots are `pattern: "^.+$"` — so accepting it
+        here would be the reader taking what the gate rejects.
+        """
+        with pytest.raises(ValueError, match="line break"):
+            claim_file_envelope(source=ClaimFileSource(repository=forged, dataset="R2", table="t"))
+
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="source repository"):
             claim_file_envelope(source=ClaimFileSource(repository=""))
