@@ -358,14 +358,22 @@ def field_label(record: dict, field_name: str) -> str | None:
     return _entry_value(entry) if status == CLASSIFIED else status
 
 
-# The shape a claim file's `fetched_at` must start with: an ISO 8601 calendar date,
-# then the separator that a time of day follows. Matched rather than measured by
-# length, because `datetime.fromisoformat` reads character 10 as the separator
-# whatever it is and a suffix can be longer than a date without being a time —
-# `2026-09-01Z` and `2026-09-01+00:00` are both 11+ characters and both parse to
-# midnight. This is the schema's `fetched_at` pattern, so both sides refuse the same
-# strings (#401 review).
-_ISO_DATETIME_START = re.compile(r"\d{4}-\d{2}-\d{2}[T ]")
+# The shape a claim file's `fetched_at` must have. This is the schema's `fetched_at`
+# pattern, character for character — `test_the_reader_and_the_schema_share_one_pattern`
+# reads the slot and compares — because the two must refuse the same strings, and the
+# ways they drift apart are not guessable. Matched rather than measured by length:
+# `fromisoformat` reads character 10 as the separator whatever it is, and a suffix can
+# make a date longer than ten characters without making it a time, so `2026-09-01Z`
+# and `2026-09-01+00:00` both parsed to midnight under a length check. Matched in full
+# rather than by prefix: `fromisoformat` accepts a basic-format offset (`+0100`) from
+# 3.11 and the schema never did, so a prefix check agreed with the gate on 3.10 and
+# disagreed on 3.11 — a claim file that reads differently by interpreter, which is
+# what the `Z` normalization below exists to prevent (#401 review).
+_FETCHED_AT_PATTERN = (
+    r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d"
+    r"(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?|Z)?\Z"
+)
+_FETCHED_AT = re.compile(_FETCHED_AT_PATTERN)
 
 
 def required_str(value: object, label: str, where: str) -> str:
@@ -466,7 +474,10 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
 
     Both branches name ISO 8601, because which one a value reaches depends on the
     interpreter: ``20260901T091403`` fails the parse on 3.10 and reaches the shape
-    check on 3.11, where ``fromisoformat`` accepts basic format (#401 review).
+    check on 3.11, where ``fromisoformat`` accepts basic format. The shape check is
+    the whole pattern and not a prefix for the same reason — 3.11 also accepts a
+    basic-format offset, ``+0100``, which the schema refuses on every interpreter
+    (#401 review).
 
     It is a *shape* check and not a length one: ``fromisoformat`` treats character 10
     as the date/time separator whatever character it is, so ``2026-09-01X09:14:03``
@@ -484,7 +495,7 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
-    if not _ISO_DATETIME_START.match(value):
+    if not _FETCHED_AT.match(value):
         raise ValueError(
             f"{where}: envelope fetched_at {value!r} is not an ISO 8601 date followed by T or a "
             "space and a time of day — record when the fetch happened, not only the day it happened on"
@@ -683,8 +694,9 @@ class ClaimFileSource:
         different datasets, and a consumer reading the output ``evidence`` array
         cannot go back to the claim file to find it.
 
-        Called once per claim by the reader, which is why the envelope stores these
-        once rather than repeating them a few million times.
+        Called once per distinct column by the reader, which caches what it returns
+        for the whole file (``iter_claims``); the envelope stores these once for the
+        same reason, rather than repeating them on a few million lines.
         """
         return ClaimSource(name=self.repository, url=self.url, dataset=self.dataset, table=self.table, column=column)
 

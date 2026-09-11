@@ -32,7 +32,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
+from meta_disco import models
 from meta_disco.claim_files import (
     DEFAULT_CLAIMS_ROOT,
     ENVELOPE_KEY,
@@ -928,6 +930,21 @@ class TestAClaimFileIsWrittenBySomeoneElse:
         # `ClaimTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_claims(path)) == [entry]
+
+
+def test_the_reader_and_the_schema_share_one_pattern():
+    """`fetched_at` is checked by the same regex on both sides, character for character.
+
+    Two copies of a timestamp pattern drift in ways nobody guesses: the reader used a
+    prefix of this one, which agreed with the schema on 3.10 and disagreed on 3.11,
+    where `fromisoformat` accepts a basic-format offset the schema always refused.
+    Pinning the strings equal is what makes "both sides refuse the same files" a fact
+    rather than an intention (#401 review).
+    """
+    schema = yaml.safe_load((Path(models.__file__).parent / "schema" / "classification.yaml").read_text())
+    slot = schema["classes"]["ClaimFileEnvelope"]["attributes"]["fetched_at"]
+
+    assert slot["pattern"] == models._FETCHED_AT_PATTERN
 
 
 def test_the_claims_root_the_run_uses_is_under_data():
