@@ -308,11 +308,18 @@ def iter_claims(path: Path) -> Iterator[ClaimEntry]:
     name = path.name
     with path.open("rb") as f:
         envelope_source = _read_envelope(path, f).source
+        # One `ClaimSource` per column for the whole file, as the writer keeps one per
+        # column (`write_claim_file`). The envelope's members are constant and only
+        # `column` varies, so rebuilding it per line rebuilt and re-validated the same
+        # object a few million times; a table's claims come from a handful of columns.
+        # Sharing the instance is safe and is why the record is frozen — each claim
+        # still gets its own serialized dict from `make_claim` (#401 review).
+        by_column: dict[str | None, ClaimSource] = {}
         for n, raw in enumerate(f, start=2):
             line = _decode(raw, _where(name, _READING, n))
             if line.isspace():
                 continue
-            yield _entry_from_line(name, n, line, envelope_source)
+            yield _entry_from_line(name, n, line, envelope_source, by_column)
 
 
 def _decode(raw: bytes, where: str) -> str:
@@ -545,11 +552,14 @@ def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
         raise ValueError(f"{where}: not a valid claim: {exc}") from None
 
 
-def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSource) -> ClaimEntry:
+def _entry_from_line(
+    name: str, n: int, line: str, envelope_source: ClaimFileSource, by_column: dict[str | None, ClaimSource]
+) -> ClaimEntry:
     """Parse one claim line, rebuilding its claim through ``make_claim``.
 
-    ``envelope_source`` is the file's source, read once by :func:`iter_claims`. The
-    claim comes back whole — that source as a :class:`ClaimSource`, with this line's
+    ``envelope_source`` is the file's source, read once by :func:`iter_claims`, and
+    ``by_column`` is that caller's cache of the :class:`ClaimSource` each column
+    resolves to. The claim comes back whole — that source, with this line's
     ``column`` — so a consumer reads the same claim the importer built and never has
     to consult the envelope itself.
 
@@ -607,7 +617,9 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     # The column is checked here rather than trusted: `"column": 7` would otherwise
     # ride through as a claim's source member. `as_claim_source` then supplies the
     # four facts the envelope holds.
-    source = envelope_source.as_claim_source(pop_optional_str(body, "column", "source column", where))
+    column = pop_optional_str(body, "column", "source column", where)
+    if (source := by_column.get(column)) is None:
+        source = by_column[column] = envelope_source.as_claim_source(column)
     return ClaimEntry(field=field, target_key_value=target_key_value, claim=_rebuild_claim(body, source, where))
 
 

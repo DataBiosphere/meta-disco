@@ -150,7 +150,12 @@ class TestRoundTrip:
         )
 
     def test_each_claim_gets_its_own_rehydrated_source(self, tmp_path):
-        """The reader factors the source in per claim, so claims cannot alias one dict."""
+        """Claims from one column share a `ClaimSource`, never a source *dict*.
+
+        The reader keeps one frozen record per column for the whole file rather than
+        rebuilding it per line; `make_claim` serializes it per claim, so a consumer
+        editing one claim's evidence cannot reach into another's.
+        """
         path = tmp_path / "claims.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry(name="a.bam"), _entry(name="b.bam")])
 
