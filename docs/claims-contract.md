@@ -22,6 +22,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 1.6 A curator is a source like any other, and the only one that wins.
 
+1.7 A curator writes rules. A curation decision is a rule like any other and is reviewed as one;
+    a decision about a single file is a rule whose selection matches one file, not an exception to 1.1.
+
 ## 2. Evidence
 
 2.1 Evidence is `(file, slot, raw_value)` plus provenance: source, dataset, table, column.
@@ -71,7 +74,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 4.5 Sources that disagree produce a **conflict**. No value is asserted. Both values and both rules are recorded.
 
-4.6 A curator decision wins a conflict, and is itself recorded as a source with its reason.
+4.6 A curator decision wins a conflict. It is a rule, it carries its reason, and it is recorded like any other rule.
 
 ## 5. Review
 
