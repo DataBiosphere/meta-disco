@@ -140,7 +140,7 @@ evidence}` entry — plus the controlled vocabulary:
 - **The importer owns the mapping; the run does equality lookup**: an importer
   maps its own key to the target's and writes `target_key_value` already in the
   target's value space, transforming where needed. That keeps corpus knowledge
-  out of the importer and transform logic out of the join, and it is why a
+  in the importer and transform logic out of the join, and it is why a
   source keyed by an ENA run accession adds no term to `JOIN_KEYS` — it maps
   that accession to `archive_accession` itself. `target_key` is drawn from
   `JOIN_KEYS`, which spans the target's record fields *and* facts classification

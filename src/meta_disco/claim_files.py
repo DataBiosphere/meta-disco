@@ -80,7 +80,7 @@ in different datasets.
 **The importer owns the mapping between the two keys** and writes
 ``target_key_value`` already in the target's value space; where a source's own value
 needs transforming to get there, the importer does it. The run performs equality
-lookup and nothing else. That is what keeps corpus knowledge out of the importer and
+lookup and nothing else. That is what keeps corpus knowledge in the importer and
 transform logic out of the join — and it is why a source keyed by an ENA run
 accession adds no term to the key vocabulary: it maps that accession to
 ``archive_accession`` itself.
@@ -215,7 +215,10 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     importer can stream a catalog straight through. The file is written to a
     temporary path and renamed into place only after every claim is out — as
     ``azul_manifest.write_input_files`` does — so a source that raises part-way
-    through leaves the previous claim file untouched rather than half-replaced.
+    through leaves the previous claim file untouched rather than half-replaced. The
+    rename is inside that guard rather than after it: a rename can fail too (a
+    directory standing where the file should go), and leaving the temporary behind
+    would strand a complete claim file under a name nothing reads (#401 review).
 
     Every entry is validated against the envelope as it is written
     (:func:`_claim_line`): an unknown dimension or join key, or a claim whose source
@@ -263,10 +266,10 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
                 written += 1
                 f.write(_encode(_claim_line(expected_source, entry, name, written)))
                 f.write("\n")
+        tmp.replace(path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    tmp.replace(path)
     return written
 
 
@@ -466,11 +469,21 @@ def _claim_line(
     one label per claim, shared by every raise below.
     """
     where = _where(name, _WRITING, n)
+    # Checked before its members are read, so an importer that yields a tuple or a
+    # bare dict is told what is wrong at this claim rather than getting an
+    # `AttributeError` from the attribute access below (#401 review).
+    if not isinstance(entry, ClaimEntry):
+        raise ValueError(f"{where}: is a {type(entry).__name__}, not a ClaimEntry")
     _check_entry(where, entry.field, entry.target_key_value, entry.claim)
     claim = dict(entry.claim)
     source = claim.pop("source", None)
     if not isinstance(source, dict):
-        raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
+        raise ValueError(
+            f"{where}: carries no source — a claim file holds claims from an external source"
+            if source is None
+            else f"{where}: carries a source that is a {type(source).__name__}, not the "
+            "ClaimSource dict make_claim writes"
+        )
     # A dict compare against the envelope's own serialization, not a parse. The
     # claim's source came from `make_claim`, so it is already a `ClaimSource.to_dict`
     # — equal to the expected one exactly when it is the same source. Parsing it back
@@ -506,6 +519,19 @@ def _rebuild_claim(claim: dict, source: ClaimSource, where: str) -> dict:
     ``make_claim`` as an unknown keyword and is refused as a malformed claim, which is
     what it is.
     """
+    # An explicit null is refused here as `pop_optional_str` refuses one on `column`
+    # and `_flat_from_dict` refuses one on a source member. `make_claim` treats a null
+    # argument as an absent one, so without this a line carrying `"raw_value": null`
+    # or `"tier": null` would be read back as a claim that has no such member — the
+    # file on disk and the claim in memory differing, silently, in the one direction
+    # the reader is supposed to refuse (#401 review). Membership first and the names
+    # only in the raise: this runs per claim on both sides, and the C-level scan
+    # costs 0.19 us a claim against 0.51 for a generator that names them every time.
+    if None in claim.values():
+        nulls = sorted(k for k, v in claim.items() if v is None)
+        raise ValueError(
+            f"{where}: claim member(s) {nulls} are explicit nulls — an absent member is omitted, not nulled"
+        )
     kwargs = dict(claim)
     state = kwargs.pop("claim_state", None)
     try:
@@ -552,7 +578,7 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     try:
         entry = json.loads(line)
         field, target_key_value, claim = (entry["field"], entry["target_key_value"], entry["claim"])
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (json.JSONDecodeError, KeyError, TypeError, RecursionError) as exc:
         raise ValueError(f"{where}: not a claim: {exc!r}") from None
     # A member the line does not have is refused, not dropped. `make_claim` already
     # refuses an unknown key *inside* the claim, and a reader that silently discarded
@@ -657,7 +683,7 @@ def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
     where = f"{path.name} line 1"
     try:
         wrapper = json.loads(line)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, RecursionError) as exc:
         raise ValueError(f"{where}: not a {ENVELOPE_KEY} envelope: {exc!r}") from None
     if not isinstance(wrapper, dict) or set(wrapper) != {ENVELOPE_KEY}:
         raise ValueError(

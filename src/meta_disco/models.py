@@ -1,5 +1,6 @@
 """Data models for file classification."""
 
+import re
 from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
 from functools import cache
@@ -341,9 +342,14 @@ def field_label(record: dict, field_name: str) -> str | None:
     return _entry_value(entry) if status == CLASSIFIED else status
 
 
-# Length of an ISO 8601 calendar date, `YYYY-MM-DD`. A datetime string is this plus a
-# separator and a time, so the date alone is exactly this long.
-_ISO_DATE_CHARS = 10
+# The shape a claim file's `fetched_at` must start with: an ISO 8601 calendar date,
+# then the separator that a time of day follows. Matched rather than measured by
+# length, because `datetime.fromisoformat` reads character 10 as the separator
+# whatever it is and a suffix can be longer than a date without being a time —
+# `2026-09-01Z` and `2026-09-01+00:00` are both 11+ characters and both parse to
+# midnight. This is the schema's `fetched_at` pattern, so both sides refuse the same
+# strings (#401 review).
+_ISO_DATETIME_START = re.compile(r"\d{4}-\d{2}-\d{2}[T ]")
 
 
 def required_str(value: object, label: str, where: str) -> str:
@@ -431,9 +437,16 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
     claiming to have happened at 00:00:00 — a precision the file never stated, and
     one that makes two imports on the same day indistinguishable, which is the case
     the age report exists for. The check is on the string rather than the parsed
-    value, because midnight is a real time a genuine fetch can have: an ISO 8601 date
-    is its first ten characters, so anything longer carries a separator and a time,
-    and ``isoformat()`` on a datetime always writes one.
+    value, because midnight is a real time a genuine fetch can have.
+
+    It is a *shape* check and not a length one: ``fromisoformat`` treats character 10
+    as the date/time separator whatever character it is, so ``2026-09-01X09:14:03``
+    parses, and a date can be longer than ten characters without carrying a time at
+    all — ``2026-09-01Z`` and ``2026-09-01+00:00`` both read back as midnight (#401
+    review). Matching the schema's pattern instead refuses all three on both sides,
+    and refuses ``20260901T091403`` — basic-format ISO, which 3.10 rejects and 3.11
+    accepts — the same way on every interpreter, which is the divergence the ``Z``
+    normalization above exists to prevent.
     """
     if not isinstance(value, str):
         raise ValueError(f"{where}: envelope fetched_at is {value!r}, not an ISO 8601 string")
@@ -442,10 +455,10 @@ def _parse_fetched_at(value: object, where: str) -> datetime:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
         raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
-    if len(value) <= _ISO_DATE_CHARS:
+    if not _ISO_DATETIME_START.match(value):
         raise ValueError(
-            f"{where}: envelope fetched_at {value!r} is a date with no time of day — "
-            "record when the fetch happened, not only the day it happened on"
+            f"{where}: envelope fetched_at {value!r} is not a date followed by T or a space and a "
+            "time of day — record when the fetch happened, not only the day it happened on"
         )
     return parsed
 
@@ -697,8 +710,8 @@ class ClaimFileEnvelope:
     ``target_key_value`` already in the target's value space. Where a source's own
     value needs transforming to get there — pulling ``NA12878`` out of a path,
     normalizing an accession — the importer does it. The run performs equality
-    lookup and nothing else, which is what keeps corpus knowledge out of the
-    importer and transform logic out of the join.
+    lookup and nothing else, which is what keeps corpus knowledge in the importer
+    and transform logic out of the join.
 
     ``target_key`` names a key of the target system, drawn from its record fields
     *and* from facts meta-disco derives: ENA run accessions appear in no input

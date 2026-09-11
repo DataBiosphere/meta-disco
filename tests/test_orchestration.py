@@ -12,7 +12,6 @@ These tests pin the three together.
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 from meta_disco.claim_files import write_claim_file

@@ -317,8 +317,9 @@ def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator
 
 
 def test_claim_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
-    # `range: datetime` accepts a bare date; `ClaimFileEnvelope.from_dict` refuses one,
-    # because reading it as midnight claims a precision the file never stated. The
-    # slot carries a pattern so both sides refuse the same value.
+    # A date with no time of day reads back as midnight — a precision the file never
+    # stated. The slot is constrained by a pattern rather than `range: datetime`,
+    # which would accept one, so the schema and `ClaimFileEnvelope.from_dict` refuse
+    # the same strings.
     report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="ClaimFileEnvelope")
     assert report.results, "a date-only fetched_at should have failed"

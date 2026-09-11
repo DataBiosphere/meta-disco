@@ -225,6 +225,27 @@ class TestTheEnvelopeIsFactoredOut:
         assert not path.exists()
         assert list(tmp_path.iterdir()) == []
 
+    def test_a_rename_that_cannot_happen_leaves_no_temporary_behind(self, tmp_path):
+        """A rename fails too, and a stray `.tmp` is a whole claim file nothing reads.
+
+        A directory standing where the file should go is the reachable case: the
+        claims are written, every one of them valid, and only the last step fails.
+        """
+        path = tmp_path / "claims.ndjson"
+        path.mkdir()
+
+        with pytest.raises(OSError):
+            write_claim_file(path, claim_file_envelope(), [_entry()])
+
+        assert list(tmp_path.iterdir()) == [path]
+
+    def test_something_that_is_not_a_claim_entry_is_named_not_traced(self, tmp_path):
+        """An importer that yields the wrong shape is told which claim, as any other."""
+        with pytest.raises(ValueError, match="claim 1: is a tuple, not a ClaimEntry"):
+            # The type checker refuses this shape, which is the point: the check
+            # exists for an importer that is not type-checked.
+            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [("platform", "x", {})])  # type: ignore[list-item]
+
     def test_the_caller_s_claim_is_not_mutated(self, tmp_path):
         """Factoring the source out is the file's business, not the importer's."""
         entry = _entry()
@@ -269,6 +290,35 @@ class TestMalformedFiles:
         with pytest.raises(ValueError, match=r"c\.ndjson line 2: not valid UTF-8"):
             list(iter_claims(path))
 
+    @pytest.mark.parametrize("line", [1, 2])
+    def test_a_line_nested_past_the_decoder_s_limit_is_refused_by_line(self, tmp_path, line):
+        """`json.loads` raises RecursionError, not JSONDecodeError, past ~1000 levels.
+
+        `report_claim_files` runs at the top of every classification run and catches
+        `ValueError`, so an escape here aborts the whole run on one malformed file —
+        the opposite of the report naming every file it found (#401 review).
+        """
+        deep = "[" * 2000 + "]" * 2000
+        envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()})
+        first = '{"claim_file":' + deep + "}" if line == 1 else envelope
+        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","claim":' + deep + "}"
+        path = tmp_path / "claims.ndjson"
+        path.write_text(first + "\n" + second + "\n")
+
+        with pytest.raises(ValueError, match=f"line {line}"):
+            list(iter_claims(path))
+
+    def test_a_file_nested_past_the_decoder_s_limit_is_reported_not_raised(self, tmp_path, capsys):
+        """One unreadable claim file must not hide the ones beside it, or the run."""
+        (tmp_path / "deep.ndjson").write_text('{"claim_file":' + "[" * 2000 + "]" * 2000 + "}\n")
+        write_claim_file(tmp_path / "good.ndjson", claim_file_envelope(), [_entry()])
+
+        deep, good = report_claim_files(tmp_path)
+
+        assert deep.envelope is None and "RecursionError" in (deep.error or "")
+        assert good.envelope is not None
+        assert "envelope could not be read" in capsys.readouterr().out
+
     def test_a_blank_line_carries_no_claim(self, tmp_path):
         path = tmp_path / "claims.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry()])
@@ -294,7 +344,19 @@ class TestMalformedFiles:
             ({"source": {"repository": "HPRC", "table": 7}}, "source table"),
             ({"fetched_at": None}, "fetched_at"),
             ({"fetched_at": "yesterday"}, "not an ISO 8601"),
-            ({"fetched_at": "2026-09-01"}, "no time of day"),
+            ({"fetched_at": "2026-09-01"}, "time of day"),
+            # A date can be longer than ten characters without carrying a time:
+            # `fromisoformat` reads all three of these as midnight, and the first two
+            # come straight off an API that stamps a UTC designator on a date (#401
+            # review). The third is a real separator's worth of characters in the
+            # right place and still not a `T`.
+            ({"fetched_at": "2026-09-01Z"}, "time of day"),
+            ({"fetched_at": "2026-09-01+00:00"}, "time of day"),
+            ({"fetched_at": "2026-09-01X09:14:03"}, "time of day"),
+            # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts.
+            # Refused on both, so a claim file does not read differently by
+            # interpreter — the divergence the `Z` normalization exists to prevent.
+            ({"fetched_at": "20260901T091403"}, "ISO 8601"),
             ({"source_version": ""}, "source_version"),
             ({"source_key": None}, "source_key"),
             ({"target": {"system": ""}}, "target system"),
@@ -542,6 +604,20 @@ class TestAClaimIsRebuiltNotTrusted:
         path = self._write_raw(tmp_path, claim)
 
         with pytest.raises(ValueError, match="explicit null"):
+            list(iter_claims(path))
+
+    @pytest.mark.parametrize("member", ["tier", "raw_value", "rule_id", "reason"])
+    def test_a_claim_member_that_is_an_explicit_null_is_refused(self, tmp_path, member):
+        """`make_claim` reads a null argument as an absent one, so the reader cannot.
+
+        Without this the file on disk and the claim in memory differ — `"tier": null`
+        is read back as a claim with no tier — which is exactly the normalization the
+        `column` and source-member checks refuse a line for (#401 review).
+        """
+        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", member: None}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match=f"claim member\\(s\\) \\['{member}'\\] are explicit nulls"):
             list(iter_claims(path))
 
     def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
