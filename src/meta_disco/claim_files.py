@@ -92,8 +92,12 @@ policy discards. No ``join_key`` or ``match_exact``: those are what the join fil
 once a match has actually happened, and a file asserting them would be claiming a
 match that has not occurred. No ``reason`` prose: an imported claim cites the
 ``rule_id`` of the mapping that produced it — including an identity mapping, since
-there is no implicit copy — and the text is resolved from that rule, so output stays
-readable while the file stays small. The mapping table itself is #395/#399.
+there is no implicit copy — and the file keeps the id rather than the prose repeated
+on a few million lines. Resolving that id back to text is what keeps output readable,
+and it is #395's: there is no mapping table yet, so a claim read from a file today
+carries no reason and ``ExtendedClassificationResult.reasons`` contributes an empty
+string for one. Nothing in a run reads these claims yet either (#402), so no output is
+affected — but this is the one place the format leans on work that is not built.
 """
 
 import json

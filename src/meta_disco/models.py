@@ -514,12 +514,14 @@ def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
 
     ``fields()`` walks the dataclass on every call and is not free; the members and
     which checker each one gets cannot change for a class, so they are derived once
-    and cached. Measured, this is a cold path and the cache is insurance rather than
-    a win: reading a whole claim file calls it five times, once per record class, and
-    writing one never calls it at all — ``_flat_from_dict`` runs per *file*, on the
-    envelope. The helper that does run per claim is :func:`_flat_to_dict`, through
-    ``make_claim``'s ``source.to_dict()``, and it walks ``fields()`` uncached (#401
-    review).
+    and cached. Measured, this is a cold path and the cache is insurance rather than a
+    win. Reading a whole claim file — a thousand claims or a million — consults it
+    five times across three classes: once for ``ClaimFileEnvelope`` and twice each for
+    ``ClaimFileSource`` and ``ClaimTarget``, which the envelope both reads and
+    re-validates by round-tripping. Writing one never consults it at all. The helper
+    that does run per claim is :func:`_flat_to_dict`, through ``make_claim``'s
+    ``source.to_dict()`` — a thousand calls for a thousand claims, on both sides —
+    and it walks ``fields()`` uncached (#401 review).
 
     Returns the known names, those names sorted for an error message, and
     ``(name, checker)`` pairs: a member with no dataclass default is required.
