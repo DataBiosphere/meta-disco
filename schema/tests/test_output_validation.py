@@ -226,6 +226,23 @@ def _envelope(**overrides) -> dict:
     }
 
 
+@pytest.mark.parametrize("bad", ["", "HPRC\nforged entry"])
+@pytest.mark.parametrize("member", ["name", "dataset", "table", "column"])
+def test_a_claim_source_member_must_be_one_non_empty_line(validator, member, bad):
+    # `ClaimSource.__post_init__` refuses both, and this is the class that reaches
+    # persisted evidence rather than only a claim file — so the output gate has to
+    # refuse them too, or a record the constructor would not build validates (#401
+    # review).
+    evidence = {
+        "rule_id": "map_v1",
+        "source_type": "repository_metadata",
+        "value": "PACBIO",
+        "source": {"name": "HPRC", member: bad},
+    }
+    report = validator.validate(evidence, target_class="Evidence")
+    assert report.results, f"a source {member} of {bad!r} should have failed"
+
+
 def test_claim_file_envelope_validates(envelope_validator):
     report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
     assert not report.results, "a well-formed envelope should validate: " + str([r.message for r in report.results])

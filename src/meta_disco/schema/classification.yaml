@@ -212,16 +212,19 @@ classes:
     attributes:
       name:
         required: true
+        pattern: "^.+$"
         description: >-
           Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``. Required:
           a source object with no name identifies nothing, and ``to_dict`` omits
           null members, so an unnamed source would serialize as a bare url or
           column with no owner.
       url:
+        pattern: "^.+$"
         description: >-
           URL the source was read from, if it has one. Null for a source with no
           published address, such as a curator table held in this repository.
       dataset:
+        pattern: "^.+$"
         description: >-
           The collection within the source that the claim came from — an AnVIL
           dataset title, an HPRC release, an ENA study accession. Null for a
@@ -232,11 +235,13 @@ classes:
           things in different datasets, and a consumer reading this evidence
           cannot go back to the file the claim arrived in (#401).
       table:
+        pattern: "^.+$"
         description: >-
           The table or file within the source that the claim came from, e.g. an
           AnVIL verbatim manifest table name. Null when the source is a single
           undivided file.
       column:
+        pattern: "^.+$"
         description: >-
           The column within that table the raw value was read from. Null when the
           source has no column structure.
