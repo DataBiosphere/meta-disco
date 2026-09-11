@@ -347,6 +347,26 @@ def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator
     assert report.results, "an envelope source naming a column should have failed"
 
 
+@pytest.mark.parametrize(
+    "bad", ["2026-09-01Tfoo", "2026-13-45T99:99:99", "2026-09-01T09:14:03+0100", "20260901T091403"]
+)
+def test_claim_file_envelope_refuses_a_misshapen_fetched_at(envelope_validator, bad):
+    # `ClaimFileEnvelope.from_dict` refuses each of these, so the gate must too, or a
+    # producer clears the schema and publishes a file the only reader will not read.
+    # The offset without a colon is the subtle one: `fromisoformat` wants `+HH:MM` on
+    # 3.10, and a looser pattern let `+0100` through (#401 review).
+    report = envelope_validator.validate(_envelope(fetched_at=bad), target_class="ClaimFileEnvelope")
+    assert report.results, f"a fetched_at of {bad!r} should have failed"
+
+
+@pytest.mark.parametrize("good", ["2026-09-01T09:14", "2026-09-01 09:14:03", "2026-09-01T09:14:03.123456"])
+def test_claim_file_envelope_accepts_the_shapes_the_reader_parses(envelope_validator, good):
+    # Parity runs both ways: each of these is a timestamp `fromisoformat` takes, so a
+    # pattern that refused one would make the gate stricter than the reader.
+    report = envelope_validator.validate(_envelope(fetched_at=good), target_class="ClaimFileEnvelope")
+    assert not report.results, str([r.message for r in report.results])
+
+
 def test_claim_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
     # A date with no time of day reads back as midnight — a precision the file never
     # stated. The slot is constrained by a pattern rather than `range: datetime`,

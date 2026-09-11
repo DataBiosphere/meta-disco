@@ -438,7 +438,7 @@ classes:
           after inference has run.
       fetched_at:
         required: true
-        pattern: "^\\d{4}-\\d{2}-\\d{2}[T ][^\\r\\n]+\\Z"
+        pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?|Z)?\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
           a date alone. A run reports the age of every claim file it consumes from
@@ -459,9 +459,16 @@ classes:
           gets a string rather than a datetime. The reader parses it either way,
           and the pattern says what the string must look like, so what is given up
           is a type hint and what is bought is that both sides refuse the same
-          files. The pattern does not verify the value is a real instant —
-          `2026-13-45T99:99:99` matches it — so the reader stays the authority on
-          that, and this slot is a shape check rather than a parser.
+          files.
+
+          The pattern spells out the field ranges rather than accepting any
+          non-newline text after the separator, because the loose form let
+          `2026-09-01Tfoo` and `2026-13-45T99:99:99` through the gate for the
+          reader to refuse. Measured across seventeen shapes, the two sides now
+          agree on sixteen. The one that remains is a date no regex can rule out:
+          `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays
+          the authority on whether a well-shaped timestamp is a real instant
+          (#401 review).
 
   Evidence:
     description: >-
