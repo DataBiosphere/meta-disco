@@ -536,10 +536,21 @@ def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
     envelope's members must be. The same rules then run when an importer *builds* an
     envelope (``ClaimFileEnvelope.__post_init__``), so a writer cannot produce a file
     this reader will refuse (#401 review).
+
+    The line is closed as well as the envelope inside it: ``claim_file`` must be its
+    only key. Extracting the block and ignoring its siblings would let
+    ``{"claim_file": …, "unexpected": 1}`` through while an unknown member *within*
+    the envelope is refused — the same malformed provenance, discarded rather than
+    reported, depending only on which side of one brace it sat (#401 review).
     """
     where = f"{path.name} line 1"
     try:
-        block = json.loads(line)[ENVELOPE_KEY]
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        wrapper = json.loads(line)
+    except json.JSONDecodeError as exc:
         raise ValueError(f"{where}: not a {ENVELOPE_KEY} envelope: {exc!r}") from None
-    return ClaimFileEnvelope.from_dict(block, where)
+    if not isinstance(wrapper, dict) or set(wrapper) != {ENVELOPE_KEY}:
+        raise ValueError(
+            f"{where}: line 1 must be an object whose only key is {ENVELOPE_KEY!r}, "
+            f"and this one is {sorted(wrapper) if isinstance(wrapper, dict) else type(wrapper).__name__}"
+        )
+    return ClaimFileEnvelope.from_dict(wrapper[ENVELOPE_KEY], where)

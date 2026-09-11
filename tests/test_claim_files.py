@@ -359,6 +359,32 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*unknown member"):
             read_envelope(path)
 
+    @pytest.mark.parametrize(
+        "wrapper",
+        [
+            {ENVELOPE_KEY: "ENVELOPE", "unexpected": 1},
+            {"not_the_key": "ENVELOPE"},
+            ["ENVELOPE"],
+        ],
+    )
+    def test_line_one_must_be_the_envelope_and_nothing_else(self, tmp_path, wrapper):
+        """An unknown member *within* the envelope is refused; a sibling of it must be too.
+
+        Otherwise the same malformed provenance is discarded rather than reported
+        depending only on which side of one brace it sat.
+        """
+        envelope = _envelope().to_dict()
+        payload = (
+            [envelope if v == "ENVELOPE" else v for v in wrapper]
+            if isinstance(wrapper, list)
+            else {k: (envelope if v == "ENVELOPE" else v) for k, v in wrapper.items()}
+        )
+        path = tmp_path / "c.ndjson"
+        path.write_text(json.dumps(payload) + "\n")
+
+        with pytest.raises(ValueError, match=r"c\.ndjson line 1"):
+            read_envelope(path)
+
     def test_a_utc_z_suffix_reads_back_on_every_supported_interpreter(self, tmp_path):
         """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
 
