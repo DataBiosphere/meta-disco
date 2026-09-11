@@ -507,7 +507,7 @@ def _flat_from_dict(cls, block: object, where: str, label: str):
     return cls(**values)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ClaimSource:
     """Identity of an external source that produced a claim (issue #392).
 
@@ -551,7 +551,7 @@ class ClaimSource:
         return _flat_from_dict(cls, block, where, "source")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ClaimFileSource:
     """Where a whole claim file's claims were read from (issue #401).
 
@@ -605,7 +605,7 @@ class ClaimFileSource:
         return ClaimSource(name=self.repository, url=self.url, dataset=self.dataset, table=self.table, column=column)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ClaimTarget:
     """The system a claim file's claims are *about* (issue #401).
 
@@ -656,7 +656,7 @@ class ClaimTarget:
         return _flat_from_dict(cls, block, where, "target")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ClaimFileEnvelope:
     """What a claim file records once, for every claim in it (issue #401).
 
@@ -732,6 +732,17 @@ class ClaimFileEnvelope:
         required_str(self.source_version, "source_version", where)
         required_str(self.source_key, "source_key", where)
         require_join_key(self.target_key, "target_key", where)
+        # A key that is not unique across the target cannot be matched without a
+        # scope, and `file_name` is the one in the vocabulary that is not: absent on
+        # 37% of the corpus's records and non-unique on 69%, against 2 rows in 16,271
+        # within a single dataset. Writing an unscoped one produces a file whose
+        # claims the join cannot attach to a single row — refused here rather than
+        # discovered when the join fans out (#401 review).
+        if self.target_key == JOIN_KEY_FILE_NAME and self.target.dataset is None:
+            raise ValueError(
+                f"{where}: target_key {JOIN_KEY_FILE_NAME!r} needs a target dataset to scope it — "
+                "a bare file name is non-unique on 69% of the corpus and matches no single row"
+            )
 
     @classmethod
     def from_dict(cls, block: object, where: str) -> "ClaimFileEnvelope":
@@ -771,7 +782,7 @@ class ClaimFileEnvelope:
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
             source_key=required_str(block.get("source_key"), "envelope source_key", where),
             target=ClaimTarget.from_dict(block.get("target"), where),
-            target_key=required_str(block.get("target_key"), "envelope target_key", where),
+            target_key=require_join_key(block.get("target_key"), "envelope target_key", where),
             fetched_at=_parse_fetched_at(block.get("fetched_at"), where),
         )
 

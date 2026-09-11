@@ -405,8 +405,8 @@ classes:
           from a fastq's read headers, so a claim keyed by it can only be joined
           after inference has run.
       fetched_at:
-        range: datetime
         required: true
+        pattern: "^\\d{4}-\\d{2}-\\d{2}[T ].+$"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
           a date alone. A run reports the age of every claim file it consumes from
@@ -415,6 +415,21 @@ classes:
           matters most, are only distinguishable if the time is recorded. A
           date-only value is refused rather than read as midnight, which would be
           a precision the file never stated.
+
+          Constrained by pattern rather than `range: datetime`, which was measured
+          and does not do the job: LinkML coerces the value before matching, so a
+          bare `2026-09-01` is accepted under a datetime range — and the pattern is
+          then never applied. A claim file would pass this schema and be reported
+          unreadable by the reader, which is the mismatch this class's tests exist
+          to prevent.
+
+          The trade is deliberate: a consumer generating models from this schema
+          gets a string rather than a datetime. The reader parses it either way,
+          and the pattern says what the string must look like, so what is given up
+          is a type hint and what is bought is that both sides refuse the same
+          files. The pattern does not verify the value is a real instant —
+          `2026-13-45T99:99:99` matches it — so the reader stays the authority on
+          that, and this slot is a shape check rather than a parser.
 
   Evidence:
     description: >-

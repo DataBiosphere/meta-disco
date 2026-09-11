@@ -376,21 +376,28 @@ def _describe(status: ClaimFileStatus, root: Path, now: datetime | None) -> str:
     if status.envelope is None:
         return f"UNREADABLE {name} — {status.error}"
     envelope = status.envelope
+    target = envelope.target
+    scope = f"{target.system}/{target.dataset}" if target.dataset else target.system
+    generation = f" @{target.version}" if target.version else ""
     return (
         f"{name} — {_join_side(envelope.source.to_dict(), envelope.source_key)}"
-        f" -> {_join_side(envelope.target.to_dict(), envelope.target_key)},"
-        f" version {envelope.source_version},"
+        f" v{envelope.source_version}"
+        f" -> {scope}[{envelope.target_key}]{generation},"
         f" fetched {envelope.fetched_at.isoformat()} ({_age_phrase(envelope.fetched_at, now)})"
     )
 
 
 def _join_side(members: dict, key: str) -> str:
-    """One side of the join as ``a/b/c[key]``, skipping the levels it does not have.
+    """The source side of the join as ``repository/dataset/table[key]``.
 
-    Both sides are flat records of optional strings, so one renderer serves them —
-    ``HPRC Data Explorer/R2/sequencing-data[filename]`` and
-    ``anvil/AnVIL_HPRC_R2[file_name]``. ``url`` is dropped: it is provenance a reader
-    can go and look at, not something to carry across every line of a report.
+    Skips the levels this source does not have, so a curator table with no dataset
+    renders as ``meta-disco curator table/overrides[file_md5sum]``. ``url`` is
+    dropped: it is provenance a reader can go and look at, not something to carry
+    across every line of a report.
+
+    The target renders separately rather than through here. Its ``version`` is a
+    catalog generation, not another level of the path — slash-joining it would print
+    ``anvil/AnVIL_HPRC_R2/anvil15``, where a reader takes ``anvil15`` for a table.
     """
     levels = [v for k, v in members.items() if k != "url" and v is not None]
     return f"{'/'.join(levels)}[{key}]"
@@ -445,9 +452,8 @@ def _claim_line(
     producing a file its own reader will not take, which is the failure this contract
     exists to prevent.
 
-    ``name`` and ``n`` locate the entry for a refusal and are formatted into one only
-    when there is one (:func:`_where`) — this runs a few million times per source, and
-    a label built per claim is a string nothing reads.
+    ``name`` and ``n`` locate the entry for a refusal; :func:`_where` turns them into
+    one label per claim, shared by every raise below.
     """
     where = _where(name, _WRITING, n)
     _check_entry(where, entry.field, entry.target_key_value, entry.claim)
@@ -517,20 +523,11 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     integer where there is one, known status/state/source_type/join_key, string-typed
     free text, a producer handle (#401 review).
 
-    **What it does not buy is a trustworthy tier.** ``make_claim`` checks that a tier
-    is an integer, not that it is one of the tiers this engine has, so a claim file
-    can name ``999`` and — on the day imported claims reach ``evaluate_claims`` —
-    outrank every rule and content claim by being the unique highest. That is not
-    guarded here on purpose. Where an imported claim ranks is epic #391's question,
-    already answered on measured evidence: imports are *not* tier participants, and
-    the 12 known disagreements on ``AnVIL_HPRC_R2`` are why — they sit at rule tiers
-    1-2, so admitting imports at ``CONTENT_TIER`` would have produced 1 conflict and
-    11 silent wrong overrides. Under that policy an imported claim's tier is a number
-    nothing reads. Clamping it to a range here would encode a *reversible* policy
-    decision as an invariant of the record, in the one place that cannot know what
-    the allowed answer is; the guard belongs with the policy, in #396, which is also
-    what decides whether the number means anything at all. Nothing imported reaches
-    resolution until the join lands (#402).
+    Rebuilding is also what makes an imported claim inert in resolution. It carries
+    no ``tier`` — ``make_claim`` refuses one on a claim from an external source — and
+    ``evaluate_claims`` drops a claim carrying a ``source`` before the tier math, so
+    it can neither win a field nor forge precedence over a rule. Epic #391 settled
+    that on measured evidence; comparing the two resolutions is #396.
 
     A line that carries its own ``source`` is refused rather than silently
     overwritten. The envelope names the file's source; a line may add a ``column`` to
@@ -539,8 +536,7 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
     for exactly the files it cannot vouch for.
 
     ``name`` is the file's name, hoisted out of the read loop by :func:`iter_claims`,
-    and is formatted with ``n`` into a label only on a refusal — see
-    :func:`_claim_line` for why.
+    and is formatted with ``n`` into one label per line by :func:`_where`.
     """
     where = _where(name, _READING, n)
     try:
@@ -571,9 +567,15 @@ def _entry_from_line(name: str, n: int, line: str, envelope_source: ClaimFileSou
 def _where(name: str, unit: str, n: int) -> str:
     """Name the claim being refused: ``…ndjson claim 3`` writing, ``…ndjson line 4`` reading.
 
-    Called only from a raise. The two sides count differently on purpose — a writer
-    has no line numbers yet and a reader's ``n`` includes the envelope — so the unit
-    travels with the count rather than being inferred from it.
+    Built once per claim by each caller rather than at each raise. Both sides refuse a
+    line in several places, so threading the three parts down to every one of them
+    cost more in parameters than the f-string costs to build — a judgement that only
+    holds because this is one small string against a ``make_claim`` and a JSON encode
+    on the same line.
+
+    The two sides count differently on purpose — a writer has no line numbers yet and
+    a reader's ``n`` includes the envelope — so the unit travels with the count rather
+    than being inferred from it.
     """
     return f"{name} {unit} {n}"
 

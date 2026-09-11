@@ -532,20 +532,6 @@ class TestAClaimIsRebuiltNotTrusted:
         with pytest.raises(ValueError, match="not a valid claim"):
             list(iter_claims(path))
 
-    @pytest.mark.parametrize("tier", ["1", True, 1.5])
-    def test_a_tier_that_is_not_an_integer_is_refused(self, tmp_path, tier):
-        """A string tier passes the None check, then fails inside the tier comparison.
-
-        `evaluate_claims` would raise while ordering this claim against an unrelated
-        one, so the line that caused it is never named. `bool` is an `int` in Python
-        and is not a tier.
-        """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "tier": tier}
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match="does not"):
-            list(iter_claims(path))
-
     def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
         """The per-line `column` is a source member and is checked like the rest."""
         claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": 7}
@@ -645,8 +631,10 @@ class TestTheRunReport:
         # Both sides of the join, in the order a reader needs them: what it came from,
         # then what it is about, each with the key that pairs them.
         assert "HPRC Data Explorer/R2/sequencing-data[filename]" in out
-        assert "anvil/AnVIL_HPRC_R2/anvil15[file_name]" in out
-        assert "version 2026-09-01" in out
+        # The target's generation reads as `@anvil15`, not as another level of the
+        # path — slash-joined it would look like a table.
+        assert "anvil/AnVIL_HPRC_R2[file_name] @anvil15" in out
+        assert "v2026-09-01" in out
         assert "8 days ago" in out
 
     def test_a_target_generation_is_reported_as_provenance(self, tmp_path, capsys):

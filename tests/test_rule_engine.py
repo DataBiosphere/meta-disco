@@ -468,6 +468,18 @@ class TestMakeClaim:
                 state=DECLINED,
             )
 
+    @pytest.mark.parametrize("tier", ["1", True, 1.5])
+    def test_rejects_a_tier_that_is_not_an_integer(self, tier):
+        """`evaluate_claims` orders claims by tier, so a non-integer one fails inside
+        the comparison — against a claim that has nothing to do with it. `bool` is an
+        `int` in Python and is not a tier.
+
+        Asserted on a *rule* claim: a claim from an external source is refused for
+        carrying a tier at all, before this check is reached.
+        """
+        with pytest.raises(ValueError, match="not an integer"):
+            make_claim(rule_id="r", reason="x", tier=tier, source_type=SOURCE_FILENAME_RULE, value="genomic")
+
     def test_rejects_unknown_join_key(self):
         with pytest.raises(ValueError, match="not a key of the target"):
             make_claim(

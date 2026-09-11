@@ -169,19 +169,28 @@ def make_claim(
 
     **Who made it.** At least one producer handle is required: ``rule_id`` for one
     of our rules or content classifiers, ``source`` for an external source. An
-    external claim is not given a fabricated rule id. ``source_type`` is required
+    external claim carries *both*, and they answer different questions: ``source`` is
+    where the raw value was read from, ``rule_id`` is the mapping rule that turned it
+    into a vocabulary term. It is required on one — including for an identity
+    mapping, since there is no implicit copy — except in state ``unmapped``, which
+    means exactly that no mapping entry fired (#401). No rule id is *fabricated* for
+    an external claim; the one it carries names a real, reviewable mapping. ``source_type`` is required
     on every claim and checked against the schema's ``source_type_enum``; it is
     deliberately not derived from ``tier``, which cannot tell ``contig_detection``
     from ``content_read`` (both at ``CONTENT_TIER``) nor either from
     ``signal_inference`` (at a rule tier without being a rule).
 
-    **Tier.** Required on a claim that declares a ``value`` or ``status``, because
-    that claim competes in ``evaluate_claims`` and must never fall back to a
+    **Tier.** Required on a claim that declares a ``value`` or ``status`` *and
+    competes* — that is, one of ours. A claim that competes must never fall back to a
     tier-0 default (#150 — the silent default that let the #151 rGFA near-miss
     resolve to the wrong value). Rejected on a ``state`` claim, which does not
-    compete and would only be carrying a number nothing reads. Where an imported
-    claim ranks against the rule tiers is a resolution-policy question this record
-    does not answer (epic #391).
+    compete and would only be carrying a number nothing reads, and rejected on a
+    claim from an external ``source``, which does not compete either: epic #391
+    settled on measured evidence that imports are not tier participants, so a tier on
+    one is a number the importer must invent and the policy discards.
+    ``evaluate_claims`` drops a claim carrying a ``source`` before the tier math, so
+    an imported claim is inert there — visible in the evidence, never winning and
+    never conflicting. Comparing the two resolutions is #396.
 
     **What the source said, and how it was matched.** ``raw_value`` records the
     source's own value before mapping, so ``Revio`` → ``PACBIO`` stays auditable;
@@ -430,8 +439,14 @@ class ExtendedClassificationResult:
         of the record (exactly one of value/status/state, a known source_type, a
         tier iff the claim competes, a producer handle — see that function);
         it is appended to ``field_evidence[fld]``, and the field is then set from
-        ``evaluate_claims`` over the full list — so the field's value is *derived*
-        from its claims, never written alongside them (#150). A same-tier
+        ``evaluate_claims`` over the list — so the field's value is *derived* from
+        its claims, never written alongside them (#150). "Derived from its claims"
+        means the ones that compete: ``evaluate_claims`` drops a claim carrying a
+        ``source`` (#401), so adding an imported claim records what the source said
+        without moving the field, exactly as adding a ``state`` claim does. A field
+        whose only claim is an imported one therefore stays ``not_classified``, with
+        the import visible beside the placeholder saying no rule determined a value —
+        which is true of it, and is what #396 will compare against. A same-tier
         disagreement therefore resolves to ``not_classified`` here, rather than the
         last writer silently winning. A ``state`` claim declares nothing, so
         appending one records the source's answer without changing the field —
@@ -562,9 +577,10 @@ class ExtendedClassificationResult:
         **An imported claim is not filtered out here and contributes an empty
         string.** It carries the ``rule_id`` of the mapping that produced it (#401)
         but stores no ``reason`` — the text is resolved from that mapping rule, which
-        this accessor does not do. Unreachable today, since nothing feeds an imported
-        claim into ``field_evidence`` until the join lands (#402); whichever of #395
-        or #402 first makes it reachable owns deciding whether these belong here at
+        this accessor does not do. ``add_claim`` is the public path that can put one
+        there today, and does so in the tests; nothing in the classification run takes
+        it, so no corpus output is affected until the join lands (#402). Whichever of
+        #395 or #402 first makes it routine owns deciding whether these belong here at
         all. An external claim's reason is read from the evidence itself, which keeps
         every claim, not from here.
         """

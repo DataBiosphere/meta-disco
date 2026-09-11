@@ -314,3 +314,11 @@ def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator
     bad["source"] = {**bad["source"], "column": "platform"}
     report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
     assert report.results, "an envelope source naming a column should have failed"
+
+
+def test_claim_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
+    # `range: datetime` accepts a bare date; `ClaimFileEnvelope.from_dict` refuses one,
+    # because reading it as midnight claims a precision the file never stated. The
+    # slot carries a pattern so both sides refuse the same value.
+    report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="ClaimFileEnvelope")
+    assert report.results, "a date-only fetched_at should have failed"

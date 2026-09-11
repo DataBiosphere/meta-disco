@@ -183,7 +183,7 @@ class TestTheRunReportsItsClaimFiles:
         cannot drift as the shape moves."""
         write_claim_file(
             tmp_path / "claims" / "anvil" / "manifest.ndjson",
-            claim_file_envelope(target=ClaimTarget(system="anvil", version=target_version)),
+            claim_file_envelope(target=ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version=target_version)),
             [],
         )
         return tmp_path / "claims"
