@@ -72,6 +72,24 @@ def validator():
     )
 
 
+@pytest.fixture(scope="session")
+def envelope_validator():
+    """A `closed=True` validator, for the claim-file envelope only (#401).
+
+    The gates above run `closed=False` because the golden output carries keys the
+    schema does not model (the fastq scalar hints). The envelope has no such
+    tolerance to extend: it is a small, complete contract that `claim_files` writes
+    and reads whole, and an unmodeled key in it is a claim file the reader will
+    refuse. Validating it `closed=False` would let `ClaimFileSource` and
+    `ClaimSource` differ on paper while accepting the same documents — which is the
+    mismatch the separate class exists to prevent.
+    """
+    return Validator(
+        schema=str(_SCHEMA),
+        validation_plugins=[PydanticValidationPlugin(closed=True)],
+    )
+
+
 def _golden_records():
     """Yield (label, record) for every classification record in the golden.
 
@@ -193,40 +211,83 @@ def _envelope(**overrides) -> dict:
     }
 
 
-def test_claim_file_envelope_validates(validator):
-    report = validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+def test_claim_file_envelope_validates(envelope_validator):
+    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
     assert not report.results, \
         "a well-formed envelope should validate: " + str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_accepts_an_absent_corpus_catalog(validator):
+def test_claim_file_envelope_accepts_a_declared_corpus_catalog(envelope_validator):
+    # An AnVIL claim file names the catalog generation it was built for.
+    report = envelope_validator.validate(_envelope(corpus_catalog="anvil15"), target_class="ClaimFileEnvelope")
+    assert not report.results, str([r.message for r in report.results])
+
+
+def test_claim_file_envelope_accepts_an_absent_corpus_catalog(envelope_validator):
     # Null for a source with no relationship to our catalog (HPRC, ENA, IGSR):
-    # to_dict omits the key entirely rather than writing an explicit null.
-    report = validator.validate(_envelope(corpus_catalog="anvil15"), target_class="ClaimFileEnvelope")
+    # to_dict omits the key entirely rather than writing an explicit null, so the
+    # absent case is the fixture's own shape — asserted here rather than left to
+    # ride along on another test.
+    assert "corpus_catalog" not in _envelope()
+    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
     assert not report.results, str([r.message for r in report.results])
 
 
 @pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version"])
-def test_claim_file_envelope_requires_its_provenance(validator, missing):
+def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing):
     # Each is required: a claim file that cannot say where it came from, when, or
     # from what version cannot be reasoned about later.
     bad = _envelope()
     del bad[missing]
-    report = validator.validate(bad, target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
     assert report.results, f"an envelope missing {missing!r} should have failed"
 
 
-def test_claim_file_envelope_source_is_inlined_not_a_reference(validator):
+def test_claim_file_envelope_source_is_inlined_not_a_reference(envelope_validator):
     # `inlined: true` on the slot: line 1 carries the whole {name, url, table}
     # object. Without it a class-valued slot reads as a reference, and this nested
     # object would be rejected or reshaped.
-    report = validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
     assert not report.results, \
         "a nested source object must validate: " + str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(validator):
+def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
     # `range: datetime`, so the schema refuses what ClaimFileEnvelope.from_dict
     # refuses rather than accepting free text the reader will not take.
-    report = validator.validate(_envelope(fetched_at="yesterday"), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(fetched_at="yesterday"), target_class="ClaimFileEnvelope")
     assert report.results, "a non-datetime fetched_at should have failed"
+
+
+# The schema must refuse what the reader refuses. Each of these was a value that
+# passed LinkML validation and was then rejected by `ClaimFileEnvelope.from_dict`
+# or `__post_init__`, so a claim file could clear the schema gate and still be
+# reported unreadable (#401 review).
+
+
+def test_claim_file_envelope_refuses_an_empty_source_version(envelope_validator):
+    # `required` alone admits ""; `required_str` does not.
+    report = envelope_validator.validate(_envelope(source_version=""), target_class="ClaimFileEnvelope")
+    assert report.results, "an empty source_version should have failed"
+
+
+def test_claim_file_envelope_refuses_an_empty_corpus_catalog(envelope_validator):
+    # Absent is fine; present-and-empty is not, matching `optional_str`.
+    report = envelope_validator.validate(_envelope(corpus_catalog=""), target_class="ClaimFileEnvelope")
+    assert report.results, "an empty corpus_catalog should have failed"
+
+
+def test_claim_file_envelope_refuses_a_nameless_source(envelope_validator):
+    bad = _envelope()
+    bad["source"] = {"url": "https://data.humanpangenome.org/"}
+    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    assert report.results, "a source with no name should have failed"
+
+
+def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator):
+    # `ClaimFileSource` has no `column`: a column belongs to a claim, and an
+    # envelope carrying one could disagree with every line in the file.
+    bad = _envelope()
+    bad["source"] = {**bad["source"], "column": "platform"}
+    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    assert report.results, "an envelope source naming a column should have failed"

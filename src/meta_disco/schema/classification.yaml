@@ -230,6 +230,42 @@ classes:
           The column within that table the raw value was read from. Null when the
           source has no column structure.
 
+  ClaimFileSource:
+    description: >-
+      The source a whole claim file came from (issue #401) — the `source` on a
+      `ClaimFileEnvelope`.
+
+      The same three facts `ClaimSource` carries, minus `column`. A column
+      belongs to a claim, not to a file: one table's claims are read from
+      several columns, so an envelope naming one could disagree with every line
+      in the file, and the reader refuses it. Modeled as its own class rather
+      than reusing `ClaimSource` so this schema refuses the same envelopes the
+      reader does — otherwise a claim file validates here and is then reported
+      unreadable by `read_envelope` (#401 review).
+
+      The Python side reuses `models.ClaimSource` for both and enforces the
+      absent column in `ClaimFileEnvelope.__post_init__`; the two classes here
+      are what the *file* may contain in each position.
+    attributes:
+      name:
+        required: true
+        pattern: "^.+$"
+        description: >-
+          What the source is called — `HPRC Data Explorer`, `AnVIL`. Required and
+          non-empty: a source with no name identifies nothing, and `required_str`
+          refuses the empty string on both sides of the file.
+      url:
+        pattern: "^.+$"
+        description: >-
+          Where the source lives, when it has a public address. Null for a source
+          with none — a curator table, say. Non-empty where present.
+      table:
+        pattern: "^.+$"
+        description: >-
+          The table or file within that source the claims were read from —
+          `sequencing-data`, `alignments_v2`. Null for a source with no table
+          structure. Non-empty where present.
+
   ClaimFileEnvelope:
     description: >-
       What a claim file records once, for every claim in it (issue #401). An
@@ -251,16 +287,20 @@ classes:
       are words too generic to own in a shared namespace.
     attributes:
       source:
-        range: ClaimSource
+        range: ClaimFileSource
         required: true
         inlined: true
         description: >-
           Which source the claims came from — name, url and the table within it.
-          The same object a claim carries, factored up to the file because those
-          three are constant across it; `column` is the one member that stays on
-          each claim, since one table's claims are read from several columns —
-          an envelope naming a column is refused, since it could then disagree
-          with every line in the file.
+          The same three facts a claim's `ClaimSource` carries, factored up to the
+          file because they are constant across it.
+
+          Its own class, and not `ClaimSource`, so that this schema refuses what
+          `ClaimFileEnvelope.__post_init__` refuses. `ClaimSource` has a `column`,
+          which belongs to a claim — one table's claims are read from several
+          columns — so an envelope carrying one could disagree with every line in
+          the file. Using `ClaimSource` here would let a claim file pass schema
+          validation and then be refused by `read_envelope`.
 
           `inlined` for the reason `Evidence.source` is: line 1 carries the whole
           `{name, url, table}` object, and without the declaration a class-valued
@@ -283,12 +323,18 @@ classes:
           free text the reader will not take.
       source_version:
         required: true
+        pattern: "^.+$"
         description: >-
           The version of the source the claims were taken from — a catalog
           generation, a release tag, a publication date. Required even where the
           source publishes no version of its own: a claim file that cannot say
           what it was built from cannot be reasoned about later.
+
+          `pattern` because `required` alone admits the empty string, which
+          `required_str` refuses — without it a claim file passes this schema and
+          is then refused by `read_envelope`.
       corpus_catalog:
+        pattern: "^.+$"
         description: >-
           The AnVIL catalog generation this claim file was built for. Provenance
           rather than a gate: a run reports it and refuses nothing on it, because
@@ -296,6 +342,10 @@ classes:
           a superseded catalog rather than keeping it to be compared against. The
           importer reads it on its next pass to decide whether the configured
           catalog has moved on and the file must be re-fetched.
+
+          Absent for a source unrelated to our catalog. Where it *is* present it
+          must say something: `optional_str` refuses the empty string, so the
+          pattern refuses it here too.
 
           Null for a source with no relationship to our catalog — the HPRC Data
           Explorer, ENA, IGSR — whose claims are about files rather than about a
