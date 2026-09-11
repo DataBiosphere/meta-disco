@@ -143,9 +143,10 @@ def run_all_classifications(
     Before any of that it reports the claim files under ``claims_root``
     (:func:`claim_files.report_claim_files`), which says what each one is and how old
     it is and refuses none of them. Reporting first, ahead of the run directory, puts
-    what the run consumed at the top of its log rather than behind the phases. The
-    claims go no further than that report: matching them to our files is #400b, so
-    until then a claim file changes what a run *says*, never what it writes.
+    what the run found at the top of its log rather than behind the phases. *Found*
+    and not *consumed*: the claims go no further than that report, because matching
+    them to our files is #402, so until then a claim file changes what a run *says*,
+    never what it writes.
 
     Every producer writes ``excluded_files.json`` into the run directory as it loads,
     naming each input record with no usable ``file_md5sum`` (#376) — the file is where

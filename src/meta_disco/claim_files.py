@@ -10,7 +10,8 @@ as the evidence cache, and either side can be re-run without forcing the other::
 
 This module is the artefact and its IO: the layout on disk, the envelope, the line
 format, the streaming writer and reader, and the report a run prints of what it
-consumed. Anything that needs to find or write a claim file should come through here
+found — found and not consumed, since no claim reaches classification until the join
+lands (#402). Anything that needs to find or write a claim file should come through here
 rather than re-deriving the layout. Matching a claim to one of our files is #402,
 and the importers that will produce these files are #369 (AnVIL manifests) and #394
 (external catalogs).

@@ -336,8 +336,9 @@ classes:
       What a claim file records once, for every claim in it (issue #401). An
       importer runs out of band from classification — when a catalog refreshes,
       with network — and writes a claim file of `Evidence` claims; a run reads it
-      and reports this provenance, so that what a run consumed, and how old it
-      was, is on the record.
+      and reports this provenance, so that what a run found, and how old it was,
+      is on the record. Found and not consumed: until the join lands (#402) a run
+      reads each file's envelope and none of its claims.
 
       It names both sides of the join, symmetrically: `source` / `source_version`
       / `source_key`, and `target` / `target.version` / `target_key`. A line then
