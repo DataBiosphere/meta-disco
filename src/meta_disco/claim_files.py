@@ -49,6 +49,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from .models import CLASSIFICATION_FIELDS, JOIN_KEYS, ClaimFileEnvelope, ClaimSource
+from .rule_engine import make_claim
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from a
 # claim rather than distinguishable by position alone, so a truncated or concatenated
@@ -79,6 +80,12 @@ _encode = json.JSONEncoder(separators=(",", ":")).encode
 # Write buffer for a claim file. The default 8 KB would mean a syscall every few
 # claims across a multi-gigabyte sequential write.
 _WRITE_BUFFER_BYTES = 1 << 20
+
+# What each side calls the claim it is refusing (`_where`). A writer counts claims,
+# because it has no line numbers to give; a reader counts lines, because that is what
+# a person opening the file can act on.
+_WRITING = "claim"
+_READING = "line"
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,11 +143,24 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     (:func:`_claim_line`): an unknown dimension or join key, or a claim whose source
     is not the source the envelope names, raises rather than being written and
     discovered by a reader later. The envelope's own source is serialized once, here,
-    and compared against per claim — it is constant for the file.
+    and compared against per claim — it is constant for the file. The envelope was
+    checked when it was built (``ClaimFileEnvelope.__post_init__``).
+
+    ``path`` must end in ``.ndjson``, because that is what :func:`discover` looks for.
+    Writing ``catalog.json`` otherwise succeeds, returns a claim count, and is then
+    invisible to every run — an importer's one-character mistake becoming a silent
+    no-op with a success return, which is the one failure mode an import must not
+    have (#401 review).
     """
+    if path.suffix != CLAIM_FILE_GLOB.lstrip("*"):
+        raise ValueError(
+            f"{path.name}: a claim file must be named {CLAIM_FILE_GLOB} — "
+            f"a {path.suffix or 'suffixless'} file is written but never discovered"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     file_source = _without_column(envelope.source.to_dict())
+    name = path.name
     written = 0
     try:
         with tmp.open("w", encoding="utf-8", buffering=_WRITE_BUFFER_BYTES) as f:
@@ -148,7 +168,7 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
             f.write("\n")
             for entry in entries:
                 written += 1
-                f.write(_encode(_claim_line(file_source, entry, f"{path.name} claim {written}")))
+                f.write(_encode(_claim_line(file_source, entry, name, written)))
                 f.write("\n")
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -180,12 +200,13 @@ def iter_claims(path: Path) -> Iterator[ClaimEntry]:
     reason: an import that silently dropped claims would understate what a source
     said, which is the one thing it must not do.
     """
+    name = path.name
     with path.open(encoding="utf-8") as f:
         file_source = _without_column(_read_envelope(path, f).source.to_dict())
         for n, line in enumerate(f, start=2):
             if line.isspace():
                 continue
-            yield _entry_from_line(path, n, line, file_source)
+            yield _entry_from_line(name, n, line, file_source)
 
 
 def discover(root: Path) -> list[Path]:
@@ -280,7 +301,7 @@ def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
     return f"{days} day{'s' if days != 1 else ''} ago"
 
 
-def _claim_line(file_source: dict, entry: ClaimEntry, where: str) -> dict:
+def _claim_line(file_source: dict, entry: ClaimEntry, name: str, n: int) -> dict:
     """Serialize one entry, factoring its claim's source into the file's.
 
     ``file_source`` is the envelope's source without its column, serialized once by
@@ -294,54 +315,107 @@ def _claim_line(file_source: dict, entry: ClaimEntry, where: str) -> dict:
     envelope names does not belong in this file, and saying so here is cheaper than
     a reader discovering that every claim it rehydrated was attributed to the wrong
     table.
+
+    ``name`` and ``n`` locate the entry for a refusal and are formatted into one only
+    when there is one (:func:`_where`) — this runs a few million times per source, and
+    a label built per claim is a string nothing reads.
     """
-    _check_entry(where, entry.field, entry.join_key, entry.key_value, entry.claim)
+    _check_entry(name, _WRITING, n, entry.field, entry.join_key, entry.key_value, entry.claim)
     claim = dict(entry.claim)
     source = claim.pop("source", None)
     if not isinstance(source, dict):
-        raise ValueError(f"{where}: carries no source — a claim file holds claims from an external source")
-    if _without_column(source) != file_source:
-        raise ValueError(f"{where}: comes from {_without_column(source)}, but this file's envelope names {file_source}")
+        raise ValueError(
+            f"{_where(name, _WRITING, n)}: carries no source — a claim file holds claims from an external source"
+        )
+    if (bare := _without_column(source)) != file_source:
+        raise ValueError(
+            f"{_where(name, _WRITING, n)}: comes from {bare}, but this file's envelope names {file_source}"
+        )
     if (column := source.get("column")) is not None:
         claim["column"] = column
     return {"field": entry.field, "join_key": entry.join_key, "key_value": entry.key_value, "claim": claim}
 
 
-def _entry_from_line(path: Path, n: int, line: str, file_source: dict) -> ClaimEntry:
-    """Parse one claim line, rehydrating its source from the file's.
+def _entry_from_line(name: str, n: int, line: str, file_source: dict) -> ClaimEntry:
+    """Parse one claim line, rebuilding its claim through ``make_claim``.
 
     ``file_source`` is the envelope's source without its column, serialized once by
     :func:`iter_claims`. The claim comes back whole — that source, with this line's
     ``column`` — so a consumer reads the same claim the importer built and never has
-    to consult the envelope itself. Each claim gets its own copy of the source rather
-    than a shared one, so a consumer that edits one claim cannot reach the others.
+    to consult the envelope itself.
+
+    **The claim is reconstructed, not trusted.** A claim file is bytes on disk written
+    by an out-of-band process, and the record that comes off it goes on to
+    ``evaluate_claims``; passing the parsed dict straight through would make this the
+    one producer in the codebase that bypasses ``make_claim``, against CLAUDE.md's
+    "one claim record, any source". A claim with no ``tier`` would then reach
+    resolution and take the tier-0 default that #150/#151 exist to prevent — and one
+    with a *fabricated* tier would outrank every rule. Rebuilding costs a
+    ``make_claim`` per claim on read and buys every invariant it enforces: exactly one
+    of value/status/state, a tier iff the claim competes, known status/state/
+    source_type/join_key, a producer handle (#401 review).
+
+    A line that carries its own ``source`` is refused rather than silently
+    overwritten. The envelope names the file's source; a line may add a ``column`` to
+    it and nothing else. The write side already refuses a claim whose source is not
+    the envelope's, and a reader that quietly re-attributed one would undo that check
+    for exactly the files it cannot vouch for.
+
+    ``name`` is the file's name, hoisted out of the read loop by :func:`iter_claims`,
+    and is formatted with ``n`` into a label only on a refusal — see
+    :func:`_claim_line` for why.
     """
     try:
         entry = json.loads(line)
         field, join_key, key_value, claim = (entry["field"], entry["join_key"], entry["key_value"], entry["claim"])
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ValueError(f"{path.name} line {n}: not a claim: {exc!r}") from None
-    _check_entry(f"{path.name} line {n}", field, join_key, key_value, claim)
-    column = claim.pop("column", None)
-    claim["source"] = dict(file_source) if column is None else {**file_source, "column": column}
-    return ClaimEntry(field=field, join_key=join_key, key_value=key_value, claim=claim)
+        raise ValueError(f"{_where(name, _READING, n)}: not a claim: {exc!r}") from None
+    _check_entry(name, _READING, n, field, join_key, key_value, claim)
+    if "source" in claim:
+        raise ValueError(
+            f"{_where(name, _READING, n)}: claim carries its own source {claim['source']!r} — "
+            "the envelope names this file's source, and a line may only add a column to it"
+        )
+    kwargs = dict(claim)
+    source = ClaimSource(**file_source, column=kwargs.pop("column", None))
+    # `claim_state` is the key make_claim writes; `state` is the argument it takes.
+    state = kwargs.pop("claim_state", None)
+    try:
+        rebuilt = make_claim(**kwargs, state=state, source=source)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{_where(name, _READING, n)}: not a valid claim: {exc}") from None
+    return ClaimEntry(field=field, join_key=join_key, key_value=key_value, claim=rebuilt)
 
 
-def _check_entry(where: str, field: Any, join_key: Any, key_value: Any, claim: Any) -> None:
+def _where(name: str, unit: str, n: int) -> str:
+    """Name the claim being refused: ``…ndjson claim 3`` writing, ``…ndjson line 4`` reading.
+
+    Called only from a raise. The two sides count differently on purpose — a writer
+    has no line numbers yet and a reader's ``n`` includes the envelope — so the unit
+    travels with the count rather than being inferred from it.
+    """
+    return f"{name} {unit} {n}"
+
+
+def _check_entry(name: str, unit: str, n: int, field: Any, join_key: Any, key_value: Any, claim: Any) -> None:
     """Check the four members of a claim line, in whichever direction it is crossing.
 
     One definition of the line's shape for the writer and the reader both, so the two
-    cannot drift into accepting different files; ``where`` is what each side calls the
-    line it is refusing (``…ndjson claim 3`` writing, ``…ndjson line 4`` reading).
+    cannot drift into accepting different files. ``name``/``unit``/``n`` say what to
+    call the line if it is refused, and become a label only then.
     """
     if field not in _FIELDS:
-        raise ValueError(f"{where}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})")
+        raise ValueError(
+            f"{_where(name, unit, n)}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})"
+        )
     if join_key not in JOIN_KEYS:
-        raise ValueError(f"{where}: unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})")
+        raise ValueError(
+            f"{_where(name, unit, n)}: unknown join_key {join_key!r} (expected one of {sorted(JOIN_KEYS)})"
+        )
     if not isinstance(key_value, str) or not key_value:
-        raise ValueError(f"{where}: no {join_key} value to key the claim by")
+        raise ValueError(f"{_where(name, unit, n)}: no {join_key} value to key the claim by")
     if not isinstance(claim, dict):
-        raise ValueError(f"{where}: claim is {type(claim).__name__}, not an object")
+        raise ValueError(f"{_where(name, unit, n)}: claim is {type(claim).__name__}, not an object")
 
 
 def _without_column(source: dict) -> dict:
@@ -364,50 +438,17 @@ def _read_envelope(path: Path, f: TextIO) -> ClaimFileEnvelope:
 
 
 def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
-    """Parse and validate line 1 as an envelope, or raise naming the file.
+    """Parse line 1 as an envelope, or raise naming the file.
 
-    Every member is checked here rather than where a consumer reads it: an envelope
-    is read once per file and is what the refusal decision rests on, so an
-    unparseable ``fetched_at`` or a source with no name must fail as a malformed
-    claim file, not as a report that cannot render.
+    This owns only the file layout — unwrap the JSON, find the ``claim_file`` key —
+    and hands the block to :meth:`ClaimFileEnvelope.from_dict`, which owns what an
+    envelope's members must be. The same rules then run when an importer *builds* an
+    envelope (``ClaimFileEnvelope.__post_init__``), so a writer cannot produce a file
+    this reader will refuse (#401 review).
     """
+    where = f"{path.name} line 1"
     try:
         block = json.loads(line)[ENVELOPE_KEY]
-        source, fetched_at = block["source"], block["fetched_at"]
-        name, version = source["name"], block["source_version"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ValueError(f"{path.name} line 1: not a {ENVELOPE_KEY} envelope: {exc!r}") from None
-    try:
-        fetched = datetime.fromisoformat(fetched_at)
-    except (TypeError, ValueError):
-        raise ValueError(
-            f"{path.name} line 1: envelope fetched_at {fetched_at!r} is not an ISO 8601 datetime"
-        ) from None
-    return ClaimFileEnvelope(
-        source=ClaimSource(
-            name=_required_str(path, "source name", name),
-            url=_optional_str(path, "source url", source.get("url")),
-            table=_optional_str(path, "source table", source.get("table")),
-            column=_optional_str(path, "source column", source.get("column")),
-        ),
-        fetched_at=fetched,
-        source_version=_required_str(path, "source_version", version),
-        corpus_catalog=_optional_str(path, "corpus_catalog", block.get("corpus_catalog")),
-    )
-
-
-def _required_str(path: Path, label: str, value: Any) -> str:
-    """Return an envelope member that must be a non-empty string, or raise.
-
-    An explicit ``null`` is rejected here rather than in the key check above: a
-    ``"name": null`` is a present key, so it survives the ``KeyError`` guard, and a
-    source with no name identifies nothing.
-    """
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{path.name} line 1: envelope {label} is {value!r}, not a non-empty string")
-    return value
-
-
-def _optional_str(path: Path, label: str, value: Any) -> str | None:
-    """Return an envelope member a source may not have, validated when it has one."""
-    return None if value is None else _required_str(path, label, value)
+        raise ValueError(f"{where}: not a {ENVELOPE_KEY} envelope: {exc!r}") from None
+    return ClaimFileEnvelope.from_dict(block, where)

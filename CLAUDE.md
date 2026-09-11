@@ -132,7 +132,8 @@ evidence}` entry — plus the controlled vocabulary:
   drift from it), and AnVIL deletes a superseded catalog rather than keeping it
   to be matched against. The two places that can act on the question own it
   instead — the importer compares its file's `corpus_catalog` against the
-  configured `CATALOG` when deciding to re-fetch, and the run's output records
+  catalog the operator configured (`CATALOG` in the Makefile) when deciding to
+  re-fetch, and the run's output records
   which catalog it enhances, so an enhancement offered to a catalog that has
   moved on is refused at that boundary.
 

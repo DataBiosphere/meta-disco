@@ -234,9 +234,10 @@ class TestMalformedFiles:
     @pytest.mark.parametrize(
         "envelope,expected",
         [
-            ({"source": {"url": "u"}, "fetched_at": "2026-09-01", "source_version": "1"}, "not a claim_file envelope"),
-            ({"source": {"name": "HPRC"}, "source_version": "1"}, "not a claim_file envelope"),
+            ({"source": {"url": "u"}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
+            ({"source": {"name": "HPRC"}, "source_version": "1"}, "fetched_at"),
             ({"source": {"name": "HPRC"}, "fetched_at": "yesterday", "source_version": "1"}, "not an ISO 8601"),
+            ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01"}, "source_version"),
             ({"source": {"name": ""}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
             ({"source": {"name": None}, "fetched_at": "2026-09-01", "source_version": "1"}, "source name"),
             ({"source": {"name": "HPRC"}, "fetched_at": "2026-09-01", "source_version": ""}, "source_version"),
@@ -271,6 +272,113 @@ class TestMalformedFiles:
             write_claim_file(
                 tmp_path / "c.ndjson", _envelope(), [ClaimEntry(entry.field, "sample_id", "x", entry.claim)]
             )
+
+
+class TestAWriterCannotProduceWhatTheReaderRefuses:
+    """The two sides of the contract agree, so a fault surfaces at the importer (#401 review).
+
+    The write path used to check every claim and never the envelope, so a networked
+    import could spend its run writing millions of claims behind a header its own
+    reader would reject — discovered at the next classification run, far from the
+    cause.
+    """
+
+    @pytest.mark.parametrize("version", ["", None])
+    def test_an_envelope_with_no_usable_version_is_refused_when_it_is_built(self, version):
+        """`None` was the trap: `to_dict` drops nulls, so the key vanished entirely."""
+        with pytest.raises(ValueError, match="source_version"):
+            _envelope(source_version=version)
+
+    def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
+        with pytest.raises(ValueError, match="source name"):
+            _envelope(source=ClaimSource(name=""))
+
+    def test_an_envelope_with_a_non_datetime_fetch_time_is_refused_when_it_is_built(self):
+        with pytest.raises(ValueError, match="fetched_at"):
+            _envelope(fetched_at="2026-09-01")
+
+    def test_a_file_the_run_would_never_find_is_refused_at_write(self, tmp_path):
+        """`discover` matches *.ndjson, so any other suffix is a silent no-op."""
+        with pytest.raises(ValueError, match="must be named"):
+            write_claim_file(tmp_path / "hprc" / "catalog.json", _envelope(), [_entry()])
+
+    def test_a_utc_z_suffix_reads_back_on_every_supported_interpreter(self, tmp_path):
+        """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
+
+        Our writer emits `+00:00`, but the importers in #369/#394 read web APIs that
+        emit `Z` almost universally — a claim file must not parse on a dev box and
+        fail on CI.
+        """
+        path = tmp_path / "c.ndjson"
+        block = {"source": {"name": "HPRC"}, "fetched_at": "2026-09-01T09:14:03Z", "source_version": "1"}
+        path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
+
+        assert read_envelope(path).fetched_at == datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
+
+
+class TestAClaimIsRebuiltNotTrusted:
+    """A claim read off disk goes through `make_claim`, like every other claim (#401 review).
+
+    A claim file is bytes written by an out-of-band process, and what comes off it
+    reaches `evaluate_claims`. Passing the parsed dict through would make this the one
+    producer that bypasses the single construction site.
+    """
+
+    def _write_raw(self, tmp_path, claim: dict) -> Path:
+        """A claim file whose one line carries `claim` verbatim, bypassing the writer."""
+        path = tmp_path / "c.ndjson"
+        line = {"field": "platform", "join_key": JOIN_KEY_FILE_NAME, "key_value": "HG002.bam", "claim": claim}
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: _envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
+        )
+        return path
+
+    def test_a_claim_with_no_tier_is_refused(self, tmp_path):
+        """It would otherwise reach resolution and take the tier-0 default of #150/#151."""
+        path = self._write_raw(tmp_path, {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO"})
+
+        with pytest.raises(ValueError, match="must carry a tier"):
+            list(iter_claims(path))
+
+    def test_a_claim_with_an_unknown_source_type_is_refused(self, tmp_path):
+        path = self._write_raw(tmp_path, {"reason": "r", "source_type": "hearsay", "value": "PACBIO", "tier": 1})
+
+        with pytest.raises(ValueError, match="unknown source_type"):
+            list(iter_claims(path))
+
+    def test_a_claim_declaring_both_a_value_and_a_status_is_refused(self, tmp_path):
+        claim = {
+            "reason": "r",
+            "source_type": SOURCE_REPOSITORY_METADATA,
+            "value": "PACBIO",
+            "status": "not_applicable",
+            "tier": 1,
+        }
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="exactly one of value/status/state"):
+            list(iter_claims(path))
+
+    def test_a_line_carrying_its_own_source_is_refused_not_re_attributed(self, tmp_path):
+        """The writer refuses a foreign source; a reader that overwrote one would undo that."""
+        claim = {
+            "reason": "r",
+            "source_type": SOURCE_REPOSITORY_METADATA,
+            "value": "PACBIO",
+            "tier": 1,
+            "source": {"name": "SOMEONE ELSE", "table": "other"},
+        }
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="carries its own source"):
+            list(iter_claims(path))
+
+    def test_an_unknown_key_on_a_claim_is_refused(self, tmp_path):
+        claim = {"reason": "r", "source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "tier": 1, "rank": 9}
+        path = self._write_raw(tmp_path, claim)
+
+        with pytest.raises(ValueError, match="not a valid claim"):
+            list(iter_claims(path))
 
 
 class TestDiscovery:

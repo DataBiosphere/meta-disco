@@ -1,6 +1,6 @@
 """Data models for file classification."""
 
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
 
 from .file_name import FileName
@@ -308,6 +308,39 @@ def field_label(record: dict, field_name: str) -> str | None:
     return _entry_value(entry) if status == CLASSIFIED else status
 
 
+def required_str(value: object, label: str, where: str) -> str:
+    """Return ``value`` as a non-empty string, or raise naming ``label`` and ``where``.
+
+    One definition of "this member is a usable string" for the claim-file records,
+    applied on both sides of the file: ``ClaimFileEnvelope.__post_init__`` uses it on
+    an envelope being built and the ``from_dict`` pair on one being read, so a writer
+    cannot produce a file its own reader will refuse (#401 review).
+
+    A required member is one ``to_dict`` would always have written, so its absence is
+    a malformed record. ``None`` is rejected here rather than by a key check: an
+    explicit ``"name": null`` is a present key, and ``to_dict`` omits null members
+    entirely, so both arrive as an absent value that a key check would read
+    differently from each other. The empty string is refused too — a version or a
+    name that identifies nothing.
+
+    ``where`` locates the fault — a file and line for a reader, the constructing call
+    for a writer — and prefixes every message.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{where}: {label} is {value!r}, not a non-empty string")
+    return value
+
+
+def optional_str(value: object, label: str, where: str) -> str | None:
+    """Return a member a record may not have: None when absent, checked when present.
+
+    None is what :meth:`ClaimSource.to_dict` meant by omitting the key, so it passes.
+    Anything else must satisfy :func:`required_str` — a present member that is not a
+    non-empty string is a mis-serialized record, not one to interpret.
+    """
+    return None if value is None else required_str(value, label, where)
+
+
 @dataclass(frozen=True)
 class ClaimSource:
     """Identity of an external source that produced a claim (issue #392).
@@ -341,6 +374,33 @@ class ClaimSource:
         """
         return {f.name: v for f in fields(self) if (v := getattr(self, f.name)) is not None}
 
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "ClaimSource":
+        """Rebuild a source from what :meth:`to_dict` wrote, validating each member.
+
+        The inverse of ``to_dict`` and derived from ``fields()`` for the same
+        reason: a member added to this dataclass is otherwise written by ``to_dict``
+        and silently dropped by a reader that names the members by hand. ``where``
+        locates the fault for a caller reading a file — ``claim_files`` passes the
+        file and line.
+
+        An absent optional member reads back as None, which is what ``to_dict``
+        meant by omitting it. A *present* member that is not a non-empty string
+        raises: an explicit ``"name": null`` survives a key check but identifies
+        nothing, and a source whose table is ``0`` is a mis-serialized record rather
+        than one to interpret.
+        """
+        if not isinstance(block, dict):
+            raise ValueError(f"{where}: source is {type(block).__name__}, not an object")
+        return cls(
+            **{
+                f.name: (required_str if f.default is MISSING else optional_str)(
+                    block.get(f.name), f"source {f.name}", where
+                )
+                for f in fields(cls)
+            }
+        )
+
 
 @dataclass(frozen=True)
 class ClaimFileEnvelope:
@@ -368,12 +428,71 @@ class ClaimFileEnvelope:
 
     Frozen for the reason ``ClaimSource`` is: provenance is a fact about where the
     claims came from, not state to edit after they are read.
+
+    Validated on construction (:meth:`__post_init__`) against the same rules
+    :meth:`from_dict` applies on the way back in. The writer used to accept any
+    envelope while the reader accepted very little, so an importer could spend a
+    networked run writing millions of claims behind a header its own reader would
+    refuse — and find out at the next classification run, days later and far from
+    the cause. A ``source_version`` of ``None`` was the trap: it is not a string, and
+    ``to_dict`` drops null members, so the key vanished and the file read back as
+    "not an envelope" rather than naming the field (#401 review).
     """
 
     source: ClaimSource
     fetched_at: datetime
     source_version: str
     corpus_catalog: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse an envelope that could not be read back, at the point it is built.
+
+        Type hints do not run, so ``source_version=None`` reaches here intact. Once
+        per claim file, so the checks are free relative to the write they precede.
+        """
+        where = "claim file envelope"
+        if not isinstance(self.source, ClaimSource):
+            raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimSource")
+        required_str(self.source.name, "source name", where)
+        if not isinstance(self.fetched_at, datetime):
+            raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
+        required_str(self.source_version, "source_version", where)
+        optional_str(self.corpus_catalog, "corpus_catalog", where)
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "ClaimFileEnvelope":
+        """Rebuild an envelope from what :meth:`to_dict` wrote, validating each member.
+
+        The inverse of ``to_dict``, and the only place a claim file's first line
+        becomes provenance. Every member is checked here rather than where a consumer
+        reads it: an envelope is read once per file and is what the report rests on,
+        so an unparseable ``fetched_at`` or a source with no name must fail as a
+        malformed claim file, not later as a report that cannot render.
+
+        A trailing ``Z`` is normalized to ``+00:00`` before parsing.
+        ``datetime.fromisoformat`` rejects ``Z`` on Python 3.10, which is this
+        project's floor and what CI runs, while accepting it from 3.11 — and the
+        importers coming in #369/#394 read web APIs that emit ``Z`` almost
+        universally. Without this, a claim file written on a 3.11 machine parses
+        there and fails on CI, which is a property of the interpreter rather than of
+        the file (#401 review).
+        """
+        if not isinstance(block, dict):
+            raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
+        fetched_at = block.get("fetched_at")
+        if not isinstance(fetched_at, str):
+            raise ValueError(f"{where}: envelope fetched_at is {fetched_at!r}, not an ISO 8601 string")
+        normalized = fetched_at.removesuffix("Z") + "+00:00" if fetched_at.endswith("Z") else fetched_at
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            raise ValueError(f"{where}: envelope fetched_at {fetched_at!r} is not an ISO 8601 datetime") from None
+        return cls(
+            source=ClaimSource.from_dict(block.get("source"), where),
+            fetched_at=parsed,
+            source_version=required_str(block.get("source_version"), "envelope source_version", where),
+            corpus_catalog=optional_str(block.get("corpus_catalog"), "envelope corpus_catalog", where),
+        )
 
     def to_dict(self) -> dict:
         """Serialize for the envelope line, dropping an absent ``corpus_catalog``.

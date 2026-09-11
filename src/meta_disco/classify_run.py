@@ -123,22 +123,6 @@ def _report_exclusions(output_dir: Path) -> int | None:
     return index.count
 
 
-def _report_claim_files(claims_root: Path) -> None:
-    """Say which claim files this run consumed, and how old they were.
-
-    The run's half of the claim file contract (#401). It reports and does not judge:
-    a run cannot tell offline whether a claim file has outlived what it describes,
-    and the two places that can — the importer's re-fetch decision, and the catalog
-    an enhancement is offered back to — own that instead. See
-    :func:`claim_files.report_claim_files`.
-
-    The claims themselves go no further than this report. Matching them to our files
-    is #400b; until then a claim file changes what a run *says*, never what it
-    writes, so a run with none present is identical to a pre-import run.
-    """
-    report_claim_files(claims_root)
-
-
 def run_all_classifications(
     metadata: Path,
     output_dir_base: Path,
@@ -156,10 +140,12 @@ def run_all_classifications(
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded.
 
-    Before any of that it reports the claim files under ``claims_root`` — see
-    :func:`_report_claim_files`. Reporting first, ahead of the run directory, is so
-    that what the run consumed is the first thing in its log rather than buried
-    behind the phases.
+    Before any of that it reports the claim files under ``claims_root``
+    (:func:`claim_files.report_claim_files`), which says what each one is and how old
+    it is and refuses none of them. Reporting first, ahead of the run directory, puts
+    what the run consumed at the top of its log rather than behind the phases. The
+    claims go no further than that report: matching them to our files is #400b, so
+    until then a claim file changes what a run *says*, never what it writes.
 
     Every producer writes ``excluded_files.json`` into the run directory as it loads,
     naming each input record with no usable ``file_md5sum`` (#376) — the file is where
@@ -167,7 +153,7 @@ def run_all_classifications(
     function only reports the count after Phase 1, because each producer's own stdout is
     captured.
     """
-    _report_claim_files(claims_root)
+    report_claim_files(claims_root)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = output_dir_base / timestamp
