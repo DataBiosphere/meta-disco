@@ -263,11 +263,19 @@ class TestTheEnvelopeIsFactoredOut:
         """
         path = tmp_path / "claims.ndjson"
         seen = []
+        # Both writers have opened their temporary and written a claim into it by the
+        # time they reach this, and neither proceeds until the other arrives — so the
+        # sample below cannot miss the overlap. Without it the main-thread writer can
+        # finish before the other starts, and the test passes or fails on scheduling
+        # (#401 review). The timeout turns a writer that raises before the barrier
+        # into a failure here rather than a hang.
+        both_writing = threading.Barrier(2, timeout=10)
 
         def entries(tag):
-            # Sampled from inside the stream, so both writers are mid-write at once.
             for n in range(3):
-                seen.append(sorted(p.name for p in tmp_path.iterdir()))
+                if n == 1:
+                    both_writing.wait()
+                    seen.append(sorted(p.name for p in tmp_path.iterdir()))
                 yield _entry(name=f"{tag}{n}.bam")
 
         first = threading.Thread(target=write_claim_file, args=(path, claim_file_envelope(), entries("a")))
@@ -275,8 +283,7 @@ class TestTheEnvelopeIsFactoredOut:
         write_claim_file(path, claim_file_envelope(), entries("b"))
         first.join()
 
-        both = max(seen, key=len)
-        assert sum(name.endswith(".tmp") for name in both) == 2, both
+        assert [sum(name.endswith(".tmp") for name in sample) for sample in seen] == [2, 2], seen
         assert len(list(iter_claims(path))) == 3
 
     def test_a_rename_that_cannot_happen_leaves_no_temporary_behind(self, tmp_path):
