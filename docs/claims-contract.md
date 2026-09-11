@@ -36,7 +36,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 2.4 Evidence records what the source said, **including when we believe the source is wrong.**
     Suppressing at import hides the disagreement from review and smuggles a judgment into the importer.
 
-2.5 Evidence is fetched out of band, with network. Classification reads it offline and deterministically.
+2.5 Evidence **imported from a source** is fetched out of band, with network, and read offline and deterministically.
+    Inference fetches its own headers and content during the run, through the evidence cache, and always has.
 
 2.6 A table name and a column name are evidence, the same as a cell value.
 
@@ -48,12 +49,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.3 A claim that declares a value declares a term in the controlled vocabulary, or it is not a claim.
 
-3.4 Rules match on `(slot, raw_value)`. They may condition on provenance; normally they do not.
-    This is what keeps one rule set working across every source.
+3.4 A rule that maps imported evidence matches on `(slot, raw_value)` and may condition on provenance;
+    normally it does not. This is what keeps one rule set working across every source.
+    Inference rules match their own signals — extension, filename, header, content — as they do today.
 
 3.5 Nothing fires by similarity. Matching is exact, over spellings a rule declares explicitly.
 
-3.6 `not_applicable` belongs to the rule engine. No source may assert it.
+3.6 `not_applicable` is a rule's to declare. No source asserts it in evidence.
 
 3.7 A raw value no rule matched produces no claim and enters the review queue.
 
@@ -71,6 +73,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.3 Resolution has two stages: **within** a source by tier, then **across** sources by agreement.
 
 4.4 Sources that agree classify the slot, and every agreeing source is recorded.
+    A slot on which only one input speaks is classified from it: filling a gap is not a disagreement.
 
 4.5 Sources that disagree produce a **conflict**. No value is asserted. Both values and both rules are recorded.
 
@@ -80,11 +83,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 5.1 Every conflict is listable, with its competing values and the rule behind each.
 
-5.2 Every unmatched raw value is listable, with its source, table, column, and the number of files it affects.
+5.2 Every unmatched raw value is listable, with its source, dataset, table, column, and the number of files it affects.
+    Dataset is not optional: the same column name means different things in different datasets.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
-5.4 The mapping a person must review is the rule set, not the importer.
+5.4 The *value* mapping a person must review is the rule set.
+    The slot map is reviewable too — a wrong table-or-column-to-slot mapping misroutes evidence before any rule runs.
 
 ## 6. The pipeline
 
@@ -95,7 +100,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.3 Reconciliation writes its own output. It never rewrites inference output.
 
 6.4 Reconciliation is re-runnable against a stored inference run, without re-inferring.
-    Inference is the expensive half — network, headers, 708K files. Editing a rule must not cost a corpus run.
+    Inference is the expensive half — network, headers, 708K files. Editing a rule that maps imported
+    evidence must not cost a corpus run. Editing an inference rule changes the inference artifact, and does.
 
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
