@@ -515,12 +515,20 @@ class ClaimSource:
     ``ClaimSource`` class is the definition of what the four members mean and why
     the record is cut at this granularity; this is the Python side of it.
 
-    It answers *who said this*. A claim file's envelope answers a wider question —
-    which collection within the source, and which target the claims are about — and
-    uses :class:`ClaimFileSource` for it. The two are not duplicates: ``repository``
-    fills ``name`` and ``table`` fills ``table`` when a claim is rebuilt from a
-    file, while the envelope's ``dataset`` never reaches a claim, because a dataset
-    is the scope a claim is matched within rather than part of who produced it.
+    Four levels of *where*, narrowing: the source, the collection within it, the
+    table within that, and the column the raw value was read from. ``dataset`` is
+    what makes ``column`` legible — the same column name means different things in
+    different datasets, so a claim that named only its column could not be
+    interpreted without going back to the file it arrived in, which nothing that
+    reads output evidence can do (#401 review).
+
+    A claim file's envelope holds the first three for a whole file and uses
+    :class:`ClaimFileSource` for it, which has no ``column`` because one table's
+    claims are read from several. :meth:`ClaimFileSource.as_claim_source` copies the
+    three across and adds this claim's column. The one asymmetry is deliberate: the
+    envelope calls the top level ``repository`` because a claim file names a system,
+    while a claim calls it ``name`` because that is what it has always been and it is
+    what the output ``evidence`` array already carries.
 
     Frozen because a source's identity is a fact about where a claim came from,
     not state to edit after the claim is built; that also lets one instance be
@@ -529,6 +537,7 @@ class ClaimSource:
 
     name: str
     url: str | None = None
+    dataset: str | None = None
     table: str | None = None
     column: str | None = None
 
@@ -584,11 +593,16 @@ class ClaimFileSource:
     def as_claim_source(self, column: str | None) -> ClaimSource:
         """The per-claim :class:`ClaimSource` a claim in this file carries.
 
-        The envelope's three facts minus ``dataset``, plus the column this particular
-        claim was read from. Called once per claim by the reader, which is why the
-        envelope stores these once rather than repeating them a few million times.
+        A field copy — the envelope's four facts, plus the column this particular
+        claim was read from. ``dataset`` crosses with the rest: it is what makes the
+        column legible, since the same column name means different things in
+        different datasets, and a consumer reading the output ``evidence`` array
+        cannot go back to the claim file to find it.
+
+        Called once per claim by the reader, which is why the envelope stores these
+        once rather than repeating them a few million times.
         """
-        return ClaimSource(name=self.repository, url=self.url, table=self.table, column=column)
+        return ClaimSource(name=self.repository, url=self.url, dataset=self.dataset, table=self.table, column=column)
 
 
 @dataclass(frozen=True)

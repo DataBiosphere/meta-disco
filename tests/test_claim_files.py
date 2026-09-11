@@ -133,6 +133,24 @@ class TestRoundTrip:
 
         assert list(iter_claims(path)) == [entry]
 
+    def test_a_rehydrated_claim_can_interpret_its_own_column(self, tmp_path):
+        """The dataset crosses onto the claim, not only onto the envelope.
+
+        The same column name means different things in different datasets, so a claim
+        naming only its column could not be read without going back to the file it
+        arrived in — which nothing reading the output evidence array can do (#401).
+        """
+        path = tmp_path / "claims.ndjson"
+        write_claim_file(path, claim_file_envelope(), [_entry(column="platform")])
+
+        (source,) = [entry.claim["source"] for entry in iter_claims(path)]
+        assert (source["name"], source["dataset"], source["table"], source["column"]) == (
+            "HPRC Data Explorer",
+            "R2",
+            "sequencing-data",
+            "platform",
+        )
+
     def test_each_claim_gets_its_own_rehydrated_source(self, tmp_path):
         """The reader factors the source in per claim, so claims cannot alias one dict."""
         path = tmp_path / "claims.ndjson"

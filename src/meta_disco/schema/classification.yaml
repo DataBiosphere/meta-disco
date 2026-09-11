@@ -220,6 +220,16 @@ classes:
         description: >-
           URL the source was read from, if it has one. Null for a source with no
           published address, such as a curator table held in this repository.
+      dataset:
+        description: >-
+          The collection within the source that the claim came from — an AnVIL
+          dataset title, an HPRC release, an ENA study accession. Null for a
+          source with no such level.
+
+          Carried on the claim and not only on the claim file's envelope because
+          it is what makes `column` legible: the same column name means different
+          things in different datasets, and a consumer reading this evidence
+          cannot go back to the file the claim arrived in (#401).
       table:
         description: >-
           The table or file within the source that the claim came from, e.g. an
