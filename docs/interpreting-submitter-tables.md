@@ -12,7 +12,7 @@ costs to use — all measured, with the method at the end so it can be re-run.
 
 ---
 
-## 1. Three shapes, not one per submitter
+## 1. Three shapes, and two authors
 
 There are 107 submitter tables across 12 datasets. Every one of them is in one of three
 shapes, distinguished by how many of its columns hold a file pointer (a `drs://` URI, or
@@ -32,13 +32,29 @@ ways of connecting a row to a file.
 `hifi`, `hic` and `nanopore` each hold several DRS URIs. A reader that only checks for a
 scalar string finds nothing there and silently classifies the table as reaching no files.
 
-**Why the entity shape exists at all: Terra materializes workflow outputs as columns.**
-Run a WDL over a `participant` table and each output is written back as a column on that
-row. That produces exactly what we see — one row per entity (the workflow's input unit),
-one column per output, the column named for the output, and **no dimension cells at all**,
-because a workflow writes files rather than metadata. The 62-column
-`1KGP_CHM13v2_sample` is a chromosome-sharded variant caller, not a data-modelling
-decision. §6 verifies this against the workflow that produced `ANVIL_T2T`.
+**Why a table is in one shape or another: it depends on who wrote the columns.**
+
+- **Workflow-materialized.** A WDL ran over an entity table and Terra wrote each output
+  back as a column on that row. That produces one row per entity (the workflow's input
+  unit), one column per output, the column named for the output, and **no dimension cells
+  at all** — a workflow writes files, not metadata. `ANVIL_T2T/participant` and
+  `ANVIL_HPRC/assembly_sample` are this; the 62-column `1KGP_CHM13v2_sample` is a
+  chromosome-sharded variant caller rather than a data-modelling decision. §6 verifies it
+  against the workflow that produced `ANVIL_T2T`.
+- **Model-authored.** Someone designed a schema first and filled it. Entities are
+  normalized, relationships are foreign keys, files live in their own tables, and the
+  columns carry **metadata values**. `AnVIL_HPRC_R2`'s `hifi` / `ont` / `hic` are this.
+  So is a GREGoR-style table like `experiment_nanopore`, whose columns are
+  `analyte_id`, `sequencing_platform`, `chemistry_type`, `seq_library_prep_kit_method`,
+  `targeted_regions_method` — one file pointer in the whole row, and that one a targeting
+  BED rather than an output.
+
+**This is the distinction that predicts where dimension values are.** They are in
+model-authored tables and essentially nowhere else, which is why import's measured gain
+on `AnVIL_HPRC_R2` (+4,305 `data_modality`, +2,786 `data_type`) comes from `hifi`/`ont`/
+`hic`, and why the workflow-materialized `assembly_sample` added nothing at all (§4). A
+dataset made entirely of workflow outputs has no dimension metadata to import, however
+many columns it has.
 
 ## 2. The entity shape is a triple
 
