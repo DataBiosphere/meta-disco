@@ -235,7 +235,7 @@ class TestOneRecordAcrossProducers:
     )
     def test_a_source_member_of_the_wrong_type_is_refused_when_it_is_built(self, member, value, expected):
         # A dataclass annotation is not a runtime check, and this is the one
-        # claim-file record that reaches output evidence without passing an
+        # evidence-file record that reaches output evidence without passing an
         # envelope — `ClaimSource(name="HPRC", dataset=7)` would serialize a number
         # into the schema's `Evidence` and be caught at no boundary before it.
         with pytest.raises(ValueError, match=f"claim source: {expected}"):

@@ -75,13 +75,13 @@ def validator():
 
 @pytest.fixture(scope="session")
 def envelope_validator():
-    """A `closed=True` validator, for the claim-file envelope only (#401).
+    """A `closed=True` validator, for the evidence-file envelope only (#401).
 
     The gates above run `closed=False` because the golden output carries keys the
     schema does not model (the fastq scalar hints). The envelope has no such
-    tolerance to extend: it is a small, complete contract that `claim_files` writes
-    and reads whole, and an unmodeled key in it is a claim file the reader will
-    refuse. Validating it `closed=False` would let `ClaimFileSource` and
+    tolerance to extend: it is a small, complete contract that `source_evidence` writes
+    and reads whole, and an unmodeled key in it is an evidence file the reader will
+    refuse. Validating it `closed=False` would let `EvidenceFileSource` and
     `ClaimSource` differ on paper while accepting the same documents — which is the
     mismatch the separate class exists to prevent.
 
@@ -89,7 +89,7 @@ def envelope_validator():
     one checks slot ranges and patterns, and the jsonschema one is the only of the two
     that enforces a class's ``rules`` — measured, not assumed. The envelope has one
     rule (a ``file_name`` target needs ``target.dataset``), and under the pydantic
-    plugin alone the schema validated envelopes ``ClaimFileEnvelope.from_dict``
+    plugin alone the schema validated envelopes ``EvidenceFileEnvelope.from_dict``
     refuses, which is exactly the gap a producer would fall into (#401 review).
     """
     return Validator(
@@ -194,17 +194,17 @@ def test_gate_rejects_out_of_enum_value(validator):
     assert report.results, "an out-of-enum value should have failed validation"
 
 
-# --- ClaimFileEnvelope (#401) ------------------------------------------------
+# --- EvidenceFileEnvelope (#401, #421) ------------------------------------------
 #
 # The envelope is a standalone class: it describes an artefact exchanged *between*
 # runs and is referenced by no slot in ClassificationRecord, so the golden-output
 # gates above never reach it. Without these, a typo in its required members or
 # ranges would pass the schema gate even though this class defines the on-disk
-# claim-file contract (#401 review).
+# evidence-file contract (#401 review).
 
 
 def _envelope(**overrides) -> dict:
-    """A valid claim-file envelope as `ClaimFileEnvelope.to_dict` writes one.
+    """A valid evidence-file envelope as `EvidenceFileEnvelope.to_dict` writes one.
 
     The HPRC Data Explorer's R2 sequencing-data table, keyed by the filenames it
     publishes, matched against AnVIL's `file_name` within the dataset that makes that
@@ -217,6 +217,7 @@ def _envelope(**overrides) -> dict:
             "table": "sequencing-data",
             "url": "https://data.humanpangenome.org/",
         },
+        "source_type": "repository_metadata",
         "source_version": "2026-09-01",
         "source_key": "filename",
         "target": {"system": "anvil", "dataset": "AnVIL_HPRC_R2", "version": "anvil15"},
@@ -233,7 +234,7 @@ def _envelope(**overrides) -> dict:
 @pytest.mark.parametrize("member", ["name", "dataset", "table", "column"])
 def test_a_claim_source_member_must_be_one_non_empty_line(validator, member, bad):
     # `ClaimSource.__post_init__` refuses both, and this is the class that reaches
-    # persisted evidence rather than only a claim file — so the output gate has to
+    # persisted evidence rather than only an evidence file — so the output gate has to
     # refuse them too, or a record the constructor would not build validates (#401
     # review).
     evidence = {
@@ -246,131 +247,218 @@ def test_a_claim_source_member_must_be_one_non_empty_line(validator, member, bad
     assert report.results, f"a source {member} of {bad!r} should have failed"
 
 
-def test_claim_file_envelope_validates(envelope_validator):
-    report = envelope_validator.validate(_envelope(), target_class="ClaimFileEnvelope")
+# --- EvidenceRow (#421) -------------------------------------------------------
+#
+# The other line kind. A producer that validated only its envelope could publish a
+# file whose every row carried a mapped `value`, which is the arrangement #421
+# retired — so the row is modeled and gated too.
+
+
+def _row(**overrides) -> dict:
+    """A valid evidence row as `source_evidence` writes one."""
+    return {
+        "field": "platform",
+        "target_key_value": "HG002.hifi.bam",
+        "raw_value": "Revio",
+        "column": "instrumentModel",
+        **overrides,
+    }
+
+
+def test_evidence_row_validates(envelope_validator):
+    report = envelope_validator.validate(_row(), target_class="EvidenceRow")
+    assert not report.results, "a well-formed row should validate: " + str([r.message for r in report.results])
+
+
+def test_evidence_row_needs_no_column(envelope_validator):
+    # Absent for a source whose table has no column to name; the writer omits it.
+    row = _row()
+    del row["column"]
+    report = envelope_validator.validate(row, target_class="EvidenceRow")
+    assert not report.results, str([r.message for r in report.results])
+
+
+@pytest.mark.parametrize("raw", ["Revio", "GENOMIC", " Revio ", "", "Hi-C"])
+def test_evidence_row_takes_any_raw_value_the_source_wrote(envelope_validator, raw):
+    # No pattern and no enum on `raw_value`, deliberately: a source's spellings are
+    # its own, `Hi-C` is a vocabulary gap for #399 rather than a malformed file, and
+    # an empty cell is something the source published (contract 1.4, 3.7).
+    report = envelope_validator.validate(_row(raw_value=raw), target_class="EvidenceRow")
+    assert not report.results, f"a raw_value of {raw!r} should validate: " + str([r.message for r in report.results])
+
+
+@pytest.mark.parametrize("member", ["value", "status", "claim_state", "rule_id", "tier", "source", "join_key"])
+def test_evidence_row_refuses_a_member_that_declares_something(envelope_validator, member):
+    # The gate's half of #421: a row is an observation. `_entry_from_line` refuses
+    # each of these by name, and the schema has to agree or a producer validates a
+    # file the only reader will not read.
+    report = envelope_validator.validate(_row(**{member: "x"}), target_class="EvidenceRow")
+    assert report.results, f"a row carrying {member!r} should have failed"
+
+
+@pytest.mark.parametrize("missing", ["field", "target_key_value", "raw_value"])
+def test_evidence_row_requires_its_three_facts(envelope_validator, missing):
+    row = _row()
+    del row[missing]
+    report = envelope_validator.validate(row, target_class="EvidenceRow")
+    assert report.results, f"a row missing {missing!r} should have failed"
+
+
+@pytest.mark.parametrize("field", ["data_moddality", "platform ", "modality", ""])
+def test_evidence_row_refuses_a_field_that_is_not_a_dimension(envelope_validator, field):
+    report = envelope_validator.validate(_row(field=field), target_class="EvidenceRow")
+    assert report.results, f"a field of {field!r} should have failed"
+
+
+def test_evidence_row_refuses_an_empty_target_key_value(envelope_validator):
+    # A row with nothing to match on can attach to no file. Note the asymmetry with
+    # `raw_value`, where empty is legal: one is an identity, the other is a reading.
+    report = envelope_validator.validate(_row(target_key_value=""), target_class="EvidenceRow")
+    assert report.results, "a row with an empty target_key_value should have failed"
+
+
+def test_evidence_file_envelope_validates(envelope_validator):
+    report = envelope_validator.validate(_envelope(), target_class="EvidenceFileEnvelope")
     assert not report.results, "a well-formed envelope should validate: " + str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_accepts_a_target_with_no_scope(envelope_validator):
+def test_evidence_file_envelope_accepts_a_target_with_no_scope(envelope_validator):
     # Null for a source whose key is unique across the whole target (`file_id`,
     # `entry_id`, `drs_uri`), where a corpus-wide match is correct.
     report = envelope_validator.validate(
-        _envelope(target={"system": "anvil"}, target_key="file_id"), target_class="ClaimFileEnvelope"
+        _envelope(target={"system": "anvil"}, target_key="file_id"), target_class="EvidenceFileEnvelope"
     )
     assert not report.results, str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_refuses_an_unscoped_file_name_target(envelope_validator):
-    # The rule the reader has: `ClaimFileEnvelope.__post_init__` refuses the same
-    # envelope. Without it here a producer could validate a claim file against the
+def test_evidence_file_envelope_refuses_an_unscoped_file_name_target(envelope_validator):
+    # The rule the reader has: `EvidenceFileEnvelope.__post_init__` refuses the same
+    # envelope. Without it here a producer could validate an evidence file against the
     # schema, publish it, and have `read_envelope` refuse the file — the schema
     # saying yes to something the only reader says no to.
     bad = _envelope(target={"system": "anvil", "version": "anvil15"}, target_key="file_name")
-    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(bad, target_class="EvidenceFileEnvelope")
     assert report.results, "a file_name target with no dataset scope should have failed"
 
 
-def test_claim_file_envelope_refuses_a_target_key_outside_the_vocabulary(envelope_validator):
+def test_evidence_file_envelope_refuses_a_target_key_outside_the_vocabulary(envelope_validator):
     # `target_key` is a key of the *target*, drawn from join_key_enum. A source keyed
     # by an ENA run accession maps it to one of these rather than adding a term here.
-    report = envelope_validator.validate(_envelope(target_key="run_accession"), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(target_key="run_accession"), target_class="EvidenceFileEnvelope")
     assert report.results, "a target_key outside join_key_enum should have failed"
 
 
-def test_claim_file_envelope_accepts_a_derived_target_key(envelope_validator):
+def test_evidence_file_envelope_accepts_a_derived_target_key(envelope_validator):
     # archive_accession is read from a fastq's read headers rather than from the
     # input record, which is why the join runs after inference.
-    report = envelope_validator.validate(_envelope(target_key="archive_accession"), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(target_key="archive_accession"), target_class="EvidenceFileEnvelope")
     assert not report.results, str([r.message for r in report.results])
 
 
-@pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version", "source_key", "target", "target_key"])
-def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing):
-    # Each is required: a claim file that cannot say where it came from, when, or
+@pytest.mark.parametrize(
+    "missing", ["source", "source_type", "fetched_at", "source_version", "source_key", "target", "target_key"]
+)
+def test_evidence_file_envelope_requires_its_provenance(envelope_validator, missing):
+    # Each is required: an evidence file that cannot say where it came from, when, or
     # from what version cannot be reasoned about later.
     bad = _envelope()
     del bad[missing]
-    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(bad, target_class="EvidenceFileEnvelope")
     assert report.results, f"an envelope missing {missing!r} should have failed"
 
 
 @pytest.mark.parametrize("slot", ["source", "target"])
 @pytest.mark.parametrize("shape", ["a name", [{"repository": "HPRC"}]])
-def test_claim_file_envelope_refuses_a_nested_record_given_as_a_reference(envelope_validator, slot, shape):
-    # Line 1 carries the whole source and target objects, because a claim file is
+def test_evidence_file_envelope_refuses_a_nested_record_given_as_a_reference(envelope_validator, slot, shape):
+    # Line 1 carries the whole source and target objects, because an evidence file is
     # read by itself: there is no registry a name could be resolved against, and a
     # list would say the file has two of something it has one of.
-    report = envelope_validator.validate(_envelope(**{slot: shape}), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(**{slot: shape}), target_class="EvidenceFileEnvelope")
     assert report.results, f"a {slot} given as {shape!r} should have failed"
 
 
-def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
-    # The slot's pattern refuses what ClaimFileEnvelope.from_dict refuses rather
+@pytest.mark.parametrize(
+    "bad", ["filename_rule", "content_read", "derivation_inheritance", "wrangler_annotation", "hearsay"]
+)
+def test_evidence_file_envelope_refuses_a_source_type_an_importer_cannot_write(envelope_validator, bad):
+    # An evidence file is written by an importer reading something we do not own. The
+    # first three are real members of `source_type_enum` and are inference's own — a
+    # file declaring one would be naming our rule engine as its publisher.
+    # `wrangler_annotation` is a real *external* kind and still refused: a curator
+    # enters as rules, not as evidence (contract 1.6, 1.7), so the format must not be
+    # able to express it. `EvidenceFileEnvelope.__post_init__` refuses all five, and
+    # the gate has to agree or a producer validates here and is refused at read (#421).
+    report = envelope_validator.validate(_envelope(source_type=bad), target_class="EvidenceFileEnvelope")
+    assert report.results, f"a source_type of {bad!r} should have failed"
+
+
+def test_evidence_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
+    # The slot's pattern refuses what EvidenceFileEnvelope.from_dict refuses rather
     # than accepting free text the reader will not take.
-    report = envelope_validator.validate(_envelope(fetched_at="yesterday"), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(fetched_at="yesterday"), target_class="EvidenceFileEnvelope")
     assert report.results, "a non-datetime fetched_at should have failed"
 
 
 # The schema must refuse what the reader refuses. Each of these was a value that
-# passed LinkML validation and was then rejected by `ClaimFileEnvelope.from_dict`
-# or `__post_init__`, so a claim file could clear the schema gate and still be
+# passed LinkML validation and was then rejected by `EvidenceFileEnvelope.from_dict`
+# or `__post_init__`, so an evidence file could clear the schema gate and still be
 # reported unreadable (#401 review).
 
 
-def test_claim_file_envelope_refuses_an_empty_source_version(envelope_validator):
+def test_evidence_file_envelope_refuses_an_empty_source_version(envelope_validator):
     # `required` alone admits ""; `required_str` does not.
-    report = envelope_validator.validate(_envelope(source_version=""), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(source_version=""), target_class="EvidenceFileEnvelope")
     assert report.results, "an empty source_version should have failed"
 
 
-def test_claim_file_envelope_refuses_an_empty_target_version(envelope_validator):
+def test_evidence_file_envelope_refuses_an_empty_target_version(envelope_validator):
     # Absent is fine; present-and-empty is not, matching `optional_str`.
     report = envelope_validator.validate(
-        _envelope(target={"system": "anvil", "version": ""}), target_class="ClaimFileEnvelope"
+        _envelope(target={"system": "anvil", "version": ""}), target_class="EvidenceFileEnvelope"
     )
     assert report.results, "an empty target version should have failed"
 
 
-def test_claim_file_envelope_refuses_a_source_with_no_repository(envelope_validator):
+def test_evidence_file_envelope_refuses_a_source_with_no_repository(envelope_validator):
     bad = _envelope()
     bad["source"] = {"url": "https://data.humanpangenome.org/"}
-    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(bad, target_class="EvidenceFileEnvelope")
     assert report.results, "a source with no repository should have failed"
 
 
-def test_claim_file_envelope_refuses_a_source_naming_a_column(envelope_validator):
-    # `ClaimFileSource` has no `column`: a column belongs to a claim, and an
+def test_evidence_file_envelope_refuses_a_source_naming_a_column(envelope_validator):
+    # `EvidenceFileSource` has no `column`: a column belongs to a row, and an
     # envelope carrying one could disagree with every line in the file.
     bad = _envelope()
     bad["source"] = {**bad["source"], "column": "platform"}
-    report = envelope_validator.validate(bad, target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(bad, target_class="EvidenceFileEnvelope")
     assert report.results, "an envelope source naming a column should have failed"
 
 
 @pytest.mark.parametrize(
     "bad", ["2026-09-01Tfoo", "2026-13-45T99:99:99", "2026-09-01T09:14:03+0100", "20260901T091403"]
 )
-def test_claim_file_envelope_refuses_a_misshapen_fetched_at(envelope_validator, bad):
-    # `ClaimFileEnvelope.from_dict` refuses each of these, so the gate must too, or a
+def test_evidence_file_envelope_refuses_a_misshapen_fetched_at(envelope_validator, bad):
+    # `EvidenceFileEnvelope.from_dict` refuses each of these, so the gate must too, or a
     # producer clears the schema and publishes a file the only reader will not read.
     # The offset without a colon is the subtle one: `fromisoformat` wants `+HH:MM` on
     # 3.10, and a looser pattern let `+0100` through (#401 review).
-    report = envelope_validator.validate(_envelope(fetched_at=bad), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(fetched_at=bad), target_class="EvidenceFileEnvelope")
     assert report.results, f"a fetched_at of {bad!r} should have failed"
 
 
 @pytest.mark.parametrize("good", ["2026-09-01T09:14", "2026-09-01 09:14:03", "2026-09-01T09:14:03.123456"])
-def test_claim_file_envelope_accepts_the_shapes_the_reader_parses(envelope_validator, good):
+def test_evidence_file_envelope_accepts_the_shapes_the_reader_parses(envelope_validator, good):
     # Parity runs both ways: each of these is a timestamp `fromisoformat` takes, so a
     # pattern that refused one would make the gate stricter than the reader.
-    report = envelope_validator.validate(_envelope(fetched_at=good), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(fetched_at=good), target_class="EvidenceFileEnvelope")
     assert not report.results, str([r.message for r in report.results])
 
 
-def test_claim_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
+def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
     # A date with no time of day reads back as midnight — a precision the file never
     # stated. The slot is constrained by a pattern rather than `range: datetime`,
-    # which would accept one, so the schema and `ClaimFileEnvelope.from_dict` refuse
+    # which would accept one, so the schema and `EvidenceFileEnvelope.from_dict` refuse
     # the same strings.
-    report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="ClaimFileEnvelope")
+    report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="EvidenceFileEnvelope")
     assert report.results, "a date-only fetched_at should have failed"

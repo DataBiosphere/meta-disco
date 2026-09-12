@@ -211,7 +211,7 @@ classes:
       Declared as class-local ``attributes`` rather than global ``slots``:
       ``name``, ``url``, ``dataset``, ``table`` and ``column`` are words too
       generic to own in a shared namespace, and nothing outside this class needs
-      them. Claim files (#401) carry all of these but ``column`` once per file in
+      them. Evidence files (#401) carry all of these but ``column`` once per file in
       their envelope, and put ``column`` on each claim — one shape, factored, not
       a second one.
     attributes:
@@ -235,7 +235,7 @@ classes:
           dataset title, an HPRC release, an ENA study accession. Null for a
           source with no such level.
 
-          Carried on the claim and not only on the claim file's envelope because
+          Carried on the claim and not only on the evidence file's envelope because
           it is what makes `column` legible: the same column name means different
           things in different datasets, and a consumer reading this evidence
           cannot go back to the file the claim arrived in (#401).
@@ -251,10 +251,10 @@ classes:
           The column within that table the raw value was read from. Null when the
           source has no column structure.
 
-  ClaimFileSource:
+  EvidenceFileSource:
     description: >-
-      Where a whole claim file's claims were read from (issue #401) — the `source`
-      on a `ClaimFileEnvelope`.
+      Where a whole evidence file's claims were read from (issue #401) — the `source`
+      on a `EvidenceFileEnvelope`.
 
       Three levels, because a source is not flat: a repository publishes datasets,
       and a dataset has tables. The AnVIL manifests are `AnVIL / AnVIL_HPRC_R2 /
@@ -264,11 +264,11 @@ classes:
       it returns are the columns. A source with no middle level leaves `dataset`
       null, as `table` may be null.
 
-      Distinct from `ClaimSource` rather than reusing it. A claim's source carries
-      a `column`, which belongs to the claim because one table's claims are read
-      from several columns; a file's source carries a `dataset`, which belongs to
-      the file because every claim in it came from the same one. Modeling them as
-      one class would let an envelope name a column that could disagree with every
+      Distinct from `ClaimSource` rather than reusing it. A row's source carries a
+      `column`, which belongs to the row because one table's rows are read from
+      several columns; a file's source carries a `dataset`, which belongs to the
+      file because every row in it came from the same one. Modeling them as one
+      class would let an envelope name a column that could disagree with every
       line in the file.
     attributes:
       repository:
@@ -295,12 +295,12 @@ classes:
           Where the source was read from, if it has a public address. Null for a
           source with none, such as a curator table held in this repository.
 
-  ClaimTarget:
+  EvidenceTarget:
     description: >-
-      The system a claim file's claims are *about* (issue #401) — the `target` on
-      a `ClaimFileEnvelope`.
+      The system an evidence file's claims are *about* (issue #401) — the `target` on
+      a `EvidenceFileEnvelope`.
 
-      A claim file says "the row in this system whose this key is that value". The
+      An evidence file says "the row in this system whose this key is that value". The
       target names the system, so an importer is not implicitly bound to AnVIL and
       the file records which system it resolved its keys against.
 
@@ -341,19 +341,100 @@ classes:
           catalog rather than keeping it to be compared against.
 
 
-  ClaimFileEnvelope:
+  EvidenceRow:
     description: >-
-      What a claim file records once, for every claim in it (issue #401). An
+      One line of an evidence file after the envelope (#401, amended by #421): an
+      observation, not an answer. It reads "about the row in the envelope's
+      `target` whose `target_key` equals `target_key_value`, the source wrote
+      `raw_value` for `field`".
+
+      **It declares nothing.** No `value`, no `status`, no `claim_state`, no
+      `rule_id` and no `tier` — an importer maps structure and the rule engine maps
+      meaning (contract 1.1, 1.3). The claim that reconcile eventually makes from
+      this row is an `Evidence`, which is the class that carries those; this one is
+      what the source said before anyone interpreted it. Validated `closed`, like the
+      envelope, and `source_evidence._entry_from_line` refuses each retired member
+      by name, so a producer written against #401's format is told what to write
+      instead rather than having the member silently dropped.
+
+      **Where this gate is weaker than the reader**, which is the same divergence
+      `EvidenceFileEnvelope` documents and for the same cause. `column` is
+      optional, LinkML models an optional slot as nullable (`gen-json-schema`
+      emits `type: [string, null]`), so `{"column": null}` is valid here by
+      construction — and `_entry_from_line` refuses it through
+      `member_optional_str`, because the writer omits a member it does not have
+      and a written-out null is a line this writer could not have produced.
+
+      The reader is deliberately the stricter of the two, which is the safe
+      direction: a producer that validates here and writes explicit nulls is
+      refused at read, rather than publishing a file we would later read as
+      though the member were absent. Accepting it would be exactly the silent
+      normalization every other member refuses.
+      `test_a_line_whose_column_is_an_explicit_null_is_refused` pins it.
+
+      Deliberately outside the `ClassificationRecord` tree and referenced by no
+      slot in it, for the reason `EvidenceFileEnvelope` is: it describes an
+      artefact exchanged *between* runs. Modeled here so that a producer can
+      validate a whole evidence file — both its line kinds — against the schema
+      rather than against the reader alone.
+    slots:
+      - raw_value
+    slot_usage:
+      raw_value:
+        required: true
+        description: >-
+          What the source wrote, verbatim (contract 1.4) — not casefolded, trimmed,
+          corrected or suppressed. The same slot an `Evidence` claim carries beside
+          its mapped value; on a row it is the whole content, because a row maps
+          nothing.
+
+          No pattern and no enum, deliberately: a source's spellings are its own, a
+          value our vocabulary has no word for is the review queue's input rather
+          than an error (contract 3.7), and an empty cell is something the source
+          published, whose meaning is a rule's to decide.
+    attributes:
+      field:
+        required: true
+        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type)\\Z"
+        description: >-
+          The slot this row speaks to, spelled `field` on the wire and in the code
+          (contract 2.1). One of the five classification dimensions.
+
+          Pinned by pattern rather than by an enum because the dimension names are
+          slot *names* in this schema and not a vocabulary it declares;
+          `test_the_row_field_pattern_lists_every_dimension` holds it to
+          `CLASSIFICATION_FIELDS`.
+      target_key_value:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The value to match against the envelope's `target_key`, already in the
+          target's value space — the importer owns the mapping between its own key
+          and the target's. Empty is refused: a row with nothing to match on can
+          attach to no file.
+      column:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The column the raw value was read from. The one member of the source
+          that varies within a file — repository, dataset, table and url are on
+          the envelope — and absent for a source whose table has no columns to
+          name.
+
+  EvidenceFileEnvelope:
+    description: >-
+      What an evidence file records once, for every row in it (issue #401, amended
+      by #421). An
       importer runs out of band from classification — when a catalog refreshes,
-      with network — and writes a claim file of `Evidence` claims; a run reads it
+      with network — and writes an evidence file of `EvidenceRow`s; a run reads it
       and reports this provenance, so that what a run found, and how old it was,
       is on the record. Found and not consumed: until the join lands (#402) a run
-      reads each file's envelope and none of its claims.
+      reads each file's envelope and none of its rows.
 
       It names both sides of the join, symmetrically: `source` / `source_version`
       / `source_key`, and `target` / `target.version` / `target_key`. A line then
       reads "this row is about the row in `target` whose `target_key` equals its
-      `target_key_value`; here is the claim."
+      `target_key_value`; about that row's `field`, the source wrote its
+      `raw_value`."
 
       **Where this gate is weaker than the reader.** Measured over 70 malformed
       envelopes — every member empty, newlined, numeric, null or absent — the two
@@ -379,9 +460,9 @@ classes:
       never appears in a classified record. It is modeled here so that the file a
       claim arrives in is defined where the claim itself is, rather than in an
       importer. On disk the file is NDJSON — this envelope wrapped in a
-      `claim_file` key on line 1, one claim per line after it — because millions
+      `evidence_file` key on line 1, one row per line after it — because millions
       of claims must not be read through a whole-file parse (#374);
-      `src/meta_disco/claim_files.py` is the reader and writer.
+      `src/meta_disco/source_evidence.py` is the reader and writer.
 
       Declared as class-local `attributes` for the reason `ClaimSource` is: these
       are words too generic to own in a shared namespace.
@@ -391,7 +472,7 @@ classes:
           is non-unique on 69.4% of the AnVIL corpus's 708,088 rows and on 20% even
           scoped by dataset title, against 2 rows in 16,271 within
           `AnVIL_HPRC_R2` — so an unscoped filename claim attaches to rows a join
-          cannot choose between. `ClaimFileEnvelope.__post_init__` refuses the same
+          cannot choose between. `EvidenceFileEnvelope.__post_init__` refuses the same
           envelope; this rule is what stops a producer validating against the schema
           alone and publishing a file the reader will not read (#401 review).
         preconditions:
@@ -407,7 +488,7 @@ classes:
                     required: true
     attributes:
       source:
-        range: ClaimFileSource
+        range: EvidenceFileSource
         required: true
         inlined: true
         description: >-
@@ -415,13 +496,27 @@ classes:
           `inlined` for the reason `Evidence.source` is: line 1 carries the whole
           object, and without the declaration a class-valued slot is read as a
           reference rather than as the object the file holds.
+      source_type:
+        range: importer_source_type_enum
+        required: true
+        description: >-
+          Which kind of external source this file was read from. On the envelope
+          rather than on every row for the reason the key names are: one
+          repository, dataset and table is one kind of source, so it is checked
+          once per file rather than a few million times, and reconcile reads it
+          from here when it stamps the claim it makes from a row (#421).
+
+          Restricted to the kinds an importer may write. A file declaring
+          `filename_rule` would be naming our own rule engine as its publisher,
+          and one declaring `wrangler_annotation` would be a curator arriving as
+          evidence, which contract 1.6 routes to rules instead.
       source_version:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The version of the source the claims were taken from — a release tag, a
           publication date, a catalog generation. Required even where the source
-          publishes no version of its own: a claim file that cannot say what it
+          publishes no version of its own: an evidence file that cannot say what it
           was built from cannot be reasoned about later.
       source_key:
         required: true
@@ -433,7 +528,7 @@ classes:
           never reads this, but a person auditing the file needs to know which
           column of the source produced them.
       target:
-        range: ClaimTarget
+        range: EvidenceTarget
         required: true
         inlined: true
         description: >-
@@ -453,7 +548,7 @@ classes:
         pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?|Z)?\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
-          a date alone. A run reports the age of every claim file it finds from
+          a date alone. A run reports the age of every evidence file it finds from
           this, so that a person can see an artefact going stale before it is
           wrong — and two imports on the same day, which is where that report
           matters most, are only distinguishable if the time is recorded. A
@@ -463,7 +558,7 @@ classes:
           Constrained by pattern rather than `range: datetime`, which was measured
           and does not do the job: LinkML coerces the value before matching, so a
           bare `2026-09-01` is accepted under a datetime range — and the pattern is
-          then never applied. A claim file would pass this schema and be reported
+          then never applied. An evidence file would pass this schema and be reported
           unreadable by the reader, which is the mismatch this class's tests exist
           to prevent.
 
@@ -838,6 +933,34 @@ enums:
         description: >-
           A human curator's decision, recorded deliberately rather than inferred.
 
+  importer_source_type_enum:
+    description: >-
+      The kinds of source an importer may write, and so the kinds an evidence
+      file's envelope may declare (#421). A strict subset of `source_type_enum`,
+      excluding two groups for two reasons.
+
+      The inference kinds, because a file declaring `filename_rule` would be
+      naming our own rule engine as its publisher.
+
+      And `wrangler_annotation`, because a curator does not reach us as evidence.
+      The claims contract 1.6 puts it plainly — a curator "is unlike every other
+      in how it enters: as rules, not as evidence" — and 1.7 makes a decision
+      about a single file a rule whose selection matches one file. Accepting one
+      here would let the curator table (#397) be built as an importer against a
+      format that takes it and a resolution stage with nowhere to put it.
+
+      Listed rather than derived because LinkML has no enum-subset construct that
+      `gen-json-schema` honours; `test_the_importer_source_types_are_a_subset`
+      pins the two so a value can be added to one and not lost from the other.
+      The values carry no description of their own for the same reason the pin
+      exists: `source_type_enum` defines these terms, and a second copy of that
+      prose could drift from it without any test noticing.
+    permissible_values:
+      external_ground_truth:
+        description: As in `source_type_enum`.
+      repository_metadata:
+        description: As in `source_type_enum`.
+
   claim_state_enum:
     description: >-
       Why a claim that consulted a source produced no vocabulary value (issue
@@ -866,8 +989,8 @@ enums:
   join_key_enum:
     description: >-
       A key by which a claim is attached to a row in the target system (issue
-      #392, extended in #401). One vocabulary in two positions: a claim file's
-      envelope declares which of these it is keyed by (`ClaimFileEnvelope.
+      #392, extended in #401). One vocabulary in two positions: an evidence file's
+      envelope declares which of these it is keyed by (`EvidenceFileEnvelope.
       target_key`), and a claim records which one actually attached it
       (`Evidence.join_key`) once the join has run.
 
@@ -909,7 +1032,7 @@ enums:
           present on every record but non-unique on 69.4%. Collisions are wildly
           per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3%
           within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a
-          dataset scope, which is what `ClaimTarget.dataset` is for.
+          dataset scope, which is what `EvidenceTarget.dataset` is for.
       archive_accession:
         description: >-
           Sequence-archive run accession (ENA, SRA). Not a field of the input

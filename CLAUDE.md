@@ -97,8 +97,9 @@ evidence}` entry — plus the controlled vocabulary:
   `6.9`) rather than restating it — restating is the drift it exists to stop.
   **Read its "What is not true yet" section before building against it.** Much of it
   describes a target state: the slot map, the translation table, the read-sources and
-  reconcile stages, and the evidence file do not exist yet. Its Open section lists
-  what is still undecided. Epic #391 tracks the work; #414 comes first.
+  reconcile stages do not exist yet. The evidence file does (#401, amended by
+  #421) and nothing reads one. Its Open section lists what is still undecided.
+  Epic #391 tracks the work; #414 comes first.
 
 - **What the code does today, which the contract does not replace:**
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
@@ -112,15 +113,23 @@ evidence}` entry — plus the controlled vocabulary:
   - `CONTENT_TIER` (4, in `rule_engine.py`) is for claims derived from reading file
     bytes. Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded
     number (#226). Tiers 1–3 are the rule tiers declared in `unified_rules.yaml`.
-  - Claim files under `data/claims/<source>/` are NDJSON, written and read through
-    `write_claim_file` / `iter_claims` and never with a whole-file `json.load` — the
-    corpus is millions of records (#374). Line 1 is the envelope, naming both sides
-    of the join; `_check_entry` refuses a mapped value outside the dimension's
-    vocabulary on write and on read. `raw_value` is deliberately unchecked.
-  - `run_all_classifications` calls `report_claim_files` and never `iter_claims`, so
-    no claim reaches classification and a run with claim files present produces the
-    same output as one without. Currency is not decidable offline; recording which
-    catalog a run enhances is #404, and is not built.
+  - Evidence files under `data/source_evidence/<source>/` are NDJSON, written and
+    read through `source_evidence.write_evidence_file` / `iter_evidence` and never
+    with a whole-file `json.load` — the corpus is millions of records (#374). Line 1
+    is the envelope, naming both sides of the join and the source's kind
+    (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant for the file — the two
+    kinds an importer may write. `wrangler_annotation` is deliberately not among
+    them: a curator enters as rules, not as evidence, per contract 1.6/1.7).
+  - **A line is an observation, not a claim** (#421, contract 1.1): `EvidenceEntry`
+    is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
+    `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and
+    `raw_value` is transcribed verbatim and checked only for being a string. The
+    vocabulary check on a *mapped* value belongs to the translation table (#414),
+    which validates at load. Do not reintroduce one here.
+  - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
+    so no evidence reaches classification and a run with evidence files present
+    produces the same output as one without. Currency is not decidable offline;
+    recording which catalog a run enhances is #404, and is not built.
 
 ## Surprises
 

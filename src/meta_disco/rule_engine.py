@@ -259,7 +259,7 @@ def make_claim(
         # at CONTENT_TIER would have produced one conflict and eleven silent wrong
         # overrides. Inference and imports resolve separately and are compared. A
         # tier on such a claim is therefore a number an importer must invent and the
-        # policy discards — and a number a claim file could forge to outrank every
+        # policy discards — and a number an evidence file could forge to outrank every
         # rule. Rejected for the reason a state claim's is: it never competes (#401).
         if tier is not None:
             raise ValueError(
@@ -306,7 +306,7 @@ def make_claim(
     # membership, which implies a string; these are free text and a boolean, so a
     # claim built by hand could otherwise carry `value=7` or `match_exact="yes"` into
     # resolution and out into the schema's Evidence, which says strings and a boolean
-    # (#401 review). `add_claim` is the reachable way in: a claim file cannot carry
+    # (#401 review). `add_claim` is the reachable way in: an evidence file cannot carry
     # `match_exact` at all, since `_check_entry` refuses a post-join member outright.
     # Cheap next to the membership tests this already runs.
     # A rule's reason is the text that makes output readable and is not recoverable
@@ -613,7 +613,7 @@ class ExtendedClassificationResult:
         the mapping that produced it (#401), so it is not skipped like a marker, and
         what it contributes is whatever ``reason`` it stores: prose for a curator
         claim, which is allowed to carry one and does in the tests, and an empty
-        string for a mapped claim off a claim file, which stores the id alone and
+        string for a mapped claim off an evidence file, which stores the id alone and
         leaves the text to be resolved from the mapping rule — which this accessor
         does not do. ``add_claim`` is the public path that can put one
         there today, and does so in the tests; nothing in the classification run takes

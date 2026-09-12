@@ -1,8 +1,6 @@
 """Data models for file classification."""
 
-import re
 from dataclasses import MISSING, dataclass, field, fields
-from datetime import datetime
 from functools import cache
 from typing import Any
 
@@ -64,6 +62,20 @@ EXTERNAL_SOURCE_TYPES = frozenset(
         SOURCE_WRANGLER_ANNOTATION,
     }
 )
+# The kinds an *importer* may write, which is narrower. A curator claim is legitimate
+# — a curator's decision is reviewed and cited like any other — but a curator does not
+# reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
+# how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
+# file a rule whose selection matches one file. So the envelope's vocabulary is these
+# two, and the format cannot express the one input the contract routes elsewhere
+# (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
+# there should not silently become writable to a file.
+IMPORTER_SOURCE_TYPES = frozenset(
+    {
+        SOURCE_EXTERNAL_GROUND_TRUTH,
+        SOURCE_REPOSITORY_METADATA,
+    }
+)
 SOURCE_TYPES = frozenset(
     {
         SOURCE_FILENAME_RULE,
@@ -79,7 +91,7 @@ SOURCE_TYPES = frozenset(
 )
 
 # Keys a claim may be attached to a target row by (#392, extended in #401). One
-# vocabulary for two positions: a claim file's envelope declares which of these it is
+# vocabulary for two positions: an evidence file's envelope declares which of these it is
 # keyed by (`target_key`), and a claim records which one actually attached it
 # (`join_key`) once the join has run.
 #
@@ -358,29 +370,11 @@ def field_label(record: dict, field_name: str) -> str | None:
     return _entry_value(entry) if status == CLASSIFIED else status
 
 
-# The shape a claim file's `fetched_at` must have. This is the schema's `fetched_at`
-# pattern, character for character — `test_the_reader_and_the_schema_share_one_pattern`
-# reads the slot and compares — because the two must refuse the same strings, and the
-# ways they drift apart are not guessable. Matched rather than measured by length:
-# `fromisoformat` reads character 10 as the separator whatever it is, and a suffix can
-# make a date longer than ten characters without making it a time, so `2026-09-01Z`
-# and `2026-09-01+00:00` both parsed to midnight under a length check. Matched in full
-# rather than by prefix: `fromisoformat` accepts a basic-format offset (`+0100`) from
-# 3.11 and the schema never did, so a prefix check agreed with the gate on 3.10 and
-# disagreed on 3.11 — a claim file that reads differently by interpreter, which is
-# what the `Z` normalization below exists to prevent (#401 review).
-_FETCHED_AT_PATTERN = (
-    r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d"
-    r"(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?|Z)?\Z"
-)
-_FETCHED_AT = re.compile(_FETCHED_AT_PATTERN)
-
-
 def required_str(value: object, label: str, where: str) -> str:
     """Return ``value`` as a non-empty string, or raise naming ``label`` and ``where``.
 
-    One definition of "this member is a usable string" for the claim-file records,
-    applied on both sides of the file: ``ClaimFileEnvelope.__post_init__`` uses it on
+    One definition of "this member is a usable string" for the evidence-file records,
+    applied on both sides of the file: ``EvidenceFileEnvelope.__post_init__`` uses it on
     an envelope being built and the ``from_dict`` pair on one being read, so a writer
     cannot produce a file its own reader will refuse (#401 review).
 
@@ -393,8 +387,8 @@ def required_str(value: object, label: str, where: str) -> str:
 
     A line break is refused with it. These members are identifiers — a repository, a
     dataset, a table, a catalog version — and none of them contains one, while every
-    one is printed by ``claim_files._describe`` in the run's report, where an embedded
-    newline is a second report line a claim file wrote. The schema refuses the same
+    one is printed by ``source_evidence._describe`` in the run's report, where an embedded
+    newline is a second report line an evidence file wrote. The schema refuses the same
     value — the slots carry ``pattern: "^[^\\r\\n]+\\Z"``, which excludes a line
     terminator anywhere, including the trailing one that ``$`` would have allowed
     through — so without this the reader would accept what the schema rejects
@@ -426,92 +420,88 @@ def optional_str(value: object, label: str, where: str) -> str | None:
 _ABSENT = object()
 
 
+def _require_one_of(value: object, vocabulary: frozenset[str], noun: str, label: str, where: str) -> str:
+    """Return ``value`` as a member of ``vocabulary``, or raise naming it and ``where``.
+
+    One wording for "this member is not in that closed set", so the several
+    vocabularies an evidence file's envelope pins do not each grow a phrasing of the
+    same fault. ``noun`` completes the sentence: *is not a key of the target*, *is not
+    a kind of external source*.
+    """
+    if not isinstance(value, str) or value not in vocabulary:
+        raise ValueError(f"{where}: {label} {value!r} is not {noun} (expected one of {sorted(vocabulary)})")
+    return value
+
+
+def require_importer_source_type(value: object, label: str, where: str) -> str:
+    """Return ``value`` as a kind of source an importer may write, or raise.
+
+    An evidence file is written by an importer reading something we do not own, so its
+    ``source_type`` is one of :data:`IMPORTER_SOURCE_TYPES`. Two kinds are excluded and
+    for different reasons. The inference kinds, because a file declaring
+    ``filename_rule`` would be naming our own rule engine as its publisher. And
+    ``wrangler_annotation``, because a curator enters as **rules**, not as evidence
+    (contract 1.6, 1.7) — accepting one here would let #397 be built as an importer
+    against a format that takes it and a reconcile stage that has nowhere to put it.
+
+    It sits on the envelope rather than on every row (#421): one repository, dataset
+    and table is one kind of source, so this runs once per file and reconcile reads it
+    from there when it stamps the claim it makes from a row.
+    """
+    return _require_one_of(value, IMPORTER_SOURCE_TYPES, "a kind of source an importer may write", label, where)
+
+
 def require_join_key(value: object, label: str, where: str) -> str:
     """Return ``value`` as a key of the target, or raise naming ``label`` and ``where``.
 
-    One refusal for one vocabulary, used in both positions it appears in: a claim
+    One refusal for one vocabulary, used in both positions it appears in: an evidence
     file's envelope declaring which key it is keyed by (``target_key``), and a claim
     recording which one attached it (``join_key``) once the join has run. Stating it
     twice would mean two wordings for the same fault and two places to update when
     the vocabulary moves — ``archive_accession`` is the live example, a derived fact
     rather than a record field.
     """
-    if not isinstance(value, str) or value not in JOIN_KEYS:
-        raise ValueError(f"{where}: {label} {value!r} is not a key of the target (expected one of {sorted(JOIN_KEYS)})")
-    return value
+    return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
 
 
-def pop_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
-    """Remove an optional string member from ``block``, refusing an explicit null.
+def member_optional_str(block: dict, key: str, label: str, where: str, checker=optional_str) -> str | None:
+    """Read one member of ``block`` through ``checker``, refusing an explicit null.
 
-    The same rule :func:`_flat_from_dict` applies to a member it reads, for one taken
-    out of a dict instead — a claim line's ``column``, which is the one source member
-    the line carries rather than the envelope. ``dict.pop`` with a default cannot tell
-    an absent key from a present null, and collapsing the two would accept a record
-    the writer could not have produced while every other member refuses it (#401
-    review).
+    The single statement of the absent-versus-null rule, used by both readers that
+    need it: :func:`_flat_from_dict` for every member of a flat record, and
+    ``source_evidence`` for an evidence line's ``column`` — the one source member a
+    line carries rather than the envelope. ``dict.get`` with a default cannot tell an
+    absent key from a present null, and collapsing the two would accept a record the
+    writer could not have produced while every other member refuses it (#401 review).
+
+    ``checker`` is what a present value must satisfy; it defaults to
+    :func:`optional_str` because most members are, and :func:`_flat_from_dict` passes
+    :func:`required_str` for a member with no dataclass default.
+
+    Read rather than removed: while a line held a claim, the members left after this
+    one became ``make_claim``'s keyword arguments, so taking it out was the point. A
+    row has no such remainder (#421), and copying the parsed line per read only to pop
+    one key from the copy would be a dict allocation per row for nothing.
     """
-    value = block.pop(key, _ABSENT)
+    value = block.get(key, _ABSENT)
     if value is None:
         raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
-    return optional_str(None if value is _ABSENT else value, label, where)
-
-
-def _parse_fetched_at(value: object, where: str) -> datetime:
-    """Parse a claim file's ``fetched_at``, or raise naming ``where``.
-
-    A trailing ``Z`` is normalized to ``+00:00`` first. ``datetime.fromisoformat``
-    rejects ``Z`` on Python 3.10 — this project's floor and what CI runs — while
-    accepting it from 3.11, and the importers coming in #369/#394 read web APIs that
-    emit it almost universally. Without this a claim file written on a 3.11 machine
-    parses there and fails on CI, which is a property of the interpreter rather than
-    of the file.
-
-    A time of day is required. ``fromisoformat`` accepts a bare ``2026-09-01`` and
-    silently returns midnight, so a date-only value would read back as a fetch
-    claiming to have happened at 00:00:00 — a precision the file never stated, and
-    one that makes two imports on the same day indistinguishable, which is the case
-    the age report exists for. The check is on the string rather than the parsed
-    value, because midnight is a real time a genuine fetch can have.
-
-    Both branches name ISO 8601, because which one a value reaches depends on the
-    interpreter: ``20260901T091403`` fails the parse on 3.10 and reaches the shape
-    check on 3.11, where ``fromisoformat`` accepts basic format. The shape check is
-    the whole pattern and not a prefix for the same reason — 3.11 also accepts a
-    basic-format offset, ``+0100``, which the schema refuses on every interpreter
-    (#401 review).
-
-    It is a *shape* check and not a length one: ``fromisoformat`` treats character 10
-    as the date/time separator whatever character it is, so ``2026-09-01X09:14:03``
-    parses, and a date can be longer than ten characters without carrying a time at
-    all — ``2026-09-01Z`` and ``2026-09-01+00:00`` both read back as midnight (#401
-    review). Matching the schema's pattern instead refuses all three on both sides,
-    and refuses ``20260901T091403`` — basic-format ISO, which 3.10 rejects and 3.11
-    accepts — the same way on every interpreter, which is the divergence the ``Z``
-    normalization above exists to prevent.
-    """
-    if not isinstance(value, str):
-        raise ValueError(f"{where}: envelope fetched_at is {value!r}, not an ISO 8601 string")
-    normalized = value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
-    if not _FETCHED_AT.match(value):
-        raise ValueError(
-            f"{where}: envelope fetched_at {value!r} is not an ISO 8601 date followed by T or a "
-            "space and a time of day — record when the fetch happened, not only the day it happened on"
-        )
-    return parsed
+    return checker(None if value is _ABSENT else value, label, where)
 
 
 def _flat_to_dict(record) -> dict:
     """Serialize a flat dataclass of optional strings, dropping the absent ones.
 
-    Shared by the claim-file records (``ClaimSource``, ``ClaimFileSource``,
-    ``ClaimTarget``). Keys come from ``fields()`` rather than being listed, so a
+    Shared by the evidence-file records (``ClaimSource``, ``EvidenceFileSource``,
+    ``EvidenceTarget``). Only the first of those is still in this module: the envelope
+    and its parts describe one artefact and moved to ``source_evidence`` with it
+    (#409), while ``ClaimSource`` stays here because it reaches output evidence on
+    every imported claim. This family of helpers stays here with it, and
+    ``source_evidence`` imports them.
+
+    Keys come from ``fields()`` rather than being listed, so a
     member added to one of those dataclasses is emitted rather than silently dropped
-    from every claim file — the same reason ``ExcludedFile.to_dict`` derives its keys.
+    from every evidence file — the same reason ``ExcludedFile.to_dict`` derives its keys.
 
     Null members are omitted rather than written as explicit nulls: these records
     either have a member or do not, and there is no "we looked and found nothing"
@@ -528,13 +518,14 @@ def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
     ``fields()`` walks the dataclass on every call and is not free; the members and
     which checker each one gets cannot change for a class, so they are derived once
     and cached. Measured, this is a cold path and the cache is insurance rather than a
-    win. Reading a whole claim file — a thousand claims or a million — consults it
-    five times across three classes: once for ``ClaimFileEnvelope`` and twice each for
-    ``ClaimFileSource`` and ``ClaimTarget``, which the envelope both reads and
-    re-validates by round-tripping. Writing one never consults it at all. The helper
-    that does run per claim is :func:`_flat_to_dict`, through ``make_claim``'s
-    ``source.to_dict()`` — a thousand calls for a thousand claims, on both sides —
-    and it walks ``fields()`` uncached (#401 review).
+    win. Reading a whole evidence file — a thousand rows or a million — consults it
+    five times across three classes: once for ``EvidenceFileEnvelope`` and twice each for
+    ``EvidenceFileSource`` and ``EvidenceTarget``, which the envelope both reads and
+    re-validates by round-tripping. Writing one never consults it at all, and neither
+    does a row on either side: a row stopped carrying a claim in #421, so the
+    per-claim ``_flat_to_dict`` this note used to warn about — ``make_claim``'s
+    ``source.to_dict()``, a call for every claim on both sides — is gone. The one
+    ``to_dict`` left on a row's path is in ``_evidence_line``'s error branch.
 
     Returns the known names, those names sorted for an error message, and
     ``(name, checker)`` pairs: a member with no dataclass default is required.
@@ -550,7 +541,7 @@ def _reject_unknown(block: dict, known: frozenset, expected: tuple, where: str, 
     The schema validates these records ``closed=True``, so a reader that quietly
     dropped an unknown key would accept documents the schema rejects — the two must
     refuse the same files (#401 review). Shared by the flat records and by
-    ``ClaimFileEnvelope``, so one refusal is worded one way.
+    ``EvidenceFileEnvelope``, so one refusal is worded one way.
     """
     if extra := sorted(set(block) - known):
         raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {list(expected)})")
@@ -581,12 +572,9 @@ def _flat_from_dict(cls, block: object, where: str, label: str):
     _reject_unknown(block, known, expected, where, label)
     # Values are only ever `str | None` to a type checker — `required_str` raises
     # rather than returning None, but that is not visible through the splat.
-    values: dict[str, Any] = {}
-    for name, checker in members:
-        present = block.get(name, _ABSENT)
-        if present is None:
-            raise ValueError(f"{where}: {label} {name} is an explicit null — an absent member is omitted, not nulled")
-        values[name] = checker(None if present is _ABSENT else present, f"{label} {name}", where)
+    values: dict[str, Any] = {
+        name: member_optional_str(block, name, f"{label} {name}", where, checker) for name, checker in members
+    }
     return cls(**values)
 
 
@@ -605,11 +593,11 @@ class ClaimSource:
     interpreted without going back to the file it arrived in, which nothing that
     reads output evidence can do (#401 review).
 
-    A claim file's envelope holds the first three for a whole file and uses
-    :class:`ClaimFileSource` for it, which has no ``column`` because one table's
-    claims are read from several. :meth:`ClaimFileSource.as_claim_source` copies the
+    An evidence file's envelope holds the first three for a whole file and uses
+    :class:`EvidenceFileSource` for it, which has no ``column`` because one table's
+    claims are read from several. :meth:`EvidenceFileSource.as_claim_source` copies the
     three across and adds this claim's column. The one asymmetry is deliberate: the
-    envelope calls the top level ``repository`` because a claim file names a system,
+    envelope calls the top level ``repository`` because an evidence file names a system,
     while a claim calls it ``name`` because that is what it has always been and it is
     what the output ``evidence`` array already carries.
 
@@ -627,16 +615,16 @@ class ClaimSource:
     def __post_init__(self) -> None:
         """Check the members, because a dataclass annotation is not a runtime check.
 
-        This is the one claim-file record that reaches output evidence without
-        passing through an envelope: ``ClaimFileSource`` and ``ClaimTarget`` are
-        validated by :meth:`ClaimFileEnvelope.__post_init__`, but a ``ClaimSource``
+        This is the one evidence-file record that reaches output evidence without
+        passing through an envelope: ``EvidenceFileSource`` and ``EvidenceTarget`` are
+        validated by :meth:`EvidenceFileEnvelope.__post_init__`, but a ``ClaimSource``
         can be handed straight to ``make_claim``, and ``ClaimSource(name="HPRC",
         dataset=7)`` would otherwise serialize a number into the schema's ``Evidence``
         and only be caught at a file or schema boundary, if at all (#401 review).
 
         Members are checked rather than the record round-tripped through
         :meth:`from_dict`, which would call this again on the record it rebuilds. Per
-        source object and not per claim: a claim file builds one per column and every
+        source object and not per claim: an evidence file builds one per column and every
         claim read from that column shares it.
         """
         where = "claim source"
@@ -652,267 +640,6 @@ class ClaimSource:
     def from_dict(cls, block: object, where: str) -> "ClaimSource":
         """Rebuild a source from what :meth:`to_dict` wrote, validating each member."""
         return _flat_from_dict(cls, block, where, "source")
-
-
-@dataclass(frozen=True, kw_only=True)
-class ClaimFileSource:
-    """Where a whole claim file's claims were read from (issue #401).
-
-    Three levels, because a source is not flat: a **repository** publishes
-    **datasets**, and a dataset has **tables**. The AnVIL manifests are
-    ``AnVIL / AnVIL_HPRC_R2 / alignments_v2``; the HPRC Data Explorer is
-    ``HPRC Data Explorer / R2 / sequencing-data``; ENA is
-    ``ENA / <study accession> / read_run`` — where ``read_run`` is literally the
-    ``result=`` parameter its API takes, and the fields it returns are the columns.
-    A source with no middle level leaves ``dataset`` null, as ``table`` may be null.
-
-    ``dataset`` earns its place twice. It is provenance, and it is what a claim's
-    :attr:`column` cannot be read without — the same column name means different
-    things in different datasets. It is also the reason the *target* carries a
-    dataset: see :class:`ClaimTarget`.
-
-    Distinct from :class:`ClaimSource` rather than reusing it. A claim's source
-    carries a ``column``, which belongs to the claim because one table's claims are
-    read from several columns; a file's source carries a ``dataset``, which belongs
-    to the file because every claim in it came from the same one. Modeling them as
-    one class would let an envelope name a column that could disagree with every
-    line in the file.
-    """
-
-    repository: str
-    dataset: str | None = None
-    table: str | None = None
-    url: str | None = None
-
-    def to_dict(self) -> dict:
-        """Serialize for the envelope line, dropping members the source does not have."""
-        return _flat_to_dict(self)
-
-    @classmethod
-    def from_dict(cls, block: object, where: str) -> "ClaimFileSource":
-        """Rebuild a file's source from what :meth:`to_dict` wrote."""
-        return _flat_from_dict(cls, block, where, "source")
-
-    def as_claim_source(self, column: str | None) -> ClaimSource:
-        """The per-claim :class:`ClaimSource` a claim in this file carries.
-
-        A field copy — the envelope's four facts, plus the column this particular
-        claim was read from. ``dataset`` crosses with the rest: it is what makes the
-        column legible, since the same column name means different things in
-        different datasets, and a consumer reading the output ``evidence`` array
-        cannot go back to the claim file to find it.
-
-        Called once per distinct column by the reader, which caches what it returns
-        for the whole file (``iter_claims``); the envelope stores these once for the
-        same reason, rather than repeating them on a few million lines.
-        """
-        return ClaimSource(name=self.repository, url=self.url, dataset=self.dataset, table=self.table, column=column)
-
-
-@dataclass(frozen=True, kw_only=True)
-class ClaimTarget:
-    """The system a claim file's claims are *about* (issue #401).
-
-    A claim file says "the row in **this** system whose **this key** is **that
-    value**". The target names the system, so an importer is not implicitly bound to
-    AnVIL, and the file records which system it resolved its keys against.
-
-    ``dataset`` is the scope the join runs within, and it is not decoration: keyed by
-    ``file_name`` alone, 69.4% of the corpus's 708,088 rows carry a non-unique key,
-    and 20% remain non-unique even scoped by dataset *title* alone — but within
-    ``AnVIL_HPRC_R2`` the collision rate is 2 rows in 16,271. A filename join is
-    unusable without a dataset scope and workable with one: those 2 rows are
-    ambiguity the join must still record rather than resolve, which is #402's, and
-    this scope is what brings it down to something a person can look at.
-
-    Null is correct only where the key is unique across the whole target. Measured,
-    that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on
-    every one of the 708,088 records. ``file_md5sum`` is *not*: it is non-unique on
-    1.72% of rows, 12,203 of them. Two thirds of those are collisions **inside** one
-    dataset — 8,119 rows from 1,118 md5s — which a dataset scope would not separate
-    either; the remaining 4,084 rows are 2,026 md5s registered in more than one
-    dataset. Leaving it unscoped is defensible for a claim about the file's
-    *content*, which is true of every row that has those bytes however they are
-    catalogued, and wrong for a claim about one catalogued file. Nothing here
-    enforces that distinction; making the join record the ambiguity rather than
-    silently fanning out is #402's.
-
-    ``version`` is which generation of the target the importer resolved against — an
-    AnVIL catalog such as ``anvil15``. Null when the importer did not resolve against
-    a particular generation, which is the ordinary case for a source that simply
-    publishes names and values (HPRC, ENA) rather than reading our catalog. It is
-    provenance for the importer's own next pass, not a gate on the run: see
-    ``claim_files`` on why currency is not decidable offline.
-
-    The mapping from the source's own names to these is the **importer's**
-    knowledge. The source calls its collection ``R2``; the target calls the same
-    thing ``AnVIL_HPRC_R2``. The importer records both sides, and the run does
-    equality lookup only.
-    """
-
-    system: str
-    dataset: str | None = None
-    version: str | None = None
-
-    def to_dict(self) -> dict:
-        """Serialize for the envelope line, dropping members the target does not have."""
-        return _flat_to_dict(self)
-
-    @classmethod
-    def from_dict(cls, block: object, where: str) -> "ClaimTarget":
-        """Rebuild a target from what :meth:`to_dict` wrote."""
-        return _flat_from_dict(cls, block, where, "target")
-
-
-@dataclass(frozen=True, kw_only=True)
-class ClaimFileEnvelope:
-    """What a claim file records once, for every claim in it (issue #401).
-
-    An importer runs out of band from classification — when a catalog refreshes,
-    with network — and writes a claim file; a run reads it. This is the header of
-    that artefact, and it names **both sides of the join**, symmetrically::
-
-        source            source_version      source_key
-        target                  target.version    target_key
-
-    A line then reads: *this row is about the row in* ``target`` *whose*
-    ``target_key`` *equals its* ``target_key_value`` *; here is the claim.*
-
-    **The key names are here, not on the line.** They do not change within a file —
-    every claim an importer writes is keyed the same way — so repeating them on a
-    few million lines would be the envelope's content written out again. Only the
-    key *value* varies, so only that is on the line. It is the same factoring that
-    keeps ``ClaimSource``'s name, url and table here while ``column`` stays per
-    claim.
-
-    **The importer owns the mapping between the two keys**, and writes
-    ``target_key_value`` already in the target's value space. Where a source's own
-    value needs transforming to get there — pulling ``NA12878`` out of a path,
-    normalizing an accession — the importer does it. The run performs equality
-    lookup and nothing else, which is what keeps corpus knowledge in the importer
-    and transform logic out of the join.
-
-    ``target_key`` names a key of the target system, drawn from its record fields
-    *and* from facts meta-disco derives: ENA run accessions appear in no input
-    ``file_name`` at all, but ``archive_accession`` is populated on thousands of
-    classified fastq records, read from the read headers. So the join runs after
-    inference — which is where the pipeline already puts import.
-
-    Frozen because provenance is a fact about where the claims came from, not state
-    to edit after they are read. Validated on construction
-    (:meth:`__post_init__`) against the same rules :meth:`from_dict` applies on the
-    way back in, so a writer cannot produce a file its own reader would refuse —
-    an importer would otherwise spend a networked run writing millions of claims
-    behind a header that fails at the next classification run, days later and far
-    from the cause.
-    """
-
-    source: ClaimFileSource
-    source_version: str
-    source_key: str
-    target: ClaimTarget
-    target_key: str
-    fetched_at: datetime
-
-    def __post_init__(self) -> None:
-        """Refuse an envelope that could not be read back, at the point it is built.
-
-        Type hints do not run, so a ``source_version`` of ``None`` reaches here
-        intact — and ``to_dict`` omits null members, so it would vanish from the file
-        and read back as a missing key rather than naming the field.
-
-        The two nested records are checked by serializing them and reading them back
-        through their own ``from_dict`` — the reader's definition applied to the
-        reader's input — rather than by re-listing their members here, which is how
-        an earlier version left the parity half-kept.
-
-        Runs once per claim file, so its cost is nothing beside the write it precedes.
-        """
-        where = "claim file envelope"
-        if not isinstance(self.source, ClaimFileSource):
-            raise ValueError(f"{where}: source is {type(self.source).__name__}, not a ClaimFileSource")
-        if not isinstance(self.target, ClaimTarget):
-            raise ValueError(f"{where}: target is {type(self.target).__name__}, not a ClaimTarget")
-        ClaimFileSource.from_dict(self.source.to_dict(), where)
-        ClaimTarget.from_dict(self.target.to_dict(), where)
-        if not isinstance(self.fetched_at, datetime):
-            raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
-        required_str(self.source_version, "source_version", where)
-        required_str(self.source_key, "source_key", where)
-        require_join_key(self.target_key, "target_key", where)
-        # A key that is not unique across the target cannot be matched without a
-        # scope, and `file_name` is the one in the vocabulary that is not: present on
-        # every record but non-unique on 69.4%, against 2 rows in 16,271
-        # within a single dataset. Writing an unscoped one produces a file whose
-        # claims the join cannot attach to a single row — refused here rather than
-        # discovered when the join fans out (#401 review).
-        if self.target_key == JOIN_KEY_FILE_NAME and self.target.dataset is None:
-            raise ValueError(
-                f"{where}: target_key {JOIN_KEY_FILE_NAME!r} needs a target dataset to scope it — "
-                "a bare file name is non-unique on 69% of the corpus and matches no single row"
-            )
-
-    @classmethod
-    def from_dict(cls, block: object, where: str) -> "ClaimFileEnvelope":
-        """Rebuild an envelope from what :meth:`to_dict` wrote, validating each member.
-
-        The only place a claim file's first line becomes provenance. Every member is
-        checked here rather than where a consumer reads it: an envelope is read once
-        per file and is what the report rests on, so an unparseable ``fetched_at`` or
-        a source with no repository must fail as a malformed claim file, not later as
-        a report that cannot render.
-
-        A member the envelope does not have is refused rather than ignored, because
-        the schema validates this record ``closed=True``: a reader that quietly
-        dropped an unknown key would accept documents the schema rejects.
-
-        A trailing ``Z`` on ``fetched_at`` is normalized to ``+00:00`` before parsing.
-        ``datetime.fromisoformat`` rejects ``Z`` on Python 3.10, this project's floor
-        and what CI runs, while accepting it from 3.11 — and the importers coming in
-        #369/#394 read web APIs that emit it almost universally. Without this, a claim
-        file written on a 3.11 machine parses there and fails on CI, which is a
-        property of the interpreter rather than of the file.
-
-        ``fetched_at`` must carry a time of day. ``fromisoformat`` accepts a bare
-        ``2026-09-01`` and silently returns midnight, so a date-only value would read
-        back as a fetch claiming to have happened at 00:00:00 — a precision the file
-        never stated, and one that makes two imports on the same day
-        indistinguishable, which is the case the age report exists for. The check is
-        on the string rather than the parsed value, because midnight is a real time a
-        genuine fetch can have.
-        """
-        if not isinstance(block, dict):
-            raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
-        known, expected, _ = _flat_plan(cls)
-        _reject_unknown(block, known, expected, where, "envelope")
-        return cls(
-            source=ClaimFileSource.from_dict(block.get("source"), where),
-            source_version=required_str(block.get("source_version"), "envelope source_version", where),
-            source_key=required_str(block.get("source_key"), "envelope source_key", where),
-            target=ClaimTarget.from_dict(block.get("target"), where),
-            target_key=require_join_key(block.get("target_key"), "envelope target_key", where),
-            fetched_at=_parse_fetched_at(block.get("fetched_at"), where),
-        )
-
-    def to_dict(self) -> dict:
-        """Serialize for the envelope line.
-
-        The three members that are not already JSON are encoded here: ``source`` and
-        ``target`` through their own ``to_dict``, and ``fetched_at`` as an ISO 8601
-        string — the form ``azul_manifest.metadata_block`` already writes a fetch time
-        in, and the form :meth:`from_dict` parses back.
-
-        Keys come from ``fields()`` for the reason the nested records' do: a member
-        added to the dataclass and not here would otherwise be dropped from every
-        claim file silently. Every member of this record is required, so none is
-        omitted — unlike the nested records, which drop the members they lack.
-        """
-        encoded = {
-            "source": self.source.to_dict(),
-            "target": self.target.to_dict(),
-            "fetched_at": self.fetched_at.isoformat(),
-        }
-        return {f.name: encoded.get(f.name, getattr(self, f.name)) for f in fields(self)}
 
 
 @dataclass

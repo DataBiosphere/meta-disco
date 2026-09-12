@@ -14,7 +14,6 @@ These tests pin the three together.
 import json
 from pathlib import Path
 
-from meta_disco.claim_files import write_claim_file
 from meta_disco.classify_run import (
     _report_exclusions,
     build_parallel_jobs,
@@ -22,9 +21,9 @@ from meta_disco.classify_run import (
 )
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.models import ClaimTarget
 from meta_disco.output_utils import CLASSIFICATION_FILES
-from tests.test_claim_files import claim_file_envelope
+from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
+from tests.test_source_evidence import evidence_file_envelope
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
@@ -166,29 +165,31 @@ def test_exclusions_file_is_not_read_as_a_classification():
     assert EXCLUDED_FILE not in {path.name for _, path, _ in _jobs()}
 
 
-class TestTheRunReportsItsClaimFiles:
-    """A run reads its claim files and is stopped by none of them (#401).
+class TestTheRunReportsItsEvidenceFiles:
+    """A run reads its evidence files and is stopped by none of them (#401).
 
-    What the report *says* is pinned in ``test_claim_files.py``; what is pinned here
-    is the wiring — that ``run_all_classifications`` takes a claims root, reports it,
-    and starts regardless of what it found. Whether a claim file has outlived its
+    What the report *says* is pinned in ``test_source_evidence.py``; what is pinned here
+    is the wiring — that ``run_all_classifications`` takes an evidence root, reports it,
+    and starts regardless of what it found. Whether an evidence file has outlived its
     catalog is not answerable at a run: it belongs to the importer's re-fetch
     decision and to the catalog the run's output is offered back to.
     """
 
-    def _claim_file(self, tmp_path, target_version):
-        """A claim file whose target names ``target_version`` as the generation it was
-        built against — the envelope factory the claim-file tests use, so the two
+    def _evidence_file(self, tmp_path, target_version):
+        """An evidence file whose target names ``target_version`` as the generation it was
+        built against — the envelope factory the evidence-file tests use, so the two
         cannot drift as the shape moves."""
-        write_claim_file(
-            tmp_path / "claims" / "anvil" / "manifest.ndjson",
-            claim_file_envelope(target=ClaimTarget(system="anvil", dataset="AnVIL_HPRC_R2", version=target_version)),
+        write_evidence_file(
+            tmp_path / "source_evidence" / "anvil" / "manifest.ndjson",
+            evidence_file_envelope(
+                target=EvidenceTarget(system="anvil", dataset="AnVIL_HPRC_R2", version=target_version)
+            ),
             [],
         )
-        return tmp_path / "claims"
+        return tmp_path / "source_evidence"
 
-    def test_a_claim_file_from_another_catalog_is_reported_not_refused(self, tmp_path, capsys):
-        """A run classifying anvil15 still runs beside an anvil14 claim file.
+    def test_an_evidence_file_from_another_catalog_is_reported_not_refused(self, tmp_path, capsys):
+        """A run classifying anvil15 still runs beside an anvil14 evidence file.
 
         Nothing on disk establishes which of the two is current — AnVIL deletes the
         superseded catalog rather than keeping it to be compared against — so the run
@@ -200,7 +201,7 @@ class TestTheRunReportsItsClaimFiles:
         output_base = tmp_path / "output"
 
         run_all_classifications(
-            metadata, output_base, tmp_path / "evidence", claims_root=self._claim_file(tmp_path, "anvil14")
+            metadata, output_base, tmp_path / "evidence", source_evidence_root=self._evidence_file(tmp_path, "anvil14")
         )
-        assert output_base.exists(), "the run must start regardless of a claim file's catalog"
+        assert output_base.exists(), "the run must start regardless of an evidence file's catalog"
         assert "anvil/manifest.ndjson" in capsys.readouterr().out.replace("\\", "/")
