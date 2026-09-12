@@ -92,8 +92,17 @@ def recommendation(declared_values: list[str] | None, label: str | None) -> str:
 
 @dataclass(frozen=True)
 class IncumbentRow:
-    """One file, one dimension, both sides' answers, and the recommendation."""
+    """One file, one dimension, both sides' answers, and the recommendation.
 
+    ``file_key`` is the identity :func:`gather` deduplicated on, carried here so that
+    counting files from these rows and counting them during the pass cannot disagree.
+    Name and dataset are *not* that identity: the corpus admits two distinct files with
+    one name in one dataset — ``corpus_diff`` keys on ``(dataset, name, md5)`` and
+    deliberately keeps such a pair as a multiset — so counting rows by name would
+    collapse a pair the recommendation counts twice.
+    """
+
+    file_key: tuple[str, object]
     file_name: str
     dataset_title: str
     slot: str
@@ -140,8 +149,12 @@ class IncumbentReport:
 
     @property
     def declared_files(self) -> int:
-        """Files carrying a declaration on at least one dimension."""
-        return len({(row.file_name, row.dataset_title) for row in self.rows})
+        """Files carrying a declaration on at least one dimension.
+
+        Counted on the same identity ``gather`` deduplicated on, so this headline and
+        the recommendation tables always describe the same set of files.
+        """
+        return len({row.file_key for row in self.rows})
 
     def compare_pairs(self) -> dict[tuple[str, str, str | None], list[IncumbentRow]]:
         """``compare`` rows grouped by the (slot, azul cell, our value) they share."""
@@ -201,6 +214,7 @@ def gather(run_dir: Path) -> IncumbentReport:
                 report.value_in_vocab[(slot, value)] = value in recorded
             report.rows.append(
                 IncumbentRow(
+                    file_key=key,
                     file_name=str(record.get("file_name") or ""),
                     dataset_title=dataset,
                     slot=slot,

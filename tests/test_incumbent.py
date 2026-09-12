@@ -345,3 +345,24 @@ def test_the_display_join_matches_the_manifest_reader():
     from meta_disco import azul_manifest
 
     assert MULTI_VALUE_SEP == azul_manifest._MULTI_VALUE_SEP
+
+
+def test_two_files_sharing_a_name_in_one_dataset_are_counted_twice(tmp_path):
+    """The headline counts files on the identity `gather` deduplicated on.
+
+    The corpus admits a repeated name within a dataset — `corpus_diff` keys on
+    (dataset, name, md5) and keeps such a pair as a multiset — so counting by name
+    would report one file while the recommendation tables counted two.
+    """
+    declared = build_declared({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    twins = []
+    for entry in ("e1", "e2"):
+        rec = _record("same.bam", declared=declared)
+        rec["entry_id"], rec["md5sum"] = entry, entry
+        twins.append(rec)
+    report = gather(_write_run(tmp_path / "run", twins))
+
+    assert report.files == 2
+    assert report.duplicate_records == 0
+    assert report.declared_files == 2
+    assert report.counts[("AnVIL_IGVF_Mouse_R1", "reference_assembly", TAKE_AZUL)] == 2
