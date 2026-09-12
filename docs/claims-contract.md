@@ -172,6 +172,15 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     any other declarations — agreeing ones classify, disagreeing ones conflict — and neither column takes
     precedence, because nothing has established one.
 
+6.9 Inference output has two readers: **reconcile**, and anything whose purpose is to measure inference itself
+    — the eval fixtures and the corpus-drift guard (#381), which would read a mapping-rule edit or a catalog
+    refresh as inference drift if they read the reconciled artifact.
+    Everything else reads the **reconciled** output, because that is the answer: the coverage, validation and
+    consistency reports, the md5 cross-registration check (#395), and every downstream consumer.
+    A stage of inference reading an earlier stage's file — Phase 2 over Phase 1 — is inference consuming its
+    own intermediate, not a reader of the artifact.
+    `corpus_diff` must be told which it is comparing: two runs' answers, or inference's behaviour across runs.
+
 ---
 
 ## What is not true yet
@@ -215,4 +224,3 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
   conflict, which is right if the number is small and wrong if it floods the queue.
-- Which consumers read which artifact. `corpus_diff`, the coverage / validation / consistency reports, the ENA validator on stored output (#330) and the eval fixtures each want inference or reconciled output, and today there is only one.
