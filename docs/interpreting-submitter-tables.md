@@ -56,6 +56,35 @@ on `AnVIL_HPRC_R2` (+4,305 `data_modality`, +2,786 `data_type`) comes from `hifi
 dataset made entirely of workflow outputs has no dimension metadata to import, however
 many columns it has.
 
+**But the two authors are a heuristic for where to look, not the rule for how to read.**
+Tables exist that are both. `AnVIL_HPRC_R2/assembly` (466 rows) was designed by someone
+*and* holds four files per row:
+
+```
+assembly, assembly_fai, assembly_gzi, assembly_md5        4 file pointers
+haplotype, genbank_accession, assembly_method,
+assembly_method_version, phasing, source, assembly_date   real metadata values
+sample_id                                                 foreign key
+```
+
+**So classify the column, not the table.** Every column is one of three things, and each
+is read differently:
+
+| column kind | test | the evidence is | yields |
+|---|---|---|---|
+| **file link** | holds a `drs://` URI, or a list of them | its **name** — the role | an edge (#363) |
+| **metadata value** | holds anything else that is not an identifier | its **value** | a dimension claim (#414) |
+| **foreign key** | names another entity (`sample_id`, `analyte_id`, `maternal_id`) | its value | the subject, or an entity→entity edge |
+
+Read that way, `assembly` needs no classification at all: `assembly_method` is a value,
+`assembly_fai` is an index edge, `sample_id` is the subject.
+
+It also says what to **ignore**, which matters as much. In a workflow-materialized table
+the cell values are pointers and mean nothing, and its column names must not be mapped to
+dimensions — measured, that adds nothing (§4). In a model-authored table the column name
+is a field label, not a description of the file: `platform` names the field, it does not
+say the file is a platform.
+
 ## 2. The entity shape is a triple
 
 ```
