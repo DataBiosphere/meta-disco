@@ -28,7 +28,10 @@ is modeled over exactly the classifier-relevant fields, not the full contract.
 Both classes expose the same six identity attributes (``file_name``,
 ``file_format``, ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``),
 so ``_build_record`` and the work-list steps read them uniformly regardless of
-stream.
+stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
+incumbent declaration (#424), not identity and not classifier input — for the same
+reason: ``_build_record`` reads them off either stream without asking which it has,
+and a record that failed the input contract declares whatever it declares.
 
 The module also holds the two write-side dataclasses the pipeline serializes at
 its output boundary, which follow the same frozen / field-order-is-output-order /
@@ -42,6 +45,57 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from .file_name import FileName
+from .schema_vocab import value_in_vocabulary
+
+# The two dimensions AnVIL declares on a file of its own accord, in the order the
+# ``declared`` block emits them. Not the classifier's input and not its answer: the
+# incumbent output, what AnVIL publishes today (#424). Two of the five
+# CLASSIFICATION_FIELDS, deliberately not derived from that tuple — it is the set
+# Azul's file index happens to carry, and it moves when Azul moves, not when our
+# dimensions do.
+DECLARED_FIELDS = ("data_modality", "reference_assembly")
+
+
+def build_declared(
+    *,
+    data_modality: list[str] | None,
+    reference_assembly: list[str] | None,
+    source: str | None,
+) -> dict | None:
+    """The ``declared`` block for one file, or None when nothing was declared.
+
+    Carries the incumbent declaration into the output (#424): the values AnVIL
+    publishes for this file today, transcribed exactly as Azul published them and
+    as a list wherever Azul published a list. This is not a claim and nothing
+    resolves against it — classification does not read it, and a file's ``value``
+    is whatever inference concluded, declared block or no. It exists so the output
+    can be diffed against the incumbent, and precisely because a declaration may
+    produce nothing else: ``GRCm39`` is a term this project has no word for, so
+    without ``declared`` those 220 values would appear in the output nowhere at all.
+
+    ``in_vocabulary`` names, per declared slot, the subset of that slot's declared
+    values that *are* terms in the slot's enum. An empty list means the incumbent
+    said something this project's vocabulary cannot say — which is the case for
+    every declared value in the corpus today, and is what makes the gap countable
+    from the output rather than asserted. A slot that declared nothing is absent
+    from the map rather than carrying an empty list, so the map's keys are exactly
+    the slots that spoke.
+
+    Returns None — and the envelope emits ``"declared": null`` — when neither slot
+    declared anything, which is ~98% of the corpus.
+    """
+    declared = {"data_modality": data_modality, "reference_assembly": reference_assembly}
+    if not any(declared.values()):
+        return None
+    return {
+        "source": source,
+        **declared,
+        "in_vocabulary": {
+            field: [value for value in values if value_in_vocabulary(field, value)]
+            for field, values in declared.items()
+            if values
+        },
+    }
 
 
 def coerce_identity(value: Any) -> str:
@@ -83,6 +137,13 @@ class ClassifierRecord:
     full path and served from their own S3 paths) supplies it here and the fetcher
     streams from it instead. Not a classifier-relevant field, so its absence never
     diverts a record.
+
+    ``data_modality`` / ``reference_assembly`` are the incumbent declaration (#424),
+    carried from the input record to the output's ``declared`` block. Nothing on the
+    classify path reads either one — they are not evidence, not a claim and not a
+    tier participant; they are what AnVIL publishes today, kept so the run's answer
+    can be diffed against it. ``None`` where the record declared nothing, which is
+    most of the corpus and all of the HPRC path.
     """
 
     file_name: str
@@ -93,6 +154,8 @@ class ClassifierRecord:
     entry_id: Any
     name: FileName
     url: str | None = None
+    data_modality: list[str] | None = None
+    reference_assembly: list[str] | None = None
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -108,6 +171,12 @@ class ClassifierRecord:
         ``file_name`` is parsed into a :class:`FileName` exactly once here — the
         single parse site on the pipeline path (#242). ``url`` is optional (#276) and
         absent on the AnVIL path, so it is read with ``.get`` and defaults to ``None``.
+
+        The two declared dimensions are read with ``.get`` for a stronger reason than
+        optionality: they are not slots of the input contract at all (#424 — they are
+        not input, they are the incumbent output), so no validation has run on them
+        and no caller guarantee covers them. A record that carries neither reads as
+        ``None`` on both, exactly like one from a source that declares nothing.
         """
         return cls(
             file_name=record["file_name"],
@@ -118,6 +187,8 @@ class ClassifierRecord:
             entry_id=record.get("entry_id"),
             name=FileName.parse(record["file_name"]),
             url=record.get("url"),
+            data_modality=record.get("data_modality"),
+            reference_assembly=record.get("reference_assembly"),
         )
 
 
@@ -133,6 +204,13 @@ class InvalidRecord:
     (the two fields downstream does string operations on), the rest are echoed as
     the record carried them, since a ``validation_failed`` row may carry their
     drifted (non-string) types.
+
+    It carries the incumbent declaration too (#424), and is typed ``Any`` for it
+    rather than ``list[str] | None``: the two are outside the input contract, so
+    nothing has checked their shape on this stream any more than on the other, and
+    this stream is the one built from records already known to be drifted. A file
+    AnVIL declares a modality for does not stop being declared by failing our
+    contract on ``file_size``, so the row still reports what the incumbent says.
     """
 
     file_name: str
@@ -142,6 +220,8 @@ class InvalidRecord:
     dataset_title: Any
     entry_id: Any
     reasons: list[str]
+    data_modality: Any = None
+    reference_assembly: Any = None
 
     @classmethod
     def from_record(cls, record: dict, reasons: list[str]) -> InvalidRecord:
@@ -161,6 +241,8 @@ class InvalidRecord:
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
             reasons=reasons,
+            data_modality=record.get("data_modality"),
+            reference_assembly=record.get("reference_assembly"),
         )
 
 
@@ -171,7 +253,15 @@ class OutputRecord:
     The single shape the pipeline writes per record. Both producers construct it —
     the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
     work item) and the single-file path (``classify_single``) — and serialize through
-    ``to_dict``, so the seven-key envelope can no longer drift between them (#204).
+    ``to_dict``, so the eight-key envelope can no longer drift between them (#204).
+
+    ``declared`` is the incumbent block (#424) — what AnVIL publishes for this file
+    today, beside what this run concluded. It is ``None`` on most records and on the
+    whole single-file path, and is emitted as ``"declared": null`` rather than
+    omitted, so the envelope keeps one shape for every row (the reason ``RunMetadata``
+    still emits a retired ``dropped: 0``). It is not part of ``classifications`` and
+    never merges into it: the dimensions block is this project's answer, and mixing
+    the incumbent into it is the confusion #424 exists to undo.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
@@ -197,13 +287,26 @@ class OutputRecord:
     dataset_title: Any
     classifications: dict
     entry_id: Any
+    declared: dict | None = None
 
     @classmethod
-    def from_work_item(cls, item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+    def from_work_item(
+        cls,
+        item: ClassifierRecord | InvalidRecord,
+        classifications: dict,
+        source: str | None = None,
+    ) -> OutputRecord:
         """Build from a parsed work item and its classifications payload.
 
         Reads the six identity attributes both streams expose (see the module
-        docstring), so it is agnostic to which stream produced ``item``.
+        docstring), so it is agnostic to which stream produced ``item`` — and the two
+        declared dimensions, which both streams expose for that same reason.
+
+        ``source`` names the incumbent the declaration was read from (#424), and is
+        the caller's to supply because it is a fact about the run's input snapshot,
+        not about this record: the pipeline reads it from the input envelope. ``None``
+        where the input carried no envelope to name one, which is honest — better an
+        unnamed incumbent than a guessed catalog.
         """
         return cls(
             file_name=item.file_name,
@@ -213,6 +316,11 @@ class OutputRecord:
             dataset_title=item.dataset_title,
             entry_id=item.entry_id,
             classifications=classifications,
+            declared=build_declared(
+                data_modality=item.data_modality,
+                reference_assembly=item.reference_assembly,
+                source=source,
+            ),
         )
 
     @classmethod
@@ -229,7 +337,9 @@ class OutputRecord:
 
         ``dataset_title``/``entry_id`` have no source here and serialize as ``None`` —
         the envelope's one canonical shape, which is why the single-file path's output
-        carries the same seven keys as the batch path.
+        carries the same eight keys as the batch path. ``declared`` is ``None`` for the
+        same reason and one more: this path has no input record, so there is no
+        incumbent declaration to carry even in principle.
         """
         return cls(
             file_name=file_name,
@@ -242,7 +352,7 @@ class OutputRecord:
         )
 
     def to_dict(self) -> dict:
-        """Serialize to the output envelope dict (the seven-key shape written to JSON).
+        """Serialize to the output envelope dict (the eight-key shape written to JSON).
 
         Derived from the dataclass fields (a shallow copy — ``classifications`` is not
         deep-copied), so every field is emitted, in declaration order, and ``to_dict``

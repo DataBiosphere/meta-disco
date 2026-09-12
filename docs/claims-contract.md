@@ -129,11 +129,17 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
+    **Kind 2 is retired (#424).** The AnVIL harmonized fields are not a source with an opinion about our
+    files — they are the incumbent output, the answer AnVIL publishes today, which ours is diffed against.
+    A target's current state is not an input to producing it. Four input kinds remain; the numbering is kept
+    so citations elsewhere stay valid. See the Open section for the full reasoning.
+
     A source is an input kind only if it says something about **our files**. A table that describes the world —
     an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
     That is why the reference validator is input kind 1: it reads our bytes and looks the answer up.
 
-4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank.
+4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank. (With kind 2 retired,
+    this is a statement about the four kinds that remain — 1, 3, 4 and 5.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -230,11 +236,54 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      is the memory ceiling of #374, and the reconciled artifact is larger still. 6.5 is about the record's
      schema, not its container, so nothing is lost by the change.
 
+## 7. The incumbent
+
+Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it.
+
+7.1 AnVIL's own `data_modality` and `reference_assembly` are the **incumbent output**, not an input.
+    They are the answer the AnVIL Explorer publishes right now, and a target's current state is not an input
+    to producing it. This is why 4.1's kind 2 is retired.
+
+7.2 The incumbent is **carried, never consumed**. It produces no claim, competes at no tier, and changes no
+    value. A run with the incumbent present classifies identically to one without it — the same guarantee
+    6.6 makes about a run with no sources.
+
+7.3 It is carried **verbatim**: the values as the publisher wrote them, a list wherever the publisher
+    published a list. Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing
+    a wrong answer, and 1.4's transcribe-verbatim rule governs the incumbent as it governs evidence.
+
+7.4 It is carried **on the record**, in a `declared` block beside `classifications`, and not merged into it.
+    Nesting is what keeps 7.2 legible: the dimensions block is our answer and the declared block is theirs.
+
+7.5 The incumbent is carried **even when it yields nothing else**. A declared value our vocabulary has no
+    word for — `GRCm39` — produces no claim under 3.7, so without this block it would appear in the output
+    nowhere at all, and the gap it represents would be unmeasurable from the output.
+
+7.6 Whether a declared value is a term in our vocabulary is **recorded per file**, not inferred by a reader.
+    Today no declared value in the corpus is one, which is what makes #414's translation rows countable
+    rather than asserted.
+
+7.7 **Every producer of a run writes it.** This is 7.2's twin: a producer that omits it does not fail, it
+    under-reports, and a missing declaration is indistinguishable from a file the publisher said nothing
+    about. The claim is about the whole run, exactly as #376's exclusion claim is.
+
+7.8 The diff against the incumbent is a stage **after** resolution, and its shape does not depend on how many
+    sources feed it: `sources -> reconcile -> our value -> diff against incumbent`. With one source there is
+    nothing to reconcile, and the diff is the whole of it.
+
+7.9 The diff **recommends; it does not adopt**. A recommendation that the incumbent should stand leaves our
+    value exactly as inference resolved it. Nothing here writes an answer.
+
+7.10 Agreement is only decidable **after mapping**. `GRCh38 + Gencode40` and `GRCh38` are the same assembly
+     and different strings, so until #414's translation table exists the diff names the value pair rather
+     than judging it. Guessing at equality would be 3.5's similarity matching by another route.
+
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. Nothing yet checks a mapped value *against the slot's vocabulary* at runtime; that check is #414's, at the point the translation table loads. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in five places:
+No code reads this document, and the pipeline it describes does not exist — with section 7 excepted, which
+describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. Nothing yet checks a mapped value *against the slot's vocabulary* at runtime; that check is #414's, at the point the translation table loads. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in five places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
@@ -262,7 +311,23 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - Rule-id namespace: unique across the whole rule set, or namespaced per source.
 - What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
-- Whether input kind 2 (AnVIL harmonized fields) is read today at all.
+- ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered by #424: it is not an
+  input kind.** It was read — the downloader parsed both fields onto every record — and then dropped at
+  `ClassifierRecord`, one step before classification, so the answer to the question as asked was "no". But
+  the reframing matters more than the answer. The AnVIL harmonized fields are not a *source with an opinion*
+  about our files; they are the **incumbent output**, the answer the AnVIL Explorer publishes today and the
+  thing our answer is measured against. A target's current state is not an input to producing it.
+
+  So 4.1 has four input kinds, not five, and 4.2's "inputs 1-4 are equal" is a statement about the four that
+  remain. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
+  4.3-4.6 describe what happens when a second arrives. #424 does no reconciliation for that reason — one
+  source has nothing to reconcile with — and instead diffs inference against the incumbent and recommends,
+  which is a stage that sits *after* reconciliation and is unaffected by how many sources feed it:
+  `sources -> reconcile -> our value -> diff against incumbent`.
+
+  What #424 built is the carrying, not a claim: each record's `declared` block holds the incumbent verbatim,
+  produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
+  by number across the issues, and a silent renumber would break every citation.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
 - How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has

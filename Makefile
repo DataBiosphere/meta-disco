@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report incumbent-report manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -27,6 +27,7 @@ help:
 	@echo "  make manifest-survey    Survey what the downloaded manifests carry (offline)"
 	@echo "  make download-and-survey Pull manifests, then survey what they carry"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
+	@echo "  make incumbent-report   Compare a run against the values AnVIL publishes today"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
 	@echo "  make all-reports        Generate all reports (coverage + validation)"
@@ -171,6 +172,12 @@ download-and-survey: download manifest-survey
 validation-report:
 	uv run python scripts/generate_validation_report.py
 
+# This run's answer beside the incumbent AnVIL publishes today (#424): what each side
+# says per file, and what to do about the difference. Offline — the pipeline carries
+# the declaration into each record, so it reads only the run's own output.
+incumbent-report:
+	uv run python scripts/generate_incumbent_report.py
+
 # Compare two corpus generations: input snapshots file-by-file by md5, and run
 # outputs by label, splitting each coverage delta into corpus loss / corpus gain /
 # label change so a catalog migration is not mistaken for classifier drift (#335).
@@ -180,7 +187,7 @@ validation-report:
 corpus-diff:
 	uv run python scripts/compare_corpus.py $(ARGS)
 
-all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report incumbent-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py

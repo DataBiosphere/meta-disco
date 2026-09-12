@@ -12,7 +12,8 @@ from pathlib import Path
 
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
-from meta_disco.pipeline import load_classifiable_records
+from meta_disco.pipeline import incumbent_source, load_classifiable_snapshot
+from meta_disco.records import build_declared
 from meta_disco.rule_engine import RuleEngine
 
 # Extensions handled by this script
@@ -25,7 +26,8 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    files = load_classifiable_records(metadata_path, output_path.parent)
+    metadata, files = load_classifiable_snapshot(metadata_path, output_path.parent)
+    source = incumbent_source(metadata)
     print(f"Loaded {len(files):,} files from metadata")
 
     engine = RuleEngine()
@@ -72,6 +74,15 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                 "dataset_id": f.get("dataset_id"),
                 "dataset_title": dataset_title,
                 "classifications": result.to_output_dict(),
+                # What AnVIL declares about this file today, carried beside what this
+                # run concluded (#424). Every producer of a run must write it or the
+                # comparison silently under-reports: this catch-all alone holds 5,817
+                # of the corpus's 11,231 declared files.
+                "declared": build_declared(
+                    data_modality=f.get("data_modality"),
+                    reference_assembly=f.get("reference_assembly"),
+                    source=source,
+                ),
             }
         )
 

@@ -188,6 +188,9 @@ RECORD_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
+    # The incumbent declaration (#424). Present on every record and null on most —
+    # these fixtures declare nothing, so the golden pins it as null throughout.
+    "declared",
 }
 
 

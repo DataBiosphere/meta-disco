@@ -380,30 +380,57 @@ def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], i
 def _first(cell: str) -> str | None:
     """The first of a ``||``-joined multi-value cell, or None for an empty cell.
 
-    The retired page downloader took element zero of the list Azul returned for
-    ``data_modality`` and ``reference_assembly``; this is the same choice on the
-    compact spelling of that list.
+    Used for ``organism_type`` and ``phenotypic_sex`` only — the two donor fields
+    the page downloader also emitted, which the input contract does not model and
+    ignores as extra keys. Taking element zero of a list is lossy, so it is kept
+    only where nothing reads the result: the two fields AnVIL *declares* about a
+    file went through here too until #424, where element zero was not dropping
+    data but manufacturing a wrong answer (twelve IGVF files declare two
+    modalities and all twelve arrived as the first one). Those two read
+    :func:`_declared` instead.
     """
     if not cell:
         return None
     return cell.split(_MULTI_VALUE_SEP, 1)[0] or None
 
 
+def _declared(cell: str) -> list[str] | None:
+    """Every value of a ``||``-joined multi-value cell, or None for an empty cell.
+
+    The incumbent declaration transcribed as Azul published it (#424): a list
+    where Azul published a list, and each value exactly as it was written — no
+    mapping, no normalization, no casefolding. Splitting on the full ``" || "``
+    separator rather than ``"||"`` is what keeps a value free of the separator's
+    own padding.
+
+    An empty element is dropped rather than transcribed: it declares nothing, and
+    a cell of nothing but separators yields ``None`` like a blank one. That is the
+    only case in which the returned list is not the cell split verbatim, and the
+    only value this can ever drop.
+    """
+    if not cell:
+        return None
+    return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
+
+
 def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
     """One classifier input record from one compact-manifest row.
 
-    The keys are the input contract (``schema/metadata.yaml``) plus the two
-    donor fields the page downloader also emitted and the contract ignores.
+    The keys are the input contract (``schema/metadata.yaml``) plus four fields
+    the contract does not model and ignores as extra keys: AnVIL's two declared
+    dimensions and the two donor fields the page downloader also emitted.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
     strict validation requires; a cell that is not one of Azul's ``True`` /
-    ``False`` spellings raises rather than silently becoming ``False``. Four
-    fields read an empty cell as ``None`` and a multi-valued one as its first
-    value, which is what the page downloader emitted for them: the contract's
-    two nullable slots, ``data_modality`` and ``reference_assembly``, and the
-    two donor fields, ``organism_type`` and ``phenotypic_sex``, which the
-    contract does not model and ignores as extra keys. Every other field is
-    passed through as the cell's text, and the contract's non-empty patterns
-    are what reject a blank one.
+    ``False`` spellings raises rather than silently becoming ``False``.
+
+    Four fields read an empty cell as ``None``, and they split a multi-valued one
+    two different ways. ``data_modality`` and ``reference_assembly`` are the
+    incumbent declaration — the values AnVIL publishes today, which classification
+    reads as nothing and the output carries as ``declared`` (#424) — and are
+    transcribed as the full list (:func:`_declared`). ``organism_type`` and
+    ``phenotypic_sex`` still keep element zero (:func:`_first`), which nothing
+    reads. Every other field is passed through as the cell's text, and the
+    contract's non-empty patterns are what reject a blank one.
     """
     return {
         "entry_id": row["files.document_id"],
@@ -412,8 +439,8 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
         "file_format": row["files.file_format"],
         "file_size": int(row["files.file_size"]),
         "file_md5sum": row["files.file_md5sum"],
-        "data_modality": _first(row.get("files.data_modality", "")),
-        "reference_assembly": _first(row.get("files.reference_assembly", "")),
+        "data_modality": _declared(row.get("files.data_modality", "")),
+        "reference_assembly": _declared(row.get("files.reference_assembly", "")),
         "is_supplementary": _BOOL_CELL[row["files.is_supplementary"]],
         "drs_uri": row["files.drs_uri"],
         "dataset_id": row["datasets.dataset_id"],

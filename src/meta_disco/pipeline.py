@@ -74,6 +74,50 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 
+# The system publishing the incumbent declaration a run diffs against (#424). The
+# catalog generation is appended to it, giving e.g. "anvil/anvil15": AnVIL is who
+# publishes, the catalog is which generation of what it published.
+INCUMBENT_SYSTEM = "anvil"
+
+
+def incumbent_source(metadata: dict) -> str | None:
+    """Name the incumbent an input snapshot's declarations came from, or None.
+
+    Reads the catalog generation the snapshot recorded (``metadata.catalog``, written
+    by ``azul_manifest.metadata_block``) and qualifies it with the publishing system,
+    so a ``declared`` block says *which* incumbent it carries rather than only that one
+    exists — the distinction that matters the first time a second target appears.
+
+    ``None`` when the input carried no envelope (an ``.ndjson`` load) or its envelope
+    recorded no catalog (a snapshot pulled before #335 added it, such as the archived
+    anvil14 one). Deliberately not defaulted to the current catalog: an unnamed
+    incumbent is a fact, and a guessed one is the drift #335 exists to catch.
+    """
+    catalog = metadata.get("catalog")
+    return f"{INCUMBENT_SYSTEM}/{catalog}" if isinstance(catalog, str) and catalog else None
+
+
+def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[dict, list[dict]]:
+    """:func:`load_classifiable_records`, plus the input envelope, in one parse.
+
+    The envelope half is what :func:`incumbent_source` reads, so a producer that
+    writes a ``declared`` block can name the incumbent without parsing a
+    several-hundred-megabyte file a second time. Same exclusion, same
+    ``excluded_files.json`` write, same guarantee that every returned element is a
+    ``dict`` — this is that function with the envelope kept rather than dropped, and
+    that function is now this one with it dropped.
+
+    The metadata block is ``{}`` for an ``.ndjson`` input, which carries no envelope.
+    """
+    metadata, raw = load_snapshot(input_path)
+    records, excluded = partition_records(raw)
+    if run_dir is not None:
+        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
+    if excluded:
+        print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
+    return metadata, records
+
+
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
     """Load an input file's records, minus the ones excluded for having no checksum.
 
@@ -102,13 +146,12 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     element cannot carry a checksum, so the exclusion removes it. That is why the
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
+
+    The records half of :func:`load_classifiable_snapshot`, for the producers that do
+    not need the envelope; the two share one load path so the exclusion cannot come to
+    mean different things to different producers.
     """
-    records, excluded = partition_records(load_records(input_path))
-    if run_dir is not None:
-        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
-    if excluded:
-        print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
-    return records
+    return load_classifiable_snapshot(input_path, run_dir)[1]
 
 
 class RecordOutcome(NamedTuple):
@@ -266,6 +309,10 @@ class ClassifyPipeline:
         self.workers = workers or 10
         self.skip_complete = skip_complete
         self.skip_cached = skip_cached
+        # Set by _load_input from the input envelope, so it is known before the first
+        # record is built. None until then, and None afterwards for an input that
+        # named no catalog (see incumbent_source).
+        self.incumbent_source: str | None = None
 
     def run(self) -> list[dict]:
         """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
@@ -343,7 +390,7 @@ class ClassifyPipeline:
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
-        Returns the canonical seven-key ``OutputRecord`` envelope (#204), the same
+        Returns the canonical eight-key ``OutputRecord`` envelope (#204), the same
         shape the batch path writes; ``dataset_title``/``entry_id`` are ``None`` here
         since there is no source record.
 
@@ -391,8 +438,15 @@ class ClassifyPipeline:
         The run directory is this pipeline's output directory, so the load also records
         what it excluded there — including on a standalone ``make classify-<type>`` run,
         which no orchestrator wraps.
+
+        Reads the snapshot form so the input envelope is parsed in the same pass, and
+        records which incumbent this run's ``declared`` blocks came from (#424). That
+        is a side effect on ``self``, done here because this is where the envelope is
+        in hand and every record built afterwards needs the answer.
         """
-        return load_classifiable_records(self.input_path, self.output_path.parent)
+        metadata, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
+        self.incumbent_source = incumbent_source(metadata)
+        return records
 
     def _filter_records(self, records: list) -> list[dict]:
         """Filter to records routed to this file type by extension.
@@ -564,18 +618,21 @@ class ClassifyPipeline:
             self._build_record(item, classifications), was_cached, content_unreadable, validation_failed=False
         )
 
-    @staticmethod
-    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+    def _build_record(self, item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
         """Wrap a classifications dict in the typed output envelope.
 
         Reads identity off the typed work item (a ``ClassifierRecord`` on the success
         path, an ``InvalidRecord`` on the ``validation_failed`` path); ``OutputRecord``
-        is serialized to the seven-key dict at the NDJSON write boundary via
+        is serialized to the eight-key dict at the NDJSON write boundary via
         ``to_dict``. The identity fields are echoed as the item carries them — typed on
         the success path, the raw (possibly drifted) values on the ``validation_failed``
         path — matching what ``classify_single`` writes for the single-file path (#204).
+
+        An instance method rather than a static one because the ``declared`` block
+        names the incumbent it was read from, which is a fact about this run's input
+        snapshot (#424) and so lives on the pipeline, not on the record.
         """
-        return OutputRecord.from_work_item(item, classifications)
+        return OutputRecord.from_work_item(item, classifications, source=self.incumbent_source)
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""
