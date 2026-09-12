@@ -99,7 +99,7 @@ pedigree in the same row as the file pointers; `coriell_id` / `kgp_sample_id` in
 **The predicate is compound.** `mat_grch38_aln_bam` packs role, haplotype, reference and
 format into one token. One column name therefore speaks to several slots at once.
 
-## 3. The harmonization is Broad's, at TDR ingest, and it drops the column
+## 3. The harmonized layer: what the ingest drops, and why it is empty
 
 `anvil_activity` in `ANVIL_T2T`: **`Indexing` 116,247, `Unknown` 3,207.** That second
 number is the participant count (3,202). One of them:
@@ -150,6 +150,78 @@ you cannot say which column, and the column is where the role lives.
 1:1 restatement, not the entity→file edge. Joining an entity table to our records still
 goes through the DRS URI, which works: `drs_uri` is in `JOIN_KEYS`, and in the check
 below it matched 656/656 with no misses.
+
+### Why the harmonized layer is empty
+
+The layer the ingest produces is the **Findability Subset Schema** — the ingest repo
+carries `anvil_schema/fss_index_data_dictionary/`, and the AnVIL Data-Model repo's one
+artifact is `AnVILDataSubmissionFindabilitySubsetSchema.template.xlsx`. Azul indexes it.
+It is mostly unpopulated, and the reason is visible in the mapping.
+
+The schema **defines** `data_modality` / `reference_assembly` / `assay_type` on six
+tables, `anvil_file` among them. Three ingest paths can fill them, and only one usually
+does:
+
+| path | record set | what it produces |
+|---|---|---|
+| **inventory** — most specs, including `hprc_r2_1` | `file_inventory`, `file_metadata` | `file_id`, `file_format`, `file_ref`, `file_name`, `file_size`, `file_md5sum`. **No dimension columns exist in the mapping.** |
+| **passthrough** — `anvil_1`, `anvil_2`, for submitters already shaped like the AnVIL model | `file_anvil` | adds `data_modality <- file.data_modality`, `reference_assembly <- file.reference_assembly` — if the submitter filled them |
+| **bespoke** | per spec | `igvf_1` is the only one in our corpus that maps dimensions explicitly |
+
+Worked example. HPRC's `hifi` row carries `platform = PACBIO_SMRT`,
+`library_strategy = WGS`, `library_source = GENOMIC`, `data_type = unaligned reads`. The
+activity query reads `sample_id` and `path` from it and nothing else; the file record
+comes from `file_inventory`, a different table entirely. So `anvil_file.data_modality`
+comes out empty while `GENOMIC` sits two tables away, untouched. **Nobody wrote the
+mapping from `hifi.library_strategy` to `anvil_file.data_modality`** — the specification
+author did the structural half and not the semantic half.
+
+That predicts our corpus exactly:
+
+| dataset | files | data_modality | reference_assembly |
+|---|---:|---:|---:|
+| AnVIL_IGVF_Mouse_R1 | 6,786 | **6,755** | 220 |
+| AnVIL_ENCORE_RS293 | 3,752 | 0 | **2,932** |
+| AnVIL_ENCORE_293T | 1,992 | 0 | **1,544** |
+| the other nine datasets | 695,558 | **0** | **0** |
+| TOTAL | 708,088 | 0.95% | 0.66% |
+
+`data_modality` is 100% IGVF, the one bespoke spec. `reference_assembly` is IGVF plus
+ENCORE, whose submitter tables are already named `file` with AnVIL columns and who filled
+`reference_assembly` but not `data_modality`. The 1% figure is not attrition or sampling:
+it is three datasets, for two identifiable reasons.
+
+### A compute ledger is not a catalog
+
+The submitter tables are not a failed catalog. They are a good **compute ledger**, which
+is a different artifact. In Terra a workflow runs over rows, inputs are wired by writing
+`this.read_1_fastq` — so the column name *is* the variable name — and outputs are written
+back as columns on the same row. The table records what has been produced and for which
+rows.
+
+Every property that makes that work makes it unfindable:
+
+| good for the workflow | bad for the catalog |
+|---|---|
+| column name = WDL variable name | the vocabulary is workspace-local |
+| outputs are files | no metadata values to facet on |
+| schema shaped by this pipeline | no two workspaces share a schema |
+| one row per compute unit | the unit differs — sample, chromosome, cohort |
+
+That gap is what the FSS exists to close, and filling it costs real judgment: deciding
+what `WGS` and `unaligned reads` and `PACBIO_SMRT` mean in a controlled vocabulary, once
+per submitter, across twelve vocabularies.
+
+**Why it stays unfilled is reasoning, not measurement** — but the incentive falls on the
+far side of the work. A submitter gets daily value from the working tables because jobs
+run against them; the FSS produces value for someone else, later, looking for the
+dataset. Nothing breaks when it is thin. Consistent with that, the only datasets with
+anything populated are the two where the cost was already paid for another reason.
+
+**What that means for us.** The metadata is not lost, and we are not compensating for a
+failure: the submitter tables are correct and current precisely because people compute
+against them, and the semantic mapping is work nobody upstream is positioned to do. It
+also means we are reading the layer with the maintenance incentive behind it.
 
 ## 4. What it is worth
 
@@ -294,6 +366,9 @@ All measurements are offline, over `data/anvil/manifest/anvil15/*.verbatim.jsonl
   corpus; compare against the stored run's `reference_assembly` and `data_type`.
 - **Predicates**: distinct link-column names on 2+-link tables, collapsed by replacing a
   chromosome token with `chrN`.
+- **Harmonized coverage**: count non-null `data_modality` / `reference_assembly` per
+  dataset over `anvil_files_metadata.ndjson`, against the mapping specifications and
+  record sets in `broadinstitute/anvil_tdr_ingest`.
 
 ## 9. What is not established
 
@@ -303,6 +378,11 @@ All measurements are offline, over `data/anvil/manifest/anvil15/*.verbatim.jsonl
 - What most of the 115 predicates mean. `ANVIL_T2T`'s are documented by the workflow that
   wrote them (§6), but the other datasets' are not yet traced to a source, and mapping any
   of them onto #363's verbs is still the work.
+- Why the FSS stays unfilled (§3). The incentive argument is reasoning from how the
+  artifacts are used, not something anyone has stated. So is the claim that the
+  submitter format suits WDL work well — that is inference from how Terra wires
+  workflow inputs, not a report of what AnVIL users say, and is worth asking someone
+  who lives in it.
 - Whether every Terra-workspace dataset has a findable workflow. The T2T route worked
   because the producers published their WDLs; that is a courtesy, not a guarantee.
 - What the upstream specifications cost to consume. They are BigQuery SQL, not a
