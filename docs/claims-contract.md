@@ -32,9 +32,15 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
     A **slot** is one of the five classification dimensions; it is spelled `field` on the wire and in the code.
-    Evidence is keyed by one of the *target's* keys — the importer maps its source's key into that space and
-    writes the value there (#401, `models.py`) — and is attached to a **file** only at the join (6.7), which
-    is what makes an unmatched or ambiguous row representable rather than unthinkable.
+    The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
+    `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
+    **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather
+    than unthinkable.
+    This is the same principle as `raw_value` beside a mapped value, applied to identity: the importer maps
+    the key and keeps what the source called it, a rule maps the value and keeps what the source said, and
+    both stay auditable for the same reason.
+    A source that cannot name one of our keys cannot be imported. IGSR keys by sample id, we have no
+    subject-level key, and so it writes no evidence — a refusal, not a gap.
     Inference's own signals — an extension, a filename, a header, a contig length, a file size — are not this
     shape, and this section does not govern them.
 
@@ -204,7 +210,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
   question for #364 rather than a mapping one.
-- Who owns the key mapping. #401 merged one answer — `models.py`: "The importer owns the mapping between the two keys", and `require_join_key` refuses any `target_key` outside `JOIN_KEYS` — while #402's body, inherited from #400, says the importer keys by whatever its source publishes and the main loop resolves it. Those are incompatible, the contradiction predates this document, and 2.1 currently states the merged one.
+- Whether a subject-level key and subject-level slots are worth adding. Without them IGSR, which keys by sample id, cannot be imported at all — correctly, but at the cost of a source. Related to the instrument-model question above, to #336 and to #361.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
