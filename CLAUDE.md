@@ -91,94 +91,36 @@ evidence}` entry — plus the controlled vocabulary:
   individually. This is not the retired `dropped` concept (#155) — nothing goes
   unrecorded.
 - **No speculation as fact**: Never confidently assert something unless you actually know it. If inferring or guessing, say "I think" or "it could be". This applies to root cause analysis, data interpretation, and codebase history.
-- **Claim tiers**: A classification field's value is resolved from competing
-  claims by tier (`evaluate_claims`, highest unique tier wins). Tiers 1–3 are
-  the rule tiers declared in `unified_rules.yaml` (extension / filename /
-  header). `CONTENT_TIER` (4, in `rule_engine.py`) is reserved for claims
-  *derived from reading file bytes* (contig lengths, VCF `##contig` lengths,
-  FASTA content, GFA segment tags) — the definitive signal from the accuracy
-  principle above, which must out-rank even a disagreeing tier-3 header rule.
-  Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded number
-  (issue #226).
-- **One claim record, any source**: build claims through
-  `rule_engine.make_claim` (or `add_claim`, which wraps it) — our rules, the
-  content classifiers, and any external source alike. The one standing exception
-  is `classify_index_files.inherited_evidence`, which copies a parent's
-  *already-resolved* status (`conflict` included) rather than declaring something
-  for resolution to weigh, so the constructor cannot express it; it stamps its
-  `source_type` by hand. `make_claim` enforces the record's
-  invariants: exactly one of `value` / `status` / `state`, a `tier` on a claim
-  that competes and none on one that cannot, and a producer handle (`rule_id`
-  for one of ours, a `ClaimSource` for an external source). Every claim carries
-  a `source_type`; state it explicitly from the `SOURCE_*` constants. Never
-  derive it from `tier`, which cannot tell `contig_detection` from `content_read`
-  (both sit at `CONTENT_TIER`) nor either from `signal_inference` (issue #392).
-  Rule claims are the one derived case, and they key off `scope` — the rule's own
-  declaration of what it reads — not tier. The three claim states (`unmapped` / `no_vocabulary_term` /
-  `declined`) declare nothing to resolution: they record that a source was
-  consulted and yielded no vocabulary value, and never win or conflict.
-- **A claim file names both sides of the join, and the envelope carries what
-  does not vary**: an importer runs *out of band* from classification — when a
-  catalog refreshes, with network — and writes a claim file under
-  `data/claims/<source>/` (`claim_files.py`, issue #401); the run reads it, so
-  the import step stays offline and deterministic and either side can be re-run
-  without forcing the other. NDJSON, written and read through
-  `write_claim_file` / `iter_claims` and never with a whole-file `json.load` —
-  the corpus is millions of claims (#374). Line 1 is the envelope:
+- **Claims, evidence and reconciliation live in `docs/claims-contract.md`**, not here.
+  It is the authority on who makes a claim, what an importer may do, how sources
+  reconcile, and what the pipeline's stages are. Cite it by assertion number (`3.4`,
+  `6.9`) rather than restating it — restating is the drift it exists to stop.
+  **Read its "What is not true yet" section before building against it.** Much of it
+  describes a target state: the slot map, the translation table, the read-sources and
+  reconcile stages, and the evidence file do not exist yet. Its Open section lists
+  what is still undecided. Epic #391 tracks the work; #414 comes first.
 
-  ```
-  source{repository,dataset,table,url}  source_version  source_key
-  target{system,dataset,version}                        target_key   fetched_at
-  ```
-
-  and every later line is `{field, target_key_value, claim}`, read as *this row
-  is about the row in `target` whose `target_key` equals `target_key_value`*.
-  The key **names** are on the envelope because they do not change within a
-  file; only the **value** varies, so only that is per line — the same factoring
-  that keeps the source's repository/url/table on the envelope while `column`
-  stays per claim.
-- **A claim file cannot hold a value we have no word for**: `_check_entry` refuses a
-  mapped `value` outside the dimension's vocabulary, on write and on read alike.
-  Mapping a source's raw value onto our terms is the importer's whole job, and
-  nothing downstream would catch a miss — `evaluate_claims` drops source-bearing
-  claims, so a `platform` of `Revio`, or of `pacbio` with the wrong case, would reach
-  no output record and fail no schema gate. `raw_value` is deliberately not checked:
-  recording what the source actually said is what it is for.
-- **The importer owns the mapping; the run does equality lookup**: an importer
-  maps its own key to the target's and writes `target_key_value` already in the
-  target's value space, transforming where needed. That keeps corpus knowledge
-  in the importer and transform logic out of the join, and it is why a
-  source keyed by an ENA run accession adds no term to `JOIN_KEYS` — it maps
-  that accession to `archive_accession` itself. `target_key` is drawn from
-  `JOIN_KEYS`, which spans the target's record fields *and* facts classification
-  derives, so **the join runs after inference**. `target.dataset` is the scope
-  and is not decoration: `file_name` is non-unique on 69% of the corpus and on
-  20% even scoped by dataset title, but on 2 rows of 16,271 within
-  `AnVIL_HPRC_R2`.
-- **An imported claim carries no tier and cites its mapping rule**: imports are
-  not tier participants (#391, on measured evidence), so `make_claim` rejects a
-  `tier` on a claim whose producer is a `ClaimSource`, exactly as it rejects one
-  on a `state` claim — it never competes. It carries the `rule_id` of the
-  mapping that produced it, **including an identity mapping**: there is no
-  implicit copy, because a source value that happens to spell a vocabulary term
-  is a coincidence of spelling rather than an agreement about meaning. A claim
-  names a rule **iff** a mapping entry fired, which makes `unmapped` mean exactly
-  "no entry exists for this raw value" — checkable, and precisely the review
-  queue. The file stores the `rule_id`, not `reason` prose; the text is resolved
-  from the rule when the claim enters the stream, so **classification output is
-  unchanged and stays readable**. The mapping table is #395/#399.
-- **A run reports its claim files and refuses none**: `run_all_classifications`
-  calls `report_claim_files` and never `iter_claims`, so today no claim reaches
-  classification and a run with claim files present produces the same output as
-  one without — the join is #402. It will still refuse none when that lands,
-  because currency is not decidable offline: the sources share no version to
-  compare and AnVIL deletes a superseded catalog rather than keeping it to be
-  matched against. The two places that can act on it own it — the importer
-  compares its file's `target.version` against the configured catalog (`CATALOG`
-  in the Makefile) when deciding to re-fetch, and the run's output is to record
-  which catalog it enhances so an enhancement offered to a catalog that has
-  moved on is refused there (**#404, not yet built** — no run output carries a
-  catalog today).
+- **What the code does today, which the contract does not replace:**
+  - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
+    construction site for a claim, and enforces its invariants: exactly one of
+    `value` / `status` / `state`, a `tier` only where one belongs, and a producer
+    handle. `classify_index_files.inherited_evidence` is the one path outside it —
+    a known violation of the contract's 1.1, tracked as #413.
+  - Every claim carries a `source_type`, stated explicitly from the `SOURCE_*`
+    constants. Never derive it from `tier`, which cannot tell `contig_detection`
+    from `content_read`. Rule claims are the one derived case and key off `scope`.
+  - `CONTENT_TIER` (4, in `rule_engine.py`) is for claims derived from reading file
+    bytes. Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded
+    number (#226). Tiers 1–3 are the rule tiers declared in `unified_rules.yaml`.
+  - Claim files under `data/claims/<source>/` are NDJSON, written and read through
+    `write_claim_file` / `iter_claims` and never with a whole-file `json.load` — the
+    corpus is millions of records (#374). Line 1 is the envelope, naming both sides
+    of the join; `_check_entry` refuses a mapped value outside the dimension's
+    vocabulary on write and on read. `raw_value` is deliberately unchecked.
+  - `run_all_classifications` calls `report_claim_files` and never `iter_claims`, so
+    no claim reaches classification and a run with claim files present produces the
+    same output as one without. Currency is not decidable offline; recording which
+    catalog a run enhances is #404, and is not built.
 
 ## Surprises
 
