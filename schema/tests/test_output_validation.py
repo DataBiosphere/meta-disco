@@ -289,9 +289,9 @@ def test_evidence_row_takes_any_raw_value_the_source_wrote(envelope_validator, r
 
 @pytest.mark.parametrize("member", ["value", "status", "claim_state", "rule_id", "tier", "source", "join_key"])
 def test_evidence_row_refuses_a_member_that_declares_something(envelope_validator, member):
-    # The gate's half of #421: a row is an observation. `source_evidence._check_entry`
-    # refuses each of these by name, and the schema has to agree or a producer
-    # validates a file the only reader will not read.
+    # The gate's half of #421: a row is an observation. `_entry_from_line` refuses
+    # each of these by name, and the schema has to agree or a producer validates a
+    # file the only reader will not read.
     report = envelope_validator.validate(_row(**{member: "x"}), target_class="EvidenceRow")
     assert report.results, f"a row carrying {member!r} should have failed"
 

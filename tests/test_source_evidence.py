@@ -48,6 +48,7 @@ from meta_disco.models import (
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
+from meta_disco.schema_vocab import default_schema_path
 from meta_disco.source_evidence import (
     _MAX_ENVELOPE_BYTES,
     DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -114,17 +115,6 @@ def _entry(column="instrumentModel", raw="Revio", name="HG002.bam", source=HPRC_
     )
 
 
-def _entry_with(entry: EvidenceEntry, **overrides) -> EvidenceEntry:
-    """A copy of ``entry`` with one member replaced, valid or not.
-
-    `dataclasses.replace` because the record is frozen, and deliberately without a
-    type check on the way through: the cases below hand it a `raw_value` of `None` or
-    a `field` that is not a dimension, which is exactly what an importer that is not
-    type-checked can hand the writer.
-    """
-    return replace(entry, **overrides)
-
-
 class TestRoundTrip:
     """An evidence file says where it came from, and gives back the rows put into it."""
 
@@ -183,7 +173,9 @@ class TestRoundTrip:
         first, second = (entry.source for entry in iter_evidence(path))
         assert first is second
         with pytest.raises(AttributeError):
-            first.table = "edited"
+            # The type checker refuses the assignment, which is the point: the record
+            # is frozen, and this pins that the sharing above is therefore safe.
+            first.table = "edited"  # type: ignore[misc]
 
     @pytest.mark.parametrize(
         "raw",
@@ -192,7 +184,11 @@ class TestRoundTrip:
             "GENOMIC",  # differs from our `genomic` only by case
             " Revio ",  # a cell the source padded
             "",  # an empty cell: 63 of them in AnVIL_HPRC_R2.library_selection
-            "Hi-C",  # a value `assay_type_enum` has no term for at all
+            # A decision #399 owes, not a file this can refuse. Until #421 the module
+            # refused a *mapped* value outside the dimension's vocabulary, which is why
+            # an importer had to reach for a `no_vocabulary_term` state to say this; a
+            # row says nothing about its raw value, so the question survives intact.
+            "Hi-C",
         ],
     )
     def test_the_raw_value_is_what_the_source_wrote(self, tmp_path, raw):
@@ -206,25 +202,6 @@ class TestRoundTrip:
         write_evidence_file(path, evidence_file_envelope(), [_entry(raw=raw)])
 
         assert [entry.raw_value for entry in iter_evidence(path)] == [raw]
-
-    def test_a_value_the_vocabulary_has_no_word_for_is_kept_not_refused(self, tmp_path):
-        """`Hi-C` on 3,002 files is a decision #399 owes, not a file this can refuse.
-
-        Until #421 this module refused a *mapped* value outside the dimension's
-        vocabulary, which is why an importer had to reach for a `no_vocabulary_term`
-        state to say this. A row carries the raw value and says nothing about it, so
-        the question survives to the review queue intact.
-        """
-        path = tmp_path / "evidence.ndjson"
-        entry = EvidenceEntry(
-            field="assay_type",
-            target_key_value="HG002.hic.bam",
-            raw_value="Hi-C",
-            source=HPRC_CATALOG.as_claim_source("libraryStrategy"),
-        )
-        write_evidence_file(path, evidence_file_envelope(), [entry])
-
-        assert list(iter_evidence(path)) == [entry]
 
     def test_the_count_written_is_returned(self, tmp_path):
         path = tmp_path / "evidence.ndjson"
@@ -513,7 +490,9 @@ class TestMalformedFiles:
         path = tmp_path / "evidence.ndjson"
         entry = _entry()
         with pytest.raises(ValueError, match="unknown dimension"):
-            write_evidence_file(path, evidence_file_envelope(), [_entry_with(entry, field="data_moddality")])
+            # `replace` rather than a valid constructor call: an importer that is not
+            # type-checked is exactly what this refusal exists for.
+            write_evidence_file(path, evidence_file_envelope(), [replace(entry, field="data_moddality")])
 
         write_evidence_file(path, evidence_file_envelope(), [entry])
         path.write_text(path.read_text().replace('"platform"', '"data_moddality"', 1))
@@ -522,11 +501,8 @@ class TestMalformedFiles:
 
     def test_a_line_with_nothing_to_match_on_is_refused(self, tmp_path):
         """A row whose target_key_value is empty can attach to no file."""
-        entry = _entry()
         with pytest.raises(ValueError, match="target_key_value"):
-            write_evidence_file(
-                tmp_path / "c.ndjson", evidence_file_envelope(), [_entry_with(entry, target_key_value="")]
-            )
+            write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(), [_entry(name="")])
 
     @pytest.mark.parametrize("raw", [None, 7, ["Revio"]])
     def test_a_raw_value_that_is_not_a_string_is_refused_both_ways(self, tmp_path, raw):
@@ -538,7 +514,7 @@ class TestMalformedFiles:
         """
         path = tmp_path / "evidence.ndjson"
         with pytest.raises(ValueError, match="raw_value"):
-            write_evidence_file(path, evidence_file_envelope(), [_entry_with(_entry(), raw_value=raw)])
+            write_evidence_file(path, evidence_file_envelope(), [_entry(raw=raw)])
 
         write_evidence_file(path, evidence_file_envelope(), [_entry()])
         path.write_text(path.read_text().replace('"Revio"', json.dumps(raw), 1))
@@ -638,7 +614,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
     def test_a_hand_built_row_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
         """An importer builds an EvidenceEntry by hand; the writer holds it to the line shape."""
-        entry = _entry_with(_entry(), source=ClaimSource(name="HPRC Data Explorer", column="instrumentModel"))
+        entry = replace(_entry(), source=ClaimSource(name="HPRC Data Explorer", column="instrumentModel"))
 
         with pytest.raises(ValueError, match="envelope names"):
             write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(), [entry])
@@ -723,22 +699,11 @@ class TestALineIsAnObservationNotAClaim:
         )
         return path
 
-    @pytest.mark.parametrize(
-        "member,value",
-        [
-            ("claim", {"value": "PACBIO", "rule_id": "m1"}),
-            ("value", "PACBIO"),
-            ("status", "not_applicable"),
-            ("claim_state", "no_vocabulary_term"),
-            ("rule_id", "map_hprc_platform_v1"),
-            ("tier", 4),
-            ("source_type", SOURCE_REPOSITORY_METADATA),
-            ("join_key", JOIN_KEY_FILE_NAME),
-            ("match_exact", True),
-            ("source", {"name": "SOMEONE ELSE", "table": "other"}),
-        ],
-    )
-    def test_a_retired_member_is_refused_by_name(self, tmp_path, member, value):
+    # Over the map itself, not a hand-copied list: a key added there and not here
+    # would go untested silently. The value is arbitrary — the refusal fires on the
+    # member's presence, before anything looks at what it holds.
+    @pytest.mark.parametrize("member", sorted(source_evidence._RETIRED_LINE_KEYS))
+    def test_a_retired_member_is_refused_by_name(self, tmp_path, member):
         """Each one is a thing a line used to carry, and the refusal says why it does not.
 
         A bare "unknown member" would be true and useless: the producer that hits this
@@ -751,24 +716,27 @@ class TestALineIsAnObservationNotAClaim:
         that re-attributed itself would undo the writer's check for exactly the files
         it cannot vouch for.
         """
-        path = self._write_raw(tmp_path, **{member: value})
+        path = self._write_raw(tmp_path, **{member: "x"})
 
         with pytest.raises(ValueError, match=f"{member!r} is not a member of an evidence row"):
             list(iter_evidence(path))
 
-    @pytest.mark.parametrize("member", ["value", "status", "claim_state", "rule_id", "tier"])
-    def test_the_record_offers_nowhere_to_put_a_retired_member(self, member):
+    def test_the_record_offers_nowhere_to_put_a_retired_member(self):
         """The writer cannot publish one either, because the record cannot hold one.
 
         This is the stronger half of the guarantee: the reader refuses a hand-written
         line, and an importer using the record is refused by the type system before it
-        writes anything. `EvidenceEntry` has four members and none of them is an
-        answer.
+        writes anything. The field-set assertion is what carries it — `EvidenceEntry`
+        has four members and none of them is an answer — and the `TypeError` is the
+        one mechanism that follows from it, not five.
         """
         assert {f.name for f in fields(EvidenceEntry)} == {"field", "target_key_value", "raw_value", "source"}
         with pytest.raises(TypeError):
-            EvidenceEntry(  # type: ignore[call-arg]
-                field="platform", target_key_value="HG002.bam", raw_value="Revio", **{member: "x"}
+            EvidenceEntry(
+                field="platform",
+                target_key_value="HG002.bam",
+                raw_value="Revio",
+                value="PACBIO",  # type: ignore[call-arg]
             )
 
     def test_an_unknown_member_beside_the_row_is_refused(self, tmp_path):
@@ -967,7 +935,18 @@ class TestAnEvidenceFileIsWrittenBySomeoneElse:
         assert list(iter_evidence(path)) == [entry]
 
 
-def test_the_row_field_pattern_lists_every_dimension():
+@pytest.fixture(scope="module")
+def schema() -> dict:
+    """The LinkML schema, parsed once for the two tests that read it.
+
+    Through `schema_vocab.default_schema_path()` rather than a hand-built path: it is
+    the canonical locator (`test_package_data` uses it the same way) and it does not
+    go stale if the package-data anchor moves.
+    """
+    return yaml.safe_load(default_schema_path().read_text())
+
+
+def test_the_row_field_pattern_lists_every_dimension(schema):
     """The schema's `EvidenceRow.field` pattern and `CLASSIFICATION_FIELDS` are one set.
 
     The pattern spells the five names out rather than pointing at an enum, because
@@ -975,13 +954,12 @@ def test_the_row_field_pattern_lists_every_dimension():
     stays safe while the two agree: a dimension added to the tuple and not to the
     pattern would be written by this module and refused by the gate (#421).
     """
-    schema = yaml.safe_load((Path(source_evidence.__file__).parent / "schema" / "classification.yaml").read_text())
     pattern = schema["classes"]["EvidenceRow"]["attributes"]["field"]["pattern"]
 
     assert set(pattern.removeprefix("^(").removesuffix(r")\Z").split("|")) == set(CLASSIFICATION_FIELDS)
 
 
-def test_the_reader_and_the_schema_share_one_pattern():
+def test_the_reader_and_the_schema_share_one_pattern(schema):
     """`fetched_at` is checked by the same regex on both sides, character for character.
 
     Two copies of a timestamp pattern drift in ways nobody guesses: the reader used a
@@ -990,7 +968,6 @@ def test_the_reader_and_the_schema_share_one_pattern():
     Pinning the strings equal is what makes "both sides refuse the same files" a fact
     rather than an intention (#401 review).
     """
-    schema = yaml.safe_load((Path(source_evidence.__file__).parent / "schema" / "classification.yaml").read_text())
     slot = schema["classes"]["EvidenceFileEnvelope"]["attributes"]["fetched_at"]
 
     assert slot["pattern"] == source_evidence._FETCHED_AT_PATTERN

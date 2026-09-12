@@ -406,6 +406,19 @@ def optional_str(value: object, label: str, where: str) -> str | None:
 _ABSENT = object()
 
 
+def _require_one_of(value: object, vocabulary: frozenset[str], noun: str, label: str, where: str) -> str:
+    """Return ``value`` as a member of ``vocabulary``, or raise naming it and ``where``.
+
+    One wording for "this member is not in that closed set", so the several
+    vocabularies an evidence file's envelope pins do not each grow a phrasing of the
+    same fault. ``noun`` completes the sentence: *is not a key of the target*, *is not
+    a kind of external source*.
+    """
+    if not isinstance(value, str) or value not in vocabulary:
+        raise ValueError(f"{where}: {label} {value!r} is not {noun} (expected one of {sorted(vocabulary)})")
+    return value
+
+
 def require_external_source_type(value: object, label: str, where: str) -> str:
     """Return ``value`` as a kind of source outside this repository, or raise.
 
@@ -418,38 +431,35 @@ def require_external_source_type(value: object, label: str, where: str) -> str:
     and table is one kind of source, so this runs once per file and reconcile reads it
     from there when it stamps the claim it makes from a row.
     """
-    if not isinstance(value, str) or value not in EXTERNAL_SOURCE_TYPES:
-        raise ValueError(
-            f"{where}: {label} {value!r} is not a kind of external source "
-            f"(expected one of {sorted(EXTERNAL_SOURCE_TYPES)})"
-        )
-    return value
+    return _require_one_of(value, EXTERNAL_SOURCE_TYPES, "a kind of external source", label, where)
 
 
 def require_join_key(value: object, label: str, where: str) -> str:
     """Return ``value`` as a key of the target, or raise naming ``label`` and ``where``.
 
-    One refusal for one vocabulary, used in both positions it appears in: a claim
+    One refusal for one vocabulary, used in both positions it appears in: an evidence
     file's envelope declaring which key it is keyed by (``target_key``), and a claim
     recording which one attached it (``join_key``) once the join has run. Stating it
     twice would mean two wordings for the same fault and two places to update when
     the vocabulary moves — ``archive_accession`` is the live example, a derived fact
     rather than a record field.
     """
-    if not isinstance(value, str) or value not in JOIN_KEYS:
-        raise ValueError(f"{where}: {label} {value!r} is not a key of the target (expected one of {sorted(JOIN_KEYS)})")
-    return value
+    return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
 
 
-def member_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
-    """Read an optional string member of ``block``, refusing an explicit null.
+def member_optional_str(block: dict, key: str, label: str, where: str, checker=optional_str) -> str | None:
+    """Read one member of ``block`` through ``checker``, refusing an explicit null.
 
-    The same rule :func:`_flat_from_dict` applies to a member it reads, for one read
-    out of a dict instead — an evidence line's ``column``, which is the one source
-    member the line carries rather than the envelope. ``dict.get`` with a default
-    cannot tell an absent key from a present null, and collapsing the two would accept
-    a record the writer could not have produced while every other member refuses it
-    (#401 review).
+    The single statement of the absent-versus-null rule, used by both readers that
+    need it: :func:`_flat_from_dict` for every member of a flat record, and
+    ``source_evidence`` for an evidence line's ``column`` — the one source member a
+    line carries rather than the envelope. ``dict.get`` with a default cannot tell an
+    absent key from a present null, and collapsing the two would accept a record the
+    writer could not have produced while every other member refuses it (#401 review).
+
+    ``checker`` is what a present value must satisfy; it defaults to
+    :func:`optional_str` because most members are, and :func:`_flat_from_dict` passes
+    :func:`required_str` for a member with no dataclass default.
 
     Read rather than removed: while a line held a claim, the members left after this
     one became ``make_claim``'s keyword arguments, so taking it out was the point. A
@@ -459,7 +469,7 @@ def member_optional_str(block: dict, key: str, label: str, where: str) -> str | 
     value = block.get(key, _ABSENT)
     if value is None:
         raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
-    return optional_str(None if value is _ABSENT else value, label, where)
+    return checker(None if value is _ABSENT else value, label, where)
 
 
 def _flat_to_dict(record) -> dict:
@@ -491,13 +501,14 @@ def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
     ``fields()`` walks the dataclass on every call and is not free; the members and
     which checker each one gets cannot change for a class, so they are derived once
     and cached. Measured, this is a cold path and the cache is insurance rather than a
-    win. Reading a whole evidence file — a thousand claims or a million — consults it
+    win. Reading a whole evidence file — a thousand rows or a million — consults it
     five times across three classes: once for ``EvidenceFileEnvelope`` and twice each for
     ``EvidenceFileSource`` and ``EvidenceTarget``, which the envelope both reads and
-    re-validates by round-tripping. Writing one never consults it at all. The helper
-    that does run per claim is :func:`_flat_to_dict`, through ``make_claim``'s
-    ``source.to_dict()`` — a thousand calls for a thousand claims, on both sides —
-    and it walks ``fields()`` uncached (#401 review).
+    re-validates by round-tripping. Writing one never consults it at all, and neither
+    does a row on either side: a row stopped carrying a claim in #421, so the
+    per-claim ``_flat_to_dict`` this note used to warn about — ``make_claim``'s
+    ``source.to_dict()``, a call for every claim on both sides — is gone. The one
+    ``to_dict`` left on a row's path is in ``_evidence_line``'s error branch.
 
     Returns the known names, those names sorted for an error message, and
     ``(name, checker)`` pairs: a member with no dataclass default is required.
@@ -544,12 +555,9 @@ def _flat_from_dict(cls, block: object, where: str, label: str):
     _reject_unknown(block, known, expected, where, label)
     # Values are only ever `str | None` to a type checker — `required_str` raises
     # rather than returning None, but that is not visible through the splat.
-    values: dict[str, Any] = {}
-    for name, checker in members:
-        present = block.get(name, _ABSENT)
-        if present is None:
-            raise ValueError(f"{where}: {label} {name} is an explicit null — an absent member is omitted, not nulled")
-        values[name] = checker(None if present is _ABSENT else present, f"{label} {name}", where)
+    values: dict[str, Any] = {
+        name: member_optional_str(block, name, f"{label} {name}", where, checker) for name, checker in members
+    }
     return cls(**values)
 
 

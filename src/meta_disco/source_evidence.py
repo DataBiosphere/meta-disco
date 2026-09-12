@@ -119,7 +119,7 @@ decision no one can review (#421).
 import json
 import os
 import re
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path
@@ -168,9 +168,9 @@ _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 # used for it: that constructs a fresh encoder on every call.
 _encode = json.JSONEncoder(separators=(",", ":")).encode
 
-# Write buffer for an evidence file. A written line measures around 170 bytes, so the
-# default 8 KB is a syscall every 50 rows or so across a multi-gigabyte sequential
-# write; a megabyte is one per 6,000.
+# Write buffer for an evidence file. A written line measures around 126 bytes — a row
+# stopped carrying a claim in #421 — so the default 8 KB is a syscall every 65 rows or
+# so across a multi-gigabyte sequential write; a megabyte is one per 8,300.
 _WRITE_BUFFER_BYTES = 1 << 20
 
 # How far `read_envelope` will read looking for the end of line 1. See `_read_envelope`.
@@ -187,6 +187,7 @@ _READING = "line"
 # optional — a source whose table has none omits it. The key names are not among
 # them: they are on the envelope, constant for the file.
 _LINE_KEYS = frozenset({"field", "target_key_value", "raw_value", "column"})
+_EXPECTED_LINE_KEYS = tuple(sorted(_LINE_KEYS))
 
 # Members a line carried when it was a claim (#401), each with why it is gone (#421).
 # Refused by name rather than as an anonymous unknown member: a producer written
@@ -634,12 +635,17 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     would strand a complete evidence file under a name nothing reads (#401 review).
 
     Every entry is validated against the envelope as it is written
-    (:func:`_evidence_line`): an unknown dimension, a retired member such as a mapped
-    ``value`` or a ``join_key``, or a row whose source is not the source the envelope
+    (:func:`_evidence_line`): an unknown dimension, a non-string ``raw_value``, an
+    empty ``target_key_value``, or a row whose source is not the source the envelope
     names, raises rather than being written and discovered by a reader later. The
-    envelope's own source is resolved once per column, here, and compared against per
-    row — it is constant for the file. The envelope was checked when it was built
+    envelope's four source facts are flattened once, here, and compared against per
+    row — they are constant for the file. The envelope was checked when it was built
     (``EvidenceFileEnvelope.__post_init__``).
+
+    A *retired* member — a mapped ``value``, a ``tier``, a ``join_key`` — is not
+    refused here because it cannot get this far: ``EvidenceEntry`` has four members
+    and none of them is an answer. Refusing one by name is the reader's job
+    (:func:`_entry_from_line`), where a hand-edited line can carry it.
 
     ``path`` must end in ``.ndjson``, because that is what :func:`discover` looks for.
     Writing ``catalog.json`` otherwise succeeds, returns a row count, and is then
@@ -668,20 +674,13 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     # looks for `*.ndjson`, so no run reads it.
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
     name = path.name
-    # The source a row in this file must have come from, by its column. The
-    # envelope's source is constant for the file and one table's rows are read from a
-    # handful of columns, so this is a few objects per file rather than one per row.
-    # The comparison against it is a record compare: `ClaimSource` is a frozen
-    # dataclass, so equality is its members, and an entry now carries the record
-    # itself rather than a serialized claim to be parsed back (#421). (A plain dict
-    # closed over here rather than `lru_cache` on a method, which would keep the
-    # envelope alive for the process.)
-    by_column: dict[str | None, ClaimSource] = {}
-
-    def expected_source(column: str | None) -> ClaimSource:
-        if (known := by_column.get(column)) is None:
-            known = by_column[column] = envelope.source.as_claim_source(column)
-        return known
+    # The four facts a row's source must agree with, flattened once for the file.
+    # They are the whole of the envelope's source — only `column` varies per row, and
+    # a row's column is what it is compared against itself, so it cannot disagree.
+    # Taken from `as_claim_source` rather than read off the envelope directly, so the
+    # writer's notion of "the same source" stays the reader's own.
+    expected = envelope.source.as_claim_source(None)
+    expected_facts = (expected.name, expected.url, expected.dataset, expected.table)
 
     written = 0
     try:
@@ -690,7 +689,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
             f.write("\n")
             for entry in entries:
                 written += 1
-                f.write(_encode(_evidence_line(expected_source, entry, name, written)))
+                f.write(_encode(_evidence_line(expected_facts, envelope.source, entry, name, written)))
                 f.write("\n")
         tmp.replace(path)
     except BaseException:
@@ -877,7 +876,11 @@ def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
 
 
 def _evidence_line(
-    expected_source: Callable[[str | None], ClaimSource], entry: EvidenceEntry, name: str, n: int
+    expected_facts: tuple[str | None, ...],
+    envelope_source: EvidenceFileSource,
+    entry: EvidenceEntry,
+    name: str,
+    n: int,
 ) -> dict:
     """Serialize one entry, factoring its source into the file's.
 
@@ -890,8 +893,13 @@ def _evidence_line(
     That factoring is also a check: a row whose source is not the source the
     envelope names does not belong in this file, and saying so here is cheaper than a
     reader discovering that every row it rehydrated was attributed to the wrong
-    table. The comparison goes through :meth:`EvidenceFileSource.as_claim_source`, so the
-    writer's notion of "the same source" is the reader's own.
+    table. ``expected_facts`` is what :func:`write_evidence_file` flattened out of the
+    envelope for it; ``envelope_source`` is only for wording the refusal.
+
+    What it does *not* check is anything a row could declare. An `EvidenceEntry` has
+    four members and none of them is an answer, so a mapped ``value`` or a ``tier`` is
+    unwritable rather than refused — :func:`_entry_from_line` is where a hand-edited
+    line carrying one is turned away (:data:`_RETIRED_LINE_KEYS`).
 
     ``name`` and ``n`` locate the entry for a refusal; :func:`_where` turns them into
     one label per row, shared by every raise below.
@@ -910,12 +918,17 @@ def _evidence_line(
             if source is None
             else f"{where}: carries a source that is a {type(source).__name__}, not a ClaimSource"
         )
-    # A record compare against the envelope's own, not a parse: `ClaimSource` is
-    # frozen, so equality is its five members, and `column` is the one of them this
-    # line rather than the envelope decides. The record was validated when it was
-    # built (`ClaimSource.__post_init__`), so nothing here re-checks its members.
-    if source != (expected := expected_source(source.column)):
-        raise ValueError(f"{where}: comes from {source.to_dict()}, but this file's envelope names {expected.to_dict()}")
+    # A tuple compare against the four facts hoisted once per file, not a record
+    # compare: `ClaimSource` has no `__slots__`, so its `__eq__` builds two 5-tuples
+    # out of two `__dict__`s and cost 0.42 us a row — 41% of this function, against
+    # 0.11 us here. `column` is left out because it is this row's own and is compared
+    # against itself. The record was validated when it was built
+    # (`ClaimSource.__post_init__`), so nothing here re-checks its members.
+    if (source.name, source.url, source.dataset, source.table) != expected_facts:
+        raise ValueError(
+            f"{where}: comes from {source.to_dict()}, but this file's envelope names "
+            f"{envelope_source.as_claim_source(source.column).to_dict()}"
+        )
     line = {"field": entry.field, "target_key_value": entry.target_key_value, "raw_value": entry.raw_value}
     if source.column is not None:
         line["column"] = source.column
@@ -973,12 +986,15 @@ def _entry_from_line(
     # (#401 review). A member the format *used* to have is named for what it was, so
     # a producer written against the claim format is told what to write instead
     # rather than being handed a bare "unknown member" (#421).
-    if extra := sorted(set(entry) - _LINE_KEYS):
-        if retired := [key for key in extra if key in _RETIRED_LINE_KEYS]:
-            raise ValueError(
-                f"{where}: {retired[0]!r} is not a member of an evidence row — {_RETIRED_LINE_KEYS[retired[0]]}"
-            )
-        raise ValueError(f"{where}: line has unknown member(s) {extra} (expected {sorted(_LINE_KEYS)})")
+    #
+    # Membership before allocation, as `_check_entry` and the old `_rebuild_claim`
+    # both were: `set(entry) - _LINE_KEYS` built two sets and a list on every
+    # well-formed row, 0.22 us against 0.10 for the subset test.
+    if not entry.keys() <= _LINE_KEYS:
+        retired = next((key for key in sorted(entry) if key in _RETIRED_LINE_KEYS), None)
+        if retired is not None:
+            raise ValueError(f"{where}: {retired!r} is not a member of an evidence row — {_RETIRED_LINE_KEYS[retired]}")
+        _reject_unknown(entry, _LINE_KEYS, _EXPECTED_LINE_KEYS, where, "line")
     _check_entry(where, field, target_key_value, raw_value)
     # The column is checked here rather than trusted: `"column": 7` would otherwise
     # ride through as a source member. `as_claim_source` then supplies the four facts
