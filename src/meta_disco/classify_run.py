@@ -15,9 +15,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from meta_disco.claim_files import DEFAULT_CLAIMS_ROOT, report_claim_files
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
 # out to live at <root>/scripts/, so the subprocess cwd is the repo root three levels up.
@@ -128,7 +128,7 @@ def run_all_classifications(
     output_dir_base: Path,
     evidence_base: Path,
     workers: int | None = None,
-    claims_root: Path = DEFAULT_CLAIMS_ROOT,
+    source_evidence_root: Path = DEFAULT_SOURCE_EVIDENCE_ROOT,
 ) -> bool:
     """Run the full classification pipeline over one meta-disco metadata file.
 
@@ -140,12 +140,12 @@ def run_all_classifications(
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded.
 
-    Before any of that it reports the claim files under ``claims_root``
-    (:func:`claim_files.report_claim_files`), which says what each one is and how old
+    Before any of that it reports the evidence files under ``source_evidence_root``
+    (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
     it is and refuses none of them. Reporting first, ahead of the run directory, puts
     what the run found at the top of its log rather than behind the phases. *Found*
     and not *consumed*: the claims go no further than that report, because matching
-    them to our files is #402, so until then a claim file changes what a run *says*,
+    them to our files is #402, so until then an evidence file changes what a run *says*,
     never what it writes.
 
     Every producer writes ``excluded_files.json`` into the run directory as it loads,
@@ -154,7 +154,7 @@ def run_all_classifications(
     function only reports the count after Phase 1, because each producer's own stdout is
     captured.
     """
-    report_claim_files(claims_root)
+    report_evidence_files(source_evidence_root)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = output_dir_base / timestamp

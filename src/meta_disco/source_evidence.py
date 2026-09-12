@@ -15,9 +15,9 @@ carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
 (#414), applied by reconcile, which is also where that vocabulary check now is.
 
-This module is the artefact and its IO: the layout on disk, the envelope, the line
-format, the streaming writer and reader, and the report a run prints of what it
-found — found and not consumed, since no evidence reaches classification until the
+This module is the artefact and everything about it: the envelope record and its
+parts, the layout on disk, the line format, the streaming writer and reader, and the
+report a run prints of what it found — found and not consumed, since no evidence reaches classification until the
 join lands (#402). Anything that needs to find or write an evidence file should come
 through here rather than re-deriving the layout. Matching a row to one of our files
 is #402, and the importers that will produce these files are #369 (AnVIL manifests)
@@ -25,7 +25,7 @@ and #394 (external catalogs).
 
 **What a run does with these today.** It discovers them and reports each one's
 source, version, catalog and age — ``classify_run.run_all_classifications`` calls
-:func:`report_claim_files` and never :func:`iter_claims`. No evidence reaches
+:func:`report_evidence_files` and never :func:`iter_evidence`. No evidence reaches
 classification, so a run with evidence files present writes the same output as one
 without. Matching rows to our files is #402; the writer and reader here exist so
 the producers (#369, #394) can be built against a settled contract before that lands.
@@ -118,8 +118,9 @@ decision no one can review (#421).
 
 import json
 import os
+import re
 from collections.abc import Callable, Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -127,10 +128,16 @@ from uuid import uuid4
 
 from .models import (
     CLASSIFICATION_FIELDS,
-    ClaimFileEnvelope,
-    ClaimFileSource,
+    JOIN_KEY_FILE_NAME,
     ClaimSource,
+    _flat_from_dict,
+    _flat_plan,
+    _flat_to_dict,
+    _reject_unknown,
     member_optional_str,
+    require_external_source_type,
+    require_join_key,
+    required_str,
 )
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from an
@@ -138,18 +145,20 @@ from .models import (
 # concatenated file fails as a shape violation instead of reading an envelope as a row.
 ENVELOPE_KEY = "evidence_file"
 
-# What `discover` treats as a claim file. NDJSON is the format, so the suffix is the
+# What `discover` treats as an evidence file. NDJSON is the format, so the suffix is the
 # membership test — a README or a scratch .json beside them is not picked up.
-CLAIM_FILE_GLOB = "*.ndjson"
+EVIDENCE_FILE_GLOB = "*.ndjson"
 
-# Where an importer leaves the claim files a run reads. One directory per source
-# under it (`data/claims/hprc/`, `data/claims/anvil/`): a claim file is the same kind
-# of artefact whoever wrote it, so a run discovers them all by walking one root
-# rather than by knowing which sources exist. This module is
-# <root>/src/meta_disco/claim_files.py, so the repo root is three levels up.
-DEFAULT_CLAIMS_ROOT = Path(__file__).resolve().parents[2] / "data" / "claims"
+# Where an importer leaves the evidence files a run reads. One directory per source
+# under it (`data/source_evidence/hprc/`, `.../anvil/`): an evidence file is the same
+# kind of artefact whoever wrote it, so a run discovers them all by walking one root
+# rather than by knowing which sources exist. `source_evidence` and not `evidence`,
+# which `data/` already uses for the fetched-header cache — two unrelated things, and
+# a shared name would have read as one. This module is
+# <root>/src/meta_disco/source_evidence.py, so the repo root is three levels up.
+DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "source_evidence"
 
-# The dimension names as a set, for the membership check every claim pays twice — on
+# The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
 # because its order is the canonical output order; this is the same five names.
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
@@ -159,9 +168,9 @@ _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 # used for it: that constructs a fresh encoder on every call.
 _encode = json.JSONEncoder(separators=(",", ":")).encode
 
-# Write buffer for a claim file. A written claim line measures around 170 bytes, so
-# the default 8 KB is a syscall every 50 claims or so across a multi-gigabyte
-# sequential write; a megabyte is one per 6,000.
+# Write buffer for an evidence file. A written line measures around 170 bytes, so the
+# default 8 KB is a syscall every 50 rows or so across a multi-gigabyte sequential
+# write; a megabyte is one per 6,000.
 _WRITE_BUFFER_BYTES = 1 << 20
 
 # How far `read_envelope` will read looking for the end of line 1. See `_read_envelope`.
@@ -203,6 +212,355 @@ _RETIRED_LINE_KEYS = {
 }
 
 
+# --- The envelope and its parts (moved here from `models` by #409) -----------
+#
+# These three records and the timestamp they parse describe *this artefact* and
+# nothing else, and `source_evidence` is the only module that imports them. They
+# sat in `models` because #401 built them there; `models` is what the whole
+# package shares, and every serialized format it accumulated made it more so.
+#
+# `ClaimSource` stays in `models`: it names where a raw value came from on a real
+# claim in output evidence, which the rule engine builds and every consumer reads.
+# The `_flat_*` helpers stay with it, for the same reason and because it uses
+# them — so this module imports them rather than the other way round (#409).
+
+# The shape an evidence file's `fetched_at` must have. This is the schema's `fetched_at`
+# pattern, character for character — `test_the_reader_and_the_schema_share_one_pattern`
+# reads the slot and compares — because the two must refuse the same strings, and the
+# ways they drift apart are not guessable. Matched rather than measured by length:
+# `fromisoformat` reads character 10 as the separator whatever it is, and a suffix can
+# make a date longer than ten characters without making it a time, so `2026-09-01Z`
+# and `2026-09-01+00:00` both parsed to midnight under a length check. Matched in full
+# rather than by prefix: `fromisoformat` accepts a basic-format offset (`+0100`) from
+# 3.11 and the schema never did, so a prefix check agreed with the gate on 3.10 and
+# disagreed on 3.11 — an evidence file that reads differently by interpreter, which is
+# what the `Z` normalization below exists to prevent (#401 review).
+_FETCHED_AT_PATTERN = (
+    r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d"
+    r"(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?|Z)?\Z"
+)
+_FETCHED_AT = re.compile(_FETCHED_AT_PATTERN)
+
+
+def _parse_fetched_at(value: object, where: str) -> datetime:
+    """Parse an evidence file's ``fetched_at``, or raise naming ``where``.
+
+    A trailing ``Z`` is normalized to ``+00:00`` first. ``datetime.fromisoformat``
+    rejects ``Z`` on Python 3.10 — this project's floor and what CI runs — while
+    accepting it from 3.11, and the importers coming in #369/#394 read web APIs that
+    emit it almost universally. Without this an evidence file written on a 3.11 machine
+    parses there and fails on CI, which is a property of the interpreter rather than
+    of the file.
+
+    A time of day is required. ``fromisoformat`` accepts a bare ``2026-09-01`` and
+    silently returns midnight, so a date-only value would read back as a fetch
+    claiming to have happened at 00:00:00 — a precision the file never stated, and
+    one that makes two imports on the same day indistinguishable, which is the case
+    the age report exists for. The check is on the string rather than the parsed
+    value, because midnight is a real time a genuine fetch can have.
+
+    Both branches name ISO 8601, because which one a value reaches depends on the
+    interpreter: ``20260901T091403`` fails the parse on 3.10 and reaches the shape
+    check on 3.11, where ``fromisoformat`` accepts basic format. The shape check is
+    the whole pattern and not a prefix for the same reason — 3.11 also accepts a
+    basic-format offset, ``+0100``, which the schema refuses on every interpreter
+    (#401 review).
+
+    It is a *shape* check and not a length one: ``fromisoformat`` treats character 10
+    as the date/time separator whatever character it is, so ``2026-09-01X09:14:03``
+    parses, and a date can be longer than ten characters without carrying a time at
+    all — ``2026-09-01Z`` and ``2026-09-01+00:00`` both read back as midnight (#401
+    review). Matching the schema's pattern instead refuses all three on both sides,
+    and refuses ``20260901T091403`` — basic-format ISO, which 3.10 rejects and 3.11
+    accepts — the same way on every interpreter, which is the divergence the ``Z``
+    normalization above exists to prevent.
+    """
+    if not isinstance(value, str):
+        raise ValueError(f"{where}: envelope fetched_at is {value!r}, not an ISO 8601 string")
+    normalized = value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        raise ValueError(f"{where}: envelope fetched_at {value!r} is not an ISO 8601 datetime") from None
+    if not _FETCHED_AT.match(value):
+        raise ValueError(
+            f"{where}: envelope fetched_at {value!r} is not an ISO 8601 date followed by T or a "
+            "space and a time of day — record when the fetch happened, not only the day it happened on"
+        )
+    return parsed
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvidenceFileSource:
+    """Where a whole evidence file's rows were read from (issue #401).
+
+    Three levels, because a source is not flat: a **repository** publishes
+    **datasets**, and a dataset has **tables**. The AnVIL manifests are
+    ``AnVIL / AnVIL_HPRC_R2 / alignments_v2``; the HPRC Data Explorer is
+    ``HPRC Data Explorer / R2 / sequencing-data``; ENA is
+    ``ENA / <study accession> / read_run`` — where ``read_run`` is literally the
+    ``result=`` parameter its API takes, and the fields it returns are the columns.
+    A source with no middle level leaves ``dataset`` null, as ``table`` may be null.
+
+    ``dataset`` earns its place twice. It is provenance, and it is what a claim's
+    :attr:`column` cannot be read without — the same column name means different
+    things in different datasets. It is also the reason the *target* carries a
+    dataset: see :class:`EvidenceTarget`.
+
+    Distinct from :class:`ClaimSource` rather than reusing it. A claim's source
+    carries a ``column``, which belongs to the row because one table's rows are
+    read from several columns; a file's source carries a ``dataset``, which belongs
+    to the file because every row in it came from the same one. Modeling them as
+    one class would let an envelope name a column that could disagree with every
+    line in the file.
+    """
+
+    repository: str
+    dataset: str | None = None
+    table: str | None = None
+    url: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line, dropping members the source does not have."""
+        return _flat_to_dict(self)
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "EvidenceFileSource":
+        """Rebuild a file's source from what :meth:`to_dict` wrote."""
+        return _flat_from_dict(cls, block, where, "source")
+
+    def as_claim_source(self, column: str | None) -> ClaimSource:
+        """The per-claim :class:`ClaimSource` a claim in this file carries.
+
+        A field copy — the envelope's four facts, plus the column this particular
+        row was read from. ``dataset`` crosses with the rest: it is what makes the
+        column legible, since the same column name means different things in
+        different datasets, and a consumer reading the output ``evidence`` array
+        cannot go back to the evidence file to find it.
+
+        Called once per distinct column by the reader, which caches what it returns
+        for the whole file (``iter_evidence``); the envelope stores these once for the
+        same reason, rather than repeating them on a few million lines.
+        """
+        return ClaimSource(name=self.repository, url=self.url, dataset=self.dataset, table=self.table, column=column)
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvidenceTarget:
+    """The system an evidence file's rows are *about* (issue #401).
+
+    An evidence file says "the row in **this** system whose **this key** is **that
+    value**". The target names the system, so an importer is not implicitly bound to
+    AnVIL, and the file records which system it resolved its keys against.
+
+    ``dataset`` is the scope the join runs within, and it is not decoration: keyed by
+    ``file_name`` alone, 69.4% of the corpus's 708,088 rows carry a non-unique key,
+    and 20% remain non-unique even scoped by dataset *title* alone — but within
+    ``AnVIL_HPRC_R2`` the collision rate is 2 rows in 16,271. A filename join is
+    unusable without a dataset scope and workable with one: those 2 rows are
+    ambiguity the join must still record rather than resolve, which is #402's, and
+    this scope is what brings it down to something a person can look at.
+
+    Null is correct only where the key is unique across the whole target. Measured,
+    that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on
+    every one of the 708,088 records. ``file_md5sum`` is *not*: it is non-unique on
+    1.72% of rows, 12,203 of them. Two thirds of those are collisions **inside** one
+    dataset — 8,119 rows from 1,118 md5s — which a dataset scope would not separate
+    either; the remaining 4,084 rows are 2,026 md5s registered in more than one
+    dataset. Leaving it unscoped is defensible for a claim about the file's
+    *content*, which is true of every row that has those bytes however they are
+    catalogued, and wrong for a claim about one catalogued file. Nothing here
+    enforces that distinction; making the join record the ambiguity rather than
+    silently fanning out is #402's.
+
+    ``version`` is which generation of the target the importer resolved against — an
+    AnVIL catalog such as ``anvil15``. Null when the importer did not resolve against
+    a particular generation, which is the ordinary case for a source that simply
+    publishes names and values (HPRC, ENA) rather than reading our catalog. It is
+    provenance for the importer's own next pass, not a gate on the run: see
+    ``source_evidence`` on why currency is not decidable offline.
+
+    The mapping from the source's own names to these is the **importer's**
+    knowledge. The source calls its collection ``R2``; the target calls the same
+    thing ``AnVIL_HPRC_R2``. The importer records both sides, and the run does
+    equality lookup only.
+    """
+
+    system: str
+    dataset: str | None = None
+    version: str | None = None
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line, dropping members the target does not have."""
+        return _flat_to_dict(self)
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "EvidenceTarget":
+        """Rebuild a target from what :meth:`to_dict` wrote."""
+        return _flat_from_dict(cls, block, where, "target")
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvidenceFileEnvelope:
+    """What an evidence file records once, for every row in it (issue #401).
+
+    An importer runs out of band from classification — when a catalog refreshes,
+    with network — and writes an evidence file; a run reads it. This is the header of
+    that artefact, and it names **both sides of the join**, symmetrically::
+
+        source   source_type   source_version      source_key
+        target                       target.version    target_key
+
+    A line then reads: *this row is about the row in* ``target`` *whose*
+    ``target_key`` *equals its* ``target_key_value`` *; about that row's* ``field``
+    *, the source wrote* ``raw_value``.
+
+    ``source_type`` is which kind of external source this is
+    (:data:`EXTERNAL_SOURCE_TYPES`). It is here rather than on every row for the
+    reason the key names are: one repository, dataset and table is one kind of
+    source, so it is checked once per file, and reconcile reads it from here when it
+    stamps the claim it makes from a row (#421).
+
+    **The key names are here, not on the line.** They do not change within a file —
+    every row an importer writes is keyed the same way — so repeating them on a
+    few million lines would be the envelope's content written out again. Only the
+    key *value* varies, so only that is on the line. It is the same factoring that
+    keeps ``ClaimSource``'s name, url and table here while ``column`` stays per
+    row.
+
+    **The importer owns the mapping between the two keys**, and writes
+    ``target_key_value`` already in the target's value space. Where a source's own
+    value needs transforming to get there — pulling ``NA12878`` out of a path,
+    normalizing an accession — the importer does it. The run performs equality
+    lookup and nothing else, which is what keeps corpus knowledge in the importer
+    and transform logic out of the join.
+
+    ``target_key`` names a key of the target system, drawn from its record fields
+    *and* from facts meta-disco derives: ENA run accessions appear in no input
+    ``file_name`` at all, but ``archive_accession`` is populated on thousands of
+    classified fastq records, read from the read headers. So the join runs after
+    inference — which is where the pipeline already puts import.
+
+    Frozen because provenance is a fact about where the rows came from, not state
+    to edit after they are read. Validated on construction
+    (:meth:`__post_init__`) against the same rules :meth:`from_dict` applies on the
+    way back in, so a writer cannot produce a file its own reader would refuse —
+    an importer would otherwise spend a networked run writing millions of rows
+    behind a header that fails at the next classification run, days later and far
+    from the cause.
+    """
+
+    source: EvidenceFileSource
+    source_type: str
+    source_version: str
+    source_key: str
+    target: EvidenceTarget
+    target_key: str
+    fetched_at: datetime
+
+    def __post_init__(self) -> None:
+        """Refuse an envelope that could not be read back, at the point it is built.
+
+        Type hints do not run, so a ``source_version`` of ``None`` reaches here
+        intact — and ``to_dict`` omits null members, so it would vanish from the file
+        and read back as a missing key rather than naming the field.
+
+        The two nested records are checked by serializing them and reading them back
+        through their own ``from_dict`` — the reader's definition applied to the
+        reader's input — rather than by re-listing their members here, which is how
+        an earlier version left the parity half-kept.
+
+        Runs once per evidence file, so its cost is nothing beside the write it precedes.
+        """
+        where = "evidence file envelope"
+        if not isinstance(self.source, EvidenceFileSource):
+            raise ValueError(f"{where}: source is {type(self.source).__name__}, not a EvidenceFileSource")
+        if not isinstance(self.target, EvidenceTarget):
+            raise ValueError(f"{where}: target is {type(self.target).__name__}, not a EvidenceTarget")
+        EvidenceFileSource.from_dict(self.source.to_dict(), where)
+        EvidenceTarget.from_dict(self.target.to_dict(), where)
+        if not isinstance(self.fetched_at, datetime):
+            raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
+        require_external_source_type(self.source_type, "source_type", where)
+        required_str(self.source_version, "source_version", where)
+        required_str(self.source_key, "source_key", where)
+        require_join_key(self.target_key, "target_key", where)
+        # A key that is not unique across the target cannot be matched without a
+        # scope, and `file_name` is the one in the vocabulary that is not: present on
+        # every record but non-unique on 69.4%, against 2 rows in 16,271
+        # within a single dataset. Writing an unscoped one produces a file whose
+        # rows the join cannot attach to a single file — refused here rather than
+        # discovered when the join fans out (#401 review).
+        if self.target_key == JOIN_KEY_FILE_NAME and self.target.dataset is None:
+            raise ValueError(
+                f"{where}: target_key {JOIN_KEY_FILE_NAME!r} needs a target dataset to scope it — "
+                "a bare file name is non-unique on 69% of the corpus and matches no single row"
+            )
+
+    @classmethod
+    def from_dict(cls, block: object, where: str) -> "EvidenceFileEnvelope":
+        """Rebuild an envelope from what :meth:`to_dict` wrote, validating each member.
+
+        The only place an evidence file's first line becomes provenance. Every member is
+        checked here rather than where a consumer reads it: an envelope is read once
+        per file and is what the report rests on, so an unparseable ``fetched_at`` or
+        a source with no repository must fail as a malformed evidence file, not later as
+        a report that cannot render.
+
+        A member the envelope does not have is refused rather than ignored, because
+        the schema validates this record ``closed=True``: a reader that quietly
+        dropped an unknown key would accept documents the schema rejects.
+
+        A trailing ``Z`` on ``fetched_at`` is normalized to ``+00:00`` before parsing.
+        ``datetime.fromisoformat`` rejects ``Z`` on Python 3.10, this project's floor
+        and what CI runs, while accepting it from 3.11 — and the importers coming in
+        #369/#394 read web APIs that emit it almost universally. Without this, a claim
+        file written on a 3.11 machine parses there and fails on CI, which is a
+        property of the interpreter rather than of the file.
+
+        ``fetched_at`` must carry a time of day. ``fromisoformat`` accepts a bare
+        ``2026-09-01`` and silently returns midnight, so a date-only value would read
+        back as a fetch claiming to have happened at 00:00:00 — a precision the file
+        never stated, and one that makes two imports on the same day
+        indistinguishable, which is the case the age report exists for. The check is
+        on the string rather than the parsed value, because midnight is a real time a
+        genuine fetch can have.
+        """
+        if not isinstance(block, dict):
+            raise ValueError(f"{where}: envelope is {type(block).__name__}, not an object")
+        known, expected, _ = _flat_plan(cls)
+        _reject_unknown(block, known, expected, where, "envelope")
+        return cls(
+            source=EvidenceFileSource.from_dict(block.get("source"), where),
+            source_type=require_external_source_type(block.get("source_type"), "envelope source_type", where),
+            source_version=required_str(block.get("source_version"), "envelope source_version", where),
+            source_key=required_str(block.get("source_key"), "envelope source_key", where),
+            target=EvidenceTarget.from_dict(block.get("target"), where),
+            target_key=require_join_key(block.get("target_key"), "envelope target_key", where),
+            fetched_at=_parse_fetched_at(block.get("fetched_at"), where),
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize for the envelope line.
+
+        The three members that are not already JSON are encoded here: ``source`` and
+        ``target`` through their own ``to_dict``, and ``fetched_at`` as an ISO 8601
+        string — the form ``azul_manifest.metadata_block`` already writes a fetch time
+        in, and the form :meth:`from_dict` parses back.
+
+        Keys come from ``fields()`` for the reason the nested records' do: a member
+        added to the dataclass and not here would otherwise be dropped from every
+        evidence file silently. Every member of this record is required, so none is
+        omitted — unlike the nested records, which drop the members they lack.
+        """
+        encoded = {
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
+            "fetched_at": self.fetched_at.isoformat(),
+        }
+        return {f.name: encoded.get(f.name, getattr(self, f.name)) for f in fields(self)}
+
+
 @dataclass(frozen=True, slots=True)
 class EvidenceEntry:
     """One line of an evidence file: a slot, a target row, and what the source said.
@@ -226,13 +584,13 @@ class EvidenceEntry:
     that it is a string, which is what the format can hold.
 
     ``source`` is the file's :class:`ClaimSource` with this row's ``column``:
-    :func:`write_claim_file` factors it back into the envelope and :func:`iter_claims`
+    :func:`write_evidence_file` factors it back into the envelope and :func:`iter_evidence`
     puts it back, so a caller on either side holds whole provenance without consulting
     line 1. Reconcile needs all four levels — a rule may condition on provenance
     (contract 3.4), and an unmatched value is listed by source, dataset, table and
     column (5.2).
 
-    ``slots=True`` because :func:`iter_claims` builds one of these per row: a few
+    ``slots=True`` because :func:`iter_evidence` builds one of these per row: a few
     million per source, each of which would otherwise carry its own ``__dict__``.
     """
 
@@ -243,7 +601,7 @@ class EvidenceEntry:
 
 
 @dataclass(frozen=True)
-class ClaimFileStatus:
+class EvidenceFileStatus:
     """One evidence file as a run sees it: its provenance, or why it could not be read.
 
     Exactly one of the two is set. ``error`` is the envelope's own parse or IO
@@ -259,11 +617,11 @@ class ClaimFileStatus:
     """
 
     path: Path
-    envelope: ClaimFileEnvelope | None
+    envelope: EvidenceFileEnvelope | None
     error: str | None = None
 
 
-def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[EvidenceEntry]) -> int:
+def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Iterable[EvidenceEntry]) -> int:
     """Write one evidence file, streaming; return the number of rows written.
 
     ``entries`` is consumed once and no more than the current entry is held, so an
@@ -281,7 +639,7 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     names, raises rather than being written and discovered by a reader later. The
     envelope's own source is resolved once per column, here, and compared against per
     row — it is constant for the file. The envelope was checked when it was built
-    (``ClaimFileEnvelope.__post_init__``).
+    (``EvidenceFileEnvelope.__post_init__``).
 
     ``path`` must end in ``.ndjson``, because that is what :func:`discover` looks for.
     Writing ``catalog.json`` otherwise succeeds, returns a row count, and is then
@@ -289,9 +647,9 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     no-op with a success return, which is the one failure mode an import must not
     have (#401 review).
     """
-    if path.suffix != CLAIM_FILE_GLOB.lstrip("*"):
+    if path.suffix != EVIDENCE_FILE_GLOB.lstrip("*"):
         raise ValueError(
-            f"{path.name}: an evidence file must be named {CLAIM_FILE_GLOB} — "
+            f"{path.name}: an evidence file must be named {EVIDENCE_FILE_GLOB} — "
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -341,7 +699,7 @@ def write_claim_file(path: Path, envelope: ClaimFileEnvelope, entries: Iterable[
     return written
 
 
-def read_envelope(path: Path) -> ClaimFileEnvelope:
+def read_envelope(path: Path) -> EvidenceFileEnvelope:
     """The evidence file's envelope, read from its first line alone.
 
     A run decides whether to refuse a file from its provenance, so that decision
@@ -352,7 +710,7 @@ def read_envelope(path: Path) -> ClaimFileEnvelope:
         return _read_envelope(path, f)
 
 
-def iter_claims(path: Path) -> Iterator[EvidenceEntry]:
+def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
     """Every evidence row in one file on disk, in file order, streamed.
 
     Line 1 is consumed as the envelope before any row is yielded, because the
@@ -374,7 +732,7 @@ def iter_claims(path: Path) -> Iterator[EvidenceEntry]:
     with path.open("rb") as f:
         envelope_source = _read_envelope(path, f).source
         # One `ClaimSource` per column for the whole file, as the writer keeps one per
-        # column (`write_claim_file`). The envelope's members are constant and only
+        # column (`write_evidence_file`). The envelope's members are constant and only
         # `column` varies, so rebuilding it per line rebuilt and re-validated the same
         # object a few million times; a table's rows come from a handful of columns.
         # Sharing the instance is safe and is why the record is frozen: nothing
@@ -402,27 +760,27 @@ def _decode(raw: bytes, where: str) -> str:
 
 
 def discover(root: Path) -> list[Path]:
-    """Every claim file under ``root``, in a stable order; empty when there are none.
+    """Every evidence file under ``root``, in a stable order; empty when there are none.
 
-    A missing ``root`` is not an error: no claim files present is the ordinary state
+    A missing ``root`` is not an error: no evidence files present is the ordinary state
     of a run today, and it means the run imports nothing — not that it is
     misconfigured.
     """
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob(CLAIM_FILE_GLOB) if p.is_file())
+    return sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
 
 
-def report_claim_files(root: Path, now: datetime | None = None) -> list[ClaimFileStatus]:
-    """Report every claim file under ``root``, and return what each one's status is.
+def report_evidence_files(root: Path, now: datetime | None = None) -> list[EvidenceFileStatus]:
+    """Report every evidence file under ``root``, and return what each one's status is.
 
     Prints one line per file — source, table, version, the catalog it was built for
-    if it names one, fetch date and age — so a run says which claim files it found
+    if it names one, fetch date and age — so a run says which evidence files it found
     and how old they were. *Found* and not *consumed*: no claim reaches classification
     until the join lands (#402), and this report is the whole of what a run does with
     one today. Returns the statuses in the order printed.
 
-    The report does not judge, and the run does not stop. Whether a claim file has
+    The report does not judge, and the run does not stop. Whether an evidence file has
     outlived what it describes is not answerable from the file: the sources have no
     common version to compare (HPRC has a major release and may drift from it), and
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
@@ -443,24 +801,24 @@ def report_claim_files(root: Path, now: datetime | None = None) -> list[ClaimFil
         try:
             envelope = read_envelope(path)
         except (OSError, ValueError) as exc:
-            statuses.append(ClaimFileStatus(path, None, f"envelope could not be read: {exc}"))
+            statuses.append(EvidenceFileStatus(path, None, f"envelope could not be read: {exc}"))
             continue
-        statuses.append(ClaimFileStatus(path, envelope))
+        statuses.append(EvidenceFileStatus(path, envelope))
 
     if not statuses:
-        print(f"Claim files: none under {root} — this run imports nothing.")
+        print(f"Evidence files: none under {root} — this run imports nothing.")
         return statuses
-    print(f"Claim files under {root}:")
+    print(f"Evidence files under {root}:")
     for status in statuses:
         print(f"  {_describe(status, root, now)}")
     return statuses
 
 
-def _describe(status: ClaimFileStatus, root: Path, now: datetime | None) -> str:
-    """One report line for one claim file: both sides of its join, and its age.
+def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> str:
+    """One report line for one evidence file: both sides of its join, and its age.
 
     Reads as *what it came from* → *what it is about*, because a person checking a
-    run's claim files wants to see which corpus each one will attach to as much as
+    run's evidence files wants to see which corpus each one will attach to as much as
     where it was fetched from.
     """
     name = status.path.relative_to(root)
@@ -499,7 +857,7 @@ def _age_phrase(fetched_at: datetime, now: datetime | None) -> str:
 
     A ``now`` of None means the current time in the envelope's own timezone. An
     explicit ``now`` need not agree with the envelope about awareness — a caller
-    holds one clock and a claim file writes whichever kind its importer had — so
+    holds one clock and an evidence file writes whichever kind its importer had — so
     where they disagree both are given the local zone, which is what makes them
     subtractable. Getting that wrong would raise inside the report and take every
     other file's line down with it, which is the one thing the report must not do.
@@ -532,7 +890,7 @@ def _evidence_line(
     That factoring is also a check: a row whose source is not the source the
     envelope names does not belong in this file, and saying so here is cheaper than a
     reader discovering that every row it rehydrated was attributed to the wrong
-    table. The comparison goes through :meth:`ClaimFileSource.as_claim_source`, so the
+    table. The comparison goes through :meth:`EvidenceFileSource.as_claim_source`, so the
     writer's notion of "the same source" is the reader's own.
 
     ``name`` and ``n`` locate the entry for a refusal; :func:`_where` turns them into
@@ -565,11 +923,11 @@ def _evidence_line(
 
 
 def _entry_from_line(
-    name: str, n: int, line: str, envelope_source: ClaimFileSource, by_column: dict[str | None, ClaimSource]
+    name: str, n: int, line: str, envelope_source: EvidenceFileSource, by_column: dict[str | None, ClaimSource]
 ) -> EvidenceEntry:
     """Parse one evidence line, attaching the provenance its envelope carries.
 
-    ``envelope_source`` is the file's source, read once by :func:`iter_claims`, and
+    ``envelope_source`` is the file's source, read once by :func:`iter_evidence`, and
     ``by_column`` is that caller's cache of the :class:`ClaimSource` each column
     resolves to. The row comes back whole — that source, with this line's ``column``
     — so a consumer reads the provenance the importer recorded and never has to
@@ -595,7 +953,7 @@ def _entry_from_line(
     quietly re-attributed one would undo that check for exactly the files it cannot
     vouch for.
 
-    ``name`` is the file's name, hoisted out of the read loop by :func:`iter_claims`,
+    ``name`` is the file's name, hoisted out of the read loop by :func:`iter_evidence`,
     and is formatted with ``n`` into one label per line by :func:`_where`.
     """
     where = _where(name, _READING, n)
@@ -680,13 +1038,13 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
         )
 
 
-def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:
+def _read_envelope(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
     """Consume line 1 of an open evidence file as its envelope.
 
-    The one place a claim file's first line is turned into provenance, shared by
-    :func:`read_envelope` (which wants only that) and :func:`iter_claims` (which
+    The one place an evidence file's first line is turned into provenance, shared by
+    :func:`read_envelope` (which wants only that) and :func:`iter_evidence` (which
     reads on from there), so a file with no first line is refused in the same words
-    either way. ``f`` is a byte handle for the reason :func:`iter_claims` opens one:
+    either way. ``f`` is a byte handle for the reason :func:`iter_evidence` opens one:
     a decode failure is reported as a malformed line, not raised from inside a file
     iterator.
     """
@@ -708,13 +1066,13 @@ def _read_envelope(path: Path, f: BinaryIO) -> ClaimFileEnvelope:
     return _envelope_from_line(path, first)
 
 
-def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
+def _envelope_from_line(path: Path, line: str) -> EvidenceFileEnvelope:
     """Parse line 1 as an envelope, or raise naming the file.
 
     This owns only the file layout — unwrap the JSON, find the ``evidence_file`` key —
-    and hands the block to :meth:`ClaimFileEnvelope.from_dict`, which owns what an
+    and hands the block to :meth:`EvidenceFileEnvelope.from_dict`, which owns what an
     envelope's members must be. The same rules then run when an importer *builds* an
-    envelope (``ClaimFileEnvelope.__post_init__``), so a writer cannot produce a file
+    envelope (``EvidenceFileEnvelope.__post_init__``), so a writer cannot produce a file
     this reader will refuse (#401 review).
 
     The line is closed as well as the envelope inside it: ``evidence_file`` must be its
@@ -735,4 +1093,4 @@ def _envelope_from_line(path: Path, line: str) -> ClaimFileEnvelope:
             f"{where}: line 1 must be an object whose only key is {ENVELOPE_KEY!r}, "
             f"and this one is {sorted(wrapper) if isinstance(wrapper, dict) else type(wrapper).__name__}"
         )
-    return ClaimFileEnvelope.from_dict(wrapper[ENVELOPE_KEY], where)
+    return EvidenceFileEnvelope.from_dict(wrapper[ENVELOPE_KEY], where)
