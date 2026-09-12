@@ -45,15 +45,15 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 2.5 Evidence **imported from a source** is fetched out of band, with network, and read offline and deterministically.
     Inference fetches its own headers and content during the run, through the evidence cache, where a classifier
-    needs them. Not every classifier does, and a fetch that fails falls back to classifying without content,
-    which yields `not_classified` rather than an error.
+    needs them. Not every classifier does; a fetch failure the fetchers signal falls back to classifying
+    without content, which yields `not_classified`; and an unwrapped error — a missing tool, say — propagates.
 
 2.6 A table name and a column name are evidence, the same as a cell value.
 
 ## 3. Claims
 
-3.1 A claim is a rule's declaration about a slot, derived either from source evidence (2.1) or from
-    inference's own signals. It declares a **value** or a **status**.
+3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
+    signals, or from a curator's decision. It declares a **value** or a **status**.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
@@ -80,7 +80,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 4. Sources and resolution
 
 4.1 There are five input kinds:
-    1. inference (filename, extension, header, content)
+    1. inference (filename, extension, header, content, file size, and signals already resolved)
     2. canonical repository metadata (AnVIL harmonized fields)
     3. non-canonical repository metadata (submitter tables)
     4. external repository (HPRC Data Explorer, ENA, IGSR)
@@ -94,7 +94,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank.
 
-4.3 Resolution has two stages: **within** a source by tier, then **across** sources by agreement.
+4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
+    Every declaration that survives — inference's, and each source's — then reconciles by agreement.
+    Only inference has a tier ladder. No other input has one, and none is given one.
 
 4.4 Sources that agree classify the slot, and every agreeing source is recorded.
     A slot on which only one input speaks takes that input's declaration — a value classifies it, a status is
@@ -154,14 +156,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.8 Resolution across sources is by agreement, and is not tier math.
     Tier resolution *within* a source applies to inference, which has competing rules at four tiers.
-    A source's own rows do not compete: the slot map selects the columns, and at most one mapping applies to
-    a given file and slot. Two that both apply is a slot-map error, not a resolution case.
+    A source may have several mappings reaching one file and slot — `participant.instrument_model` and
+    `participant.instrument_platform` both speak to `platform` on 3,202 rows — and they reconcile like any
+    other declarations: agreeing ones classify, disagreeing ones conflict. One column gets no precedence
+    over another, because nothing has established one.
 
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently — `make_claim` refuses a claim that declares two things at once or carries a value outside the vocabulary, and the claim-file contract validates its own entries — but nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
+No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `claim_files._check_entry` refuses a mapped value outside the slot's vocabulary. Note where that second check lives — the claim constructor validates shape, not vocabulary, so **3.3 binds at the file boundary and nowhere else today**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no evidence file.** #401's per-line record is still a claim carrying a mapped value. Amending it to an evidence row is unfiled.
@@ -191,7 +195,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
 - Whether input kind 2 (AnVIL harmonized fields) is read today at all.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
-- How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. Both produce no claim today. #399 needs the first to be an explicit, reasoned decision that stays visible, which the contract does not yet give it a way to say.
+- How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
