@@ -32,6 +32,14 @@ ways of connecting a row to a file.
 `hifi`, `hic` and `nanopore` each hold several DRS URIs. A reader that only checks for a
 scalar string finds nothing there and silently classifies the table as reaching no files.
 
+**Why the entity shape exists at all: Terra materializes workflow outputs as columns.**
+Run a WDL over a `participant` table and each output is written back as a column on that
+row. That produces exactly what we see — one row per entity (the workflow's input unit),
+one column per output, the column named for the output, and **no dimension cells at all**,
+because a workflow writes files rather than metadata. The 62-column
+`1KGP_CHM13v2_sample` is a chromosome-sharded variant caller, not a data-modelling
+decision. §6 verifies this against the workflow that produced `ANVIL_T2T`.
+
 ## 2. The entity shape is a triple
 
 ```
@@ -199,7 +207,38 @@ reach 165,440 files, 38% of everything reachable:
 So the mapping work is roughly a hundred rows, and a couple of dozen of them cover most
 of the corpus.
 
-## 6. What this means for the open work
+## 6. Where a predicate vocabulary comes from: the workflow that wrote it
+
+`ANVIL_T2T` and `ANVIL_T2T_CHRY` are 85% of the corpus and appear in *none* of
+`anvil_tdr_ingest`'s mapping specifications. They did not take that route. The schatzlab
+group ran WDL workflows on AnVIL and published the results as a Terra workspace
+([`anvil-datastorage/AnVIL_T2T_CHRY`](https://anvil.terra.bio/#workspaces/anvil-datastorage/AnVIL_T2T_CHRY),
+May 2023), which was snapshotted into TDR afterwards. The workflows are published, in
+[`schatzlab/t2t-chm13-chry`](https://github.com/schatzlab/t2t-chm13-chry).
+
+**The column names are the WDL output names, verbatim**, and the pipeline README says
+what each one is:
+
+| WDL output (from `t2t_realignment`, `haplotype_calling`) | column | what the README says it is |
+|---|---|---|
+| `cram` | `cram` | alignment, compressed with the karyotype-specific reference |
+| `cramIndex` | `cram_index` | CRAM index for that alignment |
+| `mosdepth_globalDist`, `mosdepth_regionsBed`, `mosdepth_regionsBedIndex`, `mosdepth_regionsDist`, `mosdepth_summary` | `mosdepth_*` | output of running `mosdepth` on the alignment CRAM |
+| `samtools_stats` | `samtools_stats` | output of running `samtools stats` on the alignment CRAM |
+| `chr{1-22}_hcVCF_gz` | `chrN_hcvcf_gz` | the gzipped output VCF for each autosome |
+
+So for this dataset the predicate dictionary is not a set of judgments to be made — it is
+a document written by the people who produced the files, covering ~17 predicates over
+125,605 files. It also hands #363 the producing tool with the edge, which is #341's
+subject: `mosdepth`, `samtools stats`, GATK `HaplotypeCaller`, BWA.
+
+**Generalised: to read a submitter table, find the workflow that wrote it.** The column
+vocabulary of a Terra-workspace dataset is whatever WDL produced it, and the karyotype
+split visible in `xx_chrN_hcvcf_gz` / `xy_chrN_par_hcvcf_gz` is a documented pipeline
+decision (separate XX and XY references, to improve sex-chromosome calling) rather than a
+naming quirk.
+
+## 7. What this means for the open work
 
 - **#414 (value translation table)** stays on **cell values**. Column names contribute
   nothing to the five dimensions, measured twice.
@@ -224,7 +263,7 @@ of the corpus.
   number (`read_1`/`read_2`), producing tool (`mosdepth`, `samtools`), chromosome
   (`chr10_`), instrument model, subject id. That is a #364 question, not a mapping one.
 
-## 7. Method
+## 8. Method
 
 All measurements are offline, over `data/anvil/manifest/anvil15/*.verbatim.jsonl` via
 `azul_manifest.iter_verbatim_entities`, with the corpus from
@@ -240,18 +279,16 @@ All measurements are offline, over `data/anvil/manifest/anvil15/*.verbatim.jsonl
 - **Predicates**: distinct link-column names on 2+-link tables, collapsed by replacing a
   chromosome token with `chrN`.
 
-## 8. What is not established
+## 9. What is not established
 
-- **How `ANVIL_T2T` and `ANVIL_T2T_CHRY` were ingested.** They are 85% of the corpus and
-  neither appears in `anvil_tdr_ingest`'s specifications: their tables (`participant`,
-  `chromosome`, `interval`) are named in none of them, and `anvil_1`/`anvil_2` are for
-  submissions that already conform to the AnVIL model. Some other path produced their
-  harmonized entities.
 - Whether the agreement result generalises. It covers 656 files of `ANVIL_HPRC`'s 23,185,
   all BAMs and FASTAs — file types inference reads well. A corpus of headerless or
   unfetchable files is exactly where a column name would earn its keep, and is unmeasured.
-- What the 115 predicates mean. Reading `mosdepth_regions_bed` as a coverage track is a
-  human judgment, and mapping them onto #363's verbs is the actual work.
+- What most of the 115 predicates mean. `ANVIL_T2T`'s are documented by the workflow that
+  wrote them (§6), but the other datasets' are not yet traced to a source, and mapping any
+  of them onto #363's verbs is still the work.
+- Whether every Terra-workspace dataset has a findable workflow. The T2T route worked
+  because the producers published their WDLs; that is a courtesy, not a guarantee.
 - What the upstream specifications cost to consume. They are BigQuery SQL, not a
   declarative schema, so using them means parsing queries or re-expressing them. Nothing
   in the manifests on disk carries a schema: the Azul sidecar is our own download
