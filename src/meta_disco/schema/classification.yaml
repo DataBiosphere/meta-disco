@@ -357,6 +357,21 @@ classes:
       by name, so a producer written against #401's format is told what to write
       instead rather than having the member silently dropped.
 
+      **Where this gate is weaker than the reader**, which is the same divergence
+      `EvidenceFileEnvelope` documents and for the same cause. `column` is
+      optional, LinkML models an optional slot as nullable (`gen-json-schema`
+      emits `type: [string, null]`), so `{"column": null}` is valid here by
+      construction — and `_entry_from_line` refuses it through
+      `member_optional_str`, because the writer omits a member it does not have
+      and a written-out null is a line this writer could not have produced.
+
+      The reader is deliberately the stricter of the two, which is the safe
+      direction: a producer that validates here and writes explicit nulls is
+      refused at read, rather than publishing a file we would later read as
+      though the member were absent. Accepting it would be exactly the silent
+      normalization every other member refuses.
+      `test_a_line_whose_column_is_an_explicit_null_is_refused` pins it.
+
       Deliberately outside the `ClassificationRecord` tree and referenced by no
       slot in it, for the reason `EvidenceFileEnvelope` is: it describes an
       artefact exchanged *between* runs. Modeled here so that a producer can
