@@ -40,6 +40,7 @@ import yaml
 
 from meta_disco import source_evidence
 from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
     SOURCE_CONTENT_READ,
@@ -594,6 +595,20 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="line break"):
             evidence_file_envelope(source=EvidenceFileSource(repository=forged, dataset="R2", table="t"))
 
+    @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
+    def test_an_envelope_with_a_source_type_that_is_not_external_is_refused_when_it_is_built(self, bad):
+        """An importer reads something we do not own, so the kind is one of three.
+
+        `content_read` is the reachable mistake and the reason this is checked rather
+        than assumed: it is a real `source_type`, and it is inference's own — an
+        evidence file declaring it would be naming our rule engine as its publisher.
+        Refused where the envelope is built as well as where it is read, so a
+        networked import fails at its own first line rather than at the next
+        classification run.
+        """
+        with pytest.raises(ValueError, match="not a kind of external source"):
+            evidence_file_envelope(source_type=bad)
+
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="source repository"):
             evidence_file_envelope(source=EvidenceFileSource(repository=""))
@@ -950,6 +965,20 @@ class TestAnEvidenceFileIsWrittenBySomeoneElse:
         # `EvidenceTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_evidence(path)) == [entry]
+
+
+def test_the_row_field_pattern_lists_every_dimension():
+    """The schema's `EvidenceRow.field` pattern and `CLASSIFICATION_FIELDS` are one set.
+
+    The pattern spells the five names out rather than pointing at an enum, because
+    they are slot *names* in that schema and not a vocabulary it declares. That only
+    stays safe while the two agree: a dimension added to the tuple and not to the
+    pattern would be written by this module and refused by the gate (#421).
+    """
+    schema = yaml.safe_load((Path(source_evidence.__file__).parent / "schema" / "classification.yaml").read_text())
+    pattern = schema["classes"]["EvidenceRow"]["attributes"]["field"]["pattern"]
+
+    assert set(pattern.removeprefix("^(").removesuffix(r")\Z").split("|")) == set(CLASSIFICATION_FIELDS)
 
 
 def test_the_reader_and_the_schema_share_one_pattern():

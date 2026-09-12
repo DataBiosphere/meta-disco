@@ -247,6 +247,76 @@ def test_a_claim_source_member_must_be_one_non_empty_line(validator, member, bad
     assert report.results, f"a source {member} of {bad!r} should have failed"
 
 
+# --- EvidenceRow (#421) -------------------------------------------------------
+#
+# The other line kind. A producer that validated only its envelope could publish a
+# file whose every row carried a mapped `value`, which is the arrangement #421
+# retired — so the row is modeled and gated too.
+
+
+def _row(**overrides) -> dict:
+    """A valid evidence row as `source_evidence` writes one."""
+    return {
+        "field": "platform",
+        "target_key_value": "HG002.hifi.bam",
+        "raw_value": "Revio",
+        "column": "instrumentModel",
+        **overrides,
+    }
+
+
+def test_evidence_row_validates(envelope_validator):
+    report = envelope_validator.validate(_row(), target_class="EvidenceRow")
+    assert not report.results, "a well-formed row should validate: " + str([r.message for r in report.results])
+
+
+def test_evidence_row_needs_no_column(envelope_validator):
+    # Absent for a source whose table has no column to name; the writer omits it.
+    row = _row()
+    del row["column"]
+    report = envelope_validator.validate(row, target_class="EvidenceRow")
+    assert not report.results, str([r.message for r in report.results])
+
+
+@pytest.mark.parametrize("raw", ["Revio", "GENOMIC", " Revio ", "", "Hi-C"])
+def test_evidence_row_takes_any_raw_value_the_source_wrote(envelope_validator, raw):
+    # No pattern and no enum on `raw_value`, deliberately: a source's spellings are
+    # its own, `Hi-C` is a vocabulary gap for #399 rather than a malformed file, and
+    # an empty cell is something the source published (contract 1.4, 3.7).
+    report = envelope_validator.validate(_row(raw_value=raw), target_class="EvidenceRow")
+    assert not report.results, f"a raw_value of {raw!r} should validate: " + str([r.message for r in report.results])
+
+
+@pytest.mark.parametrize("member", ["value", "status", "claim_state", "rule_id", "tier", "source", "join_key"])
+def test_evidence_row_refuses_a_member_that_declares_something(envelope_validator, member):
+    # The gate's half of #421: a row is an observation. `source_evidence._check_entry`
+    # refuses each of these by name, and the schema has to agree or a producer
+    # validates a file the only reader will not read.
+    report = envelope_validator.validate(_row(**{member: "x"}), target_class="EvidenceRow")
+    assert report.results, f"a row carrying {member!r} should have failed"
+
+
+@pytest.mark.parametrize("missing", ["field", "target_key_value", "raw_value"])
+def test_evidence_row_requires_its_three_facts(envelope_validator, missing):
+    row = _row()
+    del row[missing]
+    report = envelope_validator.validate(row, target_class="EvidenceRow")
+    assert report.results, f"a row missing {missing!r} should have failed"
+
+
+@pytest.mark.parametrize("field", ["data_moddality", "platform ", "modality", ""])
+def test_evidence_row_refuses_a_field_that_is_not_a_dimension(envelope_validator, field):
+    report = envelope_validator.validate(_row(field=field), target_class="EvidenceRow")
+    assert report.results, f"a field of {field!r} should have failed"
+
+
+def test_evidence_row_refuses_an_empty_target_key_value(envelope_validator):
+    # A row with nothing to match on can attach to no file. Note the asymmetry with
+    # `raw_value`, where empty is legal: one is an identity, the other is a reading.
+    report = envelope_validator.validate(_row(target_key_value=""), target_class="EvidenceRow")
+    assert report.results, "a row with an empty target_key_value should have failed"
+
+
 def test_evidence_file_envelope_validates(envelope_validator):
     report = envelope_validator.validate(_envelope(), target_class="EvidenceFileEnvelope")
     assert not report.results, "a well-formed envelope should validate: " + str([r.message for r in report.results])
