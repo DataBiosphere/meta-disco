@@ -181,6 +181,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     own intermediate, not a reader of the artifact.
     `corpus_diff` must be told which it is comparing: two runs' answers, or inference's behaviour across runs.
 
+6.10 A reconciled record is **self-contained**: what inference concluded, what each source declared, and the
+     resolution, in one record. It necessarily repeats inference's claims, because 4.5 and 4.7 require every
+     competing declaration to be present, and that repetition is the price of a record a person can read
+     without performing a join.
+
+6.11 Each stage writes into its own subdirectory of the run, and both artifacts are **NDJSON**.
+     One run's inference output is already 1.6 GB, with a single 551 MB file; a whole-file `json.load` of that
+     is the memory ceiling of #374, and the reconciled artifact is larger still. 6.5 is about the record's
+     schema, not its container, so nothing is lost by the change.
+
 ---
 
 ## What is not true yet
@@ -220,7 +230,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
   question for #364 rather than a mapping one.
 - Whether a subject-level key and subject-level slots are worth adding. Without them IGSR, which keys by sample id, cannot be imported at all — correctly, but at the cost of a source. Related to the instrument-model question above, to #336 and to #361.
-- Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
+- What the two artifacts are called. `*_classifications.json` means inference today and the name should be corrected rather than inherited. This is #271's scope — it already covers naming drift in `output/`, and it says it can land independently of the rest of #268.
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
   conflict, which is right if the number is small and wrong if it floods the queue.
