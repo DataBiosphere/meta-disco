@@ -69,8 +69,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       entity.
 
 2.8 A slot's value comes from a metadata value. A file link's name states a role, which belongs
-    to the derivation graph rather than to a dimension, and mapping one to a slot has been
-    measured to add nothing on files inference can read.
+    to the derivation graph.
+    Whether such a name is *also* usable as slot evidence is unsettled, and the contract does
+    not forbid it: measured on files inference can read, it added nothing (two slots, 656
+    files); where inference has a content ceiling — a FASTQ's modality — it may be the only
+    signal there is, and that case is untested. A source whose tables carry no metadata values
+    at all has nothing else to offer.
     `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
     come in, why, and what each is worth.
 

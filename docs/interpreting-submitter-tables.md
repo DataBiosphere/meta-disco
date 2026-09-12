@@ -204,7 +204,8 @@ Worked example. HPRC's `hifi` row carries `platform = PACBIO_SMRT`,
 activity query reads `sample_id` and `path` from it and nothing else; the file record
 comes from `file_inventory`, a different table entirely. So `anvil_file.data_modality`
 comes out empty while `GENOMIC` sits two tables away, untouched. **Nobody wrote the
-mapping from `hifi.library_strategy` to `anvil_file.data_modality`** — the specification
+mapping from `hifi.library_source` to `anvil_file.data_modality`** — nor from
+`library_strategy` to `assay_type`, nor `platform` to `platform` — the specification
 author did the structural half and not the semantic half.
 
 That predicts our corpus exactly:
@@ -380,7 +381,9 @@ naming quirk.
   pointer in the `assembly` table and a real reference (`unaligned`) in `hic`, so a
   column-name heuristic misroutes 466 DRS URIs into `reference_assembly`.
 - **#363 (derivation graph)** is where the value is. Subject and predicate are exactly
-  its nodes and edge labels, they arrive grounded, and the vocabulary is ~115 entries.
+  its nodes and edge labels, and the vocabulary is ~115 entries. Note the qualification in
+  §4: the *object* resolves exactly, the subject is an identifier rather than a node in our
+  corpus, so these are not "grounded" in #363's sense and its 59–82% figures do not compare.
 - **The upstream specifications are prior art for both.** `anvil_tdr_ingest` carries a
   mapping specification per dataset — `hprc_r2_1`, `mage_1`, `igvf_1`, `primed_1`,
   `card_1`, `gtex_ext_*` among them. Each names, per submitter table, the subject column
