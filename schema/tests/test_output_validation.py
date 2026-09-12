@@ -194,17 +194,17 @@ def test_gate_rejects_out_of_enum_value(validator):
     assert report.results, "an out-of-enum value should have failed validation"
 
 
-# --- ClaimFileEnvelope (#401) ------------------------------------------------
+# --- ClaimFileEnvelope (#401, #421) ------------------------------------------
 #
 # The envelope is a standalone class: it describes an artefact exchanged *between*
 # runs and is referenced by no slot in ClassificationRecord, so the golden-output
 # gates above never reach it. Without these, a typo in its required members or
 # ranges would pass the schema gate even though this class defines the on-disk
-# claim-file contract (#401 review).
+# evidence-file contract (#401 review).
 
 
 def _envelope(**overrides) -> dict:
-    """A valid claim-file envelope as `ClaimFileEnvelope.to_dict` writes one.
+    """A valid evidence-file envelope as `ClaimFileEnvelope.to_dict` writes one.
 
     The HPRC Data Explorer's R2 sequencing-data table, keyed by the filenames it
     publishes, matched against AnVIL's `file_name` within the dataset that makes that
@@ -217,6 +217,7 @@ def _envelope(**overrides) -> dict:
             "table": "sequencing-data",
             "url": "https://data.humanpangenome.org/",
         },
+        "source_type": "repository_metadata",
         "source_version": "2026-09-01",
         "source_key": "filename",
         "target": {"system": "anvil", "dataset": "AnVIL_HPRC_R2", "version": "anvil15"},
@@ -284,7 +285,9 @@ def test_claim_file_envelope_accepts_a_derived_target_key(envelope_validator):
     assert not report.results, str([r.message for r in report.results])
 
 
-@pytest.mark.parametrize("missing", ["source", "fetched_at", "source_version", "source_key", "target", "target_key"])
+@pytest.mark.parametrize(
+    "missing", ["source", "source_type", "fetched_at", "source_version", "source_key", "target", "target_key"]
+)
 def test_claim_file_envelope_requires_its_provenance(envelope_validator, missing):
     # Each is required: a claim file that cannot say where it came from, when, or
     # from what version cannot be reasoned about later.
@@ -302,6 +305,18 @@ def test_claim_file_envelope_refuses_a_nested_record_given_as_a_reference(envelo
     # list would say the file has two of something it has one of.
     report = envelope_validator.validate(_envelope(**{slot: shape}), target_class="ClaimFileEnvelope")
     assert report.results, f"a {slot} given as {shape!r} should have failed"
+
+
+@pytest.mark.parametrize("bad", ["filename_rule", "content_read", "derivation_inheritance", "hearsay"])
+def test_claim_file_envelope_refuses_a_source_type_that_is_not_external(envelope_validator, bad):
+    # An evidence file is written by an importer reading something we do not own, so
+    # its source_type is one of the external kinds. The first three are real members
+    # of `source_type_enum` and are inference's own — a file declaring one would be
+    # naming our rule engine as its publisher. `ClaimFileEnvelope.__post_init__`
+    # refuses all four, and the gate has to agree or a producer validates here and is
+    # refused at read (#421).
+    report = envelope_validator.validate(_envelope(source_type=bad), target_class="ClaimFileEnvelope")
+    assert report.results, f"a source_type of {bad!r} should have failed"
 
 
 def test_claim_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):

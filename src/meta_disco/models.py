@@ -426,6 +426,26 @@ def optional_str(value: object, label: str, where: str) -> str | None:
 _ABSENT = object()
 
 
+def require_external_source_type(value: object, label: str, where: str) -> str:
+    """Return ``value`` as a kind of source outside this repository, or raise.
+
+    An evidence file is written by an importer reading something we do not own, so
+    its ``source_type`` is one of :data:`EXTERNAL_SOURCE_TYPES` and never one of the
+    inference kinds — a file declaring ``filename_rule`` would be claiming our own
+    rule engine as its publisher.
+
+    It sits on the envelope rather than on every row (#421): one repository, dataset
+    and table is one kind of source, so this runs once per file and reconcile reads it
+    from there when it stamps the claim it makes from a row.
+    """
+    if not isinstance(value, str) or value not in EXTERNAL_SOURCE_TYPES:
+        raise ValueError(
+            f"{where}: {label} {value!r} is not a kind of external source "
+            f"(expected one of {sorted(EXTERNAL_SOURCE_TYPES)})"
+        )
+    return value
+
+
 def require_join_key(value: object, label: str, where: str) -> str:
     """Return ``value`` as a key of the target, or raise naming ``label`` and ``where``.
 
@@ -441,17 +461,22 @@ def require_join_key(value: object, label: str, where: str) -> str:
     return value
 
 
-def pop_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
-    """Remove an optional string member from ``block``, refusing an explicit null.
+def member_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
+    """Read an optional string member of ``block``, refusing an explicit null.
 
-    The same rule :func:`_flat_from_dict` applies to a member it reads, for one taken
-    out of a dict instead — a claim line's ``column``, which is the one source member
-    the line carries rather than the envelope. ``dict.pop`` with a default cannot tell
-    an absent key from a present null, and collapsing the two would accept a record
-    the writer could not have produced while every other member refuses it (#401
-    review).
+    The same rule :func:`_flat_from_dict` applies to a member it reads, for one read
+    out of a dict instead — an evidence line's ``column``, which is the one source
+    member the line carries rather than the envelope. ``dict.get`` with a default
+    cannot tell an absent key from a present null, and collapsing the two would accept
+    a record the writer could not have produced while every other member refuses it
+    (#401 review).
+
+    Read rather than removed: while a line held a claim, the members left after this
+    one became ``make_claim``'s keyword arguments, so taking it out was the point. A
+    row has no such remainder (#421), and copying the parsed line per read only to pop
+    one key from the copy would be a dict allocation per row for nothing.
     """
-    value = block.pop(key, _ABSENT)
+    value = block.get(key, _ABSENT)
     if value is None:
         raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
     return optional_str(None if value is _ABSENT else value, label, where)
@@ -769,14 +794,21 @@ class ClaimFileEnvelope:
     """What a claim file records once, for every claim in it (issue #401).
 
     An importer runs out of band from classification — when a catalog refreshes,
-    with network — and writes a claim file; a run reads it. This is the header of
+    with network — and writes an evidence file; a run reads it. This is the header of
     that artefact, and it names **both sides of the join**, symmetrically::
 
-        source            source_version      source_key
-        target                  target.version    target_key
+        source   source_type   source_version      source_key
+        target                       target.version    target_key
 
     A line then reads: *this row is about the row in* ``target`` *whose*
-    ``target_key`` *equals its* ``target_key_value`` *; here is the claim.*
+    ``target_key`` *equals its* ``target_key_value`` *; about that row's* ``field``
+    *, the source wrote* ``raw_value``.
+
+    ``source_type`` is which kind of external source this is
+    (:data:`EXTERNAL_SOURCE_TYPES`). It is here rather than on every row for the
+    reason the key names are: one repository, dataset and table is one kind of
+    source, so it is checked once per file, and reconcile reads it from here when it
+    stamps the claim it makes from a row (#421).
 
     **The key names are here, not on the line.** They do not change within a file —
     every claim an importer writes is keyed the same way — so repeating them on a
@@ -808,6 +840,7 @@ class ClaimFileEnvelope:
     """
 
     source: ClaimFileSource
+    source_type: str
     source_version: str
     source_key: str
     target: ClaimTarget
@@ -837,6 +870,7 @@ class ClaimFileEnvelope:
         ClaimTarget.from_dict(self.target.to_dict(), where)
         if not isinstance(self.fetched_at, datetime):
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
+        require_external_source_type(self.source_type, "source_type", where)
         required_str(self.source_version, "source_version", where)
         required_str(self.source_key, "source_key", where)
         require_join_key(self.target_key, "target_key", where)
@@ -887,6 +921,7 @@ class ClaimFileEnvelope:
         _reject_unknown(block, known, expected, where, "envelope")
         return cls(
             source=ClaimFileSource.from_dict(block.get("source"), where),
+            source_type=require_external_source_type(block.get("source_type"), "envelope source_type", where),
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
             source_key=required_str(block.get("source_key"), "envelope source_key", where),
             target=ClaimTarget.from_dict(block.get("target"), where),

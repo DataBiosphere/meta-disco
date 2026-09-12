@@ -1,46 +1,49 @@
-"""The claim file: envelope, provenance and NDJSON (#401).
+"""The evidence file: envelope, provenance and NDJSON (#401, #421).
 
-A claim file is how an importer that ran yesterday, against a network catalog, hands
-claims to a run happening today. Three things have to hold for that to be safe, and
-they are what these tests cover.
+An evidence file is how an importer that ran yesterday, against a network catalog,
+hands what a source said to a run happening today. It hands over **observations, not
+answers**: a row carries the source's ``raw_value`` and no mapped value, because only
+the rule engine maps meaning (contract 1.1-1.5). Three things have to hold for that to
+be safe, and they are what these tests cover.
 
 *It must say where it came from.* Provenance is per file, recorded once, and read
-back whole — including the ``ClaimSource`` each claim's own record carries, which the
-writer factors into the envelope and the reader puts back.
+back whole — including the ``ClaimSource`` each row carries, which the writer factors
+into the envelope and the reader puts back.
 
 *Its age must be visible.* A run says what it found and how old each one was. It
 does not adjudicate currency: nothing offline can, since the sources share no version
 to compare and AnVIL deletes a superseded catalog rather than keeping it to be matched
 against. That question belongs to the importer's re-fetch decision and to the catalog
 an enhancement is offered back to. Note what these tests therefore do *not* cover: a
-run reports its claim files and imports nothing from them — ``iter_claims`` has no
-caller in the run — so nothing here asserts that a claim reaches classification, and
+run reports its evidence files and imports nothing from them — ``iter_claims`` has no
+caller in the run — so nothing here asserts that a row reaches classification, and
 nothing does until the identity join lands (#402).
 
-*It must stream.* Millions of claims cannot go through a whole-file parse (#374), so
-the reader yields claims as it reads them and a malformed line fails naming the file
+*It must stream.* Millions of rows cannot go through a whole-file parse (#374), so
+the reader yields rows as it reads them and a malformed line fails naming the file
 and the line rather than taking the file down.
 
 Unit-level by intent: no importer exists yet (#369, #394) and the join to our files
-is #402, so the producers here are hand-built claims from the ``AnVIL_HPRC_R2``
+is #402, so the producers here are hand-built rows from the ``AnVIL_HPRC_R2``
 spike's two external sources.
 """
 
+import ast
 import json
 import threading
-from dataclasses import fields
+from dataclasses import fields, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 import yaml
 
-from meta_disco import models
+from meta_disco import claim_files, models
 from meta_disco.claim_files import (
     _MAX_ENVELOPE_BYTES,
     DEFAULT_CLAIMS_ROOT,
     ENVELOPE_KEY,
-    ClaimEntry,
+    EvidenceEntry,
     discover,
     iter_claims,
     read_envelope,
@@ -50,14 +53,14 @@ from meta_disco.claim_files import (
 from meta_disco.models import (
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
-    NO_VOCABULARY_TERM,
+    SOURCE_CONTENT_READ,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
     ClaimFileEnvelope,
     ClaimFileSource,
+    ClaimSource,
     ClaimTarget,
 )
-from meta_disco.rule_engine import make_claim
 
 HPRC_CATALOG = ClaimFileSource(
     repository="HPRC Data Explorer",
@@ -85,6 +88,7 @@ def claim_file_envelope(**overrides) -> ClaimFileEnvelope:
     return ClaimFileEnvelope(
         **{
             "source": HPRC_CATALOG,
+            "source_type": SOURCE_REPOSITORY_METADATA,
             "source_version": "2026-09-01",
             "source_key": "filename",
             "target": ANVIL_TARGET,
@@ -95,23 +99,33 @@ def claim_file_envelope(**overrides) -> ClaimFileEnvelope:
     )
 
 
-def _entry(column="platform", raw="Revio", value="PACBIO", name="HG002.bam", source=HPRC_CATALOG) -> ClaimEntry:
-    """One mapped platform claim, keyed by the file name the catalog publishes."""
-    return ClaimEntry(
+def _entry(column="instrumentModel", raw="Revio", name="HG002.bam", source=HPRC_CATALOG) -> EvidenceEntry:
+    """One platform observation, keyed by the file name the catalog publishes.
+
+    `Revio` is what the catalog writes and is carried verbatim; nothing here turns it
+    into `PACBIO`, which is a rule's job at reconcile (#414).
+    """
+    return EvidenceEntry(
         field="platform",
         target_key_value=name,
-        claim=make_claim(
-            source_type=SOURCE_REPOSITORY_METADATA,
-            source=source.as_claim_source(column),
-            rule_id="map_hprc_platform_v1",
-            raw_value=raw,
-            value=value,
-        ),
+        raw_value=raw,
+        source=source.as_claim_source(column),
     )
 
 
+def _entry_with(entry: EvidenceEntry, **overrides) -> EvidenceEntry:
+    """A copy of ``entry`` with one member replaced, valid or not.
+
+    `dataclasses.replace` because the record is frozen, and deliberately without a
+    type check on the way through: the cases below hand it a `raw_value` of `None` or
+    a `field` that is not a dimension, which is exactly what an importer that is not
+    type-checked can hand the writer.
+    """
+    return replace(entry, **overrides)
+
+
 class TestRoundTrip:
-    """A claim file says where it came from, and gives back the claims put into it."""
+    """An evidence file says where it came from, and gives back the rows put into it."""
 
     def test_envelope_carries_source_table_fetch_date_and_version(self, tmp_path):
         path = tmp_path / "hprc" / "sequencing_data.ndjson"
@@ -123,79 +137,96 @@ class TestRoundTrip:
         assert envelope.source.url == "https://data.humanpangenome.org/"
         assert envelope.fetched_at == FETCHED_AT
         assert envelope.source_version == "2026-09-01"
+        assert envelope.source_type == SOURCE_REPOSITORY_METADATA
         # Both sides of the join, and which key pairs with which.
         assert (envelope.source_key, envelope.target_key) == ("filename", JOIN_KEY_FILE_NAME)
         assert envelope.target == ANVIL_TARGET
 
-    def test_a_claim_comes_back_whole(self, tmp_path):
-        """The claim read back is the claim written, source and all."""
-        path = tmp_path / "claims.ndjson"
+    def test_a_row_comes_back_whole(self, tmp_path):
+        """The row read back is the row written, source and all."""
+        path = tmp_path / "evidence.ndjson"
         entry = _entry()
         write_claim_file(path, claim_file_envelope(), [entry])
 
         assert list(iter_claims(path)) == [entry]
 
-    def test_a_rehydrated_claim_can_interpret_its_own_column(self, tmp_path):
-        """The dataset crosses onto the claim, not only onto the envelope.
+    def test_a_rehydrated_row_can_interpret_its_own_column(self, tmp_path):
+        """The dataset crosses onto the row, not only onto the envelope.
 
-        The same column name means different things in different datasets, so a claim
+        The same column name means different things in different datasets, so a row
         naming only its column could not be read without going back to the file it
         arrived in — which nothing reading the output evidence array can do (#401).
         """
-        path = tmp_path / "claims.ndjson"
-        write_claim_file(path, claim_file_envelope(), [_entry(column="platform")])
+        path = tmp_path / "evidence.ndjson"
+        write_claim_file(path, claim_file_envelope(), [_entry(column="instrumentModel")])
 
-        (source,) = [entry.claim["source"] for entry in iter_claims(path)]
-        assert (source["name"], source["dataset"], source["table"], source["column"]) == (
+        (source,) = [entry.source for entry in iter_claims(path)]
+        assert (source.name, source.dataset, source.table, source.column) == (
             "HPRC Data Explorer",
             "R2",
             "sequencing-data",
-            "platform",
+            "instrumentModel",
         )
 
-    def test_each_claim_gets_its_own_rehydrated_source(self, tmp_path):
-        """Claims from one column share a `ClaimSource`, never a source *dict*.
+    def test_rows_from_one_column_share_one_frozen_source(self, tmp_path):
+        """The reader keeps one `ClaimSource` per column for the whole file.
 
-        The reader keeps one frozen record per column for the whole file rather than
-        rebuilding it per line; `make_claim` serializes it per claim, so a consumer
-        editing one claim's evidence cannot reach into another's.
+        Rebuilding it per line rebuilt and re-validated the same object a few million
+        times. Sharing one instance is safe because the record is frozen — a consumer
+        cannot edit one row's provenance and reach another's — which is why the
+        shared object is the record and not a mutable dict.
         """
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry(name="a.bam"), _entry(name="b.bam")])
 
-        first, second = (entry.claim["source"] for entry in iter_claims(path))
-        assert first == second
-        first["table"] = "edited"
-        assert second["table"] == "sequencing-data"
+        first, second = (entry.source for entry in iter_claims(path))
+        assert first is second
+        with pytest.raises(AttributeError):
+            first.table = "edited"
 
-    def test_the_raw_value_survives_beside_the_mapped_one(self, tmp_path):
-        """The mapping is the reviewable decision, so `Revio` must outlive the file."""
-        path = tmp_path / "claims.ndjson"
-        write_claim_file(path, claim_file_envelope(), [_entry(raw="Revio", value="PACBIO")])
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "Revio",  # differs from our `PACBIO` by more than spelling
+            "GENOMIC",  # differs from our `genomic` only by case
+            " Revio ",  # a cell the source padded
+            "",  # an empty cell: 63 of them in AnVIL_HPRC_R2.library_selection
+            "Hi-C",  # a value `assay_type_enum` has no term for at all
+        ],
+    )
+    def test_the_raw_value_is_what_the_source_wrote(self, tmp_path, raw):
+        """Verbatim, byte for byte (contract 1.4).
 
-        (claim,) = [entry.claim for entry in iter_claims(path)]
-        assert (claim["raw_value"], claim["value"]) == ("Revio", "PACBIO")
+        Not casefolded, not trimmed, not dropped for being empty, and not refused for
+        being a value we have no word for — that last is the review queue's input
+        (contract 3.7), not an error. Matching normalizes; the file records.
+        """
+        path = tmp_path / "evidence.ndjson"
+        write_claim_file(path, claim_file_envelope(), [_entry(raw=raw)])
 
-    def test_a_state_claim_survives_the_round_trip(self, tmp_path):
-        """`Hi-C` mapped deliberately to nothing is the review queue — it must be kept."""
-        path = tmp_path / "claims.ndjson"
-        entry = ClaimEntry(
+        assert [entry.raw_value for entry in iter_claims(path)] == [raw]
+
+    def test_a_value_the_vocabulary_has_no_word_for_is_kept_not_refused(self, tmp_path):
+        """`Hi-C` on 3,002 files is a decision #399 owes, not a file this can refuse.
+
+        Until #421 this module refused a *mapped* value outside the dimension's
+        vocabulary, which is why an importer had to reach for a `no_vocabulary_term`
+        state to say this. A row carries the raw value and says nothing about it, so
+        the question survives to the review queue intact.
+        """
+        path = tmp_path / "evidence.ndjson"
+        entry = EvidenceEntry(
             field="assay_type",
             target_key_value="HG002.hic.bam",
-            claim=make_claim(
-                source_type=SOURCE_REPOSITORY_METADATA,
-                source=HPRC_CATALOG.as_claim_source("assayType"),
-                rule_id="map_hprc_assay_v1",
-                raw_value="Hi-C",
-                state=NO_VOCABULARY_TERM,
-            ),
+            raw_value="Hi-C",
+            source=HPRC_CATALOG.as_claim_source("libraryStrategy"),
         )
         write_claim_file(path, claim_file_envelope(), [entry])
 
         assert list(iter_claims(path)) == [entry]
 
     def test_the_count_written_is_returned(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         assert write_claim_file(path, claim_file_envelope(), [_entry(name=f"HG{n:04d}.bam") for n in range(7)]) == 7
 
     def test_a_lazy_source_is_streamed_not_gathered(self, tmp_path):
@@ -204,7 +235,7 @@ class TestRoundTrip:
         A refusal part-way through is what makes the difference visible: the fourth
         entry is one the writer will not take, so a writer that consumes as it goes
         has asked for four and a writer that gathered first would have asked for all
-        seven. The corpus is millions of claims (#374), so this is the property that
+        seven. The corpus is millions of rows (#374), so this is the property that
         keeps an importer from having to hold one.
         """
         produced = []
@@ -214,39 +245,39 @@ class TestRoundTrip:
                 produced.append(n)
                 yield _entry(name=f"HG{n:04d}.bam", source=ANVIL_MANIFEST if n == 3 else HPRC_CATALOG)
 
-        with pytest.raises(ValueError, match="claim 4"):
-            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), entries())
+        with pytest.raises(ValueError, match="row 4"):
+            write_claim_file(tmp_path / "evidence.ndjson", claim_file_envelope(), entries())
 
         assert produced == [0, 1, 2, 3]
 
 
 class TestTheEnvelopeIsFactoredOut:
-    """Name, url and table are recorded once; only `column` stays on a claim."""
+    """Name, url and table are recorded once; only `column` stays on a row."""
 
-    def test_a_written_claim_repeats_no_envelope_field(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
-        write_claim_file(path, claim_file_envelope(), [_entry(column="platform")])
+    def test_a_written_row_repeats_no_envelope_field(self, tmp_path):
+        path = tmp_path / "evidence.ndjson"
+        write_claim_file(path, claim_file_envelope(), [_entry(column="instrumentModel")])
 
-        claim = json.loads(path.read_text().splitlines()[1])["claim"]
-        assert "source" not in claim
-        assert claim["column"] == "platform"
+        line = json.loads(path.read_text().splitlines()[1])
+        assert sorted(line) == ["column", "field", "raw_value", "target_key_value"]
+        assert line["column"] == "instrumentModel"
 
     def test_line_one_is_the_envelope_and_is_labelled_as_one(self, tmp_path):
-        """An envelope is told from a claim by its shape, not by being first."""
-        path = tmp_path / "claims.ndjson"
+        """An envelope is told from a row by its shape, not by being first."""
+        path = tmp_path / "evidence.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry()])
 
         assert list(json.loads(path.read_text().splitlines()[0])) == [ENVELOPE_KEY]
 
-    def test_a_claim_from_another_source_is_refused_at_write(self, tmp_path):
-        """A file's claims must have come from the source its envelope names."""
-        path = tmp_path / "claims.ndjson"
+    def test_a_row_from_another_source_is_refused_at_write(self, tmp_path):
+        """A file's rows must have come from the source its envelope names."""
+        path = tmp_path / "evidence.ndjson"
         with pytest.raises(ValueError, match="envelope names"):
             write_claim_file(path, claim_file_envelope(), [_entry(source=ANVIL_MANIFEST)])
 
-    def test_nothing_is_left_behind_when_a_claim_is_refused(self, tmp_path):
+    def test_nothing_is_left_behind_when_a_row_is_refused(self, tmp_path):
         """The temp-file-and-rename write leaves the previous file, or none at all."""
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         with pytest.raises(ValueError):
             write_claim_file(path, claim_file_envelope(), [_entry(source=ANVIL_MANIFEST)])
 
@@ -256,14 +287,14 @@ class TestTheEnvelopeIsFactoredOut:
     def test_two_writers_on_one_path_do_not_share_a_temporary(self, tmp_path):
         """A shared `<name>.tmp` let one writer's rename delete the other's file.
 
-        The loser then returned a claim count for claims that are not on disk. They
+        The loser then returned a row count for rows that are not on disk. They
         race only on the rename now, and the file that survives is whole — but which
         one survives is completion order, not catalog order, which is why the comment
         on `tmp` says two importers must not share a path.
         """
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         seen = []
-        # Both writers have opened their temporary and written a claim into it by the
+        # Both writers have opened their temporary and written a row into it by the
         # time they reach this, and neither proceeds until the other arrives — so the
         # sample below cannot miss the overlap. Without it the main-thread writer can
         # finish before the other starts, and the test passes or fails on scheduling
@@ -287,12 +318,12 @@ class TestTheEnvelopeIsFactoredOut:
         assert len(list(iter_claims(path))) == 3
 
     def test_a_rename_that_cannot_happen_leaves_no_temporary_behind(self, tmp_path):
-        """A rename fails too, and a stray `.tmp` is a whole claim file nothing reads.
+        """A rename fails too, and a stray `.tmp` is a whole evidence file nothing reads.
 
         A directory standing where the file should go is the reachable case: the
-        claims are written, every one of them valid, and only the last step fails.
+        rows are written, every one of them valid, and only the last step fails.
         """
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         path.mkdir()
 
         with pytest.raises(OSError):
@@ -300,36 +331,36 @@ class TestTheEnvelopeIsFactoredOut:
 
         assert list(tmp_path.iterdir()) == [path]
 
-    def test_something_that_is_not_a_claim_entry_is_named_not_traced(self, tmp_path):
-        """An importer that yields the wrong shape is told which claim, as any other."""
-        with pytest.raises(ValueError, match="claim 1: is a tuple, not a ClaimEntry"):
+    def test_something_that_is_not_an_evidence_entry_is_named_not_traced(self, tmp_path):
+        """An importer that yields the wrong shape is told which row, as any other."""
+        with pytest.raises(ValueError, match="row 1: is a tuple, not an EvidenceEntry"):
             # The type checker refuses this shape, which is the point: the check
             # exists for an importer that is not type-checked.
-            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [("platform", "x", {})])  # type: ignore[list-item]
+            write_claim_file(tmp_path / "evidence.ndjson", claim_file_envelope(), [("platform", "x", {})])  # type: ignore[list-item]
 
-    def test_the_caller_s_claim_is_not_mutated(self, tmp_path):
+    def test_the_caller_s_entry_is_not_mutated(self, tmp_path):
         """Factoring the source out is the file's business, not the importer's."""
         entry = _entry()
-        before = json.loads(json.dumps(entry.claim))
-        write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [entry])
+        before = (entry.field, entry.target_key_value, entry.raw_value, entry.source)
+        write_claim_file(tmp_path / "evidence.ndjson", claim_file_envelope(), [entry])
 
-        assert entry.claim == before
+        assert (entry.field, entry.target_key_value, entry.raw_value, entry.source) == before
 
 
 class TestMalformedFiles:
     """A file that will not read fails naming itself and the line."""
 
     def test_a_malformed_line_names_the_file_and_the_line(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry(), _entry()])
         path.write_text(path.read_text() + "{not json\n")
 
-        with pytest.raises(ValueError, match=r"claims\.ndjson line 4: not a claim"):
+        with pytest.raises(ValueError, match=r"evidence\.ndjson line 4: not an evidence row"):
             list(iter_claims(path))
 
-    def test_claims_before_a_malformed_line_are_yielded_first(self, tmp_path):
+    def test_rows_before_a_malformed_line_are_yielded_first(self, tmp_path):
         """Proof the reader streams: it cannot have parsed line 5 before yielding line 2."""
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry(name=f"HG{n}.bam") for n in range(3)])
         path.write_text(path.read_text() + "{not json\n")
 
@@ -346,7 +377,7 @@ class TestMalformedFiles:
         opened as bytes and decoded where the line number is known."""
         path = tmp_path / "c.ndjson"
         envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}).encode() + b"\n"
-        path.write_bytes(envelope + b'{"field":"platform","target_key_value":"\xff\xfe","claim":{}}\n')
+        path.write_bytes(envelope + b'{"field":"platform","target_key_value":"\xff\xfe","raw_value":"x"}\n')
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 2: not valid UTF-8"):
             list(iter_claims(path))
@@ -361,9 +392,9 @@ class TestMalformedFiles:
         """
         deep = "[" * 2000 + "]" * 2000
         envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()})
-        first = '{"claim_file":' + deep + "}" if line == 1 else envelope
-        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","claim":' + deep + "}"
-        path = tmp_path / "claims.ndjson"
+        first = '{"evidence_file":' + deep + "}" if line == 1 else envelope
+        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + deep + "}"
+        path = tmp_path / "evidence.ndjson"
         path.write_text(first + "\n" + second + "\n")
 
         with pytest.raises(ValueError, match=f"line {line}"):
@@ -379,17 +410,17 @@ class TestMalformedFiles:
         """
         big = "1" * 5000
         envelope = json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()})
-        first = '{"claim_file":{"n":' + big + "}}" if line == 1 else envelope
-        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","claim":{"tier":' + big + "}}"
-        path = tmp_path / "claims.ndjson"
+        first = '{"evidence_file":{"n":' + big + "}}" if line == 1 else envelope
+        second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + big + "}"
+        path = tmp_path / "evidence.ndjson"
         path.write_text(first + "\n" + second + "\n")
 
         with pytest.raises(ValueError, match=f"line {line}"):
             list(iter_claims(path))
 
     def test_a_file_nested_past_the_decoder_s_limit_is_reported_not_raised(self, tmp_path, capsys):
-        """One unreadable claim file must not hide the ones beside it, or the run."""
-        (tmp_path / "deep.ndjson").write_text('{"claim_file":' + "[" * 2000 + "]" * 2000 + "}\n")
+        """One unreadable evidence file must not hide the ones beside it, or the run."""
+        (tmp_path / "deep.ndjson").write_text('{"evidence_file":' + "[" * 2000 + "]" * 2000 + "}\n")
         write_claim_file(tmp_path / "good.ndjson", claim_file_envelope(), [_entry()])
 
         deep, good = report_claim_files(tmp_path)
@@ -400,7 +431,7 @@ class TestMalformedFiles:
 
     def test_a_file_with_no_line_break_is_refused_before_it_is_read(self, tmp_path):
         """`readline` on a file with no newline reads the file — the one thing this
-        module exists to avoid. A claim corpus written as one JSON array is the
+        module exists to avoid. An evidence corpus written as one JSON array is the
         reachable case: valid JSON, one line, and unbounded (#374).
         """
         path = tmp_path / "array.ndjson"
@@ -410,20 +441,20 @@ class TestMalformedFiles:
         with pytest.raises(ValueError, match="no line break in the first"):
             read_envelope(path)
 
-    def test_a_blank_line_carries_no_claim(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
+    def test_a_blank_line_carries_no_row(self, tmp_path):
+        path = tmp_path / "evidence.ndjson"
         write_claim_file(path, claim_file_envelope(), [_entry()])
         path.write_text(path.read_text() + "\n")
 
         assert len(list(iter_claims(path))) == 1
 
-    def test_an_empty_file_is_a_missing_envelope_not_an_empty_claim_set(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
+    def test_an_empty_file_is_a_missing_envelope_not_an_empty_row_set(self, tmp_path):
+        path = tmp_path / "evidence.ndjson"
         path.write_text("")
 
-        with pytest.raises(ValueError, match="line 1 must be the claim_file envelope"):
+        with pytest.raises(ValueError, match="line 1 must be the evidence_file envelope"):
             read_envelope(path)
-        with pytest.raises(ValueError, match="line 1 must be the claim_file envelope"):
+        with pytest.raises(ValueError, match="line 1 must be the evidence_file envelope"):
             list(iter_claims(path))
 
     @pytest.mark.parametrize(
@@ -451,6 +482,11 @@ class TestMalformedFiles:
             ({"fetched_at": "20260901T091403"}, "is not an ISO 8601"),
             ({"source_version": ""}, "source_version"),
             ({"source_key": None}, "source_key"),
+            # An evidence file is written by an importer reading something we do not
+            # own, so its source_type is one of EXTERNAL_SOURCE_TYPES. `content_read`
+            # is the reachable mistake: a real source_type, and our own inference's.
+            ({"source_type": SOURCE_CONTENT_READ}, "not a kind of external source"),
+            ({"source_type": None}, "not a kind of external source"),
             ({"target": {"system": ""}}, "target system"),
             ({"target": {"system": "anvil", "dataset": 7}}, "target dataset"),
             ({"target_key": "sample_id"}, "not a key of the target"),
@@ -464,17 +500,17 @@ class TestMalformedFiles:
         what it asserts is the member named and not an unrelated one that happened to
         be missing too.
         """
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         path.write_text(json.dumps({ENVELOPE_KEY: {**claim_file_envelope().to_dict(), **envelope}}) + "\n")
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
 
-    def test_a_claim_for_an_unknown_dimension_is_refused_both_ways(self, tmp_path):
-        path = tmp_path / "claims.ndjson"
+    def test_a_row_for_an_unknown_dimension_is_refused_both_ways(self, tmp_path):
+        path = tmp_path / "evidence.ndjson"
         entry = _entry()
         with pytest.raises(ValueError, match="unknown dimension"):
-            write_claim_file(path, claim_file_envelope(), [ClaimEntry("data_moddality", "x", entry.claim)])
+            write_claim_file(path, claim_file_envelope(), [_entry_with(entry, field="data_moddality")])
 
         write_claim_file(path, claim_file_envelope(), [entry])
         path.write_text(path.read_text().replace('"platform"', '"data_moddality"', 1))
@@ -482,10 +518,27 @@ class TestMalformedFiles:
             list(iter_claims(path))
 
     def test_a_line_with_nothing_to_match_on_is_refused(self, tmp_path):
-        """A claim whose target_key_value is empty can attach to no row."""
+        """A row whose target_key_value is empty can attach to no file."""
         entry = _entry()
         with pytest.raises(ValueError, match="target_key_value"):
-            write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [ClaimEntry(entry.field, "", entry.claim)])
+            write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [_entry_with(entry, target_key_value="")])
+
+    @pytest.mark.parametrize("raw", [None, 7, ["Revio"]])
+    def test_a_raw_value_that_is_not_a_string_is_refused_both_ways(self, tmp_path, raw):
+        """The one check a raw value gets: the format holds a string.
+
+        Its emptiness and its spelling are deliberately not checked — see
+        `TestRoundTrip.test_the_raw_value_is_what_the_source_wrote` — so this is the
+        whole of what a malformed raw value can be.
+        """
+        path = tmp_path / "evidence.ndjson"
+        with pytest.raises(ValueError, match="raw_value"):
+            write_claim_file(path, claim_file_envelope(), [_entry_with(_entry(), raw_value=raw)])
+
+        write_claim_file(path, claim_file_envelope(), [_entry()])
+        path.write_text(path.read_text().replace('"Revio"', json.dumps(raw), 1))
+        with pytest.raises(ValueError, match="line 2: raw_value"):
+            list(iter_claims(path))
 
     def test_an_envelope_naming_a_key_the_target_does_not_have_is_refused(self, tmp_path):
         """`target_key` is a key of the *target*. A source keyed by something else maps
@@ -497,8 +550,8 @@ class TestMalformedFiles:
 class TestAWriterCannotProduceWhatTheReaderRefuses:
     """The two sides of the contract agree, so a fault surfaces at the importer (#401 review).
 
-    The write path used to check every claim and never the envelope, so a networked
-    import could spend its run writing millions of claims behind a header its own
+    The write path used to check every row and never the envelope, so a networked
+    import could spend its run writing millions of rows behind a header its own
     reader would reject — discovered at the next classification run, far from the
     cause.
     """
@@ -528,7 +581,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
     def test_a_source_member_carrying_a_line_break_is_refused(self, forged):
         """Every one of these is printed in the run's report, one file per line.
 
-        A newline in a repository name is a second report line the claim file wrote.
+        A newline in a repository name is a second report line the evidence file wrote.
         The schema refuses it too — the slots are `pattern: "^.+$"` — so accepting it
         here would be the reader taking what the gate rejects.
         """
@@ -544,11 +597,11 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
             claim_file_envelope(fetched_at="2026-09-01")
 
     def test_an_envelope_cannot_name_a_column_at_all(self):
-        """A column belongs to a claim, not to a file — the type says so.
+        """A column belongs to a row, not to a file — the type says so.
 
         `ClaimFileSource` has no `column` member, so an envelope naming one is not a
         value to be refused at runtime but a shape that cannot be expressed. One
-        table's claims are read from several columns, so a column on the envelope
+        table's rows are read from several columns, so a column on the envelope
         could disagree with every line in the file.
         """
         assert "column" not in {f.name for f in fields(ClaimFileSource)}
@@ -562,19 +615,11 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="source table"):
             claim_file_envelope(source=ClaimFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
 
-    def test_a_hand_built_claim_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
-        """An importer can build a ClaimEntry by hand; the writer holds it to make_claim."""
-        entry = ClaimEntry(
-            field="platform",
-            target_key_value="HG002.bam",
-            claim={
-                "source_type": SOURCE_REPOSITORY_METADATA,
-                "value": "PACBIO",
-                "source": HPRC_CATALOG.as_claim_source("platform").to_dict(),
-            },
-        )
+    def test_a_hand_built_row_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
+        """An importer builds an EvidenceEntry by hand; the writer holds it to the line shape."""
+        entry = _entry_with(_entry(), source=ClaimSource(name="HPRC Data Explorer", column="instrumentModel"))
 
-        with pytest.raises(ValueError, match="cites no mapping rule"):
+        with pytest.raises(ValueError, match="envelope names"):
             write_claim_file(tmp_path / "c.ndjson", claim_file_envelope(), [entry])
 
     def test_a_file_the_run_would_never_find_is_refused_at_write(self, tmp_path):
@@ -628,7 +673,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
 
         Our writer emits `+00:00`, but the importers in #369/#394 read web APIs that
-        emit `Z` almost universally — a claim file must not parse on a dev box and
+        emit `Z` almost universally — an evidence file must not parse on a dev box and
         fail on CI.
         """
         path = tmp_path / "c.ndjson"
@@ -638,133 +683,82 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         assert read_envelope(path).fetched_at == datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
 
 
-class TestAClaimIsRebuiltNotTrusted:
-    """A claim read off disk goes through `make_claim`, like every other claim (#401 review).
+class TestALineIsAnObservationNotAClaim:
+    """A row records what a source wrote and declares nothing (#421, contract 1.1).
 
-    A claim file is bytes written by an out-of-band process, and what comes off it
-    reaches `evaluate_claims`. Passing the parsed dict through would make this the one
-    producer that bypasses the single construction site.
+    Until #421 a line held a claim, and this class held the twenty-odd cases that
+    made a claim off disk satisfy `make_claim`. None of them can happen now: there is
+    no claim on a line to be malformed. What replaces them is the shape a row does
+    have, and — because a producer written against the old format is the reachable
+    mistake — a refusal that names each retired member and says what to write instead.
     """
 
-    def _write_raw(self, tmp_path, claim: dict) -> Path:
-        """A claim file whose one line carries `claim` verbatim, bypassing the writer."""
+    def _write_raw(self, tmp_path, **members) -> Path:
+        """An evidence file whose one line carries ``members`` verbatim, bypassing the writer."""
         path = tmp_path / "c.ndjson"
-        line = {"field": "platform", "target_key_value": "HG002.bam", "claim": claim}
+        line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio", **members}
         path.write_text(
             json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
         )
         return path
 
-    def test_a_claim_citing_no_mapping_rule_is_refused(self, tmp_path):
-        """Every imported claim that declares anything names the mapping that made it.
+    @pytest.mark.parametrize(
+        "member,value",
+        [
+            ("claim", {"value": "PACBIO", "rule_id": "m1"}),
+            ("value", "PACBIO"),
+            ("status", "not_applicable"),
+            ("claim_state", "no_vocabulary_term"),
+            ("rule_id", "map_hprc_platform_v1"),
+            ("tier", 4),
+            ("source_type", SOURCE_REPOSITORY_METADATA),
+            ("join_key", JOIN_KEY_FILE_NAME),
+            ("match_exact", True),
+            ("source", {"name": "SOMEONE ELSE", "table": "other"}),
+        ],
+    )
+    def test_a_retired_member_is_refused_by_name(self, tmp_path, member, value):
+        """Each one is a thing a line used to carry, and the refusal says why it does not.
 
-        Including an identity mapping: there is no implicit copy, because a source
-        value that happens to spell a vocabulary term is a coincidence of spelling
-        rather than an agreement about meaning (#401).
+        A bare "unknown member" would be true and useless: the producer that hits this
+        is one written against #401's format, or against the contract's earlier
+        framing, and what it needs to be told is where that member went.
+
+        Note `value` and `status`: these are the contract's whole point. A line
+        offering either is an importer declaring meaning, which is the rule engine's
+        (1.1, 3.6). And `source`: the envelope names this file's source, so a line
+        that re-attributed itself would undo the writer's check for exactly the files
+        it cannot vouch for.
         """
-        path = self._write_raw(tmp_path, {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO"})
+        path = self._write_raw(tmp_path, **{member: value})
 
-        with pytest.raises(ValueError, match="cites no mapping rule"):
+        with pytest.raises(ValueError, match=f"{member!r} is not a member of an evidence row"):
             list(iter_claims(path))
 
-    def test_a_claim_carrying_a_tier_is_refused(self, tmp_path):
-        """An imported claim does not compete on the rule tiers, so a tier on one is a
-        number the policy discards — and one a file could forge to outrank every rule."""
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "tier": 999}
-        path = self._write_raw(tmp_path, claim)
+    @pytest.mark.parametrize("member", ["value", "status", "claim_state", "rule_id", "tier"])
+    def test_the_record_offers_nowhere_to_put_a_retired_member(self, member):
+        """The writer cannot publish one either, because the record cannot hold one.
 
-        with pytest.raises(ValueError, match="does not"):
-            list(iter_claims(path))
-
-    def test_a_claim_with_an_unknown_source_type_is_refused(self, tmp_path):
-        path = self._write_raw(tmp_path, {"source_type": "hearsay", "value": "PACBIO", "rule_id": "m1"})
-
-        with pytest.raises(ValueError, match="unknown source_type"):
-            list(iter_claims(path))
-
-    def test_a_claim_declaring_both_a_value_and_a_status_is_refused(self, tmp_path):
-        claim = {
-            "source_type": SOURCE_REPOSITORY_METADATA,
-            "value": "PACBIO",
-            "status": "not_applicable",
-            "rule_id": "m1",
-        }
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match="exactly one of value/status/state"):
-            list(iter_claims(path))
-
-    @pytest.mark.parametrize("member,value", [("join_key", "file_name"), ("match_exact", True)])
-    def test_a_claim_asserting_a_match_that_has_not_happened_is_refused(self, tmp_path, member, value):
-        """`join_key` and `match_exact` are the join's to fill in, not a file's.
-
-        A valid one is refused as firmly as a nonsense one: a claim file records the
-        key to match *on*, on its envelope, and a line claiming a match already
-        happened is claiming something no importer can know.
+        This is the stronger half of the guarantee: the reader refuses a hand-written
+        line, and an importer using the record is refused by the type system before it
+        writes anything. `EvidenceEntry` has four members and none of them is an
+        answer.
         """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", member: value}
-        path = self._write_raw(tmp_path, claim)
+        assert {f.name for f in fields(EvidenceEntry)} == {"field", "target_key_value", "raw_value", "source"}
+        with pytest.raises(TypeError):
+            EvidenceEntry(  # type: ignore[call-arg]
+                field="platform", target_key_value="HG002.bam", raw_value="Revio", **{member: "x"}
+            )
 
-        with pytest.raises(ValueError, match="which the join fills in"):
-            list(iter_claims(path))
+    def test_an_unknown_member_beside_the_row_is_refused(self, tmp_path):
+        """A member that was never part of the format, as opposed to a retired one.
 
-    def test_a_claim_asserting_a_match_is_refused_at_write_too(self, tmp_path):
-        """The writer refuses it as well, so no importer can publish one."""
-        base = _entry()
-        entry = ClaimEntry(
-            field=base.field,
-            target_key_value=base.target_key_value,
-            claim={**base.claim, "join_key": JOIN_KEY_FILE_NAME, "match_exact": True},
-        )
-
-        with pytest.raises(ValueError, match="which the join fills in"):
-            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [entry])
-
-    @pytest.mark.parametrize("value", ["Revio", "pacbio", "banana"])
-    def test_a_value_the_dimension_has_no_word_for_is_refused(self, tmp_path, value):
-        """Mapping onto our vocabulary is the importer's job, and nothing else checks it.
-
-        `evaluate_claims` drops source-bearing claims, so an unmapped-but-declared
-        value reaches no output record and fails no schema gate: a file full of
-        `"Revio"` would look like work indefinitely. `pacbio` is the case that makes
-        the point — right term, wrong case, and just as invisible.
+        A reader that dropped one silently would normalize a malformed file into an
+        apparently valid row.
         """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": value, "rule_id": "m1", "raw_value": "Revio"}
-        path = self._write_raw(tmp_path, claim)
+        path = self._write_raw(tmp_path, rank=9)
 
-        with pytest.raises(ValueError, match="not a value of that dimension"):
-            list(iter_claims(path))
-
-    def test_the_raw_value_is_not_checked_against_the_vocabulary(self, tmp_path):
-        """`raw_value` is what the source said. If it were one of ours it would not be raw."""
-        path = tmp_path / "claims.ndjson"
-        write_claim_file(path, claim_file_envelope(), [_entry(raw="Revio", value="PACBIO")])
-
-        assert [entry.claim["raw_value"] for entry in iter_claims(path)] == ["Revio"]
-
-    def test_a_value_the_dimension_has_no_word_for_is_refused_at_write(self, tmp_path):
-        """The writer refuses it too, so no importer can publish one."""
-        with pytest.raises(ValueError, match="not a value of that dimension"):
-            write_claim_file(tmp_path / "claims.ndjson", claim_file_envelope(), [_entry(value="Revio")])
-
-    def test_a_line_carrying_its_own_source_is_refused_not_re_attributed(self, tmp_path):
-        """The writer refuses a foreign source; a reader that overwrote one would undo that."""
-        claim = {
-            "source_type": SOURCE_REPOSITORY_METADATA,
-            "value": "PACBIO",
-            "rule_id": "m1",
-            "source": {"name": "SOMEONE ELSE", "table": "other"},
-        }
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match="carries its own source"):
-            list(iter_claims(path))
-
-    def test_an_unknown_key_on_a_claim_is_refused(self, tmp_path):
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "rank": 9}
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match="not a valid claim"):
+        with pytest.raises(ValueError, match=r"unknown member\(s\) \['rank'\]"):
             list(iter_claims(path))
 
     @pytest.mark.parametrize("member", ["url", "dataset", "table"])
@@ -775,7 +769,7 @@ class TestAClaimIsRebuiltNotTrusted:
         branch exists, which is what makes those cases no evidence for this one.
         """
         source = {**claim_file_envelope().source.to_dict(), member: None}
-        path = tmp_path / "claims.ndjson"
+        path = tmp_path / "evidence.ndjson"
         path.write_text(json.dumps({ENVELOPE_KEY: {**claim_file_envelope().to_dict(), "source": source}}) + "\n")
 
         with pytest.raises(ValueError, match=f"source {member} is an explicit null"):
@@ -784,70 +778,19 @@ class TestAClaimIsRebuiltNotTrusted:
     def test_a_line_whose_column_is_an_explicit_null_is_refused(self, tmp_path):
         """Absent is fine; a written-out null is a record the writer could not produce.
 
-        `dict.pop` with a default cannot tell the two apart, so collapsing them would
+        `dict.get` with a default cannot tell the two apart, so collapsing them would
         accept here what every other member refuses.
         """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": None}
-        path = self._write_raw(tmp_path, claim)
+        path = self._write_raw(tmp_path, column=None)
 
         with pytest.raises(ValueError, match="explicit null"):
             list(iter_claims(path))
 
-    @pytest.mark.parametrize("member", ["tier", "raw_value", "rule_id", "reason"])
-    def test_a_claim_member_that_is_an_explicit_null_is_refused(self, tmp_path, member):
-        """`make_claim` reads a null argument as an absent one, so the reader cannot.
-
-        Without this the file on disk and the claim in memory differ — `"tier": null`
-        is read back as a claim with no tier — which is exactly the normalization the
-        `column` and source-member checks refuse a line for (#401 review).
-        """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", member: None}
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match=f"claim member\\(s\\) \\['{member}'\\] are explicit nulls"):
-            list(iter_claims(path))
-
     def test_a_line_whose_column_is_not_a_string_is_refused(self, tmp_path):
         """The per-line `column` is a source member and is checked like the rest."""
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1", "column": 7}
-        path = self._write_raw(tmp_path, claim)
+        path = self._write_raw(tmp_path, column=7)
 
         with pytest.raises(ValueError, match="source column"):
-            list(iter_claims(path))
-
-    @pytest.mark.parametrize(
-        "member,bad",
-        [("value", 7), ("raw_value", []), ("reason", 3), ("rule_id", 9)],
-    )
-    def test_a_member_of_the_wrong_type_is_refused(self, tmp_path, member, bad):
-        """The schema's Evidence says strings and a boolean; nothing else pinned these.
-
-        A numeric `value` would otherwise reach resolution and be written to output as
-        a classification.
-        """
-        claim = {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1"}
-        claim[member] = bad
-        path = self._write_raw(tmp_path, claim)
-
-        with pytest.raises(ValueError, match=r"not a string"):
-            list(iter_claims(path))
-
-    def test_an_unknown_member_beside_the_claim_is_refused(self, tmp_path):
-        """`make_claim` refuses an unknown key inside the claim; the line must match.
-
-        A reader that dropped one silently would normalize a malformed file into an
-        apparently valid claim.
-        """
-        path = tmp_path / "c.ndjson"
-        line = {
-            "field": "platform",
-            "target_key_value": "HG002.bam",
-            "claim": {"source_type": SOURCE_REPOSITORY_METADATA, "value": "PACBIO", "rule_id": "m1"},
-            "rank": 9,
-        }
-        path.write_text(json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
-
-        with pytest.raises(ValueError, match=r"unknown member\(s\) \['rank'\]"):
             list(iter_claims(path))
 
     def test_an_unhashable_line_member_is_refused_by_name_not_by_traceback(self, tmp_path):
@@ -857,9 +800,7 @@ class TestAClaimIsRebuiltNotTrusted:
         file and the line, which is the one thing this module promises about a
         malformed file.
         """
-        path = tmp_path / "c.ndjson"
-        line = {"field": [], "target_key_value": "HG002.bam", "claim": {}}
-        path.write_text(json.dumps({ENVELOPE_KEY: claim_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+        path = self._write_raw(tmp_path, field=[])
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 2: unknown dimension"):
             list(iter_claims(path))
@@ -961,31 +902,29 @@ class TestTheRunReport:
         assert "dated in the future" in capsys.readouterr().out
 
 
-class TestAClaimFileIsWrittenBySomeoneElse:
-    """The curator table (#397) is another claim file, not a special case."""
+class TestAnEvidenceFileIsWrittenBySomeoneElse:
+    """The curator table (#397) is another evidence file, not a special case."""
 
     def test_a_wrangler_table_with_no_url_round_trips(self, tmp_path):
         # A curator table has no public address and no dataset level, and keys its
         # overrides by the strongest key the target has rather than by a name.
         curator = ClaimFileSource(repository="meta-disco curator table", table="overrides")
-        entry = ClaimEntry(
+        # A curator writes rules, not evidence (contract 1.6, 1.7) — so what this file
+        # carries is still the raw text of the decision, and the rule that acts on it
+        # is authored separately. The format does not change for the one input that
+        # wins; its `source_type` is what says which input it is.
+        entry = EvidenceEntry(
             field="data_type",
             target_key_value="a" * 32,
-            claim=make_claim(
-                # A curator's reason is not derivable from the mapping, so it is
-                # written — the one case where an imported claim carries prose (#401).
-                reason="curator override: alignments_v2.location is not an authority on data_type",
-                source_type=SOURCE_WRANGLER_ANNOTATION,
-                source=curator.as_claim_source("data_type"),
-                rule_id="curator_override_rev3",
-                value="genotypes",
-            ),
+            raw_value="genotypes",
+            source=curator.as_claim_source("data_type"),
         )
         path = tmp_path / "curator.ndjson"
         write_claim_file(
             path,
             ClaimFileEnvelope(
                 source=curator,
+                source_type=SOURCE_WRANGLER_ANNOTATION,
                 source_version="rev-3",
                 source_key="file_md5sum",
                 target=ClaimTarget(system="anvil"),
@@ -997,10 +936,11 @@ class TestAClaimFileIsWrittenBySomeoneElse:
 
         envelope = read_envelope(path)
         assert envelope.source.url is None and envelope.source.dataset is None
+        assert envelope.source_type == SOURCE_WRANGLER_ANNOTATION
         # No dataset scope. An md5 is not unique corpus-wide — 12,203 rows share
         # one, two thirds of them inside a single dataset — but every row sharing an
-        # md5 has the same bytes, so a curator's claim about the content is true of
-        # all of them. What a join should do with that is #402's — see
+        # md5 has the same bytes, so a curator's statement about the content is true
+        # of all of them. What a join should do with that is #402's — see
         # `ClaimTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_claims(path)) == [entry]
@@ -1019,6 +959,25 @@ def test_the_reader_and_the_schema_share_one_pattern():
     slot = schema["classes"]["ClaimFileEnvelope"]["attributes"]["fetched_at"]
 
     assert slot["pattern"] == models._FETCHED_AT_PATTERN
+
+
+def test_no_claim_is_constructed_on_either_path():
+    """The module makes no claim, and the import graph is what proves it (#421).
+
+    Contract 1.1: only the rule engine makes claims. Reading and writing a row must
+    therefore be reachable without `make_claim` and without the vocabulary check —
+    both of which this module called on every line until #421, on both directions.
+
+    Asserted over the module's own imports rather than by probing its namespace: a
+    `hasattr` check passes while a module-level import sits there unused, and an
+    import of `rule_engine` from here is the thing that would make a claim possible
+    again.
+    """
+    tree = ast.parse(Path(claim_files.__file__).read_text())
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+
+    assert "rule_engine" not in imported, "reading or writing a row must not be able to make a claim"
+    assert "schema_vocab" not in imported, "a raw value is not checked against our vocabulary (#414 owns that)"
 
 
 def test_the_claims_root_the_run_uses_is_under_data():

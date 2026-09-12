@@ -411,6 +411,7 @@ def test_name_source_constants_match_schema_enum():
     "constants,schema_values",
     [
         ("SOURCE_TYPES", schema_vocab.source_type_values),
+        ("EXTERNAL_SOURCE_TYPES", schema_vocab.external_source_type_values),
         ("CLAIM_STATES", schema_vocab.claim_state_values),
         ("JOIN_KEYS", schema_vocab.join_key_values),
     ],
@@ -422,6 +423,14 @@ def test_claim_vocabularies_match_their_schema_enums(constants, schema_values):
     from meta_disco import models
 
     assert getattr(models, constants) == schema_values()
+
+
+def test_the_external_source_types_are_a_subset():
+    # `external_source_type_enum` lists its three values rather than deriving them,
+    # because LinkML has no subset construct `gen-json-schema` honours. That is only
+    # safe while it stays a subset: a kind added to `source_type_enum` and misspelled
+    # here would let an evidence file declare a source_type no claim can carry (#421).
+    assert schema_vocab.external_source_type_values() < schema_vocab.source_type_values()
 
 
 def test_claim_states_are_never_dimension_statuses():

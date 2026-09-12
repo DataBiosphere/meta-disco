@@ -35,6 +35,7 @@ NAME_SOURCE_ENUM = "reference_name_source_enum"
 # the states a claim can take when it consulted a source and produced no value,
 # and the keys an external claim can be joined to one of our files by.
 SOURCE_TYPE_ENUM = "source_type_enum"
+EXTERNAL_SOURCE_TYPE_ENUM = "external_source_type_enum"
 CLAIM_STATE_ENUM = "claim_state_enum"
 JOIN_KEY_ENUM = "join_key_enum"
 
@@ -168,6 +169,17 @@ def source_type_values() -> frozenset[str]:
     schema path) if the schema is missing the enum.
     """
     return _enum_values(SOURCE_TYPE_ENUM)
+
+
+def external_source_type_values() -> frozenset[str]:
+    """Return the permissible values of an evidence file's envelope ``source_type``.
+
+    The kinds of source outside this repository (#421). A strict subset of
+    :func:`source_type_values`; ``models``' ``EXTERNAL_SOURCE_TYPES`` is pinned to it
+    so the envelope check and the schema gate refuse the same files. Raises KeyError
+    (with the schema path) if the schema is missing the enum.
+    """
+    return _enum_values(EXTERNAL_SOURCE_TYPE_ENUM)
 
 
 def claim_state_values() -> frozenset[str]:
