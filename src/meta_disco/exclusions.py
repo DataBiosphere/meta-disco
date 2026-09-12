@@ -28,7 +28,7 @@ table must never make without evidence (#375).
 This module depends only on ``records`` (for the shared identity coercion), so
 ``pipeline`` can import :data:`MD5_RE` from here without a cycle. The shared loader
 that applies :func:`partition_records` lives in ``pipeline``
-(``load_classifiable_records``), so the dependency runs one way.
+(``load_classifiable_snapshot``), so the dependency runs one way.
 """
 
 from __future__ import annotations
@@ -281,7 +281,7 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
     a per-type copy of a corpus-wide number would read as a per-type figure.
 
     **Written by every producer, concurrently, and that is safe.** Each producer of a
-    run writes this as it loads (``pipeline.load_classifiable_records``), and a full
+    run writes this as it loads (``pipeline.load_classifiable_snapshot``), and a full
     ``make classify`` runs nine of them in parallel into one run directory. They all
     read the same input and apply the same predicate, so they all compute the same
     content — the writes are idempotent, and the only hazard is a reader catching a

@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 """Generate validation report comparing classifications against ground truth.
 
-Compares our classification outputs against external metadata sources
-(AnVIL Azul, HPRC catalogs) and reports agreement, discrepancies,
-and coverage gaps.
+Compares our classification outputs against external metadata sources (the HPRC
+catalogs) and reports agreement, discrepancies, and coverage gaps.
+
+**The AnVIL comparison moved out of here (#424.)** This script used to score our
+values against AnVIL's declared `data_modality`/`reference_assembly` through two
+hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. That comparison
+is now `meta_disco.incumbent` / `make incumbent-report`, which reports the same two
+dimensions per file against the incumbent AnVIL publishes. Two reports scoring the
+same files by different rules is the drift `docs/claims-contract.md` exists to stop,
+so there is one.
+
+The dicts themselves were the only AnVIL value translations in the repo. They were
+script-local, carried no row ids, and were validated against no vocabulary, so they
+are not the translation table #414 specifies — but they are its seed, and #414 should
+start from them rather than rediscover them:
+
+    single-nucleus RNA sequencing assay -> transcriptomic.single_cell
+    single-nucleus ATAC-seq            -> epigenomic.chromatin_accessibility
+    GRCh38 + Gencode40                 -> GRCh38
+    GRCh38 / GRCh37 / CHM13            -> identity
+    GRCm39                             -> mouse, no term (#15, #399)
 
 Usage:
     python scripts/generate_validation_report.py
@@ -13,7 +31,6 @@ Usage:
 import argparse
 import json
 import sys
-from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -30,25 +47,6 @@ DIMENSION_LABELS = {
     "reference_assembly": "Reference Assembly",
     "assay_type": "Assay Type",
 }
-
-# =============================================================================
-# Field mapping: normalize external vocabulary to ours
-# =============================================================================
-
-# AnVIL maps are small and specific to this script
-ANVIL_MODALITY_MAP = {
-    "single-nucleus RNA sequencing assay": "transcriptomic.single_cell",
-    "single-nucleus ATAC-seq": "epigenomic.chromatin_accessibility",
-}
-
-ANVIL_REFERENCE_MAP = {
-    "GRCh38 + Gencode40": "GRCh38",
-    "GRCh38": "GRCh38",
-    "GRCh37": "GRCh37",
-    "CHM13": "CHM13",
-    "GRCm39": "GRCm39",  # mouse — we don't support yet
-}
-
 
 # =============================================================================
 # Load our classifications keyed by MD5 and filename
@@ -187,60 +185,6 @@ def compare_source(
 
 
 # =============================================================================
-# AnVIL comparison
-# =============================================================================
-
-
-def compare_anvil(our_by_md5: dict, metadata_path: Path) -> dict:
-    """Compare against AnVIL Azul metadata."""
-    total_files = 0
-    dataset_counts = Counter()
-    metadata_coverage = Counter()
-    truth_records = []
-    with metadata_path.open() as f:
-        for line in f:
-            r = json.loads(line)
-            total_files += 1
-            dataset_counts[r.get("dataset_title") or "unknown"] += 1
-            # Count metadata coverage from raw source records
-            for dim in DIMENSIONS:
-                if r.get(dim):
-                    metadata_coverage[dim] += 1
-            if r.get("data_modality") or r.get("reference_assembly"):
-                truth_records.append(
-                    {
-                        "md5": r.get("file_md5sum"),
-                        "file_name": r.get("file_name"),
-                        "data_modality": r.get("data_modality"),
-                        "reference_assembly": r.get("reference_assembly"),
-                    }
-                )
-
-    field_mappings = {
-        "data_modality": {
-            "truth_field": "data_modality",
-            "value_map": ANVIL_MODALITY_MAP,
-        },
-        "reference_assembly": {
-            "truth_field": "reference_assembly",
-            "value_map": ANVIL_REFERENCE_MAP,
-        },
-    }
-
-    result = compare_source(
-        our_by_md5,
-        truth_records,
-        "md5",
-        field_mappings,
-        ["data_modality", "reference_assembly"],
-    )
-    result["total_source_files"] = total_files
-    result["metadata_coverage"] = metadata_coverage
-    result["datasets"] = [{"name": n, "count": c} for n, c in dataset_counts.most_common()]
-    return result
-
-
-# =============================================================================
 # HPRC comparison — load pre-computed results from validate_against_hprc.py
 # =============================================================================
 
@@ -353,11 +297,6 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
 
 
 SOURCE_INFO = {
-    "AnVIL (Azul metadata)": {
-        "text": "Validated against file-level metadata from the",
-        "link_label": "AnVIL Data Explorer",
-        "url": "https://explore.anvilproject.org/",
-    },
     "HPRC": {
         "text": "Validated against sequencing, alignment, and annotation catalogs from the",
         "link_label": "HPRC Data Explorer",
@@ -381,7 +320,7 @@ def source_desc_html(name: str) -> str | None:
 
 
 def build_source_section(name: str, results: dict) -> str:
-    # Short label for column headers: "AnVIL (Azul metadata)" -> "AnVIL"
+    # Short label for column headers: "Some Source (detail)" -> "Some Source"
     source_label = name.split("(")[0].strip() if "(" in name else name
 
     lines = []
@@ -550,12 +489,6 @@ def main():
 
     # Run comparisons
     all_results = {}
-
-    if args.metadata.is_file():
-        print("Comparing against AnVIL metadata...")
-        anvil_results = compare_anvil(our_by_md5, args.metadata)
-        all_results["AnVIL (Azul metadata)"] = anvil_results
-        print(f"  Matched: {anvil_results['matched']:,}, Unmatched: {anvil_results['unmatched']:,}")
 
     if args.hprc_results.is_file():
         print("Loading HPRC validation results...")

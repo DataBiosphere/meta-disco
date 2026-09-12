@@ -14,6 +14,7 @@ import pytest
 from meta_disco.incumbent import (
     ADD,
     COMPARE,
+    MULTI_VALUE_SEP,
     NONE,
     TAKE_AZUL,
     gather,
@@ -54,9 +55,11 @@ def _write_run(run_dir, records):
 class TestBuildDeclared:
     def test_a_declaration_is_transcribed_verbatim_as_a_list(self):
         block = build_declared(
-            data_modality=["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
-            reference_assembly=None,
-            source="anvil/anvil15",
+            {
+                "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
+                "reference_assembly": None,
+            },
+            "anvil/anvil15",
         )
         assert block is not None
         assert block["data_modality"] == ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
@@ -64,13 +67,11 @@ class TestBuildDeclared:
         assert block["source"] == "anvil/anvil15"
 
     def test_a_file_that_declared_nothing_gets_no_block(self):
-        assert build_declared(data_modality=None, reference_assembly=None, source="anvil/anvil15") is None
+        assert build_declared({"data_modality": None, "reference_assembly": None}, "anvil/anvil15") is None
 
     def test_in_vocabulary_names_only_the_values_that_are_terms(self):
         block = build_declared(
-            data_modality=["genomic", "single-nucleus ATAC-seq"],
-            reference_assembly=["GRCm39"],
-            source=None,
+            {"data_modality": ["genomic", "single-nucleus ATAC-seq"], "reference_assembly": ["GRCm39"]}, None
         )
         assert block is not None
         # `genomic` is a data_modality_enum term; the other two are not.
@@ -80,15 +81,17 @@ class TestBuildDeclared:
         # The measured state at #424, and the reason the translation table (#414) is
         # owed: not one incumbent value is a term this schema knows.
         block = build_declared(
-            data_modality=["single-nucleus RNA sequencing assay", "single-nucleus ATAC-seq"],
-            reference_assembly=["GRCh38 + Gencode40", "GRCm39"],
-            source="anvil/anvil15",
+            {
+                "data_modality": ["single-nucleus RNA sequencing assay", "single-nucleus ATAC-seq"],
+                "reference_assembly": ["GRCh38 + Gencode40", "GRCm39"],
+            },
+            "anvil/anvil15",
         )
         assert block is not None
         assert block["in_vocabulary"] == {"data_modality": [], "reference_assembly": []}
 
     def test_a_dimension_that_declared_nothing_is_absent_from_in_vocabulary(self):
-        block = build_declared(data_modality=["genomic"], reference_assembly=None, source=None)
+        block = build_declared({"data_modality": ["genomic"], "reference_assembly": None}, None)
         assert block is not None
         assert set(block["in_vocabulary"]) == {"data_modality"}
 
@@ -158,7 +161,7 @@ class TestGather:
                 _record(
                     "b.bam",
                     declared=build_declared(
-                        data_modality=["single-nucleus ATAC-seq"], reference_assembly=None, source="anvil/anvil15"
+                        {"data_modality": ["single-nucleus ATAC-seq"], "reference_assembly": None}, "anvil/anvil15"
                     ),
                 ),
             ],
@@ -183,7 +186,9 @@ class TestGather:
         assert report.duplicate_records == 1
 
     def test_compare_rows_group_by_the_value_pair_they_share(self, tmp_path):
-        declared = build_declared(data_modality=None, reference_assembly=["GRCh38 + Gencode40"], source="anvil/anvil15")
+        declared = build_declared(
+            {"data_modality": None, "reference_assembly": ["GRCh38 + Gencode40"]}, "anvil/anvil15"
+        )
         run = _write_run(
             tmp_path / "run",
             [
@@ -197,9 +202,11 @@ class TestGather:
 
     def test_a_multi_valued_declaration_is_rejoined_into_the_cell_azul_published(self, tmp_path):
         declared = build_declared(
-            data_modality=["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
-            reference_assembly=None,
-            source="anvil/anvil15",
+            {
+                "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
+                "reference_assembly": None,
+            },
+            "anvil/anvil15",
         )
         run = _write_run(
             tmp_path / "run", [_record("x.h5ad", modality="transcriptomic.single_cell", declared=declared)]
@@ -212,7 +219,7 @@ class TestGather:
 
 class TestRender:
     def test_the_tsv_has_one_row_per_declared_file_and_dimension(self, tmp_path):
-        declared = build_declared(data_modality=["GRCm39"], reference_assembly=["GRCm39"], source="anvil/anvil15")
+        declared = build_declared({"data_modality": ["GRCm39"], "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
         run = _write_run(tmp_path / "run", [_record("m.bam", declared=declared), _record("n.bam", modality="genomic")])
         lines = render_tsv(gather(run)).strip().split("\n")
         assert lines[0].split("\t") == [
@@ -229,11 +236,11 @@ class TestRender:
         assert all(line.startswith("m.bam\t") for line in lines[1:])
 
     def test_the_report_names_the_vocabulary_gap(self, tmp_path):
-        declared = build_declared(data_modality=None, reference_assembly=["GRCm39"], source="anvil/anvil15")
+        declared = build_declared({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
         run = _write_run(tmp_path / "run", [_record("m.bam", declared=declared)])
         text = render_report(gather(run))
         assert "`GRCm39`" in text
-        assert "1 of 1 declared values are terms our vocabulary does not have" in text
+        assert "1 of 1 distinct incumbent values are terms our vocabulary does not have" in text
         assert "anvil/anvil15" in text
 
 
@@ -324,3 +331,17 @@ class TestEveryProducerCarriesTheDeclaration:
         [block] = self._declared_blocks(output)
         assert block is not None
         assert block["reference_assembly"] == ["GRCm39"]
+
+
+def test_the_display_join_matches_the_manifest_reader():
+    """The report rejoins a declared list with the separator the reader split on.
+
+    `incumbent` holds its own copy rather than importing `azul_manifest`, which opens a
+    `requests` session at import. That duplication is only safe while the two agree: if
+    Azul's separator moved and only the reader were updated, every `azul_cell` in the
+    report would silently stop matching what Azul published. Imported inside the test so
+    the report keeps its offline import graph.
+    """
+    from meta_disco import azul_manifest
+
+    assert MULTI_VALUE_SEP == azul_manifest._MULTI_VALUE_SEP

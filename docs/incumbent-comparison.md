@@ -1,6 +1,6 @@
 # The incumbent, beside ours
 
-Run: `output/anvil/20260912_130405` · 708,088 files · incumbent: `anvil/anvil15`
+Run: `output/anvil/20260912_152414` · 708,088 files · incumbent: `anvil/anvil15`
 
 What AnVIL publishes today for `data_modality` and `reference_assembly`, compared with what this
 run concluded, per file. Nothing here changes a classification: every file's value is what
@@ -36,7 +36,7 @@ Datasets the incumbent is silent across entirely are omitted.
 
 ## Can we even say it?
 
-**11,463 of 11,463 declared values are terms our vocabulary does not have.**
+**4 of 4 distinct incumbent values are terms our vocabulary does not have**, carried by 11,463 file declarations.
 Every `no` below is a translation row that is owed (#414), and its file count is what it is worth.
 Because none of the incumbent's values is a term we know, not one `compare` pair below is a
 term-level disagreement — every one of them is an untranslated string.

@@ -37,13 +37,14 @@ from pathlib import Path
 from .models import NOT_CLASSIFIED, field_label
 from .output_utils import iter_records
 from .records import DECLARED_FIELDS
-from .schema_vocab import value_in_vocabulary
 from .summaries import md_table
 
-# The separator Azul joins a multi-valued facet cell with, restored when a declared
-# value list is rendered back into one cell for the flat report. Mirrors
-# ``azul_manifest._MULTI_VALUE_SEP``, not imported from it: that module is the
-# manifest *reader* and pulling it in here would drag ``requests`` into a report.
+# The separator Azul joins a multi-valued facet cell with, used here to render a
+# declared value list back into the cell Azul published. Held separately from
+# ``azul_manifest._MULTI_VALUE_SEP`` rather than imported, because that module opens a
+# `requests` session at import and this is an offline report; the two are pinned
+# together by ``test_incumbent.test_the_display_join_matches_the_manifest_reader``,
+# which is what actually stops them drifting — a comment would not.
 MULTI_VALUE_SEP = " || "
 
 # Azul is silent, this run spoke. Nothing is owed; our value stands.
@@ -65,14 +66,6 @@ RECOMMENDATIONS = (TAKE_AZUL, COMPARE, ADD, NONE)
 # below it the individual files are, and that is where the eight interesting rows live
 # — four .bai/.tbi, two intervals_fallback BEDs, two .h5ad.
 MAX_NAMED_PER_PAIR = 20
-
-
-def our_label(record: dict, slot: str) -> str | None:
-    """What this run says about ``slot``: its value when classified, else its status.
-
-    ``field_label``, named for this module's side of the comparison.
-    """
-    return field_label(record, slot)
 
 
 def spoke(label: str | None) -> bool:
@@ -133,6 +126,11 @@ class IncumbentReport:
     counts: Counter = field(default_factory=Counter)
     # (slot, value) -> file count, over every distinct value the incumbent published.
     declared_values: Counter = field(default_factory=Counter)
+    # (slot, value) -> whether the run recorded it as a term in that slot's vocabulary.
+    # Read from each record's `declared.in_vocabulary` (contract 7.6), never recomputed:
+    # a report describes the run it reads, and once #414 maps a value, a stored "no" and
+    # a freshly computed "yes" would disagree about the same stored run.
+    value_in_vocab: dict[tuple[str, str], bool] = field(default_factory=dict)
     # The incumbents named by the records' own declared blocks.
     sources: set[str] = field(default_factory=set)
     files: int = 0
@@ -166,11 +164,18 @@ def gather(run_dir: Path) -> IncumbentReport:
     ``tar_`` and ``auxiliary_classifications.json``; none of them declares anything, so
     the deduplication changes no reported figure and is here so the totals are file
     counts rather than row counts.
+
+    ``entry_id`` is stringified before it is hashed. It is *not* guaranteed to be a
+    string: it is not classifier-relevant, so a record whose ``entry_id`` drifted to a
+    list or dict still classifies and is still written (``InvalidRecord`` echoes it
+    un-coerced), and an unhashable one would otherwise raise here — the same hazard
+    ``_run_parallel`` already avoids by not hashing a raw ``file_md5sum``. ``md5sum``
+    needs no such treatment: #376 excludes any record without a well-formed one.
     """
     report = IncumbentReport(run_dir=run_dir)
     seen: set[tuple] = set()
     for record in iter_records(run_dir):
-        key = (record.get("entry_id"), record.get("md5sum"))
+        key = (str(record.get("entry_id")), record.get("md5sum"))
         if key in seen:
             report.duplicate_records += 1
             continue
@@ -185,13 +190,15 @@ def gather(run_dir: Path) -> IncumbentReport:
 
         for slot in DECLARED_FIELDS:
             values = declared.get(slot)
-            label = our_label(record, slot)
+            label = field_label(record, slot)
             rec = recommendation(values, label)
             report.counts[(dataset, slot, rec)] += 1
             if not values:
                 continue
+            recorded = set(in_vocabulary.get(slot) or ())
             for value in values:
                 report.declared_values[(slot, value)] += 1
+                report.value_in_vocab[(slot, value)] = value in recorded
             report.rows.append(
                 IncumbentRow(
                     file_name=str(record.get("file_name") or ""),
@@ -267,7 +274,8 @@ def _vocabulary_table(report: IncumbentReport) -> list[str]:
     """
     rows = []
     for (slot, value), count in sorted(report.declared_values.items(), key=lambda kv: (-kv[1], kv[0])):
-        rows.append([slot, f"`{value}`", f"{count:,}", "yes" if value_in_vocabulary(slot, value) else "**no**"])
+        sayable = report.value_in_vocab.get((slot, value), False)
+        rows.append([slot, f"`{value}`", f"{count:,}", "yes" if sayable else "**no**"])
     return md_table(["dimension", "incumbent value", "files", "a term in our vocabulary"], rows)
 
 
@@ -301,8 +309,10 @@ def _compare_section(report: IncumbentReport) -> list[str]:
 def render_report(report: IncumbentReport) -> str:
     """The markdown report. See the module docstring for what each state means."""
     sources = ", ".join(f"`{s}`" for s in sorted(report.sources)) or "unnamed (the input carried no catalog)"
-    declared_total = sum(report.declared_values.values())
-    unsayable = sum(c for (slot, value), c in report.declared_values.items() if not value_in_vocabulary(slot, value))
+    distinct = len(report.declared_values)
+    unsayable = {key for key in report.declared_values if not report.value_in_vocab.get(key, False)}
+    distinct_unsayable = len(unsayable)
+    files_unsayable = sum(c for key, c in report.declared_values.items() if key in unsayable)
 
     lines = [
         "# The incumbent, beside ours",
@@ -316,12 +326,15 @@ def render_report(report: IncumbentReport) -> str:
         "",
         f"**{report.declared_files:,} files carry a declaration**; the rest are the incumbent's silence.",
         "",
-        "| recommendation | meaning |",
-        "| --- | --- |",
-        "| `add` | the incumbent is silent, we classified — our value is the only one |",
-        "| `take_azul` | the incumbent declares, we are `not_classified` — it should stand |",
-        "| `compare` | both spoke; whether they agree needs the translation table (#414) |",
-        "| `none` | neither spoke — the residual backlog |",
+        *md_table(
+            ["recommendation", "meaning"],
+            [
+                ["`add`", "the incumbent is silent, we classified — our value is the only one"],
+                ["`take_azul`", "the incumbent declares, we are `not_classified` — it should stand"],
+                ["`compare`", "both spoke; whether they agree needs the translation table (#414)"],
+                ["`none`", "neither spoke — the residual backlog"],
+            ],
+        ),
         "",
         "## Corpus totals",
         "",
@@ -335,7 +348,8 @@ def render_report(report: IncumbentReport) -> str:
         "",
         "## Can we even say it?",
         "",
-        f"**{unsayable:,} of {declared_total:,} declared values are terms our vocabulary does not have.**",
+        f"**{distinct_unsayable} of {distinct} distinct incumbent values are terms our vocabulary does not have**, "
+        f"carried by {files_unsayable:,} file declarations.",
         "Every `no` below is a translation row that is owed (#414), and its file count is what it is worth.",
         "Because none of the incumbent's values is a term we know, not one `compare` pair below is a",
         "term-level disagreement — every one of them is an untranslated string.",

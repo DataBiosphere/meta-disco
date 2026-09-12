@@ -32,7 +32,7 @@ def load_records(input_path: Path) -> list:
     must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
     Hence ``list``, not ``list[dict]``: this is the raw read, used by the
     ``validate_metadata`` gate, which must see every element to report on it.
-    Classification producers read :func:`load_classifiable_records` instead, which does
+    Classification producers read :func:`load_classifiable_snapshot` instead, which does
     narrow the element type.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
@@ -97,17 +97,20 @@ def incumbent_source(metadata: dict) -> str | None:
     return f"{INCUMBENT_SYSTEM}/{catalog}" if isinstance(catalog, str) and catalog else None
 
 
-def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[dict, list[dict]]:
-    """:func:`load_classifiable_records`, plus the input envelope, in one parse.
+def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[str | None, list[dict]]:
+    """:func:`load_classifiable_records`, plus the incumbent the snapshot names.
 
-    The envelope half is what :func:`incumbent_source` reads, so a producer that
-    writes a ``declared`` block can name the incumbent without parsing a
-    several-hundred-megabyte file a second time. Same exclusion, same
-    ``excluded_files.json`` write, same guarantee that every returned element is a
-    ``dict`` — this is that function with the envelope kept rather than dropped, and
-    that function is now this one with it dropped.
+    The form every classification producer calls. It returns the resolved incumbent
+    rather than the raw envelope because that is the only thing any caller wants from
+    the envelope — and because returning the envelope made naming the incumbent a
+    *second* line each producer had to remember, which is precisely the omission
+    contract 7.7 exists to catch. Resolved here, a producer cannot forget it.
 
-    The metadata block is ``{}`` for an ``.ndjson`` input, which carries no envelope.
+    Same single parse, same exclusion, same ``excluded_files.json`` write, and the same
+    guarantee that every returned element is a ``dict``.
+
+    The incumbent is ``None`` for an ``.ndjson`` input, which carries no envelope, and
+    for an envelope that names no catalog (see :func:`incumbent_source`).
     """
     metadata, raw = load_snapshot(input_path)
     records, excluded = partition_records(raw)
@@ -115,7 +118,7 @@ def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) ->
         write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:
         print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
-    return metadata, records
+    return incumbent_source(metadata), records
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -147,9 +150,11 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
 
-    The records half of :func:`load_classifiable_snapshot`, for the producers that do
-    not need the envelope; the two share one load path so the exclusion cannot come to
-    mean different things to different producers.
+    The records half of :func:`load_classifiable_snapshot`, which is what every producer
+    now calls — this narrower form has no production caller left and is kept for readers
+    that genuinely want only the records (``test_producer_exclusions``). The two share
+    one load path, so the exclusion cannot come to mean different things to different
+    callers.
     """
     return load_classifiable_snapshot(input_path, run_dir)[1]
 
@@ -431,7 +436,7 @@ class ClassifyPipeline:
     def _load_input(self) -> list[dict]:
         """Load NDJSON or JSON input, minus the records excluded for having no checksum.
 
-        Reads through the shared ``load_classifiable_records`` (#376), so a record with
+        Reads through the shared ``load_classifiable_snapshot`` (#376), so a record with
         no usable ``file_md5sum`` never reaches routing, validation, the evidence cache
         or a fetcher — and every element of the result is a ``dict``.
 
@@ -444,8 +449,7 @@ class ClassifyPipeline:
         is a side effect on ``self``, done here because this is where the envelope is
         in hand and every record built afterwards needs the answer.
         """
-        metadata, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
-        self.incumbent_source = incumbent_source(metadata)
+        self.incumbent_source, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
         return records
 
     def _filter_records(self, records: list) -> list[dict]:

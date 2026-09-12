@@ -278,6 +278,14 @@ Unlike sections 2, 4 and 6, this section describes what the code does today. #42
      and different strings, so until #414's translation table exists the diff names the value pair rather
      than judging it. Guessing at equality would be 3.5's similarity matching by another route.
 
+     To be exact about what does not exist: `generate_validation_report` carried two hand-written dicts,
+     `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`, holding these very mappings, and scored agreement
+     through them. They were script-local, carried no row ids, and were checked against no vocabulary, so
+     they are not a translation table under 3.8 and 5.4 — nothing could cite one as the rule behind a claim.
+     #424 removed that second comparison rather than leave two reports scoring the same files by different
+     rules, and recorded the five mappings in that script's docstring as #414's seed. So the absent thing is
+     a *reviewable, cited* mapping, not the knowledge of what maps to what.
+
 ---
 
 ## What is not true yet

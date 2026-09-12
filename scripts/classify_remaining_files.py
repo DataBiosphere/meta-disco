@@ -16,8 +16,8 @@ from collections import Counter
 from pathlib import Path
 
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import incumbent_source, load_classifiable_snapshot
-from meta_disco.records import build_declared
+from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.records import declared_from
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -42,8 +42,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    metadata, files = load_classifiable_snapshot(metadata_path, output_path.parent)
-    source = incumbent_source(metadata)
+    source, files = load_classifiable_snapshot(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     already = load_already_classified(classification_paths)
@@ -82,11 +81,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 # run concluded (#424). Every producer of a run must write it or the
                 # comparison silently under-reports: this catch-all alone holds 5,817
                 # of the corpus's 11,231 declared files.
-                "declared": build_declared(
-                    data_modality=rec.get("data_modality"),
-                    reference_assembly=rec.get("reference_assembly"),
-                    source=source,
-                ),
+                "declared": declared_from(rec, source),
             }
         )
 

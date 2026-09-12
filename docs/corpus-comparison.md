@@ -1,8 +1,8 @@
 # Corpus comparison
 
-Generated 2026-09-12 13:26 by `scripts/compare_corpus.py` (issue #335).
+Generated 2026-09-12 15:45 by `scripts/compare_corpus.py` (issue #335).
 
-Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_130405`.
+Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_152414`.
 
 ## Input snapshots
 

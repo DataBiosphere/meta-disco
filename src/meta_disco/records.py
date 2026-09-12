@@ -56,12 +56,22 @@ from .schema_vocab import value_in_vocabulary
 DECLARED_FIELDS = ("data_modality", "reference_assembly")
 
 
-def build_declared(
-    *,
-    data_modality: list[str] | None,
-    reference_assembly: list[str] | None,
-    source: str | None,
-) -> dict | None:
+def declared_from(record: dict, source: str | None) -> dict | None:
+    """The ``declared`` block for one raw input record (contract 7.7's one-liner).
+
+    The form every producer calls, so a producer states *which record* it is declaring
+    for and nothing else. Reading the field list from :data:`DECLARED_FIELDS` here is
+    what makes that tuple authoritative: a producer cannot read a stale subset of the
+    dimensions, and adding a third one does not touch a single call site.
+
+    The two fields are read with ``.get`` because they are outside the input contract
+    (#424 — they are not input), so no validation has run on them and no caller
+    guarantee covers them.
+    """
+    return build_declared({field: record.get(field) for field in DECLARED_FIELDS}, source)
+
+
+def build_declared(values: dict[str, list[str] | None], source: str | None) -> dict | None:
     """The ``declared`` block for one file, or None when nothing was declared.
 
     Carries the incumbent declaration into the output (#424): the values AnVIL
@@ -84,7 +94,7 @@ def build_declared(
     Returns None — and the envelope emits ``"declared": null`` — when neither slot
     declared anything, which is ~98% of the corpus.
     """
-    declared = {"data_modality": data_modality, "reference_assembly": reference_assembly}
+    declared = {field: values.get(field) for field in DECLARED_FIELDS}
     if not any(declared.values()):
         return None
     return {
@@ -316,11 +326,7 @@ class OutputRecord:
             dataset_title=item.dataset_title,
             entry_id=item.entry_id,
             classifications=classifications,
-            declared=build_declared(
-                data_modality=item.data_modality,
-                reference_assembly=item.reference_assembly,
-                source=source,
-            ),
+            declared=build_declared({field: getattr(item, field) for field in DECLARED_FIELDS}, source),
         )
 
     @classmethod

@@ -36,7 +36,7 @@ def valid_record(**overrides):
 def write_metadata(path, records):
     """Write records into the ``files`` envelope every classification producer reads.
 
-    The producers load through ``pipeline.load_classifiable_records`` (#376), which reads
+    The producers load through ``pipeline.load_classifiable_snapshot`` (#376), which reads
     the documented envelope — a bare top-level list is the shape the ``validate_metadata``
     gate exists to reject. Shared so the envelope is pinned in one place rather than in
     each producer's test module.

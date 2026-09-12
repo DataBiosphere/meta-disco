@@ -21,8 +21,8 @@ from meta_disco.models import (
     field_label,
     status_for_value,
 )
-from meta_disco.pipeline import incumbent_source, load_classifiable_snapshot
-from meta_disco.records import build_declared
+from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.records import declared_from
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -107,8 +107,7 @@ def propagate_to_index_files(
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    metadata, files = load_classifiable_snapshot(metadata_path, output_path.parent)
-    source = incumbent_source(metadata)
+    source, files = load_classifiable_snapshot(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     # Load classifications
@@ -218,11 +217,7 @@ def propagate_to_index_files(
                 # speak — AnVIL carries the set's modality on a .bai, where this
                 # project answers not_applicable — so dropping it here would hide
                 # exactly the rows the comparison exists to surface.
-                "declared": build_declared(
-                    data_modality=f.get("data_modality"),
-                    reference_assembly=f.get("reference_assembly"),
-                    source=source,
-                ),
+                "declared": declared_from(f, source),
             }
 
             if result["data_modality"] not in _sentinels:
