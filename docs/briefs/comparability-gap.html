@@ -1,0 +1,620 @@
+<title>The Comparability Gap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+
+<style>
+  :root {
+    --ground:#F7F8F6; --surface:#FFFFFF; --sunk:#EFF2F0;
+    --ink:#121A19; --ink-2:#3D4947; --muted:#5E6B68;
+    --hairline:#DCE3E0; --rule:#C3CDC9;
+    --fill:#00897B; --fill-soft:#00897B26;
+    --block:#C0392B; --block-soft:#C0392B1F;
+    --f-display:"Newsreader",Georgia,"Times New Roman",serif;
+    --f-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --f-mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+    --measure:68ch;
+    --s1:0.375rem; --s2:0.75rem; --s3:1.25rem; --s4:2rem; --s5:3.25rem; --s6:5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101614; --surface:#18211F; --sunk:#1E2927;
+      --ink:#E5EBE8; --ink-2:#C3CFCB; --muted:#94A29E;
+      --hairline:#2A3532; --rule:#3A4844;
+      --fill:#26A98F; --fill-soft:#26A98F2E;
+      --block:#DB6A54; --block-soft:#DB6A5426;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101614; --surface:#18211F; --sunk:#1E2927;
+    --ink:#E5EBE8; --ink-2:#C3CFCB; --muted:#94A29E;
+    --hairline:#2A3532; --rule:#3A4844;
+    --fill:#26A98F; --fill-soft:#26A98F2E;
+    --block:#DB6A54; --block-soft:#DB6A5426;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--f-body); font-size:16.5px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:82rem; margin:0 auto; padding:var(--s5) var(--s3) var(--s6); }
+  .col { max-width:var(--measure); }
+
+  .mast { display:flex; flex-direction:column; gap:var(--s3);
+          padding-bottom:var(--s4); border-bottom:2px solid var(--ink); }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--muted);
+             display:flex; flex-wrap:wrap; gap:var(--s2) var(--s3); }
+  h1 { font-family:var(--f-display); font-weight:500;
+       font-size:clamp(2.6rem,6vw,4.4rem); line-height:1.02;
+       letter-spacing:-0.022em; margin:0; text-wrap:balance; max-width:18ch; }
+  .standfirst { font-family:var(--f-display); font-size:clamp(1.1rem,2.2vw,1.35rem);
+                line-height:1.5; color:var(--ink-2); max-width:60ch; margin:0; }
+
+  section { padding-top:var(--s5); }
+  .sec-head { display:flex; align-items:baseline; gap:var(--s3);
+              margin-bottom:var(--s3); padding-bottom:var(--s2);
+              border-bottom:1px solid var(--rule); }
+  .sec-num { font-family:var(--f-mono); font-size:0.72rem; font-weight:700;
+             letter-spacing:0.1em; color:var(--fill); flex:none; }
+  h2 { font-family:var(--f-display); font-weight:500;
+       font-size:clamp(1.5rem,3vw,2rem); line-height:1.15;
+       letter-spacing:-0.014em; margin:0; text-wrap:balance; }
+  h3 { font-family:var(--f-body); font-weight:600; font-size:1rem;
+       margin:var(--s4) 0 var(--s1); max-width:var(--measure); }
+  p { margin:0 0 var(--s3); max-width:var(--measure); }
+  p:last-child { margin-bottom:0; }
+  strong { font-weight:600; }
+  code,.mono { font-family:var(--f-mono); font-size:0.86em; font-variant-ligatures:none; }
+  code { background:var(--sunk); padding:0.12em 0.34em; border-radius:2px; color:var(--ink-2); }
+  a { color:var(--fill); text-decoration-thickness:1px; text-underline-offset:2px; }
+  a:focus-visible { outline:2px solid var(--fill); outline-offset:2px; border-radius:2px; }
+
+  .verdict {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));
+    gap:var(--s3); margin:var(--s4) 0;
+  }
+  .vcard { background:var(--surface); border:1px solid var(--hairline);
+           border-top:3px solid var(--fill); border-radius:3px; padding:var(--s3); }
+  .vcard.bad { border-top-color:var(--block); }
+  .vcard .k { font-family:var(--f-mono); font-size:0.66rem; letter-spacing:0.1em;
+              text-transform:uppercase; color:var(--muted); display:block; margin-bottom:var(--s1); }
+  .vcard .n { font-family:var(--f-display); font-size:2.4rem; line-height:1;
+              margin:0 0 var(--s2); color:var(--fill); font-variant-numeric:tabular-nums; }
+  .vcard.bad .n { color:var(--block); }
+  .vcard p { font-size:0.87rem; color:var(--ink-2); margin:0; }
+
+  .hazard { display:grid; grid-template-columns:3rem 1fr; gap:var(--s3);
+            padding:var(--s3) 0; border-top:1px solid var(--hairline); }
+  .hazard:last-of-type { border-bottom:1px solid var(--hairline); }
+  .hz-n { font-family:var(--f-mono); font-size:0.78rem; font-weight:700;
+          color:var(--block); padding-top:0.15rem; }
+  .hz-b > * { max-width:64ch; }
+  .hz-b h4 { font-family:var(--f-body); font-weight:600; font-size:0.98rem; margin:0 0 var(--s1); }
+  .hz-b p { font-size:0.92rem; color:var(--ink-2); margin:0 0 var(--s2); }
+  .hz-b p:last-child { margin-bottom:0; }
+  .seen { font-family:var(--f-mono); font-size:0.72rem; color:var(--fill);
+          display:block; margin-top:var(--s2); }
+
+  .scroll { overflow-x:auto; margin:var(--s3) 0; }
+  table { border-collapse:collapse; width:100%; min-width:40rem; font-size:0.85rem; }
+  th,td { text-align:left; padding:0.5rem var(--s3) 0.5rem 0;
+          border-bottom:1px solid var(--hairline); vertical-align:top; }
+  thead th { font-family:var(--f-mono); font-size:0.66rem; font-weight:500;
+             letter-spacing:0.09em; text-transform:uppercase; color:var(--muted);
+             border-bottom:1px solid var(--rule); white-space:nowrap; }
+  td.num,th.num { text-align:right; font-family:var(--f-mono);
+                  font-variant-numeric:tabular-nums; padding-right:0; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.name { font-family:var(--f-mono); font-size:0.78rem; }
+  .yes { color:var(--fill); font-weight:600; }
+  .no { color:var(--block); font-weight:600; }
+  .dim { color:var(--muted); }
+
+  pre { font-family:var(--f-mono); font-size:0.75rem; line-height:1.6;
+        background:var(--sunk); border:1px solid var(--hairline); border-radius:3px;
+        padding:var(--s3); overflow-x:auto; margin:var(--s3) 0; max-width:56rem; }
+
+  .callout { background:var(--surface); border:1px solid var(--rule);
+             border-radius:3px; padding:var(--s4); margin:var(--s4) 0; max-width:52rem; }
+  .callout .ask { font-family:var(--f-display); font-size:clamp(1.3rem,3.2vw,1.8rem);
+                  line-height:1.28; margin:var(--s2) 0 0; text-wrap:balance; max-width:34ch; }
+  .callout .ask em { font-style:normal; color:var(--fill); }
+
+  .caveat { border-left:3px solid var(--block); background:var(--block-soft);
+            padding:var(--s3); border-radius:0 3px 3px 0; margin:var(--s4) 0; max-width:52rem; }
+  .caveat p { font-size:0.9rem; margin:0 0 var(--s2); }
+  .caveat p:last-child { margin-bottom:0; }
+  .caveat .tag { font-family:var(--f-mono); font-size:0.68rem; font-weight:700;
+                 letter-spacing:0.1em; text-transform:uppercase; color:var(--block);
+                 display:block; margin-bottom:var(--s1); }
+
+  .checklist { background:var(--surface); border:1px solid var(--hairline);
+               border-radius:3px; padding:var(--s3); margin:var(--s3) 0; }
+  .checklist h4 { font-family:var(--f-body); font-weight:600; font-size:0.95rem;
+                  margin:0 0 var(--s1); }
+  .checklist .goal { font-size:0.89rem; line-height:1.55; color:var(--ink-2);
+                     margin:0 0 var(--s2); max-width:64ch; }
+  .checklist .io { font-family:var(--f-mono); font-size:0.72rem; letter-spacing:0.03em;
+                   color:var(--muted); margin:0 0 var(--s2);
+                   padding-bottom:var(--s2); border-bottom:1px solid var(--hairline); }
+  .checklist .io b { font-weight:500; color:var(--ink-2); }
+  .checklist ul { margin:0; padding-left:1.1rem; font-size:0.87rem; color:var(--ink-2); }
+  .checklist li { margin-bottom:0.2rem; }
+  .checklist .verdict-line { font-family:var(--f-mono); font-size:0.72rem;
+                             margin-top:var(--s2); display:block; }
+
+  .gloss { margin:var(--s3) 0 0; }
+  .gloss-group { font-family:var(--f-mono); font-size:0.68rem; font-weight:700;
+                 letter-spacing:0.11em; text-transform:uppercase; color:var(--fill);
+                 margin:var(--s4) 0 var(--s2); padding-bottom:var(--s1);
+                 border-bottom:1px solid var(--rule); }
+  .gloss dl { display:grid; grid-template-columns:minmax(11rem,15rem) 1fr;
+              gap:0; margin:0; }
+  .gloss dt { font-family:var(--f-mono); font-size:0.78rem; color:var(--ink);
+              padding:0.6rem var(--s3) 0.6rem 0; border-top:1px solid var(--hairline);
+              overflow-wrap:anywhere; }
+  .gloss dd { font-size:0.88rem; line-height:1.55; color:var(--ink-2); margin:0;
+              padding:0.6rem 0; border-top:1px solid var(--hairline); max-width:62ch; }
+  @media (max-width:640px) {
+    .gloss dl { grid-template-columns:1fr; }
+    .gloss dt { padding-bottom:0; border-top:1px solid var(--hairline); }
+    .gloss dd { padding-top:0.2rem; border-top:none; }
+  }
+
+  footer { margin-top:var(--s6); padding-top:var(--s3); border-top:1px solid var(--rule);
+           font-family:var(--f-mono); font-size:0.7rem; letter-spacing:0.05em;
+           color:var(--muted); display:flex; flex-wrap:wrap; gap:var(--s2) var(--s4); }
+
+  @media (max-width:640px) { .hazard { grid-template-columns:1fr; gap:var(--s2); } }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Meta-disco</span><span>Cross-study comparability</span><span>24 August 2026</span>
+    </div>
+    <h1>The Comparability Gap</h1>
+    <p class="standfirst">The concern was that we lack the metadata for any accurate cross-dataset analysis. Measured against our own corpus, that is right about the catalogue and wrong about the files — and the difference determines what to do about it.</p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>The verdict, up front</h2></div>
+
+    <div class="verdict">
+      <div class="vcard bad">
+        <span class="k">From AnVIL's catalogue</span>
+        <p class="n">0%</p>
+        <p>Donor sex, ancestry, biosample type, anatomical site, diagnosis, and activity assay type are null on every indexed row. Nothing in the catalogue supports a comparability judgement.</p>
+      </div>
+      <div class="vcard">
+        <span class="k">From the aligned-read files</span>
+        <p class="n">98–100%</p>
+        <p>Reference sequence checksums, platform, platform model, library, sequencing centre and sample identifier are all present in headers we already fetch and cache.</p>
+      </div>
+      <div class="vcard bad">
+        <span class="k">Extracted by meta-disco today</span>
+        <p class="n">1 of 12</p>
+        <p>Of the comparability-bearing fields available in-band, we use contig lengths for reference assembly. The rest are parsed and discarded.</p>
+      </div>
+    </div>
+
+    <div class="col">
+      <p>So the concern is justified in its consequence and wrong in its cause. This is not an absence of metadata — for aligned reads it is an <strong>extraction gap</strong>, and the material is already on local disk. For assemblies and raw reads it genuinely is an absence, and that distinction should drive the response.</p>
+      <p>The single sharpest illustration follows.</p>
+    </div>
+
+    <pre>chr1, as declared by the files themselves
+
+  ANVIL_1000G_high_coverage   LN=248,956,422   M5=6aef897c3d6ff0c78aff06ac189178dd
+  ANVIL_T2T                   LN=248,387,497   M5=8646cb1d7b7085a82d50bf991c0962c4
+  ANVIL_T2T_CHRY              LN=248,387,328   M5=e469247288ceb332aee524caec92bb22
+
+  meta-disco reports:         GRCh38           CHM13            CHM13</pre>
+
+    <div class="col">
+      <p>Two sibling workspaces from one consortium, differing by <strong>169 bases on chromosome 1</strong> and by a completely different sequence checksum, both reported as <span class="mono">CHM13</span>. The checksum that distinguishes them is present in 98–100% of those files and is the SAM specification's own mechanism for exactly this purpose.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Six hazards</h2></div>
+    <div class="col">
+      <p>Every cross-study comparison fails in one of six ways. Each is illustrated below with a case from our own corpus rather than a hypothetical.</p>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H1</span>
+      <div class="hz-b">
+        <h4>Coordinate incomparability — positions do not mean the same thing</h4>
+        <p>Different reference builds place the same locus at different coordinates. This is the hazard people know about, and it is still routinely mishandled, because the failure is silent: both files have a <span class="mono">chr1</span> and both have a position 1,000,000.</p>
+        <p>The subtle form is worse than the obvious one. GRCh38 versus CHM13 is caught by anyone paying attention. GRCh38 with an alt/decoy analysis set versus GRCh38 without is not — same coordinates, different mapping behaviour, because decoys absorb reads that would otherwise mismap.</p>
+        <span class="seen">In our corpus: 7 distinct reference files collapse into 2 enum values (#340)</span>
+      </div>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H2</span>
+      <div class="hz-b">
+        <h4>Processing incomparability — same coordinates, different sensitivity</h4>
+        <p>Two call sets over identical samples and identical references still disagree if produced by different aligners, caller versions, or filtering regimes. A variant absent from one set may be absent because it is not there, or because that pipeline could not see it.</p>
+        <p>This is the hazard most likely to be attributed to biology. A comparison that varies pipeline and reference together will report the sum as a reference effect.</p>
+        <span class="seen">In our corpus: GATK 3.5 + VQSR vs GATK 4 gVCF; bwa 0.7.15 vs 0.7.17 vs Winnowmap (#341)</span>
+      </div>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H3</span>
+      <div class="hz-b">
+        <h4>Measurement incomparability — the assay did not ask the same question</h4>
+        <p>WGS, exome and targeted panels differ in what they can observe. In exome data, "no variant" outside the capture region means "not examined", not "not present" — and the capture kit defines that region, so two exomes with different kits are not directly comparable either.</p>
+        <p>Depth compounds it: 4× and 30× coverage of the same genome yield different sensitivity, particularly for heterozygous sites and anything structural. Platform chemistry differs in error profile by sequence context, which is precisely what donor-specific benchmarking exists to measure.</p>
+        <span class="seen">Available in @RG: PL, PM, LB, CN, PU, DT — 100% populated, entirely unused</span>
+      </div>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H4</span>
+      <div class="hz-b">
+        <h4>Biological incomparability — the material was not the same</h4>
+        <p>A lymphoblastoid cell line is not blood, and neither is liver. LCLs are EBV-transformed and accumulate culture-acquired variation, so a variant present in an LCL and absent in primary tissue from the same donor may be a culture artefact rather than a discrepancy in calling.</p>
+        <p>For expression, tissue identity dominates everything else. Comparing RNA across anatomical sites without recording the site is not a comparison at all.</p>
+        <span class="seen">In our corpus: MAGE is LCL RNA, 1000G is LCL DNA, GTEx is tissue — biosample_type is null on every AnVIL row</span>
+      </div>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H5</span>
+      <div class="hz-b">
+        <h4>Cohort incomparability — the people were chosen differently</h4>
+        <p>Allele frequencies differ between a population reference panel and a disease case-control collection for reasons that have nothing to do with technology. Ascertainment is a property of the study, invisible in any file, and recoverable only from study-level metadata or the paper.</p>
+        <p>Relatedness matters too: 1000G's expanded release includes 602 trios, so treating its samples as independent observations overstates the effective sample size.</p>
+        <span class="seen">Recoverable from the marker paper or the 1000G panel — not from AnVIL</span>
+      </div>
+    </div>
+
+    <div class="hazard">
+      <span class="hz-n">H6</span>
+      <div class="hz-b">
+        <h4>Identity incomparability — the identifier denotes different things</h4>
+        <p>The most insidious, because joins appear to succeed. A sample identifier, an aliquot identifier and a participant identifier are not interchangeable, and one person may contribute many of each. The 1000G <span class="mono">NA</span>/<span class="mono">HG</span> identifiers are Coriell cell-line identifiers, and cell line is not person.</p>
+        <p>The failure mode is a join that silently multiplies rows, or one that looks clean because both sides used the same string for different concepts.</p>
+        <span class="seen">In our corpus: @RG SM holds HG00096 in 1000G, "Bio Sample 1" in HPRC, run identifiers in HPRC_R2</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>What determines comparability, per data type</h2></div>
+    <div class="col">
+      <p>For each data type, the fields that decide whether two files can be compared — where the field lives, whether our corpus carries it, and whether we extract it.</p>
+    </div>
+
+    <h3>Aligned reads — BAM / CRAM</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Comparability question</th><th>In-band field</th><th>In our corpus</th><th>We extract</th></tr></thead>
+        <tbody>
+          <tr><td>Which exact reference?</td><td class="name">@SQ M5 (sequence checksum)</td><td class="yes">98–100%</td><td class="no">no</td></tr>
+          <tr><td>Which reference, by name?</td><td class="name">@SQ AS</td><td class="no">0%</td><td class="no">no</td></tr>
+          <tr><td>Where did the reference come from?</td><td class="name">@SQ UR</td><td class="yes">98–100%</td><td class="no">no</td></tr>
+          <tr><td>Which coordinate lengths?</td><td class="name">@SQ LN</td><td class="yes">100%</td><td class="yes">yes</td></tr>
+          <tr><td>Which sample?</td><td class="name">@RG SM</td><td class="dim">varies — see H6</td><td class="no">no</td></tr>
+          <tr><td>Which platform / instrument?</td><td class="name">@RG PL, PM</td><td class="yes">100%</td><td class="dim">partial</td></tr>
+          <tr><td>Which library / prep?</td><td class="name">@RG LB</td><td class="yes">100%</td><td class="no">no</td></tr>
+          <tr><td>Which centre, which run, when?</td><td class="name">@RG CN, PU, DT</td><td class="yes">100%</td><td class="no">no</td></tr>
+          <tr><td>Which aligner and version?</td><td class="name">@PG PN, VN</td><td class="yes">100%</td><td class="no">no</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Variant calls — VCF</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Comparability question</th><th>In-band field</th><th>In our corpus</th><th>We extract</th></tr></thead>
+        <tbody>
+          <tr><td>Which exact reference?</td><td class="name">##contig md5</td><td class="no">0%</td><td class="dim">n/a</td></tr>
+          <tr><td>Which reference, approximately?</td><td class="name">##contig length</td><td class="yes">100%</td><td class="yes">yes</td></tr>
+          <tr><td>Which reference file?</td><td class="name">##reference</td><td class="dim">partial</td><td class="no">no</td></tr>
+          <tr><td>Which caller and version?</td><td class="name">##GATKCommandLine, ##source</td><td class="yes">high</td><td class="no">no</td></tr>
+          <tr><td>Joint or single-sample?</td><td class="name">command line, #CHROM columns</td><td class="yes">100%</td><td class="no">no</td></tr>
+          <tr><td>What filtering was applied?</td><td class="name">##FILTER, ApplyRecalibration</td><td class="yes">100%</td><td class="no">no</td></tr>
+          <tr><td>Normalised? Left-aligned?</td><td class="name">##bcftools_norm</td><td class="dim">partial</td><td class="no">no</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Note the asymmetry between the two tables. <strong>CRAM carries an exact reference identity and VCF does not</strong> — the <span class="mono">md5</span> attribute of <span class="mono">##contig</span> is optional in the VCF specification and is populated on none of our 203,719 cached headers. For VCF, length is the only in-band signal, and it does separate the two CHM13 builds (248,387,497 versus 248,387,328) provided the lookup table knows both.</p>
+    </div>
+
+    <h3>Raw reads — FASTQ</h3>
+    <div class="col">
+      <p>Almost nothing is in-band. The read-name grammar yields instrument and run identifiers, which is why platform is recoverable, but library strategy, target region, reference and sample identity are not present in the file at all. FASTQ comparability is an import problem by construction — this is the content ceiling ADR-0001 already records for modality and assay.</p>
+      <p>The authority is the archive record: ENA and SRA expose <span class="mono">library_strategy</span>, <span class="mono">library_source</span>, <span class="mono">library_selection</span>, <span class="mono">library_layout</span> and <span class="mono">instrument_model</span> as controlled vocabularies, which is exactly the H3 field set. For 3,202 T2T participants that record is reachable today by run accession.</p>
+    </div>
+
+    <h3>Assemblies — FASTA</h3>
+    <div class="col">
+      <p>Nothing in-band. FASTA has no header block, so assembler, polisher, phasing method, input read technology and coverage are all absent. For HPRC the only in-file signal is the name (<span class="mono">hprc_r2_v1.0.1</span>, <span class="mono">pat</span>/<span class="mono">mat</span> versus <span class="mono">hap1</span>/<span class="mono">hap2</span>).</p>
+      <p>Assembly comparability therefore rests entirely on external catalogues. It is the clearest case in the corpus where import is the only route.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Standards exist, and they are not being used</h2></div>
+    <div class="col">
+      <p>The answer to &ldquo;are there standards here?&rdquo; is yes, and more than one for every hazard. The gap is adoption, not specification.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Hazard</th><th>Standard</th><th>What it gives</th><th>Status here</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>H1 coordinates</td>
+            <td class="name">GA4GH refget · SAM @SQ M5 · GCA/GCF accessions</td>
+            <td>Exact sequence identity by checksum — the definitive answer, not an inference</td>
+            <td class="yes">present in files, unused</td>
+          </tr>
+          <tr>
+            <td>H1 variant identity</td>
+            <td class="name">GA4GH VRS</td>
+            <td>Normalised, computable variant identifiers so the same event matches across systems</td>
+            <td class="dim">not in scope today</td>
+          </tr>
+          <tr>
+            <td>H2 processing</td>
+            <td class="name">SAM @PG · VCF ##source</td>
+            <td>Tool, version and command line as a provenance chain</td>
+            <td class="yes">present in files, unused</td>
+          </tr>
+          <tr>
+            <td>H3 measurement</td>
+            <td class="name">SRA/ENA library_* + instrument_model</td>
+            <td>Controlled vocabulary for strategy, source, selection, layout, platform</td>
+            <td class="dim">reachable by accession, not imported</td>
+          </tr>
+          <tr>
+            <td>H4 biological</td>
+            <td class="name">UBERON · OBI/EFO · BioSample/MIxS</td>
+            <td>Ontology-coded anatomical site, cell type and assay</td>
+            <td class="no">null in AnVIL; GTEx portal supplies UBERON</td>
+          </tr>
+          <tr>
+            <td>H5 cohort</td>
+            <td class="name">GA4GH Phenopackets v2 · DUO</td>
+            <td>Subject, phenotype and consent exchange with defined semantics</td>
+            <td class="no">phenopacket facet exists, 100% empty</td>
+          </tr>
+          <tr>
+            <td>H6 identity</td>
+            <td class="name">AnVIL TDR model · DRS</td>
+            <td>Distinct donor, biosample and file entities with typed relations</td>
+            <td class="no">modelled, unpopulated, ids per-snapshot</td>
+          </tr>
+          <tr>
+            <td>cross-dataset query</td>
+            <td class="name">GA4GH Beacon v2</td>
+            <td>Federated variant discovery with agreed response semantics</td>
+            <td class="dim">not applicable until the above exist</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Two observations worth separating out. First, <strong>every H1 and H2 answer is already inside the files</strong> — refget-style checksums and provenance chains are not aspirational, they are populated at 98–100% and being discarded at parse time. Second, <strong>every H4, H5 and H6 answer requires someone else to act</strong>: those are catalogue fields AnVIL models and does not fill, or external registries we would need to import.</p>
+      <p>That is the practical split. Half the problem is ours to fix this quarter; half is a data-provider conversation.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Use-case checklists</h2></div>
+    <div class="col">
+      <p>What each common cross-study analysis actually requires, and whether it is currently possible on AnVIL open data.</p>
+    </div>
+
+    <div class="checklist">
+      <h4>A. Joint variant analysis across cohorts</h4>
+      <p class="goal">Merge variant calls from two or more studies into one analysis set — to gain power for association testing, or to build a reference allele-frequency panel that spans more ancestries than any single cohort covers.</p>
+      <p class="io"><b>in</b> per-study callsets over overlapping or disjoint samples &nbsp;→&nbsp; <b>out</b> one merged callset whose genotypes and frequencies mean the same thing on every row</p>
+      <ul>
+        <li>identical reference build — checksum-verified, not name-matched (H1)</li>
+        <li>identical or deliberately harmonised calling pipeline (H2)</li>
+        <li>same assay and comparable depth; capture regions intersected for exomes (H3)</li>
+        <li>normalised representation — left-aligned, multi-allelics split (H2)</li>
+        <li>relatedness and ascertainment known before frequencies mean anything (H5)</li>
+      </ul>
+      <span class="verdict-line no">Not currently safe. Reference identity is name-matched and pipeline is unrecorded.</span>
+    </div>
+
+    <div class="checklist">
+      <h4>B. Benchmarking a pipeline against truth</h4>
+      <p class="goal">Measure what a variant-calling pipeline gets right and wrong, broken down by how hard each region is — so the answer is actionable rather than a single genome-wide number.</p>
+      <p class="io"><b>in</b> a query callset · an independent truth set · its confident regions &nbsp;→&nbsp; <b>out</b> recall and precision per region class</p>
+      <ul>
+        <li>truth and query on the same reference build (H1)</li>
+        <li>truth generated independently of the pipeline under test (H2)</li>
+        <li>confident regions stated explicitly, not assumed genome-wide (H3)</li>
+        <li>stratification by region class, or the headline number misleads (H3)</li>
+      </ul>
+      <span class="verdict-line yes">Feasible today — this is use case 1, and the assembly truth is reference-free by construction.</span>
+    </div>
+
+    <div class="checklist">
+      <h4>C. Expression comparison across studies</h4>
+      <p class="goal">Compare transcript or gene abundance between studies — for tissue-specific expression, or to replicate an eQTL in a second cohort. The whole difficulty is separating biological signal from protocol difference.</p>
+      <p class="io"><b>in</b> quantified expression matrices · biosample and protocol annotation &nbsp;→&nbsp; <b>out</b> differential or correlated expression attributable to biology</p>
+      <ul>
+        <li>anatomical site, ontology-coded (H4)</li>
+        <li>biosample type — primary tissue versus cell line is not a detail (H4)</li>
+        <li>library selection: poly-A versus ribo-depleted versus total (H3)</li>
+        <li>quantification reference and annotation version (H1)</li>
+        <li>batch and centre for any effect that survives normalisation (H3)</li>
+      </ul>
+      <span class="verdict-line no">Not possible. Anatomical site and biosample type are null on every AnVIL row.</span>
+    </div>
+
+    <div class="checklist">
+      <h4>D. Cohort assembly for downstream analysis</h4>
+      <p class="goal">Select the participants who meet a set of criteria and gather their files. This is the search itself, upstream of any analysis — and it is what every other use case on this page depends on.</p>
+      <p class="io"><b>in</b> participant attributes · per-participant data availability &nbsp;→&nbsp; <b>out</b> a manifest of participants and files a workflow can consume</p>
+      <ul>
+        <li>a participant identifier stable across datasets (H6)</li>
+        <li>data type and reference per artefact (H1)</li>
+        <li>consent and data-use terms travelling with the result (H5)</li>
+        <li>relatedness, so the cohort is not silently structured (H5)</li>
+      </ul>
+      <span class="verdict-line no">Not possible. Donor identifiers are minted per snapshot.</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>What to do, in order</h2></div>
+
+    <div class="callout">
+      <span class="eyebrow">The one-line answer</span>
+      <p class="ask">Stop inferring the reference. <em>Read the checksum.</em></p>
+      <p style="margin-top:var(--s3);font-size:0.94rem;color:var(--ink-2);">Contig-length matching is an inference that collides across builds. <span class="mono">@SQ M5</span> is an exact identity, present in 98–100% of our aligned reads, defined by the SAM specification and shared with GA4GH refget. Switching to it converts H1 from a guess into a fact, for the majority of the corpus, with no new fetches.</p>
+    </div>
+
+    <div class="col">
+      <p>After that, in descending order of value per unit of work:</p>
+      <p><strong>Extract the provenance we already parse</strong> — <span class="mono">@PG</span> and <span class="mono">##GATKCommandLine</span> (#341). This does not fix H2, but it makes H2 <em>visible</em>, which is the difference between a user being warned and a user being wrong.</p>
+      <p><strong>Import the archive record for FASTQ</strong> — ENA/SRA <span class="mono">library_*</span> and <span class="mono">instrument_model</span> is the H3 vocabulary, already reachable by run accession for 3,202 T2T participants. Mind the circularity rule: importing platform from ENA costs us ENA as an independent platform validator.</p>
+      <p><strong>Ask AnVIL for a stable participant identifier</strong> — the H6 fix, and the one thing on this list we cannot do ourselves.</p>
+      <p><strong>Treat H4 and H5 as import problems</strong> — biosample and cohort metadata are not in any file. GTEx's portal supplies UBERON-coded anatomical site for its 980 donors, which is the proof that import works where a consortium maintains a catalogue.</p>
+    </div>
+
+    <div class="caveat">
+      <span class="tag">What this report does not establish</span>
+      <p><strong>Coverage outside the datasets measured.</strong> The percentages come from cached evidence for seven AnVIL open-access datasets. Controlled-access datasets are absent from our corpus entirely, and their header conventions may differ.</p>
+      <p><strong>That M5 is sufficient on its own.</strong> It identifies a sequence, not an analysis set — two references sharing every chromosome checksum could still differ in decoy and alt content. The full identity is the set of checksums, not one.</p>
+      <p><strong>Standards detail.</strong> The standards above are named from working knowledge; versions and current specification details were not re-verified against their documents for this report. Confirm before citing any of it externally.</p>
+      <p><strong>That extraction is in scope.</strong> Whether processing provenance belongs in meta-disco at all is an open ADR-0001 question (#341), deliberately not pre-answered here.</p>
+    </div>
+  </section>
+
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>Glossary</h2></div>
+    <div class="col">
+      <p>The artefacts named as inputs and outputs above, and the properties that decide whether any two of them can be compared.</p>
+    </div>
+
+    <div class="gloss">
+
+      <p class="gloss-group">Inputs</p>
+      <dl>
+        <dt>callset</dt>
+        <dd>The variant calls for one or more samples against one reference, as a VCF. A <em>per-study callset</em> is what a single study deposited; it carries that study's caller, filters and reference, all of which travel with it.</dd>
+
+        <dt>gVCF</dt>
+        <dd>A callset that also records confidence at non-variant positions, so &ldquo;no call here&rdquo; can be told apart from &ldquo;no data here&rdquo;. Merging plain VCFs without it silently converts missing data into reference genotypes.</dd>
+
+        <dt>query callset</dt>
+        <dd>The calls being graded in a benchmark — the output of the pipeline under test.</dd>
+
+        <dt>truth set</dt>
+        <dd>Variant calls believed correct for the same sample, generated <em>independently</em> of the pipeline being tested. Independence is the whole point: a truth set sharing the query's aligner inherits its blind spots.</dd>
+
+        <dt>confident regions</dt>
+        <dd>The intervals over which a truth set claims to be complete, usually a BED. Outside them a disagreement is uninformative rather than an error, so a benchmark that ignores them reports noise as failure.</dd>
+
+        <dt>region class<br><span class="dim">(stratification)</span></dt>
+        <dd>A partition of the genome by difficulty — unique sequence, segmental duplications, tandem repeats, MHC, medically relevant genes. Short-read performance varies by orders of magnitude between them, so a genome-wide average describes none of them.</dd>
+
+        <dt>capture region</dt>
+        <dd>The intervals an exome or targeted panel actually assays. Outside them, absence of a variant means &ldquo;not examined&rdquo;. Two exomes with different capture kits are not directly comparable even at identical depth.</dd>
+
+        <dt>quantified expression matrix</dt>
+        <dd>Genes or transcripts by samples, holding abundance values. Comparable across studies only when the quantification reference and annotation version match.</dd>
+
+        <dt>biosample annotation</dt>
+        <dd>What the material was — anatomical site, whether primary tissue or a cell line, and how it was collected and preserved. The dominant variable in any expression comparison.</dd>
+
+        <dt>protocol annotation</dt>
+        <dd>How the library was made — selection (poly-A, ribo-depleted, total), strandedness, read layout and length. Protocol differences produce expression differences that look biological.</dd>
+
+        <dt>participant attributes</dt>
+        <dd>The properties a cohort query selects on: sex, ancestry, phenotype, family structure, consent terms.</dd>
+
+        <dt>data availability</dt>
+        <dd>For each participant, which artefacts exist and against which reference. This is the join that turns a list of people into an answerable query, and the thing AnVIL cannot currently express.</dd>
+      </dl>
+
+      <p class="gloss-group">Outputs</p>
+      <dl>
+        <dt>merged callset</dt>
+        <dd>One callset spanning several studies in which a genotype means the same thing regardless of which study contributed it. Achieving that is the entire difficulty; concatenating files is not it.</dd>
+
+        <dt>allele frequency panel</dt>
+        <dd>Per-variant frequencies derived from a merged callset and used as a population reference. Valid only when ascertainment and relatedness are known — otherwise the frequencies describe the sampling, not the population.</dd>
+
+        <dt>recall · precision</dt>
+        <dd>The share of true variants a pipeline found, and the share of its calls that were true. Meaningful per region class and per variant class; misleading as a single number.</dd>
+
+        <dt>differential expression</dt>
+        <dd>A difference in abundance between conditions, tissues or cohorts that survives correction for protocol and batch. Without biosample and protocol annotation it cannot be distinguished from an artefact.</dd>
+
+        <dt>manifest</dt>
+        <dd>A table of participants and file locations — DRS URIs or signed URLs — that a workflow can consume directly. The deliverable of a cohort query.</dd>
+      </dl>
+
+      <p class="gloss-group">Properties that decide comparability</p>
+      <dl>
+        <dt>reference build</dt>
+        <dd>A specific assembly release — CHM13&nbsp;v2.0, GRCh38.p12 — not a family. Two builds in the same family have different coordinates.</dd>
+
+        <dt>analysis set</dt>
+        <dd>A packaging of a build with or without decoy contigs, alternate haplotypes and HLA sequences. Same coordinates, different mapping behaviour, because decoys absorb reads that would otherwise mismap.</dd>
+
+        <dt>decoy contigs</dt>
+        <dd>Extra sequences bundled with a reference that are not part of the assembly proper — in GRCh38's case <span class="mono">hs38d1</span>, built from sequence known to occur in human genomes but absent from the primary assembly. They exist as a sink: reads from that sequence land on the decoy instead of mismapping to a similar-looking location on a real chromosome, which suppresses false positive calls there. Adding or removing them changes what maps where without moving a single primary coordinate.</dd>
+
+        <dt>alternate haplotypes<br><span class="dim">(alt contigs)</span></dt>
+        <dd>Additional scaffolds representing population variation at loci too divergent for one linear path to describe — GRCh38 carries hundreds of them over its most structurally variable regions. A read may match the primary and an alt equally well, so the aligner has to be alt-aware; one that is not splits reads between the two copies, halving apparent depth and losing heterozygous calls at exactly the loci that most needed them.</dd>
+
+        <dt>MHC<br><span class="dim">(major histocompatibility complex)</span></dt>
+        <dd>A roughly 4&nbsp;Mb stretch of chromosome 6 carrying the genes for immune self-recognition, and the most polymorphic region of the human genome. Some individuals' haplotypes diverge so far from the reference that their reads map poorly or not at all — which is why it appears as its own stratum in every serious benchmark rather than being folded into a genome-wide average.</dd>
+
+        <dt>HLA<br><span class="dim">(human leukocyte antigen)</span></dt>
+        <dd>The gene family inside the MHC — <span class="mono">HLA-A</span>, <span class="mono">-B</span>, <span class="mono">-C</span> for class&nbsp;I, <span class="mono">HLA-DR</span>, <span class="mono">-DQ</span>, <span class="mono">-DP</span> for class&nbsp;II. The two terms are not synonyms and this report should not have used them as such: <strong>MHC names the region, HLA names the genes within it</strong> and their alleles.</dd>
+
+        <dt>HLA sequences<br><span class="dim">(in an analysis set)</span></dt>
+        <dd>Separate contigs holding known HLA allele sequences, bundled with a reference so that reads from alleles unlike the primary assembly have somewhere to map. Without them those reads pile into the primary MHC and generate spurious variants; with them, which allele set was bundled changes MHC calling directly. The GRCh38 packaging observed in this corpus says so in its own filename — <span class="mono">GRCh38_full_analysis_set_plus_decoy_hla.fa</span>.</dd>
+
+        <dt>sequence checksum<br><span class="dim">(<code>@SQ M5</code>)</span></dt>
+        <dd>The MD5 of a reference sequence, carried per contig in a BAM or CRAM header. Identifies a build exactly instead of by name, and is the identity GA4GH refget is built on. Present in 98–100% of our aligned reads.</dd>
+
+        <dt>PAR<br><span class="dim">(pseudoautosomal region)</span></dt>
+        <dd>The stretches at each end of chrX and chrY that are identical between the two, and recombine like autosomes. Because the sequence is shared, a read from there matches both chromosomes equally well and an aligner has no principled way to choose.</dd>
+
+        <dt>PAR-masking</dt>
+        <dd>Replacing the pseudoautosomal region on chrY with Ns, so those reads land on chrX instead of being split arbitrarily between two copies of the same sequence. It changes coverage and genotypes across the region, and whether a reference is masked is not visible in its name — two references distributed under the same filename can differ in exactly this. In our corpus, <span class="mono">Homo_sapiens_assembly38.fasta</span> and <span class="mono">chm13v2.0.fasta</span> each appear with two different chrY checksums at identical chrY length, which is the signature of this difference. We record both checksums and draw no conclusion: confirming a mask means reading the sequence for those N-runs, which a header cannot do.</dd>
+
+        <dt>normalisation</dt>
+        <dd>Representing indels left-aligned and parsimoniously and splitting multi-allelic records, so that the same biological event compares equal between callsets. Un-normalised sets disagree on variants they both contain.</dd>
+
+        <dt>ascertainment</dt>
+        <dd>How participants were selected — population sampling, case-control, family-based. Determines whether an allele frequency is a population estimate or an artefact of recruitment. Invisible in any file.</dd>
+
+        <dt>relatedness</dt>
+        <dd>The presence of families within a cohort. 1000 Genomes' expanded release contains 602 trios; treating its samples as independent overstates the effective sample size.</dd>
+      </dl>
+
+    </div>
+  </section>
+
+  <footer>
+    <span>Meta-disco</span>
+    <span>24 August 2026</span>
+    <span>Measured on 203,719 VCF and 16,427 BAM/CRAM cached headers</span>
+    <span>Corpus snapshot 2026-07-29</span>
+  </footer>
+
+</div>

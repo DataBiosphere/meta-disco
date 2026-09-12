@@ -1,0 +1,941 @@
+<title>The Missing Participant Key</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+
+<style>
+  :root {
+    --ground:    #F7F8F6;
+    --surface:   #FFFFFF;
+    --sunk:      #EFF2F0;
+    --ink:       #121A19;
+    --ink-2:     #3D4947;
+    --muted:     #5E6B68;
+    --hairline:  #DCE3E0;
+    --rule:      #C3CDC9;
+    --fill:      #00897B;
+    --fill-soft: #00897B26;
+    --block:     #C0392B;
+    --block-soft:#C0392B1F;
+
+    --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --f-body:    "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-mono:    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --s1: 0.375rem;
+    --s2: 0.75rem;
+    --s3: 1.25rem;
+    --s4: 2rem;
+    --s5: 3.25rem;
+    --s6: 5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #101614;
+      --surface:   #18211F;
+      --sunk:      #1E2927;
+      --ink:       #E5EBE8;
+      --ink-2:     #C3CFCB;
+      --muted:     #94A29E;
+      --hairline:  #2A3532;
+      --rule:      #3A4844;
+      --fill:      #26A98F;
+      --fill-soft: #26A98F2E;
+      --block:     #DB6A54;
+      --block-soft:#DB6A5426;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:    #101614;
+    --surface:   #18211F;
+    --sunk:      #1E2927;
+    --ink:       #E5EBE8;
+    --ink-2:     #C3CFCB;
+    --muted:     #94A29E;
+    --hairline:  #2A3532;
+    --rule:      #3A4844;
+    --fill:      #26A98F;
+    --fill-soft: #26A98F2E;
+    --block:     #DB6A54;
+    --block-soft:#DB6A5426;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: var(--s5) var(--s3) var(--s6);
+  }
+
+  .col { max-width: var(--measure); }
+
+  /* ---------- masthead ---------- */
+
+  .mast {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    padding-bottom: var(--s4);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2) var(--s3);
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(2.6rem, 6vw, 4.4rem);
+    line-height: 1.02;
+    letter-spacing: -0.022em;
+    margin: 0;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+
+  .standfirst {
+    font-family: var(--f-display);
+    font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { padding-top: var(--s5); }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s3);
+    margin-bottom: var(--s3);
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--fill);
+    flex: none;
+  }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.014em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--f-body);
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.005em;
+    margin: 0 0 var(--s1);
+  }
+
+  p { margin: 0 0 var(--s3); max-width: var(--measure); }
+  p:last-child { margin-bottom: 0; }
+
+  strong { font-weight: 600; }
+
+  code, .mono {
+    font-family: var(--f-mono);
+    font-size: 0.86em;
+    font-variant-ligatures: none;
+  }
+
+  code {
+    background: var(--sunk);
+    padding: 0.12em 0.34em;
+    border-radius: 2px;
+    color: var(--ink-2);
+  }
+
+  a { color: var(--fill); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; border-radius: 2px; }
+
+  /* ---------- hero figure ---------- */
+
+  .hero-fig {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--s3) var(--s5);
+    margin-top: var(--s4);
+    padding: var(--s4) 0 0;
+  }
+
+  .bignum {
+    font-family: var(--f-display);
+    font-size: clamp(3.6rem, 11vw, 7rem);
+    font-weight: 400;
+    line-height: 0.86;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+    color: var(--fill);
+  }
+
+  .bignum-cap {
+    font-family: var(--f-mono);
+    font-size: 0.74rem;
+    line-height: 1.5;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    max-width: 30ch;
+  }
+
+  /* ---------- meters ---------- */
+
+  .meters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+    margin: var(--s3) 0;
+    max-width: 46rem;
+  }
+
+  .meter {
+    display: grid;
+    grid-template-columns: minmax(9rem, 15rem) 1fr minmax(5.5rem, auto);
+    align-items: center;
+    gap: var(--s3);
+  }
+
+  .meter-label {
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+  }
+
+  .meter-track {
+    position: relative;
+    height: 9px;
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+
+  .meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--fill);
+    border-radius: 1px;
+    min-width: 0;
+  }
+
+  .meter-fill.zero { background: none; }
+
+  .meter-val {
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--ink-2);
+  }
+
+  .meter-val.nil { color: var(--block); font-weight: 700; }
+
+  .meter-note {
+    grid-column: 1 / -1;
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: var(--s2);
+    border-top: 1px solid var(--hairline);
+    margin-top: var(--s1);
+  }
+
+  /* ---------- tables ---------- */
+
+  .scroll { overflow-x: auto; margin: var(--s3) 0; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 34rem;
+    font-size: 0.87rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.52rem var(--s3) 0.52rem 0;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+
+  thead th {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+
+  td.num, th.num {
+    text-align: right;
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    padding-right: 0;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  td.name { font-family: var(--f-mono); font-size: 0.8rem; }
+
+  .yes { color: var(--fill); font-weight: 600; }
+  .no  { color: var(--block); font-weight: 600; }
+  .dim { color: var(--muted); }
+
+  /* ---------- use case ladder ---------- */
+
+  .ladder {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    margin-top: var(--s4);
+  }
+
+  .uc {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    gap: var(--s3);
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--fill);
+    border-radius: 3px;
+    padding: var(--s3);
+  }
+
+  .uc.gated { border-left-color: var(--block); }
+
+  .uc-id {
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--fill);
+    padding-top: 0.15rem;
+  }
+
+  .uc.gated .uc-id { color: var(--block); }
+
+  .uc-body > * { max-width: 62ch; }
+
+  .quote {
+    font-family: var(--f-display);
+    font-size: 1.12rem;
+    line-height: 1.45;
+    color: var(--ink);
+    margin: 0 0 var(--s2);
+  }
+
+  .uc-why {
+    font-size: 0.92rem;
+    color: var(--ink-2);
+    margin: 0 0 var(--s2);
+  }
+
+  .needs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .needs li {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.16rem 0.44rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  .needs li.new { border-color: var(--fill); background: var(--fill-soft); color: var(--ink); }
+
+  .uc-status {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: var(--s2) 0 0;
+    color: var(--muted);
+  }
+
+  /* ---------- callout ---------- */
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: var(--s4);
+    margin: var(--s4) 0;
+    max-width: 52rem;
+  }
+
+  .callout .ask {
+    font-family: var(--f-display);
+    font-size: clamp(1.35rem, 3.4vw, 1.9rem);
+    line-height: 1.28;
+    margin: var(--s2) 0 0;
+    text-wrap: balance;
+    max-width: 30ch;
+  }
+
+  .callout .ask em { font-style: normal; color: var(--fill); }
+
+  .caveat {
+    border-left: 3px solid var(--block);
+    background: var(--block-soft);
+    padding: var(--s3);
+    border-radius: 0 3px 3px 0;
+    margin: var(--s4) 0;
+    max-width: 52rem;
+  }
+
+  .caveat p { font-size: 0.9rem; margin: 0; }
+
+  .caveat .tag {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--block);
+    display: block;
+    margin-bottom: var(--s1);
+  }
+
+  /* ---------- evidence appendix ---------- */
+
+  .evidence { font-size: 0.88rem; }
+
+  .evidence dt {
+    font-family: var(--f-mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    margin-top: var(--s3);
+    font-weight: 500;
+  }
+
+  .evidence dd {
+    margin: var(--s1) 0 0;
+    color: var(--muted);
+    max-width: 64ch;
+  }
+
+  pre {
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    line-height: 1.6;
+    background: var(--sunk);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: var(--s3);
+    overflow-x: auto;
+    margin: var(--s3) 0;
+    max-width: 52rem;
+  }
+
+  footer {
+    margin-top: var(--s6);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--rule);
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2) var(--s4);
+  }
+
+  @media (max-width: 640px) {
+    .meter { grid-template-columns: 1fr auto; }
+    .meter-track { grid-column: 1 / -1; order: 3; }
+    .uc { grid-template-columns: 1fr; gap: var(--s2); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Meta-disco</span>
+      <span>Requirements brief</span>
+      <span>22 August 2026 · rev. 23 August</span>
+    </div>
+    <h1>The Missing Participant Key</h1>
+    <p class="standfirst">The open corpus is 733,877 files and roughly four thousand named subjects. AnVIL models those subjects completely and populates them almost not at all. Three use cases for participant-level search, the metadata each needs, and the single change that unblocks the first one.</p>
+  </header>
+
+  <div class="hero-fig">
+    <div class="bignum">3,212</div>
+    <div class="bignum-cap">1000 Genomes participants underpin 679,433 files — 92.6% of the AnVIL open-access corpus. 3,210 of them appear in more than one dataset. Four more cohorts account for most of the rest.</div>
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>Why this is tractable</h2></div>
+    <div class="col">
+      <p>Asked what they want from a search system, scientists say &ldquo;everything.&rdquo; The corpus is 733,877 files, which makes everything sound enormous. Viewed by participant it is not: the open-access corpus resolves to roughly three thousand people, and one public registry — the 1000 Genomes sample panel and pedigree — covers nearly all of them.</p>
+      <p>The 3,202 figure matches the Byrska-Bishop expanded 1000G cohort exactly, including its 602 trios. Population, sex, and family structure for these participants are already public.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Dataset</th>
+            <th class="num">Files</th>
+            <th class="num">With sample ID in name</th>
+            <th class="num">Distinct participants</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="name">ANVIL_T2T_CHRY</td><td class="num">309,979</td><td class="num">59%</td><td class="num">3,202</td></tr>
+          <tr><td class="name">ANVIL_T2T</td><td class="num">289,204</td><td class="num">61%</td><td class="num">3,204</td></tr>
+          <tr><td class="name">ANVIL_1000G_high_coverage_2019</td><td class="num">26,016</td><td class="num">98%</td><td class="num">3,202</td></tr>
+          <tr><td class="name">ANVIL_HPRC</td><td class="num">23,185</td><td class="num">69%</td><td class="num">259</td></tr>
+          <tr><td class="name">AnVIL_HPRC_R2</td><td class="num">16,271</td><td class="num">88%</td><td class="num">231</td></tr>
+          <tr><td class="name">AnVIL_MAGE</td><td class="num">3,285</td><td class="num">61%</td><td class="num">477</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="col"><span class="mono dim">Measured on the 2026-07-29 corpus snapshot by extracting <code>NA#####</code>/<code>HG#####</code> from file names.</span></p>
+
+    <div class="col">
+      <h3 style="margin-top:var(--s4)">Every subject in the corpus</h3>
+      <p>Scanning all 733,877 file names for accession patterns resolves the whole open corpus to four subject cohorts, two cell lines, and two datasets whose subjects are not named in their files at all. The total is roughly four thousand two hundred named individuals.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Cohort</th>
+            <th>Datasets</th>
+            <th class="num">Subjects</th>
+            <th>Identifier in the file name</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1000 Genomes</td>
+            <td class="dim">T2T, T2T_CHRY, 1000G_HC, HPRC, HPRC_R2, MAGE</td>
+            <td class="num">3,212</td>
+            <td class="name">HG00096 · NA19189</td>
+          </tr>
+          <tr>
+            <td>GTEx</td>
+            <td class="dim">GTEx_public_data</td>
+            <td class="num">980 donors<br><span class="dim">25,708 samples</span></td>
+            <td class="name">GTEX-1117F-0126-SM-58Q7G</td>
+          </tr>
+          <tr>
+            <td>NHP dGTEx <span class="dim">— 2 primate species</span></td>
+            <td class="dim">nhp_dGTEx_V1</td>
+            <td class="num">70 donors<br><span class="dim">754 samples</span></td>
+            <td class="name">RHGTEX022-610AR-01-SM-OL9JN</td>
+          </tr>
+          <tr>
+            <td>ENCORE cell lines</td>
+            <td class="dim">ENCORE_RS293, ENCORE_293T</td>
+            <td class="num">2 lines<br><span class="dim">183 target genes</span></td>
+            <td class="name">RNF26-BGRSLV06-32</td>
+          </tr>
+          <tr>
+            <td>NIA CARD Coriell <span class="no">·  effectively no subject in name</span></td>
+            <td class="dim">NIA_CARD_Coriell</td>
+            <td class="num dim">3<br><span class="dim">in 16 of 12,534 files</span></td>
+            <td class="name">PAO86795_… <span class="dim">(ONT flow cell)</span></td>
+          </tr>
+          <tr>
+            <td>IGVF mouse <span class="no">·  no subject in name</span></td>
+            <td class="dim">IGVF_Mouse_R1</td>
+            <td class="num dim">—</td>
+            <td class="name">IGVFFI0002BHCR <span class="dim">(file accession)</span></td>
+          </tr>
+          <tr>
+            <td>1000G PRIMED <span class="dim">— aggregate callsets</span></td>
+            <td class="dim">1000G_PRIMED_data_model</td>
+            <td class="num dim">none</td>
+            <td class="name">GIH.7.psam <span class="dim">(population × chr)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <h3 style="margin-top:var(--s4)">Each cohort has a public registry keyed on that identifier</h3>
+      <p>This is what makes UC 2 cheap. The attributes AnVIL leaves null are already published elsewhere, addressable by an ID we can parse out of the file name today.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Cohort</th>
+            <th>Registry</th>
+            <th>What it returns</th>
+            <th>Checked</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GTEx</td>
+            <td class="name">gtexportal.org/api/v2</td>
+            <td>sex, age bracket, Hardy scale; per sample tissue site, <strong>UBERON term</strong>, data type, RIN, ischemic time</td>
+            <td class="yes">live</td>
+          </tr>
+          <tr>
+            <td>HPRC</td>
+            <td class="name">data.humanpangenome.org</td>
+            <td>consortium catalogue — already wired into <span class="mono">validate_against_hprc.py</span></td>
+            <td class="yes">in use</td>
+          </tr>
+          <tr>
+            <td>1000 Genomes</td>
+            <td class="name">internationalgenome.org</td>
+            <td>population, superpopulation, sex, pedigree (602 trios)</td>
+            <td class="dim">not probed</td>
+          </tr>
+          <tr>
+            <td>T2T FASTQs</td>
+            <td class="name">ENA <span class="dim">(www.ebi.ac.uk)</span></td>
+            <td>submitter-declared platform and instrument, keyed by run accession in the file name</td>
+            <td class="yes">in use</td>
+          </tr>
+          <tr>
+            <td>ENCORE</td>
+            <td class="name">encodeproject.org</td>
+            <td>291 HEK293 experiments exist, but our target genes return nothing</td>
+            <td class="no">miss</td>
+          </tr>
+          <tr>
+            <td>IGVF · Coriell</td>
+            <td class="name">data.igvf.org · coriell.org</td>
+            <td>subject not named in the files, so a registry would not join anyway</td>
+            <td class="dim">n/a</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The GTEx result is the useful one. <code>/api/v2/dataset/sample</code> returns <span class="mono">tissueSiteDetail: "Whole Blood"</span> with <span class="mono">uberonId: "UBERON:0013756"</span> — an ontology-coded anatomical site, for exactly the field AnVIL reports as null on every row. Forty-seven samples for one donor.</p>
+      <p>There is also a third crosswalk already in production. T2T's FASTQ files are named by <strong>ENA run accession — 3,202 of them in <span class="mono">ANVIL_T2T</span>, exactly one per participant</strong>, plus 279 more in <span class="mono">ANVIL_T2T_CHRY</span>. <span class="mono">validate_ena_accessions.py</span> already parses these from the file name and resolved 6,830 of 6,962 FASTQ records against ENA on the last run, with zero platform mismatches. ENA therefore reaches the same people by a different key than the sample ID does.</p>
+      <p>One honest negative: searching ENCODE for our ENCORE target genes — <span class="mono">RNF26</span>, <span class="mono">PRPF40A</span>, <span class="mono">ZC3H7A</span> — returns zero each. ENCODE is the natural home for that data but does not appear to hold it yet. No BioSample, BioProject, GEO or <span class="mono">phs</span> accession appears in any file name anywhere in the corpus.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Three use cases</h2></div>
+    <div class="col">
+      <p>Deliberately a ladder. Each rung needs strictly more metadata and more governance than the one below it, so the set can be adopted in order — and the third can be deferred without abandoning the idea.</p>
+    </div>
+
+    <div class="ladder">
+
+      <article class="uc">
+        <div class="uc-id">UC 1</div>
+        <div class="uc-body">
+          <h3>Matched-technology cohort assembly</h3>
+          <p class="quote">&ldquo;Every participant who has both an HPRC <em>de novo</em> assembly and CHM13-aligned short-read CRAMs — give me the matched pairs.&rdquo;</p>
+          <p class="uc-why">Benchmarking assembly-based against read-based variant calling. The answer exists in data already on disk and cannot be asked for in the Explorer today.</p>
+          <ul class="needs">
+            <li class="new">participant identifier</li>
+            <li>data_type</li>
+            <li>reference_assembly</li>
+          </ul>
+          <p class="uc-status">No participant attributes required · no governance change</p>
+        </div>
+      </article>
+
+      <article class="uc">
+        <div class="uc-id">UC 2</div>
+        <div class="uc-body">
+          <h3>Ancestry- and family-stratified selection</h3>
+          <p class="quote">&ldquo;Thirty participants from African-ancestry populations with long-read data, including complete trios.&rdquo;</p>
+          <p class="uc-why">Pangenome expansion, population-specific reference panels, imputation QC — the reason HPRC sampled for diversity in the first place.</p>
+          <ul class="needs">
+            <li>participant identifier</li>
+            <li>data_type</li>
+            <li>reference_assembly</li>
+            <li class="new">population / ancestry</li>
+            <li class="new">sex</li>
+            <li class="new">family &amp; relationship</li>
+            <li class="new">assay_type</li>
+          </ul>
+          <p class="uc-status">Attributes are public and free · requires a crosswalk to the 1000G panel</p>
+        </div>
+      </article>
+
+      <article class="uc gated">
+        <div class="uc-id">UC 3</div>
+        <div class="uc-body">
+          <h3>Phenotype-driven case finding</h3>
+          <p class="quote">&ldquo;Unsolved rare-disease participants with a given HPO phenotype who have both WGS and RNA-seq, in families with an affected sibling.&rdquo;</p>
+          <p class="uc-why">The query rare-disease researchers actually want, and the one that justifies participant-level search existing at all. GREGoR is the natural partner.</p>
+          <ul class="needs">
+            <li>participant identifier</li>
+            <li>population / sex / family</li>
+            <li>assay_type</li>
+            <li class="new">HPO phenotype</li>
+            <li class="new">affected / solved status</li>
+            <li class="new">consent enforcement on results</li>
+          </ul>
+          <p class="uc-status">Controlled access · for rare phenotypes even a result count can disclose</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>The model is complete. The data is not.</h2></div>
+    <div class="col">
+      <p>AnVIL's TDR schema (version 5) defines twelve tables and seventeen relationships. <code>anvil_donor</code> carries sex, reported ethnicity and genetic ancestry; <code>anvil_biosample</code> carries anatomical site, type and age at collection; <code>anvil_diagnosis</code> carries disease, phenotype and a phenopacket field. Every attribute the three use cases need already has a slot.</p>
+      <p>Azul indexes all of it — <code>/index/donors</code>, <code>/index/biosamples</code>, <code>/index/activities</code> are first-class endpoints, and a compact manifest exposes sixty columns per file including <code>donors.donor_id</code>.</p>
+      <p>Here is what those columns actually contain for <span class="mono">ANVIL_1000G_high_coverage_2019</span>, a fully indexed dataset of 26,016 files:</p>
+    </div>
+
+    <div class="meters">
+      <div class="meter">
+        <span class="meter-label">donors.donor_id</span>
+        <span class="meter-track"><span class="meter-fill" style="width:98.5%"></span></span>
+        <span class="meter-val">98.5%</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">biosamples.biosample_id</span>
+        <span class="meter-track"><span class="meter-fill" style="width:98.5%"></span></span>
+        <span class="meter-val">98.5%</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">activities.activity_id</span>
+        <span class="meter-track"><span class="meter-fill" style="width:98.5%"></span></span>
+        <span class="meter-val">98.5%</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">donors.phenotypic_sex</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">donors.genetic_ancestry</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">donors.reported_ethnicity</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">biosamples.anatomical_site</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">biosamples.biosample_type</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">diagnoses.phenotype</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">activities.assay_type</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">activities.reference_assembly</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <div class="meter">
+        <span class="meter-label">files.reference_assembly</span>
+        <span class="meter-track"><span class="meter-fill zero" style="width:0"></span></span>
+        <span class="meter-val nil">0</span>
+      </div>
+      <p class="meter-note">Share of 26,016 manifest rows with a non-empty value. Identity is wired; content is absent.</p>
+    </div>
+
+    <div class="col">
+      <p>The one populated attribute anywhere in the probe is <code>activities.activity_type</code>, and every value reads <span class="mono">Checksum &#124;&#124; Indexing &#124;&#124; Unknown</span> — provenance bookkeeping, not sequencing. The <code>anvil_sequencingactivity</code> and <code>anvil_alignmentactivity</code> tables, where <span class="mono">assay_type</span> and <span class="mono">reference_assembly</span> would live, contribute nothing.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>The identifier is minted per snapshot</h2></div>
+    <div class="col">
+      <p>Grouping files by participant works inside one dataset. Across datasets it fails completely, and not because the people differ.</p>
+      <p><strong>1,285 individuals are demonstrably present in both <span class="mono">ANVIL_1000G_high_coverage_2019</span> and <span class="mono">ANVIL_T2T</span></strong>, identified by the same sample ID in their file names. Every one of them carries a different <code>donor_id</code> in each dataset. The intersection of the two donor sets is zero.</p>
+    </div>
+
+    <pre>HG00621   1000G = 657e6813-25cf-ecaa-1782-72174bf56ae9
+          T2T   = 30ec7318-7671-96f7-4bd1-8a989f63428b
+
+NA12003   1000G = 41bc0c86-ca04-8889-d87d-9e43d507b8eb
+          T2T   = 9c461ae5-2c4c-e16b-7590-946a2fa940dd</pre>
+
+    <div class="col">
+      <p>The file name, by contrast, is a clean crosswalk. Mapping each <code>donor_id</code> to the sample IDs appearing across its files:</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Dataset</th>
+            <th class="num">Donors mapping to exactly one sample ID</th>
+            <th class="num">Mapping to more than one</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="name">ANVIL_1000G_high_coverage_2019</td><td class="num yes">3,202</td><td class="num">0</td></tr>
+          <tr><td class="name">ANVIL_T2T</td><td class="num yes">1,285</td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>4,487 of 4,487 donor records map one-to-one.</strong> No collisions, no ambiguity. That is a measured crosswalk rather than a hopeful pattern, and the <code>donor_id</code> side gives it something to be validated against on every future run.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>The join recovers metadata AnVIL already holds</h2></div>
+    <div class="col">
+      <p>This is the argument that does not depend on anyone curating anything new.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Column</th>
+            <th class="num">ANVIL_1000G_high_coverage_2019</th>
+            <th class="num">ANVIL_T2T</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name">donors indexed</td>
+            <td class="num">3,202</td>
+            <td class="num">3,202</td>
+          </tr>
+          <tr>
+            <td class="name">donors.phenotypic_sex populated</td>
+            <td class="num no">0 / 3,202</td>
+            <td class="num yes">3,202 / 3,202</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>The same 3,202 people.</strong> Sex is recorded for every one of them in one dataset and for none of them in the other — 1,603 female, 1,599 male, sitting in T2T while 1000G reports null across the board. A participant registry does not only enable new queries; it recovers metadata that is already present but stranded per snapshot.</p>
+      <p><span class="mono dim">Both datasets are fully indexed as of 2026-08-23, so these are final counts rather than a floor. The identity of the 3,202 is established by file name: the two datasets' sample-ID sets intersect exactly.</span></p>
+    </div>
+
+    <div class="callout">
+      <span class="eyebrow">The ask</span>
+      <p class="ask">A <em>stable cross-snapshot participant identifier</em>.</p>
+      <p style="margin-top:var(--s3);font-size:0.94rem;color:var(--ink-2);">Not new modelling, not a schema extension, not &ldquo;populate everything.&rdquo; One durable key. UC&nbsp;1 follows entirely from it, and the sex example above shows the payoff before any new curation happens.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>What we can build without waiting</h2></div>
+    <div class="col">
+      <p>UC 1 is reachable today. Pull a compact manifest per dataset, join <code>donors.donor_id</code> to the sample ID parsed from the file name, and union across datasets. The manifest is a richer ingest path than the <code>/index/files</code> endpoint we currently use — it carries donor, biosample, diagnosis and activity identity that the JSON response strips.</p>
+      <p>Two things must go to AnVIL rather than being solved locally: the stable identifier above, and populating the donor, biosample and activity attributes that the schema already defines. For UC 3, a data-sharing conversation with GREGoR precedes both.</p>
+    </div>
+
+    <div class="caveat">
+      <span class="tag">Snapshot caveat</span>
+      <p>The <span class="mono">anvil15</span> catalog is mid-reindex. It reached <strong>507,362 files across 9 datasets on 23 August</strong>, up from 200,454 across 4 the day before. <span class="mono">ANVIL_T2T</span> and <span class="mono">ANVIL_1000G_high_coverage_2019</span> are now complete, so the figures above are final for those two. <span class="mono">ANVIL_T2T_CHRY</span> is about half done and <span class="mono">ANVIL_HPRC</span> has not started, so any count involving them is still a floor — including the 249-participant HPRC&nbsp;∩&nbsp;T2T figure that motivates UC&nbsp;1.</p>
+      <p>Attribute population is inching up rather than arriving: across 8,669 donors, sex is now set on 3,364 and <strong>reported ethnicity on exactly three</strong>. Diagnoses and activity assay type remain wholly empty.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>How each figure was obtained</h2></div>
+    <dl class="evidence">
+      <dt>Participant counts and cross-dataset overlap</dt>
+      <dd>Regex extraction of <code>NA#####</code>/<code>HG#####</code> over the 733,877-record corpus snapshot downloaded 2026-07-29 from the Azul files index.</dd>
+
+      <dt>Subject inventory across all cohorts</dt>
+      <dd>The same snapshot scanned for thirteen accession grammars — 1000G/Coriell, GTEx donor and sample, NHP dGTEx donor, ENCORE target, ONT flow cell, IGVF, ENA/SRA run, experiment, sample and study, BioSample, BioProject, GEO and <code>phs</code>. Boundary assertions matter here: a trailing <code>\b</code> silently misses an accession followed by an underscore, which is how the 6,962 ENA-named FASTQs were missed on the first pass.</dd>
+
+      <dt>External registries</dt>
+      <dd>GTEx and ENCODE probed live on 2026-08-22 (<code>gtexportal.org/api/v2</code>, <code>encodeproject.org/search</code>). ENA figures read from <code>output/anvil/ena_validation_results.json</code>, the stored result of the last <code>validate_ena_accessions.py</code> run. The 1000G panel at internationalgenome.org was <em>not</em> probed this round — that row rests on the study dossiers.</dd>
+
+      <dt>Azul entity endpoints and facets</dt>
+      <dd>Live probe of <span class="mono">service.explore.anvilproject.org</span> on 2026-08-22: <code>/index/donors</code>, <code>/index/biosamples</code>, <code>/index/activities</code>, and the facet list returned with <code>/index/files</code>.</dd>
+
+      <dt>Manifest columns and population rates</dt>
+      <dd>Compact manifests requested with <code>PUT /fetch/manifest/files</code> filtered to one dataset, polled to completion and downloaded in full: 26,016 rows for 1000G, 96,970 for T2T. Column population counted directly over the TSV.</dd>
+
+      <dt>Donor identity behaviour</dt>
+      <dd>Set intersection of the two manifests' <code>donors.donor_id</code> values, cross-referenced against sample IDs parsed from <code>files.file_name</code> in the same rows.</dd>
+
+      <dt>TDR schema</dt>
+      <dd>Read from <code>src/azul/plugins/metadata/anvil/schema.py</code> in <span class="mono">DataBiosphere/azul</span>, which vendors the AnVIL table definitions (version 5, 12 tables, 17 relationships). Snapshot names and BigQuery projects read from <code>sources[].source_spec</code> on Azul dataset records. Table <em>contents</em> were not read — that needs Terra credentials.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    <span>Meta-disco</span>
+    <span>Prepared 22 August 2026 · revised 23 August</span>
+    <span>Figures from anvil15 (partial) and the 2026-07-29 corpus snapshot</span>
+  </footer>
+
+</div>

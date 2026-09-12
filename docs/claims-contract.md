@@ -59,6 +59,25 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 2.6 A table name and a column name are evidence, the same as a cell value.
 
+2.7 Every column of a source table is one of three kinds, and the meaning sits in a different
+    part of each. A column is read as one kind, never two.
+    - A **file link** holds a `drs://` URI, or a list of them. Its **name** carries the meaning —
+      the role the file plays. Its value is a pointer and says nothing.
+    - A **metadata value** holds anything else that is not an identifier. Its **value** carries
+      the meaning. Its name is a field label and describes no file.
+    - A **foreign key** names another entity. Its value is the subject, or an edge to another
+      entity.
+
+2.8 A slot's value comes from a metadata value. A file link's name states a role, which belongs
+    to the derivation graph.
+    Whether such a name is *also* usable as slot evidence is unsettled, and the contract does
+    not forbid it: measured on files inference can read, it added nothing (two slots, 656
+    files); where inference has a content ceiling — a FASTQ's modality — it may be the only
+    signal there is, and that case is untested. A source whose tables carry no metadata values
+    at all has nothing else to offer.
+    `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
+    come in, why, and what each is worth.
+
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
