@@ -1047,6 +1047,18 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
         raise ValueError(
             f"{where}: target_key_value is {target_key_value!r} — a row with nothing to match on can attach to no file"
         )
+    # A line break is refused with it, because the schema's `EvidenceRow.target_key_value`
+    # carries `pattern: "^[^\r\n]+\Z"` and without this the reader would accept a row
+    # the gate rejects — the disagreement this module exists to prevent, in the
+    # direction that is *not* safe (#421 review). It is the same rule `required_str`
+    # applies to the envelope's identifiers, and for a stronger reason here: every key
+    # in `JOIN_KEYS` is a file name, checksum, URI or accession, and none of them
+    # contains one.
+    if "\n" in target_key_value or "\r" in target_key_value:
+        raise ValueError(
+            f"{where}: target_key_value is {target_key_value!r}, which carries a line break — "
+            "no key of the target contains one"
+        )
     # The only check `raw_value` gets, and deliberately the only one. It is not
     # checked against the dimension's vocabulary: a source's spellings are its own,
     # and a value we have no word for is what the review queue is for (contract 3.7,

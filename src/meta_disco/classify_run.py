@@ -144,7 +144,7 @@ def run_all_classifications(
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
     it is and refuses none of them. Reporting first, ahead of the run directory, puts
     what the run found at the top of its log rather than behind the phases. *Found*
-    and not *consumed*: the claims go no further than that report, because matching
+    and not *consumed*: the rows go no further than that report, because matching
     them to our files is #402, so until then an evidence file changes what a run *says*,
     never what it writes.
 

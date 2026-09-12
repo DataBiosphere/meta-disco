@@ -426,7 +426,7 @@ def test_claim_vocabularies_match_their_schema_enums(constants, schema_values):
 
 
 def test_the_external_source_types_are_a_subset():
-    # `importer_source_type_enum` lists its three values rather than deriving them,
+    # `importer_source_type_enum` lists its two values rather than deriving them,
     # because LinkML has no subset construct `gen-json-schema` honours. That is only
     # safe while it stays a subset: a kind added to `source_type_enum` and misspelled
     # here would let an evidence file declare a source_type no claim can carry (#421).

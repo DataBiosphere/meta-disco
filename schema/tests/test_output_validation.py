@@ -427,7 +427,7 @@ def test_evidence_file_envelope_refuses_a_source_with_no_repository(envelope_val
 
 
 def test_evidence_file_envelope_refuses_a_source_naming_a_column(envelope_validator):
-    # `EvidenceFileSource` has no `column`: a column belongs to a claim, and an
+    # `EvidenceFileSource` has no `column`: a column belongs to a row, and an
     # envelope carrying one could disagree with every line in the file.
     bad = _envelope()
     bad["source"] = {**bad["source"], "column": "platform"}

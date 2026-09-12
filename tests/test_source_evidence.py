@@ -505,6 +505,20 @@ class TestMalformedFiles:
         with pytest.raises(ValueError, match="target_key_value"):
             write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(), [_entry(name="")])
 
+    @pytest.mark.parametrize("bad", ["HG002\nb.bam", "HG002\rb.bam", "HG002.bam\n"])
+    def test_a_target_key_value_carrying_a_line_break_is_refused(self, tmp_path, bad):
+        """The schema always refused it; the reader did not, which is the unsafe way round.
+
+        `EvidenceRow.target_key_value` carries `pattern: "^[^\\r\\n]+\\Z"`, so a row like
+        this validated against the gate and was refused by nothing — the writer could
+        publish a file its own schema rejects. Every key in `JOIN_KEYS` is a file name,
+        checksum, URI or accession and none contains a line break (#421 review). The
+        trailing case matters on its own: a Python `$` matches before a final newline,
+        which is why the schema pattern ends in `\\Z`.
+        """
+        with pytest.raises(ValueError, match="carries a line break"):
+            write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(), [_entry(name=bad)])
+
     @pytest.mark.parametrize("raw", [None, 7, ["Revio"]])
     def test_a_raw_value_that_is_not_a_string_is_refused_both_ways(self, tmp_path, raw):
         """The one check a raw value gets: the format holds a string.
@@ -852,7 +866,7 @@ class TestALineIsAnObservationNotAClaim:
 
 
 class TestDiscovery:
-    """What a run finds under the claims root."""
+    """What a run finds under the source-evidence root."""
 
     def test_a_missing_root_is_no_source_evidence_not_an_error(self, tmp_path):
         assert discover(tmp_path / "source_evidence") == []
@@ -1077,7 +1091,18 @@ def test_no_claim_is_constructed_on_either_path():
     again.
     """
     tree = ast.parse(Path(source_evidence.__file__).read_text())
-    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module is not None}
+    # Every dotted segment any import form touches. Collecting `ImportFrom.module`
+    # alone caught `from .rule_engine import make_claim` and missed both
+    # `import meta_disco.rule_engine` and `from meta_disco import rule_engine`, so the
+    # guard would have passed after the forbidden dependency came back (#421 review).
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            names.add(node.module or "")
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+    imported = {segment for name in names for segment in name.split(".")}
 
     assert "rule_engine" not in imported, "reading or writing a row must not be able to make a claim"
     assert "schema_vocab" not in imported, "a raw value is not checked against our vocabulary (#414 owns that)"

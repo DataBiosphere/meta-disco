@@ -409,15 +409,16 @@ classes:
     description: >-
       What an evidence file records once, for every claim in it (issue #401). An
       importer runs out of band from classification — when a catalog refreshes,
-      with network — and writes an evidence file of `Evidence` claims; a run reads it
+      with network — and writes an evidence file of `EvidenceRow`s; a run reads it
       and reports this provenance, so that what a run found, and how old it was,
       is on the record. Found and not consumed: until the join lands (#402) a run
-      reads each file's envelope and none of its claims.
+      reads each file's envelope and none of its rows.
 
       It names both sides of the join, symmetrically: `source` / `source_version`
       / `source_key`, and `target` / `target.version` / `target_key`. A line then
       reads "this row is about the row in `target` whose `target_key` equals its
-      `target_key_value`; here is the claim."
+      `target_key_value`; about that row's `field`, the source wrote its
+      `raw_value`."
 
       **Where this gate is weaker than the reader.** Measured over 70 malformed
       envelopes — every member empty, newlined, numeric, null or absent — the two
