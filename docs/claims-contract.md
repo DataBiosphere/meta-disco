@@ -156,10 +156,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.8 Resolution across sources is by agreement, and is not tier math.
     Tier resolution *within* a source applies to inference, which has competing rules at four tiers.
-    A source may have several mappings reaching one file and slot — `participant.instrument_model` and
-    `participant.instrument_platform` both speak to `platform` on 3,202 rows — and they reconcile like any
-    other declarations: agreeing ones classify, disagreeing ones conflict. One column gets no precedence
-    over another, because nothing has established one.
+    A source may have several columns reaching one file and slot, and they need not be saying the same thing.
+    `participant.instrument_model` and `participant.instrument_platform` both reach `platform` on 3,202 rows,
+    but a model and a platform are different facts: a model *implies* a platform, and the rule mapping `Revio`
+    to `PACBIO` is where that implication lives. Both are legitimate evidence for the slot. They reconcile like
+    any other declarations — agreeing ones classify, disagreeing ones conflict — and neither column takes
+    precedence, because nothing has established one.
 
 ---
 
@@ -196,6 +198,9 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - Whether input kind 2 (AnVIL harmonized fields) is read today at all.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
 - How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
+- Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
+  no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
+  question for #364 rather than a mapping one.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
