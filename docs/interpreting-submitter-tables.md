@@ -131,7 +131,9 @@ format into one token. One column name therefore speaks to several slots at once
 ## 3. The harmonized layer: what the ingest drops, and why it is empty
 
 `anvil_activity` in `ANVIL_T2T`: **`Indexing` 116,247, `Unknown` 3,207.** That second
-number is the participant count (3,202). One of them:
+number is close to the 3,202 `participant` rows and each `Unknown` activity cites one of
+them, but the counts are not equal and the five-activity difference is unexplained. One
+of them:
 
 ```
 activity_type           = Unknown
@@ -269,13 +271,20 @@ table, and every one carries a subject id.**
 
 Three different things come out of that, and they are worth very different amounts.
 
-**Subject — the largest gain.** 435,284 files get "which sample or donor is this from",
-at 100% of what is reachable. We cannot answer that for any file today.
+**Subject — the largest gain.** 435,284 files get a **typed subject**, at 100% of what is
+reachable. Often that is a sample or a donor, which we cannot answer for any file today —
+but not always: per §2 the subject may equally be a chromosome, an interval, a pangenome
+release or a population cohort, and those tables contribute to this total. The reach
+number says every reachable file is attributed to *some* named entity, not that every one
+gains a donor.
 
-**Role — real, but on far fewer than 61.5%.** These edges arrive *grounded*: the parent
-is a DRS URI that resolves to one of our records, against 59–82% grounding for the
-content-derived edges #363 measured. But the value depends on the vocabulary, and it is
-uneven. `ANVIL_T2T/participant`'s ten columns are genuinely varied roles.
+**Role — real, but on far fewer than 61.5%, and not "grounded" in #363's sense.** What
+resolves exactly here is the **object**: the file is named by a DRS URI, `drs_uri` is a
+`JOIN_KEY`, and the check below matched 656/656. The **subject** is an identifier — a
+sample id — not a node resolved in our corpus, so #363's *grounded* grade, which requires
+the **parent** resolved in the same dataset, does not apply and its 59–82% figures are not
+comparable. What these edges avoid is the guessing on the child side: no md5 lookup, no
+filename match. The value then depends on the vocabulary, and it is uneven. `ANVIL_T2T/participant`'s ten columns are genuinely varied roles.
 `ANVIL_T2T_CHRY`'s 62 are mostly `chr1…chr22,X,Y` × `hcvcf_gz`/`hcvcf_index` — **279,087
 files, 64% of the reachable set, where the role is uniformly "variants" and the only new
 fact is the chromosome**, which has no slot.
@@ -289,9 +298,12 @@ column names claim a reference assembly and a data type:
 | data_type | 281 | **281** | 0 | 0 |
 
 100% agreement, **zero coverage added**. Which is the expected result once the shape is
-understood: our five dimensions are *file-intrinsic* and we read them from the bytes, so
-a table restating them tells us nothing. What is not recoverable from the bytes is the
-subject and the predicate — and that is what these tables are made of.
+understood, at least for the two slots tested: `reference_assembly` and `data_type` on a
+BAM or a FASTA are determined by content we already read, so a column name restating them
+adds nothing. It is not a claim about all five slots or all inputs — inference also reads
+extensions and file names, and §5's cell values *are* useful dimension evidence for other
+slots. What is not recoverable from a file at all is the subject and the predicate, and
+that is what these tables are made of.
 
 Separately, `AnVIL_HPRC_R2`'s value-bearing tables (`hifi`, `ont`, `hic`, …) do carry
 real dimension cells: **26 distinct values** across 8 columns. Those are worth mapping,
@@ -333,8 +345,10 @@ group ran WDL workflows on AnVIL and published the results as a Terra workspace
 May 2023), which was snapshotted into TDR afterwards. The workflows are published, in
 [`schatzlab/t2t-chm13-chry`](https://github.com/schatzlab/t2t-chm13-chry).
 
-**The column names are the WDL output names, verbatim**, and the pipeline README says
-what each one is:
+**The column names are the WDL output names, snake-cased**, and the pipeline README says
+what each one is. They are not byte-identical — `cramIndex` becomes `cram_index`,
+`mosdepth_globalDist` becomes `mosdepth_global_dist`, and `mosdepth_regionsBedIndex`
+becomes `mosdepth_regions_bed_idx` — so match on the role, not on the string:
 
 | WDL output (from `t2t_realignment`, `haplotype_calling`) | column | what the README says it is |
 |---|---|---|
@@ -357,8 +371,10 @@ naming quirk.
 
 ## 7. What this means for the open work
 
-- **#414 (value translation table)** stays on **cell values**. Column names contribute
-  nothing to the five dimensions, measured twice.
+- **#414 (value translation table)** stays on **cell values**. Where it was measured —
+  `assembly_sample`'s column names, two slots, 656 readable files — the names added
+  nothing. That is a bounded result, not a rule about every slot or dataset; the case it
+  does not cover is a file inference cannot read (§9).
 - **#369 (slot map)** needs all three shapes, list-valued link columns, and a declared
   subject column per table. `assembly.assembly` is the cautionary case: it is a file
   pointer in the `assembly` table and a real reference (`unaligned`) in `hic`, so a
