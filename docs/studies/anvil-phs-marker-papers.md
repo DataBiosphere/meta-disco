@@ -10,7 +10,7 @@ them out.) See `findings.md` for methodology and
 per-source behavior; the open-access workspaces additionally have full
 dossiers in this directory.
 
-- **74 unique phs accessions** (each hosting one study; ADR-0001 recorded 78 — snapshot drift); 13 workspaces carry no phs accession and take the fallback path. When regenerating, check the `studies` output's `invalid_records` is empty before trusting these totals — shape-validation exclusions would silently lower them.
+- **74 unique phs accessions** (each hosting one study; an earlier count on the 2026-07-31 snapshot recorded 78 — snapshot drift); 13 workspaces carry no phs accession and take the fallback path. When regenerating, check the `studies` output's `invalid_records` is empty before trusting these totals — shape-validation exclusions would silently lower them.
 - **42/74 studies have a non-empty dbGaP Selected Publications list** (GapExchange XML).
 - The **lead PMID** below is the first Selected Publication — observed to be the marker paper for cohort/project-style studies (GTEx, ClinSeq, MEC), but for sequencing-center studies (e.g. Mendelian Genomics centers) the list opens with individual result papers, so the lead is a *candidate*, not a confirmed marker. `role` confirmation is Epic 2 work.
 
