@@ -2,7 +2,7 @@
 
 **Status:** Draft — assertions under discussion
 **Date:** 2026-09-11
-**Supersedes framing in:** #391 (epic), #392 (PR #403, merged), #401 (PR #407, merged)
+**Supersedes framing in:** #391 (epic), #392 (PR #403, merged), #401 (PR #407, merged), ADR-0001 (retired, #422)
 
 Importers say what was written. Rules say what it means. Only rules make claims.
 
@@ -77,6 +77,19 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     at all has nothing else to offer.
     `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
     come in, why, and what each is worth.
+
+2.9 **A source is read because inference has a ceiling the data sets, not the method.**
+    Some dimensions are declared in the submission and invisible in the file. Measured over the
+    corpus's 21,270 FASTQs: `platform` resolves on 100% of them from read names, and
+    `data_modality` and `assay_type` on 0%. A WGS and an RNA-seq Illumina FASTQ carry no
+    dependable in-file marker of which they are — the library type is in the submission's
+    metadata, not the reads. BED `reference_assembly` has the same shape: recoverable when a file
+    spans whole chromosomes, genuinely ambiguous when it is sparse.
+    This is a property of the bytes, so no engine reaches past it — a better rule cannot, and
+    neither could the runtime LLM this project removed. It is the whole reason input kinds 2-4
+    exist, and the reason 4.2 makes them equal to inference rather than subordinate: they are not
+    a second opinion on what inference already knows, they are the only opinion where it is blind.
+    Retired from ADR-0001, which measured it; that document is deleted and its salvage is #422.
 
 ## 3. Claims
 
@@ -162,6 +175,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 5.4 The *value* mapping a person must review is the rule set.
     The slot map is reviewable too — a wrong table-or-column-to-slot mapping misroutes evidence before any rule runs.
+
+5.5 **An LLM drafts rules and slot maps; it never classifies at runtime.** Turning a novel source
+    schema into a mapping is what it is good at, and the output is a durable artifact a person
+    reviews under 5.4 and the engine then executes deterministically. Flexibility is spent once,
+    at authoring; determinism holds at every run. A runtime LLM is not one of 4.1's input kinds
+    and may not become one: it would produce a claim no rule backs and nothing could review,
+    against 3.2. Retired from ADR-0001, which decided it; that document is deleted and its salvage is #422.
 
 ## 6. The pipeline
 

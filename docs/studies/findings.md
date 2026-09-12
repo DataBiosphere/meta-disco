@@ -8,7 +8,8 @@ read-out.
 ## The test set is not what we expected
 
 - Azul filtered to `accessible: true` returned **12 workspaces**, not the 13
-  recorded in ADR-0001 (snapshot drift; not re-reconciled this round).
+  counted on the 2026-07-31 snapshot (snapshot drift; not re-reconciled this
+  round).
   Reproduction note: this survey predates the adapter rework — today's
   `datasets` subcommand returns the full unfiltered catalog (see
   anvil-phs-marker-papers.md for the all-studies sweep); the 12-workspace

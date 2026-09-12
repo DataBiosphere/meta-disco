@@ -255,6 +255,51 @@ failure: the submitter tables are correct and current precisely because people c
 against them, and the semantic mapping is work nobody upstream is positioned to do. It
 also means we are reading the layer with the maintenance incentive behind it.
 
+### 3.1 The structural reason, in one comparison
+
+Thinness here is not an AnVIL defect. It follows from what the model is organized around,
+and a comparison makes it concrete.
+
+**UCSC is reference-centric.** The assembly is the spine: every track hangs off a declared
+genome (`genomes.txt`), and you cannot have a track without stating its assembly.
+
+**AnVIL (Terra/Gen3/Azul) is subject-centric.** The spine is dataset → donor/biosample →
+file, with a producing `activity`. The reference assembly is an optional *field* on a
+file, so it is routinely absent — 13,658 of 13,660 BEDs blank, measured. AnVIL's structure
+never *forces* what UCSC's structure *requires*.
+
+The two line up through UCSC's assembly-hub (GenArk) model:
+
+| UCSC | AnVIL/Azul analog |
+| --- | --- |
+| Hub | dataset (e.g. `ANVIL_HPRC`) |
+| Assembly (genome / `db`) | a standard reference **or** a per-sample de-novo assembly |
+| Track (typed file on an assembly) | file |
+| `type` (bed / vcfTabix / bigWig / bam) | `file_format` |
+| `group` (Variation / Expression / Repeats…) | `data_modality` + `data_type` (+ producing activity) |
+| subtrack per sample | donor / biosample |
+| `bigDataUrl` | `drs_uri` |
+| `trackDb` — *the declaration* | the Azul index, often *lacking* the declaration |
+
+Read that way, `reference_assembly` is "which UCSC genome — a standard reference, or
+`not_applicable` because the file sits on a sample-specific assembly", which is what the
+34% `not_applicable` BEDs are: per-sample de-novo assembly products.
+
+It also explains where the declarations that *are* missing have gone. The file types split
+across two domains with two metadata homes:
+
+| domain | types | where the declaration lives | does content self-describe? |
+| --- | --- | --- | --- |
+| aligned / reference-anchored | BAM, VCF, BED, bigWig | UCSC `trackDb` + the file's own header (VCF `##contig`, BAM `@SQ`) | often **yes** |
+| raw reads | FASTQ | SRA / ENA / the study's `library_strategy` | **no** — only platform, from read names |
+
+UCSC holds no FASTQ at all (no coordinates, so not a track), which is why a browser cannot
+supply FASTQ modality: that lives in the sequencing-archive world. meta-disco spans both
+domains, so it needs both kinds of source — the claims contract's 2.9 is the same point
+stated as a premise.
+
+*Retired from ADR-0001 (#422), which reasoned it out.*
+
 ## 4. What it is worth
 
 **Reach: 435,284 of 708,088 files — 61.5% of the corpus — are reachable from an entity
