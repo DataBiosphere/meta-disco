@@ -75,7 +75,7 @@ pedigree in the same row as the file pointers; `coriell_id` / `kgp_sample_id` in
 **The predicate is compound.** `mat_grch38_aln_bam` packs role, haplotype, reference and
 format into one token. One column name therefore speaks to several slots at once.
 
-## 3. The harmonized layer keeps the subject and the object, and drops the predicate
+## 3. The harmonization is Broad's, at TDR ingest, and it drops the column
 
 `anvil_activity` in `ANVIL_T2T`: **`Indexing` 116,247, `Unknown` 3,207.** That second
 number is the participant count (3,202). One of them:
@@ -97,11 +97,29 @@ is `Unknown` because the column names were the only statement of what happened.
 almost entirely `Indexing` — the one edge we already recover from filename convention at
 97%.
 
-**Where this happens is not established.** The `anvil_*` entities carry
-`datarepo_row_id`, and `anvil_activity.source_datarepo_row_ids` points at a TDR row in
-the submitter's table, which suggests the mapping runs at ingest into TDR rather than in
-Azul. That is inference from field names, not from documentation, and should be confirmed
-before anyone repeats it.
+**Where it happens, and exactly what is lost.** The transformation is Broad's, at ingest
+into TDR, not Azul's at index time. It lives in
+[`broadinstitute/anvil_tdr_ingest`](https://github.com/broadinstitute/anvil_tdr_ingest)
+as BigQuery SQL run against the submitter's tables. From `anvil_schema/mapping/specifications/hprc_r2_1.json`:
+
+```sql
+SELECT 'hifi:'||hifi_id, sample_id, [path], ['hifi:'||datarepo_row_id]
+  FROM `$BQ_DATASET.hifi`
+UNION ALL
+SELECT 'assembly:'||assembly_id, sample_id,
+       [assembly, assembly_fai, assembly_gzi, assembly_md5],
+       ['assembly:'||datarepo_row_id]
+  FROM `$BQ_DATASET.assembly`
+```
+
+One `UNION ALL` arm per submitter table, each producing
+`(activity_id, used_biosample_id, generated_file_id[], source_datarepo_row_ids)`.
+
+So it is the **column**, not the table, that is discarded. The source table survives
+unhashed in `source_datarepo_row_ids` (`'assembly:'||datarepo_row_id`), while four named
+columns — `assembly`, `assembly_fai`, `assembly_gzi`, `assembly_md5` — collapse into one
+unordered array. Given a harmonized activity you can say which table a file came from;
+you cannot say which column, and the column is where the role lives.
 
 **`source_datarepo_row_ids` does not shortcut the join.** It is 100% populated on
 `anvil_file` (289,204/289,204 in `ANVIL_T2T`) but only ever names `file_inventory` — a
@@ -191,6 +209,16 @@ of the corpus.
   column-name heuristic misroutes 466 DRS URIs into `reference_assembly`.
 - **#363 (derivation graph)** is where the value is. Subject and predicate are exactly
   its nodes and edge labels, they arrive grounded, and the vocabulary is ~115 entries.
+- **The upstream specifications are prior art for both.** `anvil_tdr_ingest` carries a
+  mapping specification per dataset — `hprc_r2_1`, `mage_1`, `igvf_1`, `primed_1`,
+  `card_1`, `gtex_ext_*` among them. Each names, per submitter table, the subject column
+  and exactly which columns hold file pointers, which is the structural half of #369's
+  slot map already authored by the people who ingest the data. Each also runs a
+  `mapping_eval_query` counting records per `(source_value, mapped_value)` *including
+  unmapped ones* — #414's review queue, already operational — against a
+  `transform_resources.vocab_map` table keyed `(attribute, source_value, mapped_value)`,
+  which is #414's translation table in all but name. That table is in BigQuery and not
+  published, so its contents are not readable from here; the shape is what matters.
 - **Facts with no slot** keep appearing, and they share a shape — they are properties of
   a relationship or an entity, never of a file's content: haplotype (`mat_`/`pat_`), read
   number (`read_1`/`read_2`), producing tool (`mosdepth`, `samtools`), chromosome
@@ -214,13 +242,17 @@ All measurements are offline, over `data/anvil/manifest/anvil15/*.verbatim.jsonl
 
 ## 8. What is not established
 
-- Whether the harmonization loss happens in TDR or in Azul (§3).
+- **How `ANVIL_T2T` and `ANVIL_T2T_CHRY` were ingested.** They are 85% of the corpus and
+  neither appears in `anvil_tdr_ingest`'s specifications: their tables (`participant`,
+  `chromosome`, `interval`) are named in none of them, and `anvil_1`/`anvil_2` are for
+  submissions that already conform to the AnVIL model. Some other path produced their
+  harmonized entities.
 - Whether the agreement result generalises. It covers 656 files of `ANVIL_HPRC`'s 23,185,
   all BAMs and FASTAs — file types inference reads well. A corpus of headerless or
   unfetchable files is exactly where a column name would earn its keep, and is unmeasured.
 - What the 115 predicates mean. Reading `mosdepth_regions_bed` as a coverage track is a
   human judgment, and mapping them onto #363's verbs is the actual work.
-- Whether a machine-readable schema exists upstream. Nothing on disk carries one: the
-  Azul sidecar is our own download bookkeeping and a verbatim line is just
-  `{type, value}`. TDR snapshots do define relational schemas, but reaching one needs the
-  TDR API and a snapshot id nothing on disk records.
+- What the upstream specifications cost to consume. They are BigQuery SQL, not a
+  declarative schema, so using them means parsing queries or re-expressing them. Nothing
+  in the manifests on disk carries a schema: the Azul sidecar is our own download
+  bookkeeping and a verbatim line is just `{type, value}`.
