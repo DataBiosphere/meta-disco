@@ -222,6 +222,8 @@ A line leaves this section when the assertion above it is enforced, not when it 
 ## Open
 
 - Rule-id namespace: unique across the whole rule set, or namespaced per source.
+- What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
+- Whether CLAUDE.md's Design Principles are corrected now or on merge. Three of them still assert what this document reverses — "The importer owns the mapping; the run does equality lookup", "A claim file cannot hold a value we have no word for", and "An imported claim carries no tier and cites its mapping rule" — and CLAUDE.md is what every session reads first, so an implementer will build to the superseded framing until they are updated.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
 - Whether input kind 2 (AnVIL harmonized fields) is read today at all.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
