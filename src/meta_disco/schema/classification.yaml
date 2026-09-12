@@ -264,11 +264,11 @@ classes:
       it returns are the columns. A source with no middle level leaves `dataset`
       null, as `table` may be null.
 
-      Distinct from `ClaimSource` rather than reusing it. A claim's source carries
-      a `column`, which belongs to the claim because one table's claims are read
-      from several columns; a file's source carries a `dataset`, which belongs to
-      the file because every claim in it came from the same one. Modeling them as
-      one class would let an envelope name a column that could disagree with every
+      Distinct from `ClaimSource` rather than reusing it. A row's source carries a
+      `column`, which belongs to the row because one table's rows are read from
+      several columns; a file's source carries a `dataset`, which belongs to the
+      file because every row in it came from the same one. Modeling them as one
+      class would let an envelope name a column that could disagree with every
       line in the file.
     attributes:
       repository:
@@ -352,7 +352,7 @@ classes:
       `rule_id` and no `tier` — an importer maps structure and the rule engine maps
       meaning (contract 1.1, 1.3). The claim that reconcile eventually makes from
       this row is an `Evidence`, which is the class that carries those; this one is
-      what the source said before anyone interpreted it. `close`d, like the
+      what the source said before anyone interpreted it. Validated `closed`, like the
       envelope, and `source_evidence._entry_from_line` refuses each retired member
       by name, so a producer written against #401's format is told what to write
       instead rather than having the member silently dropped.
@@ -407,7 +407,8 @@ classes:
 
   EvidenceFileEnvelope:
     description: >-
-      What an evidence file records once, for every claim in it (issue #401). An
+      What an evidence file records once, for every row in it (issue #401, amended
+      by #421). An
       importer runs out of band from classification — when a catalog refreshes,
       with network — and writes an evidence file of `EvidenceRow`s; a run reads it
       and reports this provenance, so that what a run found, and how old it was,
