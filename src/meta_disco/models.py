@@ -62,6 +62,20 @@ EXTERNAL_SOURCE_TYPES = frozenset(
         SOURCE_WRANGLER_ANNOTATION,
     }
 )
+# The kinds an *importer* may write, which is narrower. A curator claim is legitimate
+# — a curator's decision is reviewed and cited like any other — but a curator does not
+# reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
+# how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
+# file a rule whose selection matches one file. So the envelope's vocabulary is these
+# two, and the format cannot express the one input the contract routes elsewhere
+# (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
+# there should not silently become writable to a file.
+IMPORTER_SOURCE_TYPES = frozenset(
+    {
+        SOURCE_EXTERNAL_GROUND_TRUTH,
+        SOURCE_REPOSITORY_METADATA,
+    }
+)
 SOURCE_TYPES = frozenset(
     {
         SOURCE_FILENAME_RULE,
@@ -419,19 +433,22 @@ def _require_one_of(value: object, vocabulary: frozenset[str], noun: str, label:
     return value
 
 
-def require_external_source_type(value: object, label: str, where: str) -> str:
-    """Return ``value`` as a kind of source outside this repository, or raise.
+def require_importer_source_type(value: object, label: str, where: str) -> str:
+    """Return ``value`` as a kind of source an importer may write, or raise.
 
-    An evidence file is written by an importer reading something we do not own, so
-    its ``source_type`` is one of :data:`EXTERNAL_SOURCE_TYPES` and never one of the
-    inference kinds — a file declaring ``filename_rule`` would be claiming our own
-    rule engine as its publisher.
+    An evidence file is written by an importer reading something we do not own, so its
+    ``source_type`` is one of :data:`IMPORTER_SOURCE_TYPES`. Two kinds are excluded and
+    for different reasons. The inference kinds, because a file declaring
+    ``filename_rule`` would be naming our own rule engine as its publisher. And
+    ``wrangler_annotation``, because a curator enters as **rules**, not as evidence
+    (contract 1.6, 1.7) — accepting one here would let #397 be built as an importer
+    against a format that takes it and a reconcile stage that has nowhere to put it.
 
     It sits on the envelope rather than on every row (#421): one repository, dataset
     and table is one kind of source, so this runs once per file and reconcile reads it
     from there when it stamps the claim it makes from a row.
     """
-    return _require_one_of(value, EXTERNAL_SOURCE_TYPES, "a kind of external source", label, where)
+    return _require_one_of(value, IMPORTER_SOURCE_TYPES, "a kind of source an importer may write", label, where)
 
 
 def require_join_key(value: object, label: str, where: str) -> str:

@@ -81,7 +81,7 @@ columns. ``dataset`` crosses onto each row as well as staying on the envelope: i
 is what makes a ``column`` legible, since the same column name means different things
 in different datasets. ``source_type`` is on the envelope for the same reason and is
 not on the line at all: one repository, dataset and table is one kind of source, so
-it is checked once against ``EXTERNAL_SOURCE_TYPES`` rather than a few million times,
+it is checked once against ``IMPORTER_SOURCE_TYPES`` rather than a few million times,
 and reconcile reads it there when it stamps the claim it makes (#421).
 
 **The importer owns the mapping between the two keys** — and *only* that mapping. It
@@ -135,7 +135,7 @@ from .models import (
     _flat_to_dict,
     _reject_unknown,
     member_optional_str,
-    require_external_source_type,
+    require_importer_source_type,
     require_join_key,
     required_str,
 )
@@ -417,7 +417,7 @@ class EvidenceFileEnvelope:
     *, the source wrote* ``raw_value``.
 
     ``source_type`` is which kind of external source this is
-    (:data:`EXTERNAL_SOURCE_TYPES`). It is here rather than on every row for the
+    (:data:`IMPORTER_SOURCE_TYPES`). It is here rather than on every row for the
     reason the key names are: one repository, dataset and table is one kind of
     source, so it is checked once per file, and reconcile reads it from here when it
     stamps the claim it makes from a row (#421).
@@ -482,7 +482,7 @@ class EvidenceFileEnvelope:
         EvidenceTarget.from_dict(self.target.to_dict(), where)
         if not isinstance(self.fetched_at, datetime):
             raise ValueError(f"{where}: fetched_at is {type(self.fetched_at).__name__}, not a datetime")
-        require_external_source_type(self.source_type, "source_type", where)
+        require_importer_source_type(self.source_type, "source_type", where)
         required_str(self.source_version, "source_version", where)
         required_str(self.source_key, "source_key", where)
         require_join_key(self.target_key, "target_key", where)
@@ -533,7 +533,7 @@ class EvidenceFileEnvelope:
         _reject_unknown(block, known, expected, where, "envelope")
         return cls(
             source=EvidenceFileSource.from_dict(block.get("source"), where),
-            source_type=require_external_source_type(block.get("source_type"), "envelope source_type", where),
+            source_type=require_importer_source_type(block.get("source_type"), "envelope source_type", where),
             source_version=required_str(block.get("source_version"), "envelope source_version", where),
             source_key=required_str(block.get("source_key"), "envelope source_key", where),
             target=EvidenceTarget.from_dict(block.get("target"), where),
@@ -972,20 +972,23 @@ def _entry_from_line(
     where = _where(name, _READING, n)
     try:
         entry = json.loads(line)
-        field, target_key_value, raw_value = (entry["field"], entry["target_key_value"], entry["raw_value"])
+        if not isinstance(entry, dict):
+            raise TypeError(f"line is a {type(entry).__name__}, not an object")
     # `ValueError` rather than `json.JSONDecodeError`, which is a subclass of it:
     # `json.loads` also raises a bare `ValueError` for an integer past the
     # interpreter's digit limit (4,300 by default, since 3.10.7), and that one escaped
     # without the file and line this module promises on every malformed line. The
     # decoder raises `RecursionError` past ~1000 levels of nesting, which is not a
     # `ValueError` at all (#401 review).
-    except (ValueError, KeyError, TypeError, RecursionError) as exc:
+    except (ValueError, TypeError, RecursionError) as exc:
         raise ValueError(f"{where}: not an evidence row: {exc!r}") from None
-    # A member the line does not have is refused, not dropped: a reader that silently
-    # discarded one would normalize a malformed file into an apparently valid row
-    # (#401 review). A member the format *used* to have is named for what it was, so
-    # a producer written against the claim format is told what to write instead
-    # rather than being handed a bare "unknown member" (#421).
+    # The member check runs *before* the three are read out, and that order is the
+    # whole point of `_RETIRED_LINE_KEYS`. A line in #401's format carries `claim` and
+    # no `raw_value`, so reading first raised `KeyError('raw_value')` and the named
+    # refusal below — written for exactly that producer — could never fire (#421
+    # review). A member the line does not have is refused rather than dropped, because
+    # a reader that silently discarded one would normalize a malformed file into an
+    # apparently valid row (#401 review).
     #
     # Membership before allocation, as `_check_entry` and the old `_rebuild_claim`
     # both were: `set(entry) - _LINE_KEYS` built two sets and a list on every
@@ -995,6 +998,10 @@ def _entry_from_line(
         if retired is not None:
             raise ValueError(f"{where}: {retired!r} is not a member of an evidence row — {_RETIRED_LINE_KEYS[retired]}")
         _reject_unknown(entry, _LINE_KEYS, _EXPECTED_LINE_KEYS, where, "line")
+    try:
+        field, target_key_value, raw_value = (entry["field"], entry["target_key_value"], entry["raw_value"])
+    except KeyError as exc:
+        raise ValueError(f"{where}: evidence row has no {exc.args[0]!r}") from None
     _check_entry(where, field, target_key_value, raw_value)
     # The column is checked here rather than trusted: `"column": 7` would otherwise
     # ride through as a source member. `as_claim_source` then supplies the four facts

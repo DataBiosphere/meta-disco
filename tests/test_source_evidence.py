@@ -38,12 +38,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from meta_disco import source_evidence
+from meta_disco import models, source_evidence
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
     SOURCE_CONTENT_READ,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
@@ -463,10 +464,10 @@ class TestMalformedFiles:
             ({"source_version": ""}, "source_version"),
             ({"source_key": None}, "source_key"),
             # An evidence file is written by an importer reading something we do not
-            # own, so its source_type is one of EXTERNAL_SOURCE_TYPES. `content_read`
+            # own, so its source_type is one of IMPORTER_SOURCE_TYPES. `content_read`
             # is the reachable mistake: a real source_type, and our own inference's.
-            ({"source_type": SOURCE_CONTENT_READ}, "not a kind of external source"),
-            ({"source_type": None}, "not a kind of external source"),
+            ({"source_type": SOURCE_CONTENT_READ}, "not a kind of source an importer may write"),
+            ({"source_type": None}, "not a kind of source an importer may write"),
             ({"target": {"system": ""}}, "target system"),
             ({"target": {"system": "anvil", "dataset": 7}}, "target dataset"),
             ({"target_key": "sample_id"}, "not a key of the target"),
@@ -572,8 +573,8 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
             evidence_file_envelope(source=EvidenceFileSource(repository=forged, dataset="R2", table="t"))
 
     @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
-    def test_an_envelope_with_a_source_type_that_is_not_external_is_refused_when_it_is_built(self, bad):
-        """An importer reads something we do not own, so the kind is one of three.
+    def test_an_envelope_with_a_source_type_an_importer_cannot_write_is_refused_when_built(self, bad):
+        """An importer reads something we do not own, so the kind is one of two.
 
         `content_read` is the reachable mistake and the reason this is checked rather
         than assumed: it is a real `source_type`, and it is inference's own — an
@@ -582,8 +583,23 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         networked import fails at its own first line rather than at the next
         classification run.
         """
-        with pytest.raises(ValueError, match="not a kind of external source"):
+        with pytest.raises(ValueError, match="not a kind of source an importer may write"):
             evidence_file_envelope(source_type=bad)
+
+    def test_a_curator_cannot_be_written_as_an_evidence_file(self):
+        """A curator enters as rules, not as evidence — contract 1.6, and 1.7.
+
+        `wrangler_annotation` is a legitimate kind for a *claim*: a curator's decision
+        is cited and reviewed like any other, and `EXTERNAL_SOURCE_TYPES` still carries
+        it. What it may not be is the source of an evidence *file*. The two vocabularies
+        differ by exactly this one term, and the difference is the contract's, not an
+        oversight — so it is asserted rather than left to be rediscovered when #397
+        builds the curator table.
+        """
+        assert SOURCE_WRANGLER_ANNOTATION in models.EXTERNAL_SOURCE_TYPES
+        assert SOURCE_WRANGLER_ANNOTATION not in models.IMPORTER_SOURCE_TYPES
+        with pytest.raises(ValueError, match="not a kind of source an importer may write"):
+            evidence_file_envelope(source_type=SOURCE_WRANGLER_ANNOTATION)
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
         with pytest.raises(ValueError, match="source repository"):
@@ -739,6 +755,46 @@ class TestALineIsAnObservationNotAClaim:
                 value="PACBIO",  # type: ignore[call-arg]
             )
 
+    def test_a_line_in_the_retired_format_is_refused_by_name_not_by_keyerror(self, tmp_path):
+        """The case `_RETIRED_LINE_KEYS` exists for, written the way #401 wrote it.
+
+        `_write_raw` adds a retired member *beside* a complete row, which is not what a
+        producer written against #401 emits: that line carries `claim` and no
+        `raw_value` at all. Reading the three members before checking the member set
+        made this raise `KeyError('raw_value')`, so the named refusal could never fire
+        for the only producer it was written for — the tests passed and the feature
+        did not work (#421 review).
+        """
+        path = tmp_path / "c.ndjson"
+        line = {
+            "field": "platform",
+            "target_key_value": "HG002.bam",
+            "claim": {"rule_id": "map_hprc_platform_v1", "value": "PACBIO", "raw_value": "Revio"},
+        }
+        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+
+        with pytest.raises(ValueError, match="'claim' is not a member of an evidence row"):
+            list(iter_evidence(path))
+
+    @pytest.mark.parametrize("missing", ["field", "target_key_value", "raw_value"])
+    def test_a_row_missing_one_of_its_three_facts_names_the_member(self, tmp_path, missing):
+        """A row short a member is named, not reported as an opaque KeyError."""
+        line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio"}
+        del line[missing]
+        path = tmp_path / "c.ndjson"
+        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+
+        with pytest.raises(ValueError, match=f"evidence row has no {missing!r}"):
+            list(iter_evidence(path))
+
+    def test_a_line_that_is_not_an_object_is_refused(self, tmp_path):
+        """A bare list or string parses as JSON and is not a row."""
+        path = tmp_path / "c.ndjson"
+        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + '["platform"]\n')
+
+        with pytest.raises(ValueError, match="not an evidence row"):
+            list(iter_evidence(path))
+
     def test_an_unknown_member_beside_the_row_is_refused(self, tmp_path):
         """A member that was never part of the format, as opposed to a retired one.
 
@@ -892,30 +948,32 @@ class TestTheRunReport:
 
 
 class TestAnEvidenceFileIsWrittenBySomeoneElse:
-    """The curator table (#397) is another evidence file, not a special case."""
+    """A source with no url and no dataset level is not a special case.
 
-    def test_a_wrangler_table_with_no_url_round_trips(self, tmp_path):
-        # A curator table has no public address and no dataset level, and keys its
-        # overrides by the strongest key the target has rather than by a name.
-        curator = EvidenceFileSource(repository="meta-disco curator table", table="overrides")
-        # A curator writes rules, not evidence (contract 1.6, 1.7) — so what this file
-        # carries is still the raw text of the decision, and the rule that acts on it
-        # is authored separately. The format does not change for the one input that
-        # wins; its `source_type` is what says which input it is.
+    This was the curator table until #421. A curator enters as rules rather than as
+    evidence (contract 1.6), so the shape it stood for — a publisher with no public
+    address, no middle level, keyed by the strongest key the target has — is tested
+    here with a source that may actually write one.
+    """
+
+    def test_a_flat_source_with_no_url_round_trips(self, tmp_path):
+        # An external authority published as a flat table: no url to cite, no dataset
+        # level, and keyed by content rather than by a name it does not publish.
+        registry = EvidenceFileSource(repository="1000 Genomes sample registry", table="samples")
         entry = EvidenceEntry(
-            field="data_type",
+            field="data_modality",
             target_key_value="a" * 32,
-            raw_value="genotypes",
-            source=curator.as_claim_source("data_type"),
+            raw_value="GENOMIC",
+            source=registry.as_claim_source("library_source"),
         )
-        path = tmp_path / "curator.ndjson"
+        path = tmp_path / "registry.ndjson"
         write_evidence_file(
             path,
             EvidenceFileEnvelope(
-                source=curator,
-                source_type=SOURCE_WRANGLER_ANNOTATION,
+                source=registry,
+                source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source_version="rev-3",
-                source_key="file_md5sum",
+                source_key="sample_id",
                 target=EvidenceTarget(system="anvil"),
                 target_key=JOIN_KEY_FILE_MD5SUM,
                 fetched_at=FETCHED_AT,
@@ -925,12 +983,11 @@ class TestAnEvidenceFileIsWrittenBySomeoneElse:
 
         envelope = read_envelope(path)
         assert envelope.source.url is None and envelope.source.dataset is None
-        assert envelope.source_type == SOURCE_WRANGLER_ANNOTATION
-        # No dataset scope. An md5 is not unique corpus-wide — 12,203 rows share
-        # one, two thirds of them inside a single dataset — but every row sharing an
-        # md5 has the same bytes, so a curator's statement about the content is true
-        # of all of them. What a join should do with that is #402's — see
-        # `EvidenceTarget.dataset`.
+        assert envelope.source_type == SOURCE_EXTERNAL_GROUND_TRUTH
+        # No dataset scope. An md5 is not unique corpus-wide — 12,203 rows share one,
+        # two thirds of them inside a single dataset — but every row sharing an md5 has
+        # the same bytes, so a statement about the content is true of all of them. What
+        # a join should do with that is #402's — see `EvidenceTarget.dataset`.
         assert envelope.target.dataset is None
         assert list(iter_evidence(path)) == [entry]
 
@@ -944,6 +1001,40 @@ def schema() -> dict:
     go stale if the package-data anchor moves.
     """
     return yaml.safe_load(default_schema_path().read_text())
+
+
+def test_the_row_shape_is_one_set_in_three_places(schema):
+    """`_LINE_KEYS`, `EvidenceEntry` and the schema's `EvidenceRow` must agree.
+
+    Three hand-maintained statements of the same four members: what the reader accepts
+    on a line, what the record can hold, and what the `closed=True` gate validates. A
+    fifth member added to one and not the others is written by this module and refused
+    by the gate, or accepted by the gate and refused by the reader — the exact
+    "schema says yes to what the only reader says no to" failure the rest of these
+    tests exist to prevent, and the one drift the PR that added `EvidenceRow` left
+    unguarded (#421 review).
+
+    The envelope needs no equivalent: `_flat_plan` derives its known keys from
+    `fields()`, so its record and its reader cannot disagree by construction.
+
+    `source` maps to `column` across the boundary — the record carries whole
+    provenance, the line carries only the member that varies within a file — so that
+    one name is translated rather than compared.
+    """
+    row = schema["classes"]["EvidenceRow"]
+    on_the_wire = set(row["attributes"]) | set(row.get("slots") or [])
+
+    assert on_the_wire == set(source_evidence._LINE_KEYS)
+    assert {f.name for f in fields(EvidenceEntry)} == (set(source_evidence._LINE_KEYS) - {"column"}) | {"source"}
+
+
+def test_a_retired_member_is_never_also_a_line_member():
+    """The two sets are disjoint, which is what lets the reader pick either message.
+
+    `_entry_from_line` scans the retired map only once it knows the line has a member
+    it does not accept; an overlap would make a legal row raise.
+    """
+    assert not set(source_evidence._RETIRED_LINE_KEYS) & set(source_evidence._LINE_KEYS)
 
 
 def test_the_row_field_pattern_lists_every_dimension(schema):

@@ -480,7 +480,7 @@ classes:
           object, and without the declaration a class-valued slot is read as a
           reference rather than as the object the file holds.
       source_type:
-        range: external_source_type_enum
+        range: importer_source_type_enum
         required: true
         description: >-
           Which kind of external source this file was read from. On the envelope
@@ -489,9 +489,10 @@ classes:
           once per file rather than a few million times, and reconcile reads it
           from here when it stamps the claim it makes from a row (#421).
 
-          Restricted to the external kinds. A file declaring `filename_rule`
-          would be naming our own rule engine as its publisher, which is what an
-          evidence file is by definition not.
+          Restricted to the kinds an importer may write. A file declaring
+          `filename_rule` would be naming our own rule engine as its publisher,
+          and one declaring `wrangler_annotation` would be a curator arriving as
+          evidence, which contract 1.6 routes to rules instead.
       source_version:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
@@ -915,25 +916,32 @@ enums:
         description: >-
           A human curator's decision, recorded deliberately rather than inferred.
 
-  external_source_type_enum:
+  importer_source_type_enum:
     description: >-
-      The kinds of source that are outside this repository, and so the kinds an
-      evidence file's envelope may declare (#421). A strict subset of
-      `source_type_enum`, whose other members are inference's own — a file
-      declaring one of those would be naming our rule engine as its publisher.
+      The kinds of source an importer may write, and so the kinds an evidence
+      file's envelope may declare (#421). A strict subset of `source_type_enum`,
+      excluding two groups for two reasons.
+
+      The inference kinds, because a file declaring `filename_rule` would be
+      naming our own rule engine as its publisher.
+
+      And `wrangler_annotation`, because a curator does not reach us as evidence.
+      The claims contract 1.6 puts it plainly — a curator "is unlike every other
+      in how it enters: as rules, not as evidence" — and 1.7 makes a decision
+      about a single file a rule whose selection matches one file. Accepting one
+      here would let the curator table (#397) be built as an importer against a
+      format that takes it and a resolution stage with nowhere to put it.
 
       Listed rather than derived because LinkML has no enum-subset construct that
-      `gen-json-schema` honours; `test_the_external_source_types_are_a_subset`
+      `gen-json-schema` honours; `test_the_importer_source_types_are_a_subset`
       pins the two so a value can be added to one and not lost from the other.
       The values carry no description of their own for the same reason the pin
-      exists: `source_type_enum` defines these three terms, and a second copy of
-      that prose could drift from it without any test noticing.
+      exists: `source_type_enum` defines these terms, and a second copy of that
+      prose could drift from it without any test noticing.
     permissible_values:
       external_ground_truth:
         description: As in `source_type_enum`.
       repository_metadata:
-        description: As in `source_type_enum`.
-      wrangler_annotation:
         description: As in `source_type_enum`.
 
   claim_state_enum:

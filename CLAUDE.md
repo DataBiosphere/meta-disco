@@ -117,7 +117,9 @@ evidence}` entry — plus the controlled vocabulary:
     read through `source_evidence.write_evidence_file` / `iter_evidence` and never
     with a whole-file `json.load` — the corpus is millions of records (#374). Line 1
     is the envelope, naming both sides of the join and the source's kind
-    (`source_type`, one of `EXTERNAL_SOURCE_TYPES`, constant for the file).
+    (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant for the file — the two
+    kinds an importer may write. `wrangler_annotation` is deliberately not among
+    them: a curator enters as rules, not as evidence, per contract 1.6/1.7).
   - **A line is an observation, not a claim** (#421, contract 1.1): `EvidenceEntry`
     is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
     `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and

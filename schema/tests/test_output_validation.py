@@ -377,14 +377,17 @@ def test_evidence_file_envelope_refuses_a_nested_record_given_as_a_reference(env
     assert report.results, f"a {slot} given as {shape!r} should have failed"
 
 
-@pytest.mark.parametrize("bad", ["filename_rule", "content_read", "derivation_inheritance", "hearsay"])
-def test_evidence_file_envelope_refuses_a_source_type_that_is_not_external(envelope_validator, bad):
-    # An evidence file is written by an importer reading something we do not own, so
-    # its source_type is one of the external kinds. The first three are real members
-    # of `source_type_enum` and are inference's own — a file declaring one would be
-    # naming our rule engine as its publisher. `EvidenceFileEnvelope.__post_init__`
-    # refuses all four, and the gate has to agree or a producer validates here and is
-    # refused at read (#421).
+@pytest.mark.parametrize(
+    "bad", ["filename_rule", "content_read", "derivation_inheritance", "wrangler_annotation", "hearsay"]
+)
+def test_evidence_file_envelope_refuses_a_source_type_an_importer_cannot_write(envelope_validator, bad):
+    # An evidence file is written by an importer reading something we do not own. The
+    # first three are real members of `source_type_enum` and are inference's own — a
+    # file declaring one would be naming our rule engine as its publisher.
+    # `wrangler_annotation` is a real *external* kind and still refused: a curator
+    # enters as rules, not as evidence (contract 1.6, 1.7), so the format must not be
+    # able to express it. `EvidenceFileEnvelope.__post_init__` refuses all five, and
+    # the gate has to agree or a producer validates here and is refused at read (#421).
     report = envelope_validator.validate(_envelope(source_type=bad), target_class="EvidenceFileEnvelope")
     assert report.results, f"a source_type of {bad!r} should have failed"
 
