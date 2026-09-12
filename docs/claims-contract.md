@@ -22,7 +22,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 1.5 An importer needs no knowledge of our controlled vocabulary, and may not contain one.
 
-1.6 A curator is a source like any other, and the only one that wins.
+1.6 A curator justifies itself like any other input, and is unlike every other in how it enters: as rules,
+    not as evidence. It is also the only input that wins.
 
 1.7 A curator writes rules. A curation decision is a rule like any other and is reviewed as one;
     a decision about a single file is a rule whose selection matches one file, not an exception to 1.1.
@@ -30,8 +31,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 2. Source evidence
 
 2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
-    It is produced keyed by whatever key the source publishes, and is attached to a **file** only at the join
-    (6.7) — which is what makes an unmatched or ambiguous row representable rather than unthinkable.
+    A **slot** is one of the five classification dimensions; it is spelled `field` on the wire and in the code.
+    Evidence is keyed by one of the *target's* keys — the importer maps its source's key into that space and
+    writes the value there (#401, `models.py`) — and is attached to a **file** only at the join (6.7), which
+    is what makes an unmatched or ambiguous row representable rather than unthinkable.
     Inference's own signals — an extension, a filename, a header, a contig length, a file size — are not this
     shape, and this section does not govern them.
 
@@ -167,7 +170,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `claim_files._check_entry` refuses a mapped value outside the slot's vocabulary. Note where that second check lives — the claim constructor validates shape, not vocabulary, so **3.3 binds at the file boundary and nowhere else today**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
+No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `claim_files._check_entry` refuses a mapped value outside the slot's vocabulary. Note where that second check lives: the claim constructor validates shape, not vocabulary. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no evidence file.** #401's per-line record is still a claim carrying a mapped value. Amending it to an evidence row is unfiled.
@@ -184,7 +187,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
 
 - **A claim file becomes an evidence file.** #401's envelope, NDJSON discipline, and both-sides-of-the-join naming survive. The per-line record stops being a claim and becomes an observation: it carries `raw_value` and no mapped value.
 - **"The importer owns the mapping" is reversed.** Rules own it. The importer owns the slot map.
-- **`declined` moves to the slot map.** A table name or column judged not to speak to a slot is explicitly not mapped, with its reason recorded there. It is not a claim, not a rule, and never reaches resolution — `alignments_v2` produces no `data_type` evidence at all, rather than producing a wrong claim for something else to cancel.
+- **`declined` moves to the slot map.** A table name or column judged not to speak to a slot is explicitly not mapped, with its reason recorded there. It is not a claim, not a rule, and never reaches resolution — the files `alignments_v2.location` names receive no `data_type` evidence, rather than a wrong claim for something else to cancel. The decline is scoped to the column, as the schema's own `declined` definition already scopes it.
 - **#408 dissolves.** There are no imported claims, so there is no no-tier-on-an-imported-claim rule to place.
 - **#396 folds into the engine.** Cross-source comparison is resolution stage two, not a separate step.
 - **#369 shrinks** to the AnVIL slot map plus a reader. No vocabulary in it.
@@ -201,6 +204,7 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
   question for #364 rather than a mapping one.
+- Who owns the key mapping. #401 merged one answer — `models.py`: "The importer owns the mapping between the two keys", and `require_join_key` refuses any `target_key` outside `JOIN_KEYS` — while #402's body, inherited from #400, says the importer keys by whatever its source publishes and the main loop resolves it. Those are incompatible, the contradiction predates this document, and 2.1 currently states the merged one.
 - Output naming and layout. "Output" currently means inference output; the reconciled artifact needs a name and a place, and that decision collides with the layout epic (#268 / #271).
 - How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
   with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
