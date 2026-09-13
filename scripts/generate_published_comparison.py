@@ -6,6 +6,11 @@ table beside it (``docs/published-comparison.tsv``) — the published value besi
 inferred one, per file, which is the shape the retired pipeline's
 ``classification_results_*.tsv`` had and the move to per-field JSON lost.
 
+The markdown is committed; the TSV is gitignored. It is one row per file and dimension
+the repository publishes a value for — 11,452 today — and it grows with published
+coverage rather than with the code, so committing it would put the corpus in the
+history. Regenerate it from any run with ``make published-comparison``.
+
 Offline: everything it needs is in the run's own output, because the pipeline carries
 the published values into each record's ``published`` block. Nothing here changes a
 classification. The logic lives in ``meta_disco.published_comparison``; this is the
