@@ -287,12 +287,15 @@ def _counts_table(report: ComparisonReport) -> list[str]:
     rows = []
     for dataset in datasets:
         for dimension in PUBLISHED_FIELDS:
-            cells = [report.counts.get((dataset, dimension, rec), 0) for rec in RECOMMENDATIONS]
-            # A dataset the repository publishes nothing for says nothing this
-            # report is about; its files are already in the corpus totals below.
-            if not (cells[0] or cells[1]):
+            counts = {rec: report.counts.get((dataset, dimension, rec), 0) for rec in RECOMMENDATIONS}
+            # A dataset the repository publishes nothing for says nothing this report is
+            # about; its files are already in the totals above. Keyed by recommendation
+            # rather than by position: RECOMMENDATIONS is a presentation order, and
+            # reading `add` out of it by index is how this filter once let every dataset
+            # through when `add` was moved to the front.
+            if not (counts[KEEP] or counts[REVIEW]):
                 continue
-            rows.append([dataset, dimension] + [f"{c:,}" for c in cells])
+            rows.append([dataset, dimension] + [f"{counts[rec]:,}" for rec in RECOMMENDATIONS])
     return md_table(["dataset", "dimension", *RECOMMENDATIONS], rows)
 
 

@@ -413,3 +413,24 @@ class TestPublishedShapeIsRefused:
         block = build_published({"data_modality": ["genomic"], "reference_assembly": ["GRCh38"]}, "anvil/anvil15")
         assert block is not None
         assert block["in_vocabulary"] == {"data_modality": ["genomic"], "reference_assembly": ["GRCh38"]}
+
+
+def test_the_dataset_table_omits_datasets_with_nothing_published(tmp_path):
+    """The per-dataset table is about published values, so a dataset with none is out.
+
+    Regression: the filter once read `add` out of RECOMMENDATIONS by position, so
+    reordering that tuple to lead with `add` silently let every dataset through — a
+    presentation change altering which rows a report contains.
+    """
+    published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    run = _write_run(
+        tmp_path / "run",
+        [
+            _record("published.bam", dataset="HAS_PUBLISHED", published=published),
+            _record("silent.bam", dataset="NO_PUBLISHED", modality="genomic", assembly="GRCh38"),
+        ],
+    )
+    text = render_report(gather(run))
+    dataset_table = text[text.index("## By dataset") : text.index("## Vocabulary coverage")]
+    assert "HAS_PUBLISHED" in dataset_table
+    assert "NO_PUBLISHED" not in dataset_table

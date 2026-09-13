@@ -29,29 +29,10 @@ Datasets for which the repository publishes nothing are omitted.
 
 | dataset | dimension | add | keep | review | none |
 | --- | --- | --- | --- | --- | --- |
-| ANVIL_1000G_PRIMED_data_model | data_modality | 11,483 | 0 | 0 | 10 |
-| ANVIL_1000G_PRIMED_data_model | reference_assembly | 11,493 | 0 | 0 | 0 |
-| ANVIL_1000G_high_coverage_2019 | data_modality | 25,916 | 0 | 0 | 100 |
-| ANVIL_1000G_high_coverage_2019 | reference_assembly | 25,916 | 0 | 0 | 100 |
-| ANVIL_HPRC | data_modality | 9,957 | 0 | 0 | 13,228 |
-| ANVIL_HPRC | reference_assembly | 13,712 | 0 | 0 | 9,473 |
-| ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | data_modality | 119 | 0 | 0 | 12,415 |
-| ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | reference_assembly | 12,494 | 0 | 0 | 40 |
-| ANVIL_T2T | data_modality | 281,723 | 0 | 0 | 7,481 |
-| ANVIL_T2T | reference_assembly | 239,700 | 0 | 0 | 49,504 |
-| ANVIL_T2T_CHRY | data_modality | 309,411 | 0 | 0 | 568 |
-| ANVIL_T2T_CHRY | reference_assembly | 201,662 | 0 | 0 | 108,317 |
-| ANVIL_nhp_dGTEx_V1 | data_modality | 1,376 | 0 | 0 | 2,215 |
-| AnVIL_ENCORE_293T | data_modality | 464 | 0 | 0 | 1,528 |
 | AnVIL_ENCORE_293T | reference_assembly | 448 | 1,320 | 224 | 0 |
-| AnVIL_ENCORE_RS293 | data_modality | 820 | 0 | 0 | 2,932 |
 | AnVIL_ENCORE_RS293 | reference_assembly | 820 | 2,522 | 410 | 0 |
-| AnVIL_HPRC_R2 | data_modality | 7,842 | 0 | 0 | 8,429 |
-| AnVIL_HPRC_R2 | reference_assembly | 12,560 | 0 | 0 | 3,711 |
 | AnVIL_IGVF_Mouse_R1 | data_modality | 0 | 6,334 | 421 | 31 |
 | AnVIL_IGVF_Mouse_R1 | reference_assembly | 3,970 | 220 | 0 | 2,596 |
-| AnVIL_MAGE | data_modality | 1,593 | 0 | 0 | 1,692 |
-| AnVIL_MAGE | reference_assembly | 3,132 | 0 | 0 | 153 |
 
 ## Vocabulary coverage
 
