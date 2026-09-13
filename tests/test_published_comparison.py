@@ -66,7 +66,7 @@ class TestBuildDeclared:
         assert block["reference_assembly"] is None
         assert block["source"] == "anvil/anvil15"
 
-    def test_a_file_that_declared_nothing_gets_no_block(self):
+    def test_a_file_the_repository_publishes_nothing_for_gets_no_block(self):
         assert build_published({"data_modality": None, "reference_assembly": None}, "anvil/anvil15") is None
 
     def test_in_vocabulary_names_only_the_values_that_are_terms(self):
@@ -90,7 +90,7 @@ class TestBuildDeclared:
         assert block is not None
         assert block["in_vocabulary"] == {"data_modality": [], "reference_assembly": []}
 
-    def test_a_dimension_that_declared_nothing_is_absent_from_in_vocabulary(self):
+    def test_a_dimension_with_no_published_value_is_absent_from_in_vocabulary(self):
         block = build_published({"data_modality": ["genomic"], "reference_assembly": None}, None)
         assert block is not None
         assert set(block["in_vocabulary"]) == {"data_modality"}
@@ -103,14 +103,14 @@ class TestDeclarationReachesTheOutput:
         assert out["published"]["reference_assembly"] == ["GRCh38 + Gencode40"]
         assert out["published"]["in_vocabulary"] == {"reference_assembly": []}
 
-    def test_a_validation_failed_record_still_reports_what_was_declared(self):
+    def test_a_validation_failed_record_still_reports_what_is_published(self):
         # Failing our contract on file_size does not stop AnVIL from declaring a
         # modality, and the row must still say so.
         item = InvalidRecord.from_record(valid_record(file_size="big", data_modality=["genomic"]), ["file_size: bad"])
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
         assert out["published"]["data_modality"] == ["genomic"]
 
-    def test_the_envelope_carries_the_key_even_when_nothing_was_declared(self):
+    def test_the_envelope_carries_the_key_even_with_no_published_value(self):
         item = ClassifierRecord.from_record(valid_record())
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
         assert "published" in out and out["published"] is None
@@ -267,7 +267,7 @@ class TestEveryProducerCarriesTheDeclaration:
         return path
 
     @staticmethod
-    def _declared_blocks(output_path):
+    def _published_blocks(output_path):
         return [r.get("published") for r in json.loads(output_path.read_text())["classifications"]]
 
     @staticmethod
@@ -309,7 +309,7 @@ class TestEveryProducerCarriesTheDeclaration:
         output = tmp_path / "out_classifications.json"
         funcs[producer](metadata, output)
 
-        [block] = self._declared_blocks(output)
+        [block] = self._published_blocks(output)
         assert block is not None, f"{producer} dropped the declaration"
         assert block["data_modality"] == ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
         assert block["reference_assembly"] == ["GRCm39"]
@@ -333,7 +333,7 @@ class TestEveryProducerCarriesTheDeclaration:
         output = tmp_path / "index_classifications.json"
         propagate_to_index_files(metadata, [parents], output)
 
-        [block] = self._declared_blocks(output)
+        [block] = self._published_blocks(output)
         assert block is not None
         assert block["reference_assembly"] == ["GRCm39"]
 

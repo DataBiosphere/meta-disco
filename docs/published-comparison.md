@@ -2,7 +2,7 @@
 
 Repository: `anvil/anvil15` · run `20260912_190744` · 708,088 files
 
-**11,231 files have a published value**, across 11,463 file/dimension rows. For every other file the
+**11,231 files have a published value**, across 11,451 file/dimension rows. For every other file the
 repository publishes nothing for these dimensions.
 
 Nothing here changes a classification: each file's inferred value is what the rule engine
@@ -36,7 +36,9 @@ Datasets for which the repository publishes nothing are omitted.
 
 ## Vocabulary coverage
 
-**4 of 4 distinct published values have no term in the schema vocabulary**, carried by 11,463 file/dimension rows.
+**4 of 4 distinct published values have no term in the schema vocabulary**, carried by 11,463 published values.
+Counted per value, not per row, so a cell publishing two values contributes two — which is the
+right denominator for a mapping table. There are 11,451 file/dimension rows.
 Each is a value mapping that is owed (#414); its row count is what that mapping is worth.
 
 | dimension | published value | files | in vocabulary |

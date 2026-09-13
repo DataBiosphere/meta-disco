@@ -357,22 +357,22 @@ class TestRecordMapping:
 
     def test_a_multi_valued_cell_takes_its_first_value(self):
         # _first survives for the two donor fields only; the declared dimensions read
-        # _declared instead (#424).
+        # _published instead (#424).
         assert am._first("genomic || transcriptomic") == "genomic"
         assert am._first("") is None
 
-    def test_a_declared_cell_keeps_every_value_verbatim(self):
+    def test_a_published_cell_keeps_every_value_verbatim(self):
         # Element zero was not dropping data, it was manufacturing a wrong answer: the
         # twelve IGVF files declaring two modalities all arrived as the first (#424).
-        assert am._declared("snATAC-seq || snRNA-seq") == ["snATAC-seq", "snRNA-seq"]
-        assert am._declared("GRCh38 + Gencode40") == ["GRCh38 + Gencode40"]
-        assert am._declared("") is None
+        assert am._published("snATAC-seq || snRNA-seq") == ["snATAC-seq", "snRNA-seq"]
+        assert am._published("GRCh38 + Gencode40") == ["GRCh38 + Gencode40"]
+        assert am._published("") is None
 
-    def test_a_declared_cell_of_nothing_but_separators_declares_nothing(self):
+    def test_a_published_cell_of_nothing_but_separators_yields_nothing(self):
         # An empty element declares nothing, so it is dropped rather than transcribed,
         # and a cell left with none reads like a blank one.
-        assert am._declared(" || ") is None
-        assert am._declared("genomic ||  || ") == ["genomic"]
+        assert am._published(" || ") is None
+        assert am._published("genomic ||  || ") == ["genomic"]
 
     def test_a_multi_valued_declaration_survives_into_the_record(self, tmp_path):
         payload = compact_payload("ds", 1).replace(b"\tGRCh38\t", b"\tGRCh38 || CHM13\t")

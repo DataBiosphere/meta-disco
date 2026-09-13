@@ -16,7 +16,7 @@ description: >-
   were modeled here until #424 and dropped one step before classification, which
   is the bug that issue describes; modeling them as input is what invited it.
   They still arrive on every record, as unmodeled extra keys, and the output
-  model is where they are now modeled — `classification.yaml`'s `Declared` block,
+  model is where they are now modeled — `classification.yaml`'s `Published` block,
   which is also where their list shape and their vocabulary standing are stated.
 
   Authoring source of truth. `make gen-metadata` (schema/ project) generates the

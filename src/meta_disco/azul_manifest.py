@@ -387,14 +387,14 @@ def _first(cell: str) -> str | None:
     file went through here too until #424, where element zero was not dropping
     data but manufacturing a wrong answer (twelve IGVF files declare two
     modalities and all twelve arrived as the first one). Those two read
-    :func:`_declared` instead.
+    :func:`_published` instead.
     """
     if not cell:
         return None
     return cell.split(_MULTI_VALUE_SEP, 1)[0] or None
 
 
-def _declared(cell: str) -> list[str] | None:
+def _published(cell: str) -> list[str] | None:
     """Every value of a ``||``-joined multi-value cell, or None for an empty cell.
 
     The published values transcribed as Azul published it (#424): a list
@@ -417,7 +417,7 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     """One classifier input record from one compact manifest row.
 
     The keys are the input contract (``schema/metadata.yaml``) plus four fields
-    the contract does not model and ignores as extra keys: AnVIL's two declared
+    the contract does not model and ignores as extra keys: the two dimensions AnVIL
     dimensions and the two donor fields the page downloader also emitted.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
     strict validation requires; a cell that is not one of Azul's ``True`` /
@@ -426,8 +426,9 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     Four fields read an empty cell as ``None``, and they split a multi-valued one
     two different ways. ``data_modality`` and ``reference_assembly`` are the
     published values — the values AnVIL publishes today, which classification
-    reads as nothing and the output carries as ``declared`` (#424) — and are
-    transcribed as the full list (:func:`_declared`). ``organism_type`` and
+    publishes, which classification reads as nothing and the output carries as
+    ``published`` (#424) — and are
+    transcribed as the full list (:func:`_published`). ``organism_type`` and
     ``phenotypic_sex`` still keep element zero (:func:`_first`), which nothing
     reads. Every other field is passed through as the cell's text, and the
     contract's non-empty patterns are what reject a blank one.
@@ -439,8 +440,8 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
         "file_format": row["files.file_format"],
         "file_size": int(row["files.file_size"]),
         "file_md5sum": row["files.file_md5sum"],
-        "data_modality": _declared(row.get("files.data_modality", "")),
-        "reference_assembly": _declared(row.get("files.reference_assembly", "")),
+        "data_modality": _published(row.get("files.data_modality", "")),
+        "reference_assembly": _published(row.get("files.reference_assembly", "")),
         "is_supplementary": _BOOL_CELL[row["files.is_supplementary"]],
         "drs_uri": row["files.drs_uri"],
         "dataset_id": row["datasets.dataset_id"],

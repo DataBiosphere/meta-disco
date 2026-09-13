@@ -85,8 +85,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     'describes; modeling them as input is what invited it. They '
                     'still arrive on every record, as unmodeled extra keys, and '
                     'the output model is where they are now modeled — '
-                    "`classification.yaml`'s `Declared` block, which is also where "
-                    'their list shape and their vocabulary standing are stated.\n'
+                    "`classification.yaml`'s `Published` block, which is also "
+                    'where their list shape and their vocabulary standing are '
+                    'stated.\n'
                     'Authoring source of truth. `make gen-metadata` (schema/ '
                     'project) generates the Pydantic model '
                     '`src/meta_disco/schema/metadata_model.py` from this file via '

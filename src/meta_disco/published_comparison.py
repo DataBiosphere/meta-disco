@@ -64,7 +64,7 @@ NONE = "none"
 # this project has and the repository does not.
 RECOMMENDATIONS = (ADD, KEEP, REVIEW, NONE)
 
-# A `compare` pair listed file by file rather than only counted. Above this a pair is
+# A `review` pair listed file by file rather than only counted. Above this a pair is
 # bulk (the two 400+ and 600+ cohorts, one value pair each) and the count is the fact;
 # below it the individual files are, and that is where the eight interesting rows live
 # — four .bai/.tbi, two intervals_fallback BEDs, two .h5ad.
@@ -132,14 +132,14 @@ class ComparisonReport:
     """Everything the report renders, gathered in one pass over a run."""
 
     run_dir: Path
-    # Rows for files that declared something, in the order the run wrote them.
+    # Rows for files with a published value, in the order the run wrote them.
     rows: list[ComparisonRow] = field(default_factory=list)
     # (dataset_title, dimension, recommendation) -> file count, over every file in the run.
     counts: Counter = field(default_factory=Counter)
     # (dimension, value) -> file count, over every distinct value the repository publishes.
     published_value_counts: Counter = field(default_factory=Counter)
     # (dimension, value) -> whether the run recorded it as a term in that dimension's vocabulary.
-    # Read from each record's `declared.in_vocabulary` (contract 7.6), never recomputed:
+    # Read from each record's `published.in_vocabulary` (contract 7.6), never recomputed:
     # a report describes the run it reads, and once #414 maps a value, a stored "no" and
     # a freshly computed "yes" would disagree about the same stored run.
     value_in_vocab: dict[tuple[str, str], bool] = field(default_factory=dict)
@@ -152,7 +152,7 @@ class ComparisonReport:
 
     @property
     def published_files(self) -> int:
-        """Files carrying a declaration on at least one dimension.
+        """Files with a published value on at least one dimension.
 
         Counted on the same identity ``gather`` deduplicated on, so this headline and
         the recommendation tables always describe the same set of files.
@@ -171,15 +171,15 @@ class ComparisonReport:
 def gather(run_dir: Path) -> ComparisonReport:
     """Read a run's output and compare every file against the published values.
 
-    One pass. Every file is tallied into ``counts`` — including the ~98% that declared
-    nothing, since ``add`` and ``none`` are the bulk of the answer — while ``rows`` is
-    built only for files that declared something, which is what the flat report lists.
+    One pass. Every file is tallied into ``counts`` — including the ~98% the repository
+    publishes nothing for, since ``add`` and ``none`` are the bulk of the answer — while ``rows`` is
+    built only for files with a published value, which is what the flat report lists.
 
     A file the run wrote more than once is counted once, keyed by ``(entry_id,
     md5sum)``. That happens today for 115 tar archives, which are written to both
     ``tar_`` and ``auxiliary_classifications.json``, and it is here so every total is a
     file count rather than a row count. Being precise about what it moves: none of the
-    115 declares anything, so the declared-value figures and the ``keep`` /
+    115 has a published value, so the published-value figures and the ``keep`` /
     ``compare`` counts are identical either way — but ``counts`` is tallied for *every*
     file, so the ``add`` and ``none`` totals are 115 lower than the row count, which is
     the correct answer and not the same as being unaffected.
@@ -201,14 +201,14 @@ def gather(run_dir: Path) -> ComparisonReport:
         seen.add(key)
         report.files += 1
 
-        declared = record.get("published") or {}
-        if declared.get("source"):
-            report.sources.add(declared["source"])
-        in_vocabulary = declared.get("in_vocabulary") or {}
+        published = record.get("published") or {}
+        if published.get("source"):
+            report.sources.add(published["source"])
+        in_vocabulary = published.get("in_vocabulary") or {}
         dataset = str(record.get("dataset_title") or "")
 
         for dimension in PUBLISHED_FIELDS:
-            values = declared.get(dimension)
+            values = published.get(dimension)
             label = field_label(record, dimension)
             rec = recommendation(values, label)
             report.counts[(dataset, dimension, rec)] += 1
@@ -247,12 +247,12 @@ TSV_HEADER = (
 
 
 def render_tsv(report: ComparisonReport) -> str:
-    """The flat per-file table: one row per declared (file, dimension).
+    """The flat per-file table: one row per published (file, dimension).
 
     The shape the retired pipeline's ``classification_results_*.tsv`` had — the
     published beside inferred, per file — which the move to per-field JSON lost. Only
-    declared files appear: a row for each of the other ~697k files would say that
-    neither side declared anything, or that only we did, which the counts already say.
+    files with a published value appear: a row for each of the other ~697k would say that
+    neither side has a value, or that only inference does, which the counts already say.
 
     Led by the identity ``gather`` deduplicated on, because name and dataset do not
     identify a file: 226,416 names in this corpus appear on more than one record, and
@@ -368,7 +368,7 @@ def render_report(report: ComparisonReport) -> str:
         f"Repository: {sources} · run `{report.run_dir.name}` · {report.files:,} files",
         "",
         f"**{report.published_files:,} files have a published value**, across "
-        f"{sum(report.published_value_counts.values()):,} file/dimension rows. For every other file the",
+        f"{len(report.rows):,} file/dimension rows. For every other file the",
         "repository publishes nothing for these dimensions.",
         "",
         "Nothing here changes a classification: each file's inferred value is what the rule engine",
@@ -398,7 +398,9 @@ def render_report(report: ComparisonReport) -> str:
         "## Vocabulary coverage",
         "",
         f"**{distinct_unsayable} of {distinct} distinct published values have no term in the schema "
-        f"vocabulary**, carried by {files_unsayable:,} file/dimension rows.",
+        f"vocabulary**, carried by {files_unsayable:,} published values.",
+        "Counted per value, not per row, so a cell publishing two values contributes two — which is the",
+        f"right denominator for a mapping table. There are {len(report.rows):,} file/dimension rows.",
         "Each is a value mapping that is owed (#414); its row count is what that mapping is worth.",
         "",
         *_vocabulary_table(report),

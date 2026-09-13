@@ -31,7 +31,8 @@ so ``_build_record`` and the work-list steps read them uniformly regardless of
 stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
 published values (#424), not identity and not classifier input — for the same
 reason: ``_build_record`` reads them off either stream without asking which it has,
-and a record that failed the input contract declares whatever it declares.
+and a record that failed the input contract is still one the repository publishes
+values for.
 
 The module also holds the two write-side dataclasses the pipeline serializes at
 its output boundary, which follow the same frozen / field-order-is-output-order /
@@ -47,20 +48,19 @@ from typing import Any
 from .file_name import FileName
 from .schema_vocab import value_in_vocabulary
 
-# The two dimensions AnVIL declares on a file of its own accord, in the order the
-# ``declared`` block emits them. Not the classifier's input and not its answer: the
-# published output, what AnVIL publishes today (#424). Two of the five
-# CLASSIFICATION_FIELDS, deliberately not derived from that tuple — it is the set
-# Azul's file index happens to carry, and it moves when Azul moves, not when our
-# dimensions do.
+# The two dimensions the repository publishes of its own accord, in the order the
+# ``published`` block emits them. Not the classifier's input and not its answer: the
+# published output (#424). Two of the five CLASSIFICATION_FIELDS, deliberately not
+# derived from that tuple — it is the set the repository's file index happens to carry,
+# and it moves when the repository moves, not when our dimensions do.
 PUBLISHED_FIELDS = ("data_modality", "reference_assembly")
 
 
 def published_from(record: dict, source: str | None) -> dict | None:
-    """The ``declared`` block for one raw input record (contract 7.7's one-liner).
+    """The ``published`` block for one raw input record (contract 7.7's one-liner).
 
-    The form every producer calls, so a producer states *which record* it is declaring
-    for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
+    The form every producer calls, so a producer states *which record* it is building
+    the block for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
     what makes that tuple authoritative: a producer cannot read a stale subset of the
     dimensions, and adding a third one does not touch a single call site.
 
