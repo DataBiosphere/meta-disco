@@ -17,7 +17,7 @@ from pathlib import Path
 
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import declared_from
+from meta_disco.records import published_from
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -81,7 +81,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 # run concluded (#424). Every producer of a run must write it or the
                 # comparison silently under-reports: this catch-all alone holds 5,817
                 # of the corpus's 11,231 declared files.
-                "declared": declared_from(rec, source),
+                "published": published_from(rec, source),
             }
         )
 

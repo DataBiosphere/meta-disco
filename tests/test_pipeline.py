@@ -482,8 +482,9 @@ class TestPipelineRun:
         assert out.file_name == "123"
         assert out.file_format == ""
         assert isinstance(out.file_name, str) and isinstance(out.file_format, str)
-        # Nothing was declared, so the envelope carries the key with no block (#424).
-        assert out.declared is None
+        # The repository publishes nothing for it, so the envelope carries the key with
+        # no block (#424).
+        assert out.published is None
 
     @pytest.mark.parametrize("workers", [1, 2])
     def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
@@ -569,7 +570,7 @@ class TestPipelineRun:
             "md5sum",
             "file_size",
             "file_format",
-            "declared",
+            "published",
             "dataset_title",
             "classifications",
             "entry_id",

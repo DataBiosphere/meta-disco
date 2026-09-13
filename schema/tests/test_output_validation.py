@@ -464,73 +464,73 @@ def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validato
     assert report.results, "a date-only fetched_at should have failed"
 
 
-# --- Declared, the incumbent block (#424) ----------------------------------------
+# --- Published, the repository's own values (#424) --------------------------------
 #
-# The golden fixture carries `declared: null` on every record, because those fixtures
-# declare nothing — so the populated shape, which is the one all 11,231 declared
-# records in the corpus actually take, would otherwise reach no gate at all. A wrong
-# range, a lost `multivalued`, or a malformed `in_vocabulary` would pass CI while
-# every real declared record used that path.
+# The golden fixture carries `published: null` on every record, because those fixtures
+# have no published values — so the populated shape, which is the one all 11,231 files
+# with a published value actually take, would otherwise reach no gate at all. A wrong
+# range, a lost `multivalued`, or a malformed `in_vocabulary` would pass CI while every
+# real record used that path.
 
 
-def _record_with(declared):
-    """A minimal valid ClassificationRecord carrying `declared`."""
+def _record_with(published):
+    """A minimal valid ClassificationRecord carrying `published`."""
     ok = {"value": None, "status": "not_classified", "evidence": []}
     return {
         "md5sum": "a" * 32,
         "file_name": "IGVFFI0000TEST.bam",
         "classifications": dict.fromkeys(DIMENSION_CLASS, ok),
-        "declared": declared,
+        "published": published,
     }
 
 
-def test_a_populated_declared_block_validates(validator):
+def test_a_populated_published_block_validates(validator):
     # The shape the pipeline writes: lists on both dimensions, a source, and the
-    # vocabulary subset — here empty, as it is for every declared value in the corpus.
-    declared = {
+    # vocabulary subset — here empty, as it is for every published value in the corpus.
+    published = {
         "source": "anvil/anvil15",
         "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
         "reference_assembly": ["GRCm39"],
         "in_vocabulary": {"data_modality": [], "reference_assembly": []},
     }
-    report = validator.validate(_record_with(declared), target_class="ClassificationRecord")
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
     assert not report.results, [r.message for r in report.results]
 
 
-def test_a_declared_block_validates_with_one_dimension_silent(validator):
-    # Null on a dimension AnVIL declared nothing for, and that dimension absent from
-    # in_vocabulary — the most common populated shape (4,696 reference_assembly rows).
-    declared = {
+def test_a_published_block_validates_with_one_dimension_absent(validator):
+    # Null on a dimension the repository publishes nothing for, and that dimension
+    # absent from in_vocabulary — the most common populated shape (4,696 rows).
+    published = {
         "source": "anvil/anvil15",
         "data_modality": None,
         "reference_assembly": ["GRCh38 + Gencode40"],
         "in_vocabulary": {"reference_assembly": []},
     }
-    report = validator.validate(_record_with(declared), target_class="ClassificationRecord")
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
     assert not report.results, [r.message for r in report.results]
 
 
-def test_a_declared_block_validates_when_a_value_is_in_vocabulary(validator):
+def test_a_published_block_validates_when_a_value_is_in_vocabulary(validator):
     # Empty in_vocabulary lists are today's corpus-wide state, so the non-empty branch
     # needs its own case or the day #414 lands a term is the day this is first exercised.
-    declared = {
+    published = {
         "source": "anvil/anvil15",
         "data_modality": None,
         "reference_assembly": ["GRCh38"],
         "in_vocabulary": {"reference_assembly": ["GRCh38"]},
     }
-    report = validator.validate(_record_with(declared), target_class="ClassificationRecord")
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
     assert not report.results, [r.message for r in report.results]
 
 
-def test_the_declared_gate_rejects_a_scalar_where_a_list_belongs(validator):
+def test_the_published_gate_rejects_a_scalar_where_a_list_belongs(validator):
     # Proves the gate bites on the shape that matters. A pre-#424 snapshot spells these
     # as scalars; the input contract no longer models them (#424 — they are not input),
     # so this schema is the only thing that would catch one reaching the output.
-    declared = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": "GRCh38"}
-    report = validator.validate(_record_with(declared), target_class="ClassificationRecord")
+    published = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": "GRCh38"}
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
     # Assert it fails *because of* the shape, not some unrelated reason — otherwise a
     # regression that stopped enforcing `multivalued` could leave this test green.
-    assert any("declared.reference_assembly" in r.message for r in report.results), (
-        f"expected a failure citing the scalar declaration, got: {[r.message for r in report.results]}"
+    assert any("published.reference_assembly" in r.message for r in report.results), (
+        f"expected a failure citing the scalar published value, got: {[r.message for r in report.results]}"
     )

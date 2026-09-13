@@ -23,7 +23,7 @@ def valid_record(**overrides):
         "dataset_id": "d1",
         "dataset_title": "A Dataset",
         "is_supplementary": False,
-        # The incumbent declaration. Not slots of the contract (#424 — they are not
+        # The published values. Not slots of the contract (#424 — they are not
         # input), so they are here because a real record carries them and the
         # validator must go on ignoring them, not because validity depends on them.
         "data_modality": None,

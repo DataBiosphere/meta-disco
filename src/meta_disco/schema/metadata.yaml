@@ -11,7 +11,7 @@ description: >-
 
   It models what classification consumes, and nothing else. AnVIL's own declared
   `data_modality` / `reference_assembly` are therefore deliberately **not** slots
-  here (#424): they are not input, they are the incumbent output — the answer
+  here (#424): they are not input, they are the published output — the answer
   AnVIL publishes today, which this project diffs its own answer against. They
   were modeled here until #424 and dropped one step before classification, which
   is the bug that issue describes; modeling them as input is what invited it.

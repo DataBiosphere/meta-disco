@@ -68,7 +68,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-bam-1",
         "file_format": ".bam",
         "file_name": "sample.rnaseq.bam",
@@ -174,7 +174,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-bed-1",
         "file_format": ".bed.gz",
         "file_name": "sample.regions.bed.gz",
@@ -294,7 +294,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-fasta-1",
         "file_format": ".fasta",
         "file_name": "hapdup_contigs.hap1.fasta",
@@ -387,7 +387,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-fastq-1",
         "file_format": ".fastq.gz",
         "file_name": "sample.fastq.gz",
@@ -486,7 +486,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-gfa-1",
         "file_format": ".gfa.gz",
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
@@ -572,7 +572,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-tar-1",
         "file_format": ".tar",
         "file_name": "chr5.136400001_136500001.tar",
@@ -658,7 +658,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "declared": null,
+        "published": null,
         "entry_id": "g-vcf-1",
         "file_format": ".vcf.gz",
         "file_name": "sample.vcf.gz",

@@ -22,7 +22,7 @@ from meta_disco.models import (
     status_for_value,
 )
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import declared_from
+from meta_disco.records import published_from
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -212,12 +212,12 @@ def propagate_to_index_files(
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
                 "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
-                # The incumbent declaration for the index file itself, not the
+                # The published values for the index file itself, not the
                 # parent's (#424). An index file is where the two most often both
                 # speak — AnVIL carries the set's modality on a .bai, where this
                 # project answers not_applicable — so dropping it here would hide
                 # exactly the rows the comparison exists to surface.
-                "declared": declared_from(f, source),
+                "published": published_from(f, source),
             }
 
             if result["data_modality"] not in _sentinels:
@@ -356,7 +356,7 @@ def propagate_to_index_files(
                 "classifications": classifications,
                 # Carried through the reshape, not rebuilt: the intermediate record
                 # above already holds the index file's own declaration (#424).
-                "declared": r["declared"],
+                "published": r["published"],
             }
         )
 

@@ -130,23 +130,24 @@ evidence}` entry — plus the controlled vocabulary:
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;
     recording which catalog a run enhances is #404, and is not built.
-  - The incumbent (contract section 7, built by #424) lives in each output record's
-    `declared` block. `records.build_declared` is its single construction site, and
-    it is reached two ways: `ClassifyPipeline` through `OutputRecord.from_work_item`
-    (which reads the fields off the typed work item), and the four standalone
-    producers through `records.declared_from(record, source)`. Both drive the field
-    list from `DECLARED_FIELDS`, so no call site can read a stale subset. AnVIL's two
-    declared fields are deliberately absent from the input contract
-    (`schema/metadata.yaml`) — they are not input. Contract 7.7 binds *every*
-    producer, not just `ClassifyPipeline`: the four standalone scripts build their
-    output dicts by hand, and `classify_index_files` reshapes an intermediate record
-    into the output shape, so `declared` must survive that step too.
-    `tests/test_incumbent.py::TestEveryProducerCarriesTheDeclaration` sweeps them;
-    add a new producer there. The sweep exists because a run has three record shapes,
-    not one — #204's envelope covers only the seven pipeline types, and unifying the
-    other four on `OutputRecord` is #429, which would make the sweep unnecessary. `make incumbent-report` renders the diff — it is the
-    *only* AnVIL comparison, having replaced `generate_validation_report`'s
-    `compare_anvil` (#424), whose two value maps are #414's seed.
+  - Published values (contract section 7, built by #424) live in each output record's
+    `published` block — what the repository publishes for that file today, beside what
+    the run inferred. `records.build_published` is its single construction site,
+    reached two ways: `ClassifyPipeline` through `OutputRecord.from_work_item` (off the
+    typed work item), and the four standalone producers through
+    `records.published_from(record, source)`. Both drive the field list from
+    `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
+    deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
+    input. Contract 7.7 binds *every* producer, and
+    `tests/test_published_comparison.py::TestEveryProducerCarriesTheDeclaration` sweeps
+    them; add a new producer there. The sweep exists because a run has three record
+    shapes, not one — #204's envelope covers only the seven pipeline types, and
+    unifying the other four on `OutputRecord` is #429, which would make it unnecessary.
+    `make published-comparison` renders the report. It is the *only* comparison against
+    a repository's own values, having replaced `generate_validation_report`'s
+    `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is
+    repository-neutral on purpose (contract 7.11): `add` / `keep` / `review` / `none`
+    name what a data team should do, never who publishes.
 
 ## Surprises
 

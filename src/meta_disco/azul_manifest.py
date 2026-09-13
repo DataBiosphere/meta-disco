@@ -397,7 +397,7 @@ def _first(cell: str) -> str | None:
 def _declared(cell: str) -> list[str] | None:
     """Every value of a ``||``-joined multi-value cell, or None for an empty cell.
 
-    The incumbent declaration transcribed as Azul published it (#424): a list
+    The published values transcribed as Azul published it (#424): a list
     where Azul published a list, and each value exactly as it was written — no
     mapping, no normalization, no casefolding. Splitting on the full ``" || "``
     separator rather than ``"||"`` is what keeps a value free of the separator's
@@ -425,7 +425,7 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
 
     Four fields read an empty cell as ``None``, and they split a multi-valued one
     two different ways. ``data_modality`` and ``reference_assembly`` are the
-    incumbent declaration — the values AnVIL publishes today, which classification
+    published values — the values AnVIL publishes today, which classification
     reads as nothing and the output carries as ``declared`` (#424) — and are
     transcribed as the full list (:func:`_declared`). ``organism_type`` and
     ``phenotypic_sex`` still keep element zero (:func:`_first`), which nothing

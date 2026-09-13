@@ -29,7 +29,7 @@ Both classes expose the same six identity attributes (``file_name``,
 ``file_format``, ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``),
 so ``_build_record`` and the work-list steps read them uniformly regardless of
 stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
-incumbent declaration (#424), not identity and not classifier input — for the same
+published values (#424), not identity and not classifier input — for the same
 reason: ``_build_record`` reads them off either stream without asking which it has,
 and a record that failed the input contract declares whatever it declares.
 
@@ -49,18 +49,18 @@ from .schema_vocab import value_in_vocabulary
 
 # The two dimensions AnVIL declares on a file of its own accord, in the order the
 # ``declared`` block emits them. Not the classifier's input and not its answer: the
-# incumbent output, what AnVIL publishes today (#424). Two of the five
+# published output, what AnVIL publishes today (#424). Two of the five
 # CLASSIFICATION_FIELDS, deliberately not derived from that tuple — it is the set
 # Azul's file index happens to carry, and it moves when Azul moves, not when our
 # dimensions do.
-DECLARED_FIELDS = ("data_modality", "reference_assembly")
+PUBLISHED_FIELDS = ("data_modality", "reference_assembly")
 
 
-def declared_from(record: dict, source: str | None) -> dict | None:
+def published_from(record: dict, source: str | None) -> dict | None:
     """The ``declared`` block for one raw input record (contract 7.7's one-liner).
 
     The form every producer calls, so a producer states *which record* it is declaring
-    for and nothing else. Reading the field list from :data:`DECLARED_FIELDS` here is
+    for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
     what makes that tuple authoritative: a producer cannot read a stale subset of the
     dimensions, and adding a third one does not touch a single call site.
 
@@ -68,42 +68,73 @@ def declared_from(record: dict, source: str | None) -> dict | None:
     (#424 — they are not input), so no validation has run on them and no caller
     guarantee covers them.
     """
-    return build_declared({field: record.get(field) for field in DECLARED_FIELDS}, source)
+    return build_published({field: record.get(field) for field in PUBLISHED_FIELDS}, source)
 
 
-def build_declared(values: dict[str, list[str] | None], source: str | None) -> dict | None:
-    """The ``declared`` block for one file, or None when nothing was declared.
+def build_published(values: dict[str, Any], source: str | None) -> dict | None:
+    """The ``published`` block for one file, or None when the repository publishes none.
 
-    Carries the incumbent declaration into the output (#424): the values AnVIL
-    publishes for this file today, transcribed exactly as Azul published them and
-    as a list wherever Azul published a list. This is not a claim and nothing
-    resolves against it — classification does not read it, and a file's ``value``
-    is whatever inference concluded, declared block or no. It exists so the output
-    can be diffed against the incumbent, and precisely because a declaration may
-    produce nothing else: ``GRCm39`` is a term this project has no word for, so
-    without ``declared`` those 220 values would appear in the output nowhere at all.
+    Carries a repository's own values into the output (#424): what it publishes for
+    this file today, transcribed exactly as written and as a list wherever it
+    published a list. This is not a claim and nothing resolves against it —
+    classification does not read it, and a file's ``value`` is whatever inference
+    concluded, block or no. It exists so the two can be compared per file, and
+    precisely because a published value may produce nothing else: ``GRCm39`` is a term
+    this project has no word for, so without this block those 220 values would appear
+    in the output nowhere at all.
 
-    ``in_vocabulary`` names, per declared slot, the subset of that slot's declared
-    values that *are* terms in the slot's enum. An empty list means the incumbent
-    said something this project's vocabulary cannot say — which is the case for
-    every declared value in the corpus today, and is what makes the gap countable
-    from the output rather than asserted. A slot that declared nothing is absent
-    from the map rather than carrying an empty list, so the map's keys are exactly
-    the slots that spoke.
+    ``in_vocabulary`` names, per dimension, the subset of that dimension's published
+    values that *are* terms in its enum. An empty list means the repository published
+    something this vocabulary cannot say — the case for every published value in the
+    corpus today, and what makes the gap countable from the output rather than
+    asserted. A dimension the repository publishes nothing for is absent from the map
+    rather than carrying an empty list, so the map's keys are exactly the dimensions it
+    speaks to.
 
-    Returns None — and the envelope emits ``"declared": null`` — when neither slot
-    declared anything, which is ~98% of the corpus.
+    Returns None — and the envelope emits ``"published": null`` — when the repository
+    publishes nothing for either dimension, which is ~98% of the corpus.
+
+    **Shape is checked here because nothing else checks it.** These two fields are
+    outside the input contract (#424 — they are not input), so ``validate_metadata``
+    passes them through unexamined and no caller guarantee covers them. ``values`` is
+    typed ``Any`` for that reason rather than ``list[str] | None``: the looser type is
+    the true one, since a caller reads these straight off a raw record and can promise
+    nothing about them — this function is where the narrowing actually happens, and
+    annotating the promise instead of the check would only hide that. Both bad shapes
+    are quiet without this guard: a bare string is *iterable*, so it would be walked
+    character by character and report ``GRCh38`` — a real term — as one this vocabulary
+    lacks, then render as ``G || R || C || h || 3 || 8``; a non-iterable such as an int
+    would raise a bare ``TypeError`` from the comprehension below, inside a
+    classification worker, mid-run. Refusing both here names the field and the value
+    instead. This is not support for the pre-#424 scalar spelling: such a snapshot is
+    refused, loudly, rather than silently mis-read.
     """
-    declared = {field: values.get(field) for field in DECLARED_FIELDS}
-    if not any(declared.values()):
+    published = {}
+    for field in PUBLISHED_FIELDS:
+        value = values.get(field)
+        if value is not None and not isinstance(value, list):
+            # The str case has a known cause worth naming; any other type is drift with
+            # no story, so it gets no invented one.
+            hint = (
+                " A snapshot built before #424 spells these as scalars; rebuild it with"
+                " scripts/download_anvil_manifest.py."
+                if isinstance(value, str)
+                else ""
+            )
+            raise ValueError(f"published {field} is {type(value).__name__}, not a list: {value!r}.{hint}")
+        if value is not None and not all(isinstance(v, str) for v in value):
+            raise ValueError(f"published {field} holds a non-string value: {value!r}")
+        published[field] = value
+
+    if not any(published.values()):
         return None
     return {
         "source": source,
-        **declared,
+        **published,
         "in_vocabulary": {
-            field: [value for value in values if value_in_vocabulary(field, value)]
-            for field, values in declared.items()
-            if values
+            field: [value for value in field_values if value_in_vocabulary(field, value)]
+            for field, field_values in published.items()
+            if field_values
         },
     }
 
@@ -148,7 +179,7 @@ class ClassifierRecord:
     streams from it instead. Not a classifier-relevant field, so its absence never
     diverts a record.
 
-    ``data_modality`` / ``reference_assembly`` are the incumbent declaration (#424),
+    ``data_modality`` / ``reference_assembly`` are the published values (#424),
     carried from the input record to the output's ``declared`` block. Nothing on the
     classify path reads either one — they are not evidence, not a claim and not a
     tier participant; they are what AnVIL publishes today, kept so the run's answer
@@ -184,7 +215,7 @@ class ClassifierRecord:
 
         The two declared dimensions are read with ``.get`` for a stronger reason than
         optionality: they are not slots of the input contract at all (#424 — they are
-        not input, they are the incumbent output), so no validation has run on them
+        not input, they are the published output), so no validation has run on them
         and no caller guarantee covers them. A record that carries neither reads as
         ``None`` on both, exactly like one from a source that declares nothing.
         """
@@ -215,12 +246,12 @@ class InvalidRecord:
     the record carried them, since a ``validation_failed`` row may carry their
     drifted (non-string) types.
 
-    It carries the incumbent declaration too (#424), and is typed ``Any`` for it
+    It carries the published values too (#424), and is typed ``Any`` for it
     rather than ``list[str] | None``: the two are outside the input contract, so
     nothing has checked their shape on this stream any more than on the other, and
     this stream is the one built from records already known to be drifted. A file
     AnVIL declares a modality for does not stop being declared by failing our
-    contract on ``file_size``, so the row still reports what the incumbent says.
+    contract on ``file_size``, so the row still reports what the repository's published values says.
     """
 
     file_name: str
@@ -277,13 +308,13 @@ class OutputRecord:
     identity fields, which is what lets ``output_utils.iter_records``, ``field_label``
     and ``corpus_diff`` read them uniformly. Unifying the four on this record is #429.
 
-    ``declared`` is the incumbent block (#424) — what AnVIL publishes for this file
+    ``declared`` is the repository's published values block (#424) — what AnVIL publishes for this file
     today, beside what this run concluded. It is ``None`` on most records and on the
-    whole single-file path, and is emitted as ``"declared": null`` rather than
+    whole single-file path, and is emitted as ``"published": null`` rather than
     omitted, so the envelope keeps one shape for every row (the reason ``RunMetadata``
     still emits a retired ``dropped: 0``). It is not part of ``classifications`` and
     never merges into it: the dimensions block is this project's answer, and mixing
-    the incumbent into it is the confusion #424 exists to undo.
+    the repository's published values into it is the confusion #424 exists to undo.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
@@ -309,7 +340,7 @@ class OutputRecord:
     dataset_title: Any
     classifications: dict
     entry_id: Any
-    declared: dict | None = None
+    published: dict | None = None
 
     @classmethod
     def from_work_item(
@@ -324,11 +355,11 @@ class OutputRecord:
         docstring), so it is agnostic to which stream produced ``item`` — and the two
         declared dimensions, which both streams expose for that same reason.
 
-        ``source`` names the incumbent the declaration was read from (#424), and is
+        ``source`` names the repository's published values the declaration was read from (#424), and is
         the caller's to supply because it is a fact about the run's input snapshot,
         not about this record: the pipeline reads it from the input envelope. ``None``
         where the input carried no envelope to name one, which is honest — better an
-        unnamed incumbent than a guessed catalog.
+        unnamed published than a guessed catalog.
         """
         return cls(
             file_name=item.file_name,
@@ -338,7 +369,7 @@ class OutputRecord:
             dataset_title=item.dataset_title,
             entry_id=item.entry_id,
             classifications=classifications,
-            declared=build_declared({field: getattr(item, field) for field in DECLARED_FIELDS}, source),
+            published=build_published({field: getattr(item, field) for field in PUBLISHED_FIELDS}, source),
         )
 
     @classmethod
@@ -357,7 +388,7 @@ class OutputRecord:
         the envelope's one canonical shape, which is why the single-file path's output
         carries the same eight keys as the batch path. ``declared`` is ``None`` for the
         same reason and one more: this path has no input record, so there is no
-        incumbent declaration to carry even in principle.
+        published values to carry even in principle.
         """
         return cls(
             file_name=file_name,

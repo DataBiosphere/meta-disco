@@ -13,7 +13,7 @@ _ENVELOPE_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
-    "declared",
+    "published",
 }
 
 _METADATA_KEYS = [

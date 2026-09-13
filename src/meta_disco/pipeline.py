@@ -74,43 +74,43 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 
-# The system publishing the incumbent declaration a run diffs against (#424). The
+# The system publishing the published values a run diffs against (#424). The
 # catalog generation is appended to it, giving e.g. "anvil/anvil15": AnVIL is who
 # publishes, the catalog is which generation of what it published.
-INCUMBENT_SYSTEM = "anvil"
+PUBLISHING_REPOSITORY = "anvil"
 
 
-def incumbent_source(metadata: dict) -> str | None:
-    """Name the incumbent an input snapshot's declarations came from, or None.
+def published_source(metadata: dict) -> str | None:
+    """Name the repository's published values an input snapshot's declarations came from, or None.
 
     Reads the catalog generation the snapshot recorded (``metadata.catalog``, written
     by ``azul_manifest.metadata_block``) and qualifies it with the publishing system,
-    so a ``declared`` block says *which* incumbent it carries rather than only that one
+    so a ``declared`` block says *which* published it carries rather than only that one
     exists — the distinction that matters the first time a second target appears.
 
     ``None`` when the input carried no envelope (an ``.ndjson`` load) or its envelope
     recorded no catalog (a snapshot pulled before #335 added it, such as the archived
     anvil14 one). Deliberately not defaulted to the current catalog: an unnamed
-    incumbent is a fact, and a guessed one is the drift #335 exists to catch.
+    published is a fact, and a guessed one is the drift #335 exists to catch.
     """
     catalog = metadata.get("catalog")
-    return f"{INCUMBENT_SYSTEM}/{catalog}" if isinstance(catalog, str) and catalog else None
+    return f"{PUBLISHING_REPOSITORY}/{catalog}" if isinstance(catalog, str) and catalog else None
 
 
 def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[str | None, list[dict]]:
-    """:func:`load_classifiable_records`, plus the incumbent the snapshot names.
+    """:func:`load_classifiable_records`, plus the repository's published values the snapshot names.
 
-    The form every classification producer calls. It returns the resolved incumbent
+    The form every classification producer calls. It returns the resolved published
     rather than the raw envelope because that is the only thing any caller wants from
-    the envelope — and because returning the envelope made naming the incumbent a
+    the envelope — and because returning the envelope made naming the repository's published values a
     *second* line each producer had to remember, which is precisely the omission
     contract 7.7 exists to catch. Resolved here, a producer cannot forget it.
 
     Same single parse, same exclusion, same ``excluded_files.json`` write, and the same
     guarantee that every returned element is a ``dict``.
 
-    The incumbent is ``None`` for an ``.ndjson`` input, which carries no envelope, and
-    for an envelope that names no catalog (see :func:`incumbent_source`).
+    The published value is ``None`` for an ``.ndjson`` input, which carries no envelope, and
+    for an envelope that names no catalog (see :func:`published_source`).
     """
     metadata, raw = load_snapshot(input_path)
     records, excluded = partition_records(raw)
@@ -118,7 +118,7 @@ def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) ->
         write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:
         print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
-    return incumbent_source(metadata), records
+    return published_source(metadata), records
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -316,8 +316,8 @@ class ClassifyPipeline:
         self.skip_cached = skip_cached
         # Set by _load_input from the input envelope, so it is known before the first
         # record is built. None until then, and None afterwards for an input that
-        # named no catalog (see incumbent_source).
-        self.incumbent_source: str | None = None
+        # named no catalog (see published_source).
+        self.published_source: str | None = None
 
     def run(self) -> list[dict]:
         """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
@@ -445,11 +445,11 @@ class ClassifyPipeline:
         which no orchestrator wraps.
 
         Reads the snapshot form so the input envelope is parsed in the same pass, and
-        records which incumbent this run's ``declared`` blocks came from (#424). That
+        records which published this run's ``declared`` blocks came from (#424). That
         is a side effect on ``self``, done here because this is where the envelope is
         in hand and every record built afterwards needs the answer.
         """
-        self.incumbent_source, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
+        self.published_source, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
         return records
 
     def _filter_records(self, records: list) -> list[dict]:
@@ -633,10 +633,10 @@ class ClassifyPipeline:
         path — matching what ``classify_single`` writes for the single-file path (#204).
 
         An instance method rather than a static one because the ``declared`` block
-        names the incumbent it was read from, which is a fact about this run's input
+        names the repository's published values it was read from, which is a fact about this run's input
         snapshot (#424) and so lives on the pipeline, not on the record.
         """
-        return OutputRecord.from_work_item(item, classifications, source=self.incumbent_source)
+        return OutputRecord.from_work_item(item, classifications, source=self.published_source)
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""

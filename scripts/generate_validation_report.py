@@ -7,8 +7,8 @@ catalogs) and reports agreement, discrepancies, and coverage gaps.
 **The AnVIL comparison moved out of here (#424.)** This script used to score our
 values against AnVIL's declared `data_modality`/`reference_assembly` through two
 hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. That comparison
-is now `meta_disco.incumbent` / `make incumbent-report`, which reports the same two
-dimensions per file against the incumbent AnVIL publishes. Two reports scoring the
+is now `meta_disco.published_comparison` / `make published-comparison`, which reports the same two
+dimensions per file against the repository's published values AnVIL publishes. Two reports scoring the
 same files by different rules is the drift `docs/claims-contract.md` exists to stop,
 so there is one.
 
@@ -88,13 +88,13 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
 SENTINELS = {"not_classified", "not_applicable", None}
 
 
-def compare_field(our_value, truth_value) -> str:
+def compare_field(inferred_value, truth_value) -> str:
     """Compare a single field value against ground truth.
 
     Returns one of: agree, discrepancy, we_inferred, not_classified, no_truth
     """
     has_truth = truth_value is not None and truth_value != ""
-    classified = our_value not in SENTINELS
+    classified = inferred_value not in SENTINELS
 
     if not has_truth:
         if classified:
@@ -105,7 +105,7 @@ def compare_field(our_value, truth_value) -> str:
     if not classified:
         return "not_classified"  # we couldn't classify but truth exists
 
-    if our_value == truth_value:
+    if inferred_value == truth_value:
         return "agree"
 
     return "discrepancy"
@@ -164,17 +164,17 @@ def compare_source(
             raw_truth = truth_rec.get(truth_field)
             mapped_truth = value_map.get(raw_truth, raw_truth) if raw_truth else None
 
-            our_value = ours.get(dim)
-            outcome = compare_field(our_value, mapped_truth)
+            inferred_value = ours.get(dim)
+            outcome = compare_field(inferred_value, mapped_truth)
 
             results["dimensions"][dim][outcome] += 1
 
             if outcome == "discrepancy":
-                cat_key = f"{our_value} vs {mapped_truth}"
+                cat_key = f"{inferred_value} vs {mapped_truth}"
                 cats = results["dimensions"][dim]["discrepancy_categories"]
                 if cat_key not in cats:
                     cats[cat_key] = {
-                        "ours": our_value,
+                        "ours": inferred_value,
                         "truth_mapped": mapped_truth,
                         "count": 0,
                         "example": key,

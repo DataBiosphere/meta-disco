@@ -1,15 +1,15 @@
 # Corpus comparison
 
-Generated 2026-09-12 15:45 by `scripts/compare_corpus.py` (issue #335).
+Generated 2026-09-12 19:30 by `scripts/compare_corpus.py` (issue #335).
 
-Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_152414`.
+Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_190744`.
 
 ## Input snapshots
 
 | | file | catalog | pulled | files |
 |---|---|---|---|---:|
 | old | `data/anvil/archive/anvil14_20260729/anvil_files_metadata.json` | (unrecorded) | 2026-07-29T23:37:42.260488 | 733,877 |
-| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-12T12:42:14.765460 | 708,088 |
+| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-12T18:03:48.061280 | 708,088 |
 
 ### Parity by md5, per dataset
 

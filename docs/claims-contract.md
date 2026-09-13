@@ -120,19 +120,20 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 4. Sources and resolution
 
-4.1 There are five input kinds:
+4.1 There are four input kinds. The numbering runs to five because kind 2 was retired and its
+    number is kept, so citations elsewhere stay valid:
     1. inference (filename, extension, header, content, file size, and signals already resolved)
-    2. canonical repository metadata (AnVIL harmonized fields)
+    2. ~~canonical repository metadata (AnVIL harmonized fields)~~ — **retired, see below**
     3. non-canonical repository metadata (submitter tables)
     4. external repository (HPRC Data Explorer, ENA, IGSR)
     5. curator
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
-    **Kind 2 is retired (#424).** The AnVIL harmonized fields are not a source with an opinion about our
-    files — they are the incumbent output, the answer AnVIL publishes today, which ours is diffed against.
-    A target's current state is not an input to producing it. Four input kinds remain; the numbering is kept
-    so citations elsewhere stay valid. See the Open section for the full reasoning.
+    **Why kind 2 is retired (#424).** A repository's own harmonized fields are not a source with an
+    opinion about our files — they are its published output, the answer its users see today, which ours is
+    compared against. A target's current state is not an input to producing it. Section 7 is what replaced
+    it; the Open section carries the full reasoning.
 
     A source is an input kind only if it says something about **our files**. A table that describes the world —
     an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
@@ -236,55 +237,63 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      is the memory ceiling of #374, and the reconciled artifact is larger still. 6.5 is about the record's
      schema, not its container, so nothing is lost by the change.
 
-## 7. The incumbent
+## 7. Published values
 
 Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it.
 
-7.1 AnVIL's own `data_modality` and `reference_assembly` are the **incumbent output**, not an input.
-    They are the answer the AnVIL Explorer publishes right now, and a target's current state is not an input
+Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
+depends on that, and a second repository needs no change to these assertions.
+
+7.1 The values a repository publishes for a dimension this project infers are its **published output**,
+    not an input. They are the answer its users see today, and a target's current state is not an input
     to producing it. This is why 4.1's kind 2 is retired.
 
-7.2 The incumbent is **carried, never consumed**. It produces no claim, competes at no tier, and changes no
-    value. A run with the incumbent present classifies identically to one without it — the same guarantee
+7.2 Published values are **carried, never consumed**. They produce no claim, compete at no tier, and
+    change no value. A run with them present classifies identically to one without — the same guarantee
     6.6 makes about a run with no sources.
 
-7.3 It is carried **verbatim**: the values as the publisher wrote them, a list wherever the publisher
-    published a list. Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing
-    a wrong answer, and 1.4's transcribe-verbatim rule governs the incumbent as it governs evidence.
+7.3 They are carried **verbatim**: as the repository wrote them, a list wherever it published a list.
+    Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
+    answer, and 1.4's transcribe-verbatim rule governs them as it governs evidence.
 
-7.4 It is carried **on the record**, in a `declared` block beside `classifications`, and not merged into it.
-    Nesting is what keeps 7.2 legible: the dimensions block is our answer and the declared block is theirs.
+7.4 They are carried **on the record**, in a `published` block beside `classifications`, and not merged
+    into it. Nesting is what keeps 7.2 legible: one block is what this project inferred, the other is
+    what the repository publishes.
 
-7.5 The incumbent is carried **even when it yields nothing else**. A declared value our vocabulary has no
-    word for — `GRCm39` — produces no claim under 3.7, so without this block it would appear in the output
-    nowhere at all, and the gap it represents would be unmeasurable from the output.
+7.5 They are carried **even when they yield nothing else**. A published value this vocabulary has no
+    word for — `GRCm39` — produces no claim under 3.7, so without the block it would appear in the
+    output nowhere at all, and the gap it represents would be unmeasurable from the output.
 
-7.6 Whether a declared value is a term in our vocabulary is **recorded per file**, not inferred by a reader.
-    Today no declared value in the corpus is one, which is what makes #414's translation rows countable
-    rather than asserted.
+7.6 Whether a published value is a term in this vocabulary is **recorded per file**, not inferred by a
+    reader. Today no published value in the corpus is one, which is what makes #414's value mappings
+    countable rather than asserted.
 
-7.7 **Every producer of a run writes it.** This is 7.2's twin: a producer that omits it does not fail, it
-    under-reports, and a missing declaration is indistinguishable from a file the publisher said nothing
-    about. The claim is about the whole run, exactly as #376's exclusion claim is.
+7.7 **Every producer of a run writes the block.** This is 7.2's twin: a producer that omits it does not
+    fail, it under-reports, and a missing block is indistinguishable from a file the repository
+    publishes nothing for. The claim is about the whole run, exactly as #376's exclusion claim is.
 
-7.8 The diff against the incumbent is a stage **after** resolution, and its shape does not depend on how many
-    sources feed it: `sources -> reconcile -> our value -> diff against incumbent`. With one source there is
-    nothing to reconcile, and the diff is the whole of it.
+7.8 The comparison is a stage **after** resolution, and its shape does not depend on how many sources
+    feed it: `sources -> reconcile -> inferred value -> compare against published`. With one source
+    there is nothing to reconcile, and the comparison is the whole of it.
 
-7.9 The diff **recommends; it does not adopt**. A recommendation that the incumbent should stand leaves our
-    value exactly as inference resolved it. Nothing here writes an answer.
+7.9 The comparison **recommends; it does not adopt**. A recommendation that the published value should
+    stand leaves the inferred value exactly as inference resolved it. Nothing here writes an answer.
 
-7.10 Agreement is only decidable **after mapping**. `GRCh38 + Gencode40` and `GRCh38` are the same assembly
-     and different strings, so until #414's translation table exists the diff names the value pair rather
-     than judging it. Guessing at equality would be 3.5's similarity matching by another route.
+7.10 Agreement is only decidable **after mapping**. `GRCh38 + Gencode40` and `GRCh38` are the same
+     assembly and different strings, so until #414's value mappings exist the comparison names the pair
+     rather than judging it. Guessing at equality would be 3.5's similarity matching by another route.
 
      To be exact about what does not exist: `generate_validation_report` carried two hand-written dicts,
      `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`, holding these very mappings, and scored agreement
      through them. They were script-local, carried no row ids, and were checked against no vocabulary, so
-     they are not a translation table under 3.8 and 5.4 — nothing could cite one as the rule behind a claim.
+     they are not a mapping table under 3.8 and 5.4 — nothing could cite one as the rule behind a claim.
      #424 removed that second comparison rather than leave two reports scoring the same files by different
-     rules, and recorded the five mappings in that script's docstring as #414's seed. So the absent thing is
-     a *reviewable, cited* mapping, not the knowledge of what maps to what.
+     rules, and recorded the five mappings in that script's docstring as #414's seed. So the absent thing
+     is a *reviewable, cited* mapping, not the knowledge of what maps to what.
+
+7.11 The vocabulary is **repository-neutral**, because the report is addressed to whichever repository's
+     data team reads it. `add` / `keep` / `review` / `none` are what that team should do; no recommendation
+     names a publisher. Only `source` does.
 
 ---
 
@@ -323,17 +332,17 @@ A line leaves this section when the assertion above it is enforced, not when it 
   input kind.** It was read — the downloader parsed both fields onto every record — and then dropped at
   `ClassifierRecord`, one step before classification, so the answer to the question as asked was "no". But
   the reframing matters more than the answer. The AnVIL harmonized fields are not a *source with an opinion*
-  about our files; they are the **incumbent output**, the answer the AnVIL Explorer publishes today and the
+  about our files; they are the **published output**, the answer the AnVIL Explorer shows today and the
   thing our answer is measured against. A target's current state is not an input to producing it.
 
   So 4.1 has four input kinds, not five — 1, 3, 4 and 5 — and 4.2 and 4.5 name them individually rather
   than as a range, because the range no longer describes them. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
   4.3-4.6 describe what happens when a second arrives. #424 does no reconciliation for that reason — one
-  source has nothing to reconcile with — and instead diffs inference against the incumbent and recommends,
+  source has nothing to reconcile with — and instead compares inference against the published values and recommends,
   which is a stage that sits *after* reconciliation and is unaffected by how many sources feed it:
-  `sources -> reconcile -> our value -> diff against incumbent`.
+  `sources -> reconcile -> inferred value -> compare against published`.
 
-  What #424 built is the carrying, not a claim: each record's `declared` block holds the incumbent verbatim,
+  What #424 built is the carrying, not a claim: each record's `published` block holds those values verbatim,
   produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
   by number across the issues, and a silent renumber would break every citation.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.

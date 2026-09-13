@@ -1,9 +1,9 @@
-"""The incumbent comparison: what AnVIL declares, beside what a run concluded (#424).
+"""The published comparison: what AnVIL declares, beside what a run concluded (#424).
 
 Covers the three joints the feature has: the declaration surviving from an input
-record into the output envelope (``records.build_declared``), the recommendation for
-one file and one dimension (``incumbent.recommendation``), and the report gathered
-over a run directory (``incumbent.gather``).
+record into the output envelope (``records.build_published``), the recommendation for
+one file and one dimension (``published.recommendation``), and the report gathered
+over a run directory (``published.gather``).
 """
 
 import json
@@ -11,21 +11,21 @@ import pathlib
 
 import pytest
 
-from meta_disco.incumbent import (
+from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
+from meta_disco.pipeline import published_source
+from meta_disco.published_comparison import (
     ADD,
-    COMPARE,
+    KEEP,
     MULTI_VALUE_SEP,
     NONE,
-    TAKE_AZUL,
+    REVIEW,
     gather,
     recommendation,
     render_report,
     render_tsv,
     spoke,
 )
-from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
-from meta_disco.pipeline import incumbent_source
-from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_declared
+from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_published
 from tests.metadata_fixtures import valid_record
 
 
@@ -34,7 +34,7 @@ def _entry(value=None, status=None):
     return {"value": value, "status": status or ("classified" if value else NOT_CLASSIFIED)}
 
 
-def _record(name, *, modality=None, assembly=None, declared=None, dataset="AnVIL_IGVF_Mouse_R1"):
+def _record(name, *, modality=None, assembly=None, published=None, dataset="AnVIL_IGVF_Mouse_R1"):
     """One output record as a run writes it."""
     return {
         "file_name": name,
@@ -42,7 +42,7 @@ def _record(name, *, modality=None, assembly=None, declared=None, dataset="AnVIL
         "entry_id": name,
         "dataset_title": dataset,
         "classifications": {"data_modality": _entry(modality), "reference_assembly": _entry(assembly)},
-        "declared": declared,
+        "published": published,
     }
 
 
@@ -54,7 +54,7 @@ def _write_run(run_dir, records):
 
 class TestBuildDeclared:
     def test_a_declaration_is_transcribed_verbatim_as_a_list(self):
-        block = build_declared(
+        block = build_published(
             {
                 "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
                 "reference_assembly": None,
@@ -67,10 +67,10 @@ class TestBuildDeclared:
         assert block["source"] == "anvil/anvil15"
 
     def test_a_file_that_declared_nothing_gets_no_block(self):
-        assert build_declared({"data_modality": None, "reference_assembly": None}, "anvil/anvil15") is None
+        assert build_published({"data_modality": None, "reference_assembly": None}, "anvil/anvil15") is None
 
     def test_in_vocabulary_names_only_the_values_that_are_terms(self):
-        block = build_declared(
+        block = build_published(
             {"data_modality": ["genomic", "single-nucleus ATAC-seq"], "reference_assembly": ["GRCm39"]}, None
         )
         assert block is not None
@@ -79,8 +79,8 @@ class TestBuildDeclared:
 
     def test_every_value_the_corpus_declares_today_is_outside_our_vocabulary(self):
         # The measured state at #424, and the reason the translation table (#414) is
-        # owed: not one incumbent value is a term this schema knows.
-        block = build_declared(
+        # owed: not one published value is a term this schema knows.
+        block = build_published(
             {
                 "data_modality": ["single-nucleus RNA sequencing assay", "single-nucleus ATAC-seq"],
                 "reference_assembly": ["GRCh38 + Gencode40", "GRCm39"],
@@ -91,7 +91,7 @@ class TestBuildDeclared:
         assert block["in_vocabulary"] == {"data_modality": [], "reference_assembly": []}
 
     def test_a_dimension_that_declared_nothing_is_absent_from_in_vocabulary(self):
-        block = build_declared({"data_modality": ["genomic"], "reference_assembly": None}, None)
+        block = build_published({"data_modality": ["genomic"], "reference_assembly": None}, None)
         assert block is not None
         assert set(block["in_vocabulary"]) == {"data_modality"}
 
@@ -100,30 +100,30 @@ class TestDeclarationReachesTheOutput:
     def test_a_classifier_record_carries_it_into_the_envelope(self):
         item = ClassifierRecord.from_record(valid_record(reference_assembly=["GRCh38 + Gencode40"]))
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
-        assert out["declared"]["reference_assembly"] == ["GRCh38 + Gencode40"]
-        assert out["declared"]["in_vocabulary"] == {"reference_assembly": []}
+        assert out["published"]["reference_assembly"] == ["GRCh38 + Gencode40"]
+        assert out["published"]["in_vocabulary"] == {"reference_assembly": []}
 
     def test_a_validation_failed_record_still_reports_what_was_declared(self):
         # Failing our contract on file_size does not stop AnVIL from declaring a
         # modality, and the row must still say so.
         item = InvalidRecord.from_record(valid_record(file_size="big", data_modality=["genomic"]), ["file_size: bad"])
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
-        assert out["declared"]["data_modality"] == ["genomic"]
+        assert out["published"]["data_modality"] == ["genomic"]
 
     def test_the_envelope_carries_the_key_even_when_nothing_was_declared(self):
         item = ClassifierRecord.from_record(valid_record())
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
-        assert "declared" in out and out["declared"] is None
+        assert "published" in out and out["published"] is None
 
 
 class TestIncumbentSource:
     def test_it_names_the_catalog_the_snapshot_recorded(self):
-        assert incumbent_source({"catalog": "anvil15"}) == "anvil/anvil15"
+        assert published_source({"catalog": "anvil15"}) == "anvil/anvil15"
 
     @pytest.mark.parametrize("metadata", [{}, {"catalog": None}, {"catalog": ""}])
-    def test_an_input_that_named_no_catalog_leaves_the_incumbent_unnamed(self, metadata):
-        # An unnamed incumbent is a fact; a guessed one is the drift #335 exists to catch.
-        assert incumbent_source(metadata) is None
+    def test_an_input_that_named_no_catalog_leaves_the_repository_unnamed(self, metadata):
+        # An unnamed published is a fact; a guessed one is the drift #335 exists to catch.
+        assert published_source(metadata) is None
 
 
 class TestRecommendation:
@@ -131,8 +131,8 @@ class TestRecommendation:
         "declared,label,expected",
         [
             (None, "genomic", ADD),
-            (["GRCm39"], NOT_CLASSIFIED, TAKE_AZUL),
-            (["GRCh38 + Gencode40"], "GRCh38", COMPARE),
+            (["GRCm39"], NOT_CLASSIFIED, KEEP),
+            (["GRCh38 + Gencode40"], "GRCh38", REVIEW),
             (None, NOT_CLASSIFIED, NONE),
             (None, None, NONE),
         ],
@@ -143,9 +143,9 @@ class TestRecommendation:
     def test_not_applicable_counts_as_us_having_spoken(self):
         # The four .bai/.tbi rows: AnVIL carries the set's modality, we say the
         # dimension does not apply. That is a comparison to make, not a gap to fill —
-        # filing it under take_azul would claim we had no opinion.
+        # filing it under keep would claim we had no opinion.
         assert spoke(NOT_APPLICABLE)
-        assert recommendation(["single-nucleus ATAC-seq"], NOT_APPLICABLE) == COMPARE
+        assert recommendation(["single-nucleus ATAC-seq"], NOT_APPLICABLE) == REVIEW
 
     def test_not_classified_is_the_only_silence(self):
         assert not spoke(NOT_CLASSIFIED)
@@ -153,14 +153,14 @@ class TestRecommendation:
 
 
 class TestGather:
-    def test_it_counts_every_file_and_rows_only_the_declared_ones(self, tmp_path):
+    def test_it_counts_every_file_and_rows_only_the_published_ones(self, tmp_path):
         run = _write_run(
             tmp_path / "run",
             [
                 _record("a.bam", modality="genomic"),
                 _record(
                     "b.bam",
-                    declared=build_declared(
+                    published=build_published(
                         {"data_modality": ["single-nucleus ATAC-seq"], "reference_assembly": None}, "anvil/anvil15"
                     ),
                 ),
@@ -168,10 +168,10 @@ class TestGather:
         )
         report = gather(run)
         assert report.files == 2
-        assert report.declared_files == 1
+        assert report.published_files == 1
         assert report.sources == {"anvil/anvil15"}
         assert report.counts[("AnVIL_IGVF_Mouse_R1", "data_modality", ADD)] == 1
-        assert report.counts[("AnVIL_IGVF_Mouse_R1", "data_modality", TAKE_AZUL)] == 1
+        assert report.counts[("AnVIL_IGVF_Mouse_R1", "data_modality", KEEP)] == 1
         # b.bam declared no assembly and we classified none: neither side spoke.
         assert report.counts[("AnVIL_IGVF_Mouse_R1", "reference_assembly", NONE)] == 2
 
@@ -186,13 +186,13 @@ class TestGather:
         assert report.duplicate_records == 1
 
     def test_compare_rows_group_by_the_value_pair_they_share(self, tmp_path):
-        declared = build_declared(
+        published = build_published(
             {"data_modality": None, "reference_assembly": ["GRCh38 + Gencode40"]}, "anvil/anvil15"
         )
         run = _write_run(
             tmp_path / "run",
             [
-                _record(f"e{i}.bam", assembly="GRCh38", declared=declared, dataset="AnVIL_ENCORE_RS293")
+                _record(f"e{i}.bam", assembly="GRCh38", published=published, dataset="AnVIL_ENCORE_RS293")
                 for i in range(3)
             ],
         )
@@ -200,8 +200,8 @@ class TestGather:
         assert list(pairs) == [("reference_assembly", "GRCh38 + Gencode40", "GRCh38")]
         assert len(pairs[("reference_assembly", "GRCh38 + Gencode40", "GRCh38")]) == 3
 
-    def test_a_multi_valued_declaration_is_rejoined_into_the_cell_azul_published(self, tmp_path):
-        declared = build_declared(
+    def test_a_multi_valued_published_cell_is_rejoined_as_the_repository_published_it(self, tmp_path):
+        published = build_published(
             {
                 "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
                 "reference_assembly": None,
@@ -209,29 +209,31 @@ class TestGather:
             "anvil/anvil15",
         )
         run = _write_run(
-            tmp_path / "run", [_record("x.h5ad", modality="transcriptomic.single_cell", declared=declared)]
+            tmp_path / "run", [_record("x.h5ad", modality="transcriptomic.single_cell", published=published)]
         )
-        [row] = [r for r in gather(run).rows if r.slot == "data_modality"]
-        assert row.azul_cell == "single-nucleus ATAC-seq || single-nucleus RNA sequencing assay"
-        assert row.recommendation == COMPARE
+        [row] = [r for r in gather(run).rows if r.dimension == "data_modality"]
+        assert row.published_cell == "single-nucleus ATAC-seq || single-nucleus RNA sequencing assay"
+        assert row.recommendation == REVIEW
         assert row.vocabulary_standing == "no"
 
 
 class TestRender:
-    def test_the_tsv_has_one_row_per_declared_file_and_dimension(self, tmp_path):
-        declared = build_declared({"data_modality": ["GRCm39"], "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-        run = _write_run(tmp_path / "run", [_record("m.bam", declared=declared), _record("n.bam", modality="genomic")])
+    def test_the_tsv_has_one_row_per_published_file_and_dimension(self, tmp_path):
+        published = build_published({"data_modality": ["GRCm39"], "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+        run = _write_run(
+            tmp_path / "run", [_record("m.bam", published=published), _record("n.bam", modality="genomic")]
+        )
         lines = render_tsv(gather(run)).strip().split("\n")
         assert lines[0].split("\t") == [
             "entry_id",
             "md5sum",
             "file_name",
             "dataset",
-            "slot",
-            "azul_value",
-            "our_value",
+            "dimension",
+            "published_value",
+            "inferred_value",
             "recommendation",
-            "azul_in_vocab",
+            "published_in_vocabulary",
         ]
         # Only the declared file appears, once per dimension, and each row leads with
         # the identity gather deduplicated on — name and dataset do not identify a file.
@@ -239,11 +241,11 @@ class TestRender:
         assert all(line.startswith("m.bam\tm.bam\tm.bam\t") for line in lines[1:])
 
     def test_the_report_names_the_vocabulary_gap(self, tmp_path):
-        declared = build_declared({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-        run = _write_run(tmp_path / "run", [_record("m.bam", declared=declared)])
+        published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+        run = _write_run(tmp_path / "run", [_record("m.bam", published=published)])
         text = render_report(gather(run))
         assert "`GRCm39`" in text
-        assert "1 of 1 distinct incumbent values are terms our vocabulary does not have" in text
+        assert "1 of 1 distinct published values have no term in the schema vocabulary" in text
         assert "anvil/anvil15" in text
 
 
@@ -259,14 +261,14 @@ class TestEveryProducerCarriesTheDeclaration:
 
     @staticmethod
     def _metadata(tmp_path, records):
-        """The input envelope with a catalog, so the incumbent is named as in a real run."""
+        """The input envelope with a catalog, so the repository's published values is named as in a real run."""
         path = tmp_path / "metadata.json"
         path.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": records}))
         return path
 
     @staticmethod
     def _declared_blocks(output_path):
-        return [r.get("declared") for r in json.loads(output_path.read_text())["classifications"]]
+        return [r.get("published") for r in json.loads(output_path.read_text())["classifications"]]
 
     @staticmethod
     def _input(name, fmt):
@@ -339,9 +341,9 @@ class TestEveryProducerCarriesTheDeclaration:
 def test_the_display_join_matches_the_manifest_reader():
     """The report rejoins a declared list with the separator the reader split on.
 
-    `incumbent` holds its own copy rather than importing `azul_manifest`, which opens a
+    `published` holds its own copy rather than importing `azul_manifest`, which opens a
     `requests` session at import. That duplication is only safe while the two agree: if
-    Azul's separator moved and only the reader were updated, every `azul_cell` in the
+    Azul's separator moved and only the reader were updated, every `published_cell` in the
     report would silently stop matching what Azul published. Imported inside the test so
     the report keeps its offline import graph.
     """
@@ -357,15 +359,57 @@ def test_two_files_sharing_a_name_in_one_dataset_are_counted_twice(tmp_path):
     (dataset, name, md5) and keeps such a pair as a multiset — so counting by name
     would report one file while the recommendation tables counted two.
     """
-    declared = build_declared({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
     twins = []
     for entry in ("e1", "e2"):
-        rec = _record("same.bam", declared=declared)
+        rec = _record("same.bam", published=published)
         rec["entry_id"], rec["md5sum"] = entry, entry
         twins.append(rec)
     report = gather(_write_run(tmp_path / "run", twins))
 
     assert report.files == 2
     assert report.duplicate_records == 0
-    assert report.declared_files == 2
-    assert report.counts[("AnVIL_IGVF_Mouse_R1", "reference_assembly", TAKE_AZUL)] == 2
+    assert report.published_files == 2
+    assert report.counts[("AnVIL_IGVF_Mouse_R1", "reference_assembly", KEEP)] == 2
+
+
+class TestPublishedShapeIsRefused:
+    """`build_published` is the only thing checking these two fields' shape (#424).
+
+    They left the input contract, so `validate_metadata` passes them through
+    unexamined. Both bad shapes are quiet without the guard: a bare string is iterable,
+    so it is walked character by character; a non-iterable raises a bare `TypeError`
+    from inside a classification worker, mid-run.
+    """
+
+    def test_a_scalar_string_is_refused_rather_than_walked_character_by_character(self):
+        # 'GRCh38' would otherwise report a real vocabulary term as one we lack, and
+        # render as 'G || R || C || h || 3 || 8'.
+        with pytest.raises(ValueError, match=r"published reference_assembly is str, not a list"):
+            build_published({"data_modality": None, "reference_assembly": "GRCh38"}, "anvil/anvil15")
+
+    def test_the_scalar_message_names_the_cause(self):
+        with pytest.raises(ValueError, match=r"built before #424"):
+            build_published({"data_modality": None, "reference_assembly": "GRCh38"}, None)
+
+    def test_a_non_iterable_is_refused_instead_of_raising_a_bare_type_error(self):
+        with pytest.raises(ValueError, match=r"published data_modality is int, not a list"):
+            build_published({"data_modality": 12345, "reference_assembly": None}, None)
+
+    def test_a_non_iterable_gets_no_invented_cause(self):
+        # The pre-#424 spelling was a string; an int is drift with no story to tell.
+        with pytest.raises(ValueError) as exc:
+            build_published({"data_modality": 12345, "reference_assembly": None}, None)
+        assert "#424" not in str(exc.value)
+
+    def test_a_list_holding_a_non_string_is_refused(self):
+        # It would survive the vocabulary check (a frozenset test just says False) and
+        # then fail in the report, where the values are joined into a cell.
+        with pytest.raises(ValueError, match=r"holds a non-string value"):
+            build_published({"data_modality": ["genomic", 7], "reference_assembly": None}, None)
+
+    def test_the_shapes_a_rebuilt_snapshot_actually_produces_are_accepted(self):
+        assert build_published({"data_modality": None, "reference_assembly": None}, None) is None
+        block = build_published({"data_modality": ["genomic"], "reference_assembly": ["GRCh38"]}, "anvil/anvil15")
+        assert block is not None
+        assert block["in_vocabulary"] == {"data_modality": ["genomic"], "reference_assembly": ["GRCh38"]}

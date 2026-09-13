@@ -13,7 +13,7 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import declared_from
+from meta_disco.records import published_from
 from meta_disco.rule_engine import RuleEngine
 
 # Extensions handled by this script
@@ -76,7 +76,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                 # What AnVIL declares about this file today, carried beside what this
                 # run concluded. Contract 7.7 binds every producer: omitting it does
                 # not fail, it under-reports.
-                "declared": declared_from(f, source),
+                "published": published_from(f, source),
             }
         )
 
