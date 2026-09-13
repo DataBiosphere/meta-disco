@@ -139,8 +139,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
     That is why the reference validator is input kind 1: it reads our bytes and looks the answer up.
 
-4.2 Inputs 1, 3, 4 and 5 are equal. Being ours confers no rank; being external confers no rank.
-    (Kind 2 is retired, so the equal kinds are the four that remain — see 4.1.)
+4.2 Inputs 1, 3 and 4 are equal. Being ours confers no rank; being external confers no rank.
+    (Kind 2 is retired; kind 5 is deliberately outside this list, because a curator does not compete
+    with the others — 4.7 has a curator *answer* a conflict rather than produce one, and 4.5 keeps
+    conflict production to these three.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -336,7 +338,8 @@ A line leaves this section when the assertion above it is enforced, not when it 
   thing our answer is measured against. A target's current state is not an input to producing it.
 
   So 4.1 has four input kinds, not five — 1, 3, 4 and 5 — and 4.2 and 4.5 name them individually rather
-  than as a range, because the range no longer describes them. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
+  than as a range, because the range no longer describes them. Both name 1, 3 and 4: the curator was
+  never inside the old `1–4` either, and retiring kind 2 did not change that. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
   4.3-4.6 describe what happens when a second arrives. #424 does no reconciliation for that reason — one
   source has nothing to reconcile with — and instead compares inference against the published values and recommends,
   which is a stage that sits *after* reconciliation and is unaffected by how many sources feed it:

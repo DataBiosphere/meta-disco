@@ -12,7 +12,7 @@ import pathlib
 import pytest
 
 from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
-from meta_disco.pipeline import published_source
+from meta_disco.pipeline import ClassifyPipeline, published_source
 from meta_disco.published_comparison import (
     ADD,
     KEEP,
@@ -52,7 +52,7 @@ def _write_run(run_dir, records):
     return run_dir
 
 
-class TestBuildDeclared:
+class TestBuildPublished:
     def test_a_declaration_is_transcribed_verbatim_as_a_list(self):
         block = build_published(
             {
@@ -96,7 +96,7 @@ class TestBuildDeclared:
         assert set(block["in_vocabulary"]) == {"data_modality"}
 
 
-class TestDeclarationReachesTheOutput:
+class TestPublishedValuesReachTheOutput:
     def test_a_classifier_record_carries_it_into_the_envelope(self):
         item = ClassifierRecord.from_record(valid_record(reference_assembly=["GRCh38 + Gencode40"]))
         out = OutputRecord.from_work_item(item, {}, source="anvil/anvil15").to_dict()
@@ -128,7 +128,7 @@ class TestIncumbentSource:
 
 class TestRecommendation:
     @pytest.mark.parametrize(
-        "declared,label,expected",
+        "published,label,expected",
         [
             (None, "genomic", ADD),
             (["GRCm39"], NOT_CLASSIFIED, KEEP),
@@ -137,8 +137,8 @@ class TestRecommendation:
             (None, None, NONE),
         ],
     )
-    def test_the_four_states(self, declared, label, expected):
-        assert recommendation(declared, label) == expected
+    def test_the_four_states(self, published, label, expected):
+        assert recommendation(published, label) == expected
 
     def test_not_applicable_counts_as_us_having_spoken(self):
         # The four .bai/.tbi rows: AnVIL carries the set's modality, we say the
@@ -172,7 +172,7 @@ class TestGather:
         assert report.sources == {"anvil/anvil15"}
         assert report.counts[("AnVIL_IGVF_Mouse_R1", "data_modality", ADD)] == 1
         assert report.counts[("AnVIL_IGVF_Mouse_R1", "data_modality", KEEP)] == 1
-        # b.bam declared no assembly and we classified none: neither side spoke.
+        # b.bam has no published assembly and inference found none: neither side has a value.
         assert report.counts[("AnVIL_IGVF_Mouse_R1", "reference_assembly", NONE)] == 2
 
     def test_a_file_written_twice_is_counted_once(self, tmp_path):
@@ -211,7 +211,10 @@ class TestGather:
         run = _write_run(
             tmp_path / "run", [_record("x.h5ad", modality="transcriptomic.single_cell", published=published)]
         )
-        [row] = [r for r in gather(run).rows if r.dimension == "data_modality"]
+        report = gather(run)
+        # One dimension carrying two values is still one row.
+        assert len(report.rows) == 1
+        [row] = [r for r in report.rows if r.dimension == "data_modality"]
         assert row.published_cell == "single-nucleus ATAC-seq || single-nucleus RNA sequencing assay"
         assert row.recommendation == REVIEW
         assert row.vocabulary_standing == "no"
@@ -235,10 +238,28 @@ class TestRender:
             "recommendation",
             "published_in_vocabulary",
         ]
-        # Only the declared file appears, once per dimension, and each row leads with
+        # Only the file with published values appears, once per dimension, leading with
         # the identity gather deduplicated on — name and dataset do not identify a file.
         assert len(lines) == 3
-        assert all(line.startswith("m.bam\tm.bam\tm.bam\t") for line in lines[1:])
+        # Two rows, one file: `published_files` counts files, not rows, which is why it
+        # derives from `file_key` rather than `len(rows)`. Without this, replacing the
+        # property with `len(self.rows)` passes the whole suite.
+        report = gather(run)
+        assert len(report.rows) == 2
+        assert report.published_files == 1
+        # Every cell, not just the leading identity: swapping two columns in the emitted
+        # row is otherwise invisible to this suite.
+        assert lines[1].split("\t") == [
+            "m.bam",
+            "m.bam",
+            "m.bam",
+            "AnVIL_IGVF_Mouse_R1",
+            "data_modality",
+            "GRCm39",
+            "not_classified",
+            "keep",
+            "no",
+        ]
 
     def test_the_report_names_the_vocabulary_gap(self, tmp_path):
         published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
@@ -249,14 +270,19 @@ class TestRender:
         assert "anvil/anvil15" in text
 
 
-class TestEveryProducerCarriesTheDeclaration:
-    """Every `*_classifications.json` must carry `declared`, not just the header pipeline.
+class TestEveryProducerCarriesPublishedValues:
+    """Every standalone producer's `*_classifications.json` carries the block.
 
-    The claim is about the whole run, and the catch-all is what makes it non-trivial:
-    it classifies every input record no earlier producer named, and it alone holds
-    5,817 of the corpus's 11,231 declared files. Wiring only the header pipeline
-    produced a report that silently counted 5,403 declared files instead of 11,231 —
+    Contract 7.7's claim is about the whole run, and the catch-all is what makes it
+    non-trivial: it classifies every input record no earlier producer named, and it
+    alone holds 5,817 of the corpus's 11,231 files with a published value. Wiring only
+    `ClassifyPipeline` produced a report that silently counted 5,403 instead of 11,231 —
     no error, just a wrong number — which is why this is a sweep and not one test.
+
+    `ClassifyPipeline` itself is *not* swept here; it builds `OutputRecord` rather than a
+    dict, and its end-to-end propagation is pinned by
+    `test_the_pipeline_carries_the_catalog_into_a_written_record`. This class covers the
+    four producers that assemble records by hand.
     """
 
     @staticmethod
@@ -310,7 +336,7 @@ class TestEveryProducerCarriesTheDeclaration:
         funcs[producer](metadata, output)
 
         [block] = self._published_blocks(output)
-        assert block is not None, f"{producer} dropped the declaration"
+        assert block is not None, f"{producer} dropped the published values"
         assert block["data_modality"] == ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
         assert block["reference_assembly"] == ["GRCm39"]
         assert block["source"] == "anvil/anvil15"
@@ -434,3 +460,98 @@ def test_the_dataset_table_omits_datasets_with_nothing_published(tmp_path):
     dataset_table = text[text.index("## By dataset") : text.index("## Vocabulary coverage")]
     assert "HAS_PUBLISHED" in dataset_table
     assert "NO_PUBLISHED" not in dataset_table
+
+
+def test_the_pipeline_carries_the_catalog_into_a_written_record(tmp_path):
+    """`ClassifyPipeline`, end to end: input envelope -> written record's `published`.
+
+    The one producer the sweep above cannot cover, and the one whose propagation runs
+    through mutable state: `_load_input` sets `self.published_source` as a side effect,
+    and `_build_record` reads it later. Nothing else pins that. `test_pipeline.py`'s
+    nearest test asserts only the negative (`published is None` on a pipeline that never
+    loaded an input), and the golden fixture is built from an envelope with no catalog
+    and no published values, so every golden record is `published: null`.
+
+    Written against the real `run()` rather than the private steps, so a regression in
+    where the source is read, when it is set, or whether it reaches the envelope fails
+    here rather than only in a corpus run.
+    """
+    import sys
+
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    from test_pipeline import _make_config, _valid_record
+
+    record = _valid_record(
+        file_md5sum="a" * 32,
+        file_name="sample.test",
+        file_format=".test",
+        entry_id="e1",
+        data_modality=["single-nucleus ATAC-seq"],
+        reference_assembly=["GRCm39"],
+    )
+    input_path = tmp_path / "in.json"
+    input_path.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": [record]}))
+    output_path = tmp_path / "out.json"
+
+    pipeline = ClassifyPipeline(
+        _make_config(), input_path, output_path, evidence_base=tmp_path / "evidence", resume=False
+    )
+    [written] = pipeline.run()
+
+    assert written["published"] == {
+        "source": "anvil/anvil15",
+        "data_modality": ["single-nucleus ATAC-seq"],
+        "reference_assembly": ["GRCm39"],
+        "in_vocabulary": {"data_modality": [], "reference_assembly": []},
+    }
+
+
+def test_the_pipeline_leaves_the_repository_unnamed_when_the_envelope_has_no_catalog(tmp_path):
+    """An `.ndjson` input carries no envelope, so there is no catalog to name.
+
+    Pairs with the test above: it is the same propagation path proving it reports
+    `None` rather than inventing a catalog, which is the whole point of
+    `published_source` returning None (contract 7.1's `source`, and #335's drift rule).
+    """
+    import sys
+
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    from test_pipeline import _make_config, _valid_record
+
+    record = _valid_record(
+        file_md5sum="a" * 32,
+        file_name="sample.test",
+        file_format=".test",
+        entry_id="e1",
+        data_modality=["single-nucleus ATAC-seq"],
+    )
+    input_path = tmp_path / "in.ndjson"
+    input_path.write_text(json.dumps(record) + "\n")
+
+    pipeline = ClassifyPipeline(
+        _make_config(), input_path, tmp_path / "out.json", evidence_base=tmp_path / "evidence", resume=False
+    )
+    [written] = pipeline.run()
+
+    assert written["published"]["source"] is None
+    assert written["published"]["data_modality"] == ["single-nucleus ATAC-seq"]
+
+
+def test_the_review_preamble_follows_the_vocabulary_table(tmp_path):
+    """The sentence about unmapped strings is derived, not asserted.
+
+    Every other figure in the report is computed from the run. This one used to state
+    outright that no published value is a term the schema knows — true of today's
+    corpus, and a claim that would contradict the vocabulary table printed two sections
+    above it the day #414 lands a term.
+    """
+    unknown = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    run = _write_run(tmp_path / "unknown", [_record("m.bam", assembly="GRCh38", published=unknown)])
+    assert "None of the published values above is a term the schema knows" in render_report(gather(run))
+
+    # `GRCh38` *is* a reference_assembly_enum term, so the report must not say otherwise.
+    known = build_published({"data_modality": None, "reference_assembly": ["GRCh38"]}, "anvil/anvil15")
+    run = _write_run(tmp_path / "known", [_record("k.bam", assembly="GRCh38", published=known)])
+    text = render_report(gather(run))
+    assert "None of the published values above is a term the schema knows" not in text
+    assert "1 of 1 published values *are* terms the schema knows" in text

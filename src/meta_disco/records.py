@@ -180,10 +180,10 @@ class ClassifierRecord:
     diverts a record.
 
     ``data_modality`` / ``reference_assembly`` are the published values (#424),
-    carried from the input record to the output's ``declared`` block. Nothing on the
+    carried from the input record to the output's ``published`` block. Nothing on the
     classify path reads either one — they are not evidence, not a claim and not a
     tier participant; they are what AnVIL publishes today, kept so the run's answer
-    can be diffed against it. ``None`` where the record declared nothing, which is
+    can be compared against it. ``None`` where the repository publishes nothing, which is
     most of the corpus and all of the HPRC path.
     """
 
@@ -213,7 +213,7 @@ class ClassifierRecord:
         single parse site on the pipeline path (#242). ``url`` is optional (#276) and
         absent on the AnVIL path, so it is read with ``.get`` and defaults to ``None``.
 
-        The two declared dimensions are read with ``.get`` for a stronger reason than
+        The two published dimensions are read with ``.get`` for a stronger reason than
         optionality: they are not slots of the input contract at all (#424 — they are
         not input, they are the published output), so no validation has run on them
         and no caller guarantee covers them. A record that carries neither reads as
@@ -250,7 +250,7 @@ class InvalidRecord:
     rather than ``list[str] | None``: the two are outside the input contract, so
     nothing has checked their shape on this stream any more than on the other, and
     this stream is the one built from records already known to be drifted. A file
-    AnVIL declares a modality for does not stop being declared by failing our
+    the repository publishes a modality for does not stop being published by failing our
     contract on ``file_size``, so the row still reports what the repository's published values says.
     """
 
@@ -308,7 +308,7 @@ class OutputRecord:
     identity fields, which is what lets ``output_utils.iter_records``, ``field_label``
     and ``corpus_diff`` read them uniformly. Unifying the four on this record is #429.
 
-    ``declared`` is the repository's published values block (#424) — what AnVIL publishes for this file
+    ``published`` is the repository's own values (#424) — what it publishes for this file
     today, beside what this run concluded. It is ``None`` on most records and on the
     whole single-file path, and is emitted as ``"published": null`` rather than
     omitted, so the envelope keeps one shape for every row (the reason ``RunMetadata``
@@ -353,7 +353,7 @@ class OutputRecord:
 
         Reads the six identity attributes both streams expose (see the module
         docstring), so it is agnostic to which stream produced ``item`` — and the two
-        declared dimensions, which both streams expose for that same reason.
+        published dimensions, which both streams expose for that same reason.
 
         ``source`` names the repository's published values the declaration was read from (#424), and is
         the caller's to supply because it is a fact about the run's input snapshot,
@@ -386,7 +386,7 @@ class OutputRecord:
 
         ``dataset_title``/``entry_id`` have no source here and serialize as ``None`` —
         the envelope's one canonical shape, which is why the single-file path's output
-        carries the same eight keys as the batch path. ``declared`` is ``None`` for the
+        carries the same eight keys as the batch path. ``published`` is ``None`` for the
         same reason and one more: this path has no input record, so there is no
         published values to carry even in principle.
         """

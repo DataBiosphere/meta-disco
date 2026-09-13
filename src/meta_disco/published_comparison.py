@@ -408,9 +408,27 @@ def render_report(report: ComparisonReport) -> str:
         "## Rows needing review",
         "",
         "Both sides have a value. Whether they agree cannot be decided until the value mappings exist",
-        "(#414) — no published value above is a term the schema knows, so every pair below is an",
-        "unmapped string rather than a disagreement about meaning.",
+        "(#414), so each pair is named rather than judged.",
         "",
+        # Derived, not asserted. Every other number in this report is computed from the
+        # run; this sentence used to claim outright that no published value is in
+        # vocabulary, which is true of today's corpus and would silently contradict the
+        # vocabulary table above the day #414 lands a term or a repository publishes a
+        # bare `GRCh38`.
+        *(
+            [
+                "None of the published values above is a term the schema knows, so every pair below is an",
+                "unmapped string rather than a disagreement about meaning.",
+                "",
+            ]
+            if distinct_unsayable == distinct
+            else [
+                f"{distinct - distinct_unsayable} of {distinct} published values *are* terms the schema knows, so a",
+                "pair below may be a real disagreement rather than an unmapped string. Check the vocabulary",
+                "table above before reading one as either.",
+                "",
+            ]
+        ),
         *_compare_section(report),
     ]
     if report.duplicate_records:

@@ -51,7 +51,9 @@ Each is a value mapping that is owed (#414); its row count is what that mapping 
 ## Rows needing review
 
 Both sides have a value. Whether they agree cannot be decided until the value mappings exist
-(#414) — no published value above is a term the schema knows, so every pair below is an
+(#414), so each pair is named rather than judged.
+
+None of the published values above is a term the schema knows, so every pair below is an
 unmapped string rather than a disagreement about meaning.
 
 | dimension | published | inferred | files |

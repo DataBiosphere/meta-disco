@@ -85,7 +85,7 @@ def published_source(metadata: dict) -> str | None:
 
     Reads the catalog generation the snapshot recorded (``metadata.catalog``, written
     by ``azul_manifest.metadata_block``) and qualifies it with the publishing system,
-    so a ``declared`` block says *which* published it carries rather than only that one
+    so a ``published`` block says *which* repository it carries rather than only that one
     exists — the distinction that matters the first time a second target appears.
 
     ``None`` when the input carried no envelope (an ``.ndjson`` load) or its envelope
@@ -445,7 +445,7 @@ class ClassifyPipeline:
         which no orchestrator wraps.
 
         Reads the snapshot form so the input envelope is parsed in the same pass, and
-        records which published this run's ``declared`` blocks came from (#424). That
+        records which repository this run's ``published`` blocks came from (#424). That
         is a side effect on ``self``, done here because this is where the envelope is
         in hand and every record built afterwards needs the answer.
         """
@@ -632,7 +632,7 @@ class ClassifyPipeline:
         the success path, the raw (possibly drifted) values on the ``validation_failed``
         path — matching what ``classify_single`` writes for the single-file path (#204).
 
-        An instance method rather than a static one because the ``declared`` block
+        An instance method rather than a static one because the ``published`` block
         names the repository's published values it was read from, which is a fact about this run's input
         snapshot (#424) and so lives on the pipeline, not on the record.
         """

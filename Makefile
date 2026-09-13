@@ -169,7 +169,12 @@ manifest-survey:
 # together after a catalog refresh — the same shape as classify-and-report.
 download-and-survey: download manifest-survey
 
-validation-report:
+# Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
+# comparison to published-comparison). Its input, output/hprc/hprc_validation_results.json,
+# is generated and gitignored, so without this prerequisite a standalone run on a fresh
+# checkout finds no sources and exits 1 — which it did not before, when the AnVIL branch
+# keyed off the always-present downloaded metadata.
+validation-report: validate-hprc
 	uv run python scripts/generate_validation_report.py
 
 # This run's inferred values beside the ones the repository publishes (#424): what each

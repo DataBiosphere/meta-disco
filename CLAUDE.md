@@ -139,7 +139,7 @@ evidence}` entry — plus the controlled vocabulary:
     `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
     deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
     input. Contract 7.7 binds *every* producer, and
-    `tests/test_published_comparison.py::TestEveryProducerCarriesTheDeclaration` sweeps
+    `tests/test_published_comparison.py::TestEveryProducerCarriesPublishedValues` sweeps
     them; add a new producer there. The sweep exists because a run has three record
     shapes, not one — #204's envelope covers only the seven pipeline types, and
     unifying the other four on `OutputRecord` is #429, which would make it unnecessary.
