@@ -84,7 +84,7 @@ evidence}` entry — plus the controlled vocabulary:
   cache is keyed by it), so it is *excluded* from classification rather than
   written as a row echoing a null md5 — such a row has no usable identity and
   would collide with any other in `corpus_diff` (#376). Exclusion happens once,
-  at the shared load path (`pipeline.load_classifiable_records`), so every
+  at the shared load path (`pipeline.load_classifiable_snapshot`), so every
   producer inherits it — and that same load writes the run's
   `excluded_files.json`, so excluding a record and naming it are one act, down
   to a standalone `make classify-bam`. `make unprocessable-report` lists them

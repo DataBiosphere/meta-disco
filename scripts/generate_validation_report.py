@@ -461,9 +461,6 @@ def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
     parser.add_argument("--run-dir", type=Path, help="Classification run directory")
     parser.add_argument(
-        "--metadata", type=Path, default=Path("data/anvil/anvil_files_metadata.ndjson"), help="AnVIL metadata NDJSON"
-    )
-    parser.add_argument(
         "--hprc-results",
         type=Path,
         default=Path("output/hprc/hprc_validation_results.json"),
