@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,28 @@ from .summaries import md_table
 # together by ``test_published_comparison.test_the_display_join_matches_the_manifest_reader``,
 # which is what actually stops them drifting — a comment would not.
 MULTI_VALUE_SEP = " || "
+
+
+def _code(value: str) -> str:
+    """A markdown code span holding ``value``, whatever it contains.
+
+    Published values are transcribed verbatim (contract 7.3), so nothing stops one
+    containing a backtick, which would terminate a single-backtick span and spill the
+    rest of the value into the table as markup. CommonMark's rule is that a code span
+    may be fenced by any run of backticks not appearing in the content, so the fence is
+    one longer than the longest run inside; a value starting or ending with a backtick
+    additionally needs a space, which the reader strips.
+
+    A pipe needs no handling here: ``md_table`` escapes it, and GFM processes that escape
+    when it parses the table row — including inside a code span, which its own spec
+    demonstrates. Escaping it a second time here would put a visible backslash in the
+    rendered cell, so do not "fix" that.
+    """
+    longest = max((len(run) for run in re.findall(r"`+", value)), default=0)
+    fence = "`" * (longest + 1)
+    pad = " " if value.startswith("`") or value.endswith("`") else ""
+    return f"{fence}{pad}{value}{pad}{fence}"
+
 
 # The repository publishes nothing; this run inferred a value. Nothing is owed.
 ADD = "add"
@@ -328,7 +351,7 @@ def _vocabulary_table(report: ComparisonReport) -> list[str]:
     rows = []
     for (dimension, value), count in sorted(report.published_value_counts.items(), key=lambda kv: (-kv[1], kv[0])):
         sayable = report.value_in_vocab.get((dimension, value), False)
-        rows.append([dimension, f"`{value}`", f"{count:,}", "yes" if sayable else "**no**"])
+        rows.append([dimension, _code(value), f"{count:,}", "yes" if sayable else "**no**"])
     return md_table(["dimension", "published value", "files", "in vocabulary"], rows)
 
 
@@ -340,7 +363,7 @@ def _compare_section(report: ComparisonReport) -> list[str]:
         return ["No file has a value on both sides.", ""]
 
     rows = [
-        [dimension, f"`{published}`", f"`{inferred or ''}`", f"{len(members):,}"]
+        [dimension, _code(published), _code(inferred or ""), f"{len(members):,}"]
         for (dimension, published, inferred), members in pairs.items()
     ]
     lines += md_table(["dimension", "published", "inferred", "files"], rows)
@@ -351,7 +374,7 @@ def _compare_section(report: ComparisonReport) -> list[str]:
         lines.append(f"### Named individually (pairs of {MAX_NAMED_PER_PAIR} files or fewer)")
         lines.append("")
         named = [
-            [row.file_name, row.dataset_title, row.dimension, f"`{row.inferred_value}`"]
+            [row.file_name, row.dataset_title, row.dimension, _code(str(row.inferred_value))]
             for members in small.values()
             for row in sorted(members, key=lambda r: r.file_name)
         ]

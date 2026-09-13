@@ -649,3 +649,36 @@ def test_the_refusal_counts_records_and_fields_separately(tmp_path):
     with pytest.raises(ValueError) as exc:
         load_classifiable_snapshot(path)
     assert "1 record(s), 2 field(s)" in str(exc.value)
+
+
+def test_a_backtick_in_a_published_value_does_not_break_the_table():
+    """Published values are verbatim (7.3), so a backtick is possible and would spill.
+
+    A single-backtick span is terminated by the first backtick in its content, so the
+    rest of the value would land in the table as markup. CommonMark fences with any run
+    not present in the content; `_code` picks one longer than the longest run inside.
+    """
+    from meta_disco.published_comparison import _code
+
+    assert _code("plain") == "`plain`"
+    # A backtick inside needs a longer fence.
+    assert _code("has`tick") == "``has`tick``"
+    # A run of two needs three.
+    assert _code("has``run") == "```has``run```"
+    # Leading or trailing backticks additionally need padding, which the reader strips.
+    assert _code("`edge`") == "`` `edge` ``"
+
+
+def test_a_pipe_in_a_published_value_is_escaped_once_not_twice():
+    """`md_table` escapes the pipe and GFM processes that escape inside a code span.
+
+    Escaping it again in `_code` would put a visible backslash in the rendered cell. The
+    corpus's twelve multi-valued cells all take this path, so getting it wrong would be
+    visible on every one of them.
+    """
+    from meta_disco.published_comparison import _code
+    from meta_disco.summaries import md_table
+
+    assert _code("a || b") == "`a || b`", "the code span itself must not escape"
+    [_header, _rule, row] = md_table(["v"], [[_code("a || b")]])
+    assert r"\|\|" in row, "md_table escapes it exactly once, which GFM then unescapes"

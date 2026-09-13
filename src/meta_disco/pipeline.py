@@ -146,10 +146,17 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
         for position, entry_id, field, value, why in bad[:max_examples]
     )
     more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
+    # The pre-#424 hint belongs only to the scalar case, which is the shape a snapshot of
+    # that vintage actually has. Offering "rebuild the snapshot" for a list holding a
+    # non-string sends an operator at the wrong cause.
+    hint = (
+        " A snapshot built before #424 spells them as scalars; rebuild it with scripts/download_anvil_manifest.py."
+        if any(why.endswith("not a list") for *_, why in bad)
+        else ""
+    )
     raise ValueError(
         f"{input_path}: {offenders:,} record(s), {len(bad):,} field(s), carry a published value this "
-        f"cannot use. A snapshot built before #424 spells them as scalars; rebuild it with "
-        f"scripts/download_anvil_manifest.py. Examples — {examples}{more}"
+        f"cannot use — each must be a list of strings.{hint} Examples — {examples}{more}"
     )
 
 
