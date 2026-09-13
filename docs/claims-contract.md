@@ -241,7 +241,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 7. Published values
 
-Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it.
+Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it — with
+the exception of 7.4's second half, which names where the block goes once a reconciled record exists.
 
 Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
 depends on that, and a second repository needs no change to these assertions.
@@ -258,9 +259,23 @@ depends on that, and a second repository needs no change to these assertions.
     Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
     answer, and 1.4's transcribe-verbatim rule governs them as it governs evidence.
 
-7.4 They are carried **on the record**, in a `published` block beside `classifications`, and not merged
-    into it. Nesting is what keeps 7.2 legible: one block is what this project inferred, the other is
-    what the repository publishes.
+7.4 They are carried in a `published` block **beside** the inferred values, never merged into them.
+    Nesting is what keeps 7.2 legible: one block is what this project inferred, the other is what the
+    repository publishes.
+
+    **They belong on the reconciled record, and are on the inference record only because there is not
+    one yet.** 6.10 already describes this block's shape — a reconciled record carries what inference
+    concluded, what each source declared, and the resolution — and 6.2 says the inference artifact is
+    *what inference alone concluded*. A repository's published values are not something inference
+    concluded, so carrying them there is against 6.2's definition of that artifact. #424 did it anyway,
+    because `*_classifications.json` is the only per-file record that exists and the alternative was a
+    second artifact joined back by `(entry_id, md5sum)`.
+
+    So this is a placement of convenience, not a decision. When reconcile lands, the block moves to the
+    reconciled record and the inference artifact goes back to being purely inferential; 6.3 keeps
+    reconciliation from rewriting inference output, so the move is a removal there and an addition here.
+    Noted on #402. Until then, a reader of `*_classifications.json` should treat `published` as a
+    passenger — nothing in inference reads it, and 7.2 is what guarantees that.
 
 7.5 They are carried **even when they yield nothing else**. A published value this vocabulary has no
     word for — `GRCm39` — produces no claim under 3.7, so without the block it would appear in the
@@ -307,7 +322,7 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
 - **There is no read-sources stage and no reconcile stage** (#402 and an unfiled issue). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
-- **There is no reconciled artifact.** Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet.
+- **There is no reconciled artifact.** Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.
