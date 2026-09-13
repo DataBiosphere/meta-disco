@@ -12,7 +12,8 @@ from pathlib import Path
 
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
-from meta_disco.pipeline import load_classifiable_records
+from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.records import published_from
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -22,7 +23,7 @@ def classify_images(metadata_path: Path, output_path: Path):
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    files = load_classifiable_records(metadata_path, output_path.parent)
+    source, files = load_classifiable_snapshot(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     engine = RuleEngine()
@@ -63,6 +64,10 @@ def classify_images(metadata_path: Path, output_path: Path):
                 "dataset_id": f.get("dataset_id"),
                 "dataset_title": f.get("dataset_title"),
                 "classifications": result.to_output_dict(),
+                # What AnVIL declares about this file today, carried beside what this
+                # run concluded. Contract 7.7 binds every producer: omitting it does
+                # not fail, it under-reports.
+                "published": published_from(f, source),
             }
         )
 

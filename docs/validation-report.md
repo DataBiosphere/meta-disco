@@ -1,108 +1,11 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-09-05 23:41:59**
+Classification run: **2026-09-12 20:29:02**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| AnVIL (Azul metadata) | 11,231 | 2 | 1,047 | 4 |
 | HPRC | 6,048 | 4 | 12,690 | 233 |
-
----
-
-## AnVIL (Azul metadata)
-
-Validated against file-level metadata from the [AnVIL Data Explorer](https://explore.anvilproject.org/)'s open-access projects with **708,088** files across **12** datasets:
-
-- ANVIL_T2T_CHRY (309,979 files)
-- ANVIL_T2T (289,204 files)
-- ANVIL_1000G_high_coverage_2019 (26,016 files)
-- ANVIL_HPRC (23,185 files)
-- AnVIL_HPRC_R2 (16,271 files)
-- ANVIL_NIA_CARD_Coriell_Cell_Lines_Open (12,534 files)
-- ANVIL_1000G_PRIMED_data_model (11,493 files)
-- AnVIL_IGVF_Mouse_R1 (6,786 files)
-- AnVIL_ENCORE_RS293 (3,752 files)
-- ANVIL_nhp_dGTEx_V1 (3,591 files)
-- AnVIL_MAGE (3,285 files)
-- AnVIL_ENCORE_293T (1,992 files)
-
-### Metadata Overview
-
-AnVIL's open-access datasets currently populate the following genomic metadata dimensions:
-
-| Dimension | Files with dimension in AnVIL |
-|---|---:|
-| Data Modality | 6,755 |
-| Data Type | 0 |
-| Platform | 0 |
-| Reference Assembly | 4,696 |
-| Assay Type | 0 |
-
-### Data Modality Validation
-
-- **6,755** files available from AnVIL with ground truth Data Modality
-- **417** files comparable (both source and rule engine have values)
-- **6,338** files not classified by rule engine
-- **413** inferred data modality values match AnVIL
-- **4** discrepancies
-- **99.0%** accuracy
-
-Of the 6,755 files on AnVIL with ground truth data modality, we inferred data modality values for 417 files. 6,338 files remain unclassifiable by the rule engine.
-Of the 417 inferred data modality values, 413 (99.0%) matched AnVIL. There were 4 discrepancies (1.0%) in data modality between meta-disco and AnVIL.
-
-#### Discrepancies
-
-| Count | Inferred | AnVIL | Example |
-|---:|---|---|---|
-| 2 | genomic | epigenomic.chromatin_accessibility | 9a2afd8bc8423535f42201ba189540fb |
-| 2 | transcriptomic.single_cell | epigenomic.chromatin_accessibility | f92b42c30ff64edb444dfece410630d2 |
-
-### Data Type Validation
-
-- **0** files available from AnVIL with ground truth Data Type
-- **0** files comparable (both source and rule engine have values)
-- **0** files not classified by rule engine
-- **0** inferred data type values match AnVIL
-- **0** discrepancies
-- **-** accuracy
-
-AnVIL does not currently provide ground truth for data type.
-
-### Platform Validation
-
-- **0** files available from AnVIL with ground truth Platform
-- **0** files comparable (both source and rule engine have values)
-- **0** files not classified by rule engine
-- **0** inferred platform values match AnVIL
-- **0** discrepancies
-- **-** accuracy
-
-AnVIL does not currently provide ground truth for platform.
-
-### Reference Assembly Validation
-
-- **4,696** files available from AnVIL with ground truth Reference Assembly
-- **634** files comparable (both source and rule engine have values)
-- **4,062** files not classified by rule engine
-- **634** inferred reference assembly values match AnVIL
-- **0** discrepancies
-- **100.0%** accuracy
-
-Of the 4,696 files on AnVIL with ground truth reference assembly, we inferred reference assembly values for 634 files. 4,062 files remain unclassifiable by the rule engine.
-Of the 634 inferred reference assembly values, 634 (100.0%) matched AnVIL. There were 0 discrepancies (0.0%) in reference assembly between meta-disco and AnVIL.
-
-### Assay Type Validation
-
-- **0** files available from AnVIL with ground truth Assay Type
-- **0** files comparable (both source and rule engine have values)
-- **0** files not classified by rule engine
-- **0** inferred assay type values match AnVIL
-- **0** discrepancies
-- **-** accuracy
-
-AnVIL does not currently provide ground truth for assay type.
-
 
 ---
 

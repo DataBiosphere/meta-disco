@@ -74,12 +74,20 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     '`scripts/download_anvil_manifest.py` from the compact Azul '
                     'manifest (#368).\n'
                     'This is the *input* to classification, distinct from '
-                    '`classification.yaml` which models the classified *output*. '
-                    'Kept in a separate schema so the input contract does not '
-                    "entangle with the output's narrowed dimension ranges "
-                    '(`data_modality` / `reference_assembly` are plain nullable '
-                    'strings here — the values AnVIL itself declared — but object '
-                    'ranges in the output model).\n'
+                    '`classification.yaml` which models the classified *output*.\n'
+                    'It models what classification consumes, and nothing else. '
+                    "AnVIL's own published `data_modality` / `reference_assembly` "
+                    'are therefore deliberately **not** slots here (#424): they '
+                    'are not input, they are the published output — the answer '
+                    'AnVIL publishes today, which this project diffs its own '
+                    'answer against. They were modeled here until #424 and dropped '
+                    'one step before classification, which is the bug that issue '
+                    'describes; modeling them as input is what invited it. They '
+                    'still arrive on every record, as unmodeled extra keys, and '
+                    'the output model is where they are now modeled — '
+                    "`classification.yaml`'s `Published` block, which is also "
+                    'where their list shape and their vocabulary standing are '
+                    'stated.\n'
                     'Authoring source of truth. `make gen-metadata` (schema/ '
                     'project) generates the Pydantic model '
                     '`src/meta_disco/schema/metadata_model.py` from this file via '
@@ -88,14 +96,13 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     'runtime imports it: `metadata_schema.py` validates every '
                     'record against it at load (issue #161). The field constraints '
                     'below are the measured contract of the current corpus '
-                    '(758,658 records): `file_size >= 0` (three zero-size files), '
-                    '`data_modality` / `reference_assembly` nullable by design '
-                    '(~99% null), md5 lowercase-hex, drs_uri `drs://`-prefixed.\n'
-                    'Records may carry keys beyond those modeled here (e.g. the '
-                    'download script also emits `organism_type` / '
-                    '`phenotypic_sex`); the runtime validator tolerates them '
-                    '(validates with `extra="ignore"`), so an unmodeled column '
-                    'never fails a record.',
+                    '(708,088 records, anvil15): `file_size >= 0` (three zero-size '
+                    'files), md5 lowercase-hex, drs_uri `drs://`-prefixed.\n'
+                    'Records may carry keys beyond those modeled here — the two '
+                    'declarations above, and the `organism_type` / '
+                    '`phenotypic_sex` the download script also emits; the runtime '
+                    'validator tolerates them (validates with `extra="ignore"`), '
+                    'so an unmodeled column never fails a record.',
      'id': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
      'imports': ['linkml:types'],
      'name': 'meta_disco_input_metadata',
@@ -109,7 +116,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class AnvilFileMetadataRecord(ConfiguredBaseModel):
     """
-    One raw AnVIL file metadata record, before classification. Every slot but the nullable AnVIL declarations (`data_modality`, `reference_assembly`) is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean).
+    One raw AnVIL file metadata record, before classification. Every slot is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
          'tree_root': True})
@@ -124,8 +131,6 @@ class AnvilFileMetadataRecord(ConfiguredBaseModel):
     dataset_id: str = Field(default=..., description="""Identifier of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     dataset_title: str = Field(default=..., description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     is_supplementary: bool = Field(default=..., description="""Whether AnVIL flags the file as supplementary.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
-    data_modality: Optional[str] = Field(default=None, description="""AnVIL's own declared data modality, or null. Nullable by design — absent for most files (~99% of the corpus).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
-    reference_assembly: Optional[str] = Field(default=None, description="""AnVIL's own declared reference assembly, or null. Nullable by design — absent for most files (~99% of the corpus).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
 
     @field_validator('entry_id')
     def pattern_entry_id(cls, v):

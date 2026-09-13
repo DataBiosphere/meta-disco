@@ -1,15 +1,15 @@
 # Corpus comparison
 
-Generated 2026-09-04 02:02 by `scripts/compare_corpus.py` (issue #335).
+Generated 2026-09-12 20:47 by `scripts/compare_corpus.py` (issue #335).
 
-Runs compared: `output/anvil/20260802_170826` → `output/anvil/20260904_010319`.
+Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_202902`.
 
 ## Input snapshots
 
 | | file | catalog | pulled | files |
 |---|---|---|---|---:|
 | old | `data/anvil/archive/anvil14_20260729/anvil_files_metadata.json` | (unrecorded) | 2026-07-29T23:37:42.260488 | 733,877 |
-| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-04T00:59:04.915407 | 708,088 |
+| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-12T20:28:38.175239 | 708,088 |
 
 ### Parity by md5, per dataset
 
@@ -36,17 +36,17 @@ content — the run diff, by contrast, treats those as two different files.
 
 ## Coverage by dimension
 
-Files classified out of 733,992 (old) and 708,203 (new).
+Files classified out of 708,203 (old) and 708,203 (new).
 `classified` counts a real value; `n/a` counts `not_applicable`, which the
 coverage report folds into its own Classified row along with any other status.
 
 | dimension | old | new | old % | new % | delta | old n/a | new n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| data_modality | 617,821 | 592,104 | 84.2% | 83.6% | -25,717 | 59,021 | 59,021 |
-| data_type | 652,265 | 626,548 | 88.9% | 88.5% | -25,717 | 55,947 | 55,947 |
-| platform | 57,973 | 57,973 | 7.9% | 8.2% | +0 | 100,137 | 74,429 |
-| reference_assembly | 463,794 | 463,793 | 63.2% | 65.5% | -1 | 88,571 | 62,863 |
-| assay_type | 54,349 | 28,635 | 7.4% | 4.0% | -25,714 | 74,429 | 74,429 |
+| data_modality | 592,104 | 592,104 | 83.6% | 83.6% | +0 | 59,021 | 59,021 |
+| data_type | 626,548 | 626,548 | 88.5% | 88.5% | +0 | 55,947 | 55,947 |
+| platform | 57,973 | 57,973 | 8.2% | 8.2% | +0 | 74,429 | 74,429 |
+| reference_assembly | 463,793 | 463,793 | 65.5% | 65.5% | +0 | 62,863 | 62,863 |
+| assay_type | 28,635 | 28,635 | 4.0% | 4.0% | +0 | 74,429 | 74,429 |
 
 ### Where the delta comes from
 
@@ -57,20 +57,15 @@ runs, which is the only classifier-behaviour column.
 
 | dimension | delta | corpus loss | corpus gain | label change |
 |---|---:|---:|---:|---:|
-| data_modality | -25,717 | -25,717 | +0 | +0 |
-| data_type | -25,717 | -25,717 | +0 | +0 |
+| data_modality | +0 | -0 | +0 | +0 |
+| data_type | +0 | -0 | +0 | +0 |
 | platform | +0 | -0 | +0 | +0 |
-| reference_assembly | -1 | -1 | +0 | +0 |
-| assay_type | -25,714 | -25,714 | +0 | +0 |
+| reference_assembly | +0 | -0 | +0 | +0 |
+| assay_type | +0 | -0 | +0 | +0 |
 
 ## Label changes on files present in both runs
 
-### reference_assembly
-
-| old label | new label | files |
-|---|---|---:|
-| `CHM13` | `GRCh38` | 3,685 |
-| `GRCh38` | `CHM13` | 3,681 |
+No file present in both runs changed a label.
 
 ## Per-dataset classified counts
 
@@ -86,11 +81,6 @@ runs, which is the only classifier-behaviour column.
 | ANVIL_1000G_high_coverage_2019 | platform | 6,404 | 6,404 | +0 |
 | ANVIL_1000G_high_coverage_2019 | reference_assembly | 12,908 | 12,908 | +0 |
 | ANVIL_1000G_high_coverage_2019 | assay_type | 6,404 | 6,404 | +0 |
-| ANVIL_GTEx_public_data | data_modality | 25,717 | 0 | -25,717 |
-| ANVIL_GTEx_public_data | data_type | 25,717 | 0 | -25,717 |
-| ANVIL_GTEx_public_data | platform | 0 | 0 | +0 |
-| ANVIL_GTEx_public_data | reference_assembly | 1 | 0 | -1 |
-| ANVIL_GTEx_public_data | assay_type | 25,714 | 0 | -25,714 |
 | ANVIL_HPRC | data_modality | 5,294 | 5,294 | +0 |
 | ANVIL_HPRC | data_type | 12,178 | 12,178 | +0 |
 | ANVIL_HPRC | platform | 5,210 | 5,210 | +0 |

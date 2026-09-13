@@ -120,20 +120,29 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 4. Sources and resolution
 
-4.1 There are five input kinds:
+4.1 There are four input kinds. The numbering runs to five because kind 2 was retired and its
+    number is kept, so citations elsewhere stay valid:
     1. inference (filename, extension, header, content, file size, and signals already resolved)
-    2. canonical repository metadata (AnVIL harmonized fields)
+    2. ~~canonical repository metadata (AnVIL harmonized fields)~~ — **retired, see below**
     3. non-canonical repository metadata (submitter tables)
     4. external repository (HPRC Data Explorer, ENA, IGSR)
     5. curator
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
+    **Why kind 2 is retired (#424).** A repository's own harmonized fields are not a source with an
+    opinion about our files — they are its published output, the answer its users see today, which ours is
+    compared against. A target's current state is not an input to producing it. Section 7 is what replaced
+    it; the Open section carries the full reasoning.
+
     A source is an input kind only if it says something about **our files**. A table that describes the world —
     an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
     That is why the reference validator is input kind 1: it reads our bytes and looks the answer up.
 
-4.2 Inputs 1–4 are equal. Being ours confers no rank; being external confers no rank.
+4.2 Inputs 1, 3 and 4 are equal. Being ours confers no rank; being external confers no rank.
+    (Kind 2 is retired; kind 5 is deliberately outside this list, because a curator does not compete
+    with the others — 4.7 has a curator *answer* a conflict rather than produce one, and 4.5 keeps
+    conflict production to these three.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -143,7 +152,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A slot on which only one input speaks takes that input's declaration — a value classifies it, a status is
     preserved as that status. Filling a gap is not a disagreement.
 
-4.5 Inputs 1–4 that disagree produce a **conflict**. No value is asserted from them, and every competing
+4.5 Inputs 1, 3 and 4 that disagree produce a **conflict**. No value is asserted from them, and every competing
     declaration is recorded with the rule behind it.
 
 4.6 Statuses reconcile on their own axis, and the two behave differently.
@@ -230,16 +239,90 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      is the memory ceiling of #374, and the reconciled artifact is larger still. 6.5 is about the record's
      schema, not its container, so nothing is lost by the change.
 
+## 7. Published values
+
+Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it — with
+the exception of 7.4's second half, which names where the block goes once a reconciled record exists.
+
+Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
+depends on that, and a second repository needs no change to these assertions.
+
+7.1 The values a repository publishes for a dimension this project infers are its **published output**,
+    not an input. They are the answer its users see today, and a target's current state is not an input
+    to producing it. This is why 4.1's kind 2 is retired.
+
+7.2 Published values are **carried, never consumed**. They produce no claim, compete at no tier, and
+    change no value. A run with them present classifies identically to one without — the same guarantee
+    6.6 makes about a run with no sources.
+
+7.3 They are carried **verbatim**: as the repository wrote them, a list wherever it published a list.
+    Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
+    answer, and 1.4's transcribe-verbatim rule governs them as it governs evidence.
+
+7.4 They are carried in a `published` block **beside** the inferred values, never merged into them.
+    Nesting is what keeps 7.2 legible: one block is what this project inferred, the other is what the
+    repository publishes.
+
+    **They belong on the reconciled record, and are on the inference record only because there is not
+    one yet.** 6.10 already describes this block's shape — a reconciled record carries what inference
+    concluded, what each source declared, and the resolution — and 6.2 says the inference artifact is
+    *what inference alone concluded*. A repository's published values are not something inference
+    concluded, so carrying them there is against 6.2's definition of that artifact. #424 did it anyway,
+    because `*_classifications.json` is the only per-file record that exists and the alternative was a
+    second artifact joined back by `(entry_id, md5sum)`.
+
+    So this is a placement of convenience, not a decision. When reconcile lands, the block moves to the
+    reconciled record and the inference artifact goes back to being purely inferential; 6.3 keeps
+    reconciliation from rewriting inference output, so the move is a removal there and an addition here.
+    Tracked on #432, which inherits it; noted on #402. Until then, a reader of `*_classifications.json` should treat `published` as a
+    passenger — nothing in inference reads it, and 7.2 is what guarantees that.
+
+7.5 They are carried **even when they yield nothing else**. A published value this vocabulary has no
+    word for — `GRCm39` — produces no claim under 3.7, so without the block it would appear in the
+    output nowhere at all, and the gap it represents would be unmeasurable from the output.
+
+7.6 Whether a published value is a term in this vocabulary is **recorded per file**, not inferred by a
+    reader. Today no published value in the corpus is one, which is what makes #414's value mappings
+    countable rather than asserted.
+
+7.7 **Every producer of a run writes the block.** This is 7.2's twin: a producer that omits it does not
+    fail, it under-reports, and a missing block is indistinguishable from a file the repository
+    publishes nothing for. The claim is about the whole run, exactly as #376's exclusion claim is.
+
+7.8 The comparison is a stage **after** resolution, and its shape does not depend on how many sources
+    feed it: `sources -> reconcile -> inferred value -> compare against published`. With one source
+    there is nothing to reconcile, and the comparison is the whole of it.
+
+7.9 The comparison **recommends; it does not adopt**. A recommendation that the published value should
+    stand leaves the inferred value exactly as inference resolved it. Nothing here writes an answer.
+
+7.10 Agreement is only decidable **after mapping**. `GRCh38 + Gencode40` and `GRCh38` are the same
+     assembly and different strings, so until #414's value mappings exist the comparison names the pair
+     rather than judging it. Guessing at equality would be 3.5's similarity matching by another route.
+
+     To be exact about what does not exist: `generate_validation_report` carried two hand-written dicts,
+     `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`, holding these very mappings, and scored agreement
+     through them. They were script-local, carried no row ids, and were checked against no vocabulary, so
+     they are not a mapping table under 3.8 and 5.4 — nothing could cite one as the rule behind a claim.
+     #424 removed that second comparison rather than leave two reports scoring the same files by different
+     rules, and recorded the five mappings in that script's docstring as #414's seed. So the absent thing
+     is a *reviewable, cited* mapping, not the knowledge of what maps to what.
+
+7.11 The vocabulary is **repository-neutral**, because the report is addressed to whichever repository's
+     data team reads it. `add` / `keep` / `review` / `none` are what that team should do; no recommendation
+     names a publisher. Only `source` does.
+
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. Nothing yet checks a mapped value *against the slot's vocabulary* at runtime; that check is #414's, at the point the translation table loads. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in five places:
+No code reads this document, and the pipeline it describes does not exist — with section 7 excepted, which
+describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. Nothing yet checks a mapped value *against the slot's vocabulary* at runtime; that check is #414's, at the point the translation table loads. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in five places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
-- **There is no read-sources stage and no reconcile stage** (#402 and an unfiled issue). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
-- **There is no reconciled artifact.** Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet.
+- **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
+- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.
@@ -262,7 +345,24 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - Rule-id namespace: unique across the whole rule set, or namespaced per source.
 - What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
-- Whether input kind 2 (AnVIL harmonized fields) is read today at all.
+- ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered by #424: it is not an
+  input kind.** It was read — the downloader parsed both fields onto every record — and then dropped at
+  `ClassifierRecord`, one step before classification, so the answer to the question as asked was "no". But
+  the reframing matters more than the answer. The AnVIL harmonized fields are not a *source with an opinion*
+  about our files; they are the **published output**, the answer the AnVIL Explorer shows today and the
+  thing our answer is measured against. A target's current state is not an input to producing it.
+
+  So 4.1 has four input kinds, not five — 1, 3, 4 and 5 — and 4.2 and 4.5 name them individually rather
+  than as a range, because the range no longer describes them. Both name 1, 3 and 4: the curator was
+  never inside the old `1–4` either, and retiring kind 2 did not change that. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
+  4.3-4.6 describe what happens when a second arrives. #424 does no reconciliation for that reason — one
+  source has nothing to reconcile with — and instead compares inference against the published values and recommends,
+  which is a stage that sits *after* reconciliation and is unaffected by how many sources feed it:
+  `sources -> reconcile -> inferred value -> compare against published`.
+
+  What #424 built is the carrying, not a claim: each record's `published` block holds those values verbatim,
+  produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
+  by number across the issues, and a silent renumber would break every citation.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
 - How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has

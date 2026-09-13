@@ -5,7 +5,16 @@ import pytest
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 from tests.metadata_fixtures import valid_record
 
-_ENVELOPE_KEYS = {"file_name", "md5sum", "file_size", "file_format", "dataset_title", "classifications", "entry_id"}
+_ENVELOPE_KEYS = {
+    "file_name",
+    "md5sum",
+    "file_size",
+    "file_format",
+    "dataset_title",
+    "classifications",
+    "entry_id",
+    "published",
+}
 
 _METADATA_KEYS = [
     "total_to_process",
@@ -120,7 +129,7 @@ class TestOutputRecord:
         assert rec.entry_id is None
         assert rec.md5sum == "b" * 32
 
-    def test_to_dict_has_the_seven_envelope_keys(self):
+    def test_to_dict_has_the_eight_envelope_keys(self):
         rec = OutputRecord.from_single(
             md5sum="c" * 32, file_name="x", file_size=1, file_format=".test", classifications={"k": "v"}
         )

@@ -58,6 +58,9 @@ import requests
 API_URL = "https://service.explore.anvilproject.org"
 FILES_URL = f"{API_URL}/index/files"
 MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
+# Who publishes the files this module downloads. Written into every snapshot's envelope
+# so a reader names the publisher rather than assuming one (#424).
+REPOSITORY = "anvil"
 
 FORMAT_COMPACT = "compact"
 FORMAT_VERBATIM = "verbatim.jsonl"
@@ -380,30 +383,57 @@ def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], i
 def _first(cell: str) -> str | None:
     """The first of a ``||``-joined multi-value cell, or None for an empty cell.
 
-    The retired page downloader took element zero of the list Azul returned for
-    ``data_modality`` and ``reference_assembly``; this is the same choice on the
-    compact spelling of that list.
+    Used for ``organism_type`` and ``phenotypic_sex`` only — the two donor fields
+    the page downloader also emitted, which the input contract does not model and
+    ignores as extra keys. Taking element zero of a list is lossy, so it is kept
+    only where nothing reads the result: the two fields AnVIL *declares* about a
+    file went through here too until #424, where element zero was not dropping
+    data but manufacturing a wrong answer (twelve IGVF files declare two
+    modalities and all twelve arrived as the first one). Those two read
+    :func:`_published` instead.
     """
     if not cell:
         return None
     return cell.split(_MULTI_VALUE_SEP, 1)[0] or None
 
 
-def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
-    """One classifier input record from one compact-manifest row.
+def _published(cell: str) -> list[str] | None:
+    """Every value of a ``||``-joined multi-value cell, or None for an empty cell.
 
-    The keys are the input contract (``schema/metadata.yaml``) plus the two
-    donor fields the page downloader also emitted and the contract ignores.
-    ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
-    strict validation requires; a cell that is not one of Azul's ``True`` /
-    ``False`` spellings raises rather than silently becoming ``False``. Four
-    fields read an empty cell as ``None`` and a multi-valued one as its first
-    value, which is what the page downloader emitted for them: the contract's
-    two nullable slots, ``data_modality`` and ``reference_assembly``, and the
-    two donor fields, ``organism_type`` and ``phenotypic_sex``, which the
-    contract does not model and ignores as extra keys. Every other field is
-    passed through as the cell's text, and the contract's non-empty patterns
-    are what reject a blank one.
+    The published values transcribed as Azul published it (#424): a list
+    where Azul published a list, and each value exactly as it was written — no
+    mapping, no normalization, no casefolding. Splitting on the full ``" || "``
+    separator rather than ``"||"`` is what keeps a value free of the separator's
+    own padding.
+
+    An empty element is dropped rather than transcribed: it declares nothing, and
+    a cell of nothing but separators yields ``None`` like a blank one. That is the
+    only case in which the returned list is not the cell split verbatim, and the
+    only value this can ever drop.
+    """
+    if not cell:
+        return None
+    return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
+
+
+def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
+    """One classifier input record from one compact manifest row.
+
+    The keys are the input contract (``schema/metadata.yaml``) plus four fields the
+    contract does not model and ignores as extra keys: the two dimensions the
+    repository publishes, and the two donor fields the page downloader also emitted.
+    ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's strict
+    validation requires; a cell that is not one of Azul's ``True`` / ``False``
+    spellings raises rather than silently becoming ``False``.
+
+    Four fields read an empty cell as ``None``, and they split a multi-valued one two
+    different ways. ``data_modality`` and ``reference_assembly`` are what the repository
+    publishes for this file today — classification reads them as nothing and the output
+    carries them as its ``published`` block (#424) — so they are transcribed as the full
+    list (:func:`_published`). ``organism_type`` and ``phenotypic_sex`` still keep
+    element zero (:func:`_first`), which nothing reads. Every other field is passed
+    through as the cell's text, and the contract's non-empty patterns are what reject a
+    blank one.
     """
     return {
         "entry_id": row["files.document_id"],
@@ -412,8 +442,8 @@ def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
         "file_format": row["files.file_format"],
         "file_size": int(row["files.file_size"]),
         "file_md5sum": row["files.file_md5sum"],
-        "data_modality": _first(row.get("files.data_modality", "")),
-        "reference_assembly": _first(row.get("files.reference_assembly", "")),
+        "data_modality": _published(row.get("files.data_modality", "")),
+        "reference_assembly": _published(row.get("files.reference_assembly", "")),
         "is_supplementary": _BOOL_CELL[row["files.is_supplementary"]],
         "drs_uri": row["files.drs_uri"],
         "dataset_id": row["datasets.dataset_id"],
@@ -428,7 +458,7 @@ def _fields(count: int) -> str:
     return f"{count} field{'' if count == 1 else 's'}"
 
 
-def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
+def iter_compact_manifest_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
     """Every row of one compact manifest on disk as its raw cells, with its line number.
 
     The cells are exactly what Azul wrote — every column, unmapped and
@@ -504,12 +534,12 @@ def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
     spelling that is not Azul's ``True``/``False``; ``ValueError`` is ``int()``
     on a ``files.file_size`` that is not a number. ``TypeError`` is kept as a
     guard rather than for a known path: it was how a short row used to surface,
-    and :func:`iter_compact_rows` now refuses those outright, already naming the
+    and :func:`iter_compact_manifest_rows` now refuses those outright, already naming the
     line.
     """
-    for n, row in iter_compact_rows(path):
+    for n, row in iter_compact_manifest_rows(path):
         try:
-            yield record_from_compact_row(row)
+            yield record_from_compact_manifest_row(row)
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
 
@@ -547,11 +577,18 @@ def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: 
     Records the catalog generation the files came from (issue #335: the July
     2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
     they came through the manifest path, and how many each dataset contributed.
+
+    ``repository`` names who published these files, so nothing downstream has to infer
+    it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
+    repository a run's ``published`` blocks came from; it used to prefix a hard-coded
+    ``anvil`` there, which would have mislabelled any other repository's snapshot loaded
+    through the same shared path.
     """
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(dataset_counts.values()),
         "api_url": MANIFEST_URL,
+        "repository": REPOSITORY,
         "catalog": catalog,
         "source": "manifest",
         "datasets": dict(sorted(dataset_counts.items())),

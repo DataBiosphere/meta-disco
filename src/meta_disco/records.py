@@ -28,7 +28,11 @@ is modeled over exactly the classifier-relevant fields, not the full contract.
 Both classes expose the same six identity attributes (``file_name``,
 ``file_format``, ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``),
 so ``_build_record`` and the work-list steps read them uniformly regardless of
-stream.
+stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
+published values (#424), not identity and not classifier input — for the same
+reason: ``_build_record`` reads them off either stream without asking which it has,
+and a record that failed the input contract is still one the repository publishes
+values for.
 
 The module also holds the two write-side dataclasses the pipeline serializes at
 its output boundary, which follow the same frozen / field-order-is-output-order /
@@ -42,6 +46,122 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from .file_name import FileName
+from .schema_vocab import value_in_vocabulary
+
+# The two dimensions the repository publishes of its own accord, in the order the
+# ``published`` block emits them. Not the classifier's input and not its answer: the
+# published output (#424). Two of the five CLASSIFICATION_FIELDS, deliberately not
+# derived from that tuple — it is the set the repository's file index happens to carry,
+# and it moves when the repository moves, not when our dimensions do.
+PUBLISHED_FIELDS = ("data_modality", "reference_assembly")
+
+
+def published_from(record: dict, source: str | None) -> dict | None:
+    """The ``published`` block for one raw input record (contract 7.7's one-liner).
+
+    The form every producer calls, so a producer states *which record* it is building
+    the block for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
+    what makes that tuple authoritative: a producer cannot read a stale subset of the
+    dimensions, and adding a third one does not touch a single call site.
+
+    The two fields are read with ``.get`` because they are outside the input contract
+    (#424 — they are not input), so no validation has run on them and no caller
+    guarantee covers them.
+    """
+    return build_published({field: record.get(field) for field in PUBLISHED_FIELDS}, source)
+
+
+def build_published(values: dict[str, Any], source: str | None) -> dict | None:
+    """The ``published`` block for one file, or None when the repository publishes none.
+
+    Carries a repository's own values into the output (#424): what it publishes for
+    this file today, transcribed exactly as written and as a list wherever it
+    published a list. This is not a claim and nothing resolves against it —
+    classification does not read it, and a file's ``value`` is whatever inference
+    concluded, block or no. It exists so the two can be compared per file, and
+    precisely because a published value may produce nothing else: ``GRCm39`` is a term
+    this project has no word for, so without this block those 220 values would appear
+    in the output nowhere at all.
+
+    ``in_vocabulary`` names, per dimension, the subset of that dimension's published
+    values that *are* terms in its enum. An empty list means the repository published
+    something this vocabulary cannot say — the case for every published value in the
+    corpus today, and what makes the gap countable from the output rather than
+    asserted. A dimension the repository publishes nothing for is absent from the map
+    rather than carrying an empty list, so the map's keys are exactly the dimensions it
+    speaks to.
+
+    Returns None — and the envelope emits ``"published": null`` — when the repository
+    publishes nothing for either dimension, which is ~98% of the corpus.
+
+    **Shape is checked in three places, and this is the middle one.** These two fields
+    are outside the input contract (#424 — they are not input), so ``validate_metadata``
+    passes them through unexamined and no caller guarantee covers them. What does check
+    them: ``pipeline.refuse_bad_published_shape`` scans a whole snapshot at the load
+    boundary and is what actually refuses a pre-#424 spelling — before any record is
+    fetched or written, which is the only point at which "refuse the snapshot" can be
+    true. The output schema's ``Published`` class refuses a bad shape at the far end,
+    once a record exists. This guard sits between them, at the single construction site,
+    and covers a caller that reached it without passing through that loader.
+
+    It is not redundant with either. Both bad shapes are quiet without it: a bare string
+    is *iterable*, so it would be walked character by character and report ``GRCh38`` — a
+    real term — as one this vocabulary lacks, then render as ``G || R || C || h || 3 || 8``;
+    a non-iterable such as an int would raise a bare ``TypeError`` from the comprehension
+    below. Raising here names the field and the value instead. Note this raise is *not*
+    by itself a refusal on the pipeline path: it happens inside a worker, and
+    ``_run_parallel`` catches every worker exception and writes no row, so a snapshot
+    that reached here would lose rows rather than fail — which is why the load-boundary
+    check exists and why it, not this, is what the snapshot is refused by.
+
+    ``values`` is typed ``Any`` rather than ``list[str] | None``: the looser type is the
+    true one, since a caller reads these straight off a raw record and can promise
+    nothing about them — this function is where the narrowing happens, and annotating the
+    promise instead of the check would only hide that.
+    """
+    published = {}
+    for field in PUBLISHED_FIELDS:
+        value = values.get(field)
+        if value is not None and not isinstance(value, list):
+            # The str case has a known cause worth naming; any other type is drift with
+            # no story, so it gets no invented one.
+            hint = (
+                " A snapshot built before #424 spells these as scalars; rebuild it with"
+                " scripts/download_anvil_manifest.py."
+                if isinstance(value, str)
+                else ""
+            )
+            raise ValueError(f"published {field} is {type(value).__name__}, not a list: {value!r}.{hint}")
+        if value is not None and not all(isinstance(v, str) for v in value):
+            raise ValueError(f"published {field} holds a non-string value: {value!r}")
+        if value is not None and not value:
+            # `all([])` is True, so the emptiness check below cannot see this. An empty
+            # list is not "no published value" — the reader and this block both spell
+            # that `null` — so accepting it would emit `[]` beside a real list, or, when
+            # both dimensions are empty, collapse to no block at all and swallow the
+            # malformed shape entirely.
+            raise ValueError(f"published {field} is an empty list; a dimension with no published value is null")
+        if value is not None and not all(value):
+            # The manifest reader drops empty elements, so a cell of nothing but
+            # separators arrives as no published value at all. A list holding one did
+            # not come from that reader, and treating it as a published value would put
+            # a blank in the comparison as though the repository had said something.
+            # Refused rather than dropped: silently transforming a value here is what
+            # `_first()` did wrong.
+            raise ValueError(f"published {field} holds an empty value: {value!r}")
+        published[field] = value
+
+    if not any(published.values()):
+        return None
+    return {
+        "source": source,
+        **published,
+        "in_vocabulary": {
+            field: [value for value in field_values if value_in_vocabulary(field, value)]
+            for field, field_values in published.items()
+            if field_values
+        },
+    }
 
 
 def coerce_identity(value: Any) -> str:
@@ -83,6 +203,13 @@ class ClassifierRecord:
     full path and served from their own S3 paths) supplies it here and the fetcher
     streams from it instead. Not a classifier-relevant field, so its absence never
     diverts a record.
+
+    ``data_modality`` / ``reference_assembly`` are the published values (#424),
+    carried from the input record to the output's ``published`` block. Nothing on the
+    classify path reads either one — they are not evidence, not a claim and not a
+    tier participant; they are what AnVIL publishes today, kept so the run's answer
+    can be compared against it. ``None`` where the repository publishes nothing, which is
+    most of the corpus and all of the HPRC path.
     """
 
     file_name: str
@@ -93,6 +220,8 @@ class ClassifierRecord:
     entry_id: Any
     name: FileName
     url: str | None = None
+    data_modality: list[str] | None = None
+    reference_assembly: list[str] | None = None
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -108,6 +237,14 @@ class ClassifierRecord:
         ``file_name`` is parsed into a :class:`FileName` exactly once here — the
         single parse site on the pipeline path (#242). ``url`` is optional (#276) and
         absent on the AnVIL path, so it is read with ``.get`` and defaults to ``None``.
+
+        The two published dimensions are read with ``.get`` for a stronger reason than
+        optionality: they are not slots of the input contract at all (#424 — they are
+        not input, they are the published output), so ``validate_metadata`` never looks
+        at them. The shared loader does — ``pipeline.refuse_bad_published_shape`` refuses
+        a bad shape before either stream is built — but a caller reaching this
+        constructor another way has had no such check. A record that carries neither reads as
+        ``None`` on both, exactly like one from a source that declares nothing.
         """
         return cls(
             file_name=record["file_name"],
@@ -118,6 +255,8 @@ class ClassifierRecord:
             entry_id=record.get("entry_id"),
             name=FileName.parse(record["file_name"]),
             url=record.get("url"),
+            data_modality=record.get("data_modality"),
+            reference_assembly=record.get("reference_assembly"),
         )
 
 
@@ -133,6 +272,15 @@ class InvalidRecord:
     (the two fields downstream does string operations on), the rest are echoed as
     the record carried them, since a ``validation_failed`` row may carry their
     drifted (non-string) types.
+
+    It carries the published values too (#424), and is typed ``Any`` for it rather than
+    ``list[str] | None``: the two are outside the input contract, so the contract has
+    checked their shape on this stream no more than on the other, and this stream is the
+    one built from records already known to be drifted. (The shared loader does check
+    them, but the annotation describes what this class can promise, not what one caller
+    happens to have run.) A file
+    the repository publishes a modality for does not stop being published by failing our
+    contract on ``file_size``, so the row still reports what the repository publishes.
     """
 
     file_name: str
@@ -142,6 +290,8 @@ class InvalidRecord:
     dataset_title: Any
     entry_id: Any
     reasons: list[str]
+    data_modality: Any = None
+    reference_assembly: Any = None
 
     @classmethod
     def from_record(cls, record: dict, reasons: list[str]) -> InvalidRecord:
@@ -161,6 +311,8 @@ class InvalidRecord:
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
             reasons=reasons,
+            data_modality=record.get("data_modality"),
+            reference_assembly=record.get("reference_assembly"),
         )
 
 
@@ -168,10 +320,31 @@ class InvalidRecord:
 class OutputRecord:
     """The per-file output envelope: identity fields wrapping a classifications payload.
 
-    The single shape the pipeline writes per record. Both producers construct it —
-    the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
+    The shape ``ClassifyPipeline`` writes per record. Both of *its* producers construct
+    it — the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
     work item) and the single-file path (``classify_single``) — and serialize through
-    ``to_dict``, so the seven-key envelope can no longer drift between them (#204).
+    ``to_dict``, so the eight-key envelope can no longer drift between them (#204).
+
+    **It is not the shape of every classification record in a run.** #204 covers the
+    seven file types the pipeline classifies (bam, vcf, fastq, fasta, gfa, tar, bed);
+    the four standalone producers build their output dicts by hand and emit wider
+    records — ``dataset_id`` on auxiliary/image/remaining (nine keys), and
+    ``dataset_id`` plus ``parent_file``/``parent_md5sum`` on index (eleven), which also
+    writes a third envelope key, ``unmatched_files``. Their run ``metadata`` blocks
+    differ too: five distinct shapes across the eleven files, sharing only ``complete``.
+    So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
+    pins only this one. What all eleven *do* share is ``classifications``,
+    the six identity fields this module's docstring names, and ``published`` — which is
+    what lets ``output_utils.iter_records``, ``field_label`` and ``corpus_diff`` read them
+    uniformly. Unifying the four on this record is #429.
+
+    ``published`` is the repository's own values (#424) — what it publishes for this file
+    today, beside what this run concluded. It is ``None`` on most records and on the
+    whole single-file path, and is emitted as ``"published": null`` rather than
+    omitted, so the envelope keeps one shape for every row (the reason ``RunMetadata``
+    still emits a retired ``dropped: 0``). It is not part of ``classifications`` and
+    never merges into it: the dimensions block is this project's answer, and mixing
+    the published values into it is the confusion #424 exists to undo.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
@@ -197,13 +370,26 @@ class OutputRecord:
     dataset_title: Any
     classifications: dict
     entry_id: Any
+    published: dict | None = None
 
     @classmethod
-    def from_work_item(cls, item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+    def from_work_item(
+        cls,
+        item: ClassifierRecord | InvalidRecord,
+        classifications: dict,
+        source: str | None = None,
+    ) -> OutputRecord:
         """Build from a parsed work item and its classifications payload.
 
         Reads the six identity attributes both streams expose (see the module
-        docstring), so it is agnostic to which stream produced ``item``.
+        docstring), so it is agnostic to which stream produced ``item`` — and the two
+        published dimensions, which both streams expose for that same reason.
+
+        ``source`` names the repository the values were read from (#424), and is
+        the caller's to supply because it is a fact about the run's input snapshot,
+        not about this record: the pipeline reads it from the input envelope. ``None``
+        where the input carried no envelope to name one, which is honest — better an
+        unnamed repository than a guessed catalog.
         """
         return cls(
             file_name=item.file_name,
@@ -213,6 +399,7 @@ class OutputRecord:
             dataset_title=item.dataset_title,
             entry_id=item.entry_id,
             classifications=classifications,
+            published=build_published({field: getattr(item, field) for field in PUBLISHED_FIELDS}, source),
         )
 
     @classmethod
@@ -229,7 +416,9 @@ class OutputRecord:
 
         ``dataset_title``/``entry_id`` have no source here and serialize as ``None`` —
         the envelope's one canonical shape, which is why the single-file path's output
-        carries the same seven keys as the batch path.
+        carries the same eight keys as the batch path. ``published`` is ``None`` for the
+        same reason and one more: this path has no input record, so there is no
+        published values to carry even in principle.
         """
         return cls(
             file_name=file_name,
@@ -242,7 +431,7 @@ class OutputRecord:
         )
 
     def to_dict(self) -> dict:
-        """Serialize to the output envelope dict (the seven-key shape written to JSON).
+        """Serialize to the output envelope dict (the eight-key shape written to JSON).
 
         Derived from the dataclass fields (a shallow copy — ``classifications`` is not
         deep-copied), so every field is emitted, in declaration order, and ``to_dict``

@@ -21,7 +21,7 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
-from .records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
+from .records import PUBLISHED_FIELDS, ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 
 
 def load_records(input_path: Path) -> list:
@@ -32,7 +32,7 @@ def load_records(input_path: Path) -> list:
     must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
     Hence ``list``, not ``list[dict]``: this is the raw read, used by the
     ``validate_metadata`` gate, which must see every element to report on it.
-    Classification producers read :func:`load_classifiable_records` instead, which does
+    Classification producers read :func:`load_classifiable_snapshot` instead, which does
     narrow the element type.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
@@ -74,6 +74,134 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 
+def published_source(metadata: dict) -> str | None:
+    """Name the repository an input snapshot's published values came from, or None.
+
+    Both halves come off the snapshot's own envelope: ``repository`` (who published)
+    and ``catalog`` (which generation of what they published), giving e.g.
+    ``anvil/anvil15``. Neither is inferred. An earlier form prefixed a hard-coded
+    ``anvil`` to whatever catalog it found, which was wrong on a shared load path — the
+    HPRC run reads the same function, and would have labelled its records ``anvil/...``
+    the moment its downloader emitted an envelope. ``source`` is the one field meant to
+    name the publisher, so it is the one field that must not guess (contract 7.11).
+
+    ``None`` unless the envelope carries both. That covers an ``.ndjson`` load, which
+    has no envelope; a snapshot pulled before #335 added ``catalog``; and one written
+    before #424 added ``repository``. This is the *name* only — the values themselves
+    come off each record, so such a run still carries a ``published`` block, with
+    ``source`` null. Deliberately not defaulted: an unnamed repository is a fact, and a
+    guessed one is the drift #335 exists to catch.
+    """
+    repository, catalog = metadata.get("repository"), metadata.get("catalog")
+    if not (isinstance(repository, str) and repository and isinstance(catalog, str) and catalog):
+        return None
+    return f"{repository}/{catalog}"
+
+
+def refuse_bad_published_shape(records: list[dict], input_path: Path, max_examples: int = 5) -> None:
+    """Raise if any record's published values are not a list of strings, naming the offenders.
+
+    The published dimensions are outside the input contract (#424 — they are not input),
+    so ``validate_metadata`` passes them through unexamined. Without this, the first
+    check is ``records.build_published``, which runs *per record inside a worker* — and
+    ``_run_parallel`` catches every worker exception, counts it, and writes no row. A
+    pre-#424 snapshot would therefore not be refused: every file it publishes a value
+    for would silently vanish from the output while the run reported ``complete`` and
+    exited 0, which is the failure mode #155 exists to prevent. Worse, it would differ
+    by ``--workers``: the single-worker branch has no ``try``, so the same input crashes
+    there and truncates at the ``-w 4`` / ``-w 10`` the Makefile uses.
+
+    Checking here makes "refuse the snapshot" true for the records that would be
+    classified: the run stops before any of them is fetched or written, and reports how
+    many are bad rather than only the first. ``build_published``'s own guard stays as the
+    constructor's backstop, for callers that did not come through this path.
+
+    Deliberately *after* ``partition_records``, so it sees the classifiable records
+    only. A record excluded for having no usable checksum (#376) produces no output row
+    whatever its shape, and is named in ``excluded_files.json``, so a bad value on one
+    can lose nothing — refusing a run over it would block a snapshot that classifies
+    correctly. Checking before the split would also have to tolerate the non-dict
+    elements the split removes. So this validates what will be classified, which is the
+    scope that matters, and not the whole file.
+
+    Both halves of the shape are checked — the outer list and its elements — because
+    ``build_published`` refuses both, and anything it refuses that this lets through
+    raises in a worker and loses the row, which is the failure this exists to close.
+
+    A whole-list scan of a 708k-record corpus costs one pass over two keys per record,
+    against a run measured in minutes.
+    """
+    bad: list[tuple[int, object, str, object, str]] = []
+    for position, record in enumerate(records):
+        for field in PUBLISHED_FIELDS:
+            value = record.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
+            elif not all(isinstance(element, str) for element in value):
+                bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
+            elif not value:
+                # `all([])` is True, so the emptiness test below is blind to this.
+                bad.append((position, record.get("entry_id"), field, value, "is an empty list; absent is null"))
+            elif not all(value):
+                # `build_published` refuses this too, so letting it through here would
+                # raise in a worker and lose the row — the failure this function exists
+                # to close. The manifest reader never produces it: it drops empty
+                # elements, so such a cell arrives as no published value at all.
+                bad.append((position, record.get("entry_id"), field, value, "holds an empty value"))
+    if not bad:
+        return
+    # Records, not entries: one record can be wrong on both fields, and calling that two
+    # records would misreport how much of the snapshot is bad. Counted by position in the
+    # list, not by ``entry_id`` — the input contract requires that to be non-empty but
+    # not unique, so deduplicating on it would merge two distinct bad records (and merge
+    # every record missing one, which all read as None).
+    offenders = len({position for position, _, _, _, _ in bad})
+    examples = "; ".join(
+        f"record {position} ({entry_id}): {field}={value!r} ({why})"
+        for position, entry_id, field, value, why in bad[:max_examples]
+    )
+    more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
+    # The pre-#424 hint belongs only to the scalar case, which is the shape a snapshot of
+    # that vintage actually has. Offering "rebuild the snapshot" for a list holding a
+    # non-string sends an operator at the wrong cause.
+    hint = (
+        " A snapshot built before #424 spells them as scalars; rebuild it with scripts/download_anvil_manifest.py."
+        if any(why.endswith("not a list") for *_, why in bad)
+        else ""
+    )
+    raise ValueError(
+        f"{input_path}: {offenders:,} record(s), {len(bad):,} field(s), carry a published value this "
+        f"cannot use — each must be a list of strings.{hint} Examples — {examples}{more}"
+    )
+
+
+def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[str | None, list[dict]]:
+    """:func:`load_classifiable_records`, plus the repository the snapshot names.
+
+    The form every classification producer calls. It returns the resolved repository name
+    rather than the raw envelope because that is the only thing any caller wants from the
+    envelope — and because returning the envelope made naming the repository a *second*
+    line each producer had to remember, which is precisely the omission contract 7.7
+    exists to catch. Resolved here, a producer cannot forget it.
+
+    Same single parse, same exclusion, same ``excluded_files.json`` write, and the same
+    guarantee that every returned element is a ``dict``.
+
+    The name is ``None`` for an ``.ndjson`` input, which carries no envelope, and for an
+    envelope that names no catalog (see :func:`published_source`).
+    """
+    metadata, raw = load_snapshot(input_path)
+    records, excluded = partition_records(raw)
+    refuse_bad_published_shape(records, input_path)
+    if run_dir is not None:
+        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
+    if excluded:
+        print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
+    return published_source(metadata), records
+
+
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
     """Load an input file's records, minus the ones excluded for having no checksum.
 
@@ -102,13 +230,14 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     element cannot carry a checksum, so the exclusion removes it. That is why the
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
+
+    The records half of :func:`load_classifiable_snapshot`, which is what every producer
+    now calls — this narrower form has no production caller left and is kept for readers
+    that genuinely want only the records (``test_producer_exclusions``). The two share
+    one load path, so the exclusion cannot come to mean different things to different
+    callers.
     """
-    records, excluded = partition_records(load_records(input_path))
-    if run_dir is not None:
-        write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
-    if excluded:
-        print(f"Excluded {len(excluded):,} record(s) with no usable file_md5sum (#376)")
-    return records
+    return load_classifiable_snapshot(input_path, run_dir)[1]
 
 
 class RecordOutcome(NamedTuple):
@@ -266,6 +395,10 @@ class ClassifyPipeline:
         self.workers = workers or 10
         self.skip_complete = skip_complete
         self.skip_cached = skip_cached
+        # Set by _load_input from the input envelope, so it is known before the first
+        # record is built. None until then, and None afterwards for an input that
+        # named no catalog (see published_source).
+        self.published_source: str | None = None
 
     def run(self) -> list[dict]:
         """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
@@ -343,7 +476,7 @@ class ClassifyPipeline:
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
-        Returns the canonical seven-key ``OutputRecord`` envelope (#204), the same
+        Returns the canonical eight-key ``OutputRecord`` envelope (#204), the same
         shape the batch path writes; ``dataset_title``/``entry_id`` are ``None`` here
         since there is no source record.
 
@@ -384,15 +517,21 @@ class ClassifyPipeline:
     def _load_input(self) -> list[dict]:
         """Load NDJSON or JSON input, minus the records excluded for having no checksum.
 
-        Reads through the shared ``load_classifiable_records`` (#376), so a record with
+        Reads through the shared ``load_classifiable_snapshot`` (#376), so a record with
         no usable ``file_md5sum`` never reaches routing, validation, the evidence cache
         or a fetcher — and every element of the result is a ``dict``.
 
         The run directory is this pipeline's output directory, so the load also records
         what it excluded there — including on a standalone ``make classify-<type>`` run,
         which no orchestrator wraps.
+
+        Reads the snapshot form so the input envelope is parsed in the same pass, and
+        records which repository this run's ``published`` blocks came from (#424). That
+        is a side effect on ``self``, done here because this is where the envelope is
+        in hand and every record built afterwards needs the answer.
         """
-        return load_classifiable_records(self.input_path, self.output_path.parent)
+        self.published_source, records = load_classifiable_snapshot(self.input_path, self.output_path.parent)
+        return records
 
     def _filter_records(self, records: list) -> list[dict]:
         """Filter to records routed to this file type by extension.
@@ -564,18 +703,21 @@ class ClassifyPipeline:
             self._build_record(item, classifications), was_cached, content_unreadable, validation_failed=False
         )
 
-    @staticmethod
-    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
+    def _build_record(self, item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
         """Wrap a classifications dict in the typed output envelope.
 
         Reads identity off the typed work item (a ``ClassifierRecord`` on the success
         path, an ``InvalidRecord`` on the ``validation_failed`` path); ``OutputRecord``
-        is serialized to the seven-key dict at the NDJSON write boundary via
+        is serialized to the eight-key dict at the NDJSON write boundary via
         ``to_dict``. The identity fields are echoed as the item carries them — typed on
         the success path, the raw (possibly drifted) values on the ``validation_failed``
         path — matching what ``classify_single`` writes for the single-file path (#204).
+
+        An instance method rather than a static one because the ``published`` block names
+        the repository it was read from, which is a fact about this run's input snapshot
+        (#424) and so lives on the pipeline, not on the record.
         """
-        return OutputRecord.from_work_item(item, classifications)
+        return OutputRecord.from_work_item(item, classifications, source=self.published_source)
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""

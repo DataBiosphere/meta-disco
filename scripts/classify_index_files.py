@@ -21,7 +21,8 @@ from meta_disco.models import (
     field_label,
     status_for_value,
 )
-from meta_disco.pipeline import load_classifiable_records
+from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.records import published_from
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -106,7 +107,7 @@ def propagate_to_index_files(
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    files = load_classifiable_records(metadata_path, output_path.parent)
+    source, files = load_classifiable_snapshot(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     # Load classifications
@@ -211,6 +212,13 @@ def propagate_to_index_files(
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
                 "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
+                # The index file's own published values, not the parent's (#424). The
+                # repository publishes for 4 index files in this corpus and all four are
+                # unmatched here, so today this block is null on every row this producer
+                # writes and the catch-all is what carries those four. It is wired anyway
+                # because contract 7.7 is about the producer, not about today's corpus:
+                # a matched index with a published value would otherwise lose it silently.
+                "published": published_from(f, source),
             }
 
             if result["data_modality"] not in _sentinels:
@@ -347,6 +355,9 @@ def propagate_to_index_files(
                 "parent_file": parent,
                 "parent_md5sum": r["parent_md5sum"],
                 "classifications": classifications,
+                # Carried through the reshape, not rebuilt: the intermediate record
+                # above already holds the index file's own declaration (#424).
+                "published": r["published"],
             }
         )
 

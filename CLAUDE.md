@@ -84,7 +84,7 @@ evidence}` entry — plus the controlled vocabulary:
   cache is keyed by it), so it is *excluded* from classification rather than
   written as a row echoing a null md5 — such a row has no usable identity and
   would collide with any other in `corpus_diff` (#376). Exclusion happens once,
-  at the shared load path (`pipeline.load_classifiable_records`), so every
+  at the shared load path (`pipeline.load_classifiable_snapshot`), so every
   producer inherits it — and that same load writes the run's
   `excluded_files.json`, so excluding a record and naming it are one act, down
   to a standalone `make classify-bam`. `make unprocessable-report` lists them
@@ -130,6 +130,27 @@ evidence}` entry — plus the controlled vocabulary:
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;
     recording which catalog a run enhances is #404, and is not built.
+  - Published values (contract section 7, built by #424) live in each output record's
+    `published` block — what the repository publishes for that file today, beside what
+    the run inferred. `records.build_published` is its single construction site,
+    reached two ways: `ClassifyPipeline` through `OutputRecord.from_work_item` (off the
+    typed work item), and the four standalone producers through
+    `records.published_from(record, source)`. Both drive the field list from
+    `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
+    deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
+    input. Contract 7.7 binds *every* producer, in two places:
+    `tests/test_published_comparison.py::TestEveryProducerCarriesPublishedValues` sweeps
+    the four that build records by hand, and
+    `test_the_pipeline_carries_the_catalog_into_a_written_record` covers
+    `ClassifyPipeline` end to end. A new standalone producer goes in the sweep; a new
+    pipeline file type is already covered. Two places because a run has three record
+    shapes, not one — #204's envelope covers only the seven pipeline types, and
+    unifying the other four on `OutputRecord` is #429, which would make it unnecessary.
+    `make published-comparison` renders the report. It is the *only* comparison against
+    a repository's own values, having replaced `generate_validation_report`'s
+    `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is
+    repository-neutral on purpose (contract 7.11): `add` / `keep` / `review` / `none`
+    name what a data team should do, never who publishes.
 
 ## Surprises
 

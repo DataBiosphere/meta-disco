@@ -22,13 +22,21 @@ class TestValidRecords:
         # Three zero-size files exist in the corpus; the bound is >= 0, not > 0.
         assert validate_record(_valid(file_size=0)) == []
 
-    def test_nullable_declarations_may_be_null(self):
-        # data_modality / reference_assembly are AnVIL's own declarations, null for
-        # ~99% of the corpus. Rejecting null there would reject nearly everything.
-        assert validate_record(_valid(data_modality=None, reference_assembly=None)) == []
+    @pytest.mark.parametrize(
+        "value", [None, "GRCh38", ["GRCh38", "CHM13"], 12345, {"a": 1}], ids=["null", "scalar", "list", "int", "dict"]
+    )
+    def test_the_published_fields_are_not_validated_at_all(self, value):
+        """`data_modality` / `reference_assembly` are outside the contract (#424).
 
-    def test_nullable_declarations_may_carry_a_value(self):
-        assert validate_record(_valid(data_modality="genomic", reference_assembly="GRCh38")) == []
+        They are not input — they are what the repository publishes — so this model has
+        no slot for them and `extra="ignore"` accepts whatever they carry, including
+        shapes nothing should produce. This pins the tolerance deliberately: two tests
+        used to assert they were "nullable declarations" that "may carry a value", which
+        after #424 passed for *any* value and so asserted nothing. What actually
+        constrains the shape now is the output schema's `Published` class
+        (`schema/tests/test_output_validation.py`), not this gate.
+        """
+        assert validate_record(_valid(data_modality=value, reference_assembly=value)) == []
 
     def test_extra_keys_are_tolerated(self):
         # The download script also emits organism_type / phenotypic_sex, absent from

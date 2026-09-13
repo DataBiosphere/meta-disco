@@ -49,6 +49,80 @@ classes:
       - dataset_title
       - classifications
       - derived_from
+      - published
+
+  Published:
+    description: >-
+      What the repository publishes for this file of its own accord: the published
+      output (#424), the answer its users see today. Not this project's answer and
+      not an input to it — nothing in classification reads this block, no claim is
+      built from it, and a file's `value` is whatever inference concluded whether
+      this block is present or not. It is here so the two can be compared per file,
+      which is what `scripts/generate_published_comparison.py` does.
+
+      Repository-neutral by design: AnVIL is the only publisher today, but only the
+      `source` names one, so a second repository needs no schema change.
+
+      Each dimension is the value list the repository published, transcribed
+      verbatim — a list wherever it published a list, every value exactly as
+      written, no mapping and no normalization. Null on a dimension the repository
+      publishes nothing for, and the whole block is null on a file it publishes
+      nothing for at all (~98% of the corpus).
+
+      The block exists precisely because a published value may yield nothing else.
+      Not one published value in the corpus is a term in this schema's vocabulary —
+      `GRCm39` has no `reference_assembly_enum` member and `single-nucleus ATAC-seq`
+      has no `data_modality_enum` one — so without this block those values would
+      appear in the output nowhere at all.
+    attributes:
+      source:
+        description: >-
+          Which repository this was read from, as publishing system and catalog
+          generation (`anvil/anvil15`). Null when the run's input carried no
+          envelope naming a catalog — an unnamed repository rather than a guessed one.
+        range: string
+        required: false
+      data_modality:
+        description: The published data modality/modalities, verbatim.
+        range: string
+        multivalued: true
+        required: false
+      reference_assembly:
+        description: The published reference assembly/assemblies, verbatim.
+        range: string
+        multivalued: true
+        required: false
+      in_vocabulary:
+        description: >-
+          Which published values are terms in this schema's vocabulary, per dimension.
+          Required whenever this block exists: contract 7.6 records vocabulary standing
+          for every published value, and `records.build_published` always emits the map.
+          Optional here would let a hand-edited or future producer omit it and validate,
+          and the comparison report would read the absence as "no value is a term" —
+          under-reporting coverage rather than failing.
+        range: PublishedVocabulary
+        required: true
+
+  PublishedVocabulary:
+    description: >-
+      Per dimension, the subset of that dimension's published values that *are*
+      terms in its enum. An empty list means the repository published something this
+      vocabulary cannot say, which is the case for every published value in the
+      corpus today; that is what makes the mapping gap countable from the output
+      rather than asserted about it. A dimension the repository publishes nothing
+      for is absent here rather than present and empty, so these keys are exactly
+      the dimensions it speaks to.
+    attributes:
+      data_modality:
+        description: Published data modalities that are `data_modality_enum` terms.
+        range: data_modality_enum
+        multivalued: true
+        required: false
+      reference_assembly:
+        description: Published assemblies that are `reference_assembly_enum` terms.
+        range: reference_assembly_enum
+        multivalued: true
+        required: false
 
   Classifications:
     description: >-
@@ -663,6 +737,14 @@ slots:
   derived_from:
     description: Typed derivation edge to the parent file, if this is a derived file.
     range: DerivationEdge
+
+  # --- The published values (issue #424) ---
+  published:
+    description: >-
+      What the repository publishes for this file today, beside what this run
+      inferred. Null on a file the repository publishes nothing for.
+    range: Published
+    required: false
 
   # --- Classification sub-fields ---
   value:

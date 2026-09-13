@@ -180,6 +180,9 @@ OPTIONAL_FIELD_KEYS = {"build"}
 # Derived from the dataclass so the contract cannot drift from the fields it
 # is meant to pin.
 BUILD_KEYS = set(IDENTITY_FIELDS)
+# The pipeline's record shape only. The four standalone producers emit nine- and
+# eleven-key records this contract does not describe and no test pins (#429); the
+# golden fixture is built from FileTypeConfig classifiers, so it never sees one.
 RECORD_KEYS = {
     "file_name",
     "md5sum",
@@ -188,6 +191,9 @@ RECORD_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
+    # The repository's published values (#424). Present on every record, null on most —
+    # these fixtures declare nothing, so the golden pins it as null throughout.
+    "published",
 }
 
 
