@@ -131,14 +131,16 @@ class ComparisonRow:
     """One file, one dimension, both sides' answers, and the recommendation.
 
     ``file_key`` is the identity :func:`gather` deduplicated on, carried here so that
-    counting files from these rows and counting them during the pass cannot disagree.
+    counting files from these rows and counting them during the pass cannot disagree. It
+    is type-tagged and so not printable; ``entry_id`` is the display form the TSV writes.
     Name and dataset are *not* that identity: the corpus admits two distinct files with
     one name in one dataset — ``corpus_diff`` keys on ``(dataset, name, md5)`` and
     deliberately keeps such a pair as a multiset — so counting rows by name would
     collapse a pair the recommendation counts twice.
     """
 
-    file_key: tuple[str, object]
+    file_key: tuple[tuple[str, str], object]
+    entry_id: str
     file_name: str
     dataset_title: str
     dimension: str
@@ -228,7 +230,14 @@ def gather(run_dir: Path) -> ComparisonReport:
     report = ComparisonReport(run_dir=run_dir)
     seen: set[tuple] = set()
     for record in iter_records(run_dir):
-        key = (str(record.get("entry_id")), record.get("md5sum"))
+        raw_entry_id = record.get("entry_id")
+        # Type-tagged, not stringified: `str()` alone maps the int 1 and the string "1"
+        # to one key, and `entry_id` is not classifier-relevant, so drift on it reaches
+        # here deliberately (#161) — two distinct files could then dedupe into one and
+        # the comparison would undercount. Stringified *within* the tag because the value
+        # is not guaranteed hashable either: an `InvalidRecord` echoes a drifted list or
+        # dict un-coerced, which would otherwise raise on the set membership test below.
+        key = ((type(raw_entry_id).__name__, str(raw_entry_id)), record.get("md5sum"))
         if key in seen:
             report.duplicate_records += 1
             continue
@@ -255,6 +264,7 @@ def gather(run_dir: Path) -> ComparisonReport:
             report.rows.append(
                 ComparisonRow(
                     file_key=key,
+                    entry_id=str(raw_entry_id),
                     file_name=str(record.get("file_name") or ""),
                     dataset_title=dataset,
                     dimension=dimension,
@@ -303,10 +313,10 @@ def render_tsv(report: ComparisonReport) -> str:
     writer = csv.writer(buffer, delimiter="\t", lineterminator="\n")
     writer.writerow(TSV_HEADER)
     for row in report.rows:
-        entry_id, md5sum = row.file_key
+        _identity, md5sum = row.file_key
         writer.writerow(
             (
-                entry_id,
+                row.entry_id,
                 str(md5sum),
                 row.file_name,
                 row.dataset_title,

@@ -739,3 +739,34 @@ def test_an_empty_element_is_refused_by_both_gates(tmp_path):
         path.write_text(json.dumps({"metadata": envelope, "files": [bad]}))
         with pytest.raises(ValueError, match=expected):
             load_classifiable_snapshot(path)
+
+
+def test_two_entry_ids_whose_string_forms_coincide_are_distinct_files(tmp_path):
+    """`entry_id` is not classifier-relevant, so type drift on it reaches `gather`.
+
+    `str()` alone maps the int 1 and the string "1" to one key, so two distinct files
+    would dedupe into one and the comparison would undercount. The key is type-tagged
+    for that, and stringified within the tag because the value is not guaranteed
+    hashable either — an `InvalidRecord` echoes a drifted list or dict un-coerced.
+    """
+    published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    twins = []
+    for entry in (1, "1"):
+        rec = _record("same.bam", published=published)
+        rec["entry_id"], rec["md5sum"] = entry, "shared-md5"
+        twins.append(rec)
+    report = gather(_write_run(tmp_path / "run", twins))
+
+    assert report.files == 2, "an int and a string entry_id are different files"
+    assert report.duplicate_records == 0
+    assert report.published_files == 2
+
+
+def test_an_unhashable_entry_id_does_not_raise(tmp_path):
+    """The reason the key is stringified inside the tag rather than kept raw."""
+    published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
+    rec = _record("drifted.bam", published=published)
+    rec["entry_id"] = ["a", "list"]
+    report = gather(_write_run(tmp_path / "run", [rec]))
+    assert report.files == 1
+    assert report.rows[0].entry_id == "['a', 'list']"
