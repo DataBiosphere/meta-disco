@@ -134,6 +134,14 @@ def build_published(values: dict[str, Any], source: str | None) -> dict | None:
             raise ValueError(f"published {field} is {type(value).__name__}, not a list: {value!r}.{hint}")
         if value is not None and not all(isinstance(v, str) for v in value):
             raise ValueError(f"published {field} holds a non-string value: {value!r}")
+        if value is not None and not all(value):
+            # The manifest reader drops empty elements, so a cell of nothing but
+            # separators arrives as no published value at all. A list holding one did
+            # not come from that reader, and treating it as a published value would put
+            # a blank in the comparison as though the repository had said something.
+            # Refused rather than dropped: silently transforming a value here is what
+            # `_first()` did wrong.
+            raise ValueError(f"published {field} holds an empty value: {value!r}")
         published[field] = value
 
     if not any(published.values()):

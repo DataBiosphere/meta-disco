@@ -704,3 +704,26 @@ def test_a_checksum_less_record_is_excluded_rather_than_refusing_the_run(tmp_pat
     source, records = load_classifiable_snapshot(path)
     assert source == "anvil/anvil15"
     assert [r["entry_id"] for r in records] == ["ok"], "the drifted record was excluded, not refused"
+
+
+def test_an_empty_element_is_refused_by_both_gates(tmp_path):
+    """The reader and the constructor must agree on what an empty element means.
+
+    `azul_manifest._published` drops empty elements, so a manifest cell of nothing but
+    separators arrives as no published value at all. A list holding one therefore did not
+    come from that reader, and counting it would put a blank in the comparison as though
+    the repository had published something. Refused rather than dropped: silently
+    transforming a value in the constructor is what `_first()` did wrong.
+    """
+    from meta_disco import azul_manifest
+
+    assert azul_manifest._published(" || ") is None, "the reader treats it as nothing"
+
+    with pytest.raises(ValueError, match=r"holds an empty value"):
+        build_published({"data_modality": [""], "reference_assembly": None}, "anvil/anvil15")
+
+    bad = valid_record(file_name="b.test", file_format=".test", entry_id="blank", data_modality=[""])
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [bad]}))
+    with pytest.raises(ValueError, match=r"holds an empty value"):
+        load_classifiable_snapshot(path)

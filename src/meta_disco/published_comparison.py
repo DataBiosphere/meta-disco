@@ -480,7 +480,9 @@ def render_report(report: ComparisonReport) -> str:
             "",
             f"{report.duplicate_records:,} record(s) were written by the run more than once and counted once here",
             "(a tar archive is written to both `tar_` and `auxiliary_classifications.json`). Pre-existing, and",
-            "none has a published value, so no figure above depends on it.",
+            "none has a published value, so every figure about published values is identical either",
+            "way — but `add` and `none` are file counts over the whole run, so those two are 115 lower",
+            "than the row count. That is the correct answer; it is not the same as being unaffected.",
             "",
         ]
     return "\n".join(lines)

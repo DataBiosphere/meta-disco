@@ -141,6 +141,12 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
                 bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
             elif not all(isinstance(element, str) for element in value):
                 bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
+            elif not all(value):
+                # `build_published` refuses this too, so letting it through here would
+                # raise in a worker and lose the row — the failure this function exists
+                # to close. The manifest reader never produces it: it drops empty
+                # elements, so such a cell arrives as no published value at all.
+                bad.append((position, record.get("entry_id"), field, value, "holds an empty value"))
     if not bad:
         return
     # Records, not entries: one record can be wrong on both fields, and calling that two
