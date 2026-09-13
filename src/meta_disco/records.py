@@ -134,6 +134,13 @@ def build_published(values: dict[str, Any], source: str | None) -> dict | None:
             raise ValueError(f"published {field} is {type(value).__name__}, not a list: {value!r}.{hint}")
         if value is not None and not all(isinstance(v, str) for v in value):
             raise ValueError(f"published {field} holds a non-string value: {value!r}")
+        if value is not None and not value:
+            # `all([])` is True, so the emptiness check below cannot see this. An empty
+            # list is not "no published value" — the reader and this block both spell
+            # that `null` — so accepting it would emit `[]` beside a real list, or, when
+            # both dimensions are empty, collapse to no block at all and swallow the
+            # malformed shape entirely.
+            raise ValueError(f"published {field} is an empty list; a dimension with no published value is null")
         if value is not None and not all(value):
             # The manifest reader drops empty elements, so a cell of nothing but
             # separators arrives as no published value at all. A list holding one did

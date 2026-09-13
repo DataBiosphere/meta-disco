@@ -141,6 +141,9 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
                 bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
             elif not all(isinstance(element, str) for element in value):
                 bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
+            elif not value:
+                # `all([])` is True, so the emptiness test below is blind to this.
+                bad.append((position, record.get("entry_id"), field, value, "is an empty list; absent is null"))
             elif not all(value):
                 # `build_published` refuses this too, so letting it through here would
                 # raise in a worker and lose the row — the failure this function exists

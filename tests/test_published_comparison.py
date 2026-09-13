@@ -722,8 +722,20 @@ def test_an_empty_element_is_refused_by_both_gates(tmp_path):
     with pytest.raises(ValueError, match=r"holds an empty value"):
         build_published({"data_modality": [""], "reference_assembly": None}, "anvil/anvil15")
 
-    bad = valid_record(file_name="b.test", file_format=".test", entry_id="blank", data_modality=[""])
-    path = tmp_path / "in.json"
-    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [bad]}))
-    with pytest.raises(ValueError, match=r"holds an empty value"):
-        load_classifiable_snapshot(path)
+    # `all([])` is True, so an empty list slips past the check above and needs its own.
+    # Left accepted, it emits `[]` beside a real list — where both the reader and this
+    # block spell an absent dimension `null` — and when both dimensions are empty the
+    # block collapses to None, swallowing the malformed shape entirely.
+    assert all([]) is True, "the reason this needs a separate check"
+    with pytest.raises(ValueError, match=r"is an empty list"):
+        build_published({"data_modality": [], "reference_assembly": ["GRCh38"]}, "anvil/anvil15")
+    with pytest.raises(ValueError, match=r"is an empty list"):
+        build_published({"data_modality": [], "reference_assembly": []}, "anvil/anvil15")
+
+    envelope = {"repository": "anvil", "catalog": "anvil15"}
+    for value, expected in (([""], r"holds an empty value"), ([], r"is an empty list")):
+        bad = valid_record(file_name="b.test", file_format=".test", entry_id="blank", data_modality=value)
+        path = tmp_path / f"in{len(value)}.json"
+        path.write_text(json.dumps({"metadata": envelope, "files": [bad]}))
+        with pytest.raises(ValueError, match=expected):
+            load_classifiable_snapshot(path)
