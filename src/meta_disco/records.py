@@ -94,22 +94,30 @@ def build_published(values: dict[str, Any], source: str | None) -> dict | None:
     Returns None — and the envelope emits ``"published": null`` — when the repository
     publishes nothing for either dimension, which is ~98% of the corpus.
 
-    **Shape is checked here because the input gate cannot.** These two fields are outside
-    the input contract (#424 — they are not input), so ``validate_metadata`` passes them
-    through unexamined and no caller guarantee covers them. The output schema's
-    ``Published`` class refuses a bad shape too, but only once a record exists; this is
-    the constructor, so it is where a bad value is stopped before one does. ``values`` is
-    typed ``Any`` for that reason rather than ``list[str] | None``: the looser type is
-    the true one, since a caller reads these straight off a raw record and can promise
-    nothing about them — this function is where the narrowing actually happens, and
-    annotating the promise instead of the check would only hide that. Both bad shapes
-    are quiet without this guard: a bare string is *iterable*, so it would be walked
-    character by character and report ``GRCh38`` — a real term — as one this vocabulary
-    lacks, then render as ``G || R || C || h || 3 || 8``; a non-iterable such as an int
-    would raise a bare ``TypeError`` from the comprehension below, inside a
-    classification worker, mid-run. Refusing both here names the field and the value
-    instead. This is not support for the pre-#424 scalar spelling: such a snapshot is
-    refused, loudly, rather than silently mis-read.
+    **Shape is checked in three places, and this is the middle one.** These two fields
+    are outside the input contract (#424 — they are not input), so ``validate_metadata``
+    passes them through unexamined and no caller guarantee covers them. What does check
+    them: ``pipeline.refuse_bad_published_shape`` scans a whole snapshot at the load
+    boundary and is what actually refuses a pre-#424 spelling — before any record is
+    fetched or written, which is the only point at which "refuse the snapshot" can be
+    true. The output schema's ``Published`` class refuses a bad shape at the far end,
+    once a record exists. This guard sits between them, at the single construction site,
+    and covers a caller that reached it without passing through that loader.
+
+    It is not redundant with either. Both bad shapes are quiet without it: a bare string
+    is *iterable*, so it would be walked character by character and report ``GRCh38`` — a
+    real term — as one this vocabulary lacks, then render as ``G || R || C || h || 3 || 8``;
+    a non-iterable such as an int would raise a bare ``TypeError`` from the comprehension
+    below. Raising here names the field and the value instead. Note this raise is *not*
+    by itself a refusal on the pipeline path: it happens inside a worker, and
+    ``_run_parallel`` catches every worker exception and writes no row, so a snapshot
+    that reached here would lose rows rather than fail — which is why the load-boundary
+    check exists and why it, not this, is what the snapshot is refused by.
+
+    ``values`` is typed ``Any`` rather than ``list[str] | None``: the looser type is the
+    true one, since a caller reads these straight off a raw record and can promise
+    nothing about them — this function is where the narrowing happens, and annotating the
+    promise instead of the check would only hide that.
     """
     published = {}
     for field in PUBLISHED_FIELDS:
