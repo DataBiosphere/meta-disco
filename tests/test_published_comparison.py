@@ -12,13 +12,14 @@ import pathlib
 import pytest
 
 from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
-from meta_disco.pipeline import ClassifyPipeline, published_source
+from meta_disco.pipeline import ClassifyPipeline, load_classifiable_snapshot, published_source
 from meta_disco.published_comparison import (
     ADD,
     KEEP,
     MULTI_VALUE_SEP,
     NONE,
     REVIEW,
+    TSV_HEADER,
     gather,
     recommendation,
     render_report,
@@ -118,11 +119,20 @@ class TestPublishedValuesReachTheOutput:
 
 class TestPublishedSource:
     def test_it_names_the_catalog_the_snapshot_recorded(self):
-        assert published_source({"catalog": "anvil15"}) == "anvil/anvil15"
+        assert published_source({"repository": "anvil", "catalog": "anvil15"}) == "anvil/anvil15"
 
-    @pytest.mark.parametrize("metadata", [{}, {"catalog": None}, {"catalog": ""}])
-    def test_an_input_that_named_no_catalog_leaves_the_repository_unnamed(self, metadata):
-        # An unnamed published is a fact; a guessed one is the drift #335 exists to catch.
+    def test_a_second_repository_is_named_from_its_own_envelope(self):
+        # The name is not inferred: a shared load path must not label another
+        # repository's snapshot `anvil/...` (contract 7.11).
+        assert published_source({"repository": "hprc", "catalog": "v2"}) == "hprc/v2"
+
+    @pytest.mark.parametrize(
+        "metadata",
+        [{}, {"catalog": None}, {"catalog": ""}, {"catalog": "anvil15"}, {"repository": "anvil"}],
+        ids=["empty", "null-catalog", "empty-catalog", "no-repository", "no-catalog"],
+    )
+    def test_an_envelope_missing_either_half_leaves_the_repository_unnamed(self, metadata):
+        # An unnamed repository is a fact; a guessed one is the drift #335 exists to catch.
         assert published_source(metadata) is None
 
 
@@ -289,7 +299,7 @@ class TestEveryProducerCarriesPublishedValues:
     def _metadata(tmp_path, records):
         """The input envelope with a catalog, so the repository is named as in a real run."""
         path = tmp_path / "metadata.json"
-        path.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": records}))
+        path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": records}))
         return path
 
     @staticmethod
@@ -490,7 +500,7 @@ def test_the_pipeline_carries_the_catalog_into_a_written_record(tmp_path):
         reference_assembly=["GRCm39"],
     )
     input_path = tmp_path / "in.json"
-    input_path.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": [record]}))
+    input_path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [record]}))
     output_path = tmp_path / "out.json"
 
     pipeline = ClassifyPipeline(
@@ -555,3 +565,44 @@ def test_the_review_preamble_follows_the_vocabulary_table(tmp_path):
     text = render_report(gather(run))
     assert "None of the published values above is a term the schema knows" not in text
     assert "1 of 1 published values *are* terms the schema knows" in text
+
+
+def test_a_tab_in_a_published_value_does_not_break_the_tsv(tmp_path):
+    """Published values are verbatim (contract 7.3), so they are not tab-free by contract.
+
+    No value in the corpus contains a tab today. The point is that the file's validity
+    should not depend on that staying true: joining on tabs would turn one such value
+    into an extra column, silently, for every consumer of the export.
+    """
+    import csv
+    import io
+
+    published = build_published({"data_modality": ["has\ttab"], "reference_assembly": None}, "anvil/anvil15")
+    run = _write_run(tmp_path / "run", [_record("t.bam", published=published)])
+    text = render_tsv(gather(run))
+
+    rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
+    assert len(rows) == 2, "the tab must not have split the row"
+    assert len(rows[1]) == len(TSV_HEADER)
+    assert rows[1][5] == "has\ttab", "and the value must survive verbatim"
+
+
+def test_the_load_boundary_refuses_a_snapshot_before_any_record_is_processed(tmp_path):
+    """A bad published shape stops the run, rather than deleting rows one at a time.
+
+    `build_published` also refuses it, but on the pipeline path that raise happens inside
+    a worker, and `_run_parallel` catches every worker exception and writes no row — so
+    the file would vanish while the run reported success. Refusing at load is what makes
+    "the snapshot is refused" true.
+    """
+    good = valid_record(file_name="a.test", file_format=".test", entry_id="ok", reference_assembly=["GRCh38"])
+    bad = valid_record(file_name="b.test", file_format=".test", entry_id="drifted", data_modality="genomic")
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [good, bad]}))
+
+    with pytest.raises(ValueError) as exc:
+        load_classifiable_snapshot(path)
+    message = str(exc.value)
+    assert "1 record(s)" in message
+    assert "drifted" in message, "the offending record is named"
+    assert "rebuild it with" in message

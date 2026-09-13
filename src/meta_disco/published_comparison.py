@@ -32,6 +32,8 @@ records that this project has no opinion and the published value should stand.
 
 from __future__ import annotations
 
+import csv
+import io
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -262,25 +264,30 @@ def render_tsv(report: ComparisonReport) -> str:
     columns a reader could not tell which file a recommendation applies to, nor join a
     row back to the catalog (``entry_id``) or to a corpus diff (``md5sum``).
     """
-    lines = ["\t".join(TSV_HEADER)]
+    buffer = io.StringIO()
+    # A real writer, not `"\t".join`: published values are transcribed verbatim (7.3) and
+    # nothing constrains them to exclude a tab or a newline, so one such value would add
+    # a column or split a row and the file would stop being parseable. No value in the
+    # corpus contains one today, which is exactly when it is cheap to stop relying on
+    # that. `QUOTE_MINIMAL` leaves every current row byte-identical to the joined form.
+    writer = csv.writer(buffer, delimiter="\t", lineterminator="\n")
+    writer.writerow(TSV_HEADER)
     for row in report.rows:
         entry_id, md5sum = row.file_key
-        lines.append(
-            "\t".join(
-                (
-                    entry_id,
-                    str(md5sum),
-                    row.file_name,
-                    row.dataset_title,
-                    row.dimension,
-                    row.published_cell,
-                    row.inferred_value or "",
-                    row.recommendation,
-                    row.vocabulary_standing,
-                )
+        writer.writerow(
+            (
+                entry_id,
+                str(md5sum),
+                row.file_name,
+                row.dataset_title,
+                row.dimension,
+                row.published_cell,
+                row.inferred_value or "",
+                row.recommendation,
+                row.vocabulary_standing,
             )
         )
-    return "\n".join(lines) + "\n"
+    return buffer.getvalue()
 
 
 def _counts_table(report: ComparisonReport) -> list[str]:

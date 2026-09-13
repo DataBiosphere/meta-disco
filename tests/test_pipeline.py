@@ -564,7 +564,7 @@ class TestPipelineRun:
         assert "classifications" in result
         # classify_single now emits the same canonical 8-key envelope as the batch path
         # (#204): dataset_title/entry_id are present (None) on the single-file path, and
-        # so is declared — this path has no input record to carry one from (#424).
+        # so is published — this path has no input record to carry one from (#424).
         assert set(result) == {
             "file_name",
             "md5sum",

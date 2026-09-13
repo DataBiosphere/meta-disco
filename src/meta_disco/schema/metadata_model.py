@@ -76,7 +76,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     'This is the *input* to classification, distinct from '
                     '`classification.yaml` which models the classified *output*.\n'
                     'It models what classification consumes, and nothing else. '
-                    "AnVIL's own declared `data_modality` / `reference_assembly` "
+                    "AnVIL's own published `data_modality` / `reference_assembly` "
                     'are therefore deliberately **not** slots here (#424): they '
                     'are not input, they are the published output — the answer '
                     'AnVIL publishes today, which this project diffs its own '
@@ -116,7 +116,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class AnvilFileMetadataRecord(ConfiguredBaseModel):
     """
-    One raw AnVIL file metadata record, before classification. Every slot is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own declared `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
+    One raw AnVIL file metadata record, before classification. Every slot is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
          'tree_root': True})

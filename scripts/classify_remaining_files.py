@@ -80,7 +80,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 # What AnVIL declares about this file today, carried beside what this
                 # run concluded (#424). Every producer of a run must write it or the
                 # comparison silently under-reports: this catch-all alone holds 5,817
-                # of the corpus's 11,231 declared files.
+                # of the corpus's 11,231 files with a published value.
                 "published": published_from(rec, source),
             }
         )

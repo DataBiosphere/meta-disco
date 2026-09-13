@@ -58,6 +58,9 @@ import requests
 API_URL = "https://service.explore.anvilproject.org"
 FILES_URL = f"{API_URL}/index/files"
 MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
+# Who publishes the files this module downloads. Written into every snapshot's envelope
+# so a reader names the publisher rather than assuming one (#424).
+REPOSITORY = "anvil"
 
 FORMAT_COMPACT = "compact"
 FORMAT_VERBATIM = "verbatim.jsonl"
@@ -574,11 +577,18 @@ def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: 
     Records the catalog generation the files came from (issue #335: the July
     2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
     they came through the manifest path, and how many each dataset contributed.
+
+    ``repository`` names who published these files, so nothing downstream has to infer
+    it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
+    repository a run's ``published`` blocks came from; it used to prefix a hard-coded
+    ``anvil`` there, which would have mislabelled any other repository's snapshot loaded
+    through the same shared path.
     """
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(dataset_counts.values()),
         "api_url": MANIFEST_URL,
+        "repository": REPOSITORY,
         "catalog": catalog,
         "source": "manifest",
         "datasets": dict(sorted(dataset_counts.items())),

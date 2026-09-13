@@ -1,0 +1,686 @@
+<title>Three Views of One Genome</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+
+<style>
+  :root {
+    --ground:    #F7F8F6;
+    --surface:   #FFFFFF;
+    --sunk:      #EFF2F0;
+    --ink:       #121A19;
+    --ink-2:     #3D4947;
+    --muted:     #5E6B68;
+    --hairline:  #DCE3E0;
+    --rule:      #C3CDC9;
+    --fill:      #00897B;
+    --fill-soft: #00897B26;
+    --block:     #C0392B;
+    --block-soft:#C0392B1F;
+
+    --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --f-body:    "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-mono:    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --s1: 0.375rem;
+    --s2: 0.75rem;
+    --s3: 1.25rem;
+    --s4: 2rem;
+    --s5: 3.25rem;
+    --s6: 5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #101614;
+      --surface:   #18211F;
+      --sunk:      #1E2927;
+      --ink:       #E5EBE8;
+      --ink-2:     #C3CFCB;
+      --muted:     #94A29E;
+      --hairline:  #2A3532;
+      --rule:      #3A4844;
+      --fill:      #26A98F;
+      --fill-soft: #26A98F2E;
+      --block:     #DB6A54;
+      --block-soft:#DB6A5426;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:    #101614;
+    --surface:   #18211F;
+    --sunk:      #1E2927;
+    --ink:       #E5EBE8;
+    --ink-2:     #C3CFCB;
+    --muted:     #94A29E;
+    --hairline:  #2A3532;
+    --rule:      #3A4844;
+    --fill:      #26A98F;
+    --fill-soft: #26A98F2E;
+    --block:     #DB6A54;
+    --block-soft:#DB6A5426;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 78rem; margin: 0 auto; padding: var(--s5) var(--s3) var(--s6); }
+  .col  { max-width: var(--measure); }
+
+  .mast {
+    display: flex; flex-direction: column; gap: var(--s3);
+    padding-bottom: var(--s4); border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3);
+  }
+
+  h1 {
+    font-family: var(--f-display); font-weight: 500;
+    font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1.02;
+    letter-spacing: -0.022em; margin: 0; text-wrap: balance; max-width: 18ch;
+  }
+
+  .standfirst {
+    font-family: var(--f-display); font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+    line-height: 1.5; color: var(--ink-2); max-width: 60ch; margin: 0;
+  }
+
+  section { padding-top: var(--s5); }
+
+  .sec-head {
+    display: flex; align-items: baseline; gap: var(--s3);
+    margin-bottom: var(--s3); padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sec-num {
+    font-family: var(--f-mono); font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.1em; color: var(--fill); flex: none;
+  }
+
+  h2 {
+    font-family: var(--f-display); font-weight: 500;
+    font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.15;
+    letter-spacing: -0.014em; margin: 0; text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--f-body); font-weight: 600; font-size: 1rem;
+    margin: var(--s4) 0 var(--s1); max-width: var(--measure);
+  }
+
+  p { margin: 0 0 var(--s3); max-width: var(--measure); }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; }
+
+  code, .mono { font-family: var(--f-mono); font-size: 0.86em; font-variant-ligatures: none; }
+  code { background: var(--sunk); padding: 0.12em 0.34em; border-radius: 2px; color: var(--ink-2); }
+
+  a { color: var(--fill); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; border-radius: 2px; }
+
+  /* ---------- three-views figure ---------- */
+
+  .views {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--s3);
+    margin: var(--s4) 0;
+  }
+
+  .view {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-top: 3px solid var(--fill);
+    border-radius: 3px;
+    padding: var(--s3);
+  }
+
+  .view-k {
+    font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); display: block; margin-bottom: var(--s1);
+  }
+
+  .view-n {
+    font-family: var(--f-display); font-size: 1.5rem; line-height: 1.2;
+    margin: 0 0 var(--s2); color: var(--ink);
+  }
+
+  .view p { font-size: 0.88rem; color: var(--ink-2); margin: 0; }
+
+  .view dl { margin: var(--s2) 0 0; font-family: var(--f-mono); font-size: 0.72rem; color: var(--muted); }
+  .view dl div { display: flex; justify-content: space-between; gap: var(--s2); padding: 0.1rem 0; }
+  .view dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* ---------- numbered steps ---------- */
+
+  .steps { display: flex; flex-direction: column; gap: 0; margin-top: var(--s4); }
+
+  .step {
+    display: grid; grid-template-columns: 3rem 1fr; gap: var(--s3);
+    padding: var(--s3) 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .step:last-child { border-bottom: 1px solid var(--hairline); }
+
+  .step-n {
+    font-family: var(--f-mono); font-size: 0.78rem; font-weight: 700;
+    color: var(--fill); padding-top: 0.15rem; font-variant-numeric: tabular-nums;
+  }
+
+  .step-b > *  { max-width: 62ch; }
+  .step-b h4 {
+    font-family: var(--f-body); font-weight: 600; font-size: 0.98rem;
+    margin: 0 0 var(--s1);
+  }
+  .step-b p { font-size: 0.93rem; color: var(--ink-2); margin: 0 0 var(--s2); }
+  .step-b p:last-child { margin-bottom: 0; }
+
+  .tools {
+    display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2);
+    margin: var(--s2) 0 0; padding: 0; list-style: none;
+  }
+  .tools li {
+    font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.03em;
+    padding: 0.16rem 0.44rem; border: 1px solid var(--rule);
+    border-radius: 2px; color: var(--ink-2); white-space: nowrap;
+  }
+
+  .out {
+    font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.04em;
+    color: var(--fill); margin-top: var(--s2); display: block;
+  }
+
+  /* ---------- tables ---------- */
+
+  .scroll { overflow-x: auto; margin: var(--s3) 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: 0.87rem; }
+  th, td {
+    text-align: left; padding: 0.52rem var(--s3) 0.52rem 0;
+    border-bottom: 1px solid var(--hairline); vertical-align: top;
+  }
+  thead th {
+    font-family: var(--f-mono); font-size: 0.68rem; font-weight: 500;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  td.num, th.num {
+    text-align: right; font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums; padding-right: 0;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.name { font-family: var(--f-mono); font-size: 0.8rem; }
+  .yes { color: var(--fill); font-weight: 600; }
+  .no  { color: var(--block); font-weight: 600; }
+  .dim { color: var(--muted); }
+
+  /* ---------- variation cards ---------- */
+
+  .vars { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: var(--s3); margin-top: var(--s4); }
+  .var {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--fill); border-radius: 3px; padding: var(--s3);
+  }
+  .var.gated { border-left-color: var(--block); }
+  .var h4 { font-family: var(--f-body); font-weight: 600; font-size: 0.95rem; margin: 0 0 var(--s1); }
+  .var p { font-size: 0.87rem; color: var(--ink-2); margin: 0; }
+  .var .axis {
+    font-family: var(--f-mono); font-size: 0.66rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); display: block; margin-bottom: var(--s1);
+  }
+  .var .avail {
+    font-family: var(--f-mono); font-size: 0.7rem; margin-top: var(--s2);
+    display: block; color: var(--fill);
+  }
+  .var.gated .avail { color: var(--block); }
+
+  pre {
+    font-family: var(--f-mono); font-size: 0.76rem; line-height: 1.6;
+    background: var(--sunk); border: 1px solid var(--hairline);
+    border-radius: 3px; padding: var(--s3); overflow-x: auto;
+    margin: var(--s3) 0; max-width: 54rem;
+  }
+
+  .callout {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 3px; padding: var(--s4); margin: var(--s4) 0; max-width: 52rem;
+  }
+  .callout .ask {
+    font-family: var(--f-display); font-size: clamp(1.3rem, 3.2vw, 1.8rem);
+    line-height: 1.28; margin: var(--s2) 0 0; text-wrap: balance; max-width: 34ch;
+  }
+  .callout .ask em { font-style: normal; color: var(--fill); }
+
+  .caveat {
+    border-left: 3px solid var(--block); background: var(--block-soft);
+    padding: var(--s3); border-radius: 0 3px 3px 0;
+    margin: var(--s4) 0; max-width: 52rem;
+  }
+  .caveat p { font-size: 0.9rem; margin: 0 0 var(--s2); }
+  .caveat p:last-child { margin-bottom: 0; }
+  .caveat .tag {
+    font-family: var(--f-mono); font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--block);
+    display: block; margin-bottom: var(--s1);
+  }
+
+  footer {
+    margin-top: var(--s6); padding-top: var(--s3); border-top: 1px solid var(--rule);
+    font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.05em;
+    color: var(--muted); display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4);
+  }
+
+  @media (max-width: 640px) {
+    .step { grid-template-columns: 1fr; gap: var(--s2); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">
+      <span>Meta-disco</span>
+      <span>Use case 1 — detailed</span>
+      <span>23 August 2026</span>
+    </div>
+    <h1>Three Views of One Genome</h1>
+    <p class="standfirst">Two hundred and twenty-four people in AnVIL have their genome represented three ways at once. Most of what you would do with that has already been published — which makes it the right first test of a search AnVIL cannot currently perform, because the answer is known in advance.</p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>The cohort</h2></div>
+    <div class="col">
+      <p>Intersecting sample identifiers across three open-access AnVIL datasets gives <strong>224 participants who simultaneously have a de novo diploid assembly, short reads aligned to CHM13, and short reads aligned to GRCh38</strong> — plus deposited variant calls against both references.</p>
+    </div>
+
+    <div class="views">
+      <div class="view">
+        <span class="view-k">Reference-free</span>
+        <p class="view-n">De novo assembly</p>
+        <p>Two haplotype FASTAs per person from HPRC, assembled from long reads without consulting any reference.</p>
+        <dl>
+          <div><dt>source</dt><dd>ANVIL_HPRC · HPRC_R2</dd></div>
+          <div><dt>files</dt><dd>840</dd></div>
+          <div><dt>per person</dt><dd>3.3 GB</dd></div>
+        </dl>
+      </div>
+      <div class="view">
+        <span class="view-k">New reference</span>
+        <p class="view-n">CHM13 alignment</p>
+        <p>Short-read CRAMs and HaplotypeCaller VCFs against the complete T2T-CHM13 assembly.</p>
+        <dl>
+          <div><dt>source</dt><dd>ANVIL_T2T · T2T_CHRY</dd></div>
+          <div><dt>files</dt><dd>461 CRAM · 10,646 VCF</dd></div>
+          <div><dt>per person</dt><dd>37.6 GB</dd></div>
+        </dl>
+      </div>
+      <div class="view">
+        <span class="view-k">Incumbent reference</span>
+        <p class="view-n">GRCh38 alignment</p>
+        <p>The 30&times; NYGC high-coverage CRAMs and calls that most of the field still works from.</p>
+        <dl>
+          <div><dt>source</dt><dd>1000G_high_coverage_2019</dd></div>
+          <div><dt>files</dt><dd>224 CRAM · 224 VCF</dd></div>
+          <div><dt>per person</dt><dd>22.4 GB</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col">
+      <p>The cohort has a useful split built into it. Of the 224 assemblies, <strong>121 are trio-phased</strong> (named <span class="mono">pat</span>/<span class="mono">mat</span>, phased using parental reads) and <strong>103 are phased without a trio</strong> (<span class="mono">hap1</span>/<span class="mono">hap2</span>). That is a free methodological control, and a confounder to watch — see the variations.</p>
+      <p>Reference assignments are not assumed. They come from meta-disco's own content-based classification of the 2026-08-02 run:</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Dataset</th><th>File type</th><th class="num">CHM13</th><th class="num">GRCh38</th><th class="num">not_applicable</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="name">ANVIL_T2T</td><td>CRAM</td><td class="num yes">3,268</td><td class="num">31</td><td class="num dim">—</td></tr>
+          <tr><td class="name">ANVIL_T2T_CHRY</td><td>CRAM</td><td class="num yes">3,481</td><td class="num">279</td><td class="num dim">—</td></tr>
+          <tr><td class="name">ANVIL_1000G_high_coverage</td><td>CRAM</td><td class="num dim">0</td><td class="num yes">3,202</td><td class="num dim">—</td></tr>
+          <tr><td class="name">ANVIL_HPRC · HPRC_R2</td><td>assembly FASTA</td><td class="num dim">4</td><td class="num dim">1</td><td class="num yes">936</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The last row is the point. A de novo assembly correctly resolves to <span class="mono">not_applicable</span> for reference assembly, because it has no reference. That is what makes it usable as truth.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>The search that finds it</h2></div>
+    <div class="col">
+      <p>Stated plainly, the query is:</p>
+    </div>
+
+    <pre>participants WHERE
+    exists( data_type = assembly,        reference_assembly = not_applicable )
+AND exists( data_type = aligned_reads,   reference_assembly = CHM13 )
+AND exists( data_type = aligned_reads,   reference_assembly = GRCh38 )</pre>
+
+    <div class="col">
+      <p>Three predicates, all over metadata we already produce, joined on a participant. No phenotype, no ancestry, no consent logic. It is the simplest possible participant-level query — and it cannot be expressed in AnVIL today, because the files index carries no participant key and the donor identifiers are minted per snapshot.</p>
+      <p>What makes it answerable right now is that the participant is recoverable from the file name, at a measured one-to-one purity. So the cohort below is real and buildable this week; the metadata work is what makes it repeatable and makes the next query cheap.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>The analysis</h2></div>
+    <div class="col">
+      <p>The template is <strong>assembly-truth benchmarking</strong>: use each person's own assembly to grade their own short-read variant calls, then ask how that grade changes with the reference you aligned against.</p>
+      <p>The move that makes it work is turning an assembly into a truth set. Align the two haplotype contigs back to a reference, read off the differences, and you have a per-individual variant call set plus an explicit statement of where you are confident — derived from long reads, independent of the short-read pipeline being tested.</p>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <span class="step-n">01</span>
+        <div class="step-b">
+          <h4>Assemble the cohort</h4>
+          <p>Run the query above. Materialise a table of 224 participants with the DRS or signed URL for each artefact.</p>
+          <ul class="tools"><li>Azul manifest</li><li>Terra data table</li></ul>
+          <span class="out">→ cohort table, 224 rows</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-n">02</span>
+        <div class="step-b">
+          <h4>Turn each assembly into a truth set</h4>
+          <p>Align both haplotype FASTAs to the chosen reference and call the differences. The output is a diploid VCF plus a confident-region BED — the regions where both haplotypes aligned cleanly enough to trust a call, and, just as importantly, where they did not.</p>
+          <p>Run this <em>twice per person</em>: once against GRCh38, once against CHM13. That second run is the whole reason the comparison is interesting.</p>
+          <ul class="tools"><li>dipcall</li><li>minimap2</li></ul>
+          <span class="out">→ 448 truth VCFs + confident BEDs</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-n">03</span>
+        <div class="step-b">
+          <h4>Grade the short-read calls against it</h4>
+          <p>Compare the deposited short-read VCF to the matching assembly-derived truth VCF, restricted to the confident regions. Small variants and structural variants need different comparison logic — a 300&nbsp;bp insertion represented three different ways is the same event, and only SV-aware comparison will say so.</p>
+          <ul class="tools"><li>hap.py / rtg vcfeval</li><li>truvari</li></ul>
+          <span class="out">→ recall + precision per person per reference</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-n">04</span>
+        <div class="step-b">
+          <h4>Stratify by how hard the region is</h4>
+          <p>A single genome-wide recall number hides the entire result. Short reads are near-perfect in unique sequence and fail in specific, nameable places: segmental duplications, tandem repeats and VNTRs, the MHC, immunoglobulin and KIR loci, and the challenging medically relevant genes. Break every metric down by region class.</p>
+          <p>On CHM13 add one stratum that has no GRCh38 counterpart at all: the newly resolved sequence — centromeric satellite, acrocentric short arms, previously collapsed duplications. There is no established truth set there. Assemblies are the only route in.</p>
+          <ul class="tools"><li>GIAB stratification BEDs</li><li>CMRG</li><li>CHM13-only regions</li></ul>
+          <span class="out">→ the actual result table</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="step-n">05</span>
+        <div class="step-b">
+          <h4>Difference the references</h4>
+          <p>For each person and each region class, subtract the GRCh38 result from the CHM13 result. Positive means CHM13 recovered calls that GRCh38 lost; negative means the migration cost you something. Aggregate across the cohort, then split by whatever subject axis you chose.</p>
+          <span class="out">→ Δrecall, Δprecision per stratum, per group</span>
+        </div>
+      </div>
+
+    </div>
+
+    <h3>Running it</h3>
+    <div class="col">
+      <p>Data volume decides the venue, and the shape of it is favourable:</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Artefact</th><th class="num">Files</th><th class="num">Total</th><th class="num">Per person</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>T2T CHM13 CRAM</td><td class="num">461</td><td class="num">6.23 TB</td><td class="num">27.8 GB</td></tr>
+          <tr><td>1000G GRCh38 CRAM</td><td class="num">224</td><td class="num">3.80 TB</td><td class="num">17.0 GB</td></tr>
+          <tr><td>T2T CHM13 VCF</td><td class="num">10,646</td><td class="num">2.19 TB</td><td class="num">9.8 GB</td></tr>
+          <tr><td>1000G GRCh38 VCF</td><td class="num">224</td><td class="num">1.21 TB</td><td class="num">5.4 GB</td></tr>
+          <tr><td><strong>HPRC assembly FASTA</strong></td><td class="num">840</td><td class="num yes">0.75 TB</td><td class="num yes">3.3 GB</td></tr>
+          <tr><td class="dim">total</td><td class="num dim">12,395</td><td class="num dim">14.18 TB</td><td class="num dim">63.3 GB</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>The assemblies are five percent of the bytes.</strong> If you accept the deposited variant calls rather than re-calling from reads, you never touch a CRAM, and the whole analysis runs on assemblies plus VCFs — about 13&nbsp;GB per person.</p>
+      <p>That gives a natural two-stage plan. A pilot of three to five people is a laptop-scale job: download roughly 40–65&nbsp;GB, run dipcall and a comparison, and see a result the same day. The full 224 belongs on Terra, co-located with the buckets, where the CRAMs stay put and only summary tables come back. Only re-call from reads if the question is specifically about the caller rather than the reference.</p>
+      <p>Compute is dominated by step 2, twice per person. Treat the per-sample cost as a pilot measurement rather than a quoted figure — the honest answer is that it is small enough not to be the constraint, and egress and storage will dominate the bill before CPU does.</p>
+    </div>
+
+    <h3>The trap in the deposited calls</h3>
+    <div class="col">
+      <p>Step 3 as written — compare the deposited CHM13 calls against the deposited GRCh38 calls — <strong>does not measure the reference</strong>. Reading 203,719 cached VCF headers shows the two call sets come from different pipelines:</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Call set</th><th>Caller</th><th>Mode</th><th>Filtering</th><th>Freeze</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="name">1000G_high_coverage</td>
+            <td class="no">GATK 3.5</td>
+            <td>joint · GenotypeGVCFs</td>
+            <td>VQSR</td>
+            <td class="dim">CCDG_13607 · 2019-02-19</td>
+          </tr>
+          <tr>
+            <td class="name">ANVIL_T2T · T2T_CHRY</td>
+            <td class="no">GATK 4.x</td>
+            <td>per-sample gVCF</td>
+            <td class="dim">largely none</td>
+            <td class="dim">Cromwell/Terra · 2020–21</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Marker counts across the scanned headers: 75,246 GATK-4-style HaplotypeCaller invocations in <span class="mono">ANVIL_T2T</span> and 90,378 in <span class="mono">T2T_CHRY</span>, essentially all in gVCF mode with almost no recalibration; against 3,252 GATK-3-style invocations with VQSR in the 1000G deposit. A CHM13-minus-GRCh38 delta computed across those would substantially measure <em>GATK 3 versus GATK 4 and VQSR versus none</em>.</p>
+      <p>Worse for a metadata system: <strong>the reference itself is under-specified.</strong> Six distinct reference files appear across these three datasets, and they collapse into two enum values.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Reference file in the VCF header</th><th class="num">Headers</th><th>We classify it as</th></tr></thead>
+        <tbody>
+          <tr><td class="name">t2t-chm13.20200921.withGRCh38chrY.chrEBV…</td><td class="num">33,147</td><td class="no">CHM13</td></tr>
+          <tr><td class="name">chm13v2.0.fasta</td><td class="num">168</td><td class="no">CHM13</td></tr>
+          <tr><td class="name">chm13.draft_v1.0.fasta</td><td class="num">58</td><td class="no">CHM13</td></tr>
+          <tr><td class="name">T2T_CHM13.v1.0</td><td class="num">52</td><td class="no">CHM13</td></tr>
+          <tr><td class="name">GRCh38_full_analysis_set_plus_decoy_hla.fa</td><td class="num">4,308</td><td class="no">GRCh38</td></tr>
+          <tr><td class="name">GRCh38.p12</td><td class="num">102</td><td class="no">GRCh38</td></tr>
+          <tr><td class="name">Homo_sapiens_assembly38.fasta</td><td class="num">98</td><td class="no">GRCh38</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><span class="mono">ANVIL_T2T</span> and <span class="mono">ANVIL_T2T_CHRY</span> are sibling workspaces from one consortium, and they use <strong>different CHM13 versions</strong> — v1.0 with a grafted GRCh38 chrY in one, v2.0 in the other. Both classify as <span class="mono">CHM13</span>. Aligning to them is not the same experiment.</p>
+    </div>
+
+    <div class="caveat">
+      <span class="tag">How to address it</span>
+      <p><strong>Use the GRCh38 arm inside the T2T workspaces, not the 1000G deposit.</strong> The T2T workspaces carry their own GRCh38 calls — 1,056 headers naming <span class="mono">GRCh38_full_analysis_set_plus_decoy_hla.fa</span>, drawn from a later CCDG freeze (<span class="mono">CCDG_14151 · 2020-08-05</span>) than the 1000G deposit. That is closer to the published comparison. It is not a clean matched control either — its provenance still differs from the CHM13 arm — so read the paper's methods before relying on it.</p>
+      <p><strong>Or re-call uniformly.</strong> Both CRAM sets are present. One caller, one version, one filter regime, both references. Roughly 10 TB of reads and the only route to a defensible reference delta — and the prerequisite for any of the browser tracks below the coverage one.</p>
+      <p><strong>Or do not difference at all.</strong> Grade each call set against assembly truth independently and report per-pipeline, never subtracting. Cheap, honest, and still yields the assembly-truth coverage track, which depends on no caller at all.</p>
+      <p><strong>And regardless: record the provenance.</strong> Caller, version, filtering and the specific reference file are all sitting in headers this project already fetches, caches and parses — and all are discarded. Capturing them is what would let the query itself demand a pipeline match instead of leaving the user to discover this the hard way.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>What has already been done with exactly this data</h2></div>
+    <div class="col">
+      <p>This has to come before any claim of value, because the answer is: <strong>most of it.</strong> The <span class="mono">ANVIL_T2T</span> workspace is not raw material awaiting analysis — it is the deposited output of a published study, and its own description says so.</p>
+    </div>
+
+    <pre>&ldquo;…all 3,202 short-read samples from the recently extended 1000 Genomes
+Project collection that we analyze using the GATK HaplotypeCaller for
+SNVs and indels on the NHGRI AnVIL Cloud Platform.&rdquo;
+                          — ANVIL_T2T workspace description</pre>
+
+    <div class="col">
+      <p>That is <strong>Aganezov et al., <em>Science</em> 2022</strong> (PMID 35357935), &ldquo;A complete reference genome improves analysis of human genetic variation&rdquo; — the T2T companion paper. The workspace links to it directly. Their reported findings map onto most of what this use case was framed as producing:</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Published finding (Aganezov 2022)</th><th>Overlaps which part of this use case</th></tr></thead>
+        <tbody>
+          <tr><td>Adds &gt;80 Mbp of sequence usable for variant calling</td><td>the CHM13-only stratum</td></tr>
+          <tr><td>Eliminates false positives in <span class="mono">MAP2K3</span>, <span class="mono">ZNF717</span></td><td>&ldquo;pick your hard region&rdquo;</td></tr>
+          <tr><td>Corrects missed variants from false duplications (<span class="mono">CBS</span>, <span class="mono">KCNE1</span>)</td><td>&ldquo;pick your hard region&rdquo;</td></tr>
+          <tr><td>Improves insertion/deletion balance for SVs</td><td>the variant-class axis</td></tr>
+          <tr><td>Reduces false de novo mutations and Mendelian violations in trios</td><td class="no">the trio-consistency variation, entirely</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Two further pieces of prior art matter. <strong>Donor-specific assembly benchmarking is an established method</strong>, not an idea — McGee et al. (bioRxiv 2026, PMID 42395516) use exactly this framing to separate platform-intrinsic sequencing error from reference bias. Their scope is two samples and the question is sequencer chemistry, not reference choice. And <strong>HPRC Release 2 has a paper</strong> (PMID 42539208, bioRxiv 2026): 460 haplotypes — matching the 460 assembly FASTAs in <span class="mono">AnVIL_HPRC_R2</span> exactly — including, notably, continuous local-ancestry estimates across every genome.</p>
+    </div>
+
+    <div class="caveat">
+      <span class="tag">So what is actually left</span>
+      <p><strong>A timing gap, and it is real but narrow.</strong> Aganezov's truth set was 17 long-read samples plus GIAB. HPRC2's 230 diploid assemblies did not exist in 2022. Applying donor-specific assembly truth to the <em>reference</em> question, at n=224 rather than n=17, is an increment that post-dates the published work — but it is an increment, not a new question.</p>
+      <p><strong>I have not read the HPRC2 full text.</strong> Its abstract closes on &ldquo;a host of new tools and applications,&rdquo; which could easily include this. Anyone taking this forward should read that paper before claiming the gap is open.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Why run it anyway</h2></div>
+    <div class="col">
+      <p>Because the point of this use case was never the biology.</p>
+      <p>UC&nbsp;1 exists to demonstrate that a participant-level query across datasets is possible and worth building. For that job, <strong>an analysis whose answer is already published is not a weakness — it is the ideal choice.</strong> It is a validation harness with a known-good result.</p>
+      <p>If the search finds 224 people, the pipeline runs, and the output reproduces the <span class="mono">MAP2K3</span> and <span class="mono">ZNF717</span> false-positive elimination and the <span class="mono">CBS</span>/<span class="mono">KCNE1</span> recovery that Aganezov reported, then every link in the chain is proven: the participant crosswalk is correct, the reference classification is correct, the cross-dataset join is correct, and the data is what the metadata says it is. A novel result could not prove any of that, because there would be nothing to check it against.</p>
+      <p>That reframes the deliverable honestly. This is a <strong>capability demonstration with an independent oracle</strong>, and the science claim shrinks to a modest, defensible one: extending assembly-based truth from a handful of samples to a couple of hundred, on a question the field has already shown is worth asking.</p>
+    </div>
+
+    <div class="callout">
+      <span class="eyebrow">The claim to make</span>
+      <p class="ask">Not a new finding. A <em>reproducible</em> one, found by a query nobody can currently run.</p>
+      <p style="margin-top:var(--s3);font-size:0.94rem;color:var(--ink-2);">Aganezov's team assembled this cohort by hand, inside the consortium that generated it. The test of participant-level search is whether an outsider can reconstitute the same cohort in an afternoon — and then vary it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>Variations on the same template</h2></div>
+    <div class="col">
+      <p>The pipeline stays fixed. Each user changes one axis and gets a different paper. This is what makes it a template rather than a study — and the axes marked in red are the ones that need metadata AnVIL does not currently expose.</p>
+    </div>
+
+    <div class="vars">
+
+      <div class="var">
+        <span class="axis">Axis — reference</span>
+        <h4>GRCh38 versus CHM13</h4>
+        <p>The default framing. Every one of the 224 has both alignments already deposited, so this variation costs nothing extra to set up.</p>
+        <span class="avail">available now · 224 people</span>
+      </div>
+
+      <div class="var">
+        <span class="axis">Axis — region class</span>
+        <h4>Pick your hard region</h4>
+        <p>Restrict to the MHC, or KIR, or immunoglobulin loci, or <span class="mono">CYP2D6</span>, or <span class="mono">SMN1/SMN2</span>. Clinically consequential, notoriously unreliable, and each is a self-contained result.</p>
+        <span class="avail">available now · public BEDs</span>
+      </div>
+
+      <div class="var">
+        <span class="axis">Axis — variant class</span>
+        <h4>SNV, indel, or structural</h4>
+        <p>The reference effect is expected to be largest for SVs and repeat-length variation, and smallest for SNVs in unique sequence. Confirming or refuting that gradient is itself the finding.</p>
+        <span class="avail">available now</span>
+      </div>
+
+      <div class="var">
+        <span class="axis">Axis — assembly method</span>
+        <h4>Trio-phased versus not</h4>
+        <p>121 of the cohort are phased with parental reads, 103 without. Does truth quality track phasing method? A methodological control — and a confounder to rule out before trusting any population comparison.</p>
+        <span class="avail">available now · 121 / 103</span>
+      </div>
+
+      <div class="var">
+        <span class="axis">Axis — assembly version</span>
+        <h4>HPRC release 1 versus 2</h4>
+        <p>44 people have assemblies in both releases. Re-running on each shows how much a truth set moves when the assembly improves — the stability question that every benchmark ought to answer about itself.</p>
+        <span class="avail">available now · 44 people</span>
+      </div>
+
+      <div class="var gated">
+        <span class="axis">Axis — ancestry</span>
+        <h4>Population and superpopulation</h4>
+        <p>The variation with the most at stake: does reference choice help or hurt differently by ancestry? The HPRC2 paper ships continuous local-ancestry estimates for every genome, which is a finer instrument than population labels and was not available to the 2022 work.</p>
+        <span class="avail">1000G panel or HPRC2 local ancestry — use case 2</span>
+      </div>
+
+      <div class="var gated">
+        <span class="axis">Axis — family</span>
+        <h4>Trio consistency</h4>
+        <p>Mendelian violation rate is a second, orthogonal truth signal that needs no assembly. Aganezov already reported CHM13 reducing false de novo calls, so this axis is a reproduction target rather than an open question — which is exactly what makes it a good validation check.</p>
+        <span class="avail">needs pedigree — use case 2 · published result to match</span>
+      </div>
+
+      <div class="var">
+        <span class="axis">Axis — caller</span>
+        <h4>Deposited calls versus your own</h4>
+        <p>Re-call from the CRAMs with a different caller and grade both against the same truth. This is the one variation that requires touching the 10 TB of reads.</p>
+        <span class="avail">available now · CRAM-scale</span>
+      </div>
+
+    </div>
+
+    <div class="callout">
+      <span class="eyebrow">Why this shape of cohort matters</span>
+      <p class="ask">The redundancy <em>is</em> the asset.</p>
+      <p style="margin-top:var(--s3);font-size:0.94rem;color:var(--ink-2);">Three representations of one genome look like duplication in a file browser. Viewed per participant they are a controlled experiment that already exists, fully funded and fully public, waiting for a query that can see across datasets.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>What is verified, and what is not</h2></div>
+
+    <div class="col">
+      <p>Prior art established on 2026-08-23 from the <span class="mono">ANVIL_T2T</span> workspace description (Azul) and PubMed: Aganezov 2022 (PMID 35357935), McGee 2026 (PMID 42395516), HPRC2 (PMID 42539208). Abstracts and the workspace description were read; <strong>none of the three full texts were</strong>.</p>
+      <p>Measured directly from the 2026-07-29 corpus snapshot and meta-disco's 2026-08-02 classification run: the cohort size of 224, the 121/103 phasing split, the 44 people in both HPRC releases, every file count and byte total, and the reference assignments in the table above.</p>
+    </div>
+
+    <div class="caveat">
+      <span class="tag">Assumed, and worth checking before committing</span>
+      <p><strong>Cohort size is a floor.</strong> 224 comes from an anvil14 snapshot. <span class="mono">ANVIL_HPRC</span> has not yet been reindexed into anvil15, so this cannot currently be re-derived live. Only 45 of the 259 release-1 samples have assembly FASTAs in AnVIL against 230 of 231 in release 2 — worth confirming that release 1 assemblies are genuinely absent rather than named in a form the scan missed.</p>
+      <p><strong>Assembly completeness is unexamined.</strong> The presence of two FASTAs per person says nothing about contiguity or how much of each haplotype is actually assembled. Truth-set quality depends on it, and it should be measured per sample rather than assumed uniform.</p>
+      <p><strong>The deposited VCFs are no longer taken at face value</strong> — checked 2026-08-23 across 203,719 cached VCF headers, and they are <em>not</em> pipeline-comparable. See &ldquo;the trap in the deposited calls&rdquo; above. What remains unverified is how Aganezov handled this; only the abstract and the workspace description were read, not the methods.</p>
+      <p><strong>Tooling is named, not validated.</strong> dipcall, hap.py, rtg vcfeval and truvari are the standard choices for these steps, but no workflow has been sourced or run here. Treat step 2 onward as a design, not a tested pipeline.</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Meta-disco</span>
+    <span>Use case 1 of 3</span>
+    <span>23 August 2026</span>
+    <span>Cohort measured on the 2026-07-29 snapshot</span>
+  </footer>
+
+</div>

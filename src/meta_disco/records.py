@@ -362,7 +362,7 @@ class OutputRecord:
         the caller's to supply because it is a fact about the run's input snapshot,
         not about this record: the pipeline reads it from the input envelope. ``None``
         where the input carried no envelope to name one, which is honest — better an
-        unnamed published than a guessed catalog.
+        unnamed repository than a guessed catalog.
         """
         return cls(
             file_name=item.file_name,

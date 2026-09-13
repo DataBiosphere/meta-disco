@@ -21,7 +21,7 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
-from .records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
+from .records import PUBLISHED_FIELDS, ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 
 
 def load_records(input_path: Path) -> list:
@@ -74,29 +74,66 @@ def load_snapshot(input_path: Path) -> tuple[dict, list]:
     raise ValueError("JSON object must contain a 'results' or 'files' key")
 
 
-# The system publishing the published values a run diffs against (#424). The
-# catalog generation is appended to it, giving e.g. "anvil/anvil15": AnVIL is who
-# publishes, the catalog is which generation of what it published.
-PUBLISHING_REPOSITORY = "anvil"
-
-
 def published_source(metadata: dict) -> str | None:
     """Name the repository an input snapshot's published values came from, or None.
 
-    Reads the catalog generation the snapshot recorded (``metadata.catalog``, written by
-    ``azul_manifest.metadata_block``) and qualifies it with the publishing system, so a
-    ``published`` block says *which* repository it carries rather than only that one
-    exists — the distinction that matters the first time a second target appears.
+    Both halves come off the snapshot's own envelope: ``repository`` (who published)
+    and ``catalog`` (which generation of what they published), giving e.g.
+    ``anvil/anvil15``. Neither is inferred. An earlier form prefixed a hard-coded
+    ``anvil`` to whatever catalog it found, which was wrong on a shared load path — the
+    HPRC run reads the same function, and would have labelled its records ``anvil/...``
+    the moment its downloader emitted an envelope. ``source`` is the one field meant to
+    name the publisher, so it is the one field that must not guess (contract 7.11).
 
-    ``None`` when the input carried no envelope (an ``.ndjson`` load) or its envelope
-    recorded no catalog (a snapshot pulled before #335 added it, such as the archived
-    anvil14 one). This is the *name* only: the values themselves come off each record,
-    so such a run still carries a ``published`` block, with ``source`` null. Deliberately
-    not defaulted to the current catalog — an unnamed repository is a fact, and a guessed
-    one is the drift #335 exists to catch.
+    ``None`` unless the envelope carries both. That covers an ``.ndjson`` load, which
+    has no envelope; a snapshot pulled before #335 added ``catalog``; and one written
+    before #424 added ``repository``. This is the *name* only — the values themselves
+    come off each record, so such a run still carries a ``published`` block, with
+    ``source`` null. Deliberately not defaulted: an unnamed repository is a fact, and a
+    guessed one is the drift #335 exists to catch.
     """
-    catalog = metadata.get("catalog")
-    return f"{PUBLISHING_REPOSITORY}/{catalog}" if isinstance(catalog, str) and catalog else None
+    repository, catalog = metadata.get("repository"), metadata.get("catalog")
+    if not (isinstance(repository, str) and repository and isinstance(catalog, str) and catalog):
+        return None
+    return f"{repository}/{catalog}"
+
+
+def refuse_bad_published_shape(records: list[dict], input_path: Path, max_examples: int = 5) -> None:
+    """Raise if any record's published values are not a list, naming the offenders.
+
+    The published dimensions are outside the input contract (#424 — they are not input),
+    so ``validate_metadata`` passes them through unexamined. Without this, the first
+    check is ``records.build_published``, which runs *per record inside a worker* — and
+    ``_run_parallel`` catches every worker exception, counts it, and writes no row. A
+    pre-#424 snapshot would therefore not be refused: every file it publishes a value
+    for would silently vanish from the output while the run reported ``complete`` and
+    exited 0, which is the failure mode #155 exists to prevent. Worse, it would differ
+    by ``--workers``: the single-worker branch has no ``try``, so the same input crashes
+    there and truncates at the ``-w 4`` / ``-w 10`` the Makefile uses.
+
+    Checking here makes "refuse the snapshot" true: the run stops before any record is
+    fetched or written, and reports how many records are bad rather than the first.
+    ``build_published``'s own guard stays as the constructor's backstop, for callers
+    that did not come through this path.
+
+    A whole-list scan of a 708k-record corpus costs one pass over two keys per record,
+    against a run measured in minutes.
+    """
+    bad = [
+        (record.get("entry_id"), field, value)
+        for record in records
+        for field in PUBLISHED_FIELDS
+        if (value := record.get(field)) is not None and not isinstance(value, list)
+    ]
+    if not bad:
+        return
+    examples = "; ".join(f"{entry_id}: {field}={value!r}" for entry_id, field, value in bad[:max_examples])
+    more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
+    raise ValueError(
+        f"{input_path}: {len(bad):,} record(s) spell a published value as something other than a list. "
+        f"A snapshot built before #424 spells them as scalars; rebuild it with "
+        f"scripts/download_anvil_manifest.py. Examples — {examples}{more}"
+    )
 
 
 def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[str | None, list[dict]]:
@@ -116,6 +153,7 @@ def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) ->
     """
     metadata, raw = load_snapshot(input_path)
     records, excluded = partition_records(raw)
+    refuse_bad_published_shape(records, input_path)
     if run_dir is not None:
         write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:

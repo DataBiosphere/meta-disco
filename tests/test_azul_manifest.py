@@ -356,7 +356,7 @@ class TestRecordMapping:
         assert validate_record(record) == []
 
     def test_a_multi_valued_cell_takes_its_first_value(self):
-        # _first survives for the two donor fields only; the declared dimensions read
+        # _first survives for the two donor fields only; the published dimensions read
         # _published instead (#424).
         assert am._first("genomic || transcriptomic") == "genomic"
         assert am._first("") is None
@@ -407,16 +407,26 @@ class TestRecordMapping:
         assert load_records(tmp_path / "anvil_files_metadata.ndjson") == [valid_record()]
         assert not list(tmp_path.glob("*.tmp"))
 
-    def test_the_metadata_block_names_the_catalog_and_the_source(self):
+    def test_the_metadata_block_names_the_repository_the_catalog_and_the_source(self):
         block = am.metadata_block("anvil15", {"b": 1, "a": 2}, datetime(2026, 9, 4))
         assert block == {
             "downloaded_at": "2026-09-04T00:00:00",
             "total_files": 3,
             "api_url": am.MANIFEST_URL,
+            "repository": "anvil",
             "catalog": "anvil15",
             "source": "manifest",
             "datasets": {"a": 2, "b": 1},
         }
+
+    def test_the_snapshot_names_its_publisher_so_a_reader_need_not_infer_one(self):
+        # `pipeline.published_source` reads `repository` with `catalog` (#424). It used
+        # to prefix a hard-coded "anvil", which would mislabel any other repository's
+        # snapshot loaded through the same shared path.
+        from meta_disco.pipeline import published_source
+
+        block = am.metadata_block("anvil15", {"a": 1}, datetime(2026, 9, 4))
+        assert published_source(block) == "anvil/anvil15"
 
 
 class TestScript:
