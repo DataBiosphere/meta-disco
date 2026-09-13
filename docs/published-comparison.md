@@ -65,9 +65,12 @@ unmapped string rather than a disagreement about meaning.
 | data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `genomic` | 2 |
 | data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 2 |
 
-### Named individually (pairs of 20 files or fewer)
+### The files behind the small pairs
 
-| file | dataset | dimension | we say |
+Listed where a pair covers 20 files or fewer, which is where an individual
+file is the fact rather than the count.
+
+| file | dataset | dimension | inferred |
 | --- | --- | --- | --- |
 | IGVFFI1426BOOW.tbi | AnVIL_IGVF_Mouse_R1 | data_modality | `not_applicable` |
 | IGVFFI3781KRJF.bai | AnVIL_IGVF_Mouse_R1 | data_modality | `not_applicable` |
@@ -82,4 +85,4 @@ unmapped string rather than a disagreement about meaning.
 
 115 record(s) were written by the run more than once and counted once here
 (a tar archive is written to both `tar_` and `auxiliary_classifications.json`). Pre-existing, and
-none of them declares anything, so no figure above depends on it.
+none has a published value, so no figure above depends on it.

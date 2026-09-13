@@ -371,14 +371,17 @@ def _compare_section(report: ComparisonReport) -> list[str]:
 
     small = {key: members for key, members in pairs.items() if len(members) <= MAX_NAMED_PER_PAIR}
     if small:
-        lines.append(f"### Named individually (pairs of {MAX_NAMED_PER_PAIR} files or fewer)")
+        lines.append("### The files behind the small pairs")
+        lines.append("")
+        lines.append(f"Listed where a pair covers {MAX_NAMED_PER_PAIR} files or fewer, which is where an individual")
+        lines.append("file is the fact rather than the count.")
         lines.append("")
         named = [
             [row.file_name, row.dataset_title, row.dimension, _code(str(row.inferred_value))]
             for members in small.values()
             for row in sorted(members, key=lambda r: r.file_name)
         ]
-        lines += md_table(["file", "dataset", "dimension", "we say"], named)
+        lines += md_table(["file", "dataset", "dimension", "inferred"], named)
         lines.append("")
     return lines
 
@@ -470,7 +473,7 @@ def render_report(report: ComparisonReport) -> str:
             "",
             f"{report.duplicate_records:,} record(s) were written by the run more than once and counted once here",
             "(a tar archive is written to both `tar_` and `auxiliary_classifications.json`). Pre-existing, and",
-            "none of them declares anything, so no figure above depends on it.",
+            "none has a published value, so no figure above depends on it.",
             "",
         ]
     return "\n".join(lines)
