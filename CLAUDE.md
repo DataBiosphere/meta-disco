@@ -140,7 +140,9 @@ evidence}` entry — plus the controlled vocabulary:
     output dicts by hand, and `classify_index_files` reshapes an intermediate record
     into the output shape, so `declared` must survive that step too.
     `tests/test_incumbent.py::TestEveryProducerCarriesTheDeclaration` sweeps them;
-    add a new producer there. `make incumbent-report` renders the diff — it is the
+    add a new producer there. The sweep exists because a run has three record shapes,
+    not one — #204's envelope covers only the seven pipeline types, and unifying the
+    other four on `OutputRecord` is #429, which would make the sweep unnecessary. `make incumbent-report` renders the diff — it is the
     *only* AnVIL comparison, having replaced `generate_validation_report`'s
     `compare_anvil` (#424), whose two value maps are #414's seed.
 

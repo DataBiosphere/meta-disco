@@ -413,8 +413,8 @@ def _declared(cell: str) -> list[str] | None:
     return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
 
 
-def record_from_compact_row(row: dict[str, str]) -> dict[str, Any]:
-    """One classifier input record from one compact-manifest row.
+def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
+    """One classifier input record from one compact manifest row.
 
     The keys are the input contract (``schema/metadata.yaml``) plus four fields
     the contract does not model and ignores as extra keys: AnVIL's two declared
@@ -455,7 +455,7 @@ def _fields(count: int) -> str:
     return f"{count} field{'' if count == 1 else 's'}"
 
 
-def iter_compact_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
+def iter_compact_manifest_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
     """Every row of one compact manifest on disk as its raw cells, with its line number.
 
     The cells are exactly what Azul wrote — every column, unmapped and
@@ -531,12 +531,12 @@ def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
     spelling that is not Azul's ``True``/``False``; ``ValueError`` is ``int()``
     on a ``files.file_size`` that is not a number. ``TypeError`` is kept as a
     guard rather than for a known path: it was how a short row used to surface,
-    and :func:`iter_compact_rows` now refuses those outright, already naming the
+    and :func:`iter_compact_manifest_rows` now refuses those outright, already naming the
     line.
     """
-    for n, row in iter_compact_rows(path):
+    for n, row in iter_compact_manifest_rows(path):
         try:
-            yield record_from_compact_row(row)
+            yield record_from_compact_manifest_row(row)
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
 

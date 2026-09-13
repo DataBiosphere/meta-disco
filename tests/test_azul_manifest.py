@@ -336,7 +336,7 @@ class TestLayout:
 
 
 class TestRecordMapping:
-    def test_a_compact_row_becomes_a_record_the_contract_accepts(self, tmp_path):
+    def test_a_compact_manifest_row_becomes_a_record_the_contract_accepts(self, tmp_path):
         (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))
         [record] = am.iter_compact_records(tmp_path / "c.tsv")
         assert record == valid_record(

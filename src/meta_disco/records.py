@@ -260,10 +260,22 @@ class InvalidRecord:
 class OutputRecord:
     """The per-file output envelope: identity fields wrapping a classifications payload.
 
-    The single shape the pipeline writes per record. Both producers construct it —
-    the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
+    The shape ``ClassifyPipeline`` writes per record. Both of *its* producers construct
+    it — the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
     work item) and the single-file path (``classify_single``) — and serialize through
     ``to_dict``, so the eight-key envelope can no longer drift between them (#204).
+
+    **It is not the shape of every classification record in a run.** #204 covers the
+    seven file types the pipeline classifies (bam, vcf, fastq, fasta, gfa, tar, bed);
+    the four standalone producers build their output dicts by hand and emit wider
+    records — ``dataset_id`` on auxiliary/image/remaining (nine keys), and
+    ``dataset_id`` plus ``parent_file``/``parent_md5sum`` on index (eleven), which also
+    writes a third envelope key, ``unmatched_files``. Their run ``metadata`` blocks
+    differ too: five distinct shapes across the eleven files, sharing only ``complete``.
+    So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
+    pins only this one. What all eleven *do* share is ``classifications`` plus the seven
+    identity fields, which is what lets ``output_utils.iter_records``, ``field_label``
+    and ``corpus_diff`` read them uniformly. Unifying the four on this record is #429.
 
     ``declared`` is the incumbent block (#424) — what AnVIL publishes for this file
     today, beside what this run concluded. It is ``None`` on most records and on the

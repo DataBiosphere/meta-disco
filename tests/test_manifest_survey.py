@@ -738,9 +738,9 @@ def test_a_manifest_with_no_rows_still_reports_its_columns(tmp_path):
     assert all(c.filled == 0 and c.rate == 0.0 for c in columns)
 
 
-def test_a_short_compact_row_is_refused_before_it_can_be_mapped(tmp_path):
-    # This used to reach record_from_compact_row and surface as int(None) on
-    # file_size. iter_compact_rows refuses the row first now (#387), so the error
+def test_a_short_compact_manifest_row_is_refused_before_it_can_be_mapped(tmp_path):
+    # This used to reach record_from_compact_manifest_row and surface as int(None) on
+    # file_size. iter_compact_manifest_rows refuses the row first now (#387), so the error
     # names the line for a better reason — the mapper never sees a None.
     from meta_disco.azul_manifest import iter_compact_records
 
@@ -752,14 +752,14 @@ def test_a_short_compact_row_is_refused_before_it_can_be_mapped(tmp_path):
         list(iter_compact_records(compact_path(tmp_path)))
 
 
-def test_compact_row_with_surplus_fields_names_the_line(tmp_path):
+def test_compact_manifest_row_with_surplus_fields_names_the_line(tmp_path):
     manifest_dir(tmp_path, CATALOG).mkdir(parents=True, exist_ok=True)
     compact_path(tmp_path).write_text("a\tb\n1\t2\n1\t2\t3\n")
     with pytest.raises(ValueError, match="line 3"):
         ms.survey_compact(compact_path(tmp_path))
 
 
-def test_compact_row_with_missing_fields_names_the_line_and_the_columns(tmp_path):
+def test_compact_manifest_row_with_missing_fields_names_the_line_and_the_columns(tmp_path):
     # The mirror of the surplus case. A short row is a malformed manifest, not a
     # row with absent cells: Azul writes every column, and an absent value is
     # written as the empty string. Refusing it here is what lets every cell be

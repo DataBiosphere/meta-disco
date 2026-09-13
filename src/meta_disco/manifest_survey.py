@@ -53,7 +53,7 @@ from .azul_manifest import (
     VERBATIM_BIOSAMPLE,
     VERBATIM_FILE,
     compact_header,
-    iter_compact_rows,
+    iter_compact_manifest_rows,
     iter_verbatim_entities,
     manifest_path,
     sidecar_datasets,
@@ -432,7 +432,7 @@ def survey_compact(path: Path) -> tuple[int, list[ColumnCoverage], Counter]:
     # From the header, not the first data row: a manifest with a header and no
     # rows has columns that are 0% filled, which is not the same as having none.
     columns = compact_header(path)
-    for _n, row in iter_compact_rows(path):
+    for _n, row in iter_compact_manifest_rows(path):
         rows += 1
         for name, cell in row.items():
             if not cell:
