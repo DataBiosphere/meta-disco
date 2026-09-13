@@ -225,8 +225,10 @@ class ClassifierRecord:
 
         The two published dimensions are read with ``.get`` for a stronger reason than
         optionality: they are not slots of the input contract at all (#424 — they are
-        not input, they are the published output), so no validation has run on them
-        and no caller guarantee covers them. A record that carries neither reads as
+        not input, they are the published output), so ``validate_metadata`` never looks
+        at them. The shared loader does — ``pipeline.refuse_bad_published_shape`` refuses
+        a bad shape before either stream is built — but a caller reaching this
+        constructor another way has had no such check. A record that carries neither reads as
         ``None`` on both, exactly like one from a source that declares nothing.
         """
         return cls(
@@ -256,10 +258,12 @@ class InvalidRecord:
     the record carried them, since a ``validation_failed`` row may carry their
     drifted (non-string) types.
 
-    It carries the published values too (#424), and is typed ``Any`` for it
-    rather than ``list[str] | None``: the two are outside the input contract, so
-    nothing has checked their shape on this stream any more than on the other, and
-    this stream is the one built from records already known to be drifted. A file
+    It carries the published values too (#424), and is typed ``Any`` for it rather than
+    ``list[str] | None``: the two are outside the input contract, so the contract has
+    checked their shape on this stream no more than on the other, and this stream is the
+    one built from records already known to be drifted. (The shared loader does check
+    them, but the annotation describes what this class can promise, not what one caller
+    happens to have run.) A file
     the repository publishes a modality for does not stop being published by failing our
     contract on ``file_size``, so the row still reports what the repository publishes.
     """

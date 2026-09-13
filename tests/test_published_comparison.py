@@ -410,12 +410,17 @@ def test_two_files_sharing_a_name_in_one_dataset_are_counted_twice(tmp_path):
 
 
 class TestPublishedShapeIsRefused:
-    """`build_published` is the only thing checking these two fields' shape (#424).
+    """`build_published` refuses a shape it cannot use — the constructor-level gate.
 
-    They left the input contract, so `validate_metadata` passes them through
-    unexamined. Both bad shapes are quiet without the guard: a bare string is iterable,
-    so it is walked character by character; a non-iterable raises a bare `TypeError`
-    from inside a classification worker, mid-run.
+    These fields left the input contract, so `validate_metadata` passes them through
+    unexamined. Two other gates cover them: `pipeline.refuse_bad_published_shape` at the
+    load boundary, which is what refuses a whole snapshot, and the output schema's
+    `Published` class at the far end. This one is the single construction site, and
+    covers a caller that reached it without passing through the loader.
+
+    Both bad shapes are quiet without it: a bare string is iterable, so it is walked
+    character by character; a non-iterable raises a bare `TypeError` from inside a
+    classification worker, mid-run.
     """
 
     def test_a_scalar_string_is_refused_rather_than_walked_character_by_character(self):
@@ -606,3 +611,41 @@ def test_the_load_boundary_refuses_a_snapshot_before_any_record_is_processed(tmp
     assert "1 record(s)" in message
     assert "drifted" in message, "the offending record is named"
     assert "rebuild it with" in message
+
+
+def test_the_load_boundary_refuses_a_non_string_inside_a_list(tmp_path):
+    """The loader must refuse everything `build_published` refuses, not just the outer shape.
+
+    A list holding a non-string passed the outer-shape check, then raised in a worker —
+    where `_run_parallel` swallows it and writes no row. So the record disappeared while
+    the run reported success: the exact failure the load-boundary check exists to close,
+    reintroduced through the half of the shape it did not check.
+    """
+    bad = valid_record(file_name="b.test", file_format=".test", entry_id="drifted", data_modality=["genomic", 123])
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [bad]}))
+
+    with pytest.raises(ValueError, match=r"holds a non-string value"):
+        load_classifiable_snapshot(path)
+
+
+def test_the_refusal_counts_records_and_fields_separately(tmp_path):
+    """One record wrong on both dimensions is one record, not two.
+
+    The count is the operator's measure of how much of the snapshot is bad, so counting
+    fields as records would overstate it — by exactly a factor of two on the shape this
+    is most likely to meet, a pre-#424 snapshot where both dimensions are scalars.
+    """
+    bad = valid_record(
+        file_name="b.test",
+        file_format=".test",
+        entry_id="drifted",
+        data_modality="genomic",
+        reference_assembly="GRCh38",
+    )
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [bad]}))
+
+    with pytest.raises(ValueError) as exc:
+        load_classifiable_snapshot(path)
+    assert "1 record(s), 2 field(s)" in str(exc.value)

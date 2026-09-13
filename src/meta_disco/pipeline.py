@@ -99,7 +99,7 @@ def published_source(metadata: dict) -> str | None:
 
 
 def refuse_bad_published_shape(records: list[dict], input_path: Path, max_examples: int = 5) -> None:
-    """Raise if any record's published values are not a list, naming the offenders.
+    """Raise if any record's published values are not a list of strings, naming the offenders.
 
     The published dimensions are outside the input contract (#424 — they are not input),
     so ``validate_metadata`` passes them through unexamined. Without this, the first
@@ -116,22 +116,33 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
     ``build_published``'s own guard stays as the constructor's backstop, for callers
     that did not come through this path.
 
+    Both halves of the shape are checked — the outer list and its elements — because
+    ``build_published`` refuses both, and anything it refuses that this lets through
+    raises in a worker and loses the row, which is the failure this exists to close.
+
     A whole-list scan of a 708k-record corpus costs one pass over two keys per record,
     against a run measured in minutes.
     """
-    bad = [
-        (record.get("entry_id"), field, value)
-        for record in records
-        for field in PUBLISHED_FIELDS
-        if (value := record.get(field)) is not None and not isinstance(value, list)
-    ]
+    bad: list[tuple[object, str, object, str]] = []
+    for record in records:
+        for field in PUBLISHED_FIELDS:
+            value = record.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                bad.append((record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
+            elif not all(isinstance(element, str) for element in value):
+                bad.append((record.get("entry_id"), field, value, "holds a non-string value"))
     if not bad:
         return
-    examples = "; ".join(f"{entry_id}: {field}={value!r}" for entry_id, field, value in bad[:max_examples])
+    # Records, not entries: one record can be wrong on both fields, and calling that two
+    # records would misreport how much of the snapshot is bad.
+    offenders = len({entry_id for entry_id, _, _, _ in bad})
+    examples = "; ".join(f"{entry_id}: {field}={value!r} ({why})" for entry_id, field, value, why in bad[:max_examples])
     more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
     raise ValueError(
-        f"{input_path}: {len(bad):,} record(s) spell a published value as something other than a list. "
-        f"A snapshot built before #424 spells them as scalars; rebuild it with "
+        f"{input_path}: {offenders:,} record(s), {len(bad):,} field(s), carry a published value this "
+        f"cannot use. A snapshot built before #424 spells them as scalars; rebuild it with "
         f"scripts/download_anvil_manifest.py. Examples — {examples}{more}"
     )
 
