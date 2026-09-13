@@ -681,4 +681,26 @@ def test_a_pipe_in_a_published_value_is_escaped_once_not_twice():
 
     assert _code("a || b") == "`a || b`", "the code span itself must not escape"
     [_header, _rule, row] = md_table(["v"], [[_code("a || b")]])
+    # Exactly once. GitHub's renderer turns this row into
+    # `<td><code>a || b</code></td>` — checked against its /markdown API, not inferred,
+    # because "the report shows backslashes" has been reported three times and is wrong.
     assert r"\|\|" in row, "md_table escapes it exactly once, which GFM then unescapes"
+    assert r"\\|" not in row, "escaping twice is what would show a backslash in the cell"
+
+
+def test_a_checksum_less_record_is_excluded_rather_than_refusing_the_run(tmp_path):
+    """The shape check sees classifiable records only, and that ordering is deliberate.
+
+    A record with no usable checksum produces no output row whatever its shape (#376)
+    and is named in `excluded_files.json`, so a bad published value on one can lose
+    nothing. Refusing the run over it would block a snapshot that classifies correctly.
+    """
+    good = valid_record(file_name="a.test", file_format=".test", entry_id="ok", reference_assembly=["GRCh38"])
+    excluded = valid_record(file_name="b.test", file_format=".test", entry_id="no-md5", data_modality="genomic")
+    excluded["file_md5sum"] = None
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [good, excluded]}))
+
+    source, records = load_classifiable_snapshot(path)
+    assert source == "anvil/anvil15"
+    assert [r["entry_id"] for r in records] == ["ok"], "the drifted record was excluded, not refused"

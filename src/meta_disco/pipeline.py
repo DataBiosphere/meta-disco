@@ -111,10 +111,18 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
     by ``--workers``: the single-worker branch has no ``try``, so the same input crashes
     there and truncates at the ``-w 4`` / ``-w 10`` the Makefile uses.
 
-    Checking here makes "refuse the snapshot" true: the run stops before any record is
-    fetched or written, and reports how many records are bad rather than the first.
-    ``build_published``'s own guard stays as the constructor's backstop, for callers
-    that did not come through this path.
+    Checking here makes "refuse the snapshot" true for the records that would be
+    classified: the run stops before any of them is fetched or written, and reports how
+    many are bad rather than only the first. ``build_published``'s own guard stays as the
+    constructor's backstop, for callers that did not come through this path.
+
+    Deliberately *after* ``partition_records``, so it sees the classifiable records
+    only. A record excluded for having no usable checksum (#376) produces no output row
+    whatever its shape, and is named in ``excluded_files.json``, so a bad value on one
+    can lose nothing — refusing a run over it would block a snapshot that classifies
+    correctly. Checking before the split would also have to tolerate the non-dict
+    elements the split removes. So this validates what will be classified, which is the
+    scope that matters, and not the whole file.
 
     Both halves of the shape are checked — the outer list and its elements — because
     ``build_published`` refuses both, and anything it refuses that this lets through

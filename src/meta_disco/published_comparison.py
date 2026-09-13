@@ -65,9 +65,16 @@ def _code(value: str) -> str:
     additionally needs a space, which the reader strips.
 
     A pipe needs no handling here: ``md_table`` escapes it, and GFM processes that escape
-    when it parses the table row — including inside a code span, which its own spec
-    demonstrates. Escaping it a second time here would put a visible backslash in the
-    rendered cell, so do not "fix" that.
+    when it parses the table row — including inside a code span. Verified against
+    GitHub's own renderer rather than inferred, because it has been reported as a bug
+    three times:
+
+        printf '| a |\n| --- |\n| `x \\|\\| y` |\n' > t.md
+        jq -Rs '{text: ., mode: "gfm"}' t.md | gh api -X POST /markdown --input -
+        # -> <td><code class="notranslate">x || y</code></td>
+
+    So escaping it a second time here is what would put a visible backslash in the
+    rendered cell. Do not "fix" that.
     """
     longest = max((len(run) for run in re.findall(r"`+", value)), default=0)
     fence = "`" * (longest + 1)
