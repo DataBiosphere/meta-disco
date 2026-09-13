@@ -499,7 +499,8 @@ def test_a_populated_published_block_validates(validator):
 
 def test_a_published_block_validates_with_one_dimension_absent(validator):
     # Null on a dimension the repository publishes nothing for, and that dimension
-    # absent from in_vocabulary — the most common populated shape (4,696 rows).
+    # absent from in_vocabulary. One of the two one-sided shapes: 4,476 records are
+    # assembly-only like this one, 6,535 are modality-only, and 220 carry both.
     published = {
         "source": "anvil/anvil15",
         "data_modality": None,
@@ -525,8 +526,11 @@ def test_a_published_block_validates_when_a_value_is_in_vocabulary(validator):
 
 def test_the_published_gate_rejects_a_scalar_where_a_list_belongs(validator):
     # Proves the gate bites on the shape that matters. A pre-#424 snapshot spells these
-    # as scalars; the input contract no longer models them (#424 — they are not input),
-    # so this schema is the only thing that would catch one reaching the output.
+    # as scalars, and the input contract no longer models them (#424 — they are not
+    # input), so neither `validate_metadata` nor any caller guarantee covers the shape.
+    # `records.build_published` refuses one first, so a scalar should never reach a
+    # record; this is the second gate, and the one that would still catch a record
+    # written by some future producer that bypassed that constructor.
     published = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": "GRCh38"}
     report = validator.validate(_record_with(published), target_class="ClassificationRecord")
     # Assert it fails *because of* the shape, not some unrelated reason — otherwise a

@@ -24,7 +24,7 @@ description: >-
   `gen-pydantic`. Unlike the output model, that generated module is committed and
   shipped as package data because the runtime imports it: `metadata_schema.py`
   validates every record against it at load (issue #161). The field constraints
-  below are the measured contract of the current corpus (758,658 records):
+  below are the measured contract of the current corpus (708,088 records, anvil15):
   `file_size >= 0` (three zero-size files), md5 lowercase-hex, drs_uri
   `drs://`-prefixed.
 

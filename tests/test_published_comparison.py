@@ -116,7 +116,7 @@ class TestPublishedValuesReachTheOutput:
         assert "published" in out and out["published"] is None
 
 
-class TestIncumbentSource:
+class TestPublishedSource:
     def test_it_names_the_catalog_the_snapshot_recorded(self):
         assert published_source({"catalog": "anvil15"}) == "anvil/anvil15"
 
@@ -287,7 +287,7 @@ class TestEveryProducerCarriesPublishedValues:
 
     @staticmethod
     def _metadata(tmp_path, records):
-        """The input envelope with a catalog, so the repository's published values is named as in a real run."""
+        """The input envelope with a catalog, so the repository is named as in a real run."""
         path = tmp_path / "metadata.json"
         path.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": records}))
         return path
@@ -365,10 +365,10 @@ class TestEveryProducerCarriesPublishedValues:
 
 
 def test_the_display_join_matches_the_manifest_reader():
-    """The report rejoins a declared list with the separator the reader split on.
+    """The report rejoins a published list with the separator the reader split on.
 
-    `published` holds its own copy rather than importing `azul_manifest`, which opens a
-    `requests` session at import. That duplication is only safe while the two agree: if
+    This module holds its own copy rather than importing `azul_manifest`, which imports
+    `requests` at module scope. That duplication is only safe while the two agree: if
     Azul's separator moved and only the reader were updated, every `published_cell` in the
     report would silently stop matching what Azul published. Imported inside the test so
     the report keeps its offline import graph.

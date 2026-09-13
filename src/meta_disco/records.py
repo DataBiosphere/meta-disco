@@ -94,9 +94,11 @@ def build_published(values: dict[str, Any], source: str | None) -> dict | None:
     Returns None — and the envelope emits ``"published": null`` — when the repository
     publishes nothing for either dimension, which is ~98% of the corpus.
 
-    **Shape is checked here because nothing else checks it.** These two fields are
-    outside the input contract (#424 — they are not input), so ``validate_metadata``
-    passes them through unexamined and no caller guarantee covers them. ``values`` is
+    **Shape is checked here because the input gate cannot.** These two fields are outside
+    the input contract (#424 — they are not input), so ``validate_metadata`` passes them
+    through unexamined and no caller guarantee covers them. The output schema's
+    ``Published`` class refuses a bad shape too, but only once a record exists; this is
+    the constructor, so it is where a bad value is stopped before one does. ``values`` is
     typed ``Any`` for that reason rather than ``list[str] | None``: the looser type is
     the true one, since a caller reads these straight off a raw record and can promise
     nothing about them — this function is where the narrowing actually happens, and
@@ -251,7 +253,7 @@ class InvalidRecord:
     nothing has checked their shape on this stream any more than on the other, and
     this stream is the one built from records already known to be drifted. A file
     the repository publishes a modality for does not stop being published by failing our
-    contract on ``file_size``, so the row still reports what the repository's published values says.
+    contract on ``file_size``, so the row still reports what the repository publishes.
     """
 
     file_name: str
@@ -304,9 +306,10 @@ class OutputRecord:
     writes a third envelope key, ``unmatched_files``. Their run ``metadata`` blocks
     differ too: five distinct shapes across the eleven files, sharing only ``complete``.
     So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
-    pins only this one. What all eleven *do* share is ``classifications`` plus the seven
-    identity fields, which is what lets ``output_utils.iter_records``, ``field_label``
-    and ``corpus_diff`` read them uniformly. Unifying the four on this record is #429.
+    pins only this one. What all eleven *do* share is ``classifications``,
+    the six identity fields this module's docstring names, and ``published`` — which is
+    what lets ``output_utils.iter_records``, ``field_label`` and ``corpus_diff`` read them
+    uniformly. Unifying the four on this record is #429.
 
     ``published`` is the repository's own values (#424) — what it publishes for this file
     today, beside what this run concluded. It is ``None`` on most records and on the
@@ -314,7 +317,7 @@ class OutputRecord:
     omitted, so the envelope keeps one shape for every row (the reason ``RunMetadata``
     still emits a retired ``dropped: 0``). It is not part of ``classifications`` and
     never merges into it: the dimensions block is this project's answer, and mixing
-    the repository's published values into it is the confusion #424 exists to undo.
+    the published values into it is the confusion #424 exists to undo.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
@@ -355,7 +358,7 @@ class OutputRecord:
         docstring), so it is agnostic to which stream produced ``item`` — and the two
         published dimensions, which both streams expose for that same reason.
 
-        ``source`` names the repository's published values the declaration was read from (#424), and is
+        ``source`` names the repository the values were read from (#424), and is
         the caller's to supply because it is a fact about the run's input snapshot,
         not about this record: the pipeline reads it from the input envelope. ``None``
         where the input carried no envelope to name one, which is honest — better an

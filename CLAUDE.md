@@ -138,9 +138,12 @@ evidence}` entry — plus the controlled vocabulary:
     `records.published_from(record, source)`. Both drive the field list from
     `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
     deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
-    input. Contract 7.7 binds *every* producer, and
+    input. Contract 7.7 binds *every* producer, in two places:
     `tests/test_published_comparison.py::TestEveryProducerCarriesPublishedValues` sweeps
-    them; add a new producer there. The sweep exists because a run has three record
+    the four that build records by hand, and
+    `test_the_pipeline_carries_the_catalog_into_a_written_record` covers
+    `ClassifyPipeline` end to end. A new standalone producer goes in the sweep; a new
+    pipeline file type is already covered. Two places because a run has three record
     shapes, not one — #204's envelope covers only the seven pipeline types, and
     unifying the other four on `OutputRecord` is #429, which would make it unnecessary.
     `make published-comparison` renders the report. It is the *only* comparison against

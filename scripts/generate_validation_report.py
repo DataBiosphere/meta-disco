@@ -8,7 +8,7 @@ catalogs) and reports agreement, discrepancies, and coverage gaps.
 values against AnVIL's declared `data_modality`/`reference_assembly` through two
 hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. That comparison
 is now `meta_disco.published_comparison` / `make published-comparison`, which reports the same two
-dimensions per file against the repository's published values AnVIL publishes. Two reports scoring the
+dimensions per file against the values the repository publishes. Two reports scoring the
 same files by different rules is the drift `docs/claims-contract.md` exists to stop,
 so there is one.
 

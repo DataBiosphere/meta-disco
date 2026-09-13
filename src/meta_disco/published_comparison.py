@@ -43,8 +43,9 @@ from .summaries import md_table
 
 # The separator the repository joins a multi-valued facet cell with, used here to render
 # a published value list back into the cell as published. Held separately from
-# ``azul_manifest._MULTI_VALUE_SEP`` rather than imported, because that module opens a
-# `requests` session at import and this is an offline report; the two are pinned
+# ``azul_manifest._MULTI_VALUE_SEP`` rather than imported, because that module is the
+# manifest *fetcher* — it imports `requests` at module scope — and this is an offline
+# report that should not pull the HTTP client in to read one constant; the two are pinned
 # together by ``test_published_comparison.test_the_display_join_matches_the_manifest_reader``,
 # which is what actually stops them drifting — a comment would not.
 MULTI_VALUE_SEP = " || "
@@ -180,7 +181,7 @@ def gather(run_dir: Path) -> ComparisonReport:
     ``tar_`` and ``auxiliary_classifications.json``, and it is here so every total is a
     file count rather than a row count. Being precise about what it moves: none of the
     115 has a published value, so the published-value figures and the ``keep`` /
-    ``compare`` counts are identical either way — but ``counts`` is tallied for *every*
+    ``review`` counts are identical either way — but ``counts`` is tallied for *every*
     file, so the ``add`` and ``none`` totals are 115 lower than the row count, which is
     the correct answer and not the same as being unaffected.
 
@@ -188,8 +189,9 @@ def gather(run_dir: Path) -> ComparisonReport:
     string: it is not classifier-relevant, so a record whose ``entry_id`` drifted to a
     list or dict still classifies and is still written (``InvalidRecord`` echoes it
     un-coerced), and an unhashable one would otherwise raise here — the same hazard
-    ``_run_parallel`` already avoids by not hashing a raw ``file_md5sum``. ``md5sum``
-    needs no such treatment: #376 excludes any record without a well-formed one.
+    ``ClassifyPipeline.run``'s ``skip_cached`` filter already avoids by not hashing a raw
+    ``file_md5sum`` against a set. ``md5sum`` needs no such treatment here: #376 excludes
+    any record without a well-formed one.
     """
     report = ComparisonReport(run_dir=run_dir)
     seen: set[tuple] = set()
@@ -324,7 +326,7 @@ def _vocabulary_table(report: ComparisonReport) -> list[str]:
 
 
 def _compare_section(report: ComparisonReport) -> list[str]:
-    """Every `compare` pair, and the files behind the small ones."""
+    """Every `review` pair, and the files behind the small ones."""
     lines: list[str] = []
     pairs = report.compare_pairs()
     if not pairs:

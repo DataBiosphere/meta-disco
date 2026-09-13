@@ -416,22 +416,21 @@ def _published(cell: str) -> list[str] | None:
 def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     """One classifier input record from one compact manifest row.
 
-    The keys are the input contract (``schema/metadata.yaml``) plus four fields
-    the contract does not model and ignores as extra keys: the two dimensions AnVIL
-    dimensions and the two donor fields the page downloader also emitted.
-    ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's
-    strict validation requires; a cell that is not one of Azul's ``True`` /
-    ``False`` spellings raises rather than silently becoming ``False``.
+    The keys are the input contract (``schema/metadata.yaml``) plus four fields the
+    contract does not model and ignores as extra keys: the two dimensions the
+    repository publishes, and the two donor fields the page downloader also emitted.
+    ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's strict
+    validation requires; a cell that is not one of Azul's ``True`` / ``False``
+    spellings raises rather than silently becoming ``False``.
 
-    Four fields read an empty cell as ``None``, and they split a multi-valued one
-    two different ways. ``data_modality`` and ``reference_assembly`` are the
-    published values — the values AnVIL publishes today, which classification
-    publishes, which classification reads as nothing and the output carries as
-    ``published`` (#424) — and are
-    transcribed as the full list (:func:`_published`). ``organism_type`` and
-    ``phenotypic_sex`` still keep element zero (:func:`_first`), which nothing
-    reads. Every other field is passed through as the cell's text, and the
-    contract's non-empty patterns are what reject a blank one.
+    Four fields read an empty cell as ``None``, and they split a multi-valued one two
+    different ways. ``data_modality`` and ``reference_assembly`` are what the repository
+    publishes for this file today — classification reads them as nothing and the output
+    carries them as its ``published`` block (#424) — so they are transcribed as the full
+    list (:func:`_published`). ``organism_type`` and ``phenotypic_sex`` still keep
+    element zero (:func:`_first`), which nothing reads. Every other field is passed
+    through as the cell's text, and the contract's non-empty patterns are what reject a
+    blank one.
     """
     return {
         "entry_id": row["files.document_id"],

@@ -212,11 +212,12 @@ def propagate_to_index_files(
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
                 "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
-                # The published values for the index file itself, not the
-                # parent's (#424). An index file is where the two most often both
-                # speak — AnVIL carries the set's modality on a .bai, where this
-                # project answers not_applicable — so dropping it here would hide
-                # exactly the rows the comparison exists to surface.
+                # The index file's own published values, not the parent's (#424). The
+                # repository publishes for 4 index files in this corpus and all four are
+                # unmatched here, so today this block is null on every row this producer
+                # writes and the catch-all is what carries those four. It is wired anyway
+                # because contract 7.7 is about the producer, not about today's corpus:
+                # a matched index with a published value would otherwise lose it silently.
                 "published": published_from(f, source),
             }
 

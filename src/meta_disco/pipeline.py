@@ -81,36 +81,38 @@ PUBLISHING_REPOSITORY = "anvil"
 
 
 def published_source(metadata: dict) -> str | None:
-    """Name the repository's published values an input snapshot's declarations came from, or None.
+    """Name the repository an input snapshot's published values came from, or None.
 
-    Reads the catalog generation the snapshot recorded (``metadata.catalog``, written
-    by ``azul_manifest.metadata_block``) and qualifies it with the publishing system,
-    so a ``published`` block says *which* repository it carries rather than only that one
+    Reads the catalog generation the snapshot recorded (``metadata.catalog``, written by
+    ``azul_manifest.metadata_block``) and qualifies it with the publishing system, so a
+    ``published`` block says *which* repository it carries rather than only that one
     exists — the distinction that matters the first time a second target appears.
 
     ``None`` when the input carried no envelope (an ``.ndjson`` load) or its envelope
     recorded no catalog (a snapshot pulled before #335 added it, such as the archived
-    anvil14 one). Deliberately not defaulted to the current catalog: an unnamed
-    published is a fact, and a guessed one is the drift #335 exists to catch.
+    anvil14 one). This is the *name* only: the values themselves come off each record,
+    so such a run still carries a ``published`` block, with ``source`` null. Deliberately
+    not defaulted to the current catalog — an unnamed repository is a fact, and a guessed
+    one is the drift #335 exists to catch.
     """
     catalog = metadata.get("catalog")
     return f"{PUBLISHING_REPOSITORY}/{catalog}" if isinstance(catalog, str) and catalog else None
 
 
 def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) -> tuple[str | None, list[dict]]:
-    """:func:`load_classifiable_records`, plus the repository's published values the snapshot names.
+    """:func:`load_classifiable_records`, plus the repository the snapshot names.
 
-    The form every classification producer calls. It returns the resolved published
-    rather than the raw envelope because that is the only thing any caller wants from
-    the envelope — and because returning the envelope made naming the repository's published values a
-    *second* line each producer had to remember, which is precisely the omission
-    contract 7.7 exists to catch. Resolved here, a producer cannot forget it.
+    The form every classification producer calls. It returns the resolved repository name
+    rather than the raw envelope because that is the only thing any caller wants from the
+    envelope — and because returning the envelope made naming the repository a *second*
+    line each producer had to remember, which is precisely the omission contract 7.7
+    exists to catch. Resolved here, a producer cannot forget it.
 
     Same single parse, same exclusion, same ``excluded_files.json`` write, and the same
     guarantee that every returned element is a ``dict``.
 
-    The published value is ``None`` for an ``.ndjson`` input, which carries no envelope, and
-    for an envelope that names no catalog (see :func:`published_source`).
+    The name is ``None`` for an ``.ndjson`` input, which carries no envelope, and for an
+    envelope that names no catalog (see :func:`published_source`).
     """
     metadata, raw = load_snapshot(input_path)
     records, excluded = partition_records(raw)
@@ -632,9 +634,9 @@ class ClassifyPipeline:
         the success path, the raw (possibly drifted) values on the ``validation_failed``
         path — matching what ``classify_single`` writes for the single-file path (#204).
 
-        An instance method rather than a static one because the ``published`` block
-        names the repository's published values it was read from, which is a fact about this run's input
-        snapshot (#424) and so lives on the pipeline, not on the record.
+        An instance method rather than a static one because the ``published`` block names
+        the repository it was read from, which is a fact about this run's input snapshot
+        (#424) and so lives on the pipeline, not on the record.
         """
         return OutputRecord.from_work_item(item, classifications, source=self.published_source)
 
