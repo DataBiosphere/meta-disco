@@ -230,7 +230,17 @@ def gather(run_dir: Path) -> IncumbentReport:
     return report
 
 
-TSV_HEADER = ("file_name", "dataset", "slot", "azul_value", "our_value", "recommendation", "azul_in_vocab")
+TSV_HEADER = (
+    "entry_id",
+    "md5sum",
+    "file_name",
+    "dataset",
+    "slot",
+    "azul_value",
+    "our_value",
+    "recommendation",
+    "azul_in_vocab",
+)
 
 
 def render_tsv(report: IncumbentReport) -> str:
@@ -240,12 +250,21 @@ def render_tsv(report: IncumbentReport) -> str:
     incumbent beside ours, per file — which the move to per-field JSON lost. Only
     declared files appear: a row for each of the other ~697k files would say that
     neither side declared anything, or that only we did, which the counts already say.
+
+    Led by the identity ``gather`` deduplicated on, because name and dataset do not
+    identify a file: 226,416 names in this corpus appear on more than one record, and
+    ``corpus_diff`` keys on ``(dataset, name, md5)`` for that reason. Without these two
+    columns a reader could not tell which file a recommendation applies to, nor join a
+    row back to the catalog (``entry_id``) or to a corpus diff (``md5sum``).
     """
     lines = ["\t".join(TSV_HEADER)]
     for row in report.rows:
+        entry_id, md5sum = row.file_key
         lines.append(
             "\t".join(
                 (
+                    entry_id,
+                    str(md5sum),
                     row.file_name,
                     row.dataset_title,
                     row.slot,
@@ -325,7 +344,10 @@ def _compare_section(report: IncumbentReport) -> list[str]:
 
 def render_report(report: IncumbentReport) -> str:
     """The markdown report. See the module docstring for what each state means."""
-    sources = ", ".join(f"`{s}`" for s in sorted(report.sources)) or "unnamed (the input carried no catalog)"
+    # Read off the declared blocks, so a run in which no file declares anything names
+    # no incumbent even when its input envelope did. Say that rather than blaming the
+    # input: the two are different facts and only one is visible from here.
+    sources = ", ".join(f"`{s}`" for s in sorted(report.sources)) or "not named by any file in this run"
     distinct = len(report.declared_values)
     unsayable = {key for key in report.declared_values if not report.value_in_vocab.get(key, False)}
     distinct_unsayable = len(unsayable)

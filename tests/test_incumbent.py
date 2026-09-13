@@ -223,6 +223,8 @@ class TestRender:
         run = _write_run(tmp_path / "run", [_record("m.bam", declared=declared), _record("n.bam", modality="genomic")])
         lines = render_tsv(gather(run)).strip().split("\n")
         assert lines[0].split("\t") == [
+            "entry_id",
+            "md5sum",
             "file_name",
             "dataset",
             "slot",
@@ -231,9 +233,10 @@ class TestRender:
             "recommendation",
             "azul_in_vocab",
         ]
-        # Only the declared file appears, once per dimension.
+        # Only the declared file appears, once per dimension, and each row leads with
+        # the identity gather deduplicated on — name and dataset do not identify a file.
         assert len(lines) == 3
-        assert all(line.startswith("m.bam\t") for line in lines[1:])
+        assert all(line.startswith("m.bam\tm.bam\tm.bam\t") for line in lines[1:])
 
     def test_the_report_names_the_vocabulary_gap(self, tmp_path):
         declared = build_declared({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
