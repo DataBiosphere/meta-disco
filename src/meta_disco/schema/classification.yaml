@@ -95,8 +95,13 @@ classes:
       in_vocabulary:
         description: >-
           Which published values are terms in this schema's vocabulary, per dimension.
+          Required whenever this block exists: contract 7.6 records vocabulary standing
+          for every published value, and `records.build_published` always emits the map.
+          Optional here would let a hand-edited or future producer omit it and validate,
+          and the comparison report would read the absence as "no value is a term" —
+          under-reporting coverage rather than failing.
         range: PublishedVocabulary
-        required: false
+        required: true
 
   PublishedVocabulary:
     description: >-
@@ -110,12 +115,12 @@ classes:
     attributes:
       data_modality:
         description: Published data modalities that are `data_modality_enum` terms.
-        range: string
+        range: data_modality_enum
         multivalued: true
         required: false
       reference_assembly:
         description: Published assemblies that are `reference_assembly_enum` terms.
-        range: string
+        range: reference_assembly_enum
         multivalued: true
         required: false
 

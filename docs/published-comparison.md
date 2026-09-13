@@ -39,7 +39,8 @@ Datasets for which the repository publishes nothing are omitted.
 **4 of 4 distinct published values have no term in the schema vocabulary**, carried by 11,463 published values.
 Counted per value, not per row, so a cell publishing two values contributes two — which is the
 right denominator for a mapping table. There are 11,451 file/dimension rows.
-Each is a value mapping that is owed (#414); its row count is what that mapping is worth.
+Each of the 4 is a value mapping that is owed (#414); its row count is what
+that mapping is worth.
 
 | dimension | published value | files | in vocabulary |
 | --- | --- | --- | --- |

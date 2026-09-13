@@ -538,3 +538,30 @@ def test_the_published_gate_rejects_a_scalar_where_a_list_belongs(validator):
     assert any("published.reference_assembly" in r.message for r in report.results), (
         f"expected a failure citing the scalar published value, got: {[r.message for r in report.results]}"
     )
+
+
+def test_in_vocabulary_is_required_whenever_a_published_block_exists(validator):
+    # Contract 7.6 records vocabulary standing for every published value, and
+    # `build_published` always emits the map. Optional would let a hand-edited or future
+    # producer omit it and validate, and the report would read the absence as "no value
+    # is a term" — under-reporting coverage rather than failing.
+    published = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": ["GRCh38"]}
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
+    assert any("in_vocabulary" in r.message for r in report.results), (
+        f"expected a failure citing the missing map, got: {[r.message for r in report.results]}"
+    )
+
+
+def test_in_vocabulary_refuses_a_value_that_is_not_a_vocabulary_term(validator):
+    # The map holds enum terms by definition, so `range: string` would let a
+    # non-term validate and leave `build_published` as the only thing enforcing it.
+    published = {
+        "source": "anvil/anvil15",
+        "data_modality": None,
+        "reference_assembly": ["GRCh38"],
+        "in_vocabulary": {"reference_assembly": ["not_an_assembly"]},
+    }
+    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
+    assert any("not_an_assembly" in r.message for r in report.results), (
+        f"expected a failure citing the bad term, got: {[r.message for r in report.results]}"
+    )

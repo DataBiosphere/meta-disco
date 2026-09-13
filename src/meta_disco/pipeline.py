@@ -123,22 +123,28 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
     A whole-list scan of a 708k-record corpus costs one pass over two keys per record,
     against a run measured in minutes.
     """
-    bad: list[tuple[object, str, object, str]] = []
-    for record in records:
+    bad: list[tuple[int, object, str, object, str]] = []
+    for position, record in enumerate(records):
         for field in PUBLISHED_FIELDS:
             value = record.get(field)
             if value is None:
                 continue
             if not isinstance(value, list):
-                bad.append((record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
+                bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
             elif not all(isinstance(element, str) for element in value):
-                bad.append((record.get("entry_id"), field, value, "holds a non-string value"))
+                bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
     if not bad:
         return
     # Records, not entries: one record can be wrong on both fields, and calling that two
-    # records would misreport how much of the snapshot is bad.
-    offenders = len({entry_id for entry_id, _, _, _ in bad})
-    examples = "; ".join(f"{entry_id}: {field}={value!r} ({why})" for entry_id, field, value, why in bad[:max_examples])
+    # records would misreport how much of the snapshot is bad. Counted by position in the
+    # list, not by ``entry_id`` — the input contract requires that to be non-empty but
+    # not unique, so deduplicating on it would merge two distinct bad records (and merge
+    # every record missing one, which all read as None).
+    offenders = len({position for position, _, _, _, _ in bad})
+    examples = "; ".join(
+        f"record {position} ({entry_id}): {field}={value!r} ({why})"
+        for position, entry_id, field, value, why in bad[:max_examples]
+    )
     more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
     raise ValueError(
         f"{input_path}: {offenders:,} record(s), {len(bad):,} field(s), carry a published value this "
