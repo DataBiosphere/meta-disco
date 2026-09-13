@@ -131,9 +131,11 @@ evidence}` entry — plus the controlled vocabulary:
     produces the same output as one without. Currency is not decidable offline;
     recording which catalog a run enhances is #404, and is not built.
   - The incumbent (contract section 7, built by #424) lives in each output record's
-    `declared` block. `records.build_declared` is its single construction site;
-    producers call `records.declared_from(record, source)`, which drives the field
-    list from `DECLARED_FIELDS` so no call site can read a stale subset. AnVIL's two
+    `declared` block. `records.build_declared` is its single construction site, and
+    it is reached two ways: `ClassifyPipeline` through `OutputRecord.from_work_item`
+    (which reads the fields off the typed work item), and the four standalone
+    producers through `records.declared_from(record, source)`. Both drive the field
+    list from `DECLARED_FIELDS`, so no call site can read a stale subset. AnVIL's two
     declared fields are deliberately absent from the input contract
     (`schema/metadata.yaml`) — they are not input. Contract 7.7 binds *every*
     producer, not just `ClassifyPipeline`: the four standalone scripts build their

@@ -174,9 +174,12 @@ def gather(run_dir: Path) -> IncumbentReport:
 
     A file the run wrote more than once is counted once, keyed by ``(entry_id,
     md5sum)``. That happens today for 115 tar archives, which are written to both
-    ``tar_`` and ``auxiliary_classifications.json``; none of them declares anything, so
-    the deduplication changes no reported figure and is here so the totals are file
-    counts rather than row counts.
+    ``tar_`` and ``auxiliary_classifications.json``, and it is here so every total is a
+    file count rather than a row count. Being precise about what it moves: none of the
+    115 declares anything, so the declared-value figures and the ``take_azul`` /
+    ``compare`` counts are identical either way — but ``counts`` is tallied for *every*
+    file, so the ``add`` and ``none`` totals are 115 lower than the row count, which is
+    the correct answer and not the same as being unaffected.
 
     ``entry_id`` is stringified before it is hashed. It is *not* guaranteed to be a
     string: it is not classifier-relevant, so a record whose ``entry_id`` drifted to a

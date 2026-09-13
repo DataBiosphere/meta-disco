@@ -30,7 +30,7 @@ help:
 	@echo "  make incumbent-report   Compare a run against the values AnVIL publishes today"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
-	@echo "  make all-reports        Generate all reports (coverage + validation)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, incumbent)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
