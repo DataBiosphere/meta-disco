@@ -435,7 +435,8 @@ naming quirk.
   and exactly which columns hold file pointers, which is the structural half of #369's
   slot map already authored by the people who ingest the data. Each also runs a
   `mapping_eval_query` counting records per `(source_value, mapped_value)` *including
-  unmapped ones* — #414's review queue, already operational — against a
+  unmapped ones* — the upstream equivalent of #414's review queue, operating in their
+  pipeline and not in ours — against a
   `transform_resources.vocab_map` table keyed `(attribute, source_value, mapped_value)`,
   which is #414's translation table in all but name. That table is in BigQuery and not
   published, so its contents are not readable from here; the shape is what matters.

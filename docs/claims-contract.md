@@ -47,6 +47,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 2.2 The importer decides **which slot** a table or column speaks to. It never decides what the value means.
 
 2.3 One column may speak to more than one slot. One raw value may produce several evidence rows.
+    This fan-out is **structural**, per 1.3. A single value *implying* a term in a second slot is a
+    different act, and belongs to 3.10.
 
 2.4 The slot map is a curated judgment about what a source's tables and columns actually speak to.
     A signal judged misleading is **explicitly not mapped**, with its reason recorded in the map — never silently absent.
@@ -57,7 +59,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     needs them. Not every classifier does; a fetch failure the fetchers signal falls back to classifying
     without content, which yields `not_classified`; and an unwrapped error — a missing tool, say — propagates.
 
-2.6 A table name and a column name are evidence, the same as a cell value.
+2.6 A table name and a column name are evidence, the same as a cell value — but never evidence a mapping
+    rule reads, which sees only the slot, the raw value and `(source, dataset)` (3.4). A name routes
+    evidence rather than saying what a value means. Which reader it routes to is 2.7's and 2.8's, and 2.8
+    leaves one case open.
 
 2.7 Every column of a source table is one of three kinds, and the meaning sits in a different
     part of each. A column is read as one kind, never two.
@@ -86,7 +91,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     metadata, not the reads. BED `reference_assembly` has the same shape: recoverable when a file
     spans whole chromosomes, genuinely ambiguous when it is sparse.
     This is a property of the bytes, so no engine reaches past it — a better rule cannot, and
-    neither could the runtime LLM this project removed. It is the whole reason input kinds 2-4
+    neither could the runtime LLM this project removed. It is the whole reason input kinds 3 and 4
     exist, and the reason 4.2 makes them equal to inference rather than subordinate: they are not
     a second opinion on what inference already knows, they are the only opinion where it is blind.
     Retired from ADR-0001, which measured it; that document is deleted and its salvage is #422.
@@ -98,25 +103,64 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
-3.3 A claim that declares a value declares a term in the controlled vocabulary, or it is not a claim.
+3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
+    The vocabularies are per slot, and a term of one slot is not a term of another.
 
-3.4 A rule that maps imported evidence matches on `(slot, raw_value)` and may condition on provenance.
+3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
+    condition on provenance — on `(source, dataset)`, and no finer. Table and column belong to the slot map
+    (2.4, reviewed under 5.4): a value meaning different things in two of one source's tables is a routing
+    error, not two mappings.
     It sees nothing else — not the file's extension, not its header, not another source's claim.
     **Sources stay pure**: what a source is taken to have said never depends on what we think of the file.
-    This is also what keeps one mapping working across every source.
+    This is also what keeps an *unscoped* mapping working across every source; a scoped one narrows on
+    purpose (3.12).
     Inference rules match their own signals — extension, filename, header, content, file size — as they do today.
 
 3.5 A rule mapping imported evidence fires only on an exact match, over spellings it declares explicitly.
     Nothing fires by similarity. Inference rules keep their own matchers, regexes included.
+    Matching compares a **normalized** form; the normalizer must not be able to merge two distinct terms in
+    our vocabulary, `WGS` and `WES` being one letter apart.
 
 3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
     No source asserts either in evidence.
 
-3.7 A raw value no rule matched produces no claim and enters the review queue.
+3.7 Evidence whose selected row (3.12) is not an authored one produces no claim and enters the review
+    queue. Selection reads the evidence's `(slot, raw_value)` *and* its provenance, so one pair can be
+    ruled on under one source or dataset and queued under another. A seeded row is a key match and not a
+    ruling (3.11), so evidence selecting one is queued as surely as evidence with no row at all.
 
-3.8 "Rule" means whatever makes a claim and is cited by it. A row in a translation table is one.
+3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table that
+    declares something is one (3.9). A seeded row is not, nor is an authored row declaring nothing:
+    neither makes a claim.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
     tiers, file-attribute conditions or extension filtering.
+
+3.9 A mapping **row** is: an id; a match key of `(slot, normalized raw_value)`, with alternate spellings
+    listed explicitly; an optional scope of a source, or a source and dataset; a **declaration** of at most
+    one pair per slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where
+    an author has ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the
+    mark that separates an authored row from a seeded one (3.11).
+    An authored row that declares something is a mapping rule in 3.8's sense. A seeded row is not, nor is
+    an authored row declaring nothing: neither makes a claim, so nothing cites either. Every row carries an
+    id regardless, which is how an author refers to one — and an authored no-op is still a ruling, so 5.2
+    takes it out of the queue.
+
+3.10 A declaration may name slots other than the match slot, and may name several: an implication like
+     `library_strategy = Hi-C` ⇒ `data_modality: genomic` belongs to the **value**, not to the column it
+     arrived in. A row may also declare nothing for its own match slot and declare only another.
+
+3.11 Every `(slot, raw_value)` present at a seeding scan has a row, and **identity is where it starts**.
+     A **seeded** row declares nothing, whatever it spells, and carries no reason; an **authored** row
+     carries one, and claims each declaration it holds — an identity mapping included (3.2).
+     Authorship is the test and vocabulary is not: spelling one of our terms is a coincidence, not an
+     agreement about meaning. 3.7 covers a key no row matches, a later scan having reached it or not.
+
+3.12 Scope is optional and **nests**: unscoped, a source, then a source and dataset. Never a dataset
+     alone, a dataset belonging to a source. A row with no scope is the default; **specificity selects the
+     narrowest matching row** and takes its declaration whole, and because the three forms nest, "narrowest"
+     is a total order rather than something that can tie. Two rows whose normalized values collide on the
+     same slot at the same scope, alternate spellings included, are a rule set that cannot be loaded. This
+     selects which row fires before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
 
 ## 4. Sources and resolution
 
@@ -179,6 +223,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     files it affects. Dataset is not optional: the same column name means different things in different
     datasets. Slot is not optional either: by 2.3 one raw value can be mapped for one slot and unmatched
     for another.
+    "Unmatched" means the row 3.12 **selects** is not an authored one: a seeded row nobody has ruled on
+    (3.11), or no row at all (3.7). Selection decides it, not whether an authored row exists somewhere —
+    an authored default beneath a seeded scoped row loses to it, and the value stays queued. An authored
+    row that deliberately declares nothing for the slot — the 3.10 case — has been ruled on, and leaves.
+    The listing is therefore driven by the evidence rather than by the rows, which cannot see a value that
+    has none; table, column and file count come from the evidence too, a mapping row carrying none.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
@@ -207,7 +257,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
-    record identical to its inference record.
+    record that concludes exactly what its inference record concluded: the same value or status on every
+    slot, from the same claims. The records are not byte-identical once 7.4's `published` block moves to
+    the reconciled one, which is a passenger 7.2 keeps out of every conclusion. Sameness here is of what
+    was concluded, not of the bytes.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
@@ -321,6 +374,12 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
+- **There is no mapping row, and nothing to hold one.** 3.9-3.12 describe a record nothing constructs and
+  no loader validates; #414 builds it. Until then the required reason, the `(source, dataset)` scope,
+  3.5's bound on normalization and 3.11's seeded/authored split are unenforced, and 3.10's multi-slot
+  declaration has no representation at all.
+- **Nothing seeds a table and nothing lists the queue.** 3.11's seeding act and 5.2's two-population
+  listing are both unbuilt, so the queue 3.7 sends a value to does not exist to receive it.
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
 - **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
@@ -364,7 +423,15 @@ A line leaves this section when the assertion above it is enforced, not when it 
   produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
   by number across the issues, and a silent renumber would break every citation.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
-- How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
+- ~~How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen
+  this*.~~ **Answered by 3.11 (#435): neither is recorded, because authorship is.** The question assumed
+  two recorded states, and nothing marks a value as examined, so no producer could have written either
+  honestly. A seeded row nobody has authored and a value with no row are both simply unauthored, and 5.2
+  lists them the same way.
+- How the review queue keeps the raw value through the retirement of `unmapped` and `no_vocabulary_term`.
+  3.7 retires both `claim_state` entries — a value no rule matched produces no claim at all, so there is no
+  claim left to carry a state — and the queue must hold the raw value some other way. A migration to
+  describe, not a gap to fill. Split out of the item above, which answered a different question.
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
   question for #364 rather than a mapping one.
