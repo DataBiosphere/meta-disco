@@ -120,7 +120,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
     No source asserts either in evidence.
 
-3.7 A raw value no rule matched produces no claim and enters the review queue.
+3.7 A raw value no rule has ruled on produces no claim and enters the review queue. A seeded row is a key
+    match and not a ruling (3.11), so a value carrying one is in the queue as surely as a value with no row.
 
 3.8 "Rule" means whatever makes a claim and is cited by it. A row in a translation table is one.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
@@ -129,7 +130,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.9 A mapping rule is a **row**: an id; a match key of `(slot, normalized raw_value)`, with alternate
     spellings listed explicitly; an optional `(source, dataset)` scope; a **declaration** of at most one
     pair per slot, each a vocabulary term or one of 3.6's two statuses; and, where an author has ruled on
-    it, a recorded reason — required for the reason 2.4 requires one, and the mark that separates an
+    it, a recorded reason — required for the same reason 2.4 requires one, and the mark that separates an
     authored row from a seeded one (3.11).
 
 3.10 A declaration may name slots other than the match slot, and may name several: an implication like
@@ -208,11 +209,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     files it affects. Dataset is not optional: the same column name means different things in different
     datasets. Slot is not optional either: by 2.3 one raw value can be mapped for one slot and unmatched
     for another.
-    "Unmatched" means **no authored declaration for that slot** — a value whose row nobody has authored
-    (3.11) is as unmatched as one with no row at all (3.7), and so is one whose row declares only some
-    other slot (3.10). The listing is therefore driven by the evidence rather than by the rows, which
-    cannot see a value that has none; table, column and file count come from the evidence too, a mapping
-    row carrying none.
+    "Unmatched" means **no authored row** for that `(slot, raw_value)`: a seeded row nobody has ruled on
+    (3.11), or no row at all (3.7). An authored row that deliberately declares nothing for the slot — the
+    3.10 case — has been ruled on, and leaves the queue. The listing is therefore driven by the evidence
+    rather than by the rows, which cannot see a value that has none; table, column and file count come
+    from the evidence too, a mapping row carrying none.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
