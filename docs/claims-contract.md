@@ -121,8 +121,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
     No source asserts either in evidence.
 
-3.7 A `(slot, raw_value)` no rule has ruled on produces no claim and enters the review queue. A seeded row
-    is a key match and not a ruling (3.11), so a pair carrying one is queued as surely as one with no row.
+3.7 A `(slot, raw_value)` whose selected row (3.12) is not an authored one produces no claim and enters the
+    review queue. A seeded row is a key match and not a ruling (3.11), so a pair selecting one is queued as
+    surely as one with no row at all. Selection is what decides it, not an authored row existing elsewhere.
 
 3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table is one
     (3.9); a seeded row is not, making no claim.
@@ -134,8 +135,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where an author has
     ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the mark that
     separates an authored row from a seeded one (3.11).
-    An authored row is a mapping rule in 3.8's sense. A seeded row is not: it makes no claim, so nothing
-    cites it. It carries an id regardless, which is how an author refers to it.
+    An authored row that declares something is a mapping rule in 3.8's sense. A seeded row is not, nor is
+    an authored row declaring nothing: neither makes a claim, so nothing cites either. Every row carries an
+    id regardless, which is how an author refers to one — and an authored no-op is still a ruling, so 5.2
+    takes it out of the queue.
 
 3.10 A declaration may name slots other than the match slot, and may name several: an implication like
      `library_strategy = Hi-C` ⇒ `data_modality: genomic` belongs to the **value**, not to the column it
