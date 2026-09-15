@@ -107,13 +107,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     The vocabularies are per slot, and a term of one slot is not a term of another.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
-    condition on provenance —
-    on `(source, dataset)`, and no finer. Table and column belong to the slot map (2.4, reviewed under
-    5.4): a value meaning different things in two of one source's tables is a routing error, not two
-    mappings.
+    condition on provenance — on `(source, dataset)`, and no finer. Table and column belong to the slot map
+    (2.4, reviewed under 5.4): a value meaning different things in two of one source's tables is a routing
+    error, not two mappings.
     It sees nothing else — not the file's extension, not its header, not another source's claim.
     **Sources stay pure**: what a source is taken to have said never depends on what we think of the file.
-    This is also what keeps one mapping working across every source.
+    This is also what keeps an *unscoped* mapping working across every source; a scoped one narrows on
+    purpose (3.12).
     Inference rules match their own signals — extension, filename, header, content, file size — as they do today.
 
 3.5 A rule mapping imported evidence fires only on an exact match, over spellings it declares explicitly.
