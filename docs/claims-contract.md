@@ -101,7 +101,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
 3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
-    The vocabularies are per slot, so `data_modality: WGS` is a term and not a claim.
+    The vocabularies are per slot: `WGS` is a term in `assay_type`'s and absent from `data_modality`'s, so
+    declaring it for `data_modality` is not a claim.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
     condition on provenance —
@@ -131,10 +132,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     tiers, file-attribute conditions or extension filtering.
 
 3.9 A mapping **row** is: an id; a match key of `(slot, normalized raw_value)`, with alternate spellings
-    listed explicitly; an optional `(source, dataset)` scope; a **declaration** of at most one pair per
-    slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where an author has
-    ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the mark that
-    separates an authored row from a seeded one (3.11).
+    listed explicitly; an optional scope of a source, or a source and dataset; a **declaration** of at most
+    one pair per slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where
+    an author has ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the
+    mark that separates an authored row from a seeded one (3.11).
     An authored row that declares something is a mapping rule in 3.8's sense. A seeded row is not, nor is
     an authored row declaring nothing: neither makes a claim, so nothing cites either. Every row carries an
     id regardless, which is how an author refers to one — and an authored no-op is still a ruling, so 5.2
@@ -150,10 +151,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      Authorship is the test and vocabulary is not: spelling one of our terms is a coincidence, not an
      agreement about meaning. 3.7 covers a key no row matches, a later scan having reached it or not.
 
-3.12 Scope is optional. A row with no scope is the default; **specificity selects the narrowest matching
-     row** and takes its declaration whole. Two rows whose normalized values collide on the same slot at
-     the same scope, alternate spellings included, are a rule set that cannot be loaded. This selects which
-     row fires before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
+3.12 Scope is optional and **nests**: unscoped, a source, then a source and dataset. Never a dataset
+     alone, a dataset belonging to a source. A row with no scope is the default; **specificity selects the
+     narrowest matching row** and takes its declaration whole, and because the three forms nest, "narrowest"
+     is a total order rather than something that can tie. Two rows whose normalized values collide on the
+     same slot at the same scope, alternate spellings included, are a rule set that cannot be loaded. This
+     selects which row fires before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
 
 ## 4. Sources and resolution
 
