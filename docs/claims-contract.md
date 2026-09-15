@@ -59,7 +59,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     needs them. Not every classifier does; a fetch failure the fetchers signal falls back to classifying
     without content, which yields `not_classified`; and an unwrapped error — a missing tool, say — propagates.
 
-2.6 A table name and a column name are evidence, the same as a cell value.
+2.6 A table name and a column name are evidence, the same as a cell value — but they are read by the slot
+    map (2.4) and by the derivation graph (2.8), never by a mapping rule, which sees only the slot, the raw
+    value and `(source, dataset)` (3.4). A name routes evidence; it does not say what a value means.
 
 2.7 Every column of a source table is one of three kinds, and the meaning sits in a different
     part of each. A column is read as one kind, never two.
@@ -253,7 +255,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
-    record identical to its inference record.
+    record that concludes exactly what its inference record concluded: the same value or status on every
+    slot, from the same claims. The records are not byte-identical once 7.4's `published` block moves to
+    the reconciled one, which is a passenger 7.2 keeps out of every conclusion. Sameness here is of what
+    was concluded, not of the bytes.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
