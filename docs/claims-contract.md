@@ -209,9 +209,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     files it affects. Dataset is not optional: the same column name means different things in different
     datasets. Slot is not optional either: by 2.3 one raw value can be mapped for one slot and unmatched
     for another.
-    "Unmatched" means **no authored row** for that `(slot, raw_value)`: a seeded row nobody has ruled on
-    (3.11), or no row at all (3.7). An authored row that deliberately declares nothing for the slot — the
-    3.10 case — has been ruled on, and leaves the queue. The listing is therefore driven by the evidence
+    "Unmatched" means the row 3.12 **selects** is not an authored one: a seeded row nobody has ruled on
+    (3.11), or no row at all (3.7). Selection decides it, not whether an authored row exists somewhere —
+    an authored default beneath a seeded scoped row loses to it, and the value stays queued. An authored
+    row that deliberately declares nothing for the slot — the 3.10 case — has been ruled on, and leaves. The listing is therefore driven by the evidence
     rather than by the rows, which cannot see a value that has none; table, column and file count come
     from the evidence too, a mapping row carrying none.
 
