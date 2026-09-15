@@ -127,19 +127,20 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     tiers, file-attribute conditions or extension filtering.
 
 3.9 A mapping rule is a **row**: an id; a match key of `(slot, normalized raw_value)`, with alternate
-    spellings listed explicitly; an optional `(source, dataset)` scope; a **declaration** of zero or more
-    `(slot, term-or-status)` pairs; and, where an author has ruled on it, a recorded reason — required for
-    the reason 2.4 requires one, and the mark that separates an authored row from a seeded one (3.11).
+    spellings listed explicitly; an optional `(source, dataset)` scope; a **declaration** of at most one
+    pair per slot, each a vocabulary term or one of 3.6's two statuses; and, where an author has ruled on
+    it, a recorded reason — required for the reason 2.4 requires one, and the mark that separates an
+    authored row from a seeded one (3.11).
 
 3.10 A declaration may name slots other than the match slot, and may name several: an implication like
      `library_strategy = Hi-C` ⇒ `data_modality: genomic` belongs to the **value**, not to the column it
      arrived in. A row may also declare nothing for its own match slot and declare only another.
 
-3.11 Every raw value present at a seeding scan has a row, and **identity is where it starts**. A
-     **seeded** row declares nothing, whatever it spells, and carries no reason; an **authored** row
-     carries one, and produces a claim where it declares a term — an identity mapping included (3.2).
+3.11 Every `(slot, raw_value)` present at a seeding scan has a row, and **identity is where it starts**.
+     A **seeded** row declares nothing, whatever it spells, and carries no reason; an **authored** row
+     carries one, and claims each declaration it holds — an identity mapping included (3.2).
      Authorship is the test and vocabulary is not: spelling one of our terms is a coincidence, not an
-     agreement about meaning. A value arriving after the last scan has no row, and 3.7 covers it.
+     agreement about meaning. 3.7 covers a key no row matches, a later scan having reached it or not.
 
 3.12 Scope is optional. A row with no scope is the default; **specificity selects the narrowest matching
      row** and takes its declaration whole. Two rows whose normalized values collide on the same slot at
@@ -207,9 +208,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     files it affects. Dataset is not optional: the same column name means different things in different
     datasets. Slot is not optional either: by 2.3 one raw value can be mapped for one slot and unmatched
     for another.
-    Two populations reach it: a value whose row nobody has authored (3.11), and a value with no row (3.7).
-    The listing is therefore driven by the evidence rather than by the rows, which cannot see the second
-    population; table, column and file count come from the evidence too, a mapping row carrying none.
+    "Unmatched" means **no authored declaration for that slot** — a value whose row nobody has authored
+    (3.11) is as unmatched as one with no row at all (3.7), and so is one whose row declares only some
+    other slot (3.10). The listing is therefore driven by the evidence rather than by the rows, which
+    cannot see a value that has none; table, column and file count come from the evidence too, a mapping
+    row carrying none.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
