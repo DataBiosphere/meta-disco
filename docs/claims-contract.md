@@ -103,8 +103,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
 3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
-    The vocabularies are per slot: `WGS` is a term in `assay_type`'s and absent from `data_modality`'s, so
-    declaring it for `data_modality` is not a claim.
+    The vocabularies are per slot, and a term of one slot is not a term of another.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
     condition on provenance —
@@ -124,12 +123,14 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
     No source asserts either in evidence.
 
-3.7 A `(slot, raw_value)` whose selected row (3.12) is not an authored one produces no claim and enters the
-    review queue. A seeded row is a key match and not a ruling (3.11), so a pair selecting one is queued as
-    surely as one with no row at all. Selection is what decides it, not an authored row existing elsewhere.
+3.7 Evidence whose selected row (3.12) is not an authored one produces no claim and enters the review
+    queue. Selection reads the evidence's `(slot, raw_value)` *and* its provenance, so one pair can be
+    ruled on under one source or dataset and queued under another. A seeded row is a key match and not a
+    ruling (3.11), so evidence selecting one is queued as surely as evidence with no row at all.
 
-3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table is one
-    (3.9); a seeded row is not, making no claim.
+3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table that
+    declares something is one (3.9). A seeded row is not, nor is an authored row declaring nothing:
+    neither makes a claim.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
     tiers, file-attribute conditions or extension filtering.
 
