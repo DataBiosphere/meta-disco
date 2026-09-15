@@ -88,7 +88,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     metadata, not the reads. BED `reference_assembly` has the same shape: recoverable when a file
     spans whole chromosomes, genuinely ambiguous when it is sparse.
     This is a property of the bytes, so no engine reaches past it — a better rule cannot, and
-    neither could the runtime LLM this project removed. It is the whole reason input kinds 2-4
+    neither could the runtime LLM this project removed. It is the whole reason input kinds 3 and 4
     exist, and the reason 4.2 makes them equal to inference rather than subordinate: they are not
     a second opinion on what inference already knows, they are the only opinion where it is blind.
     Retired from ADR-0001, which measured it; that document is deleted and its salvage is #422.
@@ -100,7 +100,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
-3.3 A claim that declares a value declares a term in the controlled vocabulary, or it is not a claim.
+3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
+    The vocabularies are per slot, so `data_modality: WGS` is a term and not a claim.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
     condition on provenance —
@@ -120,10 +121,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.6 Both rule-authorable statuses — `not_applicable` and `not_classified` — are a rule's to declare.
     No source asserts either in evidence.
 
-3.7 A raw value no rule has ruled on produces no claim and enters the review queue. A seeded row is a key
-    match and not a ruling (3.11), so a value carrying one is in the queue as surely as a value with no row.
+3.7 A `(slot, raw_value)` no rule has ruled on produces no claim and enters the review queue. A seeded row
+    is a key match and not a ruling (3.11), so a pair carrying one is queued as surely as one with no row.
 
-3.8 "Rule" means whatever makes a claim and is cited by it. A row in a translation table is one.
+3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table is one
+    (3.9); a seeded row is not, making no claim.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
     tiers, file-attribute conditions or extension filtering.
 
@@ -147,8 +149,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.12 Scope is optional. A row with no scope is the default; **specificity selects the narrowest matching
      row** and takes its declaration whole. Two rows whose normalized values collide on the same slot at
-     the same scope, alternate spellings included, are a rule set that cannot be loaded. This selects which row fires
-     before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
+     the same scope, alternate spellings included, are a rule set that cannot be loaded. This selects which
+     row fires before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
 
 ## 4. Sources and resolution
 
@@ -214,9 +216,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     "Unmatched" means the row 3.12 **selects** is not an authored one: a seeded row nobody has ruled on
     (3.11), or no row at all (3.7). Selection decides it, not whether an authored row exists somewhere —
     an authored default beneath a seeded scoped row loses to it, and the value stays queued. An authored
-    row that deliberately declares nothing for the slot — the 3.10 case — has been ruled on, and leaves. The listing is therefore driven by the evidence
-    rather than by the rows, which cannot see a value that has none; table, column and file count come
-    from the evidence too, a mapping row carrying none.
+    row that deliberately declares nothing for the slot — the 3.10 case — has been ruled on, and leaves.
+    The listing is therefore driven by the evidence rather than by the rows, which cannot see a value that
+    has none; table, column and file count come from the evidence too, a mapping row carrying none.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 
