@@ -59,9 +59,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     needs them. Not every classifier does; a fetch failure the fetchers signal falls back to classifying
     without content, which yields `not_classified`; and an unwrapped error — a missing tool, say — propagates.
 
-2.6 A table name and a column name are evidence, the same as a cell value — but they are read by the slot
-    map (2.4) and by the derivation graph (2.8), never by a mapping rule, which sees only the slot, the raw
-    value and `(source, dataset)` (3.4). A name routes evidence; it does not say what a value means.
+2.6 A table name and a column name are evidence, the same as a cell value — but never evidence a mapping
+    rule reads, which sees only the slot, the raw value and `(source, dataset)` (3.4). A name routes
+    evidence rather than saying what a value means. Which reader it routes to is 2.7's and 2.8's, and 2.8
+    leaves one case open.
 
 2.7 Every column of a source table is one of three kinds, and the meaning sits in a different
     part of each. A column is read as one kind, never two.
