@@ -47,6 +47,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 2.2 The importer decides **which slot** a table or column speaks to. It never decides what the value means.
 
 2.3 One column may speak to more than one slot. One raw value may produce several evidence rows.
+    This fan-out is **structural** — the importer routing a column — and decides nothing about meaning.
+    A single value implying a term in a *second* slot is a different act, and belongs to 3.10.
 
 2.4 The slot map is a curated judgment about what a source's tables and columns actually speak to.
     A signal judged misleading is **explicitly not mapped**, with its reason recorded in the map — never silently absent.
@@ -100,7 +102,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.3 A claim that declares a value declares a term in the controlled vocabulary, or it is not a claim.
 
-3.4 A rule that maps imported evidence matches on `(slot, raw_value)` and may condition on provenance.
+3.4 A rule that maps imported evidence matches on `(slot, raw_value)` and may condition on provenance —
+    on `(source, dataset)`, and no finer. Table and column belong to the slot map (5.4): a value meaning
+    different things in two of one source's tables is a routing error, not two mappings.
     It sees nothing else — not the file's extension, not its header, not another source's claim.
     **Sources stay pure**: what a source is taken to have said never depends on what we think of the file.
     This is also what keeps one mapping working across every source.
@@ -117,6 +121,42 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.8 "Rule" means whatever makes a claim and is cited by it. A row in a translation table is one.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
     tiers, file-attribute conditions or extension filtering.
+
+3.9 A mapping rule is a **row**: an id; a match key of `(slot, normalized raw_value)`, with alternate
+    spellings listed explicitly; an optional `(source, dataset)` scope; a **declaration** of zero or more
+    `(slot, term-or-status)` pairs; and a recorded reason. The reason is required for the purpose 2.4
+    requires one on a slot-map entry — choosing to map a value and choosing not to are the same act, and
+    only the recorded reason makes either reviewable.
+    The status arm is not decoration. `assembly = unaligned` in `AnVIL_HPRC_R2`'s `hic` table, 3,002 rows,
+    is a value whose meaning is that `reference_assembly` does not apply — which 3.6 already permits a
+    rule to declare.
+
+3.10 A declaration may name slots other than the match slot, and may name several. An implication like
+     `Hi-C` ⇒ `genomic` is a property of the **value**, not of the column it arrived in, so it holds for
+     every source publishing that value. Recording it here is what stops each new source's slot map from
+     rediscovering it — which 1.3 and 1.5 forbid an importer from knowing in the first place.
+     A row may also decline its own match slot. `library_selection = cDNA` (230 rows, `kinnex`) routes
+     structurally to `assay_type`, but cDNA is a library preparation method rather than an assay, so the
+     row declares nothing for `assay_type` and declares only a `data_modality` term. Which term is #414's
+     call; that the row can say it is this assertion's.
+
+3.11 There is always a row, and **identity is where it starts**. Every raw value a source publishes has
+     one. A value nothing has been decided about carries an identity declaration, and produces no claim
+     because that spelling is not a term in the slot's vocabulary — not because anything was recorded
+     about it. The work is editing rows from identity to a real term.
+     This is what makes the review queue **derivable rather than maintained**: the rows still at identity
+     and out of vocabulary *are* the queue, and no one has to mark a value as looked-at for that to hold.
+     An earlier draft split these into two recorded states instead, and both were unrecordable — there is
+     no moment at which a person marks a value as examined, so nothing could write either one honestly.
+     3.7 still covers the other case: a value that arrived after the table was written has no row at all.
+
+3.12 A row with no scope is the default, and a scoped row names the row it narrows. Two rows matching the
+     same `(slot, value)` at the same scope fail at load, naming both. Specificity selects which row fires,
+     before any claim exists; it is not a tier ladder and 4.3 is unaffected.
+     Scope is *optional* because, measured over the twelve anvil15 datasets, every submitter raw value
+     appearing in more than one dataset means the same thing in all of them — `WGS` spans four datasets
+     under two column names, `Illumina NovaSeq 6000` three under two. Requiring scope would turn one
+     reviewed judgment into four unreviewed copies, and five at the next dataset.
 
 ## 4. Sources and resolution
 
@@ -321,6 +361,9 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
+- **There is no mapping row, and nothing to hold one.** 3.9-3.12 describe a record nothing constructs and
+  no loader validates; #414 builds it. Until then the required reason, the `(source, dataset)` scope and
+  the identity default are unenforced, and 3.10's multi-slot declaration has no representation at all.
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
 - **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
@@ -364,7 +407,13 @@ A line leaves this section when the assertion above it is enforced, not when it 
   produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
   by number across the issues, and a silent renumber would break every citation.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
-- How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen this*. The current model already has both, as `claim_state` entries — `unmapped` and `no_vocabulary_term` — visible in evidence and ignored by `evaluate_claims` for resolution. 3.7 says such a value produces *no claim at all*, which retires that representation. So this is a migration to describe, including how the queue keeps the raw value, not a gap to fill.
+- ~~How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen
+  this*.~~ **Answered by 3.11 (#435).** The question assumed two recorded states, and neither could be
+  recorded: nothing marks a value as examined, so a producer would have had to assert a distinction it had
+  no way to know. Making the row unconditional dissolves it — a value nothing has been decided about has an
+  identity row, and what a reviewer needs is whether that row is still at identity, which is visible without
+  anyone recording anything. The `claim_state` entries `unmapped` and `no_vocabulary_term` are retired by
+  3.7 as before; how the queue keeps the raw value through that migration is still to describe.
 - Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
   question for #364 rather than a mapping one.
