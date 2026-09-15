@@ -127,11 +127,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     It need not be an entry in `unified_rules.yaml`, and a mapping rule shares none of that engine's
     tiers, file-attribute conditions or extension filtering.
 
-3.9 A mapping rule is a **row**: an id; a match key of `(slot, normalized raw_value)`, with alternate
-    spellings listed explicitly; an optional `(source, dataset)` scope; a **declaration** of at most one
-    pair per slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where an
-    author has ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the
-    mark that separates an authored row from a seeded one (3.11).
+3.9 A mapping **row** is: an id; a match key of `(slot, normalized raw_value)`, with alternate spellings
+    listed explicitly; an optional `(source, dataset)` scope; a **declaration** of at most one pair per
+    slot, each a term in **that slot's** vocabulary or one of 3.6's two statuses; and, where an author has
+    ruled on it, a recorded reason — required for the same reason 2.4 requires one, and the mark that
+    separates an authored row from a seeded one (3.11).
+    An authored row is a mapping rule in 3.8's sense. A seeded row is not: it makes no claim, so nothing
+    cites it. It carries an id regardless, which is how an author refers to it.
 
 3.10 A declaration may name slots other than the match slot, and may name several: an implication like
      `library_strategy = Hi-C` ⇒ `data_modality: genomic` belongs to the **value**, not to the column it
