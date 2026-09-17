@@ -126,7 +126,7 @@ DECLINED_REASON_TEXT = {
 }
 
 
-def declined_record(record: dict, index_ext: str, reason: str, source: str) -> dict:
+def declined_record(record: dict, index_ext: str, reason: str, source: str | None) -> dict:
     """One output record for an index file this producer took no parent for.
 
     Says the one thing that is known and refuses the four that are not. The extension
