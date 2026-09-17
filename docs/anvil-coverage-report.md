@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-12 20:29:02**
+Classification run: **2026-09-17 16:15:07**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,203** files.
@@ -22,11 +22,11 @@ Processed **708,203** files.
 
 | Dimension | Classified | Not Classified |
 |---|---:|---:|
-| **Data Modality** | 651,125 (91.9%) | 57,078 (8.1%) |
+| **Data Modality** | 636,067 (89.8%) | 72,136 (10.2%) |
 | **Data Type** | 682,495 (96.4%) | 25,708 (3.6%) |
-| **Reference Assembly** | 526,656 (74.4%) | 181,547 (25.6%) |
-| **Platform** | 132,402 (18.7%) | 575,801 (81.3%) |
-| **Assay Type** | 103,064 (14.6%) | 605,139 (85.4%) |
+| **Reference Assembly** | 512,067 (72.3%) | 196,136 (27.7%) |
+| **Platform** | 131,094 (18.5%) | 577,109 (81.5%) |
+| **Assay Type** | 101,756 (14.4%) | 606,447 (85.6%) |
 
 ---
 
@@ -34,8 +34,8 @@ Processed **708,203** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 651,125 | 91.9% |
-| **Not classified** | 57,078 | 8.1% |
+| **Classified** | 636,067 | 89.8% |
+| **Not classified** | 72,136 | 10.2% |
 
 ### What's not classified?
 
@@ -43,27 +43,28 @@ Processed **708,203** files.
 |---|---:|---|
 | .fastq | 21,269 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
 | (none) | 13,827 | No rule determined a value for data_modality |
+| .tbi | 13,812 | No parent to inherit data_modality from: more than one file in this dataset carries the parent name |
 | .fast5 | 12,624 | No rule determined a value for data_modality |
 | .txt | 4,650 | No rule determined a value for data_modality |
 | .bw | 2,520 | No rule determined a value for data_modality |
 | .tsv | 923 | No rule determined a value for data_modality |
+| .crai | 696 | No parent to inherit data_modality from: more than one file in this dataset carries the parent name |
+| .csi | 676 | No parent to inherit data_modality from: more than one file in this dataset carries the parent name |
 | .bigwig | 462 | No rule determined a value for data_modality |
 | .bam | 345 | No rule determined a value for data_modality |
 | .sam | 192 | No rule determined a value for data_modality |
 | .cram | 68 | No rule determined a value for data_modality |
-| .crai | 68 | Parent file had no value for data_modality |
-| .tbi | 60 | Parent file had no value for data_modality |
 | .vcf | 23 | no VCF header lines (no '#' lines) in the read head |
 | .csv | 18 | No rule determined a value for data_modality |
+| .bai | 13 | Parent file had no value for data_modality |
 | .pod5 | 11 | No rule determined a value for data_modality |
-| .bai | 11 | Parent file had no value for data_modality |
 | .pbi | 7 | Parent file had no value for data_modality |
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
-| `genomic` | 586,749 | 82.9% | .vcf (201,645)<br>.tbi (169,457)<br>(none) (124,472)<br>.csi (41,138)<br>.bed (11,483)<br>.cram (10,555)<br>.crai (10,249)<br>.bam (4,100)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bai (1,264)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
-| `not_applicable` | 59,021 | 8.3% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fai (477)<br>.csi (48)<br>.bai (2)<br>.tbi (2) |
-| `not_classified` | 57,078 | 8.1% | .fastq (21,269)<br>(none) (13,827)<br>.fast5 (12,624)<br>.txt (4,650)<br>.bw (2,520)<br>.tsv (923)<br>.bigwig (462)<br>.bam (345)<br>.sam (192)<br>.cram (68)<br>.crai (68)<br>.tbi (60)<br>.vcf (23)<br>.csv (18)<br>.pod5 (11)<br>.bai (11)<br>.pbi (7) |
+| `genomic` | 572,220 | 80.8% | .vcf (201,645)<br>.tbi (155,707)<br>(none) (124,472)<br>.csi (40,510)<br>.bed (11,483)<br>.cram (10,555)<br>.crai (9,621)<br>.bam (4,100)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bai (1,264)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `not_classified` | 72,136 | 10.2% | .fastq (21,269)<br>(none) (13,827)<br>.tbi (13,812)<br>.fast5 (12,624)<br>.txt (4,650)<br>.bw (2,520)<br>.tsv (923)<br>.crai (696)<br>.csi (676)<br>.bigwig (462)<br>.bam (345)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.bai (13)<br>.pod5 (11)<br>.pbi (7) |
+| `not_applicable` | 58,492 | 8.3% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637)<br>.png (3,074) |
 | `transcriptomic.bulk` | 4,752 | 0.7% | .bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.txt (281)<br>.bw (16)<br>.bed (12)<br>.tbi (12)<br>.csv (3) |
 | `transcriptomic.single_cell` | 415 | 0.1% | .h5ad (350)<br>(none) (64)<br>.fastq (1) |
 | `epigenomic.methylation` | 188 | 0.0% | .idat (160)<br>.bed (28) |
@@ -98,24 +99,25 @@ Processed **708,203** files.
 
 | Data Type | count | % | extensions |
 |---|---:|---:|---|
-| `variants.germline` | 331,250 | 46.8% | .vcf (165,625)<br>.tbi (165,625) |
-| `variants` | 200,612 | 28.3% | (none) (124,335)<br>.vcf (35,828)<br>.csi (34,141)<br>.tbi (3,804)<br>.g.vcf (2,504) |
-| `not_applicable` | 55,947 | 7.9% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637)<br>.fai (477)<br>.csi (48)<br>.bai (2)<br>.tbi (2) |
-| `alignments` | 27,426 | 3.9% | .cram (10,555)<br>.crai (10,249)<br>.bam (4,969)<br>.bai (1,653) |
+| `variants.germline` | 317,716 | 44.9% | .vcf (165,625)<br>.tbi (152,091) |
+| `variants` | 200,396 | 28.3% | (none) (124,335)<br>.vcf (35,828)<br>.csi (34,141)<br>.tbi (3,588)<br>.g.vcf (2,504) |
+| `not_applicable` | 55,418 | 7.8% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637) |
+| `alignments` | 26,798 | 3.8% | .cram (10,555)<br>.crai (9,621)<br>.bam (4,969)<br>.bai (1,653) |
 | `not_classified` | 25,708 | 3.6% | (none) (13,825)<br>.txt (4,650)<br>.bw (2,520)<br>.bam (1,805)<br>.bai (1,087)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.crai (68)<br>.tbi (60)<br>.vcf (23)<br>.csv (18)<br>.pbi (7) |
 | `reads` | 21,270 | 3.0% | .fastq (21,270) |
-| `annotations` | 18,536 | 2.6% | .bed (11,523)<br>.csi (6,997)<br>.tbi (14)<br>(none) (2) |
+| `annotations` | 17,908 | 2.5% | .bed (11,523)<br>.csi (6,369)<br>.tbi (14)<br>(none) (2) |
+| `index` | 15,058 | 2.1% | .tbi (13,752)<br>.csi (676)<br>.crai (628)<br>.bai (2) |
 | `raw_signal` | 12,637 | 1.8% | .fast5 (12,624)<br>.pod5 (11)<br>(none) (2) |
 | `genotypes` | 8,562 | 1.2% | .psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854) |
 | `images` | 3,074 | 0.4% | .png (3,074) |
-| `assembly` | 961 | 0.1% | .fa (936)<br>.fasta (25) |
+| `assembly` | 1,427 | 0.2% | .fa (936)<br>.fai (466)<br>.fasta (25) |
 | `expression_matrix` | 698 | 0.1% | .h5ad (350)<br>.txt (281)<br>(none) (64)<br>.csv (3) |
 | `quantification` | 634 | 0.1% | .sf (634) |
 | `pangenome` | 449 | 0.1% | .gfa (314)<br>(none) (135) |
 | `variants.structural` | 218 | 0.0% | .vcf (192)<br>.tbi (26) |
 | `array_signal` | 160 | 0.0% | .idat (160) |
+| `sequence` | 28 | 0.0% | .fasta (13)<br>.fai (11)<br>.fa (4) |
 | `pangenome.reference` | 28 | 0.0% | .gfa (12)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
-| `sequence` | 17 | 0.0% | .fasta (13)<br>.fa (4) |
 | `signal` | 16 | 0.0% | .bw (16) |
 
 ---
@@ -124,8 +126,8 @@ Processed **708,203** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 526,656 | 74.4% |
-| **Not classified** | 181,547 | 25.6% |
+| **Classified** | 512,067 | 72.3% |
+| **Not classified** | 196,136 | 27.7% |
 
 ### What's not classified?
 
@@ -133,32 +135,33 @@ Processed **708,203** files.
 |---|---:|---|
 | (none) | 137,202 | No rule determined a value for reference_assembly |
 | .txt | 37,113 | No rule determined a value for reference_assembly |
+| .tbi | 13,821 | No parent to inherit reference_assembly from: more than one file in this dataset carries the parent name |
 | .bw | 2,536 | No rule determined a value for reference_assembly |
+| .crai | 696 | No parent to inherit reference_assembly from: more than one file in this dataset carries the parent name |
 | .bam | 688 | No rule determined a value for reference_assembly |
 | .bai | 688 | Parent file had no value for reference_assembly |
+| .csi | 676 | No parent to inherit reference_assembly from: more than one file in this dataset carries the parent name |
 | .sf | 634 | No rule determined a value for reference_assembly |
-| .fai | 467 | No rule determined a value for reference_assembly |
 | .bigwig | 462 | No rule determined a value for reference_assembly |
 | .tsv | 443 | No rule determined a value for reference_assembly |
 | .h5ad | 350 | No rule determined a value for reference_assembly |
 | .gfa | 314 | No rule determined a value for reference_assembly |
 | .sam | 192 | No rule determined a value for reference_assembly |
 | .idat | 160 | No rule determined a value for reference_assembly |
-| .tbi | 71 | Parent file had no value for reference_assembly |
 | .cram | 68 | No rule determined a value for reference_assembly |
-| .crai | 68 | Parent file had no value for reference_assembly |
 | .bed | 37 | No rule determined a value for reference_assembly |
 | .vcf | 28 | no VCF header lines (no '#' lines) in the read head |
 | .csv | 21 | No rule determined a value for reference_assembly |
 | .fasta | 3 | No rule determined a value for reference_assembly |
+| .fai | 2 | Parent file had no value for reference_assembly |
 | .xg | 2 | Filename contains GRCh38/hg38 reference indicator |
 
 | Reference Assembly | count | % | extensions |
 |---|---:|---:|---|
-| `CHM13` | 419,205 | 59.2% | .vcf (192,420)<br>.tbi (159,208)<br>.csi (39,910)<br>.bed (6,744)<br>.cram (6,718)<br>.crai (6,693)<br>.txt (5,170)<br>.bam (632)<br>.bai (632)<br>(none) (579)<br>.tsv (470)<br>.fasta (7)<br>.gfa (6)<br>.fai (6)<br>.fa (3)<br>.gbwt (3)<br>.xg (3)<br>.gbz (1) |
-| `not_classified` | 181,547 | 25.6% | (none) (137,202)<br>.txt (37,113)<br>.bw (2,536)<br>.bam (688)<br>.bai (688)<br>.sf (634)<br>.fai (467)<br>.bigwig (462)<br>.tsv (443)<br>.h5ad (350)<br>.gfa (314)<br>.sam (192)<br>.idat (160)<br>.tbi (71)<br>.cram (68)<br>.crai (68)<br>.bed (37)<br>.vcf (28)<br>.csv (21)<br>.fasta (3)<br>.xg (2) |
-| `not_applicable` | 62,863 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,624)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.fasta (25)<br>.pod5 (11)<br>.bai (11)<br>.pbi (7) |
-| `GRCh38` | 44,574 | 6.3% | .tbi (10,252)<br>.vcf (9,209)<br>.cram (3,837)<br>.crai (3,556)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.bai (1,411)<br>.csi (1,276)<br>.bed (817)<br>(none) (582)<br>.txt (196)<br>.tsv (10)<br>.gfa (6)<br>.fai (4)<br>.fasta (3)<br>.xg (3)<br>.gbwt (3)<br>.fa (1)<br>.gbz (1) |
+| `CHM13` | 411,518 | 58.1% | .vcf (192,420)<br>.tbi (152,255)<br>.csi (39,500)<br>.bed (6,744)<br>.cram (6,718)<br>.crai (6,369)<br>.txt (5,170)<br>.bam (632)<br>.bai (632)<br>(none) (579)<br>.tsv (470)<br>.fasta (7)<br>.fai (6)<br>.gfa (6)<br>.fa (3)<br>.gbwt (3)<br>.xg (3)<br>.gbz (1) |
+| `not_classified` | 196,136 | 27.7% | (none) (137,202)<br>.txt (37,113)<br>.tbi (13,821)<br>.bw (2,536)<br>.crai (696)<br>.bam (688)<br>.bai (688)<br>.csi (676)<br>.sf (634)<br>.bigwig (462)<br>.tsv (443)<br>.h5ad (350)<br>.gfa (314)<br>.sam (192)<br>.idat (160)<br>.cram (68)<br>.bed (37)<br>.vcf (28)<br>.csv (21)<br>.fasta (3)<br>.fai (2)<br>.xg (2) |
+| `not_applicable` | 63,329 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,624)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.fai (466)<br>.fasta (25)<br>.pod5 (11)<br>.bai (11)<br>.pbi (7) |
+| `GRCh38` | 37,206 | 5.3% | .vcf (9,209)<br>.cram (3,837)<br>.tbi (3,455)<br>.crai (3,252)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.bai (1,411)<br>.csi (1,010)<br>.bed (817)<br>(none) (582)<br>.txt (196)<br>.tsv (10)<br>.gfa (6)<br>.fai (3)<br>.fasta (3)<br>.xg (3)<br>.gbwt (3)<br>.fa (1)<br>.gbz (1) |
 | `GRCh37` | 14 | 0.0% | .vcf (11)<br>.bed (3) |
 
 ---
@@ -167,28 +170,29 @@ Processed **708,203** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 132,402 | 18.7% |
-| **Not classified** | 575,801 | 81.3% |
+| **Classified** | 131,094 | 18.5% |
+| **Not classified** | 577,109 | 81.5% |
 
 ### What's not classified?
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf | 201,668 | No rule determined a value for platform |
-| .tbi | 169,529 | Parent file had no value for platform |
+| .tbi | 169,531 | Parent file had no value for platform |
 | (none) | 138,363 | No rule determined a value for platform |
-| .csi | 34,141 | Parent file had no value for platform |
+| .csi | 34,817 | Parent file had no value for platform |
 | .txt | 4,931 | No rule determined a value for platform |
 | .bed | 4,432 | No rule determined a value for platform |
 | .bam | 3,664 | No rule determined a value for platform |
 | .psam | 2,854 | No rule determined a value for platform |
 | .pgen | 2,854 | No rule determined a value for platform |
 | .pvar | 2,854 | No rule determined a value for platform |
-| .bai | 2,729 | Parent file had no value for platform |
+| .bai | 2,731 | Parent file had no value for platform |
 | .bw | 2,536 | No rule determined a value for platform |
 | .g.vcf | 2,504 | No rule determined a value for platform |
 | .tsv | 923 | No rule determined a value for platform |
 | .sf | 634 | No rule determined a value for platform |
+| .crai | 628 | No parent to inherit platform from: more than one file in this dataset carries the parent name |
 | .bigwig | 462 | No rule determined a value for platform |
 | .h5ad | 350 | No rule determined a value for platform |
 | .sam | 192 | No rule determined a value for platform |
@@ -197,9 +201,9 @@ Processed **708,203** files.
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 575,801 | 81.3% | .vcf (201,668)<br>.tbi (169,529)<br>(none) (138,363)<br>.csi (34,141)<br>.txt (4,931)<br>.bed (4,432)<br>.bam (3,664)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bai (2,729)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.tsv (923)<br>.sf (634)<br>.bigwig (462)<br>.h5ad (350)<br>.sam (192)<br>.idat (160)<br>.csv (21) |
-| `not_applicable` | 74,429 | 10.5% | .txt (37,548)<br>.md5 (14,233)<br>.bed (7,091)<br>.csi (7,045)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2)<br>.bai (2)<br>.tbi (2) |
-| `ILLUMINA` | 41,106 | 5.8% | .fastq (20,166)<br>.cram (10,623)<br>.crai (10,317) |
+| `not_classified` | 577,109 | 81.5% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (138,363)<br>.csi (34,817)<br>.txt (4,931)<br>.bed (4,432)<br>.bam (3,664)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bai (2,731)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.tsv (923)<br>.sf (634)<br>.crai (628)<br>.bigwig (462)<br>.h5ad (350)<br>.sam (192)<br>.idat (160)<br>.csv (21) |
+| `not_applicable` | 73,749 | 10.4% | .txt (37,548)<br>.md5 (14,233)<br>.bed (7,091)<br>.csi (6,369)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `ILLUMINA` | 40,478 | 5.7% | .fastq (20,166)<br>.cram (10,623)<br>.crai (9,689) |
 | `ONT` | 14,072 | 2.0% | .fast5 (12,624)<br>.bam (1,300)<br>.fastq (137)<br>.pod5 (11) |
 | `PACBIO` | 2,795 | 0.4% | .bam (1,810)<br>.fastq (967)<br>.bai (11)<br>.pbi (7) |
 
@@ -211,17 +215,17 @@ Processed **708,203** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 103,064 | 14.6% |
-| **Not classified** | 605,139 | 85.4% |
+| **Classified** | 101,756 | 14.4% |
+| **Not classified** | 606,447 | 85.6% |
 
 ### What's not classified?
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
 | .vcf | 201,668 | No rule determined a value for assay_type |
-| .tbi | 169,517 | Parent file had no value for assay_type |
+| .tbi | 169,519 | Parent file had no value for assay_type |
 | (none) | 138,363 | No rule determined a value for assay_type |
-| .csi | 34,141 | Parent file had no value for assay_type |
+| .csi | 34,817 | Parent file had no value for assay_type |
 | .fastq | 21,269 | No rule determined a value for assay_type |
 | .fast5 | 12,624 | No rule determined a value for assay_type |
 | .txt | 4,650 | No rule determined a value for assay_type |
@@ -232,21 +236,21 @@ Processed **708,203** files.
 | .bw | 2,520 | No rule determined a value for assay_type |
 | .g.vcf | 2,504 | No rule determined a value for assay_type |
 | .bam | 1,905 | No rule determined a value for assay_type |
-| .bai | 1,275 | Parent file had no value for assay_type |
+| .bai | 1,277 | Parent file had no value for assay_type |
 | .tsv | 923 | No rule determined a value for assay_type |
+| .crai | 696 | No parent to inherit assay_type from: more than one file in this dataset carries the parent name |
 | .bigwig | 462 | No rule determined a value for assay_type |
 | .sam | 192 | No rule determined a value for assay_type |
 | .cram | 68 | No rule determined a value for assay_type |
-| .crai | 68 | Parent file had no value for assay_type |
 | .csv | 18 | No rule determined a value for assay_type |
 | .pod5 | 11 | No rule determined a value for assay_type |
 | .pbi | 7 | Parent file had no value for assay_type |
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 605,139 | 85.4% | .vcf (201,668)<br>.tbi (169,517)<br>(none) (138,363)<br>.csi (34,141)<br>.fastq (21,269)<br>.fast5 (12,624)<br>.txt (4,650)<br>.bed (4,392)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bw (2,520)<br>.g.vcf (2,504)<br>.bam (1,905)<br>.bai (1,275)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.crai (68)<br>.csv (18)<br>.pod5 (11)<br>.pbi (7) |
-| `not_applicable` | 74,429 | 10.5% | .txt (37,548)<br>.md5 (14,233)<br>.bed (7,091)<br>.csi (7,045)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2)<br>.bai (2)<br>.tbi (2) |
-| `WGS` | 23,344 | 3.3% | .cram (10,555)<br>.crai (10,249)<br>.bam (2,540) |
+| `not_classified` | 606,447 | 85.6% | .vcf (201,668)<br>.tbi (169,519)<br>(none) (138,363)<br>.csi (34,817)<br>.fastq (21,269)<br>.fast5 (12,624)<br>.txt (4,650)<br>.bed (4,392)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bw (2,520)<br>.g.vcf (2,504)<br>.bam (1,905)<br>.bai (1,277)<br>.tsv (923)<br>.crai (696)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.csv (18)<br>.pod5 (11)<br>.pbi (7) |
+| `not_applicable` | 73,749 | 10.4% | .txt (37,548)<br>.md5 (14,233)<br>.bed (7,091)<br>.csi (6,369)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `WGS` | 22,716 | 3.2% | .cram (10,555)<br>.crai (9,621)<br>.bam (2,540) |
 | `RNA-seq` | 5,103 | 0.7% | .bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.h5ad (350)<br>.txt (281)<br>.bw (16)<br>.bed (12)<br>.tbi (12)<br>.csv (3)<br>.fastq (1) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 | `Bisulfite-seq` | 28 | 0.0% | .bed (28) |

@@ -64,7 +64,9 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
                 raise ValueError(
                     f"{path}: classification row for {r.get('file_name')!r} has entry_id "
                     f"{entry_id!r}; this producer keys on it and cannot skip a row without "
-                    f"risking a duplicate record. Run `make validate-metadata` on the input."
+                    f"risking a duplicate record. Either the input carried a drifted "
+                    f"entry_id — `make validate-metadata` rejects that — or the producer "
+                    f"that wrote this file omitted the field and needs re-running."
                 )
             seen.add(entry_id)
     return seen

@@ -136,7 +136,7 @@ Classification results are stored in JSON files in the `output/` directory:
 | [`fastq_headers.json`](../output/fastq_headers.json) | FASTQ classifications | 23,096 |
 | [`index_classifications.json`](../output/index_classifications.json) | Index file classifications | 223,953* |
 | [`image_classifications.json`](../output/image_classifications.json) | Image classifications | 33,757 |
-| [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
+| [`auxiliary_classifications.json`](../output/auxiliary_classifications.json) | FAST5/PLINK classifications | 20,956 |
 | [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
 
 *Index files that took no parent are counted above like any other — they carry `data_type: index` from the extension and `not_classified` elsewhere — and are *additionally* listed in the `unmatched_files` array with why no parent was taken: no matching parent, or an ambiguous one (#438). The ambiguous case is much the larger of the two. See Section 6.1.
