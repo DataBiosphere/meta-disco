@@ -134,12 +134,12 @@ Classification results are stored in JSON files in the `output/` directory:
 | [`bam_headers.json`](../output/bam_headers.json) | BAM/CRAM classifications | 18,662 |
 | [`vcf_headers.json`](../output/vcf_headers.json) | VCF classifications | 205,010 |
 | [`fastq_headers.json`](../output/fastq_headers.json) | FASTQ classifications | 23,096 |
-| [`index_file_classifications.json`](../output/index_file_classifications.json) | Index file classifications | 223,953* |
+| [`index_classifications.json`](../output/index_classifications.json) | Index file classifications | 223,953* |
 | [`image_classifications.json`](../output/image_classifications.json) | Image classifications | 33,757 |
-| [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
+| [`auxiliary_classifications.json`](../output/auxiliary_classifications.json) | FAST5/PLINK classifications | 20,956 |
 | [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
 
-*84 additional orphaned index files (no matching parent) are logged in the `unmatched_files` array. See Section 6.1.
+*Index files that took no parent are counted above like any other — they carry `data_type: index` from the extension and `not_classified` elsewhere — and are *additionally* listed in the `unmatched_files` array with why no parent was taken: no matching parent, or an ambiguous one (#438). The ambiguous case is much the larger of the two. See Section 6.1.
 
 #### Output File Structure
 
@@ -788,11 +788,20 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Orphaned files are recorded in `index_file_classifications.json` under the `unmatched_files` array with:
-- `file_name`: Index filename
-- `dataset_id`: Dataset containing the orphan
+**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
+- `file_name`, `file_format`, `file_md5sum`, `entry_id`, `dataset_id`, `dataset_title`: the file's identity
+- `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
-- `reason`: `no_matching_parent_in_dataset`
+- `reason`: one of the two below
+
+Two reasons land in that array, and they are not the same problem:
+
+- **`no_matching_parent_in_dataset`** — no file in the dataset carries any candidate parent name. The orphan case described above.
+- **`ambiguous_parent_in_dataset`** — the parent name is present and names *more than one* file, so no parent can be chosen (#438). Such an entry also carries `ambiguous_candidate` (the name that was ambiguous) and `files_sharing_that_name` (how many files it names). The file inherits nothing; on the anvil15 corpus this is 15,006 index files, almost all in `ANVIL_T2T_CHRY`, which calls one sample against both CHM13v2 and GRCh38 and stores the outputs under the same filename in different directories.
+
+The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
+
+Both kinds get a record because the alternative was worse: dropping them sent the files to the catch-all producer, where the tier-1 `index_not_applicable` rule stamps four dimensions `not_applicable` on the strength of the extension alone — and coverage counts `not_applicable` as *classified*. That reported a file as determined precisely where it is not. The rule's own rationale, "metadata inherited from parent data file", shows it was written as a placeholder for files this producer would resolve.
 
 ### 6.2 Recommendations
 

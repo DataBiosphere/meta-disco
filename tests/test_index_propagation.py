@@ -8,10 +8,79 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from classify_index_files import INDEX_TO_PARENT, get_parent_candidates, load_classifications, propagate_to_index_files
+from classify_index_files import (
+    AMBIGUOUS_PARENT,
+    INDEX_TO_PARENT,
+    NO_MATCHING_PARENT,
+    get_parent_candidates,
+    load_classifications,
+    propagate_to_index_files,
+)
 
-from meta_disco.models import CLASSIFIED, CONFLICT, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    CLASSIFIED,
+    CONFLICT,
+    NOT_CLASSIFIED,
+    build_field_entry,
+    field_status,
+    field_value,
+)
 from tests.metadata_fixtures import write_metadata as _write_metadata
+
+
+def _assert_declined(output: dict, file_name: str) -> dict:
+    """An index file that took no parent: `index` by extension, the rest unknown.
+
+    `data_type` is knowable without a parent — the extension says so — and the other
+    four are properties of the data the index points into, so they are not_classified
+    rather than not_applicable: they apply, and nothing here can determine them (#438).
+    """
+    records = [r for r in output["classifications"] if r["file_name"] == file_name]
+    assert len(records) == 1, f"{file_name} should get exactly one record"
+    cls = records[0]["classifications"]
+    assert field_status(cls, "data_type") == CLASSIFIED
+    assert field_value(cls, "data_type") == "index"
+    for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
+        assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified, not asserted"
+    assert records[0]["parent_file"] is None
+    return records[0]
+
+
+def _file(name: str, fmt: str, md5: str, entry_id: str, dataset_id: str = "ds1") -> dict:
+    """One input metadata record, in the shape `write_metadata` expects."""
+    return {
+        "file_name": name,
+        "file_format": fmt,
+        "file_md5sum": md5,
+        "dataset_id": dataset_id,
+        "dataset_title": "test",
+        "entry_id": entry_id,
+    }
+
+
+_PARENT_VALUES = {
+    "data_modality": "genomic",
+    "data_type": "alignments",
+    "platform": "ILLUMINA",
+    "assay_type": "WGS",
+}
+
+
+def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam") -> dict:
+    """A parent classification whose ``reference_assembly`` is ``assembly``.
+
+    Entries come from :func:`models.build_field_entry`, the single place that
+    assembles the ``{value, status, evidence}`` shape, so the fixture follows the
+    output shape rather than restating it — and the dimensions come from
+    ``CLASSIFICATION_FIELDS`` rather than a fourth hand-written copy of them.
+    """
+    values = {**_PARENT_VALUES, "reference_assembly": assembly}
+    return {
+        "md5sum": md5,
+        "file_name": file_name,
+        "classifications": {fld: build_field_entry(values[fld]) for fld in CLASSIFICATION_FIELDS},
+    }
 
 
 class TestParentCandidateGeneration:
@@ -504,10 +573,11 @@ class TestLoadClassifications:
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
         with output_file.open() as f:
             output = json.load(f)
-        assert len(output["classifications"]) == 0
+        _assert_declined(output, "orphan.bam.bai")
         assert len(output["unmatched_files"]) == 1
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
-        assert output["unmatched_files"][0]["reason"] == "no_matching_parent_in_dataset"
+        assert output["unmatched_files"][0]["reason"] == NO_MATCHING_PARENT
+        assert output["metadata"]["ambiguous_parent"] == 0
 
     def test_parent_found_but_not_classified(self, tmp_path):
         """Parent exists in metadata but has no classification — index gets not_classified."""
@@ -546,3 +616,194 @@ class TestLoadClassifications:
         for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
             assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
+
+    def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
+        """Two files sharing the name an index points at: no parent is chosen (#438)."""
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                # Same name, different files — as ANVIL_T2T_CHRY calls one sample against
+                # both CHM13v2 and GRCh38 and stores the outputs under different paths.
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "11111111111111111111111111111111",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e1",
+                },
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "22222222222222222222222222222222",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e2",
+                },
+                {
+                    "file_name": "sample.bam.bai",
+                    "file_format": ".bai",
+                    "file_md5sum": "33333333333333333333333333333333",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e3",
+                },
+            ],
+        )
+        # Both candidate parents are classified, and they disagree. Whichever the old
+        # lookup kept, the index would have inherited a confident answer from it.
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        _classified_record("11111111111111111111111111111111", "GRCh38"),
+                        _classified_record("22222222222222222222222222222222", "CHM13"),
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        # Neither parent's answer reaches it — not GRCh38, not CHM13, not a coin flip.
+        record = _assert_declined(output, "sample.bam.bai")
+        assert record["classifications"]["reference_assembly"]["value"] is None
+        assert len(output["unmatched_files"]) == 1
+        entry = output["unmatched_files"][0]
+        assert entry["file_name"] == "sample.bam.bai"
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        assert entry["ambiguous_candidate"] == "sample.bam"
+        assert entry["files_sharing_that_name"] == 2
+        assert output["metadata"]["ambiguous_parent"] == 1
+        assert output["metadata"]["unmatched"] == 0
+
+    def test_same_name_in_another_dataset_is_not_ambiguous(self, tmp_path):
+        """The lookup key is per dataset, so a name reused across datasets still matches."""
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "11111111111111111111111111111111",
+                    "dataset_id": "ds1",
+                    "dataset_title": "one",
+                    "entry_id": "e1",
+                },
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "22222222222222222222222222222222",
+                    "dataset_id": "ds2",
+                    "dataset_title": "two",
+                    "entry_id": "e2",
+                },
+                {
+                    "file_name": "sample.bam.bai",
+                    "file_format": ".bai",
+                    "file_md5sum": "33333333333333333333333333333333",
+                    "dataset_id": "ds1",
+                    "dataset_title": "one",
+                    "entry_id": "e3",
+                },
+            ],
+        )
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps({"classifications": [_classified_record("11111111111111111111111111111111", "GRCh38")]})
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        assert output["unmatched_files"] == []
+        assert len(output["classifications"]) == 1
+        record = output["classifications"][0]
+        assert record["parent_md5sum"] == "11111111111111111111111111111111"
+        assert record["classifications"]["reference_assembly"]["value"] == "GRCh38"
+
+    def test_does_not_fall_through_to_a_later_candidate(self, tmp_path):
+        """An ambiguous first candidate declines; it does not take the next one (#438).
+
+        `sample.tbi` is a Pattern 2 name, so `get_parent_candidates` offers several
+        parents in `INDEX_TO_PARENT` order — `.vcf.gz` before `.bed.gz`. The `.vcf.gz`
+        name covers two files, so no parent is taken. Falling through to the unique
+        `.bed.gz` would resume guessing with a *worse* reading of the name, which is
+        what this issue forbids, and this test is what fails if someone does.
+        """
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                _file("sample.vcf.gz", ".vcf.gz", "11111111111111111111111111111111", "e1"),
+                _file("sample.vcf.gz", ".vcf.gz", "22222222222222222222222222222222", "e2"),
+                _file("sample.bed.gz", ".bed.gz", "33333333333333333333333333333333", "e3"),
+                _file("sample.tbi", ".tbi", "44444444444444444444444444444444", "e4"),
+            ],
+        )
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        _classified_record("11111111111111111111111111111111", "GRCh38", "sample.vcf.gz"),
+                        _classified_record("22222222222222222222222222222222", "CHM13", "sample.vcf.gz"),
+                        # The fall-through parent, deliberately a third assembly: if this
+                        # value ever reaches the index file, the stopping rule is broken.
+                        _classified_record("33333333333333333333333333333333", "GRCh37", "sample.bed.gz"),
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        # GRCh37 is the fall-through parent's answer; it must not appear anywhere.
+        record = _assert_declined(output, "sample.tbi")
+        assert record["classifications"]["reference_assembly"]["value"] is None
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        assert entry["ambiguous_candidate"] == "sample.vcf.gz"
+        assert "sample.bed.gz" in entry["candidates_tried"]
+
+    def test_ambiguity_is_judged_on_the_first_candidate_present(self, tmp_path):
+        """The candidate that decides is the first one present, not the first one tried."""
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                # No `sample.vcf.gz` at all, so the first *present* candidate is .bed.gz.
+                _file("sample.bed.gz", ".bed.gz", "11111111111111111111111111111111", "e1"),
+                _file("sample.bed.gz", ".bed.gz", "22222222222222222222222222222222", "e2"),
+                _file("sample.tbi", ".tbi", "33333333333333333333333333333333", "e3"),
+            ],
+        )
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        _classified_record("11111111111111111111111111111111", "GRCh38", "sample.bed.gz"),
+                        _classified_record("22222222222222222222222222222222", "CHM13", "sample.bed.gz"),
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        _assert_declined(output, "sample.tbi")
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        assert entry["ambiguous_candidate"] == "sample.bed.gz"
+        assert entry["files_sharing_that_name"] == 2

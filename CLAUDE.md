@@ -105,8 +105,13 @@ evidence}` entry — plus the controlled vocabulary:
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
     construction site for a claim, and enforces its invariants: exactly one of
     `value` / `status` / `state`, a `tier` only where one belongs, and a producer
-    handle. `classify_index_files.inherited_evidence` is the one path outside it —
-    a known violation of the contract's 1.1, tracked as #413.
+    handle. `classify_index_files` holds the two paths outside it, both hand-building
+    evidence for the same reason — an index file has exactly one claim per dimension and
+    never reaches `evaluate_claims`, so there is no tier to carry, and `inherited_evidence`
+    additionally copies a parent's resolved `conflict`, which `make_claim` refuses.
+    `inherited_evidence` serves a matched index; `declined_record` serves one this
+    producer took no parent for (#438). Both are known violations of the contract's 1.1,
+    tracked as #413, which should fold them in together.
   - Every claim carries a `source_type`, stated explicitly from the `SOURCE_*`
     constants. Never derive it from `tier`, which cannot tell `contig_detection`
     from `content_read`. Rule claims are the one derived case and key off `scope`.
