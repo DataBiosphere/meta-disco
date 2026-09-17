@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-Index files (.bai, .tbi, .csi, .crai, .pbi) inherit all five classification
-dimensions from their parent files (.bam, .vcf.gz, .cram), which are found by
-filename within a dataset.
+Index files inherit all five of ``CLASSIFICATION_FIELDS`` from their parent,
+which is found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
+index extensions have which parent extensions.
 
 A filename does not always identify one file. Where two files in a dataset share
 the name an index points at, no parent is chosen: the index inherits nothing and
-is listed as unmatched with reason ``ambiguous_parent_in_dataset`` (#438). The
-lookup used to keep whichever file load order visited last: measured on the
-anvil15 corpus, 15,006 index files took a parent picked by iteration order, and
-7,397 of those were verifiably wrong about their reference assembly. Distinguishing such files needs a path or a
-declared relationship, neither of which this producer can see, so it declines
-rather than guesses.
+is listed in ``unmatched_files`` with reason ``AMBIGUOUS_PARENT`` (#438).
+
+The lookup used to keep whichever file load order visited last. Measured on the
+anvil15 corpus, 15,006 index files took a parent picked that way, and 7,422 of
+them were wrong about their reference assembly — verified against the storage
+paths in the manifest's ``file_inventory`` table, which name the true parent.
+``ANVIL_T2T_CHRY`` is why: it calls one sample against both CHM13v2 and GRCh38
+and stores the outputs under the same filename in different directories.
+
+Telling such files apart needs a path or a declared parent-child relationship,
+and this producer can see neither — the compact manifest it reads carries no
+storage path and no sibling relation. So it declines rather than guesses. Doing
+better is import work (#369, #402).
 """
 
 import argparse
@@ -32,7 +39,13 @@ from meta_disco.models import (
     status_for_value,
 )
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import published_from
+from meta_disco.records import coerce_identity, published_from
+
+# Why an index file took no parent. Written into each `unmatched_files` entry and
+# read back by this module's diagnostics and its tests, so it is named rather than
+# spelled three times.
+NO_MATCHING_PARENT = "no_matching_parent_in_dataset"
+AMBIGUOUS_PARENT = "ambiguous_parent_in_dataset"
 
 # Index extension -> parent extension mapping
 # List specific compound extensions to avoid false candidates from bare .gz
@@ -76,6 +89,30 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
                     candidates.append(candidate)
 
     return candidates
+
+
+def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason: str, **extra: object) -> dict:
+    """One ``unmatched_files`` entry: an index file that took no parent, and why.
+
+    Both reasons share an identity echo, so the shape is built once here rather than
+    spelled per branch — a field added to the entry reaches every reason. Identity is
+    echoed through :func:`coerce_identity`, as ``excluded_files.json`` echoes one
+    (#376), so a drifted ``file_name`` of ``0`` renders as ``"0"`` and not ``""``.
+    ``dataset_id`` is the lookup key this producer groups by and is passed through as
+    it was read.
+    """
+    return {
+        "file_name": coerce_identity(record.get("file_name")),
+        "file_format": coerce_identity(record.get("file_format")),
+        "file_md5sum": coerce_identity(record.get("file_md5sum")),
+        "entry_id": coerce_identity(record.get("entry_id")),
+        "dataset_id": record.get("dataset_id", "unknown"),
+        "dataset_title": coerce_identity(record.get("dataset_title")),
+        "index_extension": index_ext,
+        "candidates_tried": candidates,
+        "reason": reason,
+        **extra,
+    }
 
 
 def load_classifications(*paths: Path) -> dict[str, dict]:
@@ -130,27 +167,18 @@ def propagate_to_index_files(
         ds = f.get("dataset_id", "unknown")
         by_dataset[ds].append(f)
 
-    # Build filename -> file lookup per dataset
-    # Also build filename -> md5 lookup
-    #
-    # `filename_to_md5` keeps the last file written for a key, so a name shared by two
-    # files in one dataset silently collapses to one of them. `name_counts` records how
-    # many files each key covers, so the match loop can tell a name that identifies one
-    # file from a name that does not (#438). The dict itself is left as it was: a key
-    # whose count is above one is never read from it.
-    filename_to_file = {}
-    filename_to_md5 = {}
-    name_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
+    # Every file a `(dataset_id, file_name)` names, not just the last one written.
+    # A dict keyed that way silently collapses a name two files share, which is what
+    # let an index inherit from a parent picked by iteration order (#438); keeping the
+    # list makes "this name identifies one file" a thing the match loop can test.
+    # Every record here has a well-formed md5 — `load_classifiable_snapshot` excluded
+    # the rest (#376) — so a name present here is always resolvable to one.
+    files_by_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
             name = f.get("file_name")
-            md5 = f.get("file_md5sum")
             if name:
-                key = (ds, name)
-                name_counts[key] += 1
-                filename_to_file[key] = f
-                if md5:
-                    filename_to_md5[key] = md5
+                files_by_name[(ds, name)].append(f)
 
     # Find index files and match to parents
     results = []
@@ -181,68 +209,41 @@ def propagate_to_index_files(
 
             stats[index_ext]["total"] += 1
 
-            # Find parent file
+            # The parent is the *first* candidate present, and only that one. Pattern 1
+            # (index extension appended to the parent name) is tried before Pattern 2
+            # (index extension replacing it), so an earlier candidate is the better
+            # reading of the name. Where that candidate names more than one file, this
+            # stops rather than trying the next: a later candidate is a worse reading,
+            # so falling through would swap one guess for another instead of declining
+            # to guess (#438).
             parent_candidates = get_parent_candidates(name, index_ext)
-            parent_md5 = None
-            parent_name = None
+            parent_key = next(((ds, c) for c in parent_candidates if (ds, c) in files_by_name), None)
 
-            # `get_parent_candidates` returns candidates in preference order, so the
-            # first one present is the parent. If that name covers more than one file,
-            # stop there rather than trying the next candidate: a later candidate is a
-            # *less preferred* parent, so falling through would swap one guess for
-            # another instead of declining to guess (#438).
-            ambiguous_candidate = None
-            for candidate in parent_candidates:
-                key = (ds, candidate)
-                if key in filename_to_md5:
-                    if name_counts[key] > 1:
-                        ambiguous_candidate = candidate
-                    else:
-                        parent_md5 = filename_to_md5[key]
-                        parent_name = candidate
-                    break
+            if parent_key is None:
+                stats[index_ext]["unmatched"] += 1
+                unmatched.append(unmatched_entry(f, index_ext, parent_candidates, NO_MATCHING_PARENT))
+                continue
 
-            if ambiguous_candidate is not None:
+            if len(files_by_name[parent_key]) > 1:
                 # Not a failed lookup: the parent is present, and present more than once.
-                # Recorded beside the no-parent case because the outcome is the same —
-                # no record here, and the file falls through to the catch-all producer —
-                # and separated by `reason` because the causes are not the same.
+                # Listed beside the no-parent case because the outcome is the same — no
+                # record here, and the file falls to the catch-all producer — and told
+                # apart by `reason`, because the causes are not.
                 stats[index_ext]["ambiguous"] += 1
                 unmatched.append(
-                    {
-                        "file_name": name,
-                        "file_format": fmt,
-                        "file_md5sum": f.get("file_md5sum"),
-                        "entry_id": f.get("entry_id"),
-                        "dataset_id": ds,
-                        "dataset_title": f.get("dataset_title"),
-                        "index_extension": index_ext,
-                        "candidates_tried": parent_candidates,
-                        "ambiguous_candidate": ambiguous_candidate,
-                        "files_sharing_that_name": name_counts[(ds, ambiguous_candidate)],
-                        "reason": "ambiguous_parent_in_dataset",
-                    }
+                    unmatched_entry(
+                        f,
+                        index_ext,
+                        parent_candidates,
+                        AMBIGUOUS_PARENT,
+                        ambiguous_candidate=parent_key[1],
+                        files_sharing_that_name=len(files_by_name[parent_key]),
+                    )
                 )
                 continue
 
-            if not parent_md5:
-                # Track the failure with diagnostic info
-                stats[index_ext]["unmatched"] += 1
-                unmatched.append(
-                    {
-                        "file_name": name,
-                        "file_format": fmt,
-                        "file_md5sum": f.get("file_md5sum"),
-                        "entry_id": f.get("entry_id"),
-                        "dataset_id": ds,
-                        "dataset_title": f.get("dataset_title"),
-                        "index_extension": index_ext,
-                        "candidates_tried": parent_candidates,
-                        "reason": "no_matching_parent_in_dataset",
-                    }
-                )
-                continue
-
+            parent_name = parent_key[1]
+            parent_md5 = files_by_name[parent_key][0]["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
             # Get parent classification
@@ -297,10 +298,10 @@ def propagate_to_index_files(
         if s["total"] > 0:
             match_pct = s["matched"] / s["total"] * 100
             unmatch_pct = s["unmatched"] / s["total"] * 100
-            mod_pct = s["with_modality"] / s["total"] * 100 if s["total"] > 0 else 0
-            ref_pct = s["with_ref"] / s["total"] * 100 if s["total"] > 0 else 0
-            print(f"\n{ext}:")
             amb_pct = s["ambiguous"] / s["total"] * 100
+            mod_pct = s["with_modality"] / s["total"] * 100
+            ref_pct = s["with_ref"] / s["total"] * 100
+            print(f"\n{ext}:")
             print(f"  Total:              {s['total']:>7,}")
             print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
             print(f"  Unmatched:          {s['unmatched']:>7,} ({unmatch_pct:.1f}%)")
@@ -335,7 +336,7 @@ def propagate_to_index_files(
             print(f"  {u['file_name']}")
             print(f"    Dataset: {u['dataset_id']}")
             print(f"    Reason: {u['reason']}")
-            if u["reason"] == "ambiguous_parent_in_dataset":
+            if u["reason"] == AMBIGUOUS_PARENT:
                 print(f"    Ambiguous: {u['ambiguous_candidate']} names {u['files_sharing_that_name']} files")
             else:
                 print(f"    Tried: {u['candidates_tried']}")

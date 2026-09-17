@@ -22,7 +22,25 @@ from meta_disco.rule_engine import RuleEngine
 
 
 def load_already_classified(classification_paths: list[Path]) -> set[str]:
-    """Load filenames already classified by other scripts."""
+    """Entry ids already carrying a classification record from another producer.
+
+    Keyed on ``entry_id``, not on ``file_name``: a name identifies a file only about
+    60% of the time here — the corpus holds 708,088 records under 442,865 distinct
+    names — so a name-keyed set skips a file because a *different* file elsewhere
+    shares its name, and that file then appears in no ``classifications`` array at
+    all. ``entry_id`` is unique across the corpus with no collisions.
+
+    The hazard was dormant until #438: every index file used to get a record from
+    ``classify_index_files``, so nothing with a colliding name reached this producer.
+    Declining an ambiguous parent sends 15,006 index files here, 140 of whose names
+    are also carried by matched index records in other datasets.
+
+    ``entry_id`` is Azul's ``files.document_id`` and does not survive a catalog
+    re-index — measured, zero of 705,949 records kept theirs from anvil14 to anvil15.
+    That does not matter here: this set and the records it is tested against come from
+    one run against one snapshot. It does matter for anything published for another
+    system to join against, where ``file_id`` is the stable id (#433).
+    """
     seen = set()
     for path in classification_paths:
         if not path.is_file():
@@ -30,9 +48,9 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
         with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
-            name = r.get("file_name", "")
-            if name:
-                seen.add(name)
+            entry_id = r.get("entry_id")
+            if entry_id:
+                seen.add(entry_id)
     return seen
 
 
@@ -54,7 +72,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
     for rec in files:
         name = rec.get("file_name", "")
-        if not name or name in already:
+        if not name or rec.get("entry_id") in already:
             continue
 
         file_info = FileInfo.from_filename(

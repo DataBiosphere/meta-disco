@@ -788,11 +788,18 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Orphaned files are recorded in `index_file_classifications.json` under the `unmatched_files` array with:
-- `file_name`: Index filename
-- `dataset_id`: Dataset containing the orphan
+**Output location:** Index files that took no parent are recorded in `index_file_classifications.json` under the `unmatched_files` array. Every entry carries:
+- `file_name`, `file_format`, `file_md5sum`, `entry_id`, `dataset_id`, `dataset_title`: the file's identity
+- `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
-- `reason`: `no_matching_parent_in_dataset`
+- `reason`: one of the two below
+
+Two reasons land in that array, and they are not the same problem:
+
+- **`no_matching_parent_in_dataset`** — no file in the dataset carries any candidate parent name. The orphan case described above.
+- **`ambiguous_parent_in_dataset`** — the parent name is present and names *more than one* file, so no parent can be chosen (#438). Such an entry also carries `ambiguous_candidate` (the name that was ambiguous) and `files_sharing_that_name` (how many files it names). The file inherits nothing; on the anvil15 corpus this is 15,006 index files, almost all in `ANVIL_T2T_CHRY`, which calls one sample against both CHM13v2 and GRCh38 and stores the outputs under the same filename in different directories.
+
+The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
 
 ### 6.2 Recommendations
 
