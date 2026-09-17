@@ -99,3 +99,22 @@ class TestSkipKey:
         other.write_text(json.dumps({"classifications": [{"entry_id": "", "file_name": "x.weird"}]}))
         with pytest.raises(ValueError, match="entry_id"):
             load_already_classified([other])
+
+    def test_an_input_record_with_no_entry_id_is_refused(self, tmp_path):
+        """The guard is symmetric: a drifted identity on the *input* side raises too.
+
+        `load_already_classified` guards the records it reads; this guards the records
+        it compares them against. A drifted `entry_id` here matches nothing in the skip
+        set, so an already-classified file would be classified a second time — the same
+        failure, entering by the other side.
+        """
+        metadata_file = tmp_path / "metadata.json"
+        write_metadata(metadata_file, [_record("x.weird", "e1", "1" * 32, "ds1")])
+        # Drift it after the contract-shaped fixture is written, as a producer would see it.
+        doc = json.loads(metadata_file.read_text())
+        key = "files" if "files" in doc else "records"
+        doc[key][0]["entry_id"] = None
+        metadata_file.write_text(json.dumps(doc))
+
+        with pytest.raises(ValueError, match="entry_id"):
+            classify_remaining(metadata_file, tmp_path / "out.json", [])

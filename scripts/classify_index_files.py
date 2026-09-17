@@ -6,8 +6,13 @@ which is found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
 A filename does not always identify one file. Where two files in a dataset share
-the name an index points at, no parent is chosen: the index inherits nothing and
-is listed in ``unmatched_files`` with reason ``AMBIGUOUS_PARENT`` (#438).
+the name an index points at, no parent is chosen. Such a file still gets a record,
+but it inherits nothing: ``declined_record`` gives it ``data_type: index``, which the
+extension establishes without a parent, and ``not_classified`` on the other four,
+which only a parent could supply. Why no parent was taken is listed separately in
+``unmatched_files``, with reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT``
+(#438). So this module has two behaviours: inherit all five from a unique parent, or
+assert the one dimension a parent is not needed for.
 
 The lookup used to keep whichever file load order visited last. Measured on the
 anvil15 corpus, 15,006 index files took a parent picked that way, and 7,422 of

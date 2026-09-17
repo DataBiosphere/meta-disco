@@ -90,7 +90,18 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
     for rec in files:
         name = rec.get("file_name", "")
-        if not name or rec.get("entry_id") in already:
+        entry_id = rec.get("entry_id")
+        # The same guard `load_already_classified` applies to the other side of this
+        # comparison. A drifted `entry_id` here would match nothing in `already`, so an
+        # already-classified file would be classified a second time — the failure the
+        # key change was made to prevent, entering by the input rather than the output.
+        if not isinstance(entry_id, str) or not entry_id:
+            raise ValueError(
+                f"input record for {name!r} has entry_id {entry_id!r}; this producer "
+                f"keys on it to know what another producer already classified. "
+                f"`make validate-metadata` rejects this before `make classify` runs."
+            )
+        if not name or entry_id in already:
             continue
 
         file_info = FileInfo.from_filename(
