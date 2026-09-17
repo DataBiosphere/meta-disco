@@ -801,7 +801,7 @@ Two reasons land in that array, and they are not the same problem:
 
 The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
 
-Both kinds get a record because the alternative was worse: dropping them sent the files to the catch-all producer, where the tier-1 `index_not_applicable` rule stamps four dimensions `not_applicable` on the strength of the extension alone — and coverage counts `not_applicable` as *classified*. That reported a file as determined precisely where it is not. The rule's own rationale, "metadata inherited from parent data file", shows it was written as a placeholder for files this producer would resolve.
+Both kinds get a record because the alternative was worse: dropping them sent the files to the catch-all producer, where the tier-1 `index_not_applicable` rule stamped four dimensions `not_applicable` on the strength of the extension alone — and coverage counts `not_applicable` as *classified*. That reported a file as determined precisely where it is not. That rule no longer claims `data_type` (#437), which `classify_index_files` claims from the extension on every index file it sees; the three it still claims are the ones a parent supplies.
 
 ### 6.2 Recommendations
 

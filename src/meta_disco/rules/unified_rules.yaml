@@ -158,7 +158,15 @@ rules:
   #         images, nanopore raw, FASTQ baseline)
 
   # ---------------------------------------------------------------------------
-  # Index files - not applicable (inherit from parent via classify_index_files.py)
+  # Index files — the four dimensions a parent supplies. `data_type` is not among
+  # them: an index file *is* an index, which `classify_index_files` claims from the
+  # extension on every index file it sees, matched or declined (#437). This rule no
+  # longer claims it, so the two cannot disagree.
+  #
+  # In a full run this rule reaches no index file at all — `classify_index_files`
+  # covers all seven extensions (#438) and writes a record for each, so none arrives
+  # at the catch-all. It is kept for a partial run, where that producer has not run
+  # and these are still the honest four.
   # ---------------------------------------------------------------------------
   - id: index_not_applicable
     tier: 1
@@ -168,27 +176,29 @@ rules:
     then:
       status:
         data_modality: not_applicable
-        data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Index file — metadata inherited from parent data file"
+    rationale: "Index file — the data it points into is the parent's, not its own"
 
   # ---------------------------------------------------------------------------
-  # Checksum files - not applicable
+  # Checksum files — `data_type` says what the file is, the rest do not apply.
+  # Same correction as the index rule above (#437): `checksum` is a term in
+  # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
+  # has no kind when the vocabulary has a word for its kind.
   # ---------------------------------------------------------------------------
-  - id: checksum_not_applicable
+  - id: checksum_file
     tier: 2
     scope: extension
     when:
       extensions: [".md5"]
     then:
+      data_type: checksum
       status:
         data_modality: not_applicable
-        data_type: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Checksum file — not data"
+    rationale: "Checksum file — a checksum, and no data of its own"
 
   # ---------------------------------------------------------------------------
   # Log files - not applicable

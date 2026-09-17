@@ -408,9 +408,29 @@ class TestRuleEngineE2E:
         assert result.data_modality == "transcriptomic.bulk"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
-    def test_checksum_not_applicable(self):
+    def test_checksum_file(self):
+        """A checksum file is a checksum — a term the vocabulary has (#437).
+
+        The rule used to stamp `data_type: not_applicable`, asserting the file has no
+        kind while `data_type_enum` carried a word for its kind. The other four still do
+        not apply: a checksum is about a file, not about any data of its own.
+        """
         result = engine.classify_extended(FileInfo.from_filename("sample.md5"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.data_type == "checksum"
+        for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
+            assert result.status_of(field) == NOT_APPLICABLE
+
+    def test_an_index_extension_leaves_data_type_to_the_index_producer(self):
+        """`index_not_applicable` no longer claims `data_type` (#437).
+
+        `classify_index_files` claims it from the extension on every index file, matched
+        or declined, so this rule claiming it too would be two answers for one dimension.
+        The four it does claim are the ones a parent supplies.
+        """
+        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
+        assert result.status_of("data_type") == NOT_CLASSIFIED
+        for field in ("data_modality", "assay_type", "platform"):
+            assert result.status_of(field) == NOT_APPLICABLE
 
     def test_chunked_upload_not_applicable(self):
         result = engine.classify_extended(FileInfo.from_filename("c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"))

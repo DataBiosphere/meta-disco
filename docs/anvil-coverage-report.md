@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-17 16:15:07**
+Classification run: **2026-09-17 18:30:59**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,203** files.
@@ -23,7 +23,7 @@ Processed **708,203** files.
 | Dimension | Classified | Not Classified |
 |---|---:|---:|
 | **Data Modality** | 636,067 (89.8%) | 72,136 (10.2%) |
-| **Data Type** | 682,495 (96.4%) | 25,708 (3.6%) |
+| **Data Type** | 683,717 (96.5%) | 24,486 (3.5%) |
 | **Reference Assembly** | 512,067 (72.3%) | 196,136 (27.7%) |
 | **Platform** | 131,094 (18.5%) | 577,109 (81.5%) |
 | **Assay Type** | 101,756 (14.4%) | 606,447 (85.6%) |
@@ -75,8 +75,8 @@ Processed **708,203** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 682,495 | 96.4% |
-| **Not classified** | 25,708 | 3.6% |
+| **Classified** | 683,717 | 96.5% |
+| **Not classified** | 24,486 | 3.5% |
 
 ### What's not classified?
 
@@ -86,38 +86,35 @@ Processed **708,203** files.
 | .txt | 4,650 | No rule determined a value for data_type |
 | .bw | 2,520 | No rule determined a value for data_type |
 | .bam | 1,805 | No rule determined a value for data_type |
-| .bai | 1,087 | Parent file had no value for data_type |
 | .tsv | 923 | No rule determined a value for data_type |
 | .bigwig | 462 | No rule determined a value for data_type |
 | .sam | 192 | No rule determined a value for data_type |
 | .cram | 68 | No rule determined a value for data_type |
-| .crai | 68 | Parent file had no value for data_type |
-| .tbi | 60 | Parent file had no value for data_type |
 | .vcf | 23 | no VCF header lines (no '#' lines) in the read head |
 | .csv | 18 | No rule determined a value for data_type |
-| .pbi | 7 | Parent file had no value for data_type |
 
 | Data Type | count | % | extensions |
 |---|---:|---:|---|
-| `variants.germline` | 317,716 | 44.9% | .vcf (165,625)<br>.tbi (152,091) |
-| `variants` | 200,396 | 28.3% | (none) (124,335)<br>.vcf (35,828)<br>.csi (34,141)<br>.tbi (3,588)<br>.g.vcf (2,504) |
-| `not_applicable` | 55,418 | 7.8% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637) |
-| `alignments` | 26,798 | 3.8% | .cram (10,555)<br>.crai (9,621)<br>.bam (4,969)<br>.bai (1,653) |
-| `not_classified` | 25,708 | 3.6% | (none) (13,825)<br>.txt (4,650)<br>.bw (2,520)<br>.bam (1,805)<br>.bai (1,087)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.crai (68)<br>.tbi (60)<br>.vcf (23)<br>.csv (18)<br>.pbi (7) |
+| `index` | 224,260 | 31.7% | .tbi (169,531)<br>.csi (41,186)<br>.crai (10,317)<br>.bai (2,742)<br>.fai (477)<br>.pbi (7) |
+| `variants.germline` | 165,625 | 23.4% | .vcf (165,625) |
+| `variants` | 162,667 | 23.0% | (none) (124,335)<br>.vcf (35,828)<br>.g.vcf (2,504) |
+| `not_applicable` | 41,185 | 5.8% | .txt (37,548)<br>.log (3,637) |
+| `not_classified` | 24,486 | 3.5% | (none) (13,825)<br>.txt (4,650)<br>.bw (2,520)<br>.bam (1,805)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18) |
 | `reads` | 21,270 | 3.0% | .fastq (21,270) |
-| `annotations` | 17,908 | 2.5% | .bed (11,523)<br>.csi (6,369)<br>.tbi (14)<br>(none) (2) |
-| `index` | 15,058 | 2.1% | .tbi (13,752)<br>.csi (676)<br>.crai (628)<br>.bai (2) |
+| `alignments` | 15,524 | 2.2% | .cram (10,555)<br>.bam (4,969) |
+| `checksum` | 14,233 | 2.0% | .md5 (14,233) |
 | `raw_signal` | 12,637 | 1.8% | .fast5 (12,624)<br>.pod5 (11)<br>(none) (2) |
+| `annotations` | 11,525 | 1.6% | .bed (11,523)<br>(none) (2) |
 | `genotypes` | 8,562 | 1.2% | .psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854) |
 | `images` | 3,074 | 0.4% | .png (3,074) |
-| `assembly` | 1,427 | 0.2% | .fa (936)<br>.fai (466)<br>.fasta (25) |
+| `assembly` | 961 | 0.1% | .fa (936)<br>.fasta (25) |
 | `expression_matrix` | 698 | 0.1% | .h5ad (350)<br>.txt (281)<br>(none) (64)<br>.csv (3) |
 | `quantification` | 634 | 0.1% | .sf (634) |
 | `pangenome` | 449 | 0.1% | .gfa (314)<br>(none) (135) |
-| `variants.structural` | 218 | 0.0% | .vcf (192)<br>.tbi (26) |
+| `variants.structural` | 192 | 0.0% | .vcf (192) |
 | `array_signal` | 160 | 0.0% | .idat (160) |
-| `sequence` | 28 | 0.0% | .fasta (13)<br>.fai (11)<br>.fa (4) |
 | `pangenome.reference` | 28 | 0.0% | .gfa (12)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `sequence` | 17 | 0.0% | .fasta (13)<br>.fa (4) |
 | `signal` | 16 | 0.0% | .bw (16) |
 
 ---
