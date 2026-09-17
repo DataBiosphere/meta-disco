@@ -139,7 +139,7 @@ Classification results are stored in JSON files in the `output/` directory:
 | [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
 | [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
 
-*84 additional orphaned index files (no matching parent) are logged in the `unmatched_files` array. See Section 6.1.
+*Index files that took no parent are logged in the `unmatched_files` array rather than counted above, for either of two reasons — no matching parent, or an ambiguous one (#438). The ambiguous case is much the larger of the two. See Section 6.1.
 
 #### Output File Structure
 
@@ -788,7 +788,7 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Index files that took no parent are recorded in `index_file_classifications.json` under the `unmatched_files` array. Every entry carries:
+**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_file_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
 - `file_name`, `file_format`, `file_md5sum`, `entry_id`, `dataset_id`, `dataset_title`: the file's identity
 - `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
@@ -800,6 +800,8 @@ Two reasons land in that array, and they are not the same problem:
 - **`ambiguous_parent_in_dataset`** — the parent name is present and names *more than one* file, so no parent can be chosen (#438). Such an entry also carries `ambiguous_candidate` (the name that was ambiguous) and `files_sharing_that_name` (how many files it names). The file inherits nothing; on the anvil15 corpus this is 15,006 index files, almost all in `ANVIL_T2T_CHRY`, which calls one sample against both CHM13v2 and GRCh38 and stores the outputs under the same filename in different directories.
 
 The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
+
+Both kinds get a record because the alternative was worse: dropping them sent the files to the catch-all producer, where the tier-1 `index_not_applicable` rule stamps four dimensions `not_applicable` on the strength of the extension alone — and coverage counts `not_applicable` as *classified*. That reported a file as determined precisely where it is not. The rule's own rationale, "metadata inherited from parent data file", shows it was written as a placeholder for files this producer would resolve.
 
 ### 6.2 Recommendations
 

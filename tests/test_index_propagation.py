@@ -29,6 +29,24 @@ from meta_disco.models import (
 from tests.metadata_fixtures import write_metadata as _write_metadata
 
 
+def _assert_declined(output: dict, file_name: str) -> dict:
+    """An index file that took no parent: `index` by extension, the rest unknown.
+
+    `data_type` is knowable without a parent — the extension says so — and the other
+    four are properties of the data the index points into, so they are not_classified
+    rather than not_applicable: they apply, and nothing here can determine them (#438).
+    """
+    records = [r for r in output["classifications"] if r["file_name"] == file_name]
+    assert len(records) == 1, f"{file_name} should get exactly one record"
+    cls = records[0]["classifications"]
+    assert field_status(cls, "data_type") == CLASSIFIED
+    assert field_value(cls, "data_type") == "index"
+    for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
+        assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified, not asserted"
+    assert records[0]["parent_file"] is None
+    return records[0]
+
+
 def _file(name: str, fmt: str, md5: str, entry_id: str, dataset_id: str = "ds1") -> dict:
     """One input metadata record, in the shape `write_metadata` expects."""
     return {
@@ -555,7 +573,7 @@ class TestLoadClassifications:
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
         with output_file.open() as f:
             output = json.load(f)
-        assert len(output["classifications"]) == 0
+        _assert_declined(output, "orphan.bam.bai")
         assert len(output["unmatched_files"]) == 1
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
         assert output["unmatched_files"][0]["reason"] == NO_MATCHING_PARENT
@@ -651,7 +669,9 @@ class TestLoadClassifications:
         with output_file.open() as f:
             output = json.load(f)
 
-        assert output["classifications"] == []
+        # Neither parent's answer reaches it — not GRCh38, not CHM13, not a coin flip.
+        record = _assert_declined(output, "sample.bam.bai")
+        assert record["classifications"]["reference_assembly"]["value"] is None
         assert len(output["unmatched_files"]) == 1
         entry = output["unmatched_files"][0]
         assert entry["file_name"] == "sample.bam.bai"
@@ -746,7 +766,9 @@ class TestLoadClassifications:
         with output_file.open() as f:
             output = json.load(f)
 
-        assert output["classifications"] == []
+        # GRCh37 is the fall-through parent's answer; it must not appear anywhere.
+        record = _assert_declined(output, "sample.tbi")
+        assert record["classifications"]["reference_assembly"]["value"] is None
         entry = output["unmatched_files"][0]
         assert entry["reason"] == AMBIGUOUS_PARENT
         assert entry["ambiguous_candidate"] == "sample.vcf.gz"
@@ -780,7 +802,7 @@ class TestLoadClassifications:
         with output_file.open() as f:
             output = json.load(f)
 
-        assert output["classifications"] == []
+        _assert_declined(output, "sample.tbi")
         entry = output["unmatched_files"][0]
         assert entry["reason"] == AMBIGUOUS_PARENT
         assert entry["ambiguous_candidate"] == "sample.bed.gz"

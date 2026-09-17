@@ -29,10 +29,12 @@ from pathlib import Path
 
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    CLASSIFIED,
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_DERIVATION_INHERITANCE,
+    SOURCE_FILENAME_RULE,
     build_field_entry,
     field_detail,
     field_label,
@@ -98,8 +100,8 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
     spelled per branch — a field added to the entry reaches every reason. Identity is
     echoed through :func:`coerce_identity`, as ``excluded_files.json`` echoes one
     (#376), so a drifted ``file_name`` of ``0`` renders as ``"0"`` and not ``""``.
-    ``dataset_id`` is the lookup key this producer groups by and is passed through as
-    it was read.
+    ``dataset_id`` is defaulted the same way the grouping key is, so an entry names the
+    bucket its file was matched in rather than a different spelling of absent.
     """
     return {
         "file_name": coerce_identity(record.get("file_name")),
@@ -112,6 +114,80 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
         "candidates_tried": candidates,
         "reason": reason,
         **extra,
+    }
+
+
+DATA_TYPE = "data_type"
+INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
+
+DECLINED_REASON_TEXT = {
+    NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name",
+    AMBIGUOUS_PARENT: "more than one file in this dataset carries the parent name",
+}
+
+
+def declined_record(record: dict, index_ext: str, reason: str, source: str) -> dict:
+    """One output record for an index file this producer took no parent for.
+
+    Says the one thing that is known and refuses the four that are not. The extension
+    identifies the file as an index without any parent — it is how this producer found
+    it — so ``data_type`` is ``index``, claimed the way an ``extension``-scope rule
+    would claim it (``SOURCE_FILENAME_RULE``, per ``rule_engine._RULE_SOURCE_TYPES``).
+    The other four dimensions are properties of the data the index points into, which
+    only the parent can supply, so they are ``not_classified``: they *apply*, and
+    nothing here can determine them. ``not_applicable`` would assert they cannot apply,
+    which the matched case disproves by filling them in.
+
+    Writing this record is what keeps such a file out of the catch-all producer, where
+    tier-1 ``index_not_applicable`` would stamp four dimensions ``not_applicable`` on
+    the strength of the extension alone — a rule whose own rationale is "metadata
+    inherited from parent data file", premised on this producer supplying the answer.
+    Coverage counts ``not_applicable`` as classified, so that path reported a file as
+    determined precisely where it is not (#438 review). ``data_type: index`` also
+    disagrees with what a *matched* index row says, which is #437's subject.
+    """
+    why = DECLINED_REASON_TEXT[reason]
+    classifications = {
+        DATA_TYPE: build_field_entry(
+            INDEX_DATA_TYPE,
+            status=CLASSIFIED,
+            evidence=[
+                {
+                    "rule_id": "index_by_extension",
+                    "reason": f"{index_ext} identifies an index file",
+                    "value": INDEX_DATA_TYPE,
+                    "source_type": SOURCE_FILENAME_RULE,
+                }
+            ],
+        )
+    }
+    for fld in CLASSIFICATION_FIELDS:
+        if fld == DATA_TYPE:
+            continue
+        classifications[fld] = build_field_entry(
+            None,
+            status=NOT_CLASSIFIED,
+            evidence=[
+                {
+                    "rule_id": reason,
+                    "reason": f"No parent to inherit {fld} from: {why}",
+                    "status": NOT_CLASSIFIED,
+                    "source_type": SOURCE_DERIVATION_INHERITANCE,
+                }
+            ],
+        )
+    return {
+        "file_name": record.get("file_name"),
+        "file_format": record.get("file_format"),
+        "md5sum": record.get("file_md5sum"),
+        "file_size": record.get("file_size"),
+        "entry_id": record.get("entry_id"),
+        "dataset_id": record.get("dataset_id", "unknown"),
+        "dataset_title": record.get("dataset_title"),
+        "parent_file": None,
+        "parent_md5sum": None,
+        "classifications": {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS},
+        "published": published_from(record, source),
     }
 
 
@@ -171,8 +247,10 @@ def propagate_to_index_files(
     # A dict keyed that way silently collapses a name two files share, which is what
     # let an index inherit from a parent picked by iteration order (#438); keeping the
     # list makes "this name identifies one file" a thing the match loop can test.
-    # Every record here has a well-formed md5 — `load_classifiable_snapshot` excluded
-    # the rest (#376) — so a name present here is always resolvable to one.
+    # Every *record* here has a well-formed md5 — `load_classifiable_snapshot` excluded
+    # the rest (#376) — so reading one off a chosen file never needs a guard. That says
+    # nothing about names: a name reaching more than one record is the case this exists
+    # to detect.
     files_by_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -183,6 +261,9 @@ def propagate_to_index_files(
     # Find index files and match to parents
     results = []
     unmatched = []  # Track failed lookups
+    # Index files this producer took no parent for. They still get a record — the
+    # extension says what they are, even when nothing says what they are of (#438).
+    declined: list[tuple[dict, str, str]] = []
     stats = defaultdict(
         lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0, "with_modality": 0, "with_ref": 0}
     )
@@ -222,6 +303,7 @@ def propagate_to_index_files(
             if parent_key is None:
                 stats[index_ext]["unmatched"] += 1
                 unmatched.append(unmatched_entry(f, index_ext, parent_candidates, NO_MATCHING_PARENT))
+                declined.append((f, index_ext, NO_MATCHING_PARENT))
                 continue
 
             if len(files_by_name[parent_key]) > 1:
@@ -240,6 +322,7 @@ def propagate_to_index_files(
                         files_sharing_that_name=len(files_by_name[parent_key]),
                     )
                 )
+                declined.append((f, index_ext, AMBIGUOUS_PARENT))
                 continue
 
             parent_name = parent_key[1]
@@ -331,8 +414,16 @@ def propagate_to_index_files(
 
     # Print sample of unmatched files for diagnostics
     if unmatched:
-        print("\nSample index files with no parent taken (showing up to 10):")
-        for u in unmatched[:10]:
+        # Sampled per reason, not off the head of the list. One reason outnumbers the
+        # other by orders of magnitude, so a flat head would let dataset iteration order
+        # decide whether a true orphan is ever seen — and this section exists for those.
+        sample = [
+            u
+            for reason in (NO_MATCHING_PARENT, AMBIGUOUS_PARENT)
+            for u in [x for x in unmatched if x["reason"] == reason][:5]
+        ]
+        print("\nSample index files with no parent taken (up to 5 per reason):")
+        for u in sample:
             print(f"  {u['file_name']}")
             print(f"    Dataset: {u['dataset_id']}")
             print(f"    Reason: {u['reason']}")
@@ -423,6 +514,9 @@ def propagate_to_index_files(
             }
         )
 
+    for rec, index_ext, reason in declined:
+        standard_results.append(declined_record(rec, index_ext, reason, source))
+
     with output_path.open("w") as f:
         json.dump(
             {
@@ -443,9 +537,10 @@ def propagate_to_index_files(
         )
 
     print(
-        f"\nSaved {len(standard_results):,} matched index files to {output_path}; "
-        f"{unmatched_all:,} had no parent and {ambiguous_all:,} had an ambiguous one, "
-        f"both listed in unmatched_files"
+        f"\nSaved {len(standard_results):,} index file records to {output_path}: "
+        f"{matched_all:,} inherited from a parent; {unmatched_all:,} found none and "
+        f"{ambiguous_all:,} found more than one, so those {unmatched_all + ambiguous_all:,} "
+        f"carry `index` and nothing else, and are listed in unmatched_files with why"
     )
 
 
