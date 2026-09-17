@@ -145,8 +145,8 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     which the matched case disproves by filling them in.
 
     Like ``inherited_evidence`` below, this builds its evidence by hand rather than
-    through ``make_claim``, and so is a *second* path outside it — CLAUDE.md names the
-    other as "the one path outside", which this makes untrue. Same reason as that one:
+    through ``make_claim``, and so is the second path outside it; CLAUDE.md names both.
+    Same reason as that one:
     an index file has exactly one claim per dimension and never reaches
     ``evaluate_claims``, so there is no tier to carry. Folding both in belongs to #413.
     Its ``rule_id`` values name no rule in ``unified_rules.yaml``, as
