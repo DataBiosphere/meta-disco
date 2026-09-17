@@ -14,6 +14,25 @@ from meta_disco.models import CLASSIFIED, CONFLICT, NOT_CLASSIFIED, field_status
 from tests.metadata_fixtures import write_metadata as _write_metadata
 
 
+def _classified_record(md5: str, assembly: str) -> dict:
+    """A parent classification whose reference_assembly is `assembly`.
+
+    Only the fields this module reads: `load_classifications` keys on `md5sum` and
+    `field_label` reads each dimension's `value`.
+    """
+    return {
+        "md5sum": md5,
+        "file_name": "sample.bam",
+        "classifications": {
+            "data_modality": {"value": "genomic", "evidence": []},
+            "data_type": {"value": "alignments", "evidence": []},
+            "platform": {"value": "ILLUMINA", "evidence": []},
+            "reference_assembly": {"value": assembly, "evidence": []},
+            "assay_type": {"value": "WGS", "evidence": []},
+        },
+    }
+
+
 class TestParentCandidateGeneration:
     """Test parent filename candidate generation."""
 
@@ -546,3 +565,112 @@ class TestLoadClassifications:
         for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
             assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
+
+    def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
+        """Two files sharing the name an index points at: no parent is chosen (#438)."""
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                # Same name, different files — as ANVIL_T2T_CHRY calls one sample against
+                # both CHM13v2 and GRCh38 and stores the outputs under different paths.
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "11111111111111111111111111111111",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e1",
+                },
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "22222222222222222222222222222222",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e2",
+                },
+                {
+                    "file_name": "sample.bam.bai",
+                    "file_format": ".bai",
+                    "file_md5sum": "33333333333333333333333333333333",
+                    "dataset_id": "ds1",
+                    "dataset_title": "test",
+                    "entry_id": "e3",
+                },
+            ],
+        )
+        # Both candidate parents are classified, and they disagree. Whichever the old
+        # lookup kept, the index would have inherited a confident answer from it.
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        _classified_record("11111111111111111111111111111111", "GRCh38"),
+                        _classified_record("22222222222222222222222222222222", "CHM13"),
+                    ]
+                }
+            )
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        assert output["classifications"] == []
+        assert len(output["unmatched_files"]) == 1
+        entry = output["unmatched_files"][0]
+        assert entry["file_name"] == "sample.bam.bai"
+        assert entry["reason"] == "ambiguous_parent_in_dataset"
+        assert entry["ambiguous_candidate"] == "sample.bam"
+        assert entry["files_sharing_that_name"] == 2
+        assert output["metadata"]["ambiguous_parent"] == 1
+        assert output["metadata"]["unmatched"] == 0
+
+    def test_same_name_in_another_dataset_is_not_ambiguous(self, tmp_path):
+        """The lookup key is per dataset, so a name reused across datasets still matches."""
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "11111111111111111111111111111111",
+                    "dataset_id": "ds1",
+                    "dataset_title": "one",
+                    "entry_id": "e1",
+                },
+                {
+                    "file_name": "sample.bam",
+                    "file_format": ".bam",
+                    "file_md5sum": "22222222222222222222222222222222",
+                    "dataset_id": "ds2",
+                    "dataset_title": "two",
+                    "entry_id": "e2",
+                },
+                {
+                    "file_name": "sample.bam.bai",
+                    "file_format": ".bai",
+                    "file_md5sum": "33333333333333333333333333333333",
+                    "dataset_id": "ds1",
+                    "dataset_title": "one",
+                    "entry_id": "e3",
+                },
+            ],
+        )
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps({"classifications": [_classified_record("11111111111111111111111111111111", "GRCh38")]})
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            output = json.load(f)
+
+        assert output["unmatched_files"] == []
+        assert len(output["classifications"]) == 1
+        record = output["classifications"][0]
+        assert record["parent_md5sum"] == "11111111111111111111111111111111"
+        assert record["classifications"]["reference_assembly"]["value"] == "GRCh38"

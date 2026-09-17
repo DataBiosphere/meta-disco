@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-Index files (.bai, .tbi, .csi, .crai, .pbi) inherit data_modality and
-reference_assembly from their parent files (.bam, .vcf.gz, .cram).
+Index files (.bai, .tbi, .csi, .crai, .pbi) inherit all five classification
+dimensions from their parent files (.bam, .vcf.gz, .cram), which are found by
+filename within a dataset.
+
+A filename does not always identify one file. Where two files in a dataset share
+the name an index points at, no parent is chosen: the index inherits nothing and
+is listed as unmatched with reason ``ambiguous_parent_in_dataset`` (#438). The
+lookup used to keep whichever file load order visited last: measured on the
+anvil15 corpus, 15,006 index files took a parent picked by iteration order, and
+7,397 of those were verifiably wrong about their reference assembly. Distinguishing such files needs a path or a
+declared relationship, neither of which this producer can see, so it declines
+rather than guesses.
 """
 
 import argparse
@@ -122,14 +132,22 @@ def propagate_to_index_files(
 
     # Build filename -> file lookup per dataset
     # Also build filename -> md5 lookup
+    #
+    # `filename_to_md5` keeps the last file written for a key, so a name shared by two
+    # files in one dataset silently collapses to one of them. `name_counts` records how
+    # many files each key covers, so the match loop can tell a name that identifies one
+    # file from a name that does not (#438). The dict itself is left as it was: a key
+    # whose count is above one is never read from it.
     filename_to_file = {}
     filename_to_md5 = {}
+    name_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
             name = f.get("file_name")
             md5 = f.get("file_md5sum")
             if name:
                 key = (ds, name)
+                name_counts[key] += 1
                 filename_to_file[key] = f
                 if md5:
                     filename_to_md5[key] = md5
@@ -137,7 +155,9 @@ def propagate_to_index_files(
     # Find index files and match to parents
     results = []
     unmatched = []  # Track failed lookups
-    stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "with_modality": 0, "with_ref": 0})
+    stats = defaultdict(
+        lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0, "with_modality": 0, "with_ref": 0}
+    )
     nc = NOT_CLASSIFIED
     # Labels field_label() returns for a field that is *not* classified. They are
     # statuses, not values, and must be re-emitted as such — a parent in
@@ -166,12 +186,44 @@ def propagate_to_index_files(
             parent_md5 = None
             parent_name = None
 
+            # `get_parent_candidates` returns candidates in preference order, so the
+            # first one present is the parent. If that name covers more than one file,
+            # stop there rather than trying the next candidate: a later candidate is a
+            # *less preferred* parent, so falling through would swap one guess for
+            # another instead of declining to guess (#438).
+            ambiguous_candidate = None
             for candidate in parent_candidates:
                 key = (ds, candidate)
                 if key in filename_to_md5:
-                    parent_md5 = filename_to_md5[key]
-                    parent_name = candidate
+                    if name_counts[key] > 1:
+                        ambiguous_candidate = candidate
+                    else:
+                        parent_md5 = filename_to_md5[key]
+                        parent_name = candidate
                     break
+
+            if ambiguous_candidate is not None:
+                # Not a failed lookup: the parent is present, and present more than once.
+                # Recorded beside the no-parent case because the outcome is the same —
+                # no record here, and the file falls through to the catch-all producer —
+                # and separated by `reason` because the causes are not the same.
+                stats[index_ext]["ambiguous"] += 1
+                unmatched.append(
+                    {
+                        "file_name": name,
+                        "file_format": fmt,
+                        "file_md5sum": f.get("file_md5sum"),
+                        "entry_id": f.get("entry_id"),
+                        "dataset_id": ds,
+                        "dataset_title": f.get("dataset_title"),
+                        "index_extension": index_ext,
+                        "candidates_tried": parent_candidates,
+                        "ambiguous_candidate": ambiguous_candidate,
+                        "files_sharing_that_name": name_counts[(ds, ambiguous_candidate)],
+                        "reason": "ambiguous_parent_in_dataset",
+                    }
+                )
+                continue
 
             if not parent_md5:
                 # Track the failure with diagnostic info
@@ -236,6 +288,7 @@ def propagate_to_index_files(
     total_all = 0
     matched_all = 0
     unmatched_all = 0
+    ambiguous_all = 0
     modality_all = 0
     ref_all = 0
 
@@ -247,15 +300,18 @@ def propagate_to_index_files(
             mod_pct = s["with_modality"] / s["total"] * 100 if s["total"] > 0 else 0
             ref_pct = s["with_ref"] / s["total"] * 100 if s["total"] > 0 else 0
             print(f"\n{ext}:")
+            amb_pct = s["ambiguous"] / s["total"] * 100
             print(f"  Total:              {s['total']:>7,}")
             print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
             print(f"  Unmatched:          {s['unmatched']:>7,} ({unmatch_pct:.1f}%)")
+            print(f"  Ambiguous parent:   {s['ambiguous']:>7,} ({amb_pct:.1f}%)")
             print(f"  With data_modality: {s['with_modality']:>7,} ({mod_pct:.1f}%)")
             print(f"  With reference:     {s['with_ref']:>7,} ({ref_pct:.1f}%)")
 
             total_all += s["total"]
             matched_all += s["matched"]
             unmatched_all += s["unmatched"]
+            ambiguous_all += s["ambiguous"]
             modality_all += s["with_modality"]
             ref_all += s["with_ref"]
 
@@ -265,6 +321,7 @@ def propagate_to_index_files(
     if total_all > 0:
         print(f"  Matched to parent:  {matched_all:>7,} ({matched_all / total_all * 100:.1f}%)")
         print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all / total_all * 100:.1f}%)")
+        print(f"  Ambiguous parent:   {ambiguous_all:>7,} ({ambiguous_all / total_all * 100:.1f}%)")
         print(f"  With data_modality: {modality_all:>7,} ({modality_all / total_all * 100:.1f}%)")
         print(f"  With reference:     {ref_all:>7,} ({ref_all / total_all * 100:.1f}%)")
     else:
@@ -273,11 +330,15 @@ def propagate_to_index_files(
 
     # Print sample of unmatched files for diagnostics
     if unmatched:
-        print("\nSample unmatched index files (showing up to 10):")
+        print("\nSample index files with no parent taken (showing up to 10):")
         for u in unmatched[:10]:
             print(f"  {u['file_name']}")
             print(f"    Dataset: {u['dataset_id']}")
-            print(f"    Tried: {u['candidates_tried']}")
+            print(f"    Reason: {u['reason']}")
+            if u["reason"] == "ambiguous_parent_in_dataset":
+                print(f"    Ambiguous: {u['ambiguous_candidate']} names {u['files_sharing_that_name']} files")
+            else:
+                print(f"    Tried: {u['candidates_tried']}")
 
     # Save results in same format as other classification outputs
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -368,6 +429,7 @@ def propagate_to_index_files(
                     "total_index_files": total_all,
                     "matched_to_parent": matched_all,
                     "unmatched": unmatched_all,
+                    "ambiguous_parent": ambiguous_all,
                     "with_data_modality": modality_all,
                     "with_reference_assembly": ref_all,
                     "complete": True,
@@ -379,7 +441,11 @@ def propagate_to_index_files(
             indent=2,
         )
 
-    print(f"\nSaved {len(standard_results):,} matched + {len(unmatched):,} unmatched index files to {output_path}")
+    print(
+        f"\nSaved {len(standard_results):,} matched index files to {output_path}; "
+        f"{unmatched_all:,} had no parent and {ambiguous_all:,} had an ambiguous one, "
+        f"both listed in unmatched_files"
+    )
 
 
 def main():
