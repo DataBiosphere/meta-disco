@@ -139,7 +139,7 @@ Classification results are stored in JSON files in the `output/` directory:
 | [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
 | [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
 
-*Index files that took no parent are logged in the `unmatched_files` array rather than counted above, for either of two reasons — no matching parent, or an ambiguous one (#438). The ambiguous case is much the larger of the two. See Section 6.1.
+*Index files that took no parent are counted above like any other — they carry `data_type: index` from the extension and `not_classified` elsewhere — and are *additionally* listed in the `unmatched_files` array with why no parent was taken: no matching parent, or an ambiguous one (#438). The ambiguous case is much the larger of the two. See Section 6.1.
 
 #### Output File Structure
 

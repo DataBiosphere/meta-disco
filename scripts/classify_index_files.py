@@ -309,8 +309,8 @@ def propagate_to_index_files(
             if len(files_by_name[parent_key]) > 1:
                 # Not a failed lookup: the parent is present, and present more than once.
                 # Listed beside the no-parent case because the outcome is the same — no
-                # record here, and the file falls to the catch-all producer — and told
-                # apart by `reason`, because the causes are not.
+                # parent taken, so `declined_record` writes what is known without one —
+                # and told apart by `reason`, because the causes are not the same.
                 stats[index_ext]["ambiguous"] += 1
                 unmatched.append(
                     unmatched_entry(
