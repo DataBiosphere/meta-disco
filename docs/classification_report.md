@@ -134,7 +134,7 @@ Classification results are stored in JSON files in the `output/` directory:
 | [`bam_headers.json`](../output/bam_headers.json) | BAM/CRAM classifications | 18,662 |
 | [`vcf_headers.json`](../output/vcf_headers.json) | VCF classifications | 205,010 |
 | [`fastq_headers.json`](../output/fastq_headers.json) | FASTQ classifications | 23,096 |
-| [`index_file_classifications.json`](../output/index_file_classifications.json) | Index file classifications | 223,953* |
+| [`index_classifications.json`](../output/index_classifications.json) | Index file classifications | 223,953* |
 | [`image_classifications.json`](../output/image_classifications.json) | Image classifications | 33,757 |
 | [`auxiliary_genomic_classifications.json`](../output/auxiliary_genomic_classifications.json) | FAST5/PLINK classifications | 20,956 |
 | [`bed_classifications.json`](../output/bed_classifications.json) | BED file classifications | 13,660 |
@@ -788,7 +788,7 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_file_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
+**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
 - `file_name`, `file_format`, `file_md5sum`, `entry_id`, `dataset_id`, `dataset_title`: the file's identity
 - `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted

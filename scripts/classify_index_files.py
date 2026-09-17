@@ -57,6 +57,12 @@ INDEX_TO_PARENT = {
     ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
+    # `.fai` and `.idx` are in `index_not_applicable`'s extension list and were missing
+    # here, so 477 `.fai` files never reached this producer and took that rule's four
+    # `not_applicable` stamps from the catch-all — the outcome #438 exists to prevent.
+    # Every one of the 477 has a present, unambiguous parent, so they inherit.
+    ".fai": [".fa.gz", ".fasta", ".fa"],
+    ".idx": [".vcf"],
 }
 
 
@@ -137,6 +143,15 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     only the parent can supply, so they are ``not_classified``: they *apply*, and
     nothing here can determine them. ``not_applicable`` would assert they cannot apply,
     which the matched case disproves by filling them in.
+
+    Like ``inherited_evidence`` below, this builds its evidence by hand rather than
+    through ``make_claim``, and so is a *second* path outside it — CLAUDE.md names the
+    other as "the one path outside", which this makes untrue. Same reason as that one:
+    an index file has exactly one claim per dimension and never reaches
+    ``evaluate_claims``, so there is no tier to carry. Folding both in belongs to #413.
+    Its ``rule_id`` values name no rule in ``unified_rules.yaml``, as
+    ``inherited_from_parent`` already does not; nothing validates emitted rule ids
+    against that file.
 
     Writing this record is what keeps such a file out of the catch-all producer, where
     tier-1 ``index_not_applicable`` would stamp four dimensions ``not_applicable`` on
@@ -290,13 +305,20 @@ def propagate_to_index_files(
 
             stats[index_ext]["total"] += 1
 
-            # The parent is the *first* candidate present, and only that one. Pattern 1
-            # (index extension appended to the parent name) is tried before Pattern 2
-            # (index extension replacing it), so an earlier candidate is the better
-            # reading of the name. Where that candidate names more than one file, this
-            # stops rather than trying the next: a later candidate is a worse reading,
-            # so falling through would swap one guess for another instead of declining
-            # to guess (#438).
+            # The parent is the *first* candidate present, and only that one. Where that
+            # candidate names more than one file, this stops rather than trying the next,
+            # because a later candidate is a different guess and not a better one —
+            # falling through would swap one guess for another instead of declining to
+            # guess (#438).
+            #
+            # `get_parent_candidates` orders Pattern 1 (index extension appended to the
+            # parent name) before Pattern 2 (index extension replacing it), and within
+            # Pattern 2 by `INDEX_TO_PARENT` declaration order, which asserts no
+            # preference. So "first" is well defined but only Pattern-1-over-Pattern-2 is
+            # a reasoned ranking. On the anvil15 corpus the rule has no observable effect:
+            # every ambiguous decline hits a Pattern-1 candidate, and in no case would
+            # falling through have found a unique later one. It is here for the shape of
+            # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
             parent_key = next(((ds, c) for c in parent_candidates if (ds, c) in files_by_name), None)
 
@@ -339,6 +361,7 @@ def propagate_to_index_files(
                 "file_md5sum": f.get("file_md5sum"),
                 "dataset_id": ds,
                 "dataset_title": f.get("dataset_title"),
+                "file_size": f.get("file_size"),
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
                 "data_modality": parent_class.get("data_modality") or nc,
@@ -349,11 +372,11 @@ def propagate_to_index_files(
                 "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
                 # The index file's own published values, not the parent's (#424). The
-                # repository publishes for 4 index files in this corpus and all four are
-                # unmatched here, so today this block is null on every row this producer
-                # writes and the catch-all is what carries those four. It is wired anyway
-                # because contract 7.7 is about the producer, not about today's corpus:
-                # a matched index with a published value would otherwise lose it silently.
+                # repository publishes for 4 index files in this corpus; all four have no
+                # parent, so before #438 they got no record here and the catch-all carried
+                # them. They now get a declined record, which carries the block too, so
+                # this producer writes the four. Wired on both paths because contract 7.7
+                # is about the producer, not about today's corpus.
                 "published": published_from(f, source),
             }
 

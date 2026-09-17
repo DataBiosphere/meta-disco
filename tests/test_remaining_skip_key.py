@@ -11,6 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_remaining_files import classify_remaining, load_already_classified
@@ -76,3 +78,24 @@ class TestSkipKey:
         with output_file.open() as f:
             output = json.load(f)
         assert output["classifications"] == []
+
+    def test_a_row_with_no_entry_id_is_refused(self, tmp_path):
+        """A null `entry_id` in a producer's output raises rather than being skipped.
+
+        `entry_id` is not classifier-relevant, so a drifted one reaches the valid stream
+        and is echoed into a producer's row untouched — unlike `file_name`, the key this
+        replaced. Skipping such a row would drop it from the set and give the file a
+        second classification record. `make validate-metadata` rejects it upstream, so
+        reaching here means that gate was bypassed, and the loud failure says so.
+        """
+        other = tmp_path / "other.json"
+        other.write_text(json.dumps({"classifications": [{"entry_id": None, "file_name": "drifted.weird"}]}))
+        with pytest.raises(ValueError, match="entry_id"):
+            load_already_classified([other])
+
+    def test_an_empty_entry_id_is_refused_too(self, tmp_path):
+        """Empty string, not just null — both mean the identity is absent."""
+        other = tmp_path / "other.json"
+        other.write_text(json.dumps({"classifications": [{"entry_id": "", "file_name": "x.weird"}]}))
+        with pytest.raises(ValueError, match="entry_id"):
+            load_already_classified([other])

@@ -30,10 +30,13 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
     shares its name, and that file then appears in no ``classifications`` array at
     all. ``entry_id`` is unique across the corpus with no collisions.
 
-    The hazard was dormant until #438: every index file used to get a record from
-    ``classify_index_files``, so nothing with a colliding name reached this producer.
-    Declining an ambiguous parent sends 15,006 index files here, 140 of whose names
-    are also carried by matched index records in other datasets.
+    The hazard is dormant and this fixes it pre-emptively: measured over the stored run,
+    no file is silently skipped today. #438's first draft would have woken it — declining
+    an ambiguous parent sent 15,006 index files here, 140 of whose names are also carried
+    by matched index records in other datasets — but that draft was replaced. Those files
+    now get a declined record from ``classify_index_files`` and never arrive, so the
+    switch has no measured effect on this corpus. It stays because the collision is real
+    and the next producer to send a colliding name here would hit it silently.
 
     ``entry_id`` is Azul's ``files.document_id`` and does not survive a catalog
     re-index — measured, zero of 705,949 records kept theirs from anvil14 to anvil15.
@@ -49,8 +52,21 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             entry_id = r.get("entry_id")
-            if entry_id:
-                seen.add(entry_id)
+            # Raise rather than skip. `entry_id` is deliberately *not* classifier-relevant
+            # (`records.ClassifierRecord`), so a drifted one still reaches the valid stream
+            # and is echoed into a producer's output untouched — unlike `file_name`, the
+            # key this replaced, which the contract guarantees non-empty. Skipping such a
+            # row would drop it from this set and hand the file a *second* classification
+            # record, inflating coverage and making `corpus_diff` report a phantom gain.
+            # `make validate-metadata` rejects a null `entry_id` before `make classify`,
+            # so reaching here means a producer wrote a row that gate would have refused.
+            if not isinstance(entry_id, str) or not entry_id:
+                raise ValueError(
+                    f"{path}: classification row for {r.get('file_name')!r} has entry_id "
+                    f"{entry_id!r}; this producer keys on it and cannot skip a row without "
+                    f"risking a duplicate record. Run `make validate-metadata` on the input."
+                )
+            seen.add(entry_id)
     return seen
 
 
