@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-17 18:30:59**
+Classification run: **2026-09-17 19:22:54**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,203** files.
@@ -98,7 +98,7 @@ Processed **708,203** files.
 | `index` | 224,260 | 31.7% | .tbi (169,531)<br>.csi (41,186)<br>.crai (10,317)<br>.bai (2,742)<br>.fai (477)<br>.pbi (7) |
 | `variants.germline` | 165,625 | 23.4% | .vcf (165,625) |
 | `variants` | 162,667 | 23.0% | (none) (124,335)<br>.vcf (35,828)<br>.g.vcf (2,504) |
-| `not_applicable` | 41,185 | 5.8% | .txt (37,548)<br>.log (3,637) |
+| `not_applicable` | 37,548 | 5.3% | .txt (37,548) |
 | `not_classified` | 24,486 | 3.5% | (none) (13,825)<br>.txt (4,650)<br>.bw (2,520)<br>.bam (1,805)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18) |
 | `reads` | 21,270 | 3.0% | .fastq (21,270) |
 | `alignments` | 15,524 | 2.2% | .cram (10,555)<br>.bam (4,969) |
@@ -106,6 +106,7 @@ Processed **708,203** files.
 | `raw_signal` | 12,637 | 1.8% | .fast5 (12,624)<br>.pod5 (11)<br>(none) (2) |
 | `annotations` | 11,525 | 1.6% | .bed (11,523)<br>(none) (2) |
 | `genotypes` | 8,562 | 1.2% | .psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854) |
+| `log` | 3,637 | 0.5% | .log (3,637) |
 | `images` | 3,074 | 0.4% | .png (3,074) |
 | `assembly` | 961 | 0.1% | .fa (936)<br>.fasta (25) |
 | `expression_matrix` | 698 | 0.1% | .h5ad (350)<br>.txt (281)<br>(none) (64)<br>.csv (3) |

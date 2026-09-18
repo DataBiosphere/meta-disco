@@ -154,19 +154,22 @@ rules:
   # EXTENSION-BASED RULES (tiers 1–2)
   # ===========================================================================
   # Tier 1: broad fallbacks (index files — reference_assembly left open)
-  # Tier 2: definitive not_applicable (checksum, log, upload, timestamp,
-  #         images, nanopore raw, FASTQ baseline)
+  # Tier 2: files whose kind `data_type` names (checksum, log) and files whose
+  #         dimensions do not apply (upload, timestamp, images, nanopore raw,
+  #         FASTQ baseline)
 
   # ---------------------------------------------------------------------------
-  # Index files — the four dimensions a parent supplies. `data_type` is not among
-  # them: an index file *is* an index, which `classify_index_files` claims from the
-  # extension on every index file it sees, matched or declined (#437). This rule no
-  # longer claims it, so the two cannot disagree.
+  # Index files. `data_type` is the file's own kind and is claimed here, matching what
+  # `classify_index_files` claims from the same extension (#437). The three statuses
+  # are the dimensions only a parent could supply; `reference_assembly` is left open
+  # on purpose, per the tier note above.
   #
-  # In a full run this rule reaches no index file at all — `classify_index_files`
-  # covers all seven extensions (#438) and writes a record for each, so none arrives
-  # at the catch-all. It is kept for a partial run, where that producer has not run
-  # and these are still the honest four.
+  # The two claimants never see the same file — `classify_run` passes the index
+  # output into the catch-all's skip set — so this is not a second opinion. It is what
+  # answers a file the producer did not reach: a partial run where it has not run, or
+  # a name whose index extension the producer's literal-suffix match misses while
+  # `FileName.parse` finds it (an uppercase `.BAI`, a wrapped `.fai.gz`). Before #437
+  # those files got `not_applicable` here; saying nothing would have been a regression.
   # ---------------------------------------------------------------------------
   - id: index_not_applicable
     tier: 1
@@ -174,11 +177,12 @@ rules:
     when:
       extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
     then:
+      data_type: index
       status:
         data_modality: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Index file — the data it points into is the parent's, not its own"
+    rationale: "Index file — an index, of data that is the parent's, not its own"
 
   # ---------------------------------------------------------------------------
   # Checksum files — `data_type` says what the file is, the rest do not apply.
@@ -203,19 +207,19 @@ rules:
   # ---------------------------------------------------------------------------
   # Log files - not applicable
   # ---------------------------------------------------------------------------
-  - id: log_not_applicable
+  - id: log_file
     tier: 2
     scope: extension
     when:
       extensions: [".log"]
     then:
+      data_type: log
       status:
         data_modality: not_applicable
-        data_type: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Log file — not data"
+    rationale: "Log file — a log, and no data of its own"
 
   # ---------------------------------------------------------------------------
   # Chunked upload artifacts - not applicable

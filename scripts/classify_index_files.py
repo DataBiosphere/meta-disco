@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-Index files inherit all five of ``CLASSIFICATION_FIELDS`` from their parent,
-which is found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
+An index file's ``data_type`` is ``index``, from its extension. The other four of
+``CLASSIFICATION_FIELDS`` describe the data it points into, so they are inherited from
+its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
 A filename does not always identify one file. Where two files in a dataset share
@@ -11,8 +12,9 @@ but it inherits nothing: ``declined_record`` gives it ``data_type: index``, whic
 extension establishes without a parent, and ``not_classified`` on the other four,
 which only a parent could supply. Why no parent was taken is listed separately in
 ``unmatched_files``, with reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT``
-(#438). So this module has two behaviours: inherit all five from a unique parent, or
-assert the one dimension a parent is not needed for.
+(#438). So this module has two behaviours, and they differ only in the four inherited
+dimensions: with a unique parent they are the parent's, without one they are
+``not_classified``. ``data_type`` is the same either way (#437).
 
 The lookup used to keep whichever file load order visited last. Measured on the
 anvil15 corpus, 15,006 index files took a parent picked that way, and 7,422 of
@@ -151,9 +153,11 @@ def index_data_type_entry(index_ext: str) -> dict:
     honestly, because they describe the data the index points into; ``data_type``
     describes the file itself, and is the one that must not be borrowed.
 
-    Nothing is lost by dropping the borrowed value. What the file indexes is already on
-    the record as ``parent_file`` and ``parent_md5sum``, which name the actual parent and
-    join to its record — more than a copied category said, and true besides.
+    Nothing is lost by dropping the borrowed value. On a *matched* row what the file
+    indexes is already on the record as ``parent_file`` and ``parent_md5sum``, which name
+    the actual parent and join to its record — more than a copied category said, and true
+    besides. A declined row has neither, both being null, but it never carried a borrowed
+    ``data_type`` to lose: it has no parent, which is what declined means.
     """
     return build_field_entry(
         INDEX_DATA_TYPE,
@@ -192,11 +196,10 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
 
     Writing this record is what keeps such a file out of the catch-all producer, where
     tier-1 ``index_not_applicable`` would stamp its dimensions ``not_applicable`` on
-    the strength of the extension alone — a rule whose own rationale is "metadata
-    inherited from parent data file", premised on this producer supplying the answer.
-    Coverage counts ``not_applicable`` as classified, so that path reported a file as
-    determined precisely where it is not (#438 review). ``data_type: index`` also
-    disagrees with what a *matched* index row says, which is #437's subject.
+    the strength of the extension alone. Coverage counts ``not_applicable`` as
+    classified, so that path reported a file as determined precisely where it is not
+    (#438 review). Since #437 a matched row says ``index`` too, and the rule claims it
+    rather than a status, so the three ways an index file can be classified agree.
     """
     why = DECLINED_REASON_TEXT[reason]
     classifications = {DATA_TYPE: index_data_type_entry(index_ext)}
@@ -392,7 +395,6 @@ def propagate_to_index_files(
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
                 "data_modality": parent_class.get("data_modality") or nc,
-                "data_type": parent_class.get("data_type") or nc,
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,

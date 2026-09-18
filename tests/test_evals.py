@@ -420,16 +420,40 @@ class TestRuleEngineE2E:
         for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
             assert result.status_of(field) == NOT_APPLICABLE
 
-    def test_an_index_extension_leaves_data_type_to_the_index_producer(self):
-        """`index_not_applicable` no longer claims `data_type` (#437).
+    def test_an_index_extension_is_data_type_index(self):
+        """The rule says `index` too, agreeing with `classify_index_files` (#437).
 
-        `classify_index_files` claims it from the extension on every index file, matched
-        or declined, so this rule claiming it too would be two answers for one dimension.
-        The four it does claim are the ones a parent supplies.
+        The two never see the same file — the catch-all skips whatever the producer
+        wrote — so this is not a second opinion. It answers a file the producer did not
+        reach: a partial run, or a name whose index extension the producer's
+        literal-suffix match misses while `FileName.parse` finds it.
         """
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.status_of("data_type") == NOT_CLASSIFIED
+        assert result.data_type == "index"
         for field in ("data_modality", "assay_type", "platform"):
+            assert result.status_of(field) == NOT_APPLICABLE
+
+    def test_an_index_name_the_producer_would_miss_is_still_index(self):
+        """`classify_index_files` matches the extension literally and case-sensitively.
+
+        `FileName.parse` lowercases and peels wrappers, so the rule engine recognises
+        names the producer does not — which is the case this rule exists to answer.
+        Before #437 these got `not_applicable`; dropping the claim rather than moving it
+        would have left them with nothing.
+        """
+        for name in ("SAMPLE.BAM.BAI", "ref.fa.fai.gz"):
+            result = engine.classify_extended(FileInfo.from_filename(name))
+            assert result.data_type == "index", f"{name} should still be an index"
+
+    def test_a_log_file_is_data_type_log(self):
+        """`log` is a term in `data_type_enum`; the rule used to deny the file a kind.
+
+        Same correction as `.md5` (#437), and it is what makes the `auxiliary_inert`
+        consistency rule fully live — its `when` covers `checksum` *and* `log`.
+        """
+        result = engine.classify_extended(FileInfo.from_filename("run.log"))
+        assert result.data_type == "log"
+        for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
             assert result.status_of(field) == NOT_APPLICABLE
 
     def test_chunked_upload_not_applicable(self):
@@ -446,10 +470,12 @@ class TestRuleEngineE2E:
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
-    def test_all_index_types_not_applicable(self):
-        for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi"]:
+    def test_every_index_extension_is_index_with_an_inapplicable_modality(self):
+        """All seven the rule declares, not the five this once covered (#437)."""
+        for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi", ".fai", ".idx"]:
             result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
-            assert result.status_of("data_modality") == NOT_APPLICABLE, f"{ext} should be not_applicable"
+            assert result.data_type == "index", f"{ext} should be data_type index"
+            assert result.status_of("data_modality") == NOT_APPLICABLE, f"{ext} modality should not apply"
 
     def test_narrowpeak_is_chromatin(self):
         result = engine.classify_extended(FileInfo.from_filename("sample.narrowPeak"))
@@ -841,7 +867,8 @@ class TestDerivedFileTierPrecedence:
         assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
-    # --- Checksum files: all fields not_applicable, even with reference in filename ---
+    # --- Checksum files: `data_type` is `checksum`, the rest not_applicable — even
+    # with a reference name in the filename ---
 
     def test_checksum_ignores_filename_reference(self):
         """Checksum file should stay not_applicable even with GRCh38 in filename."""
