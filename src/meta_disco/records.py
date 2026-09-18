@@ -28,7 +28,10 @@ is modeled over exactly the classifier-relevant fields, not the full contract.
 Both classes expose the same identity attributes — ``file_name``, ``file_format``,
 ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``, ``file_id`` and
 ``drs_uri`` — so ``_build_record`` and the work-list steps read them uniformly
-regardless of stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
+regardless of stream. (Their *declared* fields differ beyond that: ``ClassifierRecord``
+adds ``name``/``url``, ``InvalidRecord`` adds ``reasons``, so the shared set has to be
+named rather than pointed at.) They also both expose ``data_modality`` and
+``reference_assembly`` — the
 published values (#424), not identity and not classifier input — for the same
 reason: ``_build_record`` reads them off either stream without asking which it has,
 and a record that failed the input contract is still one the repository publishes
@@ -175,6 +178,38 @@ def coerce_identity(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+# The identifiers a repository gives a file, in the order every producer emits them.
+# Not the classifier's input and not its answer: the catalog's own handles on the file,
+# which is why `ExcludedFile` carries the same three for a record classification never
+# reached. `entry_id` is regenerated when the catalog is re-indexed and the other two
+# are not (#433) — a distinction the schema's slot descriptions carry, not this tuple,
+# which only fixes the set and its order.
+CATALOG_IDENTITY_FIELDS = ("entry_id", "file_id", "drs_uri")
+
+
+def identity_from(record: dict, *, coerce: bool = False) -> dict:
+    """The catalog identity of one raw input record, ready to splat into an output row.
+
+    The counterpart of :func:`published_from`, and for the same reason: reading the
+    field list from :data:`CATALOG_IDENTITY_FIELDS` is what makes that tuple
+    authoritative, so a producer cannot emit a stale subset and a fourth identifier
+    does not touch a call site. #433 added two fields to seven hand-written copies of
+    this set, which is what the tuple exists to prevent a third time.
+
+    Read with ``.get`` although all three are required slots of the input contract:
+    a producer may be handed a ``validation_failed`` record, and the standalone
+    producers read raw dicts rather than a typed work item.
+
+    ``coerce`` renders each value through :func:`coerce_identity` — the null-to-``""``
+    rule ``excluded_files.json`` and the ``validation_failed`` row echo a drifted
+    identity by. ``unmatched_files`` entries want it; classification rows do not,
+    because they pass identity through exactly as carried.
+    """
+    if coerce:
+        return {field: coerce_identity(record.get(field)) for field in CATALOG_IDENTITY_FIELDS}
+    return {field: record.get(field) for field in CATALOG_IDENTITY_FIELDS}
+
+
 @dataclass(frozen=True)
 class ClassifierRecord:
     """A filtered record whose classifier-relevant fields passed the input contract.
@@ -186,15 +221,12 @@ class ClassifierRecord:
     That post-condition is what lets the fetch/classify path drop the per-field
     guards #171 added.
 
-    ``dataset_title``/``entry_id``/``file_id``/``drs_uri`` are *not* classifier-relevant,
-    so a record with any of them drifted still reaches the valid stream. They are echoed
-    into the output row untouched — typed ``Any`` and passed through as-is, exactly as
-    the raw-dict path did.
+    The catalog identity is *not* classifier-relevant, so a record with any of it drifted
+    still reaches the valid stream. It is echoed into the output row untouched — typed
+    ``Any`` and passed through as-is, exactly as the raw-dict path did.
 
-    ``file_id`` is the durable identity and ``entry_id`` is not: Azul regenerates the
-    latter on re-index (#433). ``drs_uri`` is carried, never derived from ``file_id`` —
-    thousands of records wrap a different id, so reconstructing it resolves to the wrong
-    object or to nothing.
+    ``file_id`` is the durable identity and ``entry_id`` is not (#433); ``drs_uri`` is
+    carried rather than derived from ``file_id``. The schema's slot descriptions say why.
 
     ``name`` is the raw ``file_name`` parsed into a :class:`FileName` once, here at
     the load boundary (epic #242), and threaded through the fetch/classify path so
@@ -341,9 +373,9 @@ class OutputRecord:
     **It is not the shape of every classification record in a run.** #204 covers the
     seven file types the pipeline classifies (bam, vcf, fastq, fasta, gfa, tar, bed);
     the four standalone producers build their output dicts by hand and emit wider
-    records — ``dataset_id`` on auxiliary/image/remaining (nine keys), and
-    ``dataset_id`` plus ``parent_file``/``parent_md5sum`` on index (eleven), which also
-    writes a third envelope key, ``unmatched_files``. Their run ``metadata`` blocks
+    records — ``dataset_id`` on auxiliary/image/remaining, and ``dataset_id`` plus
+    ``parent_file``/``parent_md5sum`` on index, which also writes a third envelope key,
+    ``unmatched_files``. Their run ``metadata`` blocks
     differ too: five distinct shapes across the eleven files, sharing only ``complete``.
     So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
     pins only this one. What all eleven *do* share is ``classifications``,
@@ -363,8 +395,8 @@ class OutputRecord:
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).
     ``file_format`` is ``str`` on the batch path but ``str | None`` on the single-file
     path (its argument is optional). The remaining fields — ``md5sum`` (echoed from
-    ``file_md5sum``), ``file_size``, ``dataset_title``, ``entry_id`` — are passed
-    through as carried, so they are ``Any``: the ``validation_failed`` path may carry
+    ``file_md5sum``), ``file_size``, ``dataset_title``, ``entry_id``, ``file_id`` and
+    ``drs_uri`` — are passed through as carried, so they are ``Any``: the ``validation_failed`` path may carry
     drifted (non-string) values, and the classifiable path's guarantee already lives
     upstream in ``ClassifierRecord``. This record does no string operations on the
     identity fields (``to_dict`` only echoes them), so the looser typing is safe.
@@ -383,8 +415,8 @@ class OutputRecord:
     dataset_title: Any
     classifications: dict
     entry_id: Any
-    file_id: Any = None
-    drs_uri: Any = None
+    file_id: Any
+    drs_uri: Any
     published: dict | None = None
 
     @classmethod
@@ -431,9 +463,9 @@ class OutputRecord:
     ) -> OutputRecord:
         """Build from a standalone ``classify_single`` call (no work item, no source record).
 
-        The catalog identity — ``dataset_title``, ``entry_id``, ``file_id``, ``drs_uri`` —
-        has no source here and serializes as ``None``: the envelope's one canonical shape,
-        which is why the single-file path's output carries the same keys as the batch path. ``published`` is ``None`` for the
+        The catalog identity has no source here and serializes as ``None``: the
+        envelope's one canonical shape, which is why the single-file path's output
+        carries the same keys as the batch path. ``published`` is ``None`` for the
         same reason and one more: this path has no input record, so there is no
         published values to carry even in principle.
         """

@@ -789,7 +789,7 @@ Result: Parent VCF not found in dataset
 3. Incomplete data uploads
 
 **Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
-- `file_name`, `file_format`, `file_md5sum`, `entry_id`, `dataset_id`, `dataset_title`: the file's identity
+- `file_name`, `file_format`, `file_md5sum`, `entry_id`, `file_id`, `drs_uri`, `dataset_id`, `dataset_title`: the file's identity
 - `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
 - `reason`: one of the two below

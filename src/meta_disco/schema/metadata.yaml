@@ -76,7 +76,10 @@ slots:
     required: true
     pattern: "^.+$"
   file_id:
-    description: The file identifier within the entry.
+    description: >-
+      The repository's own identifier for the file, and the durable one: unlike
+      `entry_id` it is not regenerated when the catalog is re-indexed, and it is what a
+      DRS resolver dereferences (#433).
     required: true
     pattern: "^.+$"
   file_name:
