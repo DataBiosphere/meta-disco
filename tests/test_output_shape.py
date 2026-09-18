@@ -80,8 +80,11 @@ def _golden_record(md5_seed: str, **fields):
     contract's other required fields, which do not appear in the output record."""
     return valid_record(
         file_md5sum=md5_seed * 32,  # lowercase-hex, per the contract
-        file_id="g-file",
-        drs_uri="drs://golden/fixture",
+        # Per record, and deliberately not `drs://...v2_<file_id>`: one shared value
+        # would not catch a producer that pairs a row with another row's identity, and
+        # a derivable pair would not catch one that reconstructs the URI (#433).
+        file_id=f"g-file-{md5_seed}",
+        drs_uri=f"drs://golden/v2_g-object-{md5_seed}",
         dataset_id="g-dataset",
         dataset_title="GOLDEN_FIXTURE",
         **fields,
@@ -180,9 +183,9 @@ OPTIONAL_FIELD_KEYS = {"build"}
 # Derived from the dataclass so the contract cannot drift from the fields it
 # is meant to pin.
 BUILD_KEYS = set(IDENTITY_FIELDS)
-# The pipeline's record shape only. The four standalone producers emit nine- and
-# eleven-key records this contract does not describe and no test pins (#429); the
-# golden fixture is built from FileTypeConfig classifiers, so it never sees one.
+# The pipeline's record shape only. The four standalone producers emit wider records
+# this contract does not describe and no test pins (#429); the golden fixture is built
+# from FileTypeConfig classifiers, so it never sees one.
 RECORD_KEYS = {
     "file_name",
     "md5sum",
@@ -191,6 +194,10 @@ RECORD_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
+    # The durable identity (#433): `file_id` survives a catalog re-index, which
+    # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
+    "file_id",
+    "drs_uri",
     # The repository's published values (#424). Present on every record, null on most —
     # these fixtures declare nothing, so the golden pins it as null throughout.
     "published",

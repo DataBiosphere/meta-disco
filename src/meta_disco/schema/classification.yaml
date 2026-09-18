@@ -46,6 +46,8 @@ classes:
       - file_format
       - file_size
       - entry_id
+      - file_id
+      - drs_uri
       - dataset_title
       - classifications
       - derived_from
@@ -713,7 +715,20 @@ slots:
     description: File size in bytes.
     range: integer
   entry_id:
-    description: Source catalog entry identifier the record was classified from.
+    description: >-
+      Source catalog entry identifier the record was classified from. Unique within a
+      run; regenerated when the catalog is re-indexed, so it scopes a weaker key rather
+      than outliving a refresh (#433).
+  file_id:
+    description: >-
+      The repository's own file identifier, and the durable one: it survives a catalog
+      re-index, which `entry_id` does not (#433). It is the join key, not the handle
+      a resolver takes — that is `drs_uri`.
+  drs_uri:
+    description: >-
+      The file's DRS URI: what a resolver dereferences to reach the bytes. Carried,
+      never derived from `file_id` — thousands of records wrap a different object id,
+      so a reconstructed URI resolves to the wrong file or to nothing (#433).
   dataset_title:
     description: Title of the dataset the file belongs to.
   classifications:

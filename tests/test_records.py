@@ -13,6 +13,10 @@ _ENVELOPE_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
+    # The durable identity (#433): `entry_id` is regenerated on a catalog re-index,
+    # `file_id` is not, and `drs_uri` is carried rather than derived from it.
+    "file_id",
+    "drs_uri",
     "published",
 }
 
@@ -129,7 +133,7 @@ class TestOutputRecord:
         assert rec.entry_id is None
         assert rec.md5sum == "b" * 32
 
-    def test_to_dict_has_the_eight_envelope_keys(self):
+    def test_to_dict_has_the_envelope_keys(self):
         rec = OutputRecord.from_single(
             md5sum="c" * 32, file_name="x", file_size=1, file_format=".test", classifications={"k": "v"}
         )

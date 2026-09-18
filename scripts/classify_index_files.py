@@ -48,7 +48,7 @@ from meta_disco.models import (
     status_for_value,
 )
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import coerce_identity, published_from
+from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identity_from, published_from
 
 # Why an index file took no parent. Written into each `unmatched_files` entry and
 # read back by this module's diagnostics and its tests, so it is named rather than
@@ -124,7 +124,7 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
         "file_name": coerce_identity(record.get("file_name")),
         "file_format": coerce_identity(record.get("file_format")),
         "file_md5sum": coerce_identity(record.get("file_md5sum")),
-        "entry_id": coerce_identity(record.get("entry_id")),
+        **identity_from(record, coerce=True),
         "dataset_id": record.get("dataset_id", "unknown"),
         "dataset_title": coerce_identity(record.get("dataset_title")),
         "index_extension": index_ext,
@@ -233,7 +233,7 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
         "file_format": record.get("file_format"),
         "md5sum": record.get("file_md5sum"),
         "file_size": record.get("file_size"),
-        "entry_id": record.get("entry_id"),
+        **identity_from(record),
         "dataset_id": record.get("dataset_id", "unknown"),
         "dataset_title": record.get("dataset_title"),
         "parent_file": None,
@@ -391,7 +391,7 @@ def propagate_to_index_files(
             parent_class = classifications.get(parent_md5, {})
 
             result = {
-                "entry_id": f.get("entry_id"),
+                **identity_from(f),
                 "file_name": name,
                 "file_format": fmt,
                 "file_md5sum": f.get("file_md5sum"),
@@ -568,7 +568,11 @@ def propagate_to_index_files(
                 "file_format": r["file_format"],
                 "md5sum": r.get("file_md5sum"),
                 "file_size": r.get("file_size"),
-                "entry_id": r["entry_id"],
+                # The index file's own, not the parent's (#433): this row resolves to
+                # this file's bytes. Subscripted, not `identity_from`: this reads the
+                # intermediate record built above, where an absent key is our bug and
+                # should raise rather than become a null.
+                **{field: r[field] for field in CATALOG_IDENTITY_FIELDS},
                 "dataset_id": r["dataset_id"],
                 "dataset_title": r["dataset_title"],
                 "parent_file": parent,

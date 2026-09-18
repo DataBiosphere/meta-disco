@@ -562,9 +562,9 @@ class TestPipelineRun:
         assert result is not None
         assert result["md5sum"] == "test_md5"
         assert "classifications" in result
-        # classify_single now emits the same canonical 8-key envelope as the batch path
-        # (#204): dataset_title/entry_id are present (None) on the single-file path, and
-        # so is published — this path has no input record to carry one from (#424).
+        # classify_single emits the same canonical envelope as the batch path (#204).
+        # Every identity field it has no input record to carry is present and None:
+        # dataset_title/entry_id, file_id/drs_uri (#433), and published (#424).
         assert set(result) == {
             "file_name",
             "md5sum",
@@ -574,8 +574,11 @@ class TestPipelineRun:
             "dataset_title",
             "classifications",
             "entry_id",
+            "file_id",
+            "drs_uri",
         }
-        assert result["dataset_title"] is None and result["entry_id"] is None
+        for absent in ("dataset_title", "entry_id", "file_id", "drs_uri"):
+            assert result[absent] is None, f"{absent} has no source on the single-file path"
 
     def test_gzip_detection(self, tmp_path):
         """When extensions include .gz variants, is_gzipped is inferred from filename."""

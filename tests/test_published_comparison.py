@@ -28,6 +28,7 @@ from meta_disco.published_comparison import (
 )
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_published
 from tests.metadata_fixtures import valid_record
+from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
 
 
 def _entry(value=None, status=None):
@@ -296,15 +297,8 @@ class TestEveryProducerCarriesPublishedValues:
     """
 
     @staticmethod
-    def _metadata(tmp_path, records):
-        """The input envelope with a catalog, so the repository is named as in a real run."""
-        path = tmp_path / "metadata.json"
-        path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": records}))
-        return path
-
-    @staticmethod
-    def _published_blocks(output_path):
-        return [r.get("published") for r in json.loads(output_path.read_text())["classifications"]]
+    def _published_blocks(rows):
+        return [r.get("published") for r in rows]
 
     @staticmethod
     def _input(name, fmt):
@@ -320,33 +314,10 @@ class TestEveryProducerCarriesPublishedValues:
             reference_assembly=["GRCm39"],
         )
 
-    @pytest.mark.parametrize(
-        "producer,name,fmt",
-        [
-            ("classify_images", "slide.svs", ".svs"),
-            ("classify_auxiliary_genomic", "cohort.pvar", ".pvar"),
-            ("classify_remaining", "mystery.xyz", ".xyz"),
-        ],
-    )
+    @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
     def test_a_standalone_producer_writes_the_declaration(self, tmp_path, producer, name, fmt):
-        import sys
-
-        sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
-        from classify_auxiliary_genomic import classify_auxiliary_genomic
-        from classify_images import classify_images
-        from classify_remaining_files import classify_remaining
-
-        funcs = {
-            "classify_images": classify_images,
-            "classify_auxiliary_genomic": classify_auxiliary_genomic,
-            "classify_remaining": lambda m, o: classify_remaining(m, o, []),
-        }
-        metadata = self._metadata(tmp_path, [self._input(name, fmt)])
-        output = tmp_path / "out_classifications.json"
-        funcs[producer](metadata, output)
-
-        [block] = self._published_blocks(output)
-        assert block is not None, f"{producer} dropped the published values"
+        [block] = self._published_blocks(run_producer(producer, tmp_path, [self._input(name, fmt)]))
+        assert block is not None
         assert block["data_modality"] == ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
         assert block["reference_assembly"] == ["GRCm39"]
         assert block["source"] == "anvil/anvil15"
@@ -354,22 +325,12 @@ class TestEveryProducerCarriesPublishedValues:
     def test_the_index_producer_writes_the_index_files_own_declaration(self, tmp_path):
         # Not the parent's: AnVIL carries the set's modality on a .bai, and that row is
         # where the two sides most often both speak.
-        import sys
-
-        sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
-        from classify_index_files import propagate_to_index_files
-
         parent = valid_record(
             file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32, entry_id="p1", dataset_id="ds1"
         )
-        index = self._input("sample.bam.bai", ".bai")
-        metadata = self._metadata(tmp_path, [parent, index])
-        parents = tmp_path / "bam_classifications.json"
-        parents.write_text(json.dumps({"classifications": []}))
-        output = tmp_path / "index_classifications.json"
-        propagate_to_index_files(metadata, [parents], output)
+        envelope = run_index_producer(tmp_path, [parent, self._input("sample.bam.bai", ".bai")])
 
-        [block] = self._published_blocks(output)
+        [block] = self._published_blocks(envelope["classifications"])
         assert block is not None
         assert block["reference_assembly"] == ["GRCm39"]
 

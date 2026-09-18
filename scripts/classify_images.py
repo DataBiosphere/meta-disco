@@ -13,7 +13,7 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.records import published_from
+from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -60,7 +60,7 @@ def classify_images(metadata_path: Path, output_path: Path):
                 "file_format": fmt,
                 "md5sum": f.get("file_md5sum"),
                 "file_size": f.get("file_size"),
-                "entry_id": f.get("entry_id"),
+                **identity_from(f),
                 "dataset_id": f.get("dataset_id"),
                 "dataset_title": f.get("dataset_title"),
                 "classifications": result.to_output_dict(),

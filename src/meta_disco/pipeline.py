@@ -476,9 +476,10 @@ class ClassifyPipeline:
     ) -> dict:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
-        Returns the canonical eight-key ``OutputRecord`` envelope (#204), the same
-        shape the batch path writes; ``dataset_title``/``entry_id`` are ``None`` here
-        since there is no source record.
+        Returns the canonical ``OutputRecord`` envelope (#204), the same shape the batch
+        path writes; the catalog identity (:data:`records.CATALOG_IDENTITY_FIELDS`) and
+        ``dataset_title`` are ``None`` here, since there is no source record to read
+        either from.
 
         ``url`` is an optional explicit content URL (#276): ``None`` derives the URL
         from ``md5sum`` (AnVIL mirror), a value streams from it instead (HPRC).
@@ -708,7 +709,7 @@ class ClassifyPipeline:
 
         Reads identity off the typed work item (a ``ClassifierRecord`` on the success
         path, an ``InvalidRecord`` on the ``validation_failed`` path); ``OutputRecord``
-        is serialized to the eight-key dict at the NDJSON write boundary via
+        is serialized to the envelope dict at the NDJSON write boundary via
         ``to_dict``. The identity fields are echoed as the item carries them — typed on
         the success path, the raw (possibly drifted) values on the ``validation_failed``
         path — matching what ``classify_single`` writes for the single-file path (#204).

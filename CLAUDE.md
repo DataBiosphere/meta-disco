@@ -156,6 +156,21 @@ evidence}` entry — plus the controlled vocabulary:
     `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is
     repository-neutral on purpose (contract 7.11): `add` / `keep` / `review` / `none`
     name what a data team should do, never who publishes.
+  - The **catalog identity** — `entry_id`, `file_id`, `drs_uri` — is one set with one
+    name, `records.CATALOG_IDENTITY_FIELDS`, reached through `records.identity_from`
+    (`coerce=True` for the `unmatched_files` diagnostic, which echoes a drifted value the
+    way `excluded_files.json` does). Drive a producer's identity keys from it rather than
+    spelling the three; #433 had to add two fields to seven hand-written copies, which is
+    what the tuple exists to prevent a third time. `entry_id` is regenerated when the
+    catalog is re-indexed and the other two are not, which is why a consumer joins on
+    `file_id` — the schema's slot descriptions carry that, not the tuple.
+  - **Two sweeps check that every producer carries a field** — `published` (#424) and the
+    catalog identity (#433) — for the same reason: a run has three record shapes (#429),
+    so a field wired into `ClassifyPipeline` alone reaches some of the eleven outputs and
+    not others, and the gap is a silently absent key rather than an error. They share
+    `tests/producer_sweep` (how to run each producer; it is the one place `scripts/` goes
+    on the path for this) and keep their own assertions. A new standalone producer goes
+    into `STANDALONE_PRODUCERS` there and both sweeps pick it up.
 
 ## Surprises
 
