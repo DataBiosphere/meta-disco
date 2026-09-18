@@ -39,6 +39,11 @@ IMPORTER_SOURCE_TYPE_ENUM = "importer_source_type_enum"
 CLAIM_STATE_ENUM = "claim_state_enum"
 JOIN_KEY_ENUM = "join_key_enum"
 
+# The derivation edge's two vocabularies (issue #450): the verb, and the kind of file
+# the edge points at.
+RELATION_ENUM = "relation_enum"
+PARENT_KIND_ENUM = "parent_kind_enum"
+
 # ``when`` condition keys whose value must be a member of a dimension enum,
 # mapped to that dimension. The rule engine compares these against enum values at
 # match time, so a typo'd value silently never matches rather than erroring — the
@@ -158,6 +163,26 @@ def name_source_values() -> frozenset[str]:
     the schema path) if the schema is missing the enum.
     """
     return _enum_values(NAME_SOURCE_ENUM)
+
+
+def relation_values() -> frozenset[str]:
+    """Return the permissible derivation verbs from the schema.
+
+    The single source of truth for ``DerivationEdge.relation`` (issue #450), so a
+    producer emitting an edge stays pinned to the schema. Raises KeyError (with the
+    schema path) if the schema is missing the enum.
+    """
+    return _enum_values(RELATION_ENUM)
+
+
+def parent_kind_values() -> frozenset[str]:
+    """Return the permissible ``DerivationEdge.parent_kind`` values from the schema.
+
+    The single source of truth for what kind of file an edge may point at (issue #450),
+    so the index producer's category-to-kind map stays pinned to the schema. Raises
+    KeyError (with the schema path) if the schema is missing the enum.
+    """
+    return _enum_values(PARENT_KIND_ENUM)
 
 
 def source_type_values() -> frozenset[str]:

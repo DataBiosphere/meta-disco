@@ -63,10 +63,10 @@ PUBLISHED_FIELDS = ("data_modality", "reference_assembly")
 def published_from(record: dict, source: str | None) -> dict | None:
     """The ``published`` block for one raw input record (contract 7.7's one-liner).
 
-    The form every producer calls, so a producer states *which record* it is building
-    the block for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
-    what makes that tuple authoritative: a producer cannot read a stale subset of the
-    dimensions, and adding a third one does not touch a single call site.
+    Reached through :meth:`OutputRecord.from_record`, so no producer states more than
+    which record it is building. Reading the field list from :data:`PUBLISHED_FIELDS`
+    here is what makes that tuple authoritative: a stale subset cannot be read, and
+    adding a third dimension touches no call site.
 
     The two fields are read with ``.get`` because they are outside the input contract
     (#424 — they are not input), so no validation has run on them and no caller
@@ -369,10 +369,12 @@ class InvalidRecord:
 class OutputRecord:
     """The per-file output envelope: identity fields wrapping a classifications payload.
 
-    The shape ``ClassifyPipeline`` writes per record. Both of *its* producers construct
-    it — the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
-    work item) and the single-file path (``classify_single``) — and serialize through
-    ``to_dict``, so the envelope can no longer drift between them (#204).
+    The shape every producer in a run writes (#450). ``ClassifyPipeline`` builds it on
+    both its paths — the batch path (``_build_record`` over a
+    ``ClassifierRecord``/``InvalidRecord`` work item) and the single-file path
+    (``classify_single``) — and the four standalone producers through
+    :meth:`from_record`. All serialize through ``to_dict``, so the envelope cannot drift
+    between them (#204).
 
     **It is the shape of every classification record in a run** (#450). #204 covered the
     seven file types the pipeline classifies; the four standalone producers assembled
@@ -476,6 +478,13 @@ class OutputRecord:
 
         ``derived_from`` is the index producer's typed edge; every other producer leaves
         it null.
+
+        Its callers do not run the input contract — they classify from the filename and
+        never build a work item — so this cannot assume types the way
+        :meth:`from_work_item` can, and reads with ``.get``. Unifying the two means
+        routing those producers through ``partition_records``, which would divert a
+        contract-violating record to a ``validation_failed`` row instead of classifying
+        it from its name: a coverage change, not a refactor, and out of #450's scope.
         """
         return cls(
             file_name=record.get("file_name", ""),

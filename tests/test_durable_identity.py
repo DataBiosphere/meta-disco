@@ -9,7 +9,7 @@ import pytest
 
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord
 from tests.metadata_fixtures import valid_record
-from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
+from tests.producer_sweep import run_index_producer
 
 FILE_ID = "file-id-1"
 # Deliberately not `drs://drs.anv0:v2_<FILE_ID>`, so this fails if anyone derives it.
@@ -57,7 +57,7 @@ class TestBothStreamsCarryIt:
         assert row["file_id"] is None and row["drs_uri"] is None
 
 
-class TestEveryStandaloneProducerCarriesIt:
+class TestTheIndexProducerCarriesTheRightIdentity:
     """That the fields are present is structural now (#450) — every producer builds
     `OutputRecord` and `test_output_shape` pins its key set. What is left here is whose
     identity a record carries where a producer has two in hand, and the one array that

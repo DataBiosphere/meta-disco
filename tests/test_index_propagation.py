@@ -13,6 +13,7 @@ from classify_index_files import (
     NO_MATCHING_PARENT,
     get_parent_candidates,
     load_classifications,
+    parent_kind_of,
     propagate_to_index_files,
 )
 
@@ -27,6 +28,7 @@ from meta_disco.models import (
 )
 from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
+from tests.producer_sweep import run_index_producer
 
 
 def _assert_declined(output: dict, file_name: str) -> dict:
@@ -171,8 +173,6 @@ def test_a_gvcf_parent_is_variants_not_unknown():
     """`FileName.parse` keeps a compound core whole — a gVCF is `.g.vcf` — and
     `EXTENSION_MAP` keys `.vcf`, so an exact lookup called 2,504 real gVCF parents a
     kind we could not tell."""
-    from classify_index_files import parent_kind_of
-
     assert parent_kind_of("NA20872.haplotypeCalls.er.raw.g.vcf.gz", ".tbi") == "variants"
     assert parent_kind_of("HG002.vcf.gz", ".tbi") == "variants"
 
@@ -180,8 +180,6 @@ def test_a_gvcf_parent_is_variants_not_unknown():
 def test_a_parent_whose_kind_is_genuinely_unknown_stays_none():
     """The fallback must not guess: `.txt.gz` is a category with no parent_kind term,
     and a `.tbi` with no parent indexes several kinds."""
-    from classify_index_files import parent_kind_of
-
     assert parent_kind_of("annotations.txt.gz", ".tbi") is None
     assert parent_kind_of(None, ".tbi") is None
     # ...while an index extension that declares one kind answers without a parent.
@@ -195,8 +193,6 @@ def test_every_index_record_carries_its_own_file_size(tmp_path):
     record this producer builds from. Nothing pinned it, so the fix was incidental and
     could be undone the same way.
     """
-    from tests.producer_sweep import run_index_producer
-
     envelope = run_index_producer(
         tmp_path,
         [

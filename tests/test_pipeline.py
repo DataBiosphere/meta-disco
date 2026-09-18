@@ -8,6 +8,7 @@ import pytest
 from meta_disco.exclusions import read_excluded
 from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 from meta_disco.records import ClassifierRecord, InvalidRecord
+from tests.metadata_fixtures import RECORD_KEYS
 from tests.metadata_fixtures import valid_record as _valid_record
 
 # --- Test fixtures ---
@@ -580,19 +581,7 @@ class TestPipelineRun:
         # (#204, widened to all eleven by #450). Every field it has no input record to
         # carry is present and None: dataset_title/entry_id, file_id/drs_uri (#433),
         # published (#424), and derived_from (#450).
-        assert set(result) == {
-            "file_name",
-            "md5sum",
-            "file_size",
-            "file_format",
-            "published",
-            "dataset_title",
-            "classifications",
-            "entry_id",
-            "file_id",
-            "drs_uri",
-            "derived_from",
-        }
+        assert set(result) == RECORD_KEYS
         for absent in ("dataset_title", "entry_id", "file_id", "drs_uri", "derived_from"):
             assert result[absent] is None, f"{absent} has no source on the single-file path"
 

@@ -88,7 +88,6 @@ def classify_images(metadata_path: Path, output_path: Path):
                 "metadata": RunMetadata.from_counts(
                     total=total_all,
                     successful=len(results),
-                    # This producer classifies from the filename and reads no content.
                     from_cache=0,
                     content_unreadable=0,
                     details={"by_extension": {ext: stats[ext]["total"] for ext in stats if stats[ext]["total"] > 0}},

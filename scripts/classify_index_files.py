@@ -30,6 +30,7 @@ better is import work (#369, #402).
 """
 
 import argparse
+import functools
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -90,13 +91,29 @@ def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
     (docs/derived-file-data-model.md 4a). A ``.tbi`` indexes several kinds, so only a
     match resolves it and the fallback gives None.
     """
-    # A declared parent extension is not a filename, so it gets a stem and FileName
-    # peels it the same way (".vcf.gz" -> ".vcf").
-    declared = [f"parent{ext}" for ext in INDEX_TO_PARENT.get(index_ext, [])]
-    names = [parent_name] if parent_name else declared
+    if not parent_name:
+        return _declared_kind(index_ext)
+    return _agreed_kind([parent_name])
+
+
+@functools.cache
+def _declared_kind(index_ext: str) -> str | None:
+    """The kind every parent ``INDEX_TO_PARENT`` declares for this index agrees on.
+
+    Cached: this is a pure function of the seven index extensions, and the declined path
+    asks it once per record.
+    """
+    return _agreed_kind(INDEX_TO_PARENT.get(index_ext, []))
+
+
+def _agreed_kind(names: list[str]) -> str | None:
+    """The one kind these names agree on, or None.
+
+    A `None` stays in the set rather than being discarded: a name this cannot map is one
+    that disagrees, so the answer stays ambiguous rather than resolving to the rest.
+    """
     kinds = {_PARENT_KIND_BY_CATEGORY.get(_category_of(name) or "") for name in names}
-    kinds.discard(None)
-    return kinds.pop() if len(kinds) == 1 else None
+    return kinds.pop() if len(kinds) == 1 and None not in kinds else None
 
 
 def _category_of(file_name: str) -> str | None:
@@ -129,7 +146,7 @@ def derivation_edge(parent_name: str | None, parent_md5sum: str | None, index_ex
     the *type* of the link is known from the extension even when the parent is not.
     """
     return {
-        "relation": "index_of",
+        "relation": INDEX_RELATION,
         "parent_md5sum": parent_md5sum,
         "parent_file": parent_name,
         "parent_kind": parent_kind_of(parent_name, index_ext),
@@ -204,6 +221,9 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
 
 DATA_TYPE = "data_type"
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
+# The derivation verb this producer emits, a term in `relation_enum`. Pinned to the
+# schema by `test_rule_vocabulary`, as `INDEX_DATA_TYPE` is.
+INDEX_RELATION = "index_of"
 
 DECLINED_REASON_TEXT = {
     NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name",
@@ -225,11 +245,11 @@ def index_data_type_entry(index_ext: str) -> dict:
     honestly, because they describe the data the index points into; ``data_type``
     describes the file itself, and is the one that must not be borrowed.
 
-    Nothing is lost by dropping the borrowed value. On a *matched* row what the file
-    indexes is already on the record as ``parent_file`` and ``parent_md5sum``, which name
-    the actual parent and join to its record — more than a copied category said, and true
-    besides. A declined row has neither, both being null, but it never carried a borrowed
-    ``data_type`` to lose: it has no parent, which is what declined means.
+    Nothing is lost by dropping the borrowed value. What the file indexes is on the
+    record as ``derived_from`` — the verb, and where the parent is resolvable its name
+    and md5, which join to its record — more than a copied category said. A declined row
+    carries the edge without its grounding, and never had a borrowed ``data_type`` to
+    lose: it has no parent, which is what declined means.
     """
     return build_field_entry(
         INDEX_DATA_TYPE,
@@ -462,7 +482,6 @@ def propagate_to_index_files(
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
                 "detail": parent_class.get("detail", {}),
-                "inheritance_source": "parent_file",
             }
 
             if result["data_modality"] not in _sentinels:
@@ -629,7 +648,6 @@ def propagate_to_index_files(
                 "metadata": RunMetadata.from_counts(
                     total=total_all,
                     successful=len(standard_results),
-                    # This producer inherits from Phase 1's output and reads no content.
                     from_cache=0,
                     content_unreadable=0,
                     details={

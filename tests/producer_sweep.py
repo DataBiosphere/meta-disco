@@ -60,9 +60,9 @@ def run_producer(producer, tmp_path, records):
 def run_index_producer(tmp_path, records):
     """Run the index producer over ``records``; return its whole output envelope.
 
-    The parent classifications file is empty, so a matched index inherits nothing. Both
-    sweeps are about what this producer echoes off the index file's *own* record, not
-    what it inherits from a parent, so there is nothing to put in it.
+    The parent classifications file is empty, so a matched index inherits nothing: its
+    callers are about what this producer echoes off the index file's *own* record, not
+    what it inherits from a parent.
 
     The envelope rather than the rows, because this producer writes a second key —
     ``unmatched_files`` — that a sweep may want to read.

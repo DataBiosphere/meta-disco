@@ -171,6 +171,10 @@ evidence}` entry — plus the controlled vocabulary:
     are gone: `test_output_shape` pins the record's key set across all eleven instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
+  - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
+    stays on the index producer's `unmatched_files` diagnostic, but it is not a slot of
+    `ClassificationRecord` and no reader of a run wants it: consumers group on
+    `dataset_title` and join on `file_id`. Do not add it back to a record.
   - **`derived_from` is the index producer's typed edge** (#450): `relation` is always
     `index_of` and required, the grounding (`parent_file` / `parent_md5sum`) is null
     where #438 took no parent, and `parent_kind` comes from the matched parent's

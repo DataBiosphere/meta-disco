@@ -93,6 +93,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     engine = RuleEngine()
     results = []
     ext_counts = Counter()
+    nameless = 0
 
     for rec in files:
         name = rec.get("file_name", "")
@@ -107,7 +108,12 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 f"keys on it to know what another producer already classified. "
                 f"`make validate-metadata` rejects this before `make classify` runs."
             )
-        if not name or entry_id in already:
+        if not name:
+            # Handed to this producer and written by nobody. Counted, so the run's
+            # eleven metadata blocks still sum to the corpus (#450).
+            nameless += 1
+            continue
+        if entry_id in already:
             continue
 
         file_info = FileInfo.from_filename(
@@ -117,7 +123,10 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         )
         result = engine.classify_extended(file_info)
 
-        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
+        # Leading dot, as the registry-declared extensions the other producers count
+        # by: the metadata blocks are one shape now, so their keys must be one
+        # vocabulary or merging them silently mixes `.png` with `txt`.
+        ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
         ext_counts[ext] += 1
 
         # One record shape for every producer (#450).
@@ -126,16 +135,15 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")
     for ext, count in ext_counts.most_common(20):
-        print(f"  .{ext}: {count:,}")
+        print(f"  {ext}: {count:,}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w") as out:
         json.dump(
             {
                 "metadata": RunMetadata.from_counts(
-                    total=len(results),
+                    total=len(results) + nameless,
                     successful=len(results),
-                    # This producer classifies from the filename and reads no content.
                     from_cache=0,
                     content_unreadable=0,
                     details={"by_extension": dict(ext_counts.most_common())},

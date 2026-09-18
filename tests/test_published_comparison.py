@@ -28,7 +28,7 @@ from meta_disco.published_comparison import (
 )
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_published
 from tests.metadata_fixtures import valid_record
-from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
+from tests.producer_sweep import run_index_producer
 
 
 def _entry(value=None, status=None):
@@ -281,7 +281,7 @@ class TestRender:
         assert "anvil/anvil15" in text
 
 
-class TestEveryProducerCarriesPublishedValues:
+class TestTheIndexProducerPublishesItsOwnValues:
     """The block holds the file's own published values, not a parent's.
 
     That every producer emits the key at all is structural now (#450): all eleven build

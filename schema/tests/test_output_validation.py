@@ -144,6 +144,33 @@ def test_output_entries_validate_against_schema(validator):
     assert not failures, "Pipeline output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
+def test_a_populated_derivation_edge_validates(validator):
+    """The golden is `ClassifyPipeline`'s output, where `derived_from` is null on every
+    record, so nothing else puts a populated edge in front of the schema (#450).
+
+    Both shapes the index producer emits: grounded, and ungrounded where it took no
+    parent (#438) — the case `parent_md5sum`'s own schema description anticipates.
+    """
+    _, record = next(_golden_records())
+    grounded = {"relation": "index_of", "parent_md5sum": "b" * 32, "parent_file": "s.bam", "parent_kind": "alignment"}
+    ungrounded = {"relation": "index_of", "parent_md5sum": None, "parent_file": None, "parent_kind": None}
+
+    failures = []
+    for label, edge in (("grounded", grounded), ("ungrounded", ungrounded)):
+        for result in validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord").results:
+            failures.append(f"{label}: {result.severity}: {result.message}")
+    assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
+
+
+def test_a_derivation_edge_without_a_verb_is_refused(validator):
+    """`relation` is required, which is why there is no half-edge to emit: the producer
+    must name the verb even where it cannot name the parent."""
+    _, record = next(_golden_records())
+    edge = {"parent_md5sum": None, "parent_file": None, "parent_kind": None}
+    report = validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord")
+    assert report.results, "a derived_from with no relation should not validate"
+
+
 def test_output_records_validate_against_schema(validator):
     # Whole-record gate (#134): each golden record validates against
     # ClassificationRecord, exercising the `classifications` container end to end.

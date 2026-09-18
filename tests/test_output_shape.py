@@ -57,8 +57,10 @@ from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
 from meta_disco.pipeline import ClassifyPipeline
+from meta_disco.producers import PRODUCERS
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
-from tests.metadata_fixtures import valid_record
+from tests.metadata_fixtures import RECORD_KEYS, valid_record
+from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"
@@ -183,29 +185,6 @@ OPTIONAL_FIELD_KEYS = {"build"}
 # Derived from the dataclass so the contract cannot drift from the fields it
 # is meant to pin.
 BUILD_KEYS = set(IDENTITY_FIELDS)
-# The pipeline's record shape only. The four standalone producers emit wider records
-# this contract does not describe and no test pins (#429); the golden fixture is built
-# from FileTypeConfig classifiers, so it never sees one.
-RECORD_KEYS = {
-    "file_name",
-    "md5sum",
-    "file_size",
-    "file_format",
-    "dataset_title",
-    "classifications",
-    "entry_id",
-    # The durable identity (#433): `file_id` survives a catalog re-index, which
-    # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
-    "file_id",
-    "drs_uri",
-    # The repository's published values (#424). Present on every record, null on most —
-    # these fixtures declare nothing, so the golden pins it as null throughout.
-    "published",
-    # The typed derivation edge (#450). Null on every producer but the index one, which
-    # is the only one that resolves a parent; emitted rather than omitted so the
-    # envelope keeps one shape across all eleven files.
-    "derived_from",
-}
 
 
 def _make_stub_fetcher(file_type: str):
@@ -377,6 +356,35 @@ def test_output_values_in_vocabulary(output):
     )
 
 
+@pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
+def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
+    """All eleven output files carry one record shape (#450).
+
+    The golden fixture covers the seven the pipeline writes; this covers the four that
+    used to assemble dicts by hand and so could each carry a different set. That is what
+    `published` (#424) and the catalog identity (#433) each needed a sweep for, and what
+    building `OutputRecord` makes structural instead.
+    """
+    [row] = run_producer(producer, tmp_path, [valid_record(file_name=name, file_format=fmt)])
+    assert set(row) == RECORD_KEYS, f"{name}: {set(row) ^ RECORD_KEYS}"
+
+
+@pytest.mark.parametrize("with_parent", [True, False], ids=["matched", "declined"])
+def test_the_index_producer_emits_the_record_keys(tmp_path, with_parent):
+    """Both of its record paths: a matched parent, and one it declined (#438)."""
+    parent = [valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32)]
+    records = (parent if with_parent else []) + [valid_record(file_name="sample.bam.bai", file_format=".bai")]
+    for row in run_index_producer(tmp_path, records)["classifications"]:
+        assert set(row) == RECORD_KEYS, f"{set(row) ^ RECORD_KEYS}"
+
+
+def test_the_shape_test_covers_every_producer():
+    """Otherwise a twelfth producer is added and nothing notices — which is exactly how
+    the two sweeps this replaced could go stale."""
+    covered = set(FILE_TYPE_REGISTRY) | {param.id for param in STANDALONE_PRODUCERS} | {"index"}
+    assert covered == set(PRODUCERS), f"producers with no record-shape coverage: {set(PRODUCERS) ^ covered}"
+
+
 def _regenerate_golden():
     """Write the golden fixture from a fresh pipeline run (manual regen entry point)."""
     import tempfile
@@ -390,49 +398,3 @@ def _regenerate_golden():
 
 if __name__ == "__main__":
     _regenerate_golden()
-
-
-def test_every_producer_emits_the_same_record_keys(tmp_path):
-    """All eleven output files carry one record shape (#450).
-
-    The golden fixture above covers the seven the pipeline writes; this covers the four
-    that used to assemble dicts by hand and so could each carry a different set. That is
-    what `published` (#424) and the catalog identity (#433) each needed a sweep for, and
-    what building `OutputRecord` makes structural instead.
-    """
-    from tests.metadata_fixtures import valid_record
-    from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
-
-    for producer, name, fmt in (param.values for param in STANDALONE_PRODUCERS):
-        run_dir = tmp_path / name
-        run_dir.mkdir()
-        [row] = run_producer(producer, run_dir, [valid_record(file_name=name, file_format=fmt)])
-        assert set(row) == RECORD_KEYS, f"{name}: {set(row) ^ RECORD_KEYS}"
-
-    # The index producer takes a third argument, so it has its own runner. Both of its
-    # record paths are covered: a matched parent and a declined one (#438).
-    for records, label in (
-        (
-            [
-                valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32),
-                valid_record(file_name="sample.bam.bai", file_format=".bai"),
-            ],
-            "matched",
-        ),
-        ([valid_record(file_name="orphan.bam.bai", file_format=".bai")], "declined"),
-    ):
-        run_dir = tmp_path / f"index_{label}"
-        run_dir.mkdir()
-        envelope = run_index_producer(run_dir, records)
-        for row in envelope["classifications"]:
-            assert set(row) == RECORD_KEYS, f"index/{label}: {set(row) ^ RECORD_KEYS}"
-
-
-def test_the_shape_test_covers_every_producer():
-    """Otherwise a twelfth producer is added and nothing notices — which is exactly how
-    the two sweeps this replaced could go stale."""
-    from meta_disco.producers import PRODUCERS
-    from tests.producer_sweep import STANDALONE_PRODUCERS
-
-    covered = set(FILE_TYPE_REGISTRY) | {param.id for param in STANDALONE_PRODUCERS} | {"index"}
-    assert covered == set(PRODUCERS), f"producers with no record-shape coverage: {set(PRODUCERS) ^ covered}"
