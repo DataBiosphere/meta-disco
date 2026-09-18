@@ -57,8 +57,10 @@ from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
 from meta_disco.pipeline import ClassifyPipeline
+from meta_disco.producers import PRODUCERS
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
-from tests.metadata_fixtures import valid_record
+from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record
+from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer, write_snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"
@@ -183,25 +185,6 @@ OPTIONAL_FIELD_KEYS = {"build"}
 # Derived from the dataclass so the contract cannot drift from the fields it
 # is meant to pin.
 BUILD_KEYS = set(IDENTITY_FIELDS)
-# The pipeline's record shape only. The four standalone producers emit wider records
-# this contract does not describe and no test pins (#429); the golden fixture is built
-# from FileTypeConfig classifiers, so it never sees one.
-RECORD_KEYS = {
-    "file_name",
-    "md5sum",
-    "file_size",
-    "file_format",
-    "dataset_title",
-    "classifications",
-    "entry_id",
-    # The durable identity (#433): `file_id` survives a catalog re-index, which
-    # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
-    "file_id",
-    "drs_uri",
-    # The repository's published values (#424). Present on every record, null on most —
-    # these fixtures declare nothing, so the golden pins it as null throughout.
-    "published",
-}
 
 
 def _make_stub_fetcher(file_type: str):
@@ -371,6 +354,59 @@ def test_output_values_in_vocabulary(output):
     assert not violations, (
         "Pipeline output emits dimension values not in the LinkML schema vocabulary:\n  " + "\n  ".join(violations)
     )
+
+
+@pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
+def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
+    """All eleven output files carry one record shape (#450).
+
+    The golden fixture covers the seven the pipeline writes; this covers the four that
+    used to assemble dicts by hand and so could each carry a different set. That is what
+    `published` (#424) and the catalog identity (#433) each needed a sweep for, and what
+    building `OutputRecord` makes structural instead.
+    """
+    [row] = run_producer(producer, tmp_path, [valid_record(file_name=name, file_format=fmt)])
+    assert set(row) == RECORD_KEYS, f"{name}: {set(row) ^ RECORD_KEYS}"
+
+
+@pytest.mark.parametrize("with_parent", [True, False], ids=["matched", "declined"])
+def test_the_index_producer_emits_the_record_keys(tmp_path, with_parent):
+    """Both of its record paths: a matched parent, and one it declined (#438)."""
+    parent = [valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32)]
+    records = (parent if with_parent else []) + [valid_record(file_name="sample.bam.bai", file_format=".bai")]
+    for row in run_index_producer(tmp_path, records)["classifications"]:
+        assert set(row) == RECORD_KEYS, f"{set(row) ^ RECORD_KEYS}"
+
+
+@pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
+def test_a_standalone_producer_emits_the_metadata_keys(tmp_path, producer, name, fmt):
+    """The `metadata` block is one shape across producers too (#450).
+
+    `RECORD_KEYS` pins the rows; this pins the envelope's tally block, which was five
+    ad-hoc shapes sharing only `complete`. `test_records` checks `RunMetadata.to_dict`
+    in isolation — it cannot see whether a producer actually emits it.
+    """
+    output = tmp_path / "out_classifications.json"
+    producer(write_snapshot(tmp_path, [valid_record(file_name=name, file_format=fmt)]), output)
+    assert list(json.loads(output.read_text())["metadata"]) == METADATA_KEYS
+
+
+def test_the_index_producer_emits_the_metadata_keys(tmp_path):
+    envelope = run_index_producer(tmp_path, [valid_record(file_name="sample.bam.bai", file_format=".bai")])
+    assert list(envelope["metadata"]) == METADATA_KEYS
+
+
+def test_the_pipeline_emits_the_metadata_keys(output):
+    """The seven header types, off the golden run, so all eleven are covered."""
+    for ftype, payload in output.items():
+        assert list(payload["metadata"]) == METADATA_KEYS, ftype
+
+
+def test_the_shape_test_covers_every_producer():
+    """Otherwise a twelfth producer is added and nothing notices — which is exactly how
+    the two sweeps this replaced could go stale."""
+    covered = set(FILE_TYPE_REGISTRY) | {param.id for param in STANDALONE_PRODUCERS} | {"index"}
+    assert covered == set(PRODUCERS), f"producers with no record-shape coverage: {set(PRODUCERS) ^ covered}"
 
 
 def _regenerate_golden():

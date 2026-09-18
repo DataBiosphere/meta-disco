@@ -1,6 +1,6 @@
 # Published values compared with inferred
 
-Repository: `anvil/anvil15` · run `20260917_204408` · 708,088 files
+Repository: `anvil/anvil15` · run `20260918_142651` · 708,088 files
 
 **11,231 files have a published value**, across 11,451 file/dimension rows. For every other file the
 repository publishes nothing for these dimensions.
@@ -75,11 +75,3 @@ file is the fact rather than the count.
 | IGVFFI9441WCCN.bed.gz | AnVIL_IGVF_Mouse_R1 | data_modality | `genomic` |
 | IGVFFI2080ESEF.h5ad | AnVIL_IGVF_Mouse_R1 | data_modality | `transcriptomic.single_cell` |
 | IGVFFI8515HKDP.h5ad | AnVIL_IGVF_Mouse_R1 | data_modality | `transcriptomic.single_cell` |
-
----
-
-115 record(s) were written by the run more than once and counted once here
-(a tar archive is written to both `tar_` and `auxiliary_classifications.json`). Pre-existing, and
-none has a published value, so every figure about published values is identical either
-way — but `add` and `none` are file counts over the whole run, so those two are 115 lower
-than the row count. That is the correct answer; it is not the same as being unaffected.

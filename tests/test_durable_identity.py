@@ -1,16 +1,15 @@
 """Every producer carries the identity that outlives a catalog (#433).
 
-A sweep for the same reason `TestEveryProducerCarriesPublishedValues` is: a run has
-three record shapes (#429), so a field wired into `ClassifyPipeline` alone reaches some
-outputs and not others, and the gap is a silently absent key rather than an error.
-`tests/producer_sweep` holds the half the two sweeps share.
+That the fields are *present* is structural since #450 — every producer builds
+`OutputRecord`, and `test_output_shape` pins its key set. What is left here is whose
+identity a record carries where a producer has two in hand.
 """
 
 import pytest
 
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord
 from tests.metadata_fixtures import valid_record
-from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
+from tests.producer_sweep import run_index_producer
 
 FILE_ID = "file-id-1"
 # Deliberately not `drs://drs.anv0:v2_<FILE_ID>`, so this fails if anyone derives it.
@@ -58,18 +57,12 @@ class TestBothStreamsCarryIt:
         assert row["file_id"] is None and row["drs_uri"] is None
 
 
-class TestEveryStandaloneProducerCarriesIt:
-    """The four that assemble records by hand.
-
-    `ClassifyPipeline` is not swept here: `TestBothStreamsCarryIt` pins its record
-    construction in isolation, and the golden fixture (`test_output_shape.RECORD_KEYS`
-    and `expected_output.json`) covers it end to end from a real run.
+class TestTheIndexProducerCarriesTheRightIdentity:
+    """That the fields are present is structural now (#450) — every producer builds
+    `OutputRecord` and `test_output_shape` pins its key set. What is left here is whose
+    identity a record carries where a producer has two in hand, and the one array that
+    is not an `OutputRecord`.
     """
-
-    @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
-    def test_a_standalone_producer_carries_both(self, tmp_path, producer, name, fmt):
-        rows = run_producer(producer, tmp_path, [_record(name, fmt)])
-        assert _identities(rows) == [(FILE_ID, DRS_URI)]
 
     @pytest.mark.parametrize("with_parent", [True, False], ids=["matched", "declined"])
     def test_the_index_producer_carries_the_index_files_own_identity(self, tmp_path, with_parent):

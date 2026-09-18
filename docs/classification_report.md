@@ -1036,7 +1036,12 @@ Example classification records from each file type, showing the evidence chain a
   "data_modality": "genomic.germline_variants",
   "reference_assembly": "CHM13",
   "confidence": 0.90,
-  "parent_file": "NA18637.chr15.hc.vcf.gz",
+  "derived_from": {
+    "relation": "index_of",
+    "parent_file": "NA18637.chr15.hc.vcf.gz",
+    "parent_md5sum": "e14408e079ec0e0d91573e25dcc078eb",
+    "parent_kind": "variants"
+  },
   "evidence": [
     {
       "rule_id": "inherited_from_parent",

@@ -43,3 +43,46 @@ def write_metadata(path, records):
     """
     path.write_text(json.dumps({"files": records}))
     return path
+
+
+# Every key an output record carries, for the eleven producers alike (#450). Written out
+# rather than derived from `OutputRecord`'s fields on purpose: every producer now
+# serializes through `to_dict`, so deriving it would make each assertion over it vacuous.
+RECORD_KEYS = {
+    "file_name",
+    "md5sum",
+    "file_size",
+    "file_format",
+    "dataset_title",
+    "classifications",
+    "entry_id",
+    # The durable identity (#433): `file_id` survives a catalog re-index, which
+    # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
+    "file_id",
+    "drs_uri",
+    # The repository's published values (#424). Present on every record, null on most —
+    # these fixtures declare nothing, so the golden pins it as null throughout.
+    "published",
+    # The typed derivation edge (#450). Null on every producer but the index one, which
+    # is the only one that resolves a parent; emitted rather than omitted so the
+    # envelope keeps one shape across all eleven files.
+    "derived_from",
+}
+
+
+# Every key a producer's run `metadata` block carries (#450), in emit order. The record's
+# twin above: five ad-hoc shapes became one, and nothing else pins that across producers.
+METADATA_KEYS = [
+    "total_to_process",
+    "processed",
+    "successful",
+    "failed",
+    "dropped",
+    "errored",
+    "validation_failed",
+    "from_cache",
+    "content_unreadable",
+    "complete",
+    # Whatever a producer counts beyond the shared tally (#450).
+    "details",
+]

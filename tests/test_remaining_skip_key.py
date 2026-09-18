@@ -17,7 +17,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_remaining_files import classify_remaining, load_already_classified
 
-from tests.metadata_fixtures import write_metadata
+from meta_disco.models import NOT_CLASSIFIED
+from tests.metadata_fixtures import valid_record, write_metadata
 
 
 def _record(name: str, entry_id: str, md5: str, dataset_id: str) -> dict:
@@ -118,3 +119,63 @@ class TestSkipKey:
 
         with pytest.raises(ValueError, match="entry_id"):
             classify_remaining(metadata_file, tmp_path / "out.json", [])
+
+
+class TestARecordWithNoNameIsWrittenNotDropped:
+    """A nameless record violates the input contract and still gets a row (#155/#161).
+
+    The catch-all used to skip it silently: no row anywhere in the run, and
+    `unprocessable-report` — which finds such a file by scanning the output — could not
+    see it. The pipeline has always written one; this producer now does too.
+    """
+
+    def _run(self, tmp_path, records):
+        output = tmp_path / "remaining_classifications.json"
+        metadata = tmp_path / "metadata.json"
+        metadata.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": records}))
+        classify_remaining(metadata, output, [])
+        return json.loads(output.read_text())
+
+    def test_it_is_written_as_validation_failed(self, tmp_path):
+        envelope = self._run(tmp_path, [valid_record(file_name="", file_format=".xyz", entry_id="e1")])
+        [row] = envelope["classifications"]
+        assert row["entry_id"] == "e1"
+        assert all(entry["status"] == NOT_CLASSIFIED for entry in row["classifications"].values())
+        assert envelope["metadata"]["validation_failed"] == 1
+        assert envelope["metadata"]["successful"] == 0
+
+    def test_a_drifted_file_name_is_coerced_not_echoed(self, tmp_path):
+        """`OutputRecord.file_name` is typed `str`, so a drifted one is coerced on the
+        way in — the pipeline's `InvalidRecord` path does it, and this uses that path
+        rather than echoing a raw value into a row that claims to be a string."""
+        envelope = self._run(tmp_path, [valid_record(file_name=0, file_format=None, entry_id="e1")])
+        [row] = envelope["classifications"]
+        assert row["file_name"] == "0"
+        assert row["file_format"] == ""
+
+    def test_the_tallies_still_describe_the_rows(self, tmp_path):
+        """`total` is the rows written and `processed` accounts for all of them, which is
+        what lets the run's eleven metadata blocks sum to the corpus."""
+        envelope = self._run(
+            tmp_path,
+            [
+                valid_record(file_name="", file_format=".xyz", entry_id="e1"),
+                valid_record(file_name="mystery.xyz", file_format=".xyz", entry_id="e2"),
+            ],
+        )
+        meta = envelope["metadata"]
+        assert len(envelope["classifications"]) == meta["total_to_process"] == meta["processed"] == 2
+        assert meta["successful"] == 1 and meta["validation_failed"] == 1
+
+    def test_a_nameless_record_another_producer_wrote_is_not_written_again(self, tmp_path):
+        """The contract check runs after the already-written one, or a nameless record
+        claimed on its `file_format` would get a second row."""
+        output = tmp_path / "remaining_classifications.json"
+        metadata = tmp_path / "metadata.json"
+        record = valid_record(file_name="", file_format=".xyz", entry_id="e1")
+        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": [record]}))
+        other = tmp_path / "bam_classifications.json"
+        other.write_text(json.dumps({"classifications": [{"entry_id": "e1", "file_name": ""}]}))
+
+        classify_remaining(metadata, output, [other])
+        assert json.loads(output.read_text())["classifications"] == []

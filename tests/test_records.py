@@ -3,35 +3,9 @@
 import pytest
 
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
+from tests.metadata_fixtures import METADATA_KEYS as _METADATA_KEYS
+from tests.metadata_fixtures import RECORD_KEYS as _ENVELOPE_KEYS
 from tests.metadata_fixtures import valid_record
-
-_ENVELOPE_KEYS = {
-    "file_name",
-    "md5sum",
-    "file_size",
-    "file_format",
-    "dataset_title",
-    "classifications",
-    "entry_id",
-    # The durable identity (#433): `entry_id` is regenerated on a catalog re-index,
-    # `file_id` is not, and `drs_uri` is carried rather than derived from it.
-    "file_id",
-    "drs_uri",
-    "published",
-}
-
-_METADATA_KEYS = [
-    "total_to_process",
-    "processed",
-    "successful",
-    "failed",
-    "dropped",
-    "errored",
-    "validation_failed",
-    "from_cache",
-    "content_unreadable",
-    "complete",
-]
 
 
 class TestClassifierRecord:
@@ -191,7 +165,7 @@ class TestRunMetadata:
         assert meta.from_cache == 2
         assert meta.content_unreadable == 1
 
-    def test_to_dict_has_the_ten_keys_in_emit_order(self):
+    def test_to_dict_has_the_tally_keys_in_emit_order(self):
         d = RunMetadata.from_counts(
             total=3, successful=2, from_cache=1, content_unreadable=0, errored=1, validation_failed=0
         ).to_dict()

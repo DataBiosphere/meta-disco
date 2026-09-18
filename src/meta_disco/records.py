@@ -37,10 +37,11 @@ reason: ``_build_record`` reads them off either stream without asking which it h
 and a record that failed the input contract is still one the repository publishes
 values for.
 
-The module also holds the two write-side dataclasses the pipeline serializes at
-its output boundary, which follow the same frozen / field-order-is-output-order /
-``to_dict`` discipline: :class:`OutputRecord`, the per-file output envelope (#204),
-and :class:`RunMetadata`, the per-run tally block (#205).
+The module also holds the two write-side dataclasses every producer serializes at its
+output boundary, which follow the same frozen / field-order-is-output-order /
+``to_dict`` discipline: :class:`OutputRecord`, the per-file output envelope (#204,
+widened to all eleven producers by #450), and :class:`RunMetadata`, the per-run tally
+block (#205).
 """
 
 from __future__ import annotations
@@ -62,10 +63,10 @@ PUBLISHED_FIELDS = ("data_modality", "reference_assembly")
 def published_from(record: dict, source: str | None) -> dict | None:
     """The ``published`` block for one raw input record (contract 7.7's one-liner).
 
-    The form every producer calls, so a producer states *which record* it is building
-    the block for and nothing else. Reading the field list from :data:`PUBLISHED_FIELDS` here is
-    what makes that tuple authoritative: a producer cannot read a stale subset of the
-    dimensions, and adding a third one does not touch a single call site.
+    Reached through :meth:`OutputRecord.from_record`, so no producer states more than
+    which record it is building. Reading the field list from :data:`PUBLISHED_FIELDS`
+    here is what makes that tuple authoritative: a stale subset cannot be read, and
+    adding a third dimension touches no call site.
 
     The two fields are read with ``.get`` because they are outside the input contract
     (#424 — they are not input), so no validation has run on them and no caller
@@ -368,23 +369,22 @@ class InvalidRecord:
 class OutputRecord:
     """The per-file output envelope: identity fields wrapping a classifications payload.
 
-    The shape ``ClassifyPipeline`` writes per record. Both of *its* producers construct
-    it — the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
-    work item) and the single-file path (``classify_single``) — and serialize through
-    ``to_dict``, so the envelope can no longer drift between them (#204).
+    The shape every producer in a run writes (#450). ``ClassifyPipeline`` builds it on
+    both its paths — the batch path (``_build_record`` over a
+    ``ClassifierRecord``/``InvalidRecord`` work item) and the single-file path
+    (``classify_single``) — and the four standalone producers through
+    :meth:`from_record`. All serialize through ``to_dict``, so the envelope cannot drift
+    between them (#204).
 
-    **It is not the shape of every classification record in a run.** #204 covers the
-    seven file types the pipeline classifies (bam, vcf, fastq, fasta, gfa, tar, bed);
-    the four standalone producers build their output dicts by hand and emit wider
-    records — ``dataset_id`` on auxiliary/image/remaining, and ``dataset_id`` plus
-    ``parent_file``/``parent_md5sum`` on index, which also writes a third envelope key,
-    ``unmatched_files``. Their run ``metadata`` blocks
-    differ too: five distinct shapes across the eleven files, sharing only ``complete``.
-    So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
-    pins only this one. What all eleven *do* share is ``classifications``,
-    the identity fields this module's docstring names, and ``published`` — which is
-    what lets ``output_utils.iter_records``, ``field_label`` and ``corpus_diff`` read them
-    uniformly. Unifying the four on this record is #429.
+    **It is the shape of every classification record in a run** (#450). #204 covered the
+    seven file types the pipeline classifies; the four standalone producers assembled
+    their own dicts and emitted wider records, so a run held three record shapes and a
+    field wired into the pipeline reached some of the eleven outputs and not others.
+    They build this now, through :meth:`from_record`, and
+    ``metadata_fixtures.RECORD_KEYS`` pins all eleven against it.
+
+    The index producer adds the one envelope key that is not a record: ``unmatched_files``,
+    its diagnostic array for files it took no parent for.
 
     ``published`` is the repository's own values (#424) — what it publishes for this file
     today, beside what this run concluded. It is ``None`` on most records and on the
@@ -421,6 +421,10 @@ class OutputRecord:
     file_id: Any
     drs_uri: Any
     published: dict | None = None
+    # The typed derivation edge (#450). Null on every producer but the index one,
+    # which is the only one that resolves a parent today — emitted rather than omitted,
+    # for the same reason `published` is: one envelope shape for every row.
+    derived_from: dict | None = None
 
     @classmethod
     def from_work_item(
@@ -452,6 +456,52 @@ class OutputRecord:
             drs_uri=item.drs_uri,
             classifications=classifications,
             published=build_published({field: getattr(item, field) for field in PUBLISHED_FIELDS}, source),
+        )
+
+    @classmethod
+    def from_record(
+        cls,
+        record: dict,
+        classifications: dict,
+        source: str | None = None,
+        *,
+        derived_from: dict | None = None,
+    ) -> OutputRecord:
+        """Build from a raw input record, for a producer that reads dicts not work items.
+
+        The four standalone producers classify from the filename and never build a
+        ``ClassifierRecord``, so :meth:`from_work_item` has nothing to read. This is
+        their one construction site (#450), where each used to assemble its own dict and
+        so could omit a field the others carried — ``published`` and the catalog identity
+        are read here rather than by each producer, which is what retires the two sweeps
+        that checked they had been.
+
+        ``derived_from`` is the index producer's typed edge; every other producer leaves
+        it null.
+
+        Its callers do not run the input contract — they classify from the filename and
+        never build a work item — so this cannot assume types the way
+        :meth:`from_work_item` can, and reads with ``.get``. It **echoes** what it reads
+        and does not coerce it, unlike ``InvalidRecord``, so a drifted ``file_name``
+        would reach a field typed ``str``. No producer can deliver one: the three
+        filename producers call ``FileInfo.from_filename`` first and raise on a
+        non-string, and the catch-all's contract-violation path builds its row through
+        ``InvalidRecord`` precisely so the coercion is the pipeline's. Coercing here
+        instead would swallow a drift that currently fails loudly. Unifying the two means
+        routing those producers through ``partition_records``, which would divert a
+        contract-violating record to a ``validation_failed`` row instead of classifying
+        it from its name: a coverage change, not a refactor, and out of #450's scope.
+        """
+        return cls(
+            file_name=record.get("file_name", ""),
+            file_format=record.get("file_format"),
+            md5sum=record.get("file_md5sum"),
+            file_size=record.get("file_size"),
+            dataset_title=record.get("dataset_title"),
+            classifications=classifications,
+            published=published_from(record, source),
+            derived_from=derived_from,
+            **identity_from(record),
         )
 
     @classmethod
@@ -498,6 +548,12 @@ class OutputRecord:
 class RunMetadata:
     """The per-run tally block written under ``"metadata"`` in the final JSON output.
 
+    Every producer's block, not only the pipeline's (#450). The four standalone
+    producers each wrote an ad-hoc shape, so a reader could not take a count from a run
+    without knowing which file it came from; they now build this, with their own counts
+    under ``details``. A producer that fetches nothing reports ``from_cache`` and
+    ``content_unreadable`` as 0, which is true of it rather than absent.
+
     The pipeline used to build this as a 10-key literal in ``_save_final`` whose
     derived keys carried their invariants only in prose comments. :meth:`from_counts`
     is now the single site that computes those derived tallies, so the invariants are
@@ -512,6 +568,13 @@ class RunMetadata:
     * ``processed`` is ``successful + errored + validation_failed``: a
       ``validation_failed`` row (failed the input contract, #161) is counted neither
       in ``successful`` nor in ``failed``, so it is added in explicitly here.
+
+    Those three hold for every producer. None of them says a tally counts *rows*:
+    ``errored`` is an attempt that produced none, so the rows written are
+    ``successful + validation_failed``. What a standalone producer must not do is drop a
+    record it cannot classify — it writes a ``validation_failed`` row, as the pipeline
+    does, because a missing row is indistinguishable from a file that was never seen
+    (#155).
     """
 
     # Field order is the serialized ``metadata`` key order — ``to_dict`` derives the
@@ -527,6 +590,11 @@ class RunMetadata:
     from_cache: int
     content_unreadable: int
     complete: bool
+    # Whatever this producer counts that the shared tally does not: the image and
+    # auxiliary per-extension breakdowns, the index producer's matched/unmatched
+    # split (#450). Kept out of the tally itself so every producer's `metadata` has
+    # one shape and a reader can tell the shared counts from a producer's own.
+    details: dict | None = None
 
     @classmethod
     def from_counts(
@@ -539,6 +607,7 @@ class RunMetadata:
         errored: int = 0,
         validation_failed: int = 0,
         complete: bool = True,
+        details: dict | None = None,
     ) -> RunMetadata:
         """Build a run's metadata from the raw counts, computing the derived tallies once.
 
@@ -558,10 +627,11 @@ class RunMetadata:
             from_cache=from_cache,
             content_unreadable=content_unreadable,
             complete=complete,
+            details=details,
         )
 
     def to_dict(self) -> dict:
-        """Serialize to the ``metadata`` dict (the ten-key shape written to JSON).
+        """Serialize to the ``metadata`` dict written to JSON.
 
         Derived from the dataclass fields, so every field is emitted, in declaration
         order, and ``to_dict`` cannot drift from the field list.

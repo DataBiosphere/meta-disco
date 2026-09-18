@@ -20,10 +20,14 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from meta_disco.metadata_schema import (
+    classification_blocking_reasons,
+    validation_failed_classifications,
+)
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
-from meta_disco.records import identity_from, published_from
+from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -93,6 +97,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     engine = RuleEngine()
     results = []
     ext_counts = Counter()
+    validation_failed = 0
 
     for rec in files:
         name = rec.get("file_name", "")
@@ -107,7 +112,23 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 f"keys on it to know what another producer already classified. "
                 f"`make validate-metadata` rejects this before `make classify` runs."
             )
-        if not name or entry_id in already:
+        if entry_id in already:
+            continue
+        if not name:
+            # A record with no file_name violates the input contract, and is written as
+            # a validation_failed row exactly as the pipeline writes one (#161): a
+            # missing row is indistinguishable from a file that was never seen (#155),
+            # and `unprocessable-report` finds such a file by scanning the output.
+            # Checked after `already`, or a nameless record another producer claimed on
+            # its `file_format` would be written twice.
+            validation_failed += 1
+            # The pipeline's own path, not an imitation of it: `InvalidRecord` coerces a
+            # drifted identity (a null or non-string `file_name`) that `from_record`
+            # would echo as-is into a row typed `str`.
+            item = InvalidRecord.from_record(rec, classification_blocking_reasons(rec))
+            results.append(
+                OutputRecord.from_work_item(item, validation_failed_classifications(item.reasons), source).to_dict()
+            )
             continue
 
         file_info = FileInfo.from_filename(
@@ -117,41 +138,34 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         )
         result = engine.classify_extended(file_info)
 
-        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
+        # Leading dot, so a key here reads like the extensions the other producers count
+        # by rather than a bare `txt` beside their `.png` — the metadata blocks are one
+        # shape now, which invites merging them. It is not their vocabulary: this is the
+        # last dot-token of a name no producer claimed, so `x.gff.gz` counts as `.gz`.
+        token = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        ext = f".{token}" if token else "(none)"
         ext_counts[ext] += 1
 
-        results.append(
-            {
-                "file_name": name,
-                "file_format": rec.get("file_format", ""),
-                "md5sum": rec.get("file_md5sum"),
-                "file_size": rec.get("file_size"),
-                **identity_from(rec),
-                "dataset_id": rec.get("dataset_id"),
-                "dataset_title": rec.get("dataset_title", ""),
-                "classifications": result.to_output_dict(),
-                # What AnVIL declares about this file today, carried beside what this
-                # run concluded (#424). Every producer of a run must write it or the
-                # comparison silently under-reports: this catch-all alone holds 5,817
-                # of the corpus's 11,231 files with a published value.
-                "published": published_from(rec, source),
-            }
-        )
+        # One record shape for every producer (#450).
+        results.append(OutputRecord.from_record(rec, result.to_output_dict(), source).to_dict())
 
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")
     for ext, count in ext_counts.most_common(20):
-        print(f"  .{ext}: {count:,}")
+        print(f"  {ext}: {count:,}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w") as out:
         json.dump(
             {
-                "metadata": {
-                    "total_files": len(results),
-                    "by_extension": dict(ext_counts.most_common()),
-                    "complete": True,
-                },
+                "metadata": RunMetadata.from_counts(
+                    total=len(results),
+                    successful=len(results) - validation_failed,
+                    validation_failed=validation_failed,
+                    from_cache=0,
+                    content_unreadable=0,
+                    details={"by_extension": dict(ext_counts.most_common())},
+                ).to_dict(),
                 "classifications": results,
             },
             out,

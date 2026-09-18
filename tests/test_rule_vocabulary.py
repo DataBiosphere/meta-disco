@@ -12,8 +12,15 @@ Two layers of protection:
 Together they keep the rules and the schema from drifting apart.
 """
 
+import sys
+from pathlib import Path
+
 import pytest
 import yaml
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
 
 from meta_disco import schema_vocab
 from meta_disco.file_name import Format
@@ -405,6 +412,14 @@ def test_name_source_constants_match_schema_enum():
     from meta_disco.validators.reference_builds import NAME_SOURCE_COMMAND_LINE, NAME_SOURCE_REFERENCE_FIELD
 
     assert {NAME_SOURCE_REFERENCE_FIELD, NAME_SOURCE_COMMAND_LINE} == schema_vocab.name_source_values()
+
+
+def test_derivation_edge_constants_match_schema_enums():
+    # The index producer emits `relation` and `parent_kind` as literals, and nothing in
+    # `make test` validates output against the LinkML enums. Pin both so a typo or a
+    # schema rename cannot drift silently (#450).
+    assert set(_PARENT_KIND_BY_CATEGORY.values()) <= schema_vocab.parent_kind_values()
+    assert INDEX_RELATION in schema_vocab.relation_values()
 
 
 @pytest.mark.parametrize(

@@ -1,15 +1,15 @@
 # Corpus comparison
 
-Generated 2026-09-12 20:47 by `scripts/compare_corpus.py` (issue #335).
+Generated 2026-09-18 14:51 by `scripts/compare_corpus.py` (issue #335).
 
-Runs compared: `output/anvil/20260909_014657` → `output/anvil/20260912_202902`.
+Runs compared: `output/anvil/20260802_170826` → `output/anvil/20260918_142651`.
 
 ## Input snapshots
 
 | | file | catalog | pulled | files |
 |---|---|---|---|---:|
 | old | `data/anvil/archive/anvil14_20260729/anvil_files_metadata.json` | (unrecorded) | 2026-07-29T23:37:42.260488 | 733,877 |
-| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-12T20:28:38.175239 | 708,088 |
+| new | `data/anvil/anvil_files_metadata.json` | anvil15 | 2026-09-17T22:27:26.661106 | 708,088 |
 
 ### Parity by md5, per dataset
 
@@ -36,17 +36,17 @@ content — the run diff, by contrast, treats those as two different files.
 
 ## Coverage by dimension
 
-Files classified out of 708,203 (old) and 708,203 (new).
+Files classified out of 733,992 (old) and 708,088 (new).
 `classified` counts a real value; `n/a` counts `not_applicable`, which the
 coverage report folds into its own Classified row along with any other status.
 
 | dimension | old | new | old % | new % | delta | old n/a | new n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| data_modality | 592,104 | 592,104 | 83.6% | 83.6% | +0 | 59,021 | 59,021 |
-| data_type | 626,548 | 626,548 | 88.5% | 88.5% | +0 | 55,947 | 55,947 |
-| platform | 57,973 | 57,973 | 8.2% | 8.2% | +0 | 74,429 | 74,429 |
-| reference_assembly | 463,793 | 463,793 | 65.5% | 65.5% | +0 | 62,863 | 62,863 |
-| assay_type | 28,635 | 28,635 | 4.0% | 4.0% | +0 | 74,429 | 74,429 |
+| data_modality | 617,821 | 577,575 | 84.2% | 81.6% | -40,246 | 59,021 | 58,492 |
+| data_type | 652,265 | 646,054 | 88.9% | 91.2% | -6,211 | 55,947 | 37,548 |
+| platform | 57,973 | 57,230 | 7.9% | 8.1% | -743 | 100,137 | 73,749 |
+| reference_assembly | 463,794 | 448,738 | 63.2% | 63.4% | -15,056 | 88,571 | 63,214 |
+| assay_type | 54,349 | 28,007 | 7.4% | 4.0% | -26,342 | 74,429 | 73,749 |
 
 ### Where the delta comes from
 
@@ -57,33 +57,81 @@ runs, which is the only classifier-behaviour column.
 
 | dimension | delta | corpus loss | corpus gain | label change |
 |---|---:|---:|---:|---:|
-| data_modality | +0 | -0 | +0 | +0 |
-| data_type | +0 | -0 | +0 | +0 |
-| platform | +0 | -0 | +0 | +0 |
-| reference_assembly | +0 | -0 | +0 | +0 |
-| assay_type | +0 | -0 | +0 | +0 |
+| data_modality | -40,246 | -25,717 | +0 | -14,529 |
+| data_type | -6,211 | -25,832 | +0 | +19,621 |
+| platform | -743 | -115 | +0 | -628 |
+| reference_assembly | -15,056 | -1 | +0 | -15,055 |
+| assay_type | -26,342 | -25,714 | +0 | -628 |
 
 ## Label changes on files present in both runs
 
-No file present in both runs changed a label.
+### data_modality
+
+| old label | new label | files |
+|---|---|---:|
+| `genomic` | `not_classified` | 15,006 |
+| `not_applicable` | `genomic` | 477 |
+| `not_applicable` | `not_classified` | 52 |
+
+### data_type
+
+| old label | new label | files |
+|---|---|---:|
+| `variants.germline` | `index` | 165,625 |
+| `variants` | `index` | 37,945 |
+| `not_applicable` | `checksum` | 14,233 |
+| `alignments` | `index` | 11,902 |
+| `annotations` | `index` | 7,011 |
+| `not_applicable` | `log` | 3,637 |
+| `not_classified` | `index` | 1,222 |
+| `not_applicable` | `index` | 529 |
+| `variants.structural` | `index` | 26 |
+
+### platform
+
+| old label | new label | files |
+|---|---|---:|
+| `not_applicable` | `not_classified` | 680 |
+| `ILLUMINA` | `not_classified` | 628 |
+
+### reference_assembly
+
+| old label | new label | files |
+|---|---|---:|
+| `CHM13` | `not_classified` | 7,691 |
+| `GRCh38` | `not_classified` | 7,363 |
+| `not_classified` | `not_applicable` | 465 |
+| `GRCh38` | `not_applicable` | 1 |
+
+### assay_type
+
+| old label | new label | files |
+|---|---|---:|
+| `not_applicable` | `not_classified` | 680 |
+| `WGS` | `not_classified` | 628 |
 
 ## Per-dataset classified counts
 
 | dataset | dimension | old | new | delta |
 |---|---|---:|---:|---:|
 | ANVIL_1000G_PRIMED_data_model | data_modality | 8,631 | 8,631 | +0 |
-| ANVIL_1000G_PRIMED_data_model | data_type | 8,631 | 8,631 | +0 |
+| ANVIL_1000G_PRIMED_data_model | data_type | 8,631 | 11,483 | +2,852 |
 | ANVIL_1000G_PRIMED_data_model | platform | 0 | 0 | +0 |
 | ANVIL_1000G_PRIMED_data_model | reference_assembly | 8,641 | 8,641 | +0 |
 | ANVIL_1000G_PRIMED_data_model | assay_type | 0 | 0 | +0 |
 | ANVIL_1000G_high_coverage_2019 | data_modality | 12,908 | 12,908 | +0 |
-| ANVIL_1000G_high_coverage_2019 | data_type | 12,908 | 12,908 | +0 |
+| ANVIL_1000G_high_coverage_2019 | data_type | 12,908 | 25,916 | +13,008 |
 | ANVIL_1000G_high_coverage_2019 | platform | 6,404 | 6,404 | +0 |
 | ANVIL_1000G_high_coverage_2019 | reference_assembly | 12,908 | 12,908 | +0 |
 | ANVIL_1000G_high_coverage_2019 | assay_type | 6,404 | 6,404 | +0 |
+| ANVIL_GTEx_public_data | data_modality | 25,717 | 0 | -25,717 |
+| ANVIL_GTEx_public_data | data_type | 25,717 | 0 | -25,717 |
+| ANVIL_GTEx_public_data | platform | 0 | 0 | +0 |
+| ANVIL_GTEx_public_data | reference_assembly | 1 | 0 | -1 |
+| ANVIL_GTEx_public_data | assay_type | 25,714 | 0 | -25,714 |
 | ANVIL_HPRC | data_modality | 5,294 | 5,294 | +0 |
-| ANVIL_HPRC | data_type | 12,178 | 12,178 | +0 |
-| ANVIL_HPRC | platform | 5,210 | 5,210 | +0 |
+| ANVIL_HPRC | data_type | 12,178 | 13,715 | +1,537 |
+| ANVIL_HPRC | platform | 5,210 | 5,095 | -115 |
 | ANVIL_HPRC | reference_assembly | 2,121 | 2,121 | +0 |
 | ANVIL_HPRC | assay_type | 1,057 | 1,057 | +0 |
 | ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | data_modality | 119 | 119 | +0 |
@@ -91,18 +139,18 @@ No file present in both runs changed a label.
 | ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | platform | 12,403 | 12,403 | +0 |
 | ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | reference_assembly | 64 | 64 | +0 |
 | ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | assay_type | 31 | 31 | +0 |
-| ANVIL_T2T | data_modality | 264,104 | 264,104 | +0 |
-| ANVIL_T2T | data_type | 270,384 | 270,384 | +0 |
-| ANVIL_T2T | platform | 12,878 | 12,878 | +0 |
-| ANVIL_T2T | reference_assembly | 233,295 | 233,295 | +0 |
-| ANVIL_T2T | assay_type | 6,753 | 6,753 | +0 |
-| ANVIL_T2T_CHRY | data_modality | 289,468 | 289,468 | +0 |
-| ANVIL_T2T_CHRY | data_type | 290,026 | 290,026 | +0 |
-| ANVIL_T2T_CHRY | platform | 8,078 | 8,078 | +0 |
-| ANVIL_T2T_CHRY | reference_assembly | 201,104 | 201,104 | +0 |
-| ANVIL_T2T_CHRY | assay_type | 7,520 | 7,520 | +0 |
+| ANVIL_T2T | data_modality | 264,104 | 263,969 | -135 |
+| ANVIL_T2T | data_type | 270,384 | 270,522 | +138 |
+| ANVIL_T2T | platform | 12,878 | 12,808 | -70 |
+| ANVIL_T2T | reference_assembly | 233,295 | 233,107 | -188 |
+| ANVIL_T2T | assay_type | 6,753 | 6,683 | -70 |
+| ANVIL_T2T_CHRY | data_modality | 289,468 | 274,608 | -14,860 |
+| ANVIL_T2T_CHRY | data_type | 290,026 | 290,032 | +6 |
+| ANVIL_T2T_CHRY | platform | 8,078 | 7,520 | -558 |
+| ANVIL_T2T_CHRY | reference_assembly | 201,104 | 186,237 | -14,867 |
+| ANVIL_T2T_CHRY | assay_type | 7,520 | 6,962 | -558 |
 | ANVIL_nhp_dGTEx_V1 | data_modality | 1,376 | 1,376 | +0 |
-| ANVIL_nhp_dGTEx_V1 | data_type | 1,376 | 1,376 | +0 |
+| ANVIL_nhp_dGTEx_V1 | data_type | 1,376 | 1,444 | +68 |
 | ANVIL_nhp_dGTEx_V1 | platform | 136 | 136 | +0 |
 | ANVIL_nhp_dGTEx_V1 | reference_assembly | 0 | 0 | +0 |
 | ANVIL_nhp_dGTEx_V1 | assay_type | 1,372 | 1,372 | +0 |
@@ -116,18 +164,18 @@ No file present in both runs changed a label.
 | AnVIL_ENCORE_RS293 | platform | 820 | 820 | +0 |
 | AnVIL_ENCORE_RS293 | reference_assembly | 410 | 410 | +0 |
 | AnVIL_ENCORE_RS293 | assay_type | 820 | 820 | +0 |
-| AnVIL_HPRC_R2 | data_modality | 6,910 | 6,910 | +0 |
-| AnVIL_HPRC_R2 | data_type | 8,435 | 8,435 | +0 |
+| AnVIL_HPRC_R2 | data_modality | 6,910 | 7,376 | +466 |
+| AnVIL_HPRC_R2 | data_type | 8,435 | 10,291 | +1,856 |
 | AnVIL_HPRC_R2 | platform | 6,068 | 6,068 | +0 |
 | AnVIL_HPRC_R2 | reference_assembly | 3,452 | 3,452 | +0 |
 | AnVIL_HPRC_R2 | assay_type | 2,276 | 2,276 | +0 |
 | AnVIL_IGVF_Mouse_R1 | data_modality | 417 | 417 | +0 |
-| AnVIL_IGVF_Mouse_R1 | data_type | 4,386 | 4,386 | +0 |
+| AnVIL_IGVF_Mouse_R1 | data_type | 4,386 | 4,390 | +4 |
 | AnVIL_IGVF_Mouse_R1 | platform | 3,970 | 3,970 | +0 |
 | AnVIL_IGVF_Mouse_R1 | reference_assembly | 0 | 0 | +0 |
 | AnVIL_IGVF_Mouse_R1 | assay_type | 351 | 351 | +0 |
 | AnVIL_MAGE | data_modality | 1,593 | 1,593 | +0 |
-| AnVIL_MAGE | data_type | 3,151 | 3,151 | +0 |
+| AnVIL_MAGE | data_type | 3,151 | 3,188 | +37 |
 | AnVIL_MAGE | platform | 1,558 | 1,558 | +0 |
 | AnVIL_MAGE | reference_assembly | 1,574 | 1,574 | +0 |
 | AnVIL_MAGE | assay_type | 1,587 | 1,587 | +0 |
