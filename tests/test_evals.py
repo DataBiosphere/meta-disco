@@ -876,7 +876,7 @@ class TestDerivedFileTierPrecedence:
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
-    # --- Log files: all fields not_applicable ---
+    # --- Log files: `data_type` is `log`, the rest not_applicable ---
 
     def test_log_ignores_filename_reference(self):
         """Log file should stay not_applicable even with hg38 in filename."""

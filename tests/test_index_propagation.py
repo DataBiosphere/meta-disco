@@ -266,7 +266,17 @@ class TestLoadClassifications:
         assert "bam_md5" in result
         assert "bed_md5" in result
         assert result["bed_md5"]["data_modality"] == "genomic"
-        assert result["bed_md5"]["data_type"] == "annotations"
+        # The map holds only what an index inherits. `data_type` is not inherited
+        # since #437 — an index has its own — so the parent's is not read at all.
+        assert "data_type" not in result["bed_md5"]
+        assert set(result["bed_md5"]) == {
+            "data_modality",
+            "assay_type",
+            "platform",
+            "reference_assembly",
+            "detail",
+            "source_file",
+        }
 
     def test_skips_missing_files(self, tmp_path):
         """Missing files are silently skipped."""

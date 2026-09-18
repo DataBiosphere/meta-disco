@@ -737,26 +737,27 @@ class TestAddClaim:
 
 
 class TestDerivativeFiles:
-    """Test that derivative files (indices, checksums, logs) get not_applicable."""
+    """A derivative file has a kind of its own; the data it describes is another file's.
 
-    def test_index_bai(self, engine):
-        """BAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    `data_type` names the kind — `index`, `checksum`, `log` — and the dimensions that
+    describe data do not apply (#437). Before that these tests asserted only
+    `data_modality`, so they passed while their names and docstrings described the
+    opposite of what the rules now do.
+    """
 
-    def test_index_crai(self, engine):
-        """CRAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.cram.crai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_checksum_md5(self, engine):
-        """MD5 checksum files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("HG02558.final.cram.md5"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_log_files(self, engine):
-        """Log files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("pipeline.log"))
+    @pytest.mark.parametrize(
+        ("name", "data_type"),
+        [
+            ("sample.bam.bai", "index"),
+            ("sample.cram.crai", "index"),
+            ("sample.vcf.gz.tbi", "index"),
+            ("HG02558.final.cram.md5", "checksum"),
+            ("pipeline.log", "log"),
+        ],
+    )
+    def test_a_derivative_file_is_its_own_kind(self, engine, name, data_type):
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.data_type == data_type
         assert result.status_of("data_modality") == NOT_APPLICABLE
 
 

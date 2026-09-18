@@ -195,7 +195,7 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     against that file.
 
     Writing this record is what keeps such a file out of the catch-all producer, where
-    tier-1 ``index_not_applicable`` would stamp its dimensions ``not_applicable`` on
+    tier-1 ``index_not_applicable`` would stamp three dimensions ``not_applicable`` on
     the strength of the extension alone. Coverage counts ``not_applicable`` as
     classified, so that path reported a file as determined precisely where it is not
     (#438 review). Since #437 a matched row says ``index`` too, and the rule claims it
@@ -247,7 +247,6 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
             if md5:
                 classifications[md5] = {
                     "data_modality": field_label(c, "data_modality"),
-                    "data_type": field_label(c, "data_type"),
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
                     "reference_assembly": field_label(c, "reference_assembly"),

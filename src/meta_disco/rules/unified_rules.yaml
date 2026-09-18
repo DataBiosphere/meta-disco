@@ -154,9 +154,11 @@ rules:
   # EXTENSION-BASED RULES (tiers 1–2)
   # ===========================================================================
   # Tier 1: broad fallbacks (index files — reference_assembly left open)
-  # Tier 2: files whose kind `data_type` names (checksum, log) and files whose
-  #         dimensions do not apply (upload, timestamp, images, nanopore raw,
-  #         FASTQ baseline)
+  # Tier 2: definitive claims for files a name alone settles — checksum, log,
+  #         upload, timestamp, images, nanopore raw, FASTQ baseline. Most name a
+  #         kind in `data_type` and mark the data-describing dimensions
+  #         not_applicable; `upload` and `timestamp` name no kind the vocabulary
+  #         has, so they mark only statuses.
 
   # ---------------------------------------------------------------------------
   # Index files. `data_type` is the file's own kind and is claimed here, matching what
