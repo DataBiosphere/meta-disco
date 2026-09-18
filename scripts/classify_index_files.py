@@ -34,6 +34,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from meta_disco.file_name import EXTENSION_MAP, FileName
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -49,7 +50,7 @@ from meta_disco.models import (
 )
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
-from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identity_from, published_from
+from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
 
 # Why an index file took no parent. Written into each `unmatched_files` entry and
 # read back by this module's diagnostics and its tests, so it is named rather than
@@ -61,6 +62,59 @@ AMBIGUOUS_PARENT = "ambiguous_parent_in_dataset"
 # producer's extensions as the keys of `INDEX_TO_PARENT`, so what it routes on and what
 # it inherits from cannot drift apart.
 INDEX = PRODUCERS["index"]
+
+
+# An extension category (``file_name.EXTENSION_MAP``) to the derivation model's
+# ``parent_kind_enum``: the two vocabularies overlap but are not the same words. A
+# category with no enum member is deliberately absent, so it yields a null
+# ``parent_kind`` — we cannot tell, rather than a guessed kind.
+_PARENT_KIND_BY_CATEGORY = {
+    "alignment": "alignment",
+    "variant": "variants",
+    "reads": "reads",
+    "sequence": "sequence",
+    "intervals": "intervals",
+    "signal": "signal",
+    "genotype_plink": "genotypes",
+    "single_cell_matrix": "expression_matrix",
+}
+
+
+def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
+    """What kind of file this index points at, or None when that cannot be told.
+
+    The matched parent's own extension answers it where there is one. Without a parent
+    it falls back to the type-level answer — what the extensions ``INDEX_TO_PARENT``
+    declares for this index agree on, if they agree — which is the data model's claim
+    that you need not find the parent to know a ``.bai`` indexes an alignment
+    (docs/derived-file-data-model.md 4a). A ``.tbi`` indexes several kinds, so only a
+    match resolves it and the fallback gives None.
+    """
+    # A declared parent extension is not a filename, so it gets a stem and FileName
+    # peels it the same way (".vcf.gz" -> ".vcf").
+    declared = [f"parent{ext}" for ext in INDEX_TO_PARENT.get(index_ext, [])]
+    names = [parent_name] if parent_name else declared
+    categories = {EXTENSION_MAP.get(FileName.parse(name).extension or "") for name in names}
+    kinds = {_PARENT_KIND_BY_CATEGORY.get(category or "") for category in categories}
+    kinds.discard(None)
+    return kinds.pop() if len(kinds) == 1 else None
+
+
+def derivation_edge(parent_name: str | None, parent_md5sum: str | None, index_ext: str) -> dict:
+    """The typed derivation edge for one index file (#450, data model 4a).
+
+    ``relation`` is always ``index_of``: this producer classifies index files, and the
+    schema requires the verb, so there is no half-edge to emit. The grounding —
+    ``parent_file`` and ``parent_md5sum`` — is null where no parent was taken (#438),
+    which is the ungrounded edge ``parent_md5sum``'s own schema description anticipates:
+    the *type* of the link is known from the extension even when the parent is not.
+    """
+    return {
+        "relation": "index_of",
+        "parent_md5sum": parent_md5sum,
+        "parent_file": parent_name,
+        "parent_kind": parent_kind_of(parent_name, index_ext),
+    }
 
 
 def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
@@ -223,19 +277,15 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
                 }
             ],
         )
-    return {
-        "file_name": record.get("file_name"),
-        "file_format": record.get("file_format"),
-        "md5sum": record.get("file_md5sum"),
-        "file_size": record.get("file_size"),
-        **identity_from(record),
-        "dataset_id": record.get("dataset_id", "unknown"),
-        "dataset_title": record.get("dataset_title"),
-        "parent_file": None,
-        "parent_md5sum": None,
-        "classifications": {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS},
-        "published": published_from(record, source),
-    }
+    # The edge is still typed without a parent: the extension says this is an index of
+    # something, and for an unambiguous one it says of what (`parent_kind_of`). Only the
+    # grounding is missing, which is the ungrounded edge the schema anticipates.
+    return OutputRecord.from_record(
+        record,
+        {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS},
+        source,
+        derived_from=derivation_edge(None, None, index_ext),
+    ).to_dict()
 
 
 def load_classifications(*paths: Path) -> dict[str, dict]:
@@ -325,7 +375,6 @@ def propagate_to_index_files(
             if index_ext is None:
                 continue
             name = f.get("file_name", "")
-            fmt = f.get("file_format", "")
 
             stats[index_ext]["total"] += 1
 
@@ -379,13 +428,11 @@ def propagate_to_index_files(
             parent_class = classifications.get(parent_md5, {})
 
             result = {
-                **identity_from(f),
-                "file_name": name,
-                "file_format": fmt,
-                "file_md5sum": f.get("file_md5sum"),
-                "dataset_id": ds,
-                "dataset_title": f.get("dataset_title"),
-                "file_size": f.get("file_size"),
+                # The raw input record this row is about; the output is built from it.
+                # This intermediate adds only the parent's labels, and the two must stay
+                # apart: reading `published` off this dict would publish the parent's
+                # answer as the index file's own.
+                "record": f,
                 # The extension this file matched on, which is not always `file_format`:
                 # every `.fai` in the corpus carries `file_format: "Other"` (#437).
                 "index_extension": index_ext,
@@ -397,13 +444,6 @@ def propagate_to_index_files(
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
                 "detail": parent_class.get("detail", {}),
                 "inheritance_source": "parent_file",
-                # The index file's own published values, not the parent's (#424). The
-                # repository publishes for 4 index files in this corpus; all four have no
-                # parent, so before #438 they got no record here and the catch-all carried
-                # them. They now get a declined record, which carries the block too, so
-                # this producer writes the four. Wired on both paths because contract 7.7
-                # is about the producer, not about today's corpus.
-                "published": published_from(f, source),
             }
 
             if result["data_modality"] not in _sentinels:
@@ -550,26 +590,15 @@ def propagate_to_index_files(
             classifications[fld] = build_field_entry(
                 None if status == CONFLICT else label, status=status, evidence=evidence, detail=r["detail"].get(fld)
             )
+        # The index file's own identity, not the parent's (#433): this row resolves to
+        # this file's bytes. The parent is the edge's grounding, and nothing else.
         standard_results.append(
-            {
-                "file_name": r["file_name"],
-                "file_format": r["file_format"],
-                "md5sum": r.get("file_md5sum"),
-                "file_size": r.get("file_size"),
-                # The index file's own, not the parent's (#433): this row resolves to
-                # this file's bytes. Subscripted, not `identity_from`: this reads the
-                # intermediate record built above, where an absent key is our bug and
-                # should raise rather than become a null.
-                **{field: r[field] for field in CATALOG_IDENTITY_FIELDS},
-                "dataset_id": r["dataset_id"],
-                "dataset_title": r["dataset_title"],
-                "parent_file": parent,
-                "parent_md5sum": r["parent_md5sum"],
-                "classifications": classifications,
-                # Carried through the reshape, not rebuilt: the intermediate record
-                # above already holds the index file's own declaration (#424).
-                "published": r["published"],
-            }
+            OutputRecord.from_record(
+                r["record"],
+                classifications,
+                source,
+                derived_from=derivation_edge(parent, r["parent_md5sum"], r["index_extension"]),
+            ).to_dict()
         )
 
     for rec, index_ext, reason in declined:
@@ -578,15 +607,20 @@ def propagate_to_index_files(
     with output_path.open("w") as f:
         json.dump(
             {
-                "metadata": {
-                    "total_index_files": total_all,
-                    "matched_to_parent": matched_all,
-                    "unmatched": unmatched_all,
-                    "ambiguous_parent": ambiguous_all,
-                    "with_data_modality": modality_all,
-                    "with_reference_assembly": ref_all,
-                    "complete": True,
-                },
+                "metadata": RunMetadata.from_counts(
+                    total=total_all,
+                    successful=len(standard_results),
+                    # This producer inherits from Phase 1's output and reads no content.
+                    from_cache=0,
+                    content_unreadable=0,
+                    details={
+                        "matched_to_parent": matched_all,
+                        "unmatched": unmatched_all,
+                        "ambiguous_parent": ambiguous_all,
+                        "with_data_modality": modality_all,
+                        "with_reference_assembly": ref_all,
+                    },
+                ).to_dict(),
                 "classifications": standard_results,
                 "unmatched_files": unmatched,
             },

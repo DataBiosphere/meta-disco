@@ -282,18 +282,12 @@ class TestRender:
 
 
 class TestEveryProducerCarriesPublishedValues:
-    """Every standalone producer's `*_classifications.json` carries the block.
+    """The block holds the file's own published values, not a parent's.
 
-    Contract 7.7's claim is about the whole run, and the catch-all is what makes it
-    non-trivial: it classifies every input record no earlier producer named, and it
-    alone holds 5,817 of the corpus's 11,231 files with a published value. Wiring only
-    `ClassifyPipeline` produced a report that silently counted 5,403 instead of 11,231 —
-    no error, just a wrong number — which is why this is a sweep and not one test.
-
-    `ClassifyPipeline` itself is *not* swept here; it builds `OutputRecord` rather than a
-    dict, and its end-to-end propagation is pinned by
-    `test_the_pipeline_carries_the_catalog_into_a_written_record`. This class covers the
-    four producers that assemble records by hand.
+    That every producer emits the key at all is structural now (#450): all eleven build
+    `OutputRecord`, and `test_output_shape` pins its key set for each. What structure
+    cannot enforce is *which record* a producer built the block from — the index
+    producer has a parent in hand and must not publish its values as the index file's.
     """
 
     @staticmethod
@@ -313,14 +307,6 @@ class TestEveryProducerCarriesPublishedValues:
             data_modality=["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
             reference_assembly=["GRCm39"],
         )
-
-    @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
-    def test_a_standalone_producer_writes_the_declaration(self, tmp_path, producer, name, fmt):
-        [block] = self._published_blocks(run_producer(producer, tmp_path, [self._input(name, fmt)]))
-        assert block is not None
-        assert block["data_modality"] == ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
-        assert block["reference_assembly"] == ["GRCm39"]
-        assert block["source"] == "anvil/anvil15"
 
     def test_the_index_producer_writes_the_index_files_own_declaration(self, tmp_path):
         # Not the parent's: AnVIL carries the set's modality on a .bai, and that row is

@@ -1,16 +1,10 @@
 """The producers themselves — how to run each standalone one.
 
-A run has three record shapes, not one (#429): `ClassifyPipeline` covers seven file
-types through `OutputRecord`, and four producers assemble their output dicts by hand.
-So a field wired into the pipeline alone reaches some of the eleven outputs and not
-others, and the gap is a silently absent key rather than an error. Every such field
-therefore needs a *sweep*, and there are two of them now — `published` (#424) and the
-catalog identity (#433).
-
-This module is the part those two share: how to run each producer. What to assert about
-what it wrote stays in each sweep, because the two assert different things — a nested
-block against scalar echoes — and the identity sweep has a declined-record case (#438)
-the published one has no counterpart for.
+Every producer builds `OutputRecord` now (#450), so a field reaching some of the eleven
+outputs and not others is no longer a thing to sweep for: `test_output_shape` pins the
+record's key set across all of them. What still needs running a producer is what
+structure cannot settle — whose identity a record carries where a producer has two in
+hand, and the values it wrote.
 
 It lives apart from `metadata_fixtures` deliberately: importing the producers means
 putting `scripts/` on the path, and only the modules here and the tests over them
@@ -32,11 +26,14 @@ from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
 
 # The three producers that take `(metadata_path, output_path)` and write one row per
-# input record, with a file name and format each one routes on. The index producer
-# takes a third argument and needs a parent to match against, so it has its own runner.
+# input record, with a file name and format each one routes on. The index producer takes
+# a third argument and needs a parent to match against, so it has its own runner.
+#
+# Each param's id is the producer's registry name, so a test can check this list against
+# `producers.PRODUCERS` and notice a producer nothing here runs.
 STANDALONE_PRODUCERS = [
     pytest.param(classify_images, "slide.svs", ".svs", id="images"),
-    pytest.param(classify_auxiliary_genomic, "cohort.pvar", ".pvar", id="auxiliary_genomic"),
+    pytest.param(classify_auxiliary_genomic, "cohort.pvar", ".pvar", id="auxiliary"),
     pytest.param(
         functools.partial(classify_remaining, classification_paths=[]),
         "mystery.xyz",

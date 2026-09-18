@@ -23,7 +23,7 @@ from pathlib import Path
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
-from meta_disco.records import identity_from, published_from
+from meta_disco.records import OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -120,23 +120,8 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         ext = name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
         ext_counts[ext] += 1
 
-        results.append(
-            {
-                "file_name": name,
-                "file_format": rec.get("file_format", ""),
-                "md5sum": rec.get("file_md5sum"),
-                "file_size": rec.get("file_size"),
-                **identity_from(rec),
-                "dataset_id": rec.get("dataset_id"),
-                "dataset_title": rec.get("dataset_title", ""),
-                "classifications": result.to_output_dict(),
-                # What AnVIL declares about this file today, carried beside what this
-                # run concluded (#424). Every producer of a run must write it or the
-                # comparison silently under-reports: this catch-all alone holds 5,817
-                # of the corpus's 11,231 files with a published value.
-                "published": published_from(rec, source),
-            }
-        )
+        # One record shape for every producer (#450).
+        results.append(OutputRecord.from_record(rec, result.to_output_dict(), source).to_dict())
 
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")
@@ -147,11 +132,14 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     with output_path.open("w") as out:
         json.dump(
             {
-                "metadata": {
-                    "total_files": len(results),
-                    "by_extension": dict(ext_counts.most_common()),
-                    "complete": True,
-                },
+                "metadata": RunMetadata.from_counts(
+                    total=len(results),
+                    successful=len(results),
+                    # This producer classifies from the filename and reads no content.
+                    from_cache=0,
+                    content_unreadable=0,
+                    details={"by_extension": dict(ext_counts.most_common())},
+                ).to_dict(),
                 "classifications": results,
             },
             out,

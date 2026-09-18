@@ -164,13 +164,18 @@ evidence}` entry — plus the controlled vocabulary:
     what the tuple exists to prevent a third time. `entry_id` is regenerated when the
     catalog is re-indexed and the other two are not, which is why a consumer joins on
     `file_id` — the schema's slot descriptions carry that, not the tuple.
-  - **Two sweeps check that every producer carries a field** — `published` (#424) and the
-    catalog identity (#433) — for the same reason: a run has three record shapes (#429),
-    so a field wired into `ClassifyPipeline` alone reaches some of the eleven outputs and
-    not others, and the gap is a silently absent key rather than an error. They share
-    `tests/producer_sweep` (how to run each producer; it is the one place `scripts/` goes
-    on the path for this) and keep their own assertions. A new standalone producer goes
-    into `STANDALONE_PRODUCERS` there and both sweeps pick it up.
+  - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
+    `from_work_item`, the four standalone producers through `from_record`. A per-record
+    field added there reaches all eleven outputs; one wired into a producer does not.
+    That is why the two sweeps `published` (#424) and the catalog identity (#433) needed
+    are gone: `test_output_shape` pins the record's key set across all eleven instead.
+    Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
+    and that test picks it up.
+  - **`derived_from` is the index producer's typed edge** (#450): `relation` is always
+    `index_of` and required, the grounding (`parent_file` / `parent_md5sum`) is null
+    where #438 took no parent, and `parent_kind` comes from the matched parent's
+    extension — or, with no parent, from what `INDEX_TO_PARENT` declares when those
+    agree. No other producer emits an edge; widening it is #371.
   - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

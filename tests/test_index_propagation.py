@@ -43,7 +43,10 @@ def _assert_declined(output: dict, file_name: str) -> dict:
     assert field_value(cls, "data_type") == "index"
     for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
         assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified, not asserted"
-    assert records[0]["parent_file"] is None
+    # A declined record still carries a typed edge — the extension says it indexes
+    # something — with the grounding null (#450).
+    assert records[0]["derived_from"]["relation"] == "index_of"
+    assert records[0]["derived_from"]["parent_file"] is None
     return records[0]
 
 
@@ -162,6 +165,27 @@ class TestNoJunkCandidates:
         """Should not generate .cram.cram candidates."""
         candidates = get_parent_candidates("sample.cram.crai", ".crai")
         assert not any(".cram.cram" in c for c in candidates)
+
+
+def test_every_index_record_carries_its_own_file_size(tmp_path):
+    """The index file's own bytes, on both record paths.
+
+    Every index record carried `file_size: null` until #439 populated the intermediate
+    record this producer builds from. Nothing pinned it, so the fix was incidental and
+    could be undone the same way.
+    """
+    from tests.producer_sweep import run_index_producer
+
+    envelope = run_index_producer(
+        tmp_path,
+        [
+            {**_file("sample.bam", ".bam", "b" * 32, "p1"), "file_size": 900},
+            {**_file("sample.bam.bai", ".bai", "a" * 32, "i1"), "file_size": 17},
+            {**_file("orphan.bam.bai", ".bai", "c" * 32, "i2"), "file_size": 23},
+        ],
+    )
+    sizes = {r["file_name"]: r["file_size"] for r in envelope["classifications"]}
+    assert sizes == {"sample.bam.bai": 17, "orphan.bam.bai": 23}
 
 
 class TestIndexToParentMapping:
@@ -345,11 +369,14 @@ class TestLoadClassifications:
         assert len(index_cls) == 1
         csi = index_cls[0]
         assert csi["file_name"] == "HG03652.regions.bed.gz.csi"
-        assert csi["parent_file"] == "HG03652.regions.bed.gz"
+        assert csi["derived_from"]["parent_file"] == "HG03652.regions.bed.gz"
+        # `.csi` indexes variants or intervals, so the type alone cannot say which;
+        # the matched parent does.
+        assert csi["derived_from"]["parent_kind"] == "intervals"
         cls = csi["classifications"]
         assert field_value(cls, "data_modality") == "genomic"
         # The parent is annotations; the index is an index (#437). The parent is still
-        # reachable, by `parent_file` / `parent_md5sum` on the record.
+        # reachable, through the `derived_from` edge.
         assert field_value(cls, "data_type") == "index"
         assert field_value(cls, "reference_assembly") == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
@@ -589,7 +616,7 @@ class TestLoadClassifications:
         assert len(output["unmatched_files"]) == 1
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
         assert output["unmatched_files"][0]["reason"] == NO_MATCHING_PARENT
-        assert output["metadata"]["ambiguous_parent"] == 0
+        assert output["metadata"]["details"]["ambiguous_parent"] == 0
 
     def test_parent_found_but_not_classified(self, tmp_path):
         """Parent exists in metadata but has no classification — index gets not_classified."""
@@ -694,8 +721,8 @@ class TestLoadClassifications:
         assert entry["reason"] == AMBIGUOUS_PARENT
         assert entry["ambiguous_candidate"] == "sample.bam"
         assert entry["files_sharing_that_name"] == 2
-        assert output["metadata"]["ambiguous_parent"] == 1
-        assert output["metadata"]["unmatched"] == 0
+        assert output["metadata"]["details"]["ambiguous_parent"] == 1
+        assert output["metadata"]["details"]["unmatched"] == 0
 
     def test_same_name_in_another_dataset_is_not_ambiguous(self, tmp_path):
         """The lookup key is per dataset, so a name reused across datasets still matches."""
@@ -741,7 +768,7 @@ class TestLoadClassifications:
         assert output["unmatched_files"] == []
         assert len(output["classifications"]) == 1
         record = output["classifications"][0]
-        assert record["parent_md5sum"] == "11111111111111111111111111111111"
+        assert record["derived_from"]["parent_md5sum"] == "11111111111111111111111111111111"
         assert record["classifications"]["reference_assembly"]["value"] == "GRCh38"
 
     def test_does_not_fall_through_to_a_later_candidate(self, tmp_path):

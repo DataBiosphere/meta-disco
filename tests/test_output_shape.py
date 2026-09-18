@@ -201,6 +201,10 @@ RECORD_KEYS = {
     # The repository's published values (#424). Present on every record, null on most —
     # these fixtures declare nothing, so the golden pins it as null throughout.
     "published",
+    # The typed derivation edge (#450). Null on every producer but the index one, which
+    # is the only one that resolves a parent; emitted rather than omitted so the
+    # envelope keeps one shape across all eleven files.
+    "derived_from",
 }
 
 
@@ -386,3 +390,49 @@ def _regenerate_golden():
 
 if __name__ == "__main__":
     _regenerate_golden()
+
+
+def test_every_producer_emits_the_same_record_keys(tmp_path):
+    """All eleven output files carry one record shape (#450).
+
+    The golden fixture above covers the seven the pipeline writes; this covers the four
+    that used to assemble dicts by hand and so could each carry a different set. That is
+    what `published` (#424) and the catalog identity (#433) each needed a sweep for, and
+    what building `OutputRecord` makes structural instead.
+    """
+    from tests.metadata_fixtures import valid_record
+    from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
+
+    for producer, name, fmt in (param.values for param in STANDALONE_PRODUCERS):
+        run_dir = tmp_path / name
+        run_dir.mkdir()
+        [row] = run_producer(producer, run_dir, [valid_record(file_name=name, file_format=fmt)])
+        assert set(row) == RECORD_KEYS, f"{name}: {set(row) ^ RECORD_KEYS}"
+
+    # The index producer takes a third argument, so it has its own runner. Both of its
+    # record paths are covered: a matched parent and a declined one (#438).
+    for records, label in (
+        (
+            [
+                valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32),
+                valid_record(file_name="sample.bam.bai", file_format=".bai"),
+            ],
+            "matched",
+        ),
+        ([valid_record(file_name="orphan.bam.bai", file_format=".bai")], "declined"),
+    ):
+        run_dir = tmp_path / f"index_{label}"
+        run_dir.mkdir()
+        envelope = run_index_producer(run_dir, records)
+        for row in envelope["classifications"]:
+            assert set(row) == RECORD_KEYS, f"index/{label}: {set(row) ^ RECORD_KEYS}"
+
+
+def test_the_shape_test_covers_every_producer():
+    """Otherwise a twelfth producer is added and nothing notices — which is exactly how
+    the two sweeps this replaced could go stale."""
+    from meta_disco.producers import PRODUCERS
+    from tests.producer_sweep import STANDALONE_PRODUCERS
+
+    covered = set(FILE_TYPE_REGISTRY) | {param.id for param in STANDALONE_PRODUCERS} | {"index"}
+    assert covered == set(PRODUCERS), f"producers with no record-shape coverage: {set(PRODUCERS) ^ covered}"

@@ -14,7 +14,7 @@ from pathlib import Path
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
-from meta_disco.records import identity_from, published_from
+from meta_disco.records import OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
 # Routes through the shared predicate — see meta_disco.producers.
@@ -46,7 +46,6 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         if matched_ext is None:
             continue
         name = f.get("file_name", "")
-        fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
 
         stats[matched_ext]["total"] += 1
@@ -64,22 +63,8 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         if result.reference_assembly:
             stats[matched_ext]["with_ref"] += 1
 
-        results.append(
-            {
-                "file_name": name,
-                "file_format": fmt,
-                "md5sum": f.get("file_md5sum"),
-                "file_size": f.get("file_size"),
-                **identity_from(f),
-                "dataset_id": f.get("dataset_id"),
-                "dataset_title": dataset_title,
-                "classifications": result.to_output_dict(),
-                # What AnVIL declares about this file today, carried beside what this
-                # run concluded. Contract 7.7 binds every producer: omitting it does
-                # not fail, it under-reports.
-                "published": published_from(f, source),
-            }
-        )
+        # One record shape for every producer (#450).
+        results.append(OutputRecord.from_record(f, result.to_output_dict(), source).to_dict())
 
     # Print summary
     print("\n" + "=" * 70)
@@ -130,16 +115,21 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     with output_path.open("w") as f:
         json.dump(
             {
-                "metadata": {
-                    "total_files": total_all,
-                    # The registry's tuple, not a set: its order is fixed, so two runs
-                    # over the same input cannot write differently ordered output.
-                    "by_extension": {
-                        ext: stats[ext]["total"] for ext in AUXILIARY.extensions if stats[ext]["total"] > 0
+                "metadata": RunMetadata.from_counts(
+                    total=total_all,
+                    successful=len(results),
+                    # This producer classifies from the filename and reads no content.
+                    from_cache=0,
+                    content_unreadable=0,
+                    details={
+                        # The registry's tuple, not a set: its order is fixed, so two
+                        # runs over the same input cannot write differently ordered output.
+                        "by_extension": {
+                            ext: stats[ext]["total"] for ext in AUXILIARY.extensions if stats[ext]["total"] > 0
+                        },
+                        "with_reference": ref_all,
                     },
-                    "with_reference": ref_all,
-                    "complete": True,
-                },
+                ).to_dict(),
                 "classifications": results,
             },
             f,

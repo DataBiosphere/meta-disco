@@ -18,6 +18,8 @@ _ENVELOPE_KEYS = {
     "file_id",
     "drs_uri",
     "published",
+    # The typed derivation edge (#450), null on every producer but the index one.
+    "derived_from",
 }
 
 _METADATA_KEYS = [
@@ -31,6 +33,8 @@ _METADATA_KEYS = [
     "from_cache",
     "content_unreadable",
     "complete",
+    # Whatever a producer counts beyond the shared tally (#450).
+    "details",
 ]
 
 
@@ -191,7 +195,7 @@ class TestRunMetadata:
         assert meta.from_cache == 2
         assert meta.content_unreadable == 1
 
-    def test_to_dict_has_the_ten_keys_in_emit_order(self):
+    def test_to_dict_has_the_tally_keys_in_emit_order(self):
         d = RunMetadata.from_counts(
             total=3, successful=2, from_cache=1, content_unreadable=0, errored=1, validation_failed=0
         ).to_dict()
