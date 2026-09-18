@@ -64,7 +64,7 @@ INDEX_TO_PARENT = {
     ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
-    # `.fai` and `.idx` are in `index_not_applicable`'s extension list and were missing
+    # `.fai` and `.idx` are in the `index_file` rule's extension list and were missing
     # here, so 477 `.fai` files never reached this producer and took that rule's four
     # `not_applicable` stamps from the catch-all — the outcome #438 exists to prevent.
     # Every one of the 477 has a present, unambiguous parent, so they inherit.
@@ -195,7 +195,7 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     against that file.
 
     Writing this record is what keeps such a file out of the catch-all producer, where
-    tier-1 ``index_not_applicable`` would stamp three dimensions ``not_applicable`` on
+    the tier-1 ``index_file`` rule would once have stamped three dimensions ``not_applicable`` on
     the strength of the extension alone. Coverage counts ``not_applicable`` as
     classified, so that path reported a file as determined precisely where it is not
     (#438 review). Since #437 a matched row says ``index`` too, and the rule claims it

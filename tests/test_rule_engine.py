@@ -746,19 +746,21 @@ class TestDerivativeFiles:
     """
 
     @pytest.mark.parametrize(
-        ("name", "data_type"),
+        ("name", "data_type", "modality_status"),
         [
-            ("sample.bam.bai", "index"),
-            ("sample.cram.crai", "index"),
-            ("sample.vcf.gz.tbi", "index"),
-            ("HG02558.final.cram.md5", "checksum"),
-            ("pipeline.log", "log"),
+            # An index's modality is its parent's and merely unknown here; a checksum
+            # or log has none of its own, so those are denied outright (#437).
+            ("sample.bam.bai", "index", NOT_CLASSIFIED),
+            ("sample.cram.crai", "index", NOT_CLASSIFIED),
+            ("sample.vcf.gz.tbi", "index", NOT_CLASSIFIED),
+            ("HG02558.final.cram.md5", "checksum", NOT_APPLICABLE),
+            ("pipeline.log", "log", NOT_APPLICABLE),
         ],
     )
-    def test_a_derivative_file_is_its_own_kind(self, engine, name, data_type):
+    def test_a_derivative_file_is_its_own_kind(self, engine, name, data_type, modality_status):
         result = engine.classify_extended(FileInfo.from_filename(name))
         assert result.data_type == data_type
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("data_modality") == modality_status
 
 
 class TestSpecialFileTypes:
@@ -1388,14 +1390,20 @@ class TestReasonChain:
 class TestSentinelValues:
     """Test that not_applicable/not_classified sentinels are used correctly."""
 
-    def test_derivative_files_get_not_applicable(self, engine):
-        """Index files get not_applicable for modality/platform/assay but not reference_assembly
-        (reference IS applicable to indexes — it's determined by the parent file's alignment)."""
+    def test_an_index_leaves_the_parents_dimensions_open(self, engine):
+        """All four are applicable to an index and undetermined without its parent.
+
+        This test used to assert `reference_assembly` open and the other three
+        `not_applicable`, on the reasoning — in its own docstring — that "reference IS
+        applicable to indexes, it's determined by the parent file's alignment". That is
+        equally true of modality, platform and assay: the parent determines all four,
+        and the matched path in `classify_index_files` inherits all four. #437 made the
+        rule treat them alike.
+        """
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED  # applicable but unknown without filename hint
-        assert result.status_of("platform") == NOT_APPLICABLE
-        assert result.status_of("assay_type") == NOT_APPLICABLE
+        assert result.data_type == "index"
+        for field in ("data_modality", "reference_assembly", "platform", "assay_type"):
+            assert result.status_of(field) == NOT_CLASSIFIED, f"{field} should be open, not denied"
 
     def test_unclassified_fields_get_not_classified(self, engine):
         """Files with unset fields should get not_classified."""
