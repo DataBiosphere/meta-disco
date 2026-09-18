@@ -20,6 +20,10 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from meta_disco.metadata_schema import (
+    classification_blocking_reasons,
+    validation_failed_classifications,
+)
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
@@ -93,7 +97,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     engine = RuleEngine()
     results = []
     ext_counts = Counter()
-    nameless = 0
+    validation_failed = 0
 
     for rec in files:
         name = rec.get("file_name", "")
@@ -111,12 +115,18 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         if entry_id in already:
             continue
         if not name:
-            # Handed to this producer, written by nobody: a record with no file_name
-            # violates the input contract, so it is counted the way the pipeline counts
-            # one (#161) rather than vanishing from the run's tallies. Checked after
-            # `already`, or a nameless record another producer claimed on its
-            # `file_format` would be counted in two of the eleven blocks.
-            nameless += 1
+            # A record with no file_name violates the input contract, and is written as
+            # a validation_failed row exactly as the pipeline writes one (#161): a
+            # missing row is indistinguishable from a file that was never seen (#155),
+            # and `unprocessable-report` finds such a file by scanning the output.
+            # Checked after `already`, or a nameless record another producer claimed on
+            # its `file_format` would be written twice.
+            validation_failed += 1
+            results.append(
+                OutputRecord.from_record(
+                    rec, validation_failed_classifications(classification_blocking_reasons(rec)), source
+                ).to_dict()
+            )
             continue
 
         file_info = FileInfo.from_filename(
@@ -130,7 +140,8 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         # by rather than a bare `txt` beside their `.png` — the metadata blocks are one
         # shape now, which invites merging them. It is not their vocabulary: this is the
         # last dot-token of a name no producer claimed, so `x.gff.gz` counts as `.gz`.
-        ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
+        token = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        ext = f".{token}" if token else "(none)"
         ext_counts[ext] += 1
 
         # One record shape for every producer (#450).
@@ -146,9 +157,9 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         json.dump(
             {
                 "metadata": RunMetadata.from_counts(
-                    total=len(results) + nameless,
-                    successful=len(results),
-                    validation_failed=nameless,
+                    total=len(results),
+                    successful=len(results) - validation_failed,
+                    validation_failed=validation_failed,
                     from_cache=0,
                     content_unreadable=0,
                     details={"by_extension": dict(ext_counts.most_common())},

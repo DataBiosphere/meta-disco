@@ -562,6 +562,13 @@ class RunMetadata:
     * ``processed`` is ``successful + errored + validation_failed``: a
       ``validation_failed`` row (failed the input contract, #161) is counted neither
       in ``successful`` nor in ``failed``, so it is added in explicitly here.
+
+    Those three hold for every producer. What ``total_to_process - processed`` means
+    does differ, and is why the pipeline's invariants could not simply be inherited: for
+    ``ClassifyPipeline`` it is zero, because every record it takes becomes a row of some
+    kind. A standalone producer can be handed a record it writes no row for at all — the
+    catch-all skips one with no ``file_name`` — and counts it in ``total`` alone, so the
+    gap is exactly the records that reached a producer and left no trace in its output.
     """
 
     # Field order is the serialized ``metadata`` key order — ``to_dict`` derives the

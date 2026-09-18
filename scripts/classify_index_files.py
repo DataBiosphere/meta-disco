@@ -84,8 +84,9 @@ _PARENT_KIND_BY_CATEGORY = {
 def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
     """What kind of file this index points at, or None when that cannot be told.
 
-    The matched parent's own extension answers it where there is one. Without a parent
-    it falls back to the type-level answer — what the extensions ``INDEX_TO_PARENT``
+    The matched parent's own extension answers it where there is one — or leaves it
+    None, for a parent whose category has no ``parent_kind`` term. Without a parent it
+    falls back to the type-level answer — what the extensions ``INDEX_TO_PARENT``
     declares for this index agree on, if they agree — which is the data model's claim
     that you need not find the parent to know a ``.bai`` indexes an alignment
     (docs/derived-file-data-model.md 4a). A ``.tbi`` indexes several kinds, so only a
@@ -109,11 +110,12 @@ def _declared_kind(index_ext: str) -> str | None:
 def _agreed_kind(names: list[str]) -> str | None:
     """The one kind these names agree on, or None.
 
-    A `None` stays in the set rather than being discarded: a name this cannot map is one
-    that disagrees, so the answer stays ambiguous rather than resolving to the rest.
+    A `None` stays in the set rather than being discarded, so a name this cannot map is
+    one that disagrees: `{variants, None}` is ambiguous, not `variants`. A lone `None`
+    pops as `None`, which is the same answer either way.
     """
     kinds = {_PARENT_KIND_BY_CATEGORY.get(_category_of(name) or "") for name in names}
-    return kinds.pop() if len(kinds) == 1 and None not in kinds else None
+    return kinds.pop() if len(kinds) == 1 else None
 
 
 def _category_of(file_name: str) -> str | None:
