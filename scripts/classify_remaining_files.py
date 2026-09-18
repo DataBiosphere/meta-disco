@@ -108,12 +108,15 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 f"keys on it to know what another producer already classified. "
                 f"`make validate-metadata` rejects this before `make classify` runs."
             )
-        if not name:
-            # Handed to this producer and written by nobody. Counted, so the run's
-            # eleven metadata blocks still sum to the corpus (#450).
-            nameless += 1
-            continue
         if entry_id in already:
+            continue
+        if not name:
+            # Handed to this producer, written by nobody: a record with no file_name
+            # violates the input contract, so it is counted the way the pipeline counts
+            # one (#161) rather than vanishing from the run's tallies. Checked after
+            # `already`, or a nameless record another producer claimed on its
+            # `file_format` would be counted in two of the eleven blocks.
+            nameless += 1
             continue
 
         file_info = FileInfo.from_filename(
@@ -123,9 +126,10 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         )
         result = engine.classify_extended(file_info)
 
-        # Leading dot, as the registry-declared extensions the other producers count
-        # by: the metadata blocks are one shape now, so their keys must be one
-        # vocabulary or merging them silently mixes `.png` with `txt`.
+        # Leading dot, so a key here reads like the extensions the other producers count
+        # by rather than a bare `txt` beside their `.png` — the metadata blocks are one
+        # shape now, which invites merging them. It is not their vocabulary: this is the
+        # last dot-token of a name no producer claimed, so `x.gff.gz` counts as `.gz`.
         ext = "." + name.rsplit(".", 1)[-1].lower() if "." in name else "(none)"
         ext_counts[ext] += 1
 
@@ -144,6 +148,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 "metadata": RunMetadata.from_counts(
                     total=len(results) + nameless,
                     successful=len(results),
+                    validation_failed=nameless,
                     from_cache=0,
                     content_unreadable=0,
                     details={"by_extension": dict(ext_counts.most_common())},

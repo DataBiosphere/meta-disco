@@ -12,8 +12,14 @@ Two layers of protection:
 Together they keep the rules and the schema from drifting apart.
 """
 
+import sys
+from pathlib import Path
+
 import pytest
 import yaml
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
 from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
 
 from meta_disco import schema_vocab

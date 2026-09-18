@@ -381,7 +381,7 @@ class OutputRecord:
     their own dicts and emitted wider records, so a run held three record shapes and a
     field wired into the pipeline reached some of the eleven outputs and not others.
     They build this now, through :meth:`from_record`, and
-    ``test_output_shape.RECORD_KEYS`` pins all eleven against it.
+    ``metadata_fixtures.RECORD_KEYS`` pins all eleven against it.
 
     The index producer adds the one envelope key that is not a record: ``unmatched_files``,
     its diagnostic array for files it took no parent for.

@@ -28,7 +28,7 @@ from meta_disco.published_comparison import (
 )
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_published
 from tests.metadata_fixtures import valid_record
-from tests.producer_sweep import run_index_producer
+from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
 
 
 def _entry(value=None, status=None):
@@ -279,6 +279,33 @@ class TestRender:
         assert "`GRCm39`" in text
         assert "1 of 1 distinct published values have no term in the schema vocabulary" in text
         assert "anvil/anvil15" in text
+
+
+@pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
+def test_a_standalone_producer_passes_the_source_through(tmp_path, producer, name, fmt):
+    """The block carries the repository's values *and* names the repository.
+
+    `test_output_shape` pins that every producer emits the `published` key, which
+    building `OutputRecord` makes structural. It cannot pin that a producer passed
+    `source` — that is still an argument each one supplies, and omitting it writes
+    `"source": null` into every block that producer emits with no error anywhere. That
+    is the "no error, just a wrong number" failure contract 7.7 exists to catch, so it
+    needs a value-level assertion rather than a shape one.
+    """
+    record = valid_record(
+        file_name=name,
+        file_format=fmt,
+        dataset_title="AnVIL_IGVF_Mouse_R1",
+        data_modality=["single-nucleus ATAC-seq"],
+        reference_assembly=["GRCm39"],
+    )
+    [row] = run_producer(producer, tmp_path, [record])
+    assert row["published"] == {
+        "data_modality": ["single-nucleus ATAC-seq"],
+        "reference_assembly": ["GRCm39"],
+        "in_vocabulary": {"data_modality": [], "reference_assembly": []},
+        "source": "anvil/anvil15",
+    }
 
 
 class TestTheIndexProducerPublishesItsOwnValues:

@@ -137,20 +137,17 @@ evidence}` entry — plus the controlled vocabulary:
     recording which catalog a run enhances is #404, and is not built.
   - Published values (contract section 7, built by #424) live in each output record's
     `published` block — what the repository publishes for that file today, beside what
-    the run inferred. `records.build_published` is its single construction site,
-    reached two ways: `ClassifyPipeline` through `OutputRecord.from_work_item` (off the
-    typed work item), and the four standalone producers through
-    `records.published_from(record, source)`. Both drive the field list from
-    `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
+    the run inferred. `records.build_published` is its single construction site, reached
+    through `OutputRecord` either way: `from_work_item` off the pipeline's typed work
+    item, `from_record` off a standalone producer's raw dict. Both drive the field list
+    from `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
     deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
-    input. Contract 7.7 binds *every* producer, in two places:
-    `tests/test_published_comparison.py::TestEveryProducerCarriesPublishedValues` sweeps
-    the four that build records by hand, and
-    `test_the_pipeline_carries_the_catalog_into_a_written_record` covers
-    `ClassifyPipeline` end to end. A new standalone producer goes in the sweep; a new
-    pipeline file type is already covered. Two places because a run has three record
-    shapes, not one — #204's envelope covers only the seven pipeline types, and
-    unifying the other four on `OutputRecord` is #429, which would make it unnecessary.
+    input. That the block is *present* is structural since #450, pinned for all eleven
+    by `RECORD_KEYS`; what structure cannot pin is that a producer passed `source`, so
+    `test_a_standalone_producer_passes_the_source_through` asserts it per producer and
+    `test_the_pipeline_carries_the_catalog_into_a_written_record` covers the pipeline.
+    Omitting `source` writes `"source": null` with no error anywhere, which is the
+    failure contract 7.7 exists to catch.
     `make published-comparison` renders the report. It is the *only* comparison against
     a repository's own values, having replaced `generate_validation_report`'s
     `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is
