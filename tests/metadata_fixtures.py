@@ -68,3 +68,21 @@ RECORD_KEYS = {
     # envelope keeps one shape across all eleven files.
     "derived_from",
 }
+
+
+# Every key a producer's run `metadata` block carries (#450), in emit order. The record's
+# twin above: five ad-hoc shapes became one, and nothing else pins that across producers.
+METADATA_KEYS = [
+    "total_to_process",
+    "processed",
+    "successful",
+    "failed",
+    "dropped",
+    "errored",
+    "validation_failed",
+    "from_cache",
+    "content_unreadable",
+    "complete",
+    # Whatever a producer counts beyond the shared tally (#450).
+    "details",
+]

@@ -481,7 +481,13 @@ class OutputRecord:
 
         Its callers do not run the input contract — they classify from the filename and
         never build a work item — so this cannot assume types the way
-        :meth:`from_work_item` can, and reads with ``.get``. Unifying the two means
+        :meth:`from_work_item` can, and reads with ``.get``. It **echoes** what it reads
+        and does not coerce it, unlike ``InvalidRecord``, so a drifted ``file_name``
+        would reach a field typed ``str``. No producer can deliver one: the three
+        filename producers call ``FileInfo.from_filename`` first and raise on a
+        non-string, and the catch-all's contract-violation path builds its row through
+        ``InvalidRecord`` precisely so the coercion is the pipeline's. Coercing here
+        instead would swallow a drift that currently fails loudly. Unifying the two means
         routing those producers through ``partition_records``, which would divert a
         contract-violating record to a ``validation_failed`` row instead of classifying
         it from its name: a coverage change, not a refactor, and out of #450's scope.

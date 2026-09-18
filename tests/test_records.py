@@ -3,23 +3,9 @@
 import pytest
 
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
+from tests.metadata_fixtures import METADATA_KEYS as _METADATA_KEYS
 from tests.metadata_fixtures import RECORD_KEYS as _ENVELOPE_KEYS
 from tests.metadata_fixtures import valid_record
-
-_METADATA_KEYS = [
-    "total_to_process",
-    "processed",
-    "successful",
-    "failed",
-    "dropped",
-    "errored",
-    "validation_failed",
-    "from_cache",
-    "content_unreadable",
-    "complete",
-    # Whatever a producer counts beyond the shared tally (#450).
-    "details",
-]
 
 
 class TestClassifierRecord:
