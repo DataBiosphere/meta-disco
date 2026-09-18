@@ -421,7 +421,7 @@ SOURCE_SPEC_COLUMN = "sources.source_spec"
 
 
 def dataset_source(path: Path) -> tuple[str, str] | None:
-    """The TDR snapshot one dataset's compact manifest names, or None if it has no rows.
+    """The TDR snapshot one dataset's compact manifest names, or None if no row names one.
 
     Columns 3 and 4 of every compact manifest name the snapshot the dataset was
     materialised from: ``sources.source_id`` is its uuid and ``sources.source_spec``
@@ -452,7 +452,8 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
     # dropped column was recorded as "this dataset has no snapshot", the one confusion
     # the null contract above exists to prevent. Checking here also drops two
     # membership tests per row, which is 17.4M of them on the largest manifest.
-    missing = [c for c in (SOURCE_ID_COLUMN, SOURCE_SPEC_COLUMN) if c not in compact_header(path)]
+    header = compact_header(path)
+    missing = [c for c in (SOURCE_ID_COLUMN, SOURCE_SPEC_COLUMN) if c not in header]
     if missing:
         raise ValueError(
             f"{path}: compact manifest has no {' or '.join(missing)} column. "
@@ -464,12 +465,14 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
     for line_number, row in iter_compact_manifest_rows(path):
         pair = (row[SOURCE_ID_COLUMN], row[SOURCE_SPEC_COLUMN])
         # Azul writes an absent value as the empty string (see
-        # `iter_compact_manifest_rows`), so a blank pair names no snapshot and is
-        # passed over rather than compared. That keeps "" out of the envelope, where a
-        # reader following the null contract would read it as a real id, and it stops a
-        # separators-only line — which that reader deliberately yields as a full row of
-        # empty cells — from being reported as a second, contradicting snapshot.
-        if not any(pair):
+        # `iter_compact_manifest_rows`), so a row that does not fill *both* cells names
+        # no snapshot and is passed over rather than compared. `all`, not `any`: a
+        # half-filled pair would otherwise put "" into the envelope as a real-looking
+        # value, and would then differ from the next fully-filled row and abort the
+        # download as a second, contradicting snapshot — over one blank cell. It also
+        # passes over a separators-only line, which that reader deliberately yields as
+        # a full row of empty cells.
+        if not all(pair):
             continue
         if found is None:
             found = pair

@@ -178,7 +178,12 @@ def download(
             # Reported the way every other failure here is — to stderr with a non-zero
             # exit — rather than as a traceback. The input file is not written either
             # way, since `write_input_files` is below this.
-            print(f"Cannot name the TDR snapshot for {dataset.title}:\n  {exc}", file=sys.stderr)
+            #
+            # The heading says "reading", not "naming the snapshot", because this also
+            # catches `iter_compact_manifest_rows` refusing a short or surplus row: a
+            # manifest truncated mid-download fails here now rather than later in the
+            # record stream, and blaming that on the snapshot columns would misdirect.
+            print(f"Cannot read {dataset.title}'s compact manifest:\n  {exc}", file=sys.stderr)
             return 1
         entries[dataset.title] = {
             "file_count": dataset.file_count,

@@ -496,6 +496,19 @@ class TestDatasetSource:
         (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
         assert am.dataset_source(tmp_path / "c.tsv") is None
 
+    def test_a_half_named_snapshot_is_absent_not_a_second_one(self, tmp_path):
+        """One filled cell does not name a snapshot, and must not abort the download.
+
+        With `any` rather than `all`, a row filling only `source_id` was kept, putting
+        `source_spec: ""` in the envelope as a real-looking value — and the next fully
+        filled row then differed from it and raised "exactly one TDR snapshot", failing
+        the whole download over a single blank cell.
+        """
+        payload = compact_payload("ds", 3).decode().splitlines()
+        payload[1] = payload[1].replace(SOURCE_SPEC, "", 1)
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") == (SOURCE_ID, SOURCE_SPEC)
+
     def test_a_separators_only_line_is_not_a_second_snapshot(self, tmp_path):
         """`iter_compact_manifest_rows` yields such a line as a row of empty cells.
 
