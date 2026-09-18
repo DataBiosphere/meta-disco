@@ -469,9 +469,54 @@ class TestDatasetSource:
         with pytest.raises(ValueError, match="expected to come from exactly one TDR snapshot"):
             am.dataset_source(tmp_path / "c.tsv")
 
+    def test_a_differing_source_spec_is_refused_even_when_the_id_agrees(self, tmp_path):
+        """Both halves of the pair are compared, not just the id.
+
+        A mutation comparing only `source_id` survived the rest of this class, so this
+        is the case that pins the other half.
+        """
+        payload = compact_payload("ds", 3).decode().splitlines()
+        payload[2] = payload[2].replace(SOURCE_SPEC, SOURCE_SPEC + "_OTHER", 1)
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        with pytest.raises(ValueError, match="expected to come from exactly one TDR snapshot"):
+            am.dataset_source(tmp_path / "c.tsv")
+
     def test_a_manifest_with_no_rows_names_no_snapshot(self, tmp_path):
         (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 0))
         assert am.dataset_source(tmp_path / "c.tsv") is None
+
+    def test_blank_source_cells_name_no_snapshot(self, tmp_path):
+        """Azul writes an absent value as the empty string, so a blank pair is absent.
+
+        Without this, the envelope would record `source_id: ""` — which a reader
+        following the null contract reads as a real snapshot id.
+        """
+        payload = compact_payload("ds", 2).decode().splitlines()
+        payload[1:] = [row.replace(SOURCE_ID, "", 1).replace(SOURCE_SPEC, "", 1) for row in payload[1:]]
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") is None
+
+    def test_a_separators_only_line_is_not_a_second_snapshot(self, tmp_path):
+        """`iter_compact_manifest_rows` yields such a line as a row of empty cells.
+
+        Comparing it would report a junk row as a contradicting TDR snapshot, blaming
+        the wrong thing for a malformed manifest.
+        """
+        rows = compact_payload("ds", 2).decode().splitlines()
+        blank = "\t" * (len(rows[0].split("\t")) - 1)
+        (tmp_path / "c.tsv").write_text("\n".join([rows[0], blank, *rows[1:]]) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") == (SOURCE_ID, SOURCE_SPEC)
+
+    def test_a_header_without_the_column_and_no_rows_still_says_so(self, tmp_path):
+        """The column check reads the header, so it fires with no data rows to inspect.
+
+        A dropped column means Azul's shape changed; recording it as "no snapshot"
+        would hide that behind the null the contract reserves for an empty dataset.
+        """
+        header = compact_payload("ds", 1).decode().splitlines()[0].split("\t")[2:]
+        (tmp_path / "c.tsv").write_text("\t".join(header) + "\n")
+        with pytest.raises(ValueError, match=r"no sources\.source_id"):
+            am.dataset_source(tmp_path / "c.tsv")
 
     def test_a_manifest_without_the_column_says_so(self, tmp_path):
         """A bare KeyError names a dict key; this names the file and the column."""

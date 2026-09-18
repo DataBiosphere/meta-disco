@@ -165,10 +165,21 @@ def download(
     # than during `_all_records` because the envelope is written before the records
     # stream, so it has to be known first — and read in full rather than off the first
     # row, because `dataset_source` refuses a manifest naming two snapshots instead of
-    # picking one. Local: the compact manifests are already on disk.
+    # picking one.
+    #
+    # That is a second full parse of every compact manifest, measured at ~2.7s for the
+    # largest (309,979 rows) and a few seconds more across the corpus. No network — the
+    # manifests are on disk — but not free either, and the refusal is what it buys.
     entries: dict[str, dict[str, object]] = {}
     for dataset in datasets:
-        source = dataset_source(manifest_path(output_dir, catalog, dataset.title, FORMAT_COMPACT))
+        try:
+            source = dataset_source(manifest_path(output_dir, catalog, dataset.title, FORMAT_COMPACT))
+        except ValueError as exc:
+            # Reported the way every other failure here is — to stderr with a non-zero
+            # exit — rather than as a traceback. The input file is not written either
+            # way, since `write_input_files` is below this.
+            print(f"Cannot name the TDR snapshot for {dataset.title}:\n  {exc}", file=sys.stderr)
+            return 1
         entries[dataset.title] = {
             "file_count": dataset.file_count,
             "source_id": source[0] if source else None,

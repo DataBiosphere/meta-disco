@@ -440,20 +440,37 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
     breaking, and it raises naming both. Measured over anvil15 when this was written:
     12 datasets, 12 distinct ``(source_id, source_spec)`` pairs, none with more than one.
 
-    A manifest with no data rows yields None. The dataset then has no snapshot to
-    record, which :func:`metadata_block` writes as nulls rather than omitting the keys,
-    so a reader never has to tell "no snapshot" from "this build predates #434".
+    None means no row named a snapshot — an empty manifest, or one whose source cells
+    are all blank, which is how Azul writes an absent value. :func:`metadata_block`
+    records that as nulls rather than omitting the keys, so a reader never has to tell
+    "no snapshot" from "this build predates #434". A *missing column* is a different
+    thing and raises, because it means the manifest's shape changed rather than that
+    this dataset has nothing to say.
     """
+    # A header fact, checked once against the header. It used to sit in the row loop,
+    # where it could not fire on a manifest with a header and no data rows — so a
+    # dropped column was recorded as "this dataset has no snapshot", the one confusion
+    # the null contract above exists to prevent. Checking here also drops two
+    # membership tests per row, which is 17.4M of them on the largest manifest.
+    missing = [c for c in (SOURCE_ID_COLUMN, SOURCE_SPEC_COLUMN) if c not in compact_header(path)]
+    if missing:
+        raise ValueError(
+            f"{path}: compact manifest has no {' or '.join(missing)} column. "
+            f"Azul writes it on every row; a manifest without it cannot say which "
+            f"TDR snapshot the dataset came from (#434)."
+        )
+
     found: tuple[str, str] | None = None
     for line_number, row in iter_compact_manifest_rows(path):
-        missing = [c for c in (SOURCE_ID_COLUMN, SOURCE_SPEC_COLUMN) if c not in row]
-        if missing:
-            raise ValueError(
-                f"{path}: compact manifest has no {' or '.join(missing)} column. "
-                f"Azul writes it on every row; a manifest without it cannot say which "
-                f"TDR snapshot the dataset came from (#434)."
-            )
         pair = (row[SOURCE_ID_COLUMN], row[SOURCE_SPEC_COLUMN])
+        # Azul writes an absent value as the empty string (see
+        # `iter_compact_manifest_rows`), so a blank pair names no snapshot and is
+        # passed over rather than compared. That keeps "" out of the envelope, where a
+        # reader following the null contract would read it as a real id, and it stops a
+        # separators-only line — which that reader deliberately yields as a full row of
+        # empty cells — from being reported as a second, contradicting snapshot.
+        if not any(pair):
+            continue
         if found is None:
             found = pair
         elif pair != found:
@@ -642,9 +659,11 @@ def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded
     **The snapshot is deliberately not on any record.** It is one value per dataset —
     12 across anvil15, measured — so a ~90-byte ``source_spec`` on each of 708,088
     records would be ~60 MB to say twelve things, and the identical string on 309,979
-    consecutive rows in the ``ANVIL_T2T_CHRY`` case. Every output record already
-    carries ``dataset_title``, which joins to this map. Contrast #433, whose fact
-    genuinely varies per file and therefore belongs on the record.
+    consecutive rows in the ``ANVIL_T2T_CHRY`` case. Every record a corpus run writes
+    already carries ``dataset_title``, which joins to this map — not *every* record, as
+    ``records.OutputRecord.from_single`` leaves it None by design on the
+    ``classify_single`` path. Contrast #433, whose fact genuinely varies per file and
+    therefore belongs on the record.
     """
     return {
         "downloaded_at": downloaded_at.isoformat(),
