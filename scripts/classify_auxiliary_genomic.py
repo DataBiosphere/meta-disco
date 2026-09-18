@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
-from meta_disco.file_name import FileName
+from meta_disco.file_types import TAR_CONFIG
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.records import identity_from, published_from
@@ -24,15 +24,19 @@ AUXILIARY_EXTENSIONS = frozenset({".fast5", ".pod5", ".pvar", ".psam", ".pgen"})
 
 
 def _is_archived(name: str) -> bool:
-    """Whether the name is a tar archive, whatever it holds.
+    """Whether the tar type claims this name, in which case this producer must not.
 
-    An archive of fast5s is a tar first (#242), classified by the tar type, which reads
-    its members. Read off the parsed name rather than the declared ``file_format``: a
-    source may declare the *core* extension for an archive (``.fast5`` for
-    ``x.fast5.tar``), and this producer would otherwise claim it on the format while the
-    tar type claims it on the name, writing the file twice (#445).
+    An archive of fast5s is a tar first (#242), classified by the type that reads its
+    members. Asked of the name rather than the declared ``file_format``: a source may
+    declare the *core* extension for an archive (``.fast5`` for ``x.fast5.tar``), and
+    this producer would otherwise claim it on the format while the tar type claims it
+    on the name, writing the file twice (#445).
+
+    Read off ``TAR_CONFIG`` so the handover cannot outrun what the tar type actually
+    takes. A tar under some other compression (``.tar.xz``) is claimed by no type, so
+    it stays this producer's rather than falling to the catch-all.
     """
-    return ".tar" in FileName.parse(name).wrappers
+    return name.lower().endswith(TAR_CONFIG.extensions)
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):

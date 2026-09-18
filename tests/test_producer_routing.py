@@ -68,9 +68,16 @@ class TestATarOfFast5sIsATar:
         records = [_fast5_tar_record(file_name=file_name, file_format=file_format)]
         assert run_producer(classify_auxiliary_genomic, tmp_path, records) == []
 
-    def test_an_unwrapped_fast5_stays_with_the_auxiliary_producer(self, tmp_path):
-        rows = run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record("HG02148_1.fast5", ".fast5")])
-        assert [r["file_name"] for r in rows] == ["HG02148_1.fast5"]
+    @pytest.mark.parametrize(
+        "file_name",
+        ["HG02148_1.fast5", "HG02148_1.fast5.tar.xz"],
+        ids=["unwrapped", "tar under another compression"],
+    )
+    def test_what_the_tar_type_does_not_claim_stays_here(self, tmp_path, file_name):
+        """The handover goes exactly as far as `TAR_CONFIG`. A `.tar.xz` is claimed by no
+        type, so giving it up would send it to the catch-all for nothing."""
+        rows = run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record(file_name, ".fast5")])
+        assert [r["file_name"] for r in rows] == [file_name]
 
     @pytest.mark.parametrize(
         "file_name, file_format",

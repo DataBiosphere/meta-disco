@@ -180,7 +180,8 @@ def run_all_classifications(
     Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded and
-    the completed run holds one row per file (:func:`_check_one_row_per_file`).
+    no ``file_id`` repeats across the completed run (:func:`_check_one_row_per_file`,
+    which passes a run whose rows carry no ``file_id`` at all rather than checking it).
 
     Before any of that it reports the evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old

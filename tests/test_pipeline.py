@@ -622,6 +622,22 @@ class TestPipelineRun:
         assert True in calls  # .gz file
         assert False in calls  # non-.gz file
 
+    def test_gzip_detection_is_case_insensitive(self, tmp_path):
+        """Routing case-folds, so an uppercase `.GZ` reaches this reader. Read as
+        uncompressed, its gzip bytes classify as nothing."""
+        calls = []
+
+        def tracking_fetcher(evidence_dir, md5, is_gzipped=True, **kw):
+            calls.append(is_gzipped)
+            return "header"
+
+        config = _make_config(fetcher=tracking_fetcher, extensions=(".test", ".test.gz"))
+        records = [_valid_record(file_md5sum="a" * 32, file_name="x.TEST.GZ", file_format=".test")]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        ClassifyPipeline(config, path, tmp_path / "out.json", evidence_base=tmp_path / "evidence").run()
+        assert calls == [True]
+
 
 # --- File type config tests ---
 
