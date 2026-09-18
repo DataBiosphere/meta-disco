@@ -563,12 +563,12 @@ class RunMetadata:
       ``validation_failed`` row (failed the input contract, #161) is counted neither
       in ``successful`` nor in ``failed``, so it is added in explicitly here.
 
-    Those three hold for every producer, and so does the reason they are worth holding:
-    a record a producer takes becomes a row of some kind, so ``processed`` equals the
-    rows written and ``total_to_process - processed`` is zero. That is what lets a run's
-    eleven blocks sum to the corpus. A producer that finds it has a record it cannot
-    write a row for should write a ``validation_failed`` one rather than count a record
-    it dropped (#155).
+    Those three hold for every producer. None of them says a tally counts *rows*:
+    ``errored`` is an attempt that produced none, so the rows written are
+    ``successful + validation_failed``. What a standalone producer must not do is drop a
+    record it cannot classify — it writes a ``validation_failed`` row, as the pipeline
+    does, because a missing row is indistinguishable from a file that was never seen
+    (#155).
     """
 
     # Field order is the serialized ``metadata`` key order — ``to_dict`` derives the
