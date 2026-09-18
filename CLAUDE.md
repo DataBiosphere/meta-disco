@@ -142,12 +142,13 @@ evidence}` entry — plus the controlled vocabulary:
     item, `from_record` off a standalone producer's raw dict. Both drive the field list
     from `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
     deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
-    input. That the block is *present* is structural since #450, pinned for all eleven
-    by `RECORD_KEYS`; what structure cannot pin is that a producer passed `source`, so
-    `test_a_standalone_producer_passes_the_source_through` asserts it per producer and
-    `test_the_pipeline_carries_the_catalog_into_a_written_record` covers the pipeline.
-    Omitting `source` writes `"source": null` with no error anywhere, which is the
-    failure contract 7.7 exists to catch.
+    input. Contract 7.7 — every producer writes the block — is structural since #450,
+    pinned for all eleven by `RECORD_KEYS`. What structure cannot pin is that a producer
+    passed `source`, and 7.11 makes that the field that matters: no recommendation names
+    a publisher, only `source` does. Omitting it writes `"source": null` with no error
+    anywhere, so `test_a_standalone_producer_passes_the_source_through` asserts it per
+    producer and `test_the_pipeline_carries_the_catalog_into_a_written_record` covers
+    the pipeline.
     `make published-comparison` renders the report. It is the *only* comparison against
     a repository's own values, having replaced `generate_validation_report`'s
     `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is

@@ -285,12 +285,12 @@ class TestRender:
 def test_a_standalone_producer_passes_the_source_through(tmp_path, producer, name, fmt):
     """The block carries the repository's values *and* names the repository.
 
-    `test_output_shape` pins that every producer emits the `published` key, which
-    building `OutputRecord` makes structural. It cannot pin that a producer passed
-    `source` — that is still an argument each one supplies, and omitting it writes
-    `"source": null` into every block that producer emits with no error anywhere. That
-    is the "no error, just a wrong number" failure contract 7.7 exists to catch, so it
-    needs a value-level assertion rather than a shape one.
+    `test_output_shape` pins that every producer emits the `published` key — contract
+    7.7, made structural by building `OutputRecord`. It cannot pin that a producer passed
+    `source`, which is still an argument each one supplies; omitting it writes
+    `"source": null` into every block that producer emits, with no error anywhere. By
+    7.11 that is the one field naming a publisher, so a null leaves the comparison unable
+    to say whose values it read — which needs a value-level assertion, not a shape one.
     """
     record = valid_record(
         file_name=name,
