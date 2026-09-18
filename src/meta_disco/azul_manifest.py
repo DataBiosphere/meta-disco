@@ -416,6 +416,76 @@ def _published(cell: str) -> list[str] | None:
     return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
 
 
+SOURCE_ID_COLUMN = "sources.source_id"
+SOURCE_SPEC_COLUMN = "sources.source_spec"
+
+
+def dataset_source(path: Path) -> tuple[str, str] | None:
+    """The TDR snapshot one dataset's compact manifest names, or None if no row names one.
+
+    Columns 3 and 4 of every compact manifest name the snapshot the dataset was
+    materialised from: ``sources.source_id`` is its uuid and ``sources.source_spec``
+    the addressable form, ``tdr:bigquery:gcp:<project>:<snapshot>``. Neither reaches
+    :func:`record_from_compact_manifest_row`, so until #434 a run could say which Azul
+    *catalog* surfaced its files but not which snapshot it classified — and the catalog
+    is a view over snapshots rather than the thing itself.
+
+    Read verbatim. ``source_spec`` packs a provider, a cloud, a BigQuery project, a
+    snapshot name and its date, and this does not split them: the format is TDR's, not
+    ours, and the whole string is what addresses the snapshot.
+
+    **Every row is read, not just the first, because the point is to refuse rather than
+    guess.** One snapshot per dataset is what makes #434's envelope shape correct — the
+    fact is worth 12 values, not 708,088 — so a manifest carrying two is the assumption
+    breaking, and it raises naming both. Measured over anvil15 when this was written:
+    12 datasets, 12 distinct ``(source_id, source_spec)`` pairs, none with more than one.
+
+    None means no row named a snapshot — an empty manifest, or one whose source cells
+    are all blank, which is how Azul writes an absent value. :func:`metadata_block`
+    records that as nulls rather than omitting the keys, so a reader never has to tell
+    "no snapshot" from "this build predates #434". A *missing column* is a different
+    thing and raises, because it means the manifest's shape changed rather than that
+    this dataset has nothing to say.
+    """
+    # A header fact, checked once against the header. It used to sit in the row loop,
+    # where it could not fire on a manifest with a header and no data rows — so a
+    # dropped column was recorded as "this dataset has no snapshot", the one confusion
+    # the null contract above exists to prevent. Checking here also drops two
+    # membership tests per row, which is 17.4M of them on the largest manifest.
+    header = compact_header(path)
+    missing = [c for c in (SOURCE_ID_COLUMN, SOURCE_SPEC_COLUMN) if c not in header]
+    if missing:
+        raise ValueError(
+            f"{path}: compact manifest has no {' or '.join(missing)} column. "
+            f"Azul writes it on every row; a manifest without it cannot say which "
+            f"TDR snapshot the dataset came from (#434)."
+        )
+
+    found: tuple[str, str] | None = None
+    for line_number, row in iter_compact_manifest_rows(path):
+        pair = (row[SOURCE_ID_COLUMN], row[SOURCE_SPEC_COLUMN])
+        # Azul writes an absent value as the empty string (see
+        # `iter_compact_manifest_rows`), so a row that does not fill *both* cells names
+        # no snapshot and is passed over rather than compared. `all`, not `any`: a
+        # half-filled pair would otherwise put "" into the envelope as a real-looking
+        # value, and would then differ from the next fully-filled row and abort the
+        # download as a second, contradicting snapshot — over one blank cell. It also
+        # passes over a separators-only line, which that reader deliberately yields as
+        # a full row of empty cells.
+        if not all(pair):
+            continue
+        if found is None:
+            found = pair
+        elif pair != found:
+            raise ValueError(
+                f"{path}: line {line_number} names snapshot {pair[0]} ({pair[1]}), "
+                f"but an earlier row named {found[0]} ({found[1]}). A dataset is "
+                f"expected to come from exactly one TDR snapshot, and the per-dataset "
+                f"envelope shape (#434) depends on it; two means that assumption is wrong."
+            )
+    return found
+
+
 def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     """One classifier input record from one compact manifest row.
 
@@ -571,27 +641,41 @@ def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
             yield entity_type, value
 
 
-def metadata_block(catalog: str, dataset_counts: dict[str, int], downloaded_at: datetime) -> dict[str, Any]:
+def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime) -> dict[str, Any]:
     """The ``metadata`` envelope written beside ``files`` in ``anvil_files_metadata.json``.
 
     Records the catalog generation the files came from (issue #335: the July
     2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
-    they came through the manifest path, and how many each dataset contributed.
+    they came through the manifest path, and what each dataset contributed.
 
     ``repository`` names who published these files, so nothing downstream has to infer
     it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
     repository a run's ``published`` blocks came from; it used to prefix a hard-coded
     ``anvil`` there, which would have mislabelled any other repository's snapshot loaded
     through the same shared path.
+
+    ``datasets`` maps a title to ``file_count`` plus the TDR snapshot it was
+    materialised from (#434, from :func:`dataset_source`). It used to map a title to
+    the bare count; the object form is the shape the sidecar already uses for the same
+    key, so the two now read alike.
+
+    **The snapshot is deliberately not on any record.** It is one value per dataset —
+    12 across anvil15, measured — so a ~90-byte ``source_spec`` on each of 708,088
+    records would be ~60 MB to say twelve things, and the identical string on 309,979
+    consecutive rows in the ``ANVIL_T2T_CHRY`` case. Every record a corpus run writes
+    already carries ``dataset_title``, which joins to this map — not *every* record, as
+    ``records.OutputRecord.from_single`` leaves it None by design on the
+    ``classify_single`` path. Contrast #433, whose fact genuinely varies per file and
+    therefore belongs on the record.
     """
     return {
         "downloaded_at": downloaded_at.isoformat(),
-        "total_files": sum(dataset_counts.values()),
+        "total_files": sum(int(entry["file_count"]) for entry in datasets.values()),
         "api_url": MANIFEST_URL,
         "repository": REPOSITORY,
         "catalog": catalog,
         "source": "manifest",
-        "datasets": dict(sorted(dataset_counts.items())),
+        "datasets": {title: datasets[title] for title in sorted(datasets)},
     }
 
 

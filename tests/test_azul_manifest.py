@@ -24,8 +24,15 @@ def no_sleep(_seconds: float) -> None:
     pass
 
 
+SOURCE_ID = "5f579a9b-bc5d-4628-85c1-3b38cb1198ea"
+SOURCE_SPEC = "tdr:bigquery:gcp:datarepo-ce3811eb:ANVIL_TEST_20260708_ANV6_202607081759"
+
 COMPACT_HEADER = "\t".join(
     [
+        # Azul writes the dataset's TDR snapshot on every row; #434 reads it per
+        # dataset into the input envelope, so the fixture carries it too.
+        "sources.source_id",
+        "sources.source_spec",
         "files.document_id",
         "files.file_id",
         "files.file_name",
@@ -50,6 +57,8 @@ def compact_payload(dataset: str, n: int) -> bytes:
         rows.append(
             "\t".join(
                 [
+                    SOURCE_ID,
+                    SOURCE_SPEC,
                     f"doc-{i}",
                     f"file-{i}",
                     f"sample{i}.bam",
@@ -393,7 +402,7 @@ class TestRecordMapping:
         assert record["phenotypic_sex"] == "Female"
 
     def test_a_failed_write_leaves_the_previous_input_files(self, tmp_path):
-        block = am.metadata_block("anvil15", {"ds": 1}, datetime(2026, 9, 4))
+        block = am.metadata_block("anvil15", {"ds": _entry(1)}, datetime(2026, 9, 4))
         assert am.write_input_files(tmp_path, block, [valid_record()]) == 1
         before = (tmp_path / "anvil_files_metadata.json").read_bytes()
 
@@ -408,7 +417,7 @@ class TestRecordMapping:
         assert not list(tmp_path.glob("*.tmp"))
 
     def test_the_metadata_block_names_the_repository_the_catalog_and_the_source(self):
-        block = am.metadata_block("anvil15", {"b": 1, "a": 2}, datetime(2026, 9, 4))
+        block = am.metadata_block("anvil15", {"b": _entry(1, "b"), "a": _entry(2, "a")}, datetime(2026, 9, 4))
         assert block == {
             "downloaded_at": "2026-09-04T00:00:00",
             "total_files": 3,
@@ -416,8 +425,11 @@ class TestRecordMapping:
             "repository": "anvil",
             "catalog": "anvil15",
             "source": "manifest",
-            "datasets": {"a": 2, "b": 1},
+            # Title -> object, the shape the sidecar already uses for this key, and
+            # carrying the TDR snapshot each dataset came from (#434). Sorted by title.
+            "datasets": {"a": _entry(2, "a"), "b": _entry(1, "b")},
         }
+        assert list(block["datasets"]) == ["a", "b"]
 
     def test_the_snapshot_names_its_publisher_so_a_reader_need_not_infer_one(self):
         # `pipeline.published_source` reads `repository` with `catalog` (#424). It used
@@ -425,8 +437,108 @@ class TestRecordMapping:
         # snapshot loaded through the same shared path.
         from meta_disco.pipeline import published_source
 
-        block = am.metadata_block("anvil15", {"a": 1}, datetime(2026, 9, 4))
+        block = am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4))
         assert published_source(block) == "anvil/anvil15"
+
+
+def _entry(file_count: int, source: str = "s") -> dict:
+    """One `datasets` entry: the count, plus the snapshot it was materialised from."""
+    return {
+        "file_count": file_count,
+        "source_id": f"{source}-id",
+        "source_spec": f"tdr:bigquery:gcp:datarepo-{source}:SNAPSHOT_{source}",
+    }
+
+
+class TestDatasetSource:
+    """Reading the TDR snapshot a dataset's compact manifest names (#434)."""
+
+    def test_it_reads_the_snapshot_every_row_agrees_on(self, tmp_path):
+        (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 3))
+        assert am.dataset_source(tmp_path / "c.tsv") == (SOURCE_ID, SOURCE_SPEC)
+
+    def test_a_manifest_naming_two_snapshots_is_refused(self, tmp_path):
+        """One snapshot per dataset is what makes the per-dataset envelope correct.
+
+        A second is the assumption breaking, so it raises naming both rather than
+        taking the first — the difference between a wrong answer and a stopped run.
+        """
+        payload = compact_payload("ds", 3).decode().splitlines()
+        payload[2] = payload[2].replace(SOURCE_ID, "0000ffff-dead-beef-cafe-000000000000", 1)
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        with pytest.raises(ValueError, match="expected to come from exactly one TDR snapshot"):
+            am.dataset_source(tmp_path / "c.tsv")
+
+    def test_a_differing_source_spec_is_refused_even_when_the_id_agrees(self, tmp_path):
+        """Both halves of the pair are compared, not just the id.
+
+        A mutation comparing only `source_id` survived the rest of this class, so this
+        is the case that pins the other half.
+        """
+        payload = compact_payload("ds", 3).decode().splitlines()
+        payload[2] = payload[2].replace(SOURCE_SPEC, SOURCE_SPEC + "_OTHER", 1)
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        with pytest.raises(ValueError, match="expected to come from exactly one TDR snapshot"):
+            am.dataset_source(tmp_path / "c.tsv")
+
+    def test_a_manifest_with_no_rows_names_no_snapshot(self, tmp_path):
+        (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 0))
+        assert am.dataset_source(tmp_path / "c.tsv") is None
+
+    def test_blank_source_cells_name_no_snapshot(self, tmp_path):
+        """Azul writes an absent value as the empty string, so a blank pair is absent.
+
+        Without this, the envelope would record `source_id: ""` — which a reader
+        following the null contract reads as a real snapshot id.
+        """
+        payload = compact_payload("ds", 2).decode().splitlines()
+        payload[1:] = [row.replace(SOURCE_ID, "", 1).replace(SOURCE_SPEC, "", 1) for row in payload[1:]]
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") is None
+
+    def test_a_half_named_snapshot_is_absent_not_a_second_one(self, tmp_path):
+        """One filled cell does not name a snapshot, and must not abort the download.
+
+        With `any` rather than `all`, a row filling only `source_id` was kept, putting
+        `source_spec: ""` in the envelope as a real-looking value — and the next fully
+        filled row then differed from it and raised "exactly one TDR snapshot", failing
+        the whole download over a single blank cell.
+        """
+        payload = compact_payload("ds", 3).decode().splitlines()
+        payload[1] = payload[1].replace(SOURCE_SPEC, "", 1)
+        (tmp_path / "c.tsv").write_text("\n".join(payload) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") == (SOURCE_ID, SOURCE_SPEC)
+
+    def test_a_separators_only_line_is_not_a_second_snapshot(self, tmp_path):
+        """`iter_compact_manifest_rows` yields such a line as a row of empty cells.
+
+        Comparing it would report a junk row as a contradicting TDR snapshot, blaming
+        the wrong thing for a malformed manifest.
+        """
+        rows = compact_payload("ds", 2).decode().splitlines()
+        blank = "\t" * (len(rows[0].split("\t")) - 1)
+        (tmp_path / "c.tsv").write_text("\n".join([rows[0], blank, *rows[1:]]) + "\n")
+        assert am.dataset_source(tmp_path / "c.tsv") == (SOURCE_ID, SOURCE_SPEC)
+
+    def test_a_header_without_the_column_and_no_rows_still_says_so(self, tmp_path):
+        """The column check reads the header, so it fires with no data rows to inspect.
+
+        A dropped column means Azul's shape changed; recording it as "no snapshot"
+        would hide that behind the null the contract reserves for an empty dataset.
+        """
+        header = compact_payload("ds", 1).decode().splitlines()[0].split("\t")[2:]
+        (tmp_path / "c.tsv").write_text("\t".join(header) + "\n")
+        with pytest.raises(ValueError, match=r"no sources\.source_id"):
+            am.dataset_source(tmp_path / "c.tsv")
+
+    def test_a_manifest_without_the_column_says_so(self, tmp_path):
+        """A bare KeyError names a dict key; this names the file and the column."""
+        rows = compact_payload("ds", 1).decode().splitlines()
+        header = rows[0].split("\t")[2:]
+        body = rows[1].split("\t")[2:]
+        (tmp_path / "c.tsv").write_text("\t".join(header) + "\n" + "\t".join(body) + "\n")
+        with pytest.raises(ValueError, match=r"no sources\.source_id"):
+            am.dataset_source(tmp_path / "c.tsv")
 
 
 class TestScript:
@@ -443,7 +555,11 @@ class TestScript:
         assert sidecar["datasets"]["ds"]["compact"]["rows"] == 2
         assert sidecar["datasets"]["ds"]["verbatim.jsonl"]["rows"] == 2
         out = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
-        assert out["metadata"]["catalog"] == "anvil15" and out["metadata"]["datasets"] == {"ds": 2}
+        assert out["metadata"]["catalog"] == "anvil15"
+        # Title -> object, carrying the snapshot the dataset was materialised from (#434).
+        assert out["metadata"]["datasets"] == {
+            "ds": {"file_count": 2, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC}
+        }
         for path in ("anvil_files_metadata.json", "anvil_files_metadata.ndjson"):
             records = load_records(tmp_path / path)
             assert [r["file_name"] for r in records] == ["sample0.bam", "sample1.bam"]
@@ -487,7 +603,11 @@ class TestScript:
         assert dl.download("anvil15", tmp_path, {"b"}, force=True, session=session, sleep=no_sleep) == 0
         assert session.puts() == puts_before + 2  # b's two manifests, nothing of a's
         out = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
-        assert out["metadata"]["datasets"] == {"a": 3, "b": 2} and len(out["files"]) == 5
+        assert out["metadata"]["datasets"] == {
+            "a": {"file_count": 3, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC},
+            "b": {"file_count": 2, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC},
+        }
+        assert len(out["files"]) == 5
 
     def test_an_unreachable_catalog_still_rebuilds_from_disk(self, tmp_path, capsys):
         """Discovery failing with a connection error, not just a 404, must not abort a rebuild."""
