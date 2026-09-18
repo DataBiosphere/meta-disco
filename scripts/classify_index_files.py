@@ -77,6 +77,9 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     file does not carry, has to guess that extension's case.
     """
     candidates = []
+    # Folded here, not just at the comparisons below: `INDEX_TO_PARENT` is keyed in
+    # lowercase, so an unfolded `index_ext` would find no parent extensions at all.
+    index_ext = index_ext.lower()
     parent_exts = INDEX_TO_PARENT.get(index_ext, [])
 
     if index_name.lower().endswith(index_ext):

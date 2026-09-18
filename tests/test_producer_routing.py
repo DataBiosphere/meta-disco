@@ -4,7 +4,8 @@ Routing used to be four predicates in four places, so two producers could claim 
 record and the run wrote it twice (#445). `producers.route` is now the only answer, and
 it is a single choice, so a second claimant is not a thing to test for but a thing that
 cannot be constructed. What is left to pin is that the choice is the right one, and that
-the registry stays one a single choice can be made from.
+the registry keeps the property the single choice depends on: no two producers claiming
+overlapping extensions.
 """
 
 import pytest
