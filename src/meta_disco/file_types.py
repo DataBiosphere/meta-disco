@@ -1,9 +1,16 @@
 """File type configurations for the classification pipeline.
 
-Each config defines extensions, fetcher, classifier, and summary printer
-for one file type. These are used by ClassifyPipeline and the unified
-classify_headers.py script.
+Each config defines extensions, fetcher, classifier, and summary printer for one file
+type. They are used by ClassifyPipeline and classify_headers.py, and are the seven header
+entries in the producer registry (``producers``).
+
+``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
+import the registry to route a record, without the registry — which holds these configs —
+importing ``pipeline`` back.
 """
+
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from .fetchers import (
     fetch_bam_header,
@@ -26,8 +33,29 @@ from .header_classifier import (
     classify_from_vcf_header,
     tar_head_is_conclusive,
 )
-from .pipeline import FileTypeConfig
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
+
+
+@dataclass(frozen=True)
+class FileTypeConfig:
+    """Configuration for a file type that can be classified via header inspection."""
+
+    name: str
+    extensions: tuple[str, ...]
+    fetcher: Callable
+    classifier: Callable
+    summary_printer: Callable | None = None
+    # Environment check run once before the worker pool (e.g. an external tool
+    # must be installed). Raises to abort the run fast, instead of letting every
+    # record fail the same way and vanish. None means no check.
+    preflight: Callable | None = None
+    # Detector for an escalating head-read (#260): given the fetcher's parsed payload,
+    # returns whether the head is conclusive (enough to classify). The fetcher reads
+    # deeper only while this is False. Injected here rather than imported by the fetcher,
+    # so the reader stays decoupled from the classifier's recognition logic. None means
+    # the fetcher reads a single fixed head (the default for every type but tar).
+    head_detector: Callable | None = None
+
 
 BAM_CONFIG = FileTypeConfig(
     name="bam",

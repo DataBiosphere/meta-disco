@@ -11,32 +11,21 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
-from meta_disco.file_types import TAR_CONFIG
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.producers import PRODUCERS
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# Extensions this producer claims, one owner per extension (tests/test_producer_routing.py).
-# A tar-wrapped name carrying one of these is the tar type's, not this producer's —
-# `_is_archived` below, which is what the absent `.fast5.tar` entries used to half-do.
-AUXILIARY_EXTENSIONS = frozenset({".fast5", ".pod5", ".pvar", ".psam", ".pgen"})
-
-
-def _is_archived(name: str) -> bool:
-    """Whether the tar type claims this name, in which case this producer must not.
-
-    An archive of fast5s is a tar first (#242), classified by the type that reads its
-    members. Asked of the name rather than the declared ``file_format``: a source may
-    declare the *core* extension for an archive (``.fast5`` for ``x.fast5.tar``), and
-    this producer would otherwise claim it on the format while the tar type claims it
-    on the name, writing the file twice (#445).
-
-    Read off ``TAR_CONFIG`` so the handover cannot outrun what the tar type actually
-    takes. A tar under some other compression (``.tar.xz``) is claimed by no type, so
-    it stays this producer's rather than falling to the catch-all.
-    """
-    return name.lower().endswith(TAR_CONFIG.extensions)
+# Routes through the shared predicate — see meta_disco.producers.
+#
+# That is also where an archive of fast5s stopped being this producer's problem. It used
+# to need its own guard (`_is_archived`), because a source may declare the *core*
+# extension for an archive (`.fast5` for `x.fast5.tar`) and this producer matched the
+# format while the tar type matched the name, writing the file twice (#445). The shared
+# predicate routes on the name first, so `x.fast5.tar` is the tar type's for the same
+# reason any `.tar` is — without this producer knowing that tar exists.
+AUXILIARY = PRODUCERS["auxiliary"]
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
@@ -50,27 +39,17 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
 
     engine = RuleEngine()
     results = []
-    stats = {ext: {"total": 0, "with_ref": 0} for ext in AUXILIARY_EXTENSIONS}
+    stats = {ext: {"total": 0, "with_ref": 0} for ext in AUXILIARY.extensions}
 
     for f in files:
+        matched_ext = AUXILIARY.claim(f)
+        if matched_ext is None:
+            continue
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
-        name_lower = name.lower()
 
-        if _is_archived(name):
-            continue
-
-        # Check if this is an auxiliary file
-        matched_ext = None
-        for ext in AUXILIARY_EXTENSIONS:
-            if fmt == ext or name_lower.endswith(ext):
-                matched_ext = ext
-                stats[ext]["total"] = stats[ext].get("total", 0) + 1
-                break
-
-        if not matched_ext:
-            continue
+        stats[matched_ext]["total"] += 1
 
         # Classify using RuleEngine
         file_info = FileInfo.from_filename(
@@ -110,7 +89,8 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     total_all = 0
     ref_all = 0
 
-    for ext in sorted(AUXILIARY_EXTENSIONS):
+    # The registry's tuple, so two runs over one input order the summary identically.
+    for ext in AUXILIARY.extensions:
         s = stats[ext]
         if s["total"] > 0:
             total_all += s["total"]
@@ -152,10 +132,10 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             {
                 "metadata": {
                     "total_files": total_all,
-                    # Sorted: a set's iteration order varies between processes, and two
-                    # runs over the same input must not write differently ordered output.
+                    # The registry's tuple, not a set: its order is fixed, so two runs
+                    # over the same input cannot write differently ordered output.
                     "by_extension": {
-                        ext: stats[ext]["total"] for ext in sorted(AUXILIARY_EXTENSIONS) if stats[ext]["total"] > 0
+                        ext: stats[ext]["total"] for ext in AUXILIARY.extensions if stats[ext]["total"] > 0
                     },
                     "with_reference": ref_all,
                     "complete": True,
@@ -182,7 +162,7 @@ def main():
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/auxiliary_classifications.json"),
+        default=Path("output/anvil") / AUXILIARY.output,
         help="Output path for classifications",
     )
     args = parser.parse_args()

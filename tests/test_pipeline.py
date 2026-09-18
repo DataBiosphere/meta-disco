@@ -648,6 +648,23 @@ class TestFileTypeConfigs:
 
         assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa", "tar", "bed"}
 
+    def test_a_registered_type_routes_as_its_registry_producer(self, tmp_path):
+        """The pipeline does not route with a predicate of its own: it is one of the
+        eleven producers, and asks the same question they all ask (#449)."""
+        from meta_disco.file_types import FILE_TYPE_REGISTRY
+        from meta_disco.producers import PRODUCERS
+
+        pipeline = ClassifyPipeline(FILE_TYPE_REGISTRY["bam"], tmp_path / "in.json", tmp_path / "out.json")
+        assert pipeline.producer is PRODUCERS["bam"]
+
+    def test_a_config_the_registry_does_not_hold_still_routes(self, tmp_path):
+        """A ClassifyPipeline is a reusable component, not only a registry entry: given a
+        config no producer is registered for, it routes on that config's own extensions
+        rather than silently claiming nothing."""
+        pipeline = ClassifyPipeline(_make_config(), tmp_path / "in.json", tmp_path / "out.json")
+        assert pipeline.producer.name == "test"
+        assert pipeline.producer.claims(_valid_record(file_name="foo.test", file_format=".test"))
+
     def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
         import dataclasses
 

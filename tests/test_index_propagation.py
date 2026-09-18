@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import (
     AMBIGUOUS_PARENT,
-    INDEX_TO_PARENT,
     NO_MATCHING_PARENT,
     get_parent_candidates,
     load_classifications,
@@ -26,6 +25,7 @@ from meta_disco.models import (
     field_status,
     field_value,
 )
+from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
 
 

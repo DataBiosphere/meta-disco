@@ -1,4 +1,4 @@
-"""The producers themselves — how to run each standalone one, and what each one claims.
+"""The producers themselves — how to run each standalone one.
 
 A run has three record shapes, not one (#429): `ClassifyPipeline` covers seven file
 types through `OutputRecord`, and four producers assemble their output dicts by hand.
@@ -11,9 +11,6 @@ This module is the part those two share: how to run each producer. What to asser
 what it wrote stays in each sweep, because the two assert different things — a nested
 block against scalar echoes — and the identity sweep has a declined-record case (#438)
 the published one has no counterpart for.
-
-`PRODUCER_EXTENSIONS` is here for the same reason: reading it off each producer's own
-constant means the same `scripts/` import.
 
 It lives apart from `metadata_fixtures` deliberately: importing the producers means
 putting `scripts/` on the path, and only the modules here and the tests over them
@@ -29,22 +26,10 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
-from classify_auxiliary_genomic import AUXILIARY_EXTENSIONS, classify_auxiliary_genomic
-from classify_images import IMAGE_EXTENSIONS, classify_images
-from classify_index_files import INDEX_TO_PARENT, propagate_to_index_files
+from classify_auxiliary_genomic import classify_auxiliary_genomic
+from classify_images import classify_images
+from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
-
-from meta_disco.file_types import FILE_TYPE_REGISTRY
-
-# The extensions each producer routes on, read off each producer's own declaration so
-# this cannot drift from what actually runs. The catch-all producer is absent: it claims
-# no extension, taking whatever no other producer has already written a row for.
-PRODUCER_EXTENSIONS = {
-    **{name: frozenset(config.extensions) for name, config in FILE_TYPE_REGISTRY.items()},
-    "auxiliary_genomic": AUXILIARY_EXTENSIONS,
-    "images": IMAGE_EXTENSIONS,
-    "index": frozenset(INDEX_TO_PARENT),
-}
 
 # The three producers that take `(metadata_path, output_path)` and write one row per
 # input record, with a file name and format each one routes on. The index producer

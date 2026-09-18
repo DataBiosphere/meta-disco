@@ -171,6 +171,15 @@ evidence}` entry — plus the controlled vocabulary:
     `tests/producer_sweep` (how to run each producer; it is the one place `scripts/` goes
     on the path for this) and keep their own assertions. A new standalone producer goes
     into `STANDALONE_PRODUCERS` there and both sweeps pick it up.
+  - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
+    run's `*_classifications.json` files. Add one there, never to a second list:
+    `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
+    and the three hand-maintained lists they replaced are what let a registered type
+    never run (#151).
+  - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
+    owner because one function says so — the name decides and `file_format` is only a
+    fallback, for reasons `route`'s docstring gives. Four hand-written predicates are
+    what let two producers claim one file and a run write it twice (#445).
 
 ## Surprises
 
