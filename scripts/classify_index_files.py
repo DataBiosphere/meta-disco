@@ -147,8 +147,8 @@ def index_data_type_entry(index_ext: str) -> dict:
     term in ``data_type_enum``. Claimed the way an ``extension``-scope rule would claim
     it (``SOURCE_FILENAME_RULE``, per ``rule_engine._RULE_SOURCE_TYPES``).
 
-    Before #437 a *matched* index inherited this dimension with the rest, so a `.crai`
-    reported ``alignments`` and a `.tbi`` ``variants.germline`` — the parent's kind
+    Before #437 a *matched* index inherited this dimension with the rest, so a ``.crai``
+    reported ``alignments`` and a ``.tbi`` reported ``variants.germline`` — the parent's kind
     copied onto a file that is not of that kind. The other four dimensions inherit
     honestly, because they describe the data the index points into; ``data_type``
     describes the file itself, and is the one that must not be borrowed.
