@@ -1,18 +1,20 @@
-"""Guards that a registered file type actually reaches production.
+"""Guards that a registered producer actually reaches production.
 
-Registering a FileTypeConfig makes `classify_headers.py --type X` work, but a
-type only runs in a real `make classify` if it also has a Phase 1 job, and its
-output only reaches the reports if it is in CLASSIFICATION_FILES. Those are
-three separate lists. In #151 `gfa` was added to the registry and to neither of
-the others, so the classifier never ran and graph files fell through to the
-filename-only Phase 3 catch-all — with every unit test passing, because they
-call the classifier directly.
+Registering a producer must be enough to get it run and its output read. It was three
+separate lists — the file-type registry, the Phase 1 job list, and CLASSIFICATION_FILES.
+In #151 `gfa` was added to the first and neither of the others, so the classifier never
+ran and graph files fell through to the filename-only Phase 3 catch-all — with every
+unit test passing, because they call the classifier directly.
 
-These tests pin the three together.
+#449 made the other two derived from `producers.PRODUCERS`, so what these tests pin is
+that they stay derived: each is checked against what a run would actually invoke and
+read, and the Makefile — still hand-written — is checked against the registry's text.
 """
 
 import json
 from pathlib import Path
+
+import pytest
 
 from meta_disco.classify_run import (
     _report_exclusions,
@@ -22,6 +24,7 @@ from meta_disco.classify_run import (
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
+from meta_disco.producers import PRODUCERS, Producer, producers_in_phase
 from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
 from tests.test_source_evidence import evidence_file_envelope
 
@@ -42,6 +45,33 @@ def test_every_registered_file_type_has_a_phase1_job():
         f"FILE_TYPE_REGISTRY types with no Phase 1 job: {sorted(missing)}. "
         "They would be classified by the filename-only Phase 3 catch-all."
     )
+
+
+def test_every_phase1_producer_has_a_job_including_the_ones_that_read_no_headers():
+    """The two non-header producers used to be a second hand-written list
+    (`NON_HEADER_JOBS`) with the same drift risk as the registry itself (#449)."""
+    scripts = {script for script, _, _ in _jobs()}
+    missing = [producer.name for producer in producers_in_phase(1) if producer.script not in scripts]
+    assert not missing, f"Phase 1 producers with no job: {missing}. `make classify` would never invoke them."
+
+
+def test_every_producer_runs_in_a_phase_a_run_actually_has():
+    """A producer in no phase is declared and never invoked; the run has exactly three."""
+    assert {producer.phase for producer in PRODUCERS.values()} <= {1, 2, 3}
+    for phase in (1, 2, 3):
+        assert producers_in_phase(phase), f"no producer runs in phase {phase}"
+
+
+def test_the_later_phases_are_invoked_from_the_registry_too():
+    """Phase 2 and 3 are one producer each, run in sequence rather than in the pool, so
+    they are not in `build_parallel_jobs` — and must still be named from the registry
+    and not spelled in the orchestrator."""
+    run_source = (Path(__file__).parent.parent / "src" / "meta_disco" / "classify_run.py").read_text()
+    for name in ("index", "remaining"):
+        assert f'PRODUCERS["{name}"]' in run_source, (
+            f"run_all_classifications does not take the {name} producer from the registry, "
+            "so its script or output filename can drift from what the reports read."
+        )
 
 
 def test_header_jobs_receive_the_evidence_base():
@@ -77,6 +107,18 @@ def test_every_phase1_output_is_read_by_the_reports():
         "generate_coverage_report.py and generate_validation_report.py iterate "
         "CLASSIFICATION_FILES, so these records would not appear in any report."
     )
+
+
+def test_every_producer_writes_a_file_the_reports_read():
+    """The whole list, not just Phase 1 — the index and catch-all outputs are the two
+    biggest in a run, and reach the reports the same way."""
+    assert [producer.output for producer in PRODUCERS.values()] == CLASSIFICATION_FILES
+
+
+def test_no_two_producers_write_the_same_file():
+    """One producer, one output file: two sharing a name would have the second overwrite
+    the first, losing a whole population with no error."""
+    assert len(set(CLASSIFICATION_FILES)) == len(CLASSIFICATION_FILES)
 
 
 def _makefile_recipe(makefile: str, target: str) -> str | None:
@@ -232,3 +274,43 @@ class TestTheRunIsFailedByTheUniquenessCheck:
         metadata, output_base = self._empty_run(tmp_path)
 
         assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True
+
+
+class TestTheRegistryIsCheckedBeforeTheRunStarts:
+    """The overlap check is a preflight, not a post-mortem (#449).
+
+    #445's own bug — two producers claiming `.fast5.tar` — was detectable only from the
+    finished output, so it cost a multi-hour run before saying anything. The same fact is
+    available before a single file is fetched.
+    """
+
+    def _run(self, tmp_path):
+        metadata = tmp_path / "anvil_files_metadata.json"
+        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+        return run_all_classifications(metadata, tmp_path / "output", tmp_path / "evidence")
+
+    def test_an_overlapping_registry_stops_the_run(self, tmp_path, monkeypatch):
+        monkeypatch.setitem(
+            PRODUCERS,
+            "archives",
+            Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".tar.gz",)),
+        )
+        with pytest.raises(ValueError, match="overlapping extensions"):
+            self._run(tmp_path)
+
+    def test_it_refuses_before_writing_a_run_directory(self, tmp_path, monkeypatch):
+        """Nothing of the run exists afterwards — no output folder, so no half-run for an
+        operator to mistake for one that classified something."""
+        monkeypatch.setitem(
+            PRODUCERS,
+            "archives",
+            Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".tar.gz",)),
+        )
+        with pytest.raises(ValueError):
+            self._run(tmp_path)
+        assert not (tmp_path / "output").exists()
+
+    def test_the_same_run_starts_with_the_real_registry(self, tmp_path):
+        """The other half: without the overlap, this input runs — so the assertions above
+        are about the check and not about the run."""
+        assert self._run(tmp_path) is True

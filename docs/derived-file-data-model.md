@@ -125,7 +125,8 @@ Two facts about the relationship can be read without resolving the parent file:
   For `.fai`, `sequence`. For `.tbi`, one of a small set (vcf / bed / gff).
 
 We already encode the `parent_kind` half, today, in
-`scripts/classify_index_files.py`:
+`src/meta_disco/producers.py` (it moved there with the producer registry in #449,
+beside the extensions it gives the index producer to claim):
 
 ```python
 INDEX_TO_PARENT = {

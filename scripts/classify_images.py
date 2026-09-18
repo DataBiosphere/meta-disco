@@ -13,11 +13,14 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.producers import PRODUCERS, matched_extension
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# Extensions this producer claims, one owner per extension (tests/test_producer_routing.py).
-IMAGE_EXTENSIONS = frozenset({".svs", ".png", ".jpg", ".tiff"})
+# What this producer claims is declared in the producer registry, and asked through the
+# one routing predicate every producer asks (#449) — so no file can be this producer's
+# and another's at once.
+IMAGES = PRODUCERS["images"]
 
 
 def classify_images(metadata_path: Path, output_path: Path):
@@ -32,23 +35,15 @@ def classify_images(metadata_path: Path, output_path: Path):
     engine = RuleEngine()
     results = []
     # Sorted so the summary and the output's by_extension map keep a stable order.
-    stats = {ext: {"total": 0} for ext in sorted(IMAGE_EXTENSIONS)}
+    stats = {ext: {"total": 0} for ext in sorted(IMAGES.extensions)}
 
     for f in files:
+        if not IMAGES.claims(f):
+            continue
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
-        name_lower = name.lower()
 
-        # Check if this is an image file
-        is_image = False
-        for ext in stats:
-            if fmt == ext or name_lower.endswith(ext):
-                is_image = True
-                stats[ext]["total"] += 1
-                break
-
-        if not is_image:
-            continue
+        stats[matched_extension(f)]["total"] += 1
 
         # Classify using RuleEngine
         file_info = FileInfo.from_filename(

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Classify files not handled by any other classifier.
+"""Classify files no other producer wrote a row for.
 
-Catches all files that other classifiers skip (unrecognized extensions,
-etc.) and runs them through the rule engine. Most will get not_classified
-for all dimensions, making them visible in coverage reports.
+The catch-all: the one producer that claims nothing by extension, so
+``producers.producer_of`` returning ``None`` is its claim (#449). It takes whatever the
+other ten left and runs it through the rule engine. Most files get not_classified on
+every dimension, which is the point — it is what makes them visible in coverage reports
+rather than absent from the output.
+
+It keys on what was actually written rather than on that predicate, which is the
+stricter of the two: a producer that claimed a file and wrote no row for it leaves the
+file here, where asking the predicate would drop it from the run entirely.
 
 Usage:
     python scripts/classify_remaining_files.py

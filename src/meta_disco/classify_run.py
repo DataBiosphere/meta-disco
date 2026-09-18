@@ -2,8 +2,9 @@
 
 A source (AnVIL, HPRC, …) maps its native metadata into the meta-disco record shape and
 calls :func:`run_all_classifications`; there is no per-source classifier. This module holds
-the orchestration — Phase 1 (header types + the non-header scripts), Phase 2 (index
-inheritance), Phase 3 (the remaining catch-all). ``scripts/rerun_all_classifications.py``
+the orchestration — Phase 1 (the nine producers that route on their own), Phase 2
+(index inheritance), Phase 3 (the remaining catch-all). Which producers those are, and
+how each is invoked, is declared in :mod:`meta_disco.producers`. ``scripts/rerun_all_classifications.py``
 (AnVIL) and ``scripts/classify_hprc_files.py`` (HPRC) are thin CLI wrappers over it, so the
 shared path lives in the package alongside the rest of the pipeline rather than being
 imported across scripts.
@@ -17,57 +18,46 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
-from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import row_identities
+from meta_disco.producers import PRODUCERS, producers_in_phase, validate_registry
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
 # out to live at <root>/scripts/, so the subprocess cwd is the repo root three levels up.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Phase 1 classifiers that are NOT header-based, so they have their own script
-# rather than a FILE_TYPE_REGISTRY entry. (BED joined the registry in #282 — it reads
-# coordinate content through the shared pipeline, so it is a header job now.)
-NON_HEADER_JOBS = (
-    ("classify_images.py", "image_classifications.json"),
-    ("classify_auxiliary_genomic.py", "auxiliary_classifications.json"),
-)
-
 
 def build_parallel_jobs(
     metadata: Path, output_dir: Path, evidence_base: Path, workers: int | None = None
 ) -> list[tuple]:
-    """Phase 1 jobs: one per header-based file type, plus the non-header scripts.
+    """Phase 1 jobs: one per producer that runs in Phase 1.
 
-    The header jobs are derived from FILE_TYPE_REGISTRY rather than hand-listed,
-    so registering a new file type cannot silently skip production. That is what
-    happened to `gfa` in #151: it was added to the registry and to nothing else,
-    so `make classify` never invoked it and graph files fell through to the
-    filename-only Phase 3 catch-all.
+    Derived from the producer registry rather than hand-listed, so registering a
+    producer cannot silently skip production. That is what happened to `gfa` in #151: it
+    was added to the file-type registry and to nothing else, so `make classify` never
+    invoked it and graph files fell through to the filename-only Phase 3 catch-all. The
+    two non-header scripts used to be a second list here (`NON_HEADER_JOBS`) with the
+    same failure mode; #449 folded them into the registry beside the header types.
 
     ``evidence_base`` is the per-source header cache root (``data/evidence/anvil`` for
     AnVIL, ``data/evidence/hprc`` for HPRC) and ``workers`` (when set) the header-fetch
-    concurrency; both are passed only to the header jobs — the ones that fetch headers.
-    The non-header scripts take neither: image/auxiliary classify from the filename. (BED
-    used to read a separate pre-fetched coordinate cache hardcoded to the AnVIL dir; #282
-    moved it into the registry, so it is now a header job that fetches through the shared
-    pipeline and honors this ``evidence_base`` like every other type — closing #279.)
+    concurrency; both are passed only to the producers that fetch headers
+    (``Producer.fetches_headers``) — image/auxiliary classify from the filename and read
+    no content.
 
-    Every output filename here must also appear in output_utils.CLASSIFICATION_FILES
-    or the reports will not read it — pinned by tests/test_orchestration.py.
+    Every output filename here also appears in output_utils.CLASSIFICATION_FILES, which
+    is derived from the same registry, so the reports read what this produces.
     """
     header_args = ["--evidence-base", str(evidence_base)]
     if workers is not None:
         header_args += ["-w", str(workers)]
-    jobs = [
-        (
-            "classify_headers.py",
-            output_dir / f"{ftype}_classifications.json",
-            ["--type", ftype, "--input", str(metadata), *header_args],
-        )
-        for ftype in FILE_TYPE_REGISTRY
-    ]
-    jobs += [(script, output_dir / out, ["--metadata", str(metadata)]) for script, out in NON_HEADER_JOBS]
+    jobs = []
+    for producer in producers_in_phase(1):
+        if producer.fetches_headers:
+            args = ["--type", producer.name, "--input", str(metadata), *header_args]
+        else:
+            args = ["--metadata", str(metadata)]
+        jobs.append((producer.script, output_dir / producer.output, args))
     return jobs
 
 
@@ -197,6 +187,12 @@ def run_all_classifications(
     function only reports the count after Phase 1, because each producer's own stdout is
     captured.
     """
+    # Before anything is fetched or written: no two producers may claim overlapping
+    # extensions. A run that violated this wrote some files twice and was told so only
+    # at the end, hours in (#445) — the whole point of checking here is that the answer
+    # costs nothing and arrives first.
+    validate_registry()
+
     report_evidence_files(source_evidence_root)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -223,27 +219,29 @@ def run_all_classifications(
     _report_exclusions(output_dir)
 
     # Phase 2: Index classification (inherits from parent file classifications)
-    index_output = output_dir / "index_classifications.json"
+    index_producer = PRODUCERS["index"]
+    index_output = output_dir / index_producer.output
     if not success:
         print("\nPhase 2: SKIPPED — one or more Phase 1 classifiers failed")
     else:
         print("\nPhase 2: Classifying index files...")
         _, ok = run_script(
-            "classify_index_files.py",
+            index_producer.script,
             index_output,
             ["--metadata", str(metadata), "--classifications", *[str(p) for p in all_classification_files]],
         )
         success &= ok
         all_classification_files.append(index_output)
 
-    # Phase 3: Catch-all for files not handled by any other classifier
+    # Phase 3: Catch-all for files no other producer wrote a row for
+    remaining_producer = PRODUCERS["remaining"]
     if not success:
         print("\nPhase 3: SKIPPED — one or more earlier classifiers failed")
     else:
         print("\nPhase 3: Classifying remaining files...")
         _, ok = run_script(
-            "classify_remaining_files.py",
-            output_dir / "remaining_classifications.json",
+            remaining_producer.script,
+            output_dir / remaining_producer.output,
             ["--metadata", str(metadata), "--classifications", *[str(p) for p in all_classification_files]],
         )
         success &= ok

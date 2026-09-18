@@ -6,9 +6,7 @@ which carries extension filters, fetcher, classifier, and summary printer.
 """
 
 import json
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
@@ -16,11 +14,13 @@ from typing import NamedTuple, TypeGuard
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
+from .file_types import FileTypeConfig
 from .header_classifier import classify_without_content
 from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
+from .producers import producer_for
 from .records import PUBLISHED_FIELDS, ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 
 
@@ -258,27 +258,6 @@ class RecordOutcome(NamedTuple):
     validation_failed: bool
 
 
-@dataclass(frozen=True)
-class FileTypeConfig:
-    """Configuration for a file type that can be classified via header inspection."""
-
-    name: str
-    extensions: tuple[str, ...]
-    fetcher: Callable
-    classifier: Callable
-    summary_printer: Callable | None = None
-    # Environment check run once before the worker pool (e.g. an external tool
-    # must be installed). Raises to abort the run fast, instead of letting every
-    # record fail the same way and vanish. None means no check.
-    preflight: Callable | None = None
-    # Detector for an escalating head-read (#260): given the fetcher's parsed payload,
-    # returns whether the head is conclusive (enough to classify). The fetcher reads
-    # deeper only while this is False. Injected here rather than imported by the fetcher,
-    # so the reader stays decoupled from the classifier's recognition logic. None means
-    # the fetcher reads a single fixed head (the default for every type but tar).
-    head_detector: Callable | None = None
-
-
 def _fetch_and_classify(
     config: FileTypeConfig,
     evidence_dir: Path,
@@ -387,6 +366,10 @@ class ClassifyPipeline:
         skip_cached: bool = False,
     ):
         self.config = config
+        # Who this pipeline is in the run: the registry entry that routes records to
+        # this type (#449), so `_filter_records` asks the same question every other
+        # producer asks rather than a predicate of its own.
+        self.producer = producer_for(config)
         self.input_path = input_path
         self.output_path = output_path
         self.evidence_dir = evidence_base / config.name
@@ -535,37 +518,22 @@ class ClassifyPipeline:
         return records
 
     def _filter_records(self, records: list) -> list[dict]:
-        """Filter to records routed to this file type by extension.
+        """Filter to the records this file type owns.
 
-        Routing is by ``file_format``/``file_name`` extension only. A record with no
-        usable ``file_md5sum`` never reaches here at all — ``_load_input`` excluded it
-        (#376), and it is named in the run's ``excluded_files.json`` instead. A
-        contract violation on any *other* classifier-relevant field does reach here and
-        is written as ``validation_failed`` rather than silently dropped (issues
-        #155/#161).
+        Routing is :func:`producers.producer_of`, the one predicate every producer asks
+        (#449), so this type takes a record exactly when no other producer does. A
+        record with no usable ``file_md5sum`` never reaches here at all — ``_load_input``
+        excluded it (#376), and it is named in the run's ``excluded_files.json``
+        instead. A contract violation on any *other* classifier-relevant field does
+        reach here and is written as ``validation_failed`` rather than silently dropped
+        (issues #155/#161).
 
-        The non-dict guard is now defense in depth rather than a live path: ``run()``
-        feeds this from ``_load_input``, whose elements are all dicts. It is kept so the
-        method stays safe for a caller that hands it a raw record list, and the
-        whole-corpus ``validate_metadata`` gate is what reports such an element.
+        A non-dict element is routed nowhere by ``producer_of``. That is defense in
+        depth rather than a live path: ``run()`` feeds this from ``_load_input``, whose
+        elements are all dicts, and the whole-corpus ``validate_metadata`` gate is what
+        reports such an element.
         """
-        exts = self.config.extensions
-
-        def matches(r) -> bool:
-            if not isinstance(r, dict):
-                return False
-            if r.get("skip"):
-                return False
-            # str(): a non-string file_format/file_name (drift) must not raise here,
-            # before validation can convert the record into a structured failure.
-            # Lowercased because every other reader of an extension is: `FileName.parse`
-            # case-folds, so a `.TAR` this matched case-sensitively would be handed away
-            # by a producer that saw an archive and refused by the type that owns one.
-            fmt = str(r.get("file_format") or "").lower()
-            name = str(r.get("file_name") or "").lower()
-            return any(fmt.endswith(ext) for ext in exts) or any(name.endswith(ext) for ext in exts)
-
-        return [r for r in records if matches(r)]
+        return [record for record in records if self.producer.claims(record)]
 
     def _partition_records(self, records: list[dict]) -> list[ClassifierRecord | InvalidRecord]:
         """Parse routed records into typed work items at the load boundary (#172).

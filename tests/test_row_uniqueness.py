@@ -8,7 +8,7 @@ key (#445). The check turns that into a failed run.
 import json
 
 from meta_disco.classify_run import _check_one_row_per_file
-from meta_disco.output_utils import row_identities
+from meta_disco.output_utils import CLASSIFICATION_FILES, row_identities
 
 
 def _write(run_dir, fname, rows):
@@ -27,7 +27,11 @@ class TestRowIdentities:
 
         identities = row_identities(tmp_path)
         assert identities.total_rows == 3
-        assert identities.duplicates == {"f1": ["auxiliary_classifications.json", "tar_classifications.json"]}
+        # The two are named in CLASSIFICATION_FILES order, which is the producer
+        # registry's order (#449). Derived rather than spelled, so this pins that
+        # property rather than the positions these two producers happen to sit at.
+        both = {"tar_classifications.json", "auxiliary_classifications.json"}
+        assert identities.duplicates == {"f1": [f for f in CLASSIFICATION_FILES if f in both]}
 
     def test_a_file_id_written_twice_by_one_producer_is_a_duplicate_too(self, tmp_path):
         _write(tmp_path, "bam_classifications.json", [_row("f1"), _row("f1")])

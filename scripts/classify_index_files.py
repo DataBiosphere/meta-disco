@@ -48,6 +48,7 @@ from meta_disco.models import (
     status_for_value,
 )
 from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS, matched_extension
 from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identity_from, published_from
 
 # Why an index file took no parent. Written into each `unmatched_files` entry and
@@ -56,25 +57,11 @@ from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identit
 NO_MATCHING_PARENT = "no_matching_parent_in_dataset"
 AMBIGUOUS_PARENT = "ambiguous_parent_in_dataset"
 
-# Index extension -> parent extension mapping
-# List specific compound extensions to avoid false candidates from bare .gz
-INDEX_TO_PARENT = {
-    ".bai": [".bam"],
-    ".tbi": [".vcf.gz", ".bed.gz", ".txt.gz", ".tsv.gz", ".gff.gz", ".gtf.gz"],
-    ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
-    ".crai": [".cram"],
-    ".pbi": [".bam"],
-    # `.fai` and `.idx` are in the `index_file` rule's extension list and were missing
-    # here, so 477 `.fai` files never reached this producer at all. They are declared
-    # so those files can *inherit*: every one of the 477 has a present, unambiguous
-    # parent, so the four dimensions a parent supplies are answered rather than left
-    # to the catch-all, which sees only the extension. (When the gap was found, the
-    # catch-all's rule also stamped four `not_applicable` on them — the outcome #438
-    # exists to prevent. #437 removed that, so today the cost of the gap is lost
-    # inheritance rather than a wrong answer.)
-    ".fai": [".fa.gz", ".fasta", ".fa"],
-    ".idx": [".vcf"],
-}
+# What this producer claims is declared in the producer registry, and asked through the
+# one routing predicate every producer asks (#449). Its extensions are the keys of
+# `INDEX_TO_PARENT`, which is declared there beside them, so what this producer routes on
+# and what it inherits from cannot drift apart.
+INDEX = PRODUCERS["index"]
 
 
 def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
@@ -326,18 +313,11 @@ def propagate_to_index_files(
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
+            if not INDEX.claims(f):
+                continue
             name = f.get("file_name", "")
             fmt = f.get("file_format", "")
-
-            # Check if this is an index file
-            index_ext = None
-            for ext in INDEX_TO_PARENT:
-                if fmt == ext or name.endswith(ext):
-                    index_ext = ext
-                    break
-
-            if not index_ext:
-                continue
+            index_ext = matched_extension(f)
 
             stats[index_ext]["total"] += 1
 
