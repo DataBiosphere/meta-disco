@@ -167,6 +167,27 @@ class TestNoJunkCandidates:
         assert not any(".cram.cram" in c for c in candidates)
 
 
+def test_a_gvcf_parent_is_variants_not_unknown():
+    """`FileName.parse` keeps a compound core whole — a gVCF is `.g.vcf` — and
+    `EXTENSION_MAP` keys `.vcf`, so an exact lookup called 2,504 real gVCF parents a
+    kind we could not tell."""
+    from classify_index_files import parent_kind_of
+
+    assert parent_kind_of("NA20872.haplotypeCalls.er.raw.g.vcf.gz", ".tbi") == "variants"
+    assert parent_kind_of("HG002.vcf.gz", ".tbi") == "variants"
+
+
+def test_a_parent_whose_kind_is_genuinely_unknown_stays_none():
+    """The fallback must not guess: `.txt.gz` is a category with no parent_kind term,
+    and a `.tbi` with no parent indexes several kinds."""
+    from classify_index_files import parent_kind_of
+
+    assert parent_kind_of("annotations.txt.gz", ".tbi") is None
+    assert parent_kind_of(None, ".tbi") is None
+    # ...while an index extension that declares one kind answers without a parent.
+    assert parent_kind_of(None, ".bai") == "alignment"
+
+
 def test_every_index_record_carries_its_own_file_size(tmp_path):
     """The index file's own bytes, on both record paths.
 

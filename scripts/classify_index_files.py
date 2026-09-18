@@ -94,10 +94,29 @@ def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
     # peels it the same way (".vcf.gz" -> ".vcf").
     declared = [f"parent{ext}" for ext in INDEX_TO_PARENT.get(index_ext, [])]
     names = [parent_name] if parent_name else declared
-    categories = {EXTENSION_MAP.get(FileName.parse(name).extension or "") for name in names}
-    kinds = {_PARENT_KIND_BY_CATEGORY.get(category or "") for category in categories}
+    kinds = {_PARENT_KIND_BY_CATEGORY.get(_category_of(name) or "") for name in names}
     kinds.discard(None)
     return kinds.pop() if len(kinds) == 1 else None
+
+
+def _category_of(file_name: str) -> str | None:
+    """The extension category of one filename, trying shorter suffixes of a compound one.
+
+    ``FileName.parse`` keeps a compound core whole — a gVCF is ``.g.vcf`` — and
+    ``EXTENSION_MAP`` keys the simple form, so an exact lookup misses every gVCF parent
+    and calls it a kind we cannot tell. Dropping leading segments finds ``.vcf``.
+
+    The map is the rules vocabulary and is deliberately not edited to suit this: adding
+    a key there would move what the rules match on, and the kind of a parent is this
+    producer's question.
+    """
+    parsed = FileName.parse(file_name).extension or ""
+    segments = parsed.split(".")
+    for start in range(1, len(segments)):
+        category = EXTENSION_MAP.get("." + ".".join(segments[start:]))
+        if category:
+            return category
+    return None
 
 
 def derivation_edge(parent_name: str | None, parent_md5sum: str | None, index_ext: str) -> dict:

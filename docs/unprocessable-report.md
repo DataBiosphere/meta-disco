@@ -1,6 +1,6 @@
 # Unprocessable files
 
-What run `output/anvil/20260912_202902` could not classify, and why (#376).
+What run `output/anvil/20260918_142651` could not classify, and why (#376).
 
 ## Summary
 
@@ -11,7 +11,7 @@ What run `output/anvil/20260912_202902` could not classify, and why (#376).
 | Content unreadable | 23 | yes |
 | **Total** | **23** | |
 
-Read from 708,203 classification record(s) in the run, against 708,088 input record(s).
+Read from 708,088 classification record(s) in the run, against 708,088 input record(s).
 
 ## By reason
 
@@ -29,7 +29,7 @@ The record violates the input contract on a field the classifier reads (`file_si
 
 A row exists in the run's output, with the violation as each dimension's evidence.
 
-None in this run (708,203 classification records read).
+None in this run (708,088 classification records read).
 
 ### Content unreadable
 
