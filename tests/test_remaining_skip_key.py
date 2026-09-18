@@ -144,6 +144,15 @@ class TestARecordWithNoNameIsWrittenNotDropped:
         assert envelope["metadata"]["validation_failed"] == 1
         assert envelope["metadata"]["successful"] == 0
 
+    def test_a_drifted_file_name_is_coerced_not_echoed(self, tmp_path):
+        """`OutputRecord.file_name` is typed `str`, so a drifted one is coerced on the
+        way in — the pipeline's `InvalidRecord` path does it, and this uses that path
+        rather than echoing a raw value into a row that claims to be a string."""
+        envelope = self._run(tmp_path, [valid_record(file_name=0, file_format=None, entry_id="e1")])
+        [row] = envelope["classifications"]
+        assert row["file_name"] == "0"
+        assert row["file_format"] == ""
+
     def test_the_tallies_still_describe_the_rows(self, tmp_path):
         """`total` is the rows written and `processed` accounts for all of them, which is
         what lets the run's eleven metadata blocks sum to the corpus."""

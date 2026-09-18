@@ -27,7 +27,7 @@ from meta_disco.metadata_schema import (
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
-from meta_disco.records import OutputRecord, RunMetadata
+from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
 
@@ -122,10 +122,12 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
             # Checked after `already`, or a nameless record another producer claimed on
             # its `file_format` would be written twice.
             validation_failed += 1
+            # The pipeline's own path, not an imitation of it: `InvalidRecord` coerces a
+            # drifted identity (a null or non-string `file_name`) that `from_record`
+            # would echo as-is into a row typed `str`.
+            item = InvalidRecord.from_record(rec, classification_blocking_reasons(rec))
             results.append(
-                OutputRecord.from_record(
-                    rec, validation_failed_classifications(classification_blocking_reasons(rec)), source
-                ).to_dict()
+                OutputRecord.from_work_item(item, validation_failed_classifications(item.reasons), source).to_dict()
             )
             continue
 
