@@ -737,27 +737,36 @@ class TestAddClaim:
 
 
 class TestDerivativeFiles:
-    """Test that derivative files (indices, checksums, logs) get not_applicable."""
+    """A derivative file has a kind of its own; the data it describes is another file's.
 
-    def test_index_bai(self, engine):
-        """BAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    `data_type` names the kind — `index`, `checksum`, `log` (#437). What happens to the
+    data-describing dimensions is *not* uniform, and the split is the point:
 
-    def test_index_crai(self, engine):
-        """CRAI index files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.cram.crai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    - An **index** indexes coordinates into real data, so those dimensions apply to it
+      and are merely unknown to a rule that cannot see the parent. They stay open.
+    - A **checksum** or **log** is about bytes and has no coordinate space or assay of
+      its own, so they are denied outright.
 
-    def test_checksum_md5(self, engine):
-        """MD5 checksum files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("HG02558.final.cram.md5"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    Before #437 these tests asserted only `data_modality`, so they passed while their
+    names and docstrings described the opposite of what the rules now do.
+    """
 
-    def test_log_files(self, engine):
-        """Log files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("pipeline.log"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    @pytest.mark.parametrize(
+        ("name", "data_type", "modality_status"),
+        [
+            # An index's modality is its parent's and merely unknown here; a checksum
+            # or log has none of its own, so those are denied outright (#437).
+            ("sample.bam.bai", "index", NOT_CLASSIFIED),
+            ("sample.cram.crai", "index", NOT_CLASSIFIED),
+            ("sample.vcf.gz.tbi", "index", NOT_CLASSIFIED),
+            ("HG02558.final.cram.md5", "checksum", NOT_APPLICABLE),
+            ("pipeline.log", "log", NOT_APPLICABLE),
+        ],
+    )
+    def test_a_derivative_file_is_its_own_kind(self, engine, name, data_type, modality_status):
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.data_type == data_type
+        assert result.status_of("data_modality") == modality_status
 
 
 class TestSpecialFileTypes:
@@ -1387,14 +1396,20 @@ class TestReasonChain:
 class TestSentinelValues:
     """Test that not_applicable/not_classified sentinels are used correctly."""
 
-    def test_derivative_files_get_not_applicable(self, engine):
-        """Index files get not_applicable for modality/platform/assay but not reference_assembly
-        (reference IS applicable to indexes — it's determined by the parent file's alignment)."""
+    def test_an_index_leaves_the_parents_dimensions_open(self, engine):
+        """All four are applicable to an index and undetermined without its parent.
+
+        This test used to assert `reference_assembly` open and the other three
+        `not_applicable`, on the reasoning — in its own docstring — that "reference IS
+        applicable to indexes, it's determined by the parent file's alignment". That is
+        equally true of modality, platform and assay: the parent determines all four,
+        and the matched path in `classify_index_files` inherits all four. #437 made the
+        rule treat them alike.
+        """
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED  # applicable but unknown without filename hint
-        assert result.status_of("platform") == NOT_APPLICABLE
-        assert result.status_of("assay_type") == NOT_APPLICABLE
+        assert result.data_type == "index"
+        for field in ("data_modality", "reference_assembly", "platform", "assay_type"):
+            assert result.status_of(field) == NOT_CLASSIFIED, f"{field} should be open, not denied"
 
     def test_unclassified_fields_get_not_classified(self, engine):
         """Files with unset fields should get not_classified."""

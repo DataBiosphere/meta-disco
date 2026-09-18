@@ -266,7 +266,17 @@ class TestLoadClassifications:
         assert "bam_md5" in result
         assert "bed_md5" in result
         assert result["bed_md5"]["data_modality"] == "genomic"
-        assert result["bed_md5"]["data_type"] == "annotations"
+        # The map holds only what an index inherits. `data_type` is not inherited
+        # since #437 — an index has its own — so the parent's is not read at all.
+        assert "data_type" not in result["bed_md5"]
+        assert set(result["bed_md5"]) == {
+            "data_modality",
+            "assay_type",
+            "platform",
+            "reference_assembly",
+            "detail",
+            "source_file",
+        }
 
     def test_skips_missing_files(self, tmp_path):
         """Missing files are silently skipped."""
@@ -338,7 +348,9 @@ class TestLoadClassifications:
         assert csi["parent_file"] == "HG03652.regions.bed.gz"
         cls = csi["classifications"]
         assert field_value(cls, "data_modality") == "genomic"
-        assert field_value(cls, "data_type") == "annotations"
+        # The parent is annotations; the index is an index (#437). The parent is still
+        # reachable, by `parent_file` / `parent_md5sum` on the record.
+        assert field_value(cls, "data_type") == "index"
         assert field_value(cls, "reference_assembly") == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
         # Propagated entries carry the Stage 2 `status` key (epic #116), like to_output_dict.
@@ -396,7 +408,7 @@ class TestLoadClassifications:
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         assert field_value(cls, "data_modality") == "genomic"
-        assert field_value(cls, "data_type") == "variants.germline"
+        assert field_value(cls, "data_type") == "index"
         assert field_value(cls, "reference_assembly") == "GRCh38"
 
     def test_bai_inherits_from_bam_parent(self, tmp_path):
@@ -613,7 +625,11 @@ class TestLoadClassifications:
         # Parent filename matched but md5 not in classifications → not_classified
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+        # `data_type` does not depend on the parent being classified — the extension
+        # settles it (#437). The other four have nothing to inherit.
+        assert field_status(cls, "data_type") == CLASSIFIED
+        assert field_value(cls, "data_type") == "index"
+        for fld in ["data_modality", "platform", "reference_assembly", "assay_type"]:
             assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
 

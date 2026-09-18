@@ -154,58 +154,86 @@ rules:
   # EXTENSION-BASED RULES (tiers 1–2)
   # ===========================================================================
   # Tier 1: broad fallbacks (index files — reference_assembly left open)
-  # Tier 2: definitive not_applicable (checksum, log, upload, timestamp,
-  #         images, nanopore raw, FASTQ baseline)
+  # Tier 2: definitive claims for files a name alone settles — checksum, log,
+  #         upload, timestamp, images, nanopore raw, FASTQ baseline. Most name a
+  #         kind in `data_type` and mark the data-describing dimensions
+  #         not_applicable; `upload` and `timestamp` name no kind the vocabulary
+  #         has, so they mark only statuses.
 
   # ---------------------------------------------------------------------------
-  # Index files - not applicable (inherit from parent via classify_index_files.py)
+  # Index files. `data_type` is the file's own kind, and the extension settles it —
+  # the same answer `classify_index_files` gives from the same evidence (#437).
+  #
+  # It claims nothing else, which finishes what #106 began. That issue removed
+  # `reference_assembly: not_applicable` from blanket rules like this one, because a
+  # file named for CHM13 *is* associated with CHM13 and the stamp — terminal in the
+  # evaluator — was blocking `filename_ref_*` from saying so. It left `data_modality`
+  # and `platform` explicitly to be reconsidered. This is that reconsideration: the
+  # four dimensions a parent supplies all behave alike now, and none is stamped.
+  #
+  # They *do* apply to an index file. The matched path in `classify_index_files`
+  # proves it by inheriting `genomic` / `CHM13` / `ILLUMINA` / `WGS` from the parent;
+  # a `.bai` that has a reference assembly but no data modality was never coherent.
+  # A rule that cannot see the parent cannot determine them, and `not_applicable`
+  # would assert they cannot apply — a confident wrong answer, which coverage counts
+  # as classified. Leaving them unclaimed is what `declined_record` does, for the same
+  # reason, so the two agree.
+  #
+  # Contrast `checksum_file` below, which *does* claim `reference_assembly:
+  # not_applicable`: a checksum is about bytes and has no coordinate space. An index
+  # has one — it indexes coordinates into that assembly.
+  #
+  # The two claimants never see the same file — `classify_run` passes the index
+  # output into the catch-all's skip set — so this is not a second opinion. It answers
+  # an index file the producer did not reach: a partial run where it has not run, or a
+  # name whose index extension the producer's literal-suffix match misses while
+  # `FileName.parse` finds it (an uppercase `.BAI`, a wrapped `.fai.gz`).
   # ---------------------------------------------------------------------------
-  - id: index_not_applicable
+  - id: index_file
     tier: 1
     scope: extension
     when:
       extensions: [".bai", ".crai", ".tbi", ".csi", ".fai", ".idx", ".pbi"]
     then:
-      status:
-        data_modality: not_applicable
-        data_type: not_applicable
-        assay_type: not_applicable
-        platform: not_applicable
-    rationale: "Index file — metadata inherited from parent data file"
+      data_type: index
+    rationale: "Index file — an index; what it indexes is the parent's to say"
 
   # ---------------------------------------------------------------------------
-  # Checksum files - not applicable
+  # Checksum files — `data_type` says what the file is, the rest do not apply.
+  # Same correction as the index rule above (#437): `checksum` is a term in
+  # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
+  # has no kind when the vocabulary has a word for its kind.
   # ---------------------------------------------------------------------------
-  - id: checksum_not_applicable
+  - id: checksum_file
     tier: 2
     scope: extension
     when:
       extensions: [".md5"]
     then:
+      data_type: checksum
       status:
         data_modality: not_applicable
-        data_type: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Checksum file — not data"
+    rationale: "Checksum file — a checksum, and no data of its own"
 
   # ---------------------------------------------------------------------------
   # Log files - not applicable
   # ---------------------------------------------------------------------------
-  - id: log_not_applicable
+  - id: log_file
     tier: 2
     scope: extension
     when:
       extensions: [".log"]
     then:
+      data_type: log
       status:
         data_modality: not_applicable
-        data_type: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
-    rationale: "Log file — not data"
+    rationale: "Log file — a log, and no data of its own"
 
   # ---------------------------------------------------------------------------
   # Chunked upload artifacts - not applicable

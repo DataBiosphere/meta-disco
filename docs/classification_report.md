@@ -801,7 +801,9 @@ Two reasons land in that array, and they are not the same problem:
 
 The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
 
-Both kinds get a record because the alternative was worse: dropping them sent the files to the catch-all producer, where the tier-1 `index_not_applicable` rule stamps four dimensions `not_applicable` on the strength of the extension alone — and coverage counts `not_applicable` as *classified*. That reported a file as determined precisely where it is not. The rule's own rationale, "metadata inherited from parent data file", shows it was written as a placeholder for files this producer would resolve.
+Both kinds get a record because the alternative was worse. Dropping them sent the files to the catch-all producer instead, which classified them from the extension alone — and coverage counts `not_applicable` as *classified*, so a file was reported as determined precisely where it is not.
+
+What the catch-all's tier-1 `index_file` rule says today: `data_type: index`, and nothing else (#437). The four dimensions a parent supplies stay open — they apply to an index file, and a rule that cannot see the parent cannot determine them, so denying them would be a confident wrong answer that coverage counts as classified. That is the same shape `classify_index_files` gives a parentless index, so the two agree. Neither ever sees the same file, because the catch-all skips whatever the producer wrote; the rule is what answers an index file the producer did not reach, such as a partial run.
 
 ### 6.2 Recommendations
 

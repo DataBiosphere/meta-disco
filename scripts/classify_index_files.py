@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-Index files inherit all five of ``CLASSIFICATION_FIELDS`` from their parent,
-which is found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
+An index file's ``data_type`` is ``index``, from its extension. The other four of
+``CLASSIFICATION_FIELDS`` describe the data it points into, so they are inherited from
+its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
 A filename does not always identify one file. Where two files in a dataset share
@@ -11,8 +12,9 @@ but it inherits nothing: ``declined_record`` gives it ``data_type: index``, whic
 extension establishes without a parent, and ``not_classified`` on the other four,
 which only a parent could supply. Why no parent was taken is listed separately in
 ``unmatched_files``, with reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT``
-(#438). So this module has two behaviours: inherit all five from a unique parent, or
-assert the one dimension a parent is not needed for.
+(#438). So this module has two behaviours, and they differ only in the four inherited
+dimensions: with a unique parent they are the parent's, without one they are
+``not_classified``. ``data_type`` is the same either way (#437).
 
 The lookup used to keep whichever file load order visited last. Measured on the
 anvil15 corpus, 15,006 index files took a parent picked that way, and 7,422 of
@@ -62,10 +64,14 @@ INDEX_TO_PARENT = {
     ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
-    # `.fai` and `.idx` are in `index_not_applicable`'s extension list and were missing
-    # here, so 477 `.fai` files never reached this producer and took that rule's four
-    # `not_applicable` stamps from the catch-all — the outcome #438 exists to prevent.
-    # Every one of the 477 has a present, unambiguous parent, so they inherit.
+    # `.fai` and `.idx` are in the `index_file` rule's extension list and were missing
+    # here, so 477 `.fai` files never reached this producer at all. They are declared
+    # so those files can *inherit*: every one of the 477 has a present, unambiguous
+    # parent, so the four dimensions a parent supplies are answered rather than left
+    # to the catch-all, which sees only the extension. (When the gap was found, the
+    # catch-all's rule also stamped four `not_applicable` on them — the outcome #438
+    # exists to prevent. #437 removed that, so today the cost of the gap is lost
+    # inheritance rather than a wrong answer.)
     ".fai": [".fa.gz", ".fasta", ".fa"],
     ".idx": [".vcf"],
 }
@@ -137,6 +143,40 @@ DECLINED_REASON_TEXT = {
 }
 
 
+def index_data_type_entry(index_ext: str) -> dict:
+    """The ``data_type`` entry every index file carries, matched or not.
+
+    An index file *is* an index. That is knowable from the extension without a parent,
+    which is how this producer finds the file in the first place, and ``index`` is a
+    term in ``data_type_enum``. Claimed the way an ``extension``-scope rule would claim
+    it (``SOURCE_FILENAME_RULE``, per ``rule_engine._RULE_SOURCE_TYPES``).
+
+    Before #437 a *matched* index inherited this dimension with the rest, so a ``.crai``
+    reported ``alignments`` and a ``.tbi`` reported ``variants.germline`` — the parent's kind
+    copied onto a file that is not of that kind. The other four dimensions inherit
+    honestly, because they describe the data the index points into; ``data_type``
+    describes the file itself, and is the one that must not be borrowed.
+
+    Nothing is lost by dropping the borrowed value. On a *matched* row what the file
+    indexes is already on the record as ``parent_file`` and ``parent_md5sum``, which name
+    the actual parent and join to its record — more than a copied category said, and true
+    besides. A declined row has neither, both being null, but it never carried a borrowed
+    ``data_type`` to lose: it has no parent, which is what declined means.
+    """
+    return build_field_entry(
+        INDEX_DATA_TYPE,
+        status=CLASSIFIED,
+        evidence=[
+            {
+                "rule_id": "index_by_extension",
+                "reason": f"{index_ext} identifies an index file",
+                "value": INDEX_DATA_TYPE,
+                "source_type": SOURCE_FILENAME_RULE,
+            }
+        ],
+    )
+
+
 def declined_record(record: dict, index_ext: str, reason: str, source: str | None) -> dict:
     """One output record for an index file this producer took no parent for.
 
@@ -158,29 +198,21 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ``inherited_from_parent`` already does not; nothing validates emitted rule ids
     against that file.
 
-    Writing this record is what keeps such a file out of the catch-all producer, where
-    tier-1 ``index_not_applicable`` would stamp four dimensions ``not_applicable`` on
-    the strength of the extension alone — a rule whose own rationale is "metadata
-    inherited from parent data file", premised on this producer supplying the answer.
-    Coverage counts ``not_applicable`` as classified, so that path reported a file as
-    determined precisely where it is not (#438 review). ``data_type: index`` also
-    disagrees with what a *matched* index row says, which is #437's subject.
+    Writing this record is what keeps such a file out of the catch-all producer. When
+    #438 added it, that mattered because the catch-all's rule then stamped four
+    dimensions ``not_applicable`` — ``data_type`` among them — on the strength of the
+    extension alone, and coverage counts ``not_applicable`` as classified, so a file
+    was reported as determined precisely where it is not.
+
+    #437 removed that hazard at the source: the rule is now ``index_file`` and claims
+    only ``data_type: index``, leaving the four a parent supplies open. So the three
+    ways an index file can be classified — inherited from a matched parent, declined
+    here, or reached by the rule — now agree on its kind and never deny a dimension
+    that applies. The record is still written, because it carries what this producer
+    knows about the file and keeps every index file in one output.
     """
     why = DECLINED_REASON_TEXT[reason]
-    classifications = {
-        DATA_TYPE: build_field_entry(
-            INDEX_DATA_TYPE,
-            status=CLASSIFIED,
-            evidence=[
-                {
-                    "rule_id": "index_by_extension",
-                    "reason": f"{index_ext} identifies an index file",
-                    "value": INDEX_DATA_TYPE,
-                    "source_type": SOURCE_FILENAME_RULE,
-                }
-            ],
-        )
-    }
+    classifications = {DATA_TYPE: index_data_type_entry(index_ext)}
     for fld in CLASSIFICATION_FIELDS:
         if fld == DATA_TYPE:
             continue
@@ -225,7 +257,6 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
             if md5:
                 classifications[md5] = {
                     "data_modality": field_label(c, "data_modality"),
-                    "data_type": field_label(c, "data_type"),
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
                     "reference_assembly": field_label(c, "reference_assembly"),
@@ -367,10 +398,12 @@ def propagate_to_index_files(
                 "dataset_id": ds,
                 "dataset_title": f.get("dataset_title"),
                 "file_size": f.get("file_size"),
+                # The extension this file matched on, which is not always `file_format`:
+                # every `.fai` in the corpus carries `file_format: "Other"` (#437).
+                "index_extension": index_ext,
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
                 "data_modality": parent_class.get("data_modality") or nc,
-                "data_type": parent_class.get("data_type") or nc,
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
                 "reference_assembly": parent_class.get("reference_assembly") or nc,
@@ -518,6 +551,11 @@ def propagate_to_index_files(
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
         classifications = {}
         for fld in CLASSIFICATION_FIELDS:
+            # `data_type` is the file's own kind and is never inherited (#437); the other
+            # four are properties of the data the index points into, so they are.
+            if fld == DATA_TYPE:
+                classifications[fld] = index_data_type_entry(r["index_extension"])
+                continue
             label = r.get(fld)
             evidence = inherited_evidence(fld, label, parent)
             status = _inherited_status(label)
