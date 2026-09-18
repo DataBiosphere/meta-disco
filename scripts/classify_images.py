@@ -16,6 +16,10 @@ from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
+# Extensions this producer claims. No other producer may claim one ending with any of
+# these, or a file routes to both and the run writes it twice — tests/test_producer_routing.py.
+IMAGE_EXTENSIONS = (".svs", ".png", ".jpg", ".tiff")
+
 
 def classify_images(metadata_path: Path, output_path: Path):
     """Classify image files using RuleEngine."""
@@ -28,7 +32,7 @@ def classify_images(metadata_path: Path, output_path: Path):
 
     engine = RuleEngine()
     results = []
-    stats = {".svs": {"total": 0}, ".png": {"total": 0}, ".jpg": {"total": 0}, ".tiff": {"total": 0}}
+    stats = {ext: {"total": 0} for ext in IMAGE_EXTENSIONS}
 
     for f in files:
         name = f.get("file_name", "")

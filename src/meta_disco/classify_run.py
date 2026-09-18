@@ -17,6 +17,7 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.output_utils import row_identities
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
@@ -123,6 +124,36 @@ def _report_exclusions(output_dir: Path) -> int | None:
     return index.count
 
 
+# Duplicate file_ids to name before printing a count instead.
+_DUPLICATES_SHOWN = 10
+
+
+def _check_one_row_per_file(output_dir: Path) -> bool:
+    """Print whether the run wrote one row per file; False if any ``file_id`` repeats.
+
+    A repeated ``file_id`` means two producers claimed the same file, so every count
+    over the output double-counts it and no identifier is a primary key. Failing the
+    run is what stops the reports being generated over such output.
+
+    Rows carrying no ``file_id`` are reported and not failed: a source whose catalog
+    gives files no identity writes them that way.
+    """
+    identities = row_identities(output_dir)
+    if identities.without_file_id:
+        print(f"{identities.without_file_id:,} of {identities.total_rows:,} rows carry no file_id — not checked.")
+    if not identities.duplicates:
+        print(f"One row per file: {identities.total_rows - identities.without_file_id:,} rows, no repeated file_id.")
+        return True
+
+    print(f"DUPLICATE ROWS: {len(identities.duplicates):,} file_ids appear in more than one row.")
+    for file_id, sources in sorted(identities.duplicates.items())[:_DUPLICATES_SHOWN]:
+        print(f"  {file_id}: {', '.join(sources)}")
+    if len(identities.duplicates) > _DUPLICATES_SHOWN:
+        print(f"  ... and {len(identities.duplicates) - _DUPLICATES_SHOWN:,} more")
+    print("Two producers claimed the same file. Every count over this run's output double-counts it.")
+    return False
+
+
 def run_all_classifications(
     metadata: Path,
     output_dir_base: Path,
@@ -138,7 +169,8 @@ def run_all_classifications(
     ``output_dir_base`` and caches header evidence under ``evidence_base``, running
     Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
-    (``None`` = the pipeline default). Returns True only if every phase succeeded.
+    (``None`` = the pipeline default). Returns True only if every phase succeeded and
+    the completed run holds one row per file (:func:`_check_one_row_per_file`).
 
     Before any of that it reports the evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
@@ -204,6 +236,11 @@ def run_all_classifications(
             ["--metadata", str(metadata), "--classifications", *[str(p) for p in all_classification_files]],
         )
         success &= ok
+
+    # Only meaningful once every producer has written: a file claimed twice is visible
+    # only when both rows are on disk.
+    if success:
+        success &= _check_one_row_per_file(output_dir)
 
     print(f"\n{'=' * 70}")
     if success:

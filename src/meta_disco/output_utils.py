@@ -1,6 +1,8 @@
 """Shared utilities for working with classification output directories."""
 
 import json
+from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Every file a Phase 1/2/3 classifier writes. The coverage and validation report
@@ -47,8 +49,8 @@ def find_latest_run(output_dir: Path) -> Path:
     return runs[0]
 
 
-def iter_records(run_dir: Path):
-    """Yield every classification record (a dict) across a run's classification files.
+def iter_records_with_source(run_dir: Path):
+    """Yield ``(classification file name, record)`` for every record a run wrote.
 
     Unwraps the ``{"metadata", "classifications"}`` envelope with the same key
     precedence as the coverage/validation report loaders — ``classifications``,
@@ -60,7 +62,8 @@ def iter_records(run_dir: Path):
 
     Lives here, beside ``CLASSIFICATION_FILES``, so every reader of a run directory
     (the consistency linter, the corpus diff) shares one definition of the envelope
-    rather than each re-deriving it.
+    rather than each re-deriving it. The file name is yielded for the readers that
+    must name which producer wrote a record; :func:`iter_records` drops it.
     """
     for fname in CLASSIFICATION_FILES:
         path = run_dir / fname
@@ -75,4 +78,41 @@ def iter_records(run_dir: Path):
             continue
         for record in records:
             if isinstance(record, dict):
-                yield record
+                yield fname, record
+
+
+def iter_records(run_dir: Path):
+    """Yield every classification record (a dict) across a run's classification files."""
+    for _fname, record in iter_records_with_source(run_dir):
+        yield record
+
+
+@dataclass
+class RowIdentities:
+    """What a run's rows say about their own identity.
+
+    ``duplicates`` maps a ``file_id`` carried by more than one row to the classification
+    file names that wrote it, in output order and with repeats, so a producer that wrote
+    the same file twice on its own is visible as such. ``without_file_id`` counts rows
+    carrying no usable ``file_id`` — not checkable for uniqueness, which is a different
+    fact from being unique.
+    """
+
+    total_rows: int = 0
+    without_file_id: int = 0
+    duplicates: dict[str, list[str]] = field(default_factory=dict)
+
+
+def row_identities(run_dir: Path) -> RowIdentities:
+    """Report which ``file_id`` values more than one of a run's rows carries."""
+    sources: dict[str, list[str]] = defaultdict(list)
+    identities = RowIdentities()
+    for fname, record in iter_records_with_source(run_dir):
+        identities.total_rows += 1
+        file_id = record.get("file_id")
+        if not isinstance(file_id, str) or not file_id:
+            identities.without_file_id += 1
+            continue
+        sources[file_id].append(fname)
+    identities.duplicates = {fid: names for fid, names in sources.items() if len(names) > 1}
+    return identities

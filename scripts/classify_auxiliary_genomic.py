@@ -16,8 +16,12 @@ from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# Extensions handled by this script
-AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar", ".psam", ".pgen"}
+# Extensions this producer claims. No other producer may claim one ending with any of
+# these, or a file routes to both and the run writes it twice — tests/test_producer_routing.py.
+# `.fast5.tar`/`.fast5.tar.gz` are deliberately absent: an archive of fast5s is a tar first
+# (#242), so the tar type owns it and reads its members. Nothing is lost — the fast5 rule
+# keys on the core extension, which `FileName.parse` reaches through the wrappers.
+AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".pvar", ".psam", ".pgen"}
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
