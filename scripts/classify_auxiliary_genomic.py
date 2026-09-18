@@ -11,13 +11,32 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
+from meta_disco.file_types import TAR_CONFIG
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# Extensions handled by this script
-AUXILIARY_EXTENSIONS = {".fast5", ".pod5", ".fast5.tar", ".fast5.tar.gz", ".pvar", ".psam", ".pgen"}
+# Extensions this producer claims, one owner per extension (tests/test_producer_routing.py).
+# A tar-wrapped name carrying one of these is the tar type's, not this producer's —
+# `_is_archived` below, which is what the absent `.fast5.tar` entries used to half-do.
+AUXILIARY_EXTENSIONS = frozenset({".fast5", ".pod5", ".pvar", ".psam", ".pgen"})
+
+
+def _is_archived(name: str) -> bool:
+    """Whether the tar type claims this name, in which case this producer must not.
+
+    An archive of fast5s is a tar first (#242), classified by the type that reads its
+    members. Asked of the name rather than the declared ``file_format``: a source may
+    declare the *core* extension for an archive (``.fast5`` for ``x.fast5.tar``), and
+    this producer would otherwise claim it on the format while the tar type claims it
+    on the name, writing the file twice (#445).
+
+    Read off ``TAR_CONFIG`` so the handover cannot outrun what the tar type actually
+    takes. A tar under some other compression (``.tar.xz``) is claimed by no type, so
+    it stays this producer's rather than falling to the catch-all.
+    """
+    return name.lower().endswith(TAR_CONFIG.extensions)
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
@@ -38,6 +57,9 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
         name_lower = name.lower()
+
+        if _is_archived(name):
+            continue
 
         # Check if this is an auxiliary file
         matched_ext = None
@@ -130,8 +152,10 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             {
                 "metadata": {
                     "total_files": total_all,
+                    # Sorted: a set's iteration order varies between processes, and two
+                    # runs over the same input must not write differently ordered output.
                     "by_extension": {
-                        ext: stats[ext]["total"] for ext in AUXILIARY_EXTENSIONS if stats[ext]["total"] > 0
+                        ext: stats[ext]["total"] for ext in sorted(AUXILIARY_EXTENSIONS) if stats[ext]["total"] > 0
                     },
                     "with_reference": ref_all,
                     "complete": True,

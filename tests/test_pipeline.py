@@ -88,6 +88,20 @@ class TestFilterRecords:
         filtered = pipeline._filter_records(pipeline._load_input())
         assert len(filtered) == 1
 
+    @pytest.mark.parametrize(
+        "file_name, file_format",
+        [("foo.TEST", ""), ("foo", ".TEST"), ("foo.Test", "")],
+        ids=["name", "format", "mixed"],
+    )
+    def test_routing_is_case_insensitive(self, tmp_path, file_name, file_format):
+        """`FileName.parse` case-folds, so routing must too: a producer that hands an
+        archive away on the parsed name must not find this type refusing it on case."""
+        records = [{"file_md5sum": "a" * 32, "file_name": file_name, "file_format": file_format}]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        pipeline = ClassifyPipeline(_make_config(), path, tmp_path / "out.json")
+        assert len(pipeline._filter_records(pipeline._load_input())) == 1
+
     @pytest.mark.parametrize("md5", [None, "abc123"], ids=["null", "malformed"])
     def test_record_without_usable_md5_is_excluded_at_load(self, tmp_path, md5):
         """A record with no usable md5 never reaches routing: it is excluded at load
@@ -607,6 +621,22 @@ class TestPipelineRun:
         pipeline.run()
         assert True in calls  # .gz file
         assert False in calls  # non-.gz file
+
+    def test_gzip_detection_is_case_insensitive(self, tmp_path):
+        """Routing case-folds, so an uppercase `.GZ` reaches this reader. Read as
+        uncompressed, its gzip bytes classify as nothing."""
+        calls = []
+
+        def tracking_fetcher(evidence_dir, md5, is_gzipped=True, **kw):
+            calls.append(is_gzipped)
+            return "header"
+
+        config = _make_config(fetcher=tracking_fetcher, extensions=(".test", ".test.gz"))
+        records = [_valid_record(file_md5sum="a" * 32, file_name="x.TEST.GZ", file_format=".test")]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        ClassifyPipeline(config, path, tmp_path / "out.json", evidence_base=tmp_path / "evidence").run()
+        assert calls == [True]
 
 
 # --- File type config tests ---

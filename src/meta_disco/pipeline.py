@@ -558,8 +558,11 @@ class ClassifyPipeline:
                 return False
             # str(): a non-string file_format/file_name (drift) must not raise here,
             # before validation can convert the record into a structured failure.
-            fmt = str(r.get("file_format") or "")
-            name = str(r.get("file_name") or "")
+            # Lowercased because every other reader of an extension is: `FileName.parse`
+            # case-folds, so a `.TAR` this matched case-sensitively would be handed away
+            # by a producer that saw an archive and refused by the type that owns one.
+            fmt = str(r.get("file_format") or "").lower()
+            name = str(r.get("file_name") or "").lower()
             return any(fmt.endswith(ext) for ext in exts) or any(name.endswith(ext) for ext in exts)
 
         return [r for r in records if matches(r)]
@@ -676,7 +679,11 @@ class ClassifyPipeline:
             )
 
         has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
-        is_gzipped = (item.file_name.endswith(".gz") or item.file_format.endswith(".gz")) if has_gz_ext else True
+        # Lowercased for the same reason routing is: a `.VCF.GZ` reaches this reader, and
+        # read as uncompressed its gzip bytes classify as nothing.
+        is_gzipped = (
+            (item.file_name.lower().endswith(".gz") or item.file_format.lower().endswith(".gz")) if has_gz_ext else True
+        )
 
         was_cached = self.resume and self._is_cached(item.file_md5sum)
 
