@@ -65,9 +65,13 @@ INDEX_TO_PARENT = {
     ".crai": [".cram"],
     ".pbi": [".bam"],
     # `.fai` and `.idx` are in the `index_file` rule's extension list and were missing
-    # here, so 477 `.fai` files never reached this producer and took that rule's four
-    # `not_applicable` stamps from the catch-all — the outcome #438 exists to prevent.
-    # Every one of the 477 has a present, unambiguous parent, so they inherit.
+    # here, so 477 `.fai` files never reached this producer at all. They are declared
+    # so those files can *inherit*: every one of the 477 has a present, unambiguous
+    # parent, so the four dimensions a parent supplies are answered rather than left
+    # to the catch-all, which sees only the extension. (When the gap was found, the
+    # catch-all's rule also stamped four `not_applicable` on them — the outcome #438
+    # exists to prevent. #437 removed that, so today the cost of the gap is lost
+    # inheritance rather than a wrong answer.)
     ".fai": [".fa.gz", ".fasta", ".fa"],
     ".idx": [".vcf"],
 }
