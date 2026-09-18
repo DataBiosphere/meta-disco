@@ -479,7 +479,7 @@ class TestDatasetSource:
         header = rows[0].split("\t")[2:]
         body = rows[1].split("\t")[2:]
         (tmp_path / "c.tsv").write_text("\t".join(header) + "\n" + "\t".join(body) + "\n")
-        with pytest.raises(ValueError, match="no sources.source_id"):
+        with pytest.raises(ValueError, match=r"no sources\.source_id"):
             am.dataset_source(tmp_path / "c.tsv")
 
 
