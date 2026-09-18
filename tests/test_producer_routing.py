@@ -13,6 +13,8 @@ is caught after the fact by ``classify_run._check_one_row_per_file``, not here.
 
 import itertools
 
+import pytest
+
 from meta_disco.file_types import TAR_CONFIG
 from meta_disco.pipeline import ClassifyPipeline
 from tests.metadata_fixtures import valid_record
@@ -24,8 +26,8 @@ from tests.producer_sweep import (
 )
 
 
-def _fast5_tar_record():
-    return valid_record(file_name="HG02148_1.fast5.tar", file_format=".fast5.tar", dataset_title="ANVIL_HPRC")
+def _fast5_tar_record(file_name="HG02148_1.fast5.tar", file_format=".fast5.tar"):
+    return valid_record(file_name=file_name, file_format=file_format, dataset_title="ANVIL_HPRC")
 
 
 def test_no_producer_claims_an_extension_another_producer_claims():
@@ -49,6 +51,25 @@ class TestATarOfFast5sIsATar:
 
     def test_the_auxiliary_producer_writes_no_row_for_it(self, tmp_path):
         assert run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record()]) == []
+
+    @pytest.mark.parametrize(
+        "file_name, file_format",
+        [
+            ("HG02148_1.fast5.tar", ".fast5"),
+            ("HG02148_1.fast5.tar.gz", ".fast5"),
+        ],
+        ids=["tar", "tar.gz"],
+    )
+    def test_nor_when_the_source_declares_the_core_extension(self, tmp_path, file_name, file_format):
+        """A source may set `file_format` from the parsed core, so the archive arrives
+        declaring `.fast5`. Matching that on the format while the tar type matches the
+        name is how one file gets two rows with no shared extension to detect."""
+        records = [_fast5_tar_record(file_name=file_name, file_format=file_format)]
+        assert run_producer(classify_auxiliary_genomic, tmp_path, records) == []
+
+    def test_an_unwrapped_fast5_stays_with_the_auxiliary_producer(self, tmp_path):
+        rows = run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record("HG02148_1.fast5", ".fast5")])
+        assert [r["file_name"] for r in rows] == ["HG02148_1.fast5"]
 
     def test_the_tar_type_routes_it(self, tmp_path):
         pipeline = ClassifyPipeline(

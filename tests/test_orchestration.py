@@ -205,3 +205,30 @@ class TestTheRunReportsItsEvidenceFiles:
         )
         assert output_base.exists(), "the run must start regardless of an evidence file's catalog"
         assert "anvil/manifest.ndjson" in capsys.readouterr().out.replace("\\", "/")
+
+
+class TestTheRunIsFailedByTheUniquenessCheck:
+    """A run that wrote a file twice must not report success (#445).
+
+    `_check_one_row_per_file` is tested on its own in test_row_uniqueness.py; what is
+    pinned here is that `run_all_classifications` folds its answer into the value it
+    returns, which is what makes `make classify` exit non-zero and stop the reports.
+    """
+
+    def _empty_run(self, tmp_path):
+        metadata = tmp_path / "anvil_files_metadata.json"
+        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+        return metadata, tmp_path / "output"
+
+    def test_a_duplicated_run_fails(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("meta_disco.classify_run._check_one_row_per_file", lambda _output_dir: False)
+        metadata, output_base = self._empty_run(tmp_path)
+
+        assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is False
+
+    def test_the_same_run_succeeds_when_every_file_has_one_row(self, tmp_path):
+        """The other half: without the check failing, this same input returns True — so
+        the assertion above is about the check's answer and not about the run itself."""
+        metadata, output_base = self._empty_run(tmp_path)
+
+        assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True

@@ -11,15 +11,28 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
+from meta_disco.file_name import FileName
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
 # Extensions this producer claims, one owner per extension (tests/test_producer_routing.py).
-# `.fast5.tar`/`.fast5.tar.gz` are deliberately absent: an archive of fast5s is a tar first
-# (#242), so the tar type owns it and reads its members.
+# A tar-wrapped name carrying one of these is the tar type's, not this producer's —
+# `_is_archived` below, which is what the absent `.fast5.tar` entries used to half-do.
 AUXILIARY_EXTENSIONS = frozenset({".fast5", ".pod5", ".pvar", ".psam", ".pgen"})
+
+
+def _is_archived(name: str) -> bool:
+    """Whether the name is a tar archive, whatever it holds.
+
+    An archive of fast5s is a tar first (#242), classified by the tar type, which reads
+    its members. Read off the parsed name rather than the declared ``file_format``: a
+    source may declare the *core* extension for an archive (``.fast5`` for
+    ``x.fast5.tar``), and this producer would otherwise claim it on the format while the
+    tar type claims it on the name, writing the file twice (#445).
+    """
+    return ".tar" in FileName.parse(name).wrappers
 
 
 def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
@@ -40,6 +53,9 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
         fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
         name_lower = name.lower()
+
+        if _is_archived(name):
+            continue
 
         # Check if this is an auxiliary file
         matched_ext = None
