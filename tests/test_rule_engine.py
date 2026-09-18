@@ -739,10 +739,16 @@ class TestAddClaim:
 class TestDerivativeFiles:
     """A derivative file has a kind of its own; the data it describes is another file's.
 
-    `data_type` names the kind — `index`, `checksum`, `log` — and the dimensions that
-    describe data do not apply (#437). Before that these tests asserted only
-    `data_modality`, so they passed while their names and docstrings described the
-    opposite of what the rules now do.
+    `data_type` names the kind — `index`, `checksum`, `log` (#437). What happens to the
+    data-describing dimensions is *not* uniform, and the split is the point:
+
+    - An **index** indexes coordinates into real data, so those dimensions apply to it
+      and are merely unknown to a rule that cannot see the parent. They stay open.
+    - A **checksum** or **log** is about bytes and has no coordinate space or assay of
+      its own, so they are denied outright.
+
+    Before #437 these tests asserted only `data_modality`, so they passed while their
+    names and docstrings described the opposite of what the rules now do.
     """
 
     @pytest.mark.parametrize(

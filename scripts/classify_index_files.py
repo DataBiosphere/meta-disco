@@ -194,12 +194,18 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ``inherited_from_parent`` already does not; nothing validates emitted rule ids
     against that file.
 
-    Writing this record is what keeps such a file out of the catch-all producer, where
-    the tier-1 ``index_file`` rule would once have stamped three dimensions ``not_applicable`` on
-    the strength of the extension alone. Coverage counts ``not_applicable`` as
-    classified, so that path reported a file as determined precisely where it is not
-    (#438 review). Since #437 a matched row says ``index`` too, and the rule claims it
-    rather than a status, so the three ways an index file can be classified agree.
+    Writing this record is what keeps such a file out of the catch-all producer. When
+    #438 added it, that mattered because the catch-all's rule then stamped four
+    dimensions ``not_applicable`` — ``data_type`` among them — on the strength of the
+    extension alone, and coverage counts ``not_applicable`` as classified, so a file
+    was reported as determined precisely where it is not.
+
+    #437 removed that hazard at the source: the rule is now ``index_file`` and claims
+    only ``data_type: index``, leaving the four a parent supplies open. So the three
+    ways an index file can be classified — inherited from a matched parent, declined
+    here, or reached by the rule — now agree on its kind and never deny a dimension
+    that applies. The record is still written, because it carries what this producer
+    knows about the file and keeps every index file in one output.
     """
     why = DECLINED_REASON_TEXT[reason]
     classifications = {DATA_TYPE: index_data_type_entry(index_ext)}
