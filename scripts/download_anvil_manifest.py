@@ -50,6 +50,7 @@ from meta_disco.azul_manifest import (
     HttpSession,
     Sleep,
     count_rows,
+    dataset_source,
     discover_datasets,
     fetch_manifest,
     iter_compact_records,
@@ -160,7 +161,21 @@ def download(
             print(f"  {line}", file=sys.stderr)
         return 1
 
-    block = metadata_block(catalog, {d.title: d.file_count for d in datasets}, datetime.now())
+    # The TDR snapshot each dataset was materialised from (#434). Read here rather
+    # than during `_all_records` because the envelope is written before the records
+    # stream, so it has to be known first — and read in full rather than off the first
+    # row, because `dataset_source` refuses a manifest naming two snapshots instead of
+    # picking one. Local: the compact manifests are already on disk.
+    entries: dict[str, dict[str, object]] = {}
+    for dataset in datasets:
+        source = dataset_source(manifest_path(output_dir, catalog, dataset.title, FORMAT_COMPACT))
+        entries[dataset.title] = {
+            "file_count": dataset.file_count,
+            "source_id": source[0] if source else None,
+            "source_spec": source[1] if source else None,
+        }
+
+    block = metadata_block(catalog, entries, datetime.now())
     n = write_input_files(output_dir, block, _all_records(output_dir, catalog, datasets))
     print(f"Wrote {n:,} records to {output_dir / 'anvil_files_metadata.json'} (catalog {catalog})")
     return 0
