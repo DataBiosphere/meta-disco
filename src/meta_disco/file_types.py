@@ -1,12 +1,12 @@
 """File type configurations for the classification pipeline.
 
-Each config defines extensions, fetcher, classifier, and summary printer for one
-file type. These are used by ClassifyPipeline and the unified classify_headers.py
-script, and are the seven header entries in the producer registry (``producers``).
+Each config defines extensions, fetcher, classifier, and summary printer for one file
+type. They are used by ClassifyPipeline and classify_headers.py, and are the seven header
+entries in the producer registry (``producers``).
 
-``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline``
-can import the producer registry to route a record without the registry — which
-must hold these configs — importing ``pipeline`` back.
+``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
+import the registry to route a record, without the registry — which holds these configs —
+importing ``pipeline`` back.
 """
 
 from collections.abc import Callable

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
-from meta_disco.producers import PRODUCERS, producers_in_phase, validate_registry
+from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
@@ -32,21 +32,13 @@ def build_parallel_jobs(
 ) -> list[tuple]:
     """Phase 1 jobs: one per producer that runs in Phase 1.
 
-    Derived from the producer registry rather than hand-listed, so registering a
-    producer cannot silently skip production. That is what happened to `gfa` in #151: it
-    was added to the file-type registry and to nothing else, so `make classify` never
-    invoked it and graph files fell through to the filename-only Phase 3 catch-all. The
-    two non-header scripts used to be a second list here (`NON_HEADER_JOBS`) with the
-    same failure mode; #449 folded them into the registry beside the header types.
+    Derived from the producer registry rather than hand-listed, so registering a producer
+    cannot silently skip production. That is what happened to `gfa` in #151: registered
+    and invoked by nothing, so graph files fell through to the filename-only catch-all.
 
-    ``evidence_base`` is the per-source header cache root (``data/evidence/anvil`` for
-    AnVIL, ``data/evidence/hprc`` for HPRC) and ``workers`` (when set) the header-fetch
-    concurrency; both are passed only to the producers that fetch headers
-    (``Producer.fetches_headers``) — image/auxiliary classify from the filename and read
-    no content.
-
-    Every output filename here also appears in output_utils.CLASSIFICATION_FILES, which
-    is derived from the same registry, so the reports read what this produces.
+    ``evidence_base`` is the per-source header cache root and ``workers`` (when set) the
+    header-fetch concurrency; both go only to the producers that fetch headers
+    (``Producer.fetches_headers``) — the rest classify from the filename.
     """
     header_args = ["--evidence-base", str(evidence_base)]
     if workers is not None:
@@ -173,6 +165,10 @@ def run_all_classifications(
     no ``file_id`` repeats across the completed run (:func:`_check_one_row_per_file`,
     which passes a run whose rows carry no ``file_id`` at all rather than checking it).
 
+    Raises ``ValueError`` before any of that if two producers claim overlapping
+    extensions (:func:`producers.validate_registry`) — a run that cannot say who owns a
+    file must not start one.
+
     Before any of that it reports the evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
     it is and refuses none of them. Reporting first, ahead of the run directory, puts
@@ -206,7 +202,7 @@ def run_all_classifications(
     parallel_jobs = build_parallel_jobs(metadata, output_dir, evidence_base, workers)
 
     # Track all classification output paths for Phase 3
-    all_classification_files = [path for _, path, _ in parallel_jobs]
+    all_classification_files = output_paths(output_dir, phase=1)
 
     print(f"\nPhase 1: Running {len(parallel_jobs)} classifiers in parallel...")
     success = True

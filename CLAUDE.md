@@ -171,23 +171,15 @@ evidence}` entry — plus the controlled vocabulary:
     `tests/producer_sweep` (how to run each producer; it is the one place `scripts/` goes
     on the path for this) and keep their own assertions. A new standalone producer goes
     into `STANDALONE_PRODUCERS` there and both sweeps pick it up.
-  - **The eleven producers are declared once**, in `producers.PRODUCERS` (#449) — name,
-    extensions, output filename, phase, and how to invoke it, with the four standalone
-    scripts beside the seven `FileTypeConfig`s. `build_parallel_jobs` and
-    `output_utils.CLASSIFICATION_FILES` are derived from it, so registering a producer is
-    the only step; they used to be three hand-maintained lists, and #151 is what their
-    drift cost. Add a producer there, not in a second list.
-  - **`producers.route` is the only routing predicate.** It matches the *file name*
-    against every producer's declared extensions and consults `file_format` only when the
-    name names no producer — so the two fields are never matched independently, which is
-    the shape that gave 115 files two rows each (#445). Ask it through
-    `Producer.claims(record)`; never re-derive a producer's own predicate. Two
-    consequences worth not re-litigating: the container rule (#242) needs no code, since
-    `x.fast5.tar` is the tar type's because `.tar` is the tar type's extension; and
-    `validate_registry` refuses a registry where one producer's extension is a suffix of
-    another's, which is why `route` can be a rule about names rather than a precedence
-    table. It runs as a preflight before Phase 1 — #445 was detectable only from a
-    finished run, hours in.
+  - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
+    run's `*_classifications.json` files. Add one there, never to a second list:
+    `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
+    and the three hand-maintained lists they replaced are what let a registered type
+    never run (#151).
+  - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
+    owner because one function says so — the name decides and `file_format` is only a
+    fallback, for reasons `route`'s docstring gives. Four hand-written predicates are
+    what let two producers claim one file and a run write it twice (#445).
 
 ## Surprises
 

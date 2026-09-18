@@ -27,9 +27,8 @@ class TestRowIdentities:
 
         identities = row_identities(tmp_path)
         assert identities.total_rows == 3
-        # The two are named in CLASSIFICATION_FILES order, which is the producer
-        # registry's order (#449). Derived rather than spelled, so this pins that
-        # property rather than the positions these two producers happen to sit at.
+        # Named in CLASSIFICATION_FILES order. Derived rather than spelled, so this pins
+        # that property rather than where these two producers happen to sit.
         both = {"tar_classifications.json", "auxiliary_classifications.json"}
         assert identities.duplicates == {"f1": [f for f in CLASSIFICATION_FILES if f in both]}
 

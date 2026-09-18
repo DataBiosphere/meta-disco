@@ -1,14 +1,13 @@
 """Guards that a registered producer actually reaches production.
 
 Registering a producer must be enough to get it run and its output read. It was three
-separate lists — the file-type registry, the Phase 1 job list, and CLASSIFICATION_FILES.
-In #151 `gfa` was added to the first and neither of the others, so the classifier never
-ran and graph files fell through to the filename-only Phase 3 catch-all — with every
-unit test passing, because they call the classifier directly.
+separate lists, and in #151 `gfa` was added to one and neither of the others, so the
+classifier never ran and graph files fell through to the filename-only catch-all — with
+every unit test passing, because they call the classifier directly.
 
-#449 made the other two derived from `producers.PRODUCERS`, so what these tests pin is
-that they stay derived: each is checked against what a run would actually invoke and
-read, and the Makefile — still hand-written — is checked against the registry's text.
+The other two are derived from `producers.PRODUCERS` now, so what these tests pin is that
+they stay derived: each is checked against what a run would actually invoke and read, and
+the Makefile — still hand-written — against the registry.
 """
 
 import json
@@ -48,8 +47,8 @@ def test_every_registered_file_type_has_a_phase1_job():
 
 
 def test_every_phase1_producer_has_a_job_including_the_ones_that_read_no_headers():
-    """The two non-header producers used to be a second hand-written list
-    (`NON_HEADER_JOBS`) with the same drift risk as the registry itself (#449)."""
+    """The producers that read no headers used to be a second hand-written list, with the
+    same drift risk as the registry itself."""
     scripts = {script for script, _, _ in _jobs()}
     missing = [producer.name for producer in producers_in_phase(1) if producer.script not in scripts]
     assert not missing, f"Phase 1 producers with no job: {missing}. `make classify` would never invoke them."
@@ -65,7 +64,7 @@ def test_every_producer_runs_in_a_phase_a_run_actually_has():
 def test_the_later_phases_are_invoked_from_the_registry_too():
     """Phase 2 and 3 are one producer each, run in sequence rather than in the pool, so
     they are not in `build_parallel_jobs` — and must still be named from the registry
-    and not spelled in the orchestrator."""
+    rather than spelled in the orchestrator."""
     run_source = (Path(__file__).parent.parent / "src" / "meta_disco" / "classify_run.py").read_text()
     for name in ("index", "remaining"):
         assert f'PRODUCERS["{name}"]' in run_source, (
@@ -110,8 +109,8 @@ def test_every_phase1_output_is_read_by_the_reports():
 
 
 def test_every_producer_writes_a_file_the_reports_read():
-    """The whole list, not just Phase 1 — the index and catch-all outputs are the two
-    biggest in a run, and reach the reports the same way."""
+    """CLASSIFICATION_FILES stays derived rather than re-hardcoded — which is what it
+    was before #449, and how a producer's output came to be missing from it (#151)."""
     assert [producer.output for producer in PRODUCERS.values()] == CLASSIFICATION_FILES
 
 
@@ -249,6 +248,13 @@ class TestTheRunReportsItsEvidenceFiles:
         assert "anvil/manifest.ndjson" in capsys.readouterr().out.replace("\\", "/")
 
 
+def _empty_run_input(tmp_path):
+    """The metadata file a run needs to start, over an empty corpus."""
+    metadata = tmp_path / "anvil_files_metadata.json"
+    metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+    return metadata, tmp_path / "output"
+
+
 class TestTheRunIsFailedByTheUniquenessCheck:
     """A run that wrote a file twice must not report success (#445).
 
@@ -257,48 +263,33 @@ class TestTheRunIsFailedByTheUniquenessCheck:
     returns, which is what makes `make classify` exit non-zero and stop the reports.
     """
 
-    def _empty_run(self, tmp_path):
-        metadata = tmp_path / "anvil_files_metadata.json"
-        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
-        return metadata, tmp_path / "output"
-
     def test_a_duplicated_run_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr("meta_disco.classify_run._check_one_row_per_file", lambda _output_dir: False)
-        metadata, output_base = self._empty_run(tmp_path)
+        metadata, output_base = _empty_run_input(tmp_path)
 
         assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is False
 
     def test_the_same_run_succeeds_when_every_file_has_one_row(self, tmp_path):
         """The other half: without the check failing, this same input returns True — so
         the assertion above is about the check's answer and not about the run itself."""
-        metadata, output_base = self._empty_run(tmp_path)
+        metadata, output_base = _empty_run_input(tmp_path)
 
         assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True
 
 
 class TestTheRegistryIsCheckedBeforeTheRunStarts:
-    """The overlap check is a preflight, not a post-mortem (#449).
+    """The overlap check is a preflight, not a post-mortem.
 
-    #445's own bug — two producers claiming `.fast5.tar` — was detectable only from the
-    finished output, so it cost a multi-hour run before saying anything. The same fact is
-    available before a single file is fetched.
+    #445's own bug was detectable only from the finished output, so it cost a multi-hour
+    run before saying anything. The same fact is available before a single file is
+    fetched.
     """
 
     def _run(self, tmp_path):
-        metadata = tmp_path / "anvil_files_metadata.json"
-        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
-        return run_all_classifications(metadata, tmp_path / "output", tmp_path / "evidence")
+        metadata, output_base = _empty_run_input(tmp_path)
+        return run_all_classifications(metadata, output_base, tmp_path / "evidence")
 
-    def test_an_overlapping_registry_stops_the_run(self, tmp_path, monkeypatch):
-        monkeypatch.setitem(
-            PRODUCERS,
-            "archives",
-            Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".tar.gz",)),
-        )
-        with pytest.raises(ValueError, match="overlapping extensions"):
-            self._run(tmp_path)
-
-    def test_it_refuses_before_writing_a_run_directory(self, tmp_path, monkeypatch):
+    def test_an_overlapping_registry_stops_the_run_before_it_writes_anything(self, tmp_path, monkeypatch):
         """Nothing of the run exists afterwards — no output folder, so no half-run for an
         operator to mistake for one that classified something."""
         monkeypatch.setitem(
@@ -306,11 +297,30 @@ class TestTheRegistryIsCheckedBeforeTheRunStarts:
             "archives",
             Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".tar.gz",)),
         )
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="overlapping extensions"):
             self._run(tmp_path)
         assert not (tmp_path / "output").exists()
 
     def test_the_same_run_starts_with_the_real_registry(self, tmp_path):
-        """The other half: without the overlap, this input runs — so the assertions above
-        are about the check and not about the run."""
+        """The other half: without the overlap, this input runs — so the assertion above
+        is about the check and not about the run."""
         assert self._run(tmp_path) is True
+
+
+def test_no_producer_spells_its_output_filename_outside_the_registry():
+    """A standalone `python scripts/classify_x.py` and a `make classify` run must name one
+    producer's output the same file.
+
+    The standalone scripts' `--output` defaults used to hardcode their own filenames, so
+    the two could drift apart while every test passed — the reports read the registry's
+    name, and the standalone run wrote the other one.
+    """
+    outputs = {producer.output for producer in PRODUCERS.values()}
+    offenders = []
+    for script in sorted({producer.script for producer in PRODUCERS.values()}):
+        source = (Path(__file__).parent.parent / "scripts" / script).read_text()
+        offenders += [f"{script}: {name}" for name in outputs if f'"{name}"' in source or f"'{name}'" in source]
+    assert not offenders, (
+        f"Output filenames spelled as literals instead of read off the registry: {offenders}. "
+        "Take them from PRODUCERS so a standalone run and `make classify` agree."
+    )

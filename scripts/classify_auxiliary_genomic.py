@@ -13,21 +13,18 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.producers import PRODUCERS, matched_extension
+from meta_disco.producers import PRODUCERS
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# What this producer claims is declared in the producer registry, and asked through the
-# one routing predicate every producer asks (#449) — so no file can be this producer's
-# and another's at once.
+# Routes through the shared predicate — see meta_disco.producers.
 #
-# This is also where an archive of fast5s stops being this producer's problem. It used
+# That is also where an archive of fast5s stopped being this producer's problem. It used
 # to need its own guard (`_is_archived`), because a source may declare the *core*
 # extension for an archive (`.fast5` for `x.fast5.tar`) and this producer matched the
 # format while the tar type matched the name, writing the file twice (#445). The shared
 # predicate routes on the name first, so `x.fast5.tar` is the tar type's for the same
-# reason any `.tar` is, and a container is not its contents (#242) without this producer
-# knowing that tar exists.
+# reason any `.tar` is — without this producer knowing that tar exists.
 AUXILIARY = PRODUCERS["auxiliary"]
 
 
@@ -45,13 +42,13 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     stats = {ext: {"total": 0, "with_ref": 0} for ext in AUXILIARY.extensions}
 
     for f in files:
-        if not AUXILIARY.claims(f):
+        matched_ext = AUXILIARY.claim(f)
+        if matched_ext is None:
             continue
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
         dataset_title = f.get("dataset_title", "")
 
-        matched_ext = matched_extension(f)
         stats[matched_ext]["total"] += 1
 
         # Classify using RuleEngine
@@ -92,7 +89,8 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     total_all = 0
     ref_all = 0
 
-    for ext in sorted(AUXILIARY.extensions):
+    # The registry's tuple, so two runs over one input order the summary identically.
+    for ext in AUXILIARY.extensions:
         s = stats[ext]
         if s["total"] > 0:
             total_all += s["total"]
@@ -134,10 +132,10 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             {
                 "metadata": {
                     "total_files": total_all,
-                    # Sorted: a set's iteration order varies between processes, and two
-                    # runs over the same input must not write differently ordered output.
+                    # The registry's tuple, not a set: its order is fixed, so two runs
+                    # over the same input cannot write differently ordered output.
                     "by_extension": {
-                        ext: stats[ext]["total"] for ext in sorted(AUXILIARY.extensions) if stats[ext]["total"] > 0
+                        ext: stats[ext]["total"] for ext in AUXILIARY.extensions if stats[ext]["total"] > 0
                     },
                     "with_reference": ref_all,
                     "complete": True,
@@ -164,7 +162,7 @@ def main():
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/auxiliary_classifications.json"),
+        default=Path("output/anvil") / AUXILIARY.output,
         help="Output path for classifications",
     )
     args = parser.parse_args()

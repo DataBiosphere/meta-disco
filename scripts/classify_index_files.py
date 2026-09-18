@@ -48,7 +48,7 @@ from meta_disco.models import (
     status_for_value,
 )
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS, matched_extension
+from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identity_from, published_from
 
 # Why an index file took no parent. Written into each `unmatched_files` entry and
@@ -57,10 +57,9 @@ from meta_disco.records import CATALOG_IDENTITY_FIELDS, coerce_identity, identit
 NO_MATCHING_PARENT = "no_matching_parent_in_dataset"
 AMBIGUOUS_PARENT = "ambiguous_parent_in_dataset"
 
-# What this producer claims is declared in the producer registry, and asked through the
-# one routing predicate every producer asks (#449). Its extensions are the keys of
-# `INDEX_TO_PARENT`, which is declared there beside them, so what this producer routes on
-# and what it inherits from cannot drift apart.
+# Routes through the shared predicate — see meta_disco.producers, which declares this
+# producer's extensions as the keys of `INDEX_TO_PARENT`, so what it routes on and what
+# it inherits from cannot drift apart.
 INDEX = PRODUCERS["index"]
 
 
@@ -70,18 +69,24 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     Handles both patterns:
     - sample.bam.bai -> sample.bam (Pattern 1: index appended to parent)
     - sample.bai -> sample.bam (Pattern 2: index replaces parent ext)
+
+    Extensions are matched case-insensitively, as routing matches them, so a
+    ``SAMPLE.BAM.BAI`` that reaches this producer can find its parent instead of being
+    declined for a missing one. The candidate keeps the name's own casing, since it is
+    looked up against real filenames — only Pattern 2, which appends an extension this
+    file does not carry, has to guess that extension's case.
     """
     candidates = []
     parent_exts = INDEX_TO_PARENT.get(index_ext, [])
 
-    if index_name.endswith(index_ext):
+    if index_name.lower().endswith(index_ext):
         base = index_name[: -len(index_ext)]
 
         # Pattern 1: index ext appended to parent (sample.bam.bai -> sample.bam)
         # This is the most common pattern
         pattern1_matched = False
         for parent_ext in parent_exts:
-            if base.endswith(parent_ext):
+            if base.lower().endswith(parent_ext):
                 candidates.append(base)
                 pattern1_matched = True
                 break  # Only add once
@@ -313,11 +318,11 @@ def propagate_to_index_files(
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
-            if not INDEX.claims(f):
+            index_ext = INDEX.claim(f)
+            if index_ext is None:
                 continue
             name = f.get("file_name", "")
             fmt = f.get("file_format", "")
-            index_ext = matched_extension(f)
 
             stats[index_ext]["total"] += 1
 
@@ -615,21 +620,21 @@ def main():
         "--bam",
         "-b",
         type=Path,
-        default=Path("output/anvil/bam_classifications.json"),
+        default=Path("output/anvil") / PRODUCERS["bam"].output,
         help="Path to BAM classifications (used when --classifications not provided)",
     )
     parser.add_argument(
         "--vcf",
         "-v",
         type=Path,
-        default=Path("output/anvil/vcf_classifications.json"),
+        default=Path("output/anvil") / PRODUCERS["vcf"].output,
         help="Path to VCF classifications (used when --classifications not provided)",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/index_classifications.json"),
+        default=Path("output/anvil") / INDEX.output,
         help="Output path for index classifications",
     )
     args = parser.parse_args()

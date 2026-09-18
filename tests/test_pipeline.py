@@ -652,7 +652,6 @@ class TestFileTypeConfigs:
         """The pipeline does not route with a predicate of its own: it is one of the
         eleven producers, and asks the same question they all ask (#449)."""
         from meta_disco.file_types import FILE_TYPE_REGISTRY
-        from meta_disco.pipeline import ClassifyPipeline
         from meta_disco.producers import PRODUCERS
 
         pipeline = ClassifyPipeline(FILE_TYPE_REGISTRY["bam"], tmp_path / "in.json", tmp_path / "out.json")
@@ -662,11 +661,9 @@ class TestFileTypeConfigs:
         """A ClassifyPipeline is a reusable component, not only a registry entry: given a
         config no producer is registered for, it routes on that config's own extensions
         rather than silently claiming nothing."""
-        from meta_disco.pipeline import ClassifyPipeline
-
         pipeline = ClassifyPipeline(_make_config(), tmp_path / "in.json", tmp_path / "out.json")
         assert pipeline.producer.name == "test"
-        assert pipeline.producer.claims({"file_name": "foo.test", "file_md5sum": "a" * 32})
+        assert pipeline.producer.claims(_valid_record(file_name="foo.test", file_format=".test"))
 
     def _run_with_failing_fetcher(self, tmp_path, file_name, file_format):
         import dataclasses

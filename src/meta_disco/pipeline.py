@@ -520,20 +520,22 @@ class ClassifyPipeline:
     def _filter_records(self, records: list) -> list[dict]:
         """Filter to the records this file type owns.
 
-        Routing is :func:`producers.producer_of`, the one predicate every producer asks
-        (#449), so this type takes a record exactly when no other producer does. A
-        record with no usable ``file_md5sum`` never reaches here at all — ``_load_input``
-        excluded it (#376), and it is named in the run's ``excluded_files.json``
-        instead. A contract violation on any *other* classifier-relevant field does
-        reach here and is written as ``validation_failed`` rather than silently dropped
-        (issues #155/#161).
+        Routing is :meth:`producers.Producer.claims`, the one predicate every producer
+        asks, so this type takes a record exactly when no other producer does. A record
+        with no usable ``file_md5sum`` never reaches here — ``_load_input`` excluded it
+        (#376) and named it in the run's ``excluded_files.json``. A contract violation on
+        any *other* classifier-relevant field does reach here and is written as
+        ``validation_failed`` rather than silently dropped (#155/#161).
 
-        A non-dict element is routed nowhere by ``producer_of``. That is defense in
-        depth rather than a live path: ``run()`` feeds this from ``_load_input``, whose
-        elements are all dicts, and the whole-corpus ``validate_metadata`` gate is what
-        reports such an element.
+        ``skip`` stays this pipeline's own filter rather than the shared predicate's:
+        routing answers who owns a file, and a marker saying not to process one is a
+        different question. No other producer has ever honored it, so reading it here
+        keeps every producer's behavior what it was.
+
+        A non-dict element is routed nowhere, which is defense in depth rather than a live
+        path: ``run()`` feeds this from ``_load_input``, whose elements are all dicts.
         """
-        return [record for record in records if self.producer.claims(record)]
+        return [record for record in records if self.producer.claims(record) and not record.get("skip")]
 
     def _partition_records(self, records: list[dict]) -> list[ClassifierRecord | InvalidRecord]:
         """Parse routed records into typed work items at the load boundary (#172).

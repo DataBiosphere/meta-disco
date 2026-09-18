@@ -1,45 +1,21 @@
 """Every file has exactly one producer, because one function says so.
 
 Routing used to be four predicates in four places, so two producers could claim one
-record and the run wrote it twice — 115 files in two output files each, and no unique
-identifier in the output (#445). `producers.route` is now the only answer, and it is a
-single choice, so a second claimant is not a thing to test for but a thing that cannot
-be constructed. What is left to pin is that the choice is the right one, and that the
-registry stays a registry a single choice can be made from.
+record and the run wrote it twice (#445). `producers.route` is now the only answer, and
+it is a single choice, so a second claimant is not a thing to test for but a thing that
+cannot be constructed. What is left to pin is that the choice is the right one, and that
+the registry stays one a single choice can be made from.
 """
-
-import itertools
 
 import pytest
 
-from meta_disco.producers import PRODUCERS, Producer, producer_of, route, validate_registry
+from meta_disco.producers import PRODUCERS, Producer, producer_of, validate_registry
 from tests.metadata_fixtures import valid_record
-from tests.producer_sweep import PRODUCER_EXTENSIONS, classify_auxiliary_genomic, run_producer
+from tests.producer_sweep import classify_auxiliary_genomic, run_producer
 
 
 def _fast5_tar_record(file_name="HG02148_1.fast5.tar", file_format=".fast5.tar"):
     return valid_record(file_name=file_name, file_format=file_format, dataset_title="ANVIL_HPRC")
-
-
-def test_no_producer_claims_an_extension_another_producer_claims():
-    """The suffix relation, not equality: a producer claiming `.fast5.tar` would take
-    files off the producer claiming `.tar`, and no rule about a name could say which of
-    the two owns one.
-
-    The run checks this itself, as a preflight before Phase 1 (#449) — this is the same
-    check at the speed of a test, so the answer arrives before a run is started at all.
-    """
-    claims = [(producer, ext) for producer, exts in sorted(PRODUCER_EXTENSIONS.items()) for ext in sorted(exts)]
-    collisions = [
-        f"{one_producer} {one} / {other_producer} {other}"
-        for (one_producer, one), (other_producer, other) in itertools.combinations(claims, 2)
-        if one_producer != other_producer and (one.endswith(other) or other.endswith(one))
-    ]
-    assert not collisions, (
-        "Producers claim overlapping extensions, so no rule about a file name can say "
-        f"which of them owns a file: {collisions}. One of them must give the extension up."
-    )
-    validate_registry()
 
 
 def test_exactly_one_producer_claims_nothing_by_extension():
@@ -66,11 +42,11 @@ def test_a_record_is_claimed_by_one_producer_or_none():
 
 
 class TestTheNameDecidesBeforeTheFormat:
-    """`file_format` is consulted only when no producer claims the name (#449).
+    """`file_format` is consulted only when no producer claims the name.
 
     The two used to be matched independently, which is how one file answered two
-    producers with no shared extension at all — the shape the static overlap check above
-    cannot see, and the one that actually cost a run (#445).
+    producers with no shared extension at all — the shape the overlap check above cannot
+    see, and the one that actually cost a run (#445).
     """
 
     def test_the_name_wins_when_the_two_disagree(self):
@@ -93,7 +69,7 @@ class TestTheNameDecidesBeforeTheFormat:
     def test_the_matched_extension_is_the_most_specific_one(self):
         """Within a producer, the longest matching extension is the one reported — what
         the per-extension summaries and the index producer's parent lookup read."""
-        assert route(valid_record(file_name="s.g.vcf.gz", file_format=".vcf.gz")).extension == ".g.vcf.gz"
+        assert PRODUCERS["vcf"].claim(valid_record(file_name="s.g.vcf.gz", file_format=".vcf.gz")) == ".g.vcf.gz"
 
 
 class TestATarOfFast5sIsATar:
@@ -140,11 +116,16 @@ class TestATarOfFast5sIsATar:
     )
     def test_the_tar_type_routes_it(self, file_name, file_format):
         """The other half of the handover, including the cased one: the file the
-        auxiliary producer does not write is a file the tar type takes, so it is written
+        auxiliary producer does not write is one the tar type takes, so it is written
         exactly once. Asked through `claims`, the public "does this type take this file"
         — this used to reach into two of ClassifyPipeline's private methods for want of
-        one (#449)."""
+        one."""
         assert PRODUCERS["tar"].claims(_fast5_tar_record(file_name, file_format))
+
+
+def _overlapping_producer(extension):
+    """A producer claiming an extension that ends with one a real producer claims."""
+    return Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(extension,))
 
 
 class TestTheRegistryRefusesAnOverlap:
@@ -155,29 +136,18 @@ class TestTheRegistryRefusesAnOverlap:
     declaration time rather than a precedence table being invented at routing time.
     """
 
-    def _with(self, monkeypatch, producer):
-        monkeypatch.setitem(PRODUCERS, producer.name, producer)
-
-    def test_an_overlapping_claim_is_refused(self, monkeypatch):
-        self._with(
-            monkeypatch,
-            Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".fast5.tar",)),
-        )
-        with pytest.raises(ValueError, match="overlapping extensions"):
-            validate_registry()
-
-    def test_the_message_names_both_sides(self, monkeypatch):
-        self._with(
-            monkeypatch,
-            Producer(name="archives", script="x.py", output="x.json", phase=1, extensions=(".fast5.tar",)),
-        )
-        with pytest.raises(ValueError) as raised:
+    def test_an_overlapping_claim_is_refused_and_both_sides_are_named(self, monkeypatch):
+        monkeypatch.setitem(PRODUCERS, "archives", _overlapping_producer(".fast5.tar"))
+        with pytest.raises(ValueError, match="overlapping extensions") as raised:
             validate_registry()
         assert "archives .fast5.tar" in str(raised.value)
         assert "tar .tar" in str(raised.value)
 
-    def test_a_producer_may_hold_two_of_its_own_nested_extensions(self, monkeypatch):
+    def test_a_producer_may_hold_two_of_its_own_nested_extensions(self):
         """The relation is refused only *between* producers: `vcf` claims both `.vcf.gz`
-        and `.g.vcf.gz`, and picking the longer of its own is not an ownership question."""
-        validate_registry()
+        and `.g.vcf.gz`, and picking the longer of its own is not an ownership question.
+
+        The real registry holds that pair and is accepted — importing this module ran
+        `validate_registry` over it, so an overlap would have failed collection.
+        """
         assert {".vcf.gz", ".g.vcf.gz"} <= set(PRODUCERS["vcf"].extensions)

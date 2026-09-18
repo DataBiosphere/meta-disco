@@ -13,13 +13,11 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
-from meta_disco.producers import PRODUCERS, matched_extension
+from meta_disco.producers import PRODUCERS
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
-# What this producer claims is declared in the producer registry, and asked through the
-# one routing predicate every producer asks (#449) — so no file can be this producer's
-# and another's at once.
+# Routes through the shared predicate — see meta_disco.producers.
 IMAGES = PRODUCERS["images"]
 
 
@@ -34,16 +32,18 @@ def classify_images(metadata_path: Path, output_path: Path):
 
     engine = RuleEngine()
     results = []
-    # Sorted so the summary and the output's by_extension map keep a stable order.
-    stats = {ext: {"total": 0} for ext in sorted(IMAGES.extensions)}
+    # The registry's tuple has a fixed order, so the summary and the output's
+    # by_extension map are ordered identically by every run over one input.
+    stats = {ext: {"total": 0} for ext in IMAGES.extensions}
 
     for f in files:
-        if not IMAGES.claims(f):
+        matched_ext = IMAGES.claim(f)
+        if matched_ext is None:
             continue
         name = f.get("file_name", "")
         fmt = f.get("file_format", "")
 
-        stats[matched_extension(f)]["total"] += 1
+        stats[matched_ext]["total"] += 1
 
         # Classify using RuleEngine
         file_info = FileInfo.from_filename(
@@ -127,7 +127,7 @@ def main():
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/image_classifications.json"),
+        default=Path("output/anvil") / IMAGES.output,
         help="Output path for image classifications",
     )
     args = parser.parse_args()

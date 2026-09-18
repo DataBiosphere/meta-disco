@@ -1,4 +1,4 @@
-"""The producers themselves — how to run each standalone one, and what each one claims.
+"""The producers themselves — how to run each standalone one.
 
 A run has three record shapes, not one (#429): `ClassifyPipeline` covers seven file
 types through `OutputRecord`, and four producers assemble their output dicts by hand.
@@ -11,9 +11,6 @@ This module is the part those two share: how to run each producer. What to asser
 what it wrote stays in each sweep, because the two assert different things — a nested
 block against scalar echoes — and the identity sweep has a declined-record case (#438)
 the published one has no counterpart for.
-
-`PRODUCER_EXTENSIONS` is here for the readers that were already importing this module;
-it is now one read off `producers.PRODUCERS`, which needs no `scripts/` import at all.
 
 It lives apart from `metadata_fixtures` deliberately: importing the producers means
 putting `scripts/` on the path, and only the modules here and the tests over them
@@ -33,14 +30,6 @@ from classify_auxiliary_genomic import classify_auxiliary_genomic
 from classify_images import classify_images
 from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
-
-from meta_disco.producers import PRODUCERS
-
-# The extensions each producer routes on — one read off the registry that declares them
-# (#449), where it used to be assembled from four separate declarations. The catch-all
-# producer is here with an empty set: it claims no extension, taking whatever no other
-# producer has already written a row for.
-PRODUCER_EXTENSIONS = {name: frozenset(producer.extensions) for name, producer in PRODUCERS.items()}
 
 # The three producers that take `(metadata_path, output_path)` and write one row per
 # input record, with a file name and format each one routes on. The index producer

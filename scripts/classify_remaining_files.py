@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Classify files no other producer wrote a row for.
 
-The catch-all: the one producer that claims nothing by extension, so
-``producers.producer_of`` returning ``None`` is its claim (#449). It takes whatever the
+The catch-all: the one producer claiming nothing by extension. It takes whatever the
 other ten left and runs it through the rule engine. Most files get not_classified on
-every dimension, which is the point — it is what makes them visible in coverage reports
-rather than absent from the output.
+every dimension, which is the point — it makes them visible in coverage reports rather
+than absent from the output.
 
-It keys on what was actually written rather than on that predicate, which is the
-stricter of the two: a producer that claimed a file and wrote no row for it leaves the
-file here, where asking the predicate would drop it from the run entirely.
+It keys on the rows other producers actually wrote, not on the routing predicate, which
+is the stricter of the two: a producer that claimed a file and wrote no row for it leaves
+the file here, where asking the predicate would drop it from the run entirely.
 
 Usage:
     python scripts/classify_remaining_files.py
@@ -23,6 +22,7 @@ from pathlib import Path
 
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.producers import PRODUCERS
 from meta_disco.records import identity_from, published_from
 from meta_disco.rule_engine import RuleEngine
 
@@ -174,7 +174,7 @@ def main():
         "--output",
         "-o",
         type=Path,
-        default=Path("output/anvil/remaining_classifications.json"),
+        default=Path("output/anvil") / PRODUCERS["remaining"].output,
         help="Output path for classifications",
     )
     parser.add_argument(
