@@ -120,7 +120,10 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                 "file_format": rec.get("file_format", ""),
                 "md5sum": rec.get("file_md5sum"),
                 "file_size": rec.get("file_size"),
+                # The durable identity (#433).
                 "entry_id": rec.get("entry_id"),
+                "file_id": rec.get("file_id"),
+                "drs_uri": rec.get("drs_uri"),
                 "dataset_id": rec.get("dataset_id"),
                 "dataset_title": rec.get("dataset_title", ""),
                 "classifications": result.to_output_dict(),

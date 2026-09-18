@@ -69,7 +69,10 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
                 "file_format": fmt,
                 "md5sum": f.get("file_md5sum"),
                 "file_size": f.get("file_size"),
+                # The durable identity (#433).
                 "entry_id": f.get("entry_id"),
+                "file_id": f.get("file_id"),
+                "drs_uri": f.get("drs_uri"),
                 "dataset_id": f.get("dataset_id"),
                 "dataset_title": dataset_title,
                 "classifications": result.to_output_dict(),

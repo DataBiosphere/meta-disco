@@ -125,6 +125,8 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
         "file_format": coerce_identity(record.get("file_format")),
         "file_md5sum": coerce_identity(record.get("file_md5sum")),
         "entry_id": coerce_identity(record.get("entry_id")),
+        "file_id": coerce_identity(record.get("file_id")),
+        "drs_uri": coerce_identity(record.get("drs_uri")),
         "dataset_id": record.get("dataset_id", "unknown"),
         "dataset_title": coerce_identity(record.get("dataset_title")),
         "index_extension": index_ext,
@@ -234,6 +236,8 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
         "md5sum": record.get("file_md5sum"),
         "file_size": record.get("file_size"),
         "entry_id": record.get("entry_id"),
+        "file_id": record.get("file_id"),
+        "drs_uri": record.get("drs_uri"),
         "dataset_id": record.get("dataset_id", "unknown"),
         "dataset_title": record.get("dataset_title"),
         "parent_file": None,
@@ -391,7 +395,10 @@ def propagate_to_index_files(
             parent_class = classifications.get(parent_md5, {})
 
             result = {
+                # The durable identity (#433).
                 "entry_id": f.get("entry_id"),
+                "file_id": f.get("file_id"),
+                "drs_uri": f.get("drs_uri"),
                 "file_name": name,
                 "file_format": fmt,
                 "file_md5sum": f.get("file_md5sum"),
@@ -569,6 +576,10 @@ def propagate_to_index_files(
                 "md5sum": r.get("file_md5sum"),
                 "file_size": r.get("file_size"),
                 "entry_id": r["entry_id"],
+                # The index file's own, not the parent's (#433): this row resolves to
+                # this file's bytes.
+                "file_id": r["file_id"],
+                "drs_uri": r["drs_uri"],
                 "dataset_id": r["dataset_id"],
                 "dataset_title": r["dataset_title"],
                 "parent_file": parent,

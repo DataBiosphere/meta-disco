@@ -25,10 +25,10 @@ reads (e.g. ``drs_uri``) is *not* diverted — it still classifies, and the
 whole-corpus ``validate_metadata`` gate reports that drift. So the "valid" stream
 is modeled over exactly the classifier-relevant fields, not the full contract.
 
-Both classes expose the same six identity attributes (``file_name``,
-``file_format``, ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``),
-so ``_build_record`` and the work-list steps read them uniformly regardless of
-stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
+Both classes expose the same identity attributes — ``file_name``, ``file_format``,
+``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``, ``file_id`` and
+``drs_uri`` — so ``_build_record`` and the work-list steps read them uniformly
+regardless of stream. They also both expose ``data_modality`` and ``reference_assembly`` — the
 published values (#424), not identity and not classifier input — for the same
 reason: ``_build_record`` reads them off either stream without asking which it has,
 and a record that failed the input contract is still one the repository publishes
@@ -186,10 +186,15 @@ class ClassifierRecord:
     That post-condition is what lets the fetch/classify path drop the per-field
     guards #171 added.
 
-    ``dataset_title``/``entry_id`` are *not* classifier-relevant, so a record with
-    either drifted still reaches the valid stream. They are echoed into the output
-    row untouched — typed ``Any`` and passed through as-is, exactly as the raw-dict
-    path did.
+    ``dataset_title``/``entry_id``/``file_id``/``drs_uri`` are *not* classifier-relevant,
+    so a record with any of them drifted still reaches the valid stream. They are echoed
+    into the output row untouched — typed ``Any`` and passed through as-is, exactly as
+    the raw-dict path did.
+
+    ``file_id`` is the durable identity and ``entry_id`` is not: Azul regenerates the
+    latter on re-index (#433). ``drs_uri`` is carried, never derived from ``file_id`` —
+    thousands of records wrap a different id, so reconstructing it resolves to the wrong
+    object or to nothing.
 
     ``name`` is the raw ``file_name`` parsed into a :class:`FileName` once, here at
     the load boundary (epic #242), and threaded through the fetch/classify path so
@@ -218,6 +223,8 @@ class ClassifierRecord:
     file_md5sum: str
     dataset_title: Any
     entry_id: Any
+    file_id: Any
+    drs_uri: Any
     name: FileName
     url: str | None = None
     data_modality: list[str] | None = None
@@ -253,6 +260,8 @@ class ClassifierRecord:
             file_md5sum=record["file_md5sum"],
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
+            file_id=record.get("file_id"),
+            drs_uri=record.get("drs_uri"),
             name=FileName.parse(record["file_name"]),
             url=record.get("url"),
             data_modality=record.get("data_modality"),
@@ -267,7 +276,7 @@ class InvalidRecord:
     Diverted at the load boundary and never fetched or classified (#161): it carries
     the identity fields for the ``validation_failed`` output row and progress label,
     plus the blocking ``reasons`` used as that row's evidence. Like
-    ``ClassifierRecord`` it exposes all six identity attributes ready to echo —
+    ``ClassifierRecord`` it exposes every identity attribute ready to echo —
     ``file_name``/``file_format`` are coerced to ``str`` in :meth:`from_record`
     (the two fields downstream does string operations on), the rest are echoed as
     the record carried them, since a ``validation_failed`` row may carry their
@@ -289,6 +298,8 @@ class InvalidRecord:
     file_size: Any
     dataset_title: Any
     entry_id: Any
+    file_id: Any
+    drs_uri: Any
     reasons: list[str]
     data_modality: Any = None
     reference_assembly: Any = None
@@ -310,6 +321,8 @@ class InvalidRecord:
             file_size=record.get("file_size"),
             dataset_title=record.get("dataset_title"),
             entry_id=record.get("entry_id"),
+            file_id=record.get("file_id"),
+            drs_uri=record.get("drs_uri"),
             reasons=reasons,
             data_modality=record.get("data_modality"),
             reference_assembly=record.get("reference_assembly"),
@@ -323,7 +336,7 @@ class OutputRecord:
     The shape ``ClassifyPipeline`` writes per record. Both of *its* producers construct
     it — the batch path (``_build_record`` over a ``ClassifierRecord``/``InvalidRecord``
     work item) and the single-file path (``classify_single``) — and serialize through
-    ``to_dict``, so the eight-key envelope can no longer drift between them (#204).
+    ``to_dict``, so the envelope can no longer drift between them (#204).
 
     **It is not the shape of every classification record in a run.** #204 covers the
     seven file types the pipeline classifies (bam, vcf, fastq, fasta, gfa, tar, bed);
@@ -334,7 +347,7 @@ class OutputRecord:
     differ too: five distinct shapes across the eleven files, sharing only ``complete``.
     So a run has three record shapes, not one, and ``test_output_shape.RECORD_KEYS``
     pins only this one. What all eleven *do* share is ``classifications``,
-    the six identity fields this module's docstring names, and ``published`` — which is
+    the identity fields this module's docstring names, and ``published`` — which is
     what lets ``output_utils.iter_records``, ``field_label`` and ``corpus_diff`` read them
     uniformly. Unifying the four on this record is #429.
 
@@ -370,6 +383,8 @@ class OutputRecord:
     dataset_title: Any
     classifications: dict
     entry_id: Any
+    file_id: Any = None
+    drs_uri: Any = None
     published: dict | None = None
 
     @classmethod
@@ -381,9 +396,9 @@ class OutputRecord:
     ) -> OutputRecord:
         """Build from a parsed work item and its classifications payload.
 
-        Reads the six identity attributes both streams expose (see the module
-        docstring), so it is agnostic to which stream produced ``item`` — and the two
-        published dimensions, which both streams expose for that same reason.
+        Reads the identity attributes both streams expose (see the module docstring),
+        so it is agnostic to which stream produced ``item`` — and the two published
+        dimensions, which both streams expose for that same reason.
 
         ``source`` names the repository the values were read from (#424), and is
         the caller's to supply because it is a fact about the run's input snapshot,
@@ -398,6 +413,8 @@ class OutputRecord:
             file_size=item.file_size,
             dataset_title=item.dataset_title,
             entry_id=item.entry_id,
+            file_id=item.file_id,
+            drs_uri=item.drs_uri,
             classifications=classifications,
             published=build_published({field: getattr(item, field) for field in PUBLISHED_FIELDS}, source),
         )
@@ -414,9 +431,9 @@ class OutputRecord:
     ) -> OutputRecord:
         """Build from a standalone ``classify_single`` call (no work item, no source record).
 
-        ``dataset_title``/``entry_id`` have no source here and serialize as ``None`` —
-        the envelope's one canonical shape, which is why the single-file path's output
-        carries the same eight keys as the batch path. ``published`` is ``None`` for the
+        The catalog identity — ``dataset_title``, ``entry_id``, ``file_id``, ``drs_uri`` —
+        has no source here and serializes as ``None``: the envelope's one canonical shape,
+        which is why the single-file path's output carries the same keys as the batch path. ``published`` is ``None`` for the
         same reason and one more: this path has no input record, so there is no
         published values to carry even in principle.
         """
@@ -427,11 +444,13 @@ class OutputRecord:
             file_size=file_size,
             dataset_title=None,
             entry_id=None,
+            file_id=None,
+            drs_uri=None,
             classifications=classifications,
         )
 
     def to_dict(self) -> dict:
-        """Serialize to the output envelope dict (the eight-key shape written to JSON).
+        """Serialize to the output envelope dict written to JSON.
 
         Derived from the dataclass fields (a shallow copy — ``classifications`` is not
         deep-copied), so every field is emitted, in declaration order, and ``to_dict``
