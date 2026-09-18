@@ -558,8 +558,11 @@ class ClassifyPipeline:
                 return False
             # str(): a non-string file_format/file_name (drift) must not raise here,
             # before validation can convert the record into a structured failure.
-            fmt = str(r.get("file_format") or "")
-            name = str(r.get("file_name") or "")
+            # Lowercased because every other reader of an extension is: `FileName.parse`
+            # case-folds, so a `.TAR` this matched case-sensitively would be handed away
+            # by a producer that saw an archive and refused by the type that owns one.
+            fmt = str(r.get("file_format") or "").lower()
+            name = str(r.get("file_name") or "").lower()
             return any(fmt.endswith(ext) for ext in exts) or any(name.endswith(ext) for ext in exts)
 
         return [r for r in records if matches(r)]

@@ -57,8 +57,9 @@ class TestATarOfFast5sIsATar:
         [
             ("HG02148_1.fast5.tar", ".fast5"),
             ("HG02148_1.fast5.tar.gz", ".fast5"),
+            ("HG02148_1.fast5.TAR", ".fast5"),
         ],
-        ids=["tar", "tar.gz"],
+        ids=["tar", "tar.gz", "upper"],
     )
     def test_nor_when_the_source_declares_the_core_extension(self, tmp_path, file_name, file_format):
         """A source may set `file_format` from the parsed core, so the archive arrives
@@ -71,11 +72,21 @@ class TestATarOfFast5sIsATar:
         rows = run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record("HG02148_1.fast5", ".fast5")])
         assert [r["file_name"] for r in rows] == ["HG02148_1.fast5"]
 
-    def test_the_tar_type_routes_it(self, tmp_path):
+    @pytest.mark.parametrize(
+        "file_name, file_format",
+        [
+            ("HG02148_1.fast5.tar", ".fast5.tar"),
+            ("HG02148_1.fast5.TAR", ".fast5"),
+        ],
+        ids=["lower", "upper"],
+    )
+    def test_the_tar_type_routes_it(self, tmp_path, file_name, file_format):
+        """Both halves of the handover, including the cased one: the guard reads the
+        wrappers off a case-folded parse, so the type it defers to must take the file."""
         pipeline = ClassifyPipeline(
             TAR_CONFIG,
-            write_snapshot(tmp_path, [_fast5_tar_record()]),
+            write_snapshot(tmp_path, [_fast5_tar_record(file_name, file_format)]),
             tmp_path / "tar_classifications.json",
         )
         routed = pipeline._filter_records(pipeline._load_input())
-        assert [r["file_name"] for r in routed] == ["HG02148_1.fast5.tar"]
+        assert [r["file_name"] for r in routed] == [file_name]
