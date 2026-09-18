@@ -477,8 +477,9 @@ class ClassifyPipeline:
         """Classify a single file by MD5. Does not require a full pipeline instance.
 
         Returns the canonical ``OutputRecord`` envelope (#204), the same shape the batch
-        path writes; the catalog identity (``dataset_title``, ``entry_id``, ``file_id``,
-        ``drs_uri``) is ``None`` here since there is no source record.
+        path writes; the catalog identity (:data:`records.CATALOG_IDENTITY_FIELDS`) and
+        ``dataset_title`` are ``None`` here, since there is no source record to read
+        either from.
 
         ``url`` is an optional explicit content URL (#276): ``None`` derives the URL
         from ``md5sum`` (AnVIL mirror), a value streams from it instead (HPRC).

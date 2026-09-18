@@ -122,7 +122,7 @@ class AnvilFileMetadataRecord(ConfiguredBaseModel):
          'tree_root': True})
 
     entry_id: str = Field(default=..., description="""The AnVIL Explorer catalog entry identifier.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
-    file_id: str = Field(default=..., description="""The repository's own identifier for the file, and the durable one: unlike `entry_id` it is not regenerated when the catalog is re-indexed, and it is what a DRS resolver dereferences (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
+    file_id: str = Field(default=..., description="""The repository's own identifier for the file, and the durable one: unlike `entry_id` it is not regenerated when the catalog is re-indexed, so it is what a consumer joins on (#433). The handle a DRS resolver takes is `drs_uri`, which is carried separately because it does not always wrap this id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_name: str = Field(default=..., description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_format: str = Field(default=..., description="""File extension / format label (e.g. bam, vcf.gz). 62 distinct values in the current corpus, including the literal \"Other\".""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_size: int = Field(default=..., description="""File size in bytes. Zero is valid (three zero-size files exist).""", ge=0, json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })

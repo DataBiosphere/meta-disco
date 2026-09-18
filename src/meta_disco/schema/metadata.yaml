@@ -78,8 +78,9 @@ slots:
   file_id:
     description: >-
       The repository's own identifier for the file, and the durable one: unlike
-      `entry_id` it is not regenerated when the catalog is re-indexed, and it is what a
-      DRS resolver dereferences (#433).
+      `entry_id` it is not regenerated when the catalog is re-indexed, so it is what a
+      consumer joins on (#433). The handle a DRS resolver takes is `drs_uri`, which is
+      carried separately because it does not always wrap this id.
     required: true
     pattern: "^.+$"
   file_name:

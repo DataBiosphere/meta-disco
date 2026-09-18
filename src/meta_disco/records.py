@@ -200,10 +200,12 @@ def identity_from(record: dict, *, coerce: bool = False) -> dict:
     a producer may be handed a ``validation_failed`` record, and the standalone
     producers read raw dicts rather than a typed work item.
 
-    ``coerce`` renders each value through :func:`coerce_identity` — the null-to-``""``
-    rule ``excluded_files.json`` and the ``validation_failed`` row echo a drifted
-    identity by. ``unmatched_files`` entries want it; classification rows do not,
-    because they pass identity through exactly as carried.
+    ``coerce`` renders each value through :func:`coerce_identity`, the null-to-``""``
+    rule ``excluded_files.json`` echoes a drifted identity by. Only ``unmatched_files``
+    entries want it, and for the same reason: both are diagnostics, read by someone
+    chasing a file down. Classification rows pass identity through exactly as carried —
+    including on the ``validation_failed`` path, which coerces ``file_name`` and
+    ``file_format`` in :meth:`InvalidRecord.from_record` and nothing else.
     """
     if coerce:
         return {field: coerce_identity(record.get(field)) for field in CATALOG_IDENTITY_FIELDS}
@@ -221,9 +223,10 @@ class ClassifierRecord:
     That post-condition is what lets the fetch/classify path drop the per-field
     guards #171 added.
 
-    The catalog identity is *not* classifier-relevant, so a record with any of it drifted
-    still reaches the valid stream. It is echoed into the output row untouched — typed
-    ``Any`` and passed through as-is, exactly as the raw-dict path did.
+    The catalog identity and ``dataset_title`` are *not* classifier-relevant, so a record
+    with any of them drifted still reaches the valid stream. They are echoed into the
+    output row untouched — typed ``Any`` and passed through as-is, exactly as the
+    raw-dict path did.
 
     ``file_id`` is the durable identity and ``entry_id`` is not (#433); ``drs_uri`` is
     carried rather than derived from ``file_id``. The schema's slot descriptions say why.
@@ -463,9 +466,9 @@ class OutputRecord:
     ) -> OutputRecord:
         """Build from a standalone ``classify_single`` call (no work item, no source record).
 
-        The catalog identity has no source here and serializes as ``None``: the
-        envelope's one canonical shape, which is why the single-file path's output
-        carries the same keys as the batch path. ``published`` is ``None`` for the
+        The catalog identity and ``dataset_title`` have no source here and serialize as
+        ``None``: the envelope's one canonical shape, which is why the single-file path's
+        output carries the same keys as the batch path. ``published`` is ``None`` for the
         same reason and one more: this path has no input record, so there is no
         published values to carry even in principle.
         """

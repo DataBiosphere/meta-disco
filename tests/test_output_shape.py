@@ -194,8 +194,8 @@ RECORD_KEYS = {
     "dataset_title",
     "classifications",
     "entry_id",
-    # The durable identity (#433): `file_id` is what a DRS resolver dereferences and
-    # what survives a catalog re-index, which `entry_id` does not.
+    # The durable identity (#433): `file_id` survives a catalog re-index, which
+    # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
     "file_id",
     "drs_uri",
     # The repository's published values (#424). Present on every record, null on most —

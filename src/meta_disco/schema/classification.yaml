@@ -721,12 +721,14 @@ slots:
       than outliving a refresh (#433).
   file_id:
     description: >-
-      The repository's own file identifier: the durable one, and what a DRS resolver
-      dereferences (#433).
+      The repository's own file identifier, and the durable one: it survives a catalog
+      re-index, which `entry_id` does not (#433). It is the join key, not the handle
+      a resolver takes — that is `drs_uri`.
   drs_uri:
     description: >-
-      The file's DRS URI. Carried, never derived from `file_id` — thousands of records
-      wrap a different id (#433).
+      The file's DRS URI: what a resolver dereferences to reach the bytes. Carried,
+      never derived from `file_id` — thousands of records wrap a different object id,
+      so a reconstructed URI resolves to the wrong file or to nothing (#433).
   dataset_title:
     description: Title of the dataset the file belongs to.
   classifications:
