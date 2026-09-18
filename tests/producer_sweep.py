@@ -12,8 +12,8 @@ what it wrote stays in each sweep, because the two assert different things — a
 block against scalar echoes — and the identity sweep has a declined-record case (#438)
 the published one has no counterpart for.
 
-`PRODUCER_EXTENSIONS` is here for the same reason — it is a fact about the producers
-read off their own constants, and reading them means the same `scripts/` import.
+`PRODUCER_EXTENSIONS` is here for the same reason: reading it off each producer's own
+constant means the same `scripts/` import.
 
 It lives apart from `metadata_fixtures` deliberately: importing the producers means
 putting `scripts/` on the path, and only the modules here and the tests over them
@@ -41,8 +41,8 @@ from meta_disco.file_types import FILE_TYPE_REGISTRY
 # no extension, taking whatever no other producer has already written a row for.
 PRODUCER_EXTENSIONS = {
     **{name: frozenset(config.extensions) for name, config in FILE_TYPE_REGISTRY.items()},
-    "auxiliary_genomic": frozenset(AUXILIARY_EXTENSIONS),
-    "images": frozenset(IMAGE_EXTENSIONS),
+    "auxiliary_genomic": AUXILIARY_EXTENSIONS,
+    "images": IMAGE_EXTENSIONS,
     "index": frozenset(INDEX_TO_PARENT),
 }
 

@@ -9,6 +9,7 @@ shared path lives in the package alongside the rest of the pipeline rather than 
 imported across scripts.
 """
 
+import heapq
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -129,28 +130,37 @@ _DUPLICATES_SHOWN = 10
 
 
 def _check_one_row_per_file(output_dir: Path) -> bool:
-    """Print whether the run wrote one row per file; False if any ``file_id`` repeats.
+    """Print whether every ``file_id`` in the run is unique; False if any repeats.
 
-    A repeated ``file_id`` means two producers claimed the same file, so every count
-    over the output double-counts it and no identifier is a primary key. Failing the
-    run is what stops the reports being generated over such output.
+    A repeated ``file_id`` means the run holds more than one row for a file, so every
+    count over the output double-counts it and no identifier is a primary key. The
+    files listed beside each ``file_id`` say which producers wrote those rows — two
+    that claimed the same file, or one that wrote it twice.
 
-    Rows carrying no ``file_id`` are reported and not failed: a source whose catalog
+    Rows carrying no ``file_id`` are counted and not failed: a source whose catalog
     gives files no identity writes them that way.
     """
     identities = row_identities(output_dir)
+    checked = identities.total_rows - identities.without_file_id
     if identities.without_file_id:
         print(f"{identities.without_file_id:,} of {identities.total_rows:,} rows carry no file_id — not checked.")
     if not identities.duplicates:
-        print(f"One row per file: {identities.total_rows - identities.without_file_id:,} rows, no repeated file_id.")
+        # Nothing checkable is not the same fact as one row per file, so it does not
+        # get that line: a source whose catalog gives files no identity lands here.
+        if checked:
+            print(f"One row per file: {checked:,} rows, no repeated file_id.")
+        else:
+            print("No row carries a file_id — uniqueness was not checked.")
         return True
 
     print(f"DUPLICATE ROWS: {len(identities.duplicates):,} file_ids appear in more than one row.")
-    for file_id, sources in sorted(identities.duplicates.items())[:_DUPLICATES_SHOWN]:
+    # nsmallest, not sorted()[:n]: a mis-routed file type duplicates its whole
+    # population, so the map this samples can hold hundreds of thousands of entries.
+    for file_id, sources in heapq.nsmallest(_DUPLICATES_SHOWN, identities.duplicates.items()):
         print(f"  {file_id}: {', '.join(sources)}")
     if len(identities.duplicates) > _DUPLICATES_SHOWN:
         print(f"  ... and {len(identities.duplicates) - _DUPLICATES_SHOWN:,} more")
-    print("Two producers claimed the same file. Every count over this run's output double-counts it.")
+    print("A file has more than one row — see the files named above. Every count over this output double-counts it.")
     return False
 
 

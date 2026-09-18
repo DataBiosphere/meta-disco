@@ -1,12 +1,21 @@
-"""No file routes to two producers.
+"""No file routes to two producers on a shared extension.
 
-Every producer routes by filename suffix, so one filename reaches two of them exactly
-when one producer's extension ends with another's. Both then write a full record, the
-run holds two rows for one file, and no identifier in the output is unique (#445).
+A producer claims a record whose ``file_format`` or ``file_name`` carries one of its
+extensions, so two of them claim one file when one's extension ends with another's —
+what put 115 files in two output files each (#445). Both write a full record, the run
+holds two rows for one file, and no identifier in the output is unique.
+
+The suffix relation is not the only way two producers can claim one record: the two
+fields are matched independently, so a ``file_name`` answering one producer and a
+``file_format`` answering another collides with no shared extension at all. That shape
+is caught after the fact by ``classify_run._check_one_row_per_file``, not here.
 """
+
+import itertools
 
 from meta_disco.file_types import TAR_CONFIG
 from meta_disco.pipeline import ClassifyPipeline
+from tests.metadata_fixtures import valid_record
 from tests.producer_sweep import (
     PRODUCER_EXTENSIONS,
     classify_auxiliary_genomic,
@@ -16,29 +25,18 @@ from tests.producer_sweep import (
 
 
 def _fast5_tar_record():
-    return {
-        "file_name": "HG02148_1.fast5.tar",
-        "file_format": ".fast5.tar",
-        "file_md5sum": "a" * 32,
-        "file_size": 1024,
-        "entry_id": "e1",
-        "file_id": "f1",
-        "drs_uri": "drs://example/f1",
-        "dataset_title": "ANVIL_HPRC",
-    }
+    return valid_record(file_name="HG02148_1.fast5.tar", file_format=".fast5.tar", dataset_title="ANVIL_HPRC")
 
 
 def test_no_producer_claims_an_extension_another_producer_claims():
     """The suffix relation, not equality: `.fast5.tar` ends with `.tar`, so a file named
     for the first routes to the producer claiming the second as well."""
-    collisions = []
-    names = sorted(PRODUCER_EXTENSIONS)
-    for i, first in enumerate(names):
-        for second in names[i + 1 :]:
-            for one in sorted(PRODUCER_EXTENSIONS[first]):
-                for other in sorted(PRODUCER_EXTENSIONS[second]):
-                    if one.endswith(other) or other.endswith(one):
-                        collisions.append(f"{first} {one} / {second} {other}")
+    claims = [(producer, ext) for producer, exts in sorted(PRODUCER_EXTENSIONS.items()) for ext in sorted(exts)]
+    collisions = [
+        f"{one_producer} {one} / {other_producer} {other}"
+        for (one_producer, one), (other_producer, other) in itertools.combinations(claims, 2)
+        if one_producer != other_producer and (one.endswith(other) or other.endswith(one))
+    ]
     assert not collisions, (
         "Producers claim overlapping extensions, so a file routes to both and the run "
         f"writes it twice: {collisions}. One of them must give the extension up."

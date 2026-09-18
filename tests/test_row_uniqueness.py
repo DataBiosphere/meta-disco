@@ -12,11 +12,12 @@ from meta_disco.output_utils import row_identities
 
 
 def _write(run_dir, fname, rows):
-    (run_dir / fname).write_text(json.dumps({"classifications": rows}))
+    """One classification file in the envelope every producer writes."""
+    (run_dir / fname).write_text(json.dumps({"metadata": {}, "classifications": rows}))
 
 
-def _row(file_id, name="sample.bam"):
-    return {"file_name": name, "file_id": file_id, "entry_id": f"e-{file_id}"}
+def _row(file_id):
+    return {"file_name": "sample.bam", "file_id": file_id, "entry_id": f"e-{file_id}"}
 
 
 class TestRowIdentities:
@@ -70,7 +71,10 @@ class TestTheRunFailsOnDuplicates:
         assert "2 rows" in capsys.readouterr().out
 
     def test_rows_without_a_file_id_do_not_fail_the_run(self, tmp_path, capsys):
+        """And are not reported as one row per file: nothing was checkable."""
         _write(tmp_path, "bam_classifications.json", [_row(None), _row(None)])
 
         assert _check_one_row_per_file(tmp_path) is True
-        assert "no file_id" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "no file_id" in out
+        assert "One row per file" not in out
