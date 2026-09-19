@@ -247,21 +247,31 @@ def test_output_records_validate_against_schema(validator):
 
 
 def test_a_producers_published_block_reaches_the_gate():
-    """Some fixture record carries a populated `published`, and between them the fixtures
-    cover both `in_vocabulary` halves — a dimension whose published value is a term of
-    this vocabulary, and one whose is not — and the one-sided block, which is the shape
-    almost every published record in the corpus takes."""
+    """One fixture record carries both dimensions with an `in_vocabulary` map holding a
+    term and lacking one, and another carries the one-sided block.
+
+    Both halves of the map on the *same* record, which is what #465 asks for: aggregated
+    over records, a fixture could satisfy each half separately and no producer would ever
+    have written the mixed map that every corpus record with values in both dimensions
+    takes. Satisfying it on one record supplies the separate halves by construction.
+    """
     blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
     assert blocks, f"no fixture record carries a published block; regenerate with `{_REGEN}`"
-    vocabularies = [block.get("in_vocabulary", {}) for block in blocks]
-    assert any(terms for vocab in vocabularies for terms in vocab.values()), (
-        "no fixture record publishes a value this vocabulary has a term for"
-    )
-    assert any(not terms for vocab in vocabularies for terms in vocab.values()), (
-        "no fixture record publishes a value this vocabulary lacks a term for"
-    )
-    assert any(any(block.get(field) is None for field in _PUBLISHED_FIELDS) for block in blocks), (
-        "no fixture record carries a block for one dimension only"
+
+    def vocabulary(block):
+        return block.get("in_vocabulary", {}).values()
+
+    assert any(
+        all(block.get(field) for field in _PUBLISHED_FIELDS)
+        and any(terms for terms in vocabulary(block))
+        and any(not terms for terms in vocabulary(block))
+        for block in blocks
+    ), "no one fixture record publishes both dimensions with a value this vocabulary has a term for and one it lacks"
+    # `field in block`, not `block.get(field) is None`: `build_published` emits every
+    # dimension key and spells "publishes nothing for this one" as an explicit null, so
+    # accepting an omitted key would let a block that had dropped one satisfy this.
+    assert any(any(block[field] is None for field in _PUBLISHED_FIELDS if field in block) for block in blocks), (
+        "no fixture record carries a block naming one dimension and explicitly nulling the other"
     )
 
 
