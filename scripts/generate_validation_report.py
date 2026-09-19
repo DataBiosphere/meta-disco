@@ -100,14 +100,14 @@ _Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_
 class _DiscrepancyCategory(TypedDict):
     """One (ours, truth) pair we disagreed on, with a count and one example."""
 
-    # All three are whatever the two sources put in the field: rendered through
-    # `str()`, never compared, so `object` is the honest width. `example` is no
-    # narrower than the other two — `load_hprc_results` writes `m.get("file",
-    # "")`, and that default covers a missing key, not a null one.
+    # `ours` and `truth_mapped` are whatever the two sources put in the field:
+    # rendered through `str()`, never compared, so `object` is the honest width.
+    # `example` is narrower because both writers coerce it — `or ""` rather than
+    # a `get` default, which would pass a null through.
     ours: object
     truth_mapped: object
     count: int
-    example: object
+    example: str
 
 
 class _DimStats(TypedDict):
@@ -267,7 +267,7 @@ def compare_source(
                         "ours": inferred_value,
                         "truth_mapped": mapped_truth,
                         "count": 0,
-                        "example": key,
+                        "example": str(key),
                     }
                 cats[cat_key]["count"] += 1
 
@@ -317,7 +317,7 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
                         "ours": ours,
                         "truth_mapped": expected,
                         "count": 0,
-                        "example": m.get("file", ""),
+                        "example": m.get("file") or "",
                     }
                 discrepancy_categories[cat_key]["count"] += 1
 
@@ -521,7 +521,7 @@ def build_source_section(name: str, results: _ComparisonResults) -> str:
                     f"| {cat['count']:,} "
                     f"| {escape_md_cell(str(cat['ours']))} "
                     f"| {escape_md_cell(str(cat['truth_mapped']))} "
-                    f"| {escape_md_cell(str(cat['example']))} |"
+                    f"| {escape_md_cell(cat['example'])} |"
                 )
             lines.append("")
 

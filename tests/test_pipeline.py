@@ -1,8 +1,8 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -17,19 +17,15 @@ from tests.metadata_fixtures import valid_record as _valid_record
 
 def _make_config(**overrides):
     """Create a FileTypeConfig with test defaults."""
-    # `dict[str, Any]`, not a declared shape: a TypedDict here would restate
-    # `FileTypeConfig`'s signature and go stale beside it. Be aware of what
-    # that trades away — unpacking a dict switches off static arity and type
-    # checking at the call site, so a wrong or unknown key here is caught by the
-    # constructor at run time, not by `make type`.
-    defaults: dict[str, Any] = {
-        "name": "test",
-        "extensions": (".test",),
-        "fetcher": lambda evidence_dir, md5, **kw: f"header_for_{md5}",
-        "classifier": lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
-    }
-    defaults.update(overrides)
-    return FileTypeConfig(**defaults)
+    return replace(
+        FileTypeConfig(
+            name="test",
+            extensions=(".test",),
+            fetcher=lambda evidence_dir, md5, **kw: f"header_for_{md5}",
+            classifier=lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
+        ),
+        **overrides,
+    )
 
 
 @pytest.fixture
