@@ -34,6 +34,7 @@ import threading
 from dataclasses import fields, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -88,18 +89,20 @@ ISO_NOW = FETCHED_AT.isoformat()
 def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
     """An HPRC catalog envelope: filenames the catalog publishes, matched against
     AnVIL's ``file_name`` within the dataset that makes that key usable."""
-    return EvidenceFileEnvelope(
-        **{
-            "source": HPRC_CATALOG,
-            "source_type": SOURCE_REPOSITORY_METADATA,
-            "source_version": "2026-09-01",
-            "source_key": "filename",
-            "target": ANVIL_TARGET,
-            "target_key": JOIN_KEY_FILE_NAME,
-            "fetched_at": FETCHED_AT,
-            **overrides,
-        }
-    )
+    # `dict[str, Any]`, not a declared shape: this is a kwargs bag on its way to
+    # `EvidenceFileEnvelope(**...)`, where that constructor's own signature does
+    # the checking. A TypedDict here would restate it and go stale beside it.
+    kwargs: dict[str, Any] = {
+        "source": HPRC_CATALOG,
+        "source_type": SOURCE_REPOSITORY_METADATA,
+        "source_version": "2026-09-01",
+        "source_key": "filename",
+        "target": ANVIL_TARGET,
+        "target_key": JOIN_KEY_FILE_NAME,
+        "fetched_at": FETCHED_AT,
+        **overrides,
+    }
+    return EvidenceFileEnvelope(**kwargs)
 
 
 def _entry(column="instrumentModel", raw="Revio", name="HG002.bam", source=HPRC_CATALOG) -> EvidenceEntry:

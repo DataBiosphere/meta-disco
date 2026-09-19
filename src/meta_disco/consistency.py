@@ -12,9 +12,11 @@ once the violation landscape is known.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -104,7 +106,7 @@ def load_rules(resource=None) -> list[dict]:
     return data["rules"]
 
 
-def _dim(record: dict, name: str) -> tuple[str | None, str, list]:
+def _dim(record: Mapping[str, Any], name: str) -> tuple[str | None, str, list]:
     """Return the RAW ``(value, status, evidence)`` for one dimension of a record.
 
     Reuses ``models`` for layout normalization (``_field_entry``) and the status
@@ -154,7 +156,7 @@ def _violates(value: str | None, status: str, matcher: dict) -> bool:
     return False
 
 
-def rule_activation(record: dict, rule: dict) -> dict | None:
+def rule_activation(record: Mapping[str, Any], rule: dict) -> dict | None:
     """If the rule's ``when`` matches this record, return the activating field->value
     map; otherwise None. A rule only tests a record when it is active."""
     activated = {}
@@ -166,7 +168,7 @@ def rule_activation(record: dict, rule: dict) -> dict | None:
     return activated
 
 
-def _check_active(record: dict, rule: dict, activated: dict) -> list[Violation]:
+def _check_active(record: Mapping[str, Any], rule: dict, activated: dict) -> list[Violation]:
     """Violations from an already-activated rule against a record.
 
     Takes the ``activated`` map from :func:`rule_activation` so the ``when`` clause
@@ -194,7 +196,7 @@ def _check_active(record: dict, rule: dict, activated: dict) -> list[Violation]:
     return violations
 
 
-def check_record(record: dict, rules: list[dict]) -> list[Violation]:
+def check_record(record: Mapping[str, Any], rules: list[dict]) -> list[Violation]:
     """Return every consistency violation for one classified record."""
     violations: list[Violation] = []
     for rule in rules:

@@ -727,7 +727,11 @@ def test_two_entry_ids_whose_string_forms_coincide_are_distinct_files(tmp_path):
     twins = []
     for entry in (1, "1"):
         rec = _record("same.bam", published=published)
-        rec["entry_id"], rec["md5sum"] = entry, "shared-md5"
+        # The int is the point: this case exists because a drifted `entry_id`
+        # reaches `gather`, so the wrong type here is the input under test, not
+        # a slip. Nothing declares the fixture's `entry_id` as `str` — the
+        # literal it is built from infers that way.
+        rec["entry_id"], rec["md5sum"] = entry, "shared-md5"  # pyright: ignore[reportArgumentType]
         twins.append(rec)
     report = gather(_write_run(tmp_path / "run", twins))
 
@@ -740,7 +744,8 @@ def test_an_unhashable_entry_id_does_not_raise(tmp_path):
     """The reason the key is stringified inside the tag rather than kept raw."""
     published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
     rec = _record("drifted.bam", published=published)
-    rec["entry_id"] = ["a", "list"]
+    # As above: an unhashable `entry_id` is the input under test.
+    rec["entry_id"] = ["a", "list"]  # pyright: ignore[reportArgumentType]
     report = gather(_write_run(tmp_path / "run", [rec]))
     assert report.files == 1
     assert report.rows[0].entry_id == "['a', 'list']"

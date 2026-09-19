@@ -33,6 +33,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Literal, TypedDict
 
 from meta_disco.models import field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
@@ -87,8 +88,73 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
 
 SENTINELS = {"not_classified", "not_applicable", None}
 
+# The outcome vocabulary, named once. `compare_field` returns one of these and
+# `_DimStats` counts one per name, so the two cannot drift apart silently:
+# an outcome this does not list stops being a legal key of the counter.
+_Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_truth"]
 
-def compare_field(inferred_value, truth_value) -> str:
+
+class _DiscrepancyCategory(TypedDict):
+    """One (ours, truth) pair we disagreed on, with a count and one example."""
+
+    # Both sides are whatever the two sources put in the field: rendered through
+    # `str()`, never compared, so `object` is the honest width.
+    ours: object
+    truth_mapped: object
+    count: int
+    example: str
+
+
+class _DimStats(TypedDict):
+    """Per-dimension outcome counts. The first five keys are exactly `_Outcome`."""
+
+    agree: int
+    discrepancy: int
+    we_inferred: int
+    not_classified: int
+    no_truth: int
+    discrepancy_categories: dict[str, _DiscrepancyCategory]
+
+
+class _CatalogSummary(TypedDict):
+    """One catalog's file counts, for the dashboard's per-catalog table."""
+
+    name: str
+    total: int
+    matched: int
+
+
+class _ComparisonResultsBase(TypedDict):
+    """The three keys every comparison produces."""
+
+    matched: int
+    unmatched: int
+    dimensions: dict[str, _DimStats]
+
+
+class _ComparisonResults(_ComparisonResultsBase, total=False):
+    """What one ground-truth source's comparison produced.
+
+    Built two ways — by `compare_source` from records, and by
+    `load_hprc_results` from a file another script already wrote — and
+    `build_source_section` renders either. Declaring it is what holds those
+    three in agreement.
+
+    The optional half is what only `load_hprc_results` can know, because only
+    it reads a per-catalog file: `build_source_section` guards on
+    `metadata_coverage` before rendering it, and the other two reach the
+    dashboard template through `json.dumps` of the whole results dict.
+
+    Split across two classes because `NotRequired` needs 3.11 and this targets
+    3.10 (`[tool.pyright].pythonVersion`).
+    """
+
+    metadata_coverage: dict[str, int]
+    catalog_summary: list[_CatalogSummary]
+    catalog_dimensions: dict[str, list[str]]
+
+
+def compare_field(inferred_value, truth_value) -> _Outcome:
     """Compare a single field value against ground truth.
 
     Returns one of: agree, discrepancy, we_inferred, not_classified, no_truth
@@ -113,7 +179,7 @@ def compare_field(inferred_value, truth_value) -> str:
 
 def compare_source(
     our_by_key: dict, truth_records: list[dict], key_field: str, field_mappings: dict[str, dict], dimensions: list[str]
-) -> dict:
+) -> _ComparisonResults:
     """Compare our classifications against a ground truth source.
 
     Args:
@@ -125,7 +191,7 @@ def compare_source(
 
     Returns dict with per-dimension comparison stats and sample discrepancies.
     """
-    results = {
+    results: _ComparisonResults = {
         "matched": 0,
         "unmatched": 0,
         "dimensions": {},
@@ -189,7 +255,7 @@ def compare_source(
 # =============================================================================
 
 
-def load_hprc_results(hprc_results_path: Path) -> dict:
+def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
     """Load pre-computed HPRC validation results and convert to report format.
 
     Reads from output/hprc/hprc_validation_results.json (produced by validate_against_hprc.py)
@@ -206,7 +272,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     mismatches = data.get("mismatches", [])
 
     total_matched = 0
-    dimensions = {}
+    dimensions: dict[str, _DimStats] = {}
 
     for dim, stats in dim_results.items():
         match = stats.get("match", 0)
@@ -215,7 +281,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
         total_matched = max(total_matched, match + mismatch + unknown)
 
         # Group discrepancies by category
-        discrepancy_categories = {}
+        discrepancy_categories: dict[str, _DiscrepancyCategory] = {}
         for m in mismatches:
             if dim in m:
                 info = m[dim]
@@ -256,7 +322,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     # Build catalog summary for display
     catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
     by_catalog = data.get("by_catalog", {})
-    catalog_summary = []
+    catalog_summary: list[_CatalogSummary] = []
     for cat_name, cat_total in catalogs_loaded.items():
         matched = by_catalog.get(cat_name, {}).get("matched", 0)
         catalog_summary.append(
@@ -277,7 +343,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
 
     # Build metadata coverage from dimension stats
     # (match + mismatch + unknown = files where HPRC has ground truth)
-    metadata_coverage = {}
+    metadata_coverage: dict[str, int] = {}
     for dim, stats in dimensions.items():
         metadata_coverage[dim] = stats["agree"] + stats["discrepancy"] + stats["not_classified"]
 
@@ -319,7 +385,7 @@ def source_desc_html(name: str) -> str | None:
     return f'{info["text"]} <a href="{info["url"]}">{info["link_label"]}</a>.'
 
 
-def build_source_section(name: str, results: dict) -> str:
+def build_source_section(name: str, results: _ComparisonResults) -> str:
     # Short label for column headers: "Some Source (detail)" -> "Some Source"
     source_label = name.split("(")[0].strip() if "(" in name else name
 
@@ -366,7 +432,7 @@ def build_source_section(name: str, results: dict) -> str:
         lines.append("No dimensions to compare.")
         return "\n".join(lines)
 
-    EMPTY_DIM = {
+    EMPTY_DIM: _DimStats = {
         "agree": 0,
         "discrepancy": 0,
         "we_inferred": 0,

@@ -111,9 +111,11 @@ from __future__ import annotations
 
 import re
 import shlex
+from collections.abc import Mapping
 from dataclasses import asdict, astuple, dataclass, fields
 from itertools import pairwise
 from pathlib import PurePosixPath
+from typing import TypedDict
 
 # The key contigs and the row layout live beside ``ReferenceBuild`` in the
 # loader, which validates ``absent`` against them at load (#351).
@@ -414,6 +416,21 @@ def _signature_for(signatures: list[ContigSignature], contig: str) -> ContigSign
     return next((sig for sig in signatures if sig.bare_name == contig), None)
 
 
+class _Observed(TypedDict):
+    """What was read off one file for the key contigs.
+
+    The keys are ``ReferenceBuild`` field names, because :func:`_consistent`
+    looks each one up on the build with ``getattr``. Declaring them keeps that
+    correspondence checkable: a key that is not a build field is now an error
+    here rather than an ``AttributeError`` at match time.
+    """
+
+    chr1_length: int | None
+    chr1_m5: str | None
+    chry_length: int | None
+    chry_m5: str | None
+
+
 def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
     """Whether one observation is consistent with one build.
 
@@ -459,8 +476,13 @@ def _has_signatures(build: ReferenceBuild) -> bool:
     return bool(build.chr1_length or build.chr1_m5 or build.chry_length or build.chry_m5)
 
 
-def _candidates(observed: dict[str, object]) -> list[ReferenceBuild]:
-    """Builds whose recorded signatures are consistent with the evidence."""
+def _candidates(observed: Mapping[str, object]) -> list[ReferenceBuild]:
+    """Builds whose recorded signatures are consistent with the evidence.
+
+    ``Mapping``, not ``dict``: this only reads, and ``dict`` is invariant in its
+    value type, so a caller's ``dict[str, int | str | None]`` would not be
+    assignable to ``dict[str, object]`` however correct it is.
+    """
     return [
         build
         for build in get_unified_rules().reference_builds
@@ -481,7 +503,7 @@ def resolve_identity(signatures: list[ContigSignature], declared: DeclaredRefere
     """
     chr1 = _signature_for(signatures, KEY_CONTIGS[0])
     chry = _signature_for(signatures, KEY_CONTIGS[1])
-    observed = {
+    observed: _Observed = {
         "chr1_length": chr1.length if chr1 else None,
         "chr1_m5": chr1.md5 if chr1 else None,
         "chry_length": chry.length if chry else None,

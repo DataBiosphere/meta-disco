@@ -1,5 +1,6 @@
 """Data models for file classification."""
 
+from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields
 from functools import cache
 from typing import Any
@@ -149,8 +150,13 @@ CLASSIFICATION_FIELDS = (
 )
 
 
-def _field_entry(record: dict, field_name: str):
+def _field_entry(record: Mapping[str, Any], field_name: str):
     """Return the per-field classification entry/value from a record, or None.
+
+    ``Mapping``, not ``dict``: this only reads, and ``dict`` is invariant in its
+    value type, so a caller holding a declared record shape could not pass it.
+    The value type stays ``Any`` — what bare ``dict`` already meant here — so
+    widening the parameter changes nothing about what callers infer.
 
     Normalizes the layouts classification records appear in:
     - per-field:  record["classifications"][field] -> {"value", ...}

@@ -2,7 +2,9 @@
 
 import json
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 
@@ -91,14 +93,35 @@ def test_read_snapshot_tolerates_a_non_numeric_total(tmp_path):
     assert read_snapshot(path)[0].total_files is None
 
 
-def _write_run(run_dir: Path, records: list[dict], fname="bam_classifications.json"):
-    """Write a run directory holding one classification output file."""
+def _write_run(run_dir: Path, records: Sequence[Mapping[str, object]], fname="bam_classifications.json"):
+    """Write a run directory holding one classification output file.
+
+    ``Sequence[Mapping[...]]`` rather than ``list[dict]``: this only serializes,
+    and both `list` and `dict` are invariant, so a caller's `list[_RunRecord]`
+    would not be assignable however correct it is.
+    """
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / fname).write_text(json.dumps({"metadata": {}, "classifications": records}))
     return run_dir
 
 
-def _run_record(name, md5, dataset="DS1", **labels):
+class _RunRecord(TypedDict):
+    """The four fields of an output record that `run_labels` reads.
+
+    ``dataset_title`` is nullable because the HPRC source publishes none, and
+    `corpus_diff` keeps such a record rather than dropping that whole corpus —
+    the case ``test_run_labels_keeps_records_whose_dataset_title_is_absent``
+    pins. ``classifications`` stays ``dict[str, dict]`` because its keys are
+    `CLASSIFICATION_FIELDS`, read here through a loop rather than by name.
+    """
+
+    file_name: str
+    md5sum: str
+    dataset_title: str | None
+    classifications: dict[str, dict]
+
+
+def _run_record(name, md5, dataset="DS1", **labels) -> _RunRecord:
     """A classification output record; each dim kwarg is a value, else not_classified.
 
     Entries come from ``models.build_field_entry`` — the single place that assembles
