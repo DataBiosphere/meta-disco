@@ -1,9 +1,15 @@
 """End-to-end evaluation tests for classification pipeline.
 
-These test the ACTUAL script functions with REAL cached evidence files,
-not the internal classify functions directly. The input is a file
+These go through ``ClassifyPipeline.classify_single`` with REAL cached evidence
+files, not the internal classify functions directly. The input is a file
 (via md5 -> cached evidence), the output is the JSON record that would
-appear in the output file.
+appear in the output file — the same call `make classify` makes for one file,
+with the same ``*_CONFIG`` it uses.
+
+Until #466 these imported four ``scripts/classify_<type>_files.py`` wrappers,
+which had been the entry points before `make classify` moved to
+``classify_headers.py``. Each was a pass-through to the call below, so the evals
+were testing a path production no longer ran; the wrappers are gone.
 
 For rule-engine-only classifiers (BED, images, auxiliary), the input
 is a FileInfo and the output is an ExtendedClassificationResult.
@@ -14,18 +20,7 @@ call goes through a guarded wrapper (:func:`~tests.corpus_fixtures.require_corpu
 that skips with the cause named rather than falling through to a live fetch (#381).
 """
 
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-# Import the actual script functions
-from classify_bam_files import classify_single_file as _classify_bam
-from classify_fasta_files import classify_single_fasta as _classify_fasta
-from classify_fastq_files import classify_single_fastq as _classify_fastq
-from classify_vcf_files import classify_single_vcf as _classify_vcf
 
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
@@ -39,41 +34,41 @@ from meta_disco.models import (
     field_status,
     field_value,
 )
+from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.rule_engine import CONTENT_TIER, RuleEngine, evaluate_claims
 from tests.corpus_fixtures import require_corpus_file
 
 engine = RuleEngine()
 
 
-# Guarded wrappers around the four script functions. Each checks the fixture against the
-# corpus snapshot and the evidence cache before classifying, so a fixture the corpus has
-# dropped skips with that reason instead of 404ing its way to an inscrutable failure.
-# The tests call these under the script functions' own names, so a test body reads as a
-# direct call to the code under test.
+# Guarded wrappers around the one classify entry point. Each checks the fixture against
+# the corpus snapshot and the evidence cache before classifying, so a fixture the corpus
+# has dropped skips with that reason instead of 404ing its way to an inscrutable failure.
+# The only difference between them is the ``*_CONFIG`` passed through.
 
 
 def classify_bam(md5sum, file_name, **kwargs):
     """Classify a BAM/CRAM fixture, skipping when the corpus can no longer supply it."""
     require_corpus_file(md5sum, BAM_CONFIG.name)
-    return _classify_bam(md5sum, file_name, **kwargs)
+    return ClassifyPipeline.classify_single(BAM_CONFIG, md5sum, file_name=file_name, **kwargs)
 
 
 def classify_vcf(md5sum, file_name, **kwargs):
     """Classify a VCF fixture, skipping when the corpus can no longer supply it."""
     require_corpus_file(md5sum, VCF_CONFIG.name)
-    return _classify_vcf(md5sum, file_name, **kwargs)
+    return ClassifyPipeline.classify_single(VCF_CONFIG, md5sum, file_name=file_name, **kwargs)
 
 
 def classify_fastq(md5sum, file_name, **kwargs):
     """Classify a FASTQ fixture, skipping when the corpus can no longer supply it."""
     require_corpus_file(md5sum, FASTQ_CONFIG.name)
-    return _classify_fastq(md5sum, file_name, **kwargs)
+    return ClassifyPipeline.classify_single(FASTQ_CONFIG, md5sum, file_name=file_name, **kwargs)
 
 
 def classify_fasta(md5sum, file_name, **kwargs):
     """Classify a FASTA fixture, skipping when the corpus can no longer supply it."""
     require_corpus_file(md5sum, FASTA_CONFIG.name)
-    return _classify_fasta(md5sum, file_name, **kwargs)
+    return ClassifyPipeline.classify_single(FASTA_CONFIG, md5sum, file_name=file_name, **kwargs)
 
 
 def get_val(record, field):
@@ -100,7 +95,7 @@ def assert_output_format(record):
 
 
 # =============================================================================
-# BAM/CRAM — end-to-end through classify_bam_files.classify_single_file
+# BAM/CRAM — end-to-end through ClassifyPipeline.classify_single
 # =============================================================================
 
 
@@ -219,7 +214,7 @@ class TestBamE2E:
 
 
 # =============================================================================
-# VCF — end-to-end through classify_vcf_files.classify_single_vcf
+# VCF — end-to-end through ClassifyPipeline.classify_single
 # =============================================================================
 
 
@@ -272,7 +267,7 @@ class TestVcfE2E:
 
 
 # =============================================================================
-# FASTQ — end-to-end through classify_fastq_files.classify_single_fastq
+# FASTQ — end-to-end through ClassifyPipeline.classify_single
 # =============================================================================
 
 
@@ -780,7 +775,7 @@ class TestGfaSegmentTagParsing:
 
 
 # =============================================================================
-# FASTA — end-to-end through classify_fasta_files.classify_single_fasta
+# FASTA — end-to-end through ClassifyPipeline.classify_single
 # =============================================================================
 
 

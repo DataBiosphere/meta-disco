@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-# The @pytest.mark.e2e eval tests classify by MD5 through the script functions,
-# which read real fetched headers from the evidence cache ClassifyPipeline writes
+# The @pytest.mark.e2e eval tests classify by MD5 through ClassifyPipeline,
+# which reads real fetched headers from the evidence cache ClassifyPipeline writes
 # under data/evidence/anvil/ (evidence_base default in pipeline.py; gitignored).
 # Without that cache a lookup misses and falls through to a live S3 + samtools
 # fetch of the real (hundreds-of-GB) files — unavailable in CI. We mirror the
