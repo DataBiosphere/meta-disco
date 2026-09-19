@@ -395,9 +395,14 @@ def propagate_to_index_files(
     #
     # The name half of the key is case-folded, so this agrees with `route`, which has
     # folded case since #449 (#455). Folding makes two names differing only by case
-    # identify neither file, which is #438's rule read case-insensitively. `str` first
-    # for the same reason `route` does it: the key is built from a catalog value that may
-    # have drifted off the contract, and a non-string one must bucket rather than raise.
+    # identify neither file, which is #438's rule read case-insensitively.
+    #
+    # `str` only because folding reads every record in the dataset, index file or not: an
+    # exact key took a drifted non-string name as-is, and `.lower()` would not, so one
+    # bystander could take the producer down. It does not make a drifted name safe to
+    # *classify* — a record this producer owns still raises below, as the three sibling
+    # filename producers do via `FileInfo.from_filename`, which is what lets
+    # `OutputRecord.from_record` promise no producer hands it a drifted `file_name`.
     files_by_folded_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -425,11 +430,7 @@ def propagate_to_index_files(
             index_ext = INDEX.claim(f)
             if index_ext is None:
                 continue
-            # Coerced like the folded key above, and for the same reason: `route` reaches
-            # this producer by `file_format` when the name claims nothing, so a record
-            # whose `file_name` drifted off the contract still arrives here and must be
-            # written as a declined row rather than raise on `.lower()` (#455).
-            name = str(f.get("file_name") or "")
+            name = f.get("file_name", "")
 
             stats[index_ext]["total"] += 1
 

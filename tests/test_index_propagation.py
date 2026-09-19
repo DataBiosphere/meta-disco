@@ -981,27 +981,41 @@ class TestMixedCaseNames:
         assert get_parent_candidates("SAMPLE.BAM.BAI", ".BAI") == ["SAMPLE.BAM"]
         assert get_parent_candidates("SAMPLE.BAI", ".BAI") == ["SAMPLE" + ext for ext in INDEX_TO_PARENT[".bai"]]
 
-    def test_a_drifted_non_string_file_name_buckets_rather_than_raising(self, tmp_path):
-        """Folding reads a catalog value, which may not be a string (#455).
+    def test_a_drifted_bystander_name_does_not_take_the_producer_down(self, tmp_path):
+        """Folding reads every record in the dataset, not only the index files (#455).
 
-        `unmatched_entry` already anticipates a drifted `file_name` — its docstring names
-        a `0` — so both places that fold one must coerce the way `route` does rather than
-        raise `AttributeError` and take the whole run down with it. Both are exercised
-        here: the drifted record is keyed into the folded name index as a *candidate
-        parent*, and, because `route` falls back to `file_format` when the name claims
-        nothing, a second drifted record is routed to this producer as an *index file*
-        and reaches `get_parent_candidates`.
+        An exact key took a drifted non-string `file_name` as-is and `.lower()` does not,
+        so without the coercion one bystander record anywhere in a dataset would raise
+        and lose the whole producer. It cannot become a parent either way: no candidate
+        probe equals `"12345"`.
+
+        This is only about a record this producer does *not* classify. A drifted name on
+        an index file still raises — see
+        `test_a_drifted_name_on_a_file_this_producer_owns_still_raises`.
         """
         output = run_index_producer(
             tmp_path,
             [
                 {**_file("placeholder", ".bam", "1" * 32, "e1"), "file_name": 12345},
-                {**_file("placeholder", ".bai", "2" * 32, "e2"), "file_name": 67890},
-                _file("sample.bam.bai", ".bai", "3" * 32, "e3"),
+                _file("sample.bam.bai", ".bai", "2" * 32, "e2"),
             ],
         )
-        # Neither drifted record is a parent for anything, and the run completes: the
-        # two index files are simply declined for having none. The drifted name is
-        # echoed as the string `coerce_identity` makes of it, not as `""`.
-        reasons = {e["file_name"]: e["reason"] for e in output["unmatched_files"]}
-        assert reasons == {"sample.bam.bai": NO_MATCHING_PARENT, "67890": NO_MATCHING_PARENT}
+        entry = output["unmatched_files"][0]
+        assert entry["file_name"] == "sample.bam.bai"
+        assert entry["reason"] == NO_MATCHING_PARENT
+
+    def test_a_drifted_name_on_a_file_this_producer_owns_still_raises(self, tmp_path):
+        """A drifted name on a file this producer classifies fails loudly, as elsewhere.
+
+        `route` falls back to `file_format` when the name claims nothing, so a record with
+        a drifted `file_name` and an index `file_format` is routed here. It raises, which
+        is what the three sibling filename producers do through `FileInfo.from_filename`,
+        and what lets `OutputRecord.from_record` promise that no producer hands it a
+        drifted `file_name` for a field typed `str`. Coercing here instead would write a
+        row whose `file_name` is an int, swallowing a drift that currently fails loudly.
+        """
+        with pytest.raises(AttributeError):
+            run_index_producer(
+                tmp_path,
+                [{**_file("placeholder", ".bai", "1" * 32, "e1"), "file_name": 67890}],
+            )
