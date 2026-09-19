@@ -120,13 +120,8 @@
       const sourceDesc = (DATA.source_descriptions || {})[sourceName] || '';
       let html = '';
 
-      // Source description with dataset listing
-      const datasets = results.datasets || [];
-      if (sourceDesc && datasets.length > 0) {
-        const totalFiles = datasets.reduce((s, d) => s + d.count, 0);
-        const sourceInfo = sourceDesc.replace(/\.$/, '');
-        html += `<p>${sourceInfo}'s open-access projects with <strong>${totalFiles.toLocaleString()}</strong> files across <strong>${datasets.length}</strong> datasets: ${datasets.map(d => escapeHtml(d.name) + ' (' + d.count.toLocaleString() + ')').join(', ')}</p>`;
-      } else if (sourceDesc) {
+      // Source description
+      if (sourceDesc) {
         html += `<p>${sourceDesc}</p>`;
       }
 

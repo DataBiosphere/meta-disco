@@ -33,10 +33,9 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import TypedDict
 
-from meta_disco.models import field_label
-from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.output_utils import find_latest_run
 from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
@@ -50,51 +49,8 @@ DIMENSION_LABELS = {
 }
 
 # =============================================================================
-# Load our classifications keyed by MD5 and filename
+# The shapes a comparison produces
 # =============================================================================
-
-
-def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
-    """Load classifications keyed by both md5 and filename.
-
-    Returns (by_md5, by_filename) dicts mapping to classification values.
-    """
-    by_md5 = {}
-    by_filename = {}
-
-    for fname in CLASSIFICATION_FILES:
-        path = run_dir / fname
-        if not path.is_file():
-            continue
-        with path.open() as f:
-            data = json.load(f)
-        for r in data.get("classifications", data.get("results", [])):
-            rec = {}
-            for field in DIMENSIONS:
-                rec[field] = field_label(r, field)
-            md5 = r.get("md5sum") or r.get("file_md5sum")
-            file_name = r.get("file_name", "")
-            if md5:
-                by_md5[md5] = rec
-            if file_name:
-                by_filename[file_name] = rec
-
-    return by_md5, by_filename
-
-
-# =============================================================================
-# Comparison logic
-# =============================================================================
-
-SENTINELS = {"not_classified", "not_applicable", None}
-
-# The outcome vocabulary, named once. `compare_field` returns one of these and
-# `_DimStats` counts one per name. The check runs one way only: an outcome named
-# here with no matching `_DimStats` key is an error where the counter is indexed,
-# while a key added to `_DimStats` and not named here is not. That index sits in
-# `compare_source`, which nothing calls, so nothing reachable enforces the
-# correspondence today.
-_Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_truth"]
 
 
 class _DiscrepancyCategory(TypedDict):
@@ -117,7 +73,7 @@ class _DiscrepancyCategory(TypedDict):
 
 
 class _DimStats(TypedDict):
-    """Per-dimension outcome counts. The first five keys are exactly `_Outcome`."""
+    """Per-dimension outcome counts: five named outcomes, then the discrepancies."""
 
     agree: int
     discrepancy: int
@@ -125,26 +81,6 @@ class _DimStats(TypedDict):
     not_classified: int
     no_truth: int
     discrepancy_categories: dict[str, _DiscrepancyCategory]
-
-
-class _NamedCount(TypedDict):
-    """A name and a file count, as the `datasets` listing renders them."""
-
-    name: str
-    count: int
-
-
-class _CatalogSummary(TypedDict):
-    """One catalog's file counts. Written by `load_hprc_results`, read by nothing.
-
-    `validation-dashboard-template.html` contains no reference to it and no Python
-    reads it back; it reaches the generated dashboard only inside the `json.dumps`
-    of the whole results dict. Same dead payload as `datasets`, from the other end.
-    """
-
-    name: str
-    total: int
-    matched: int
 
 
 class _ComparisonResultsBase(TypedDict):
@@ -158,126 +94,19 @@ class _ComparisonResultsBase(TypedDict):
 class _ComparisonResults(_ComparisonResultsBase, total=False):
     """What one ground-truth source's comparison produced.
 
-    Declared once for two builders and one renderer, though only one builder is
-    reachable today: `main` populates `all_results` from `load_hprc_results`
-    alone, and **`compare_source` has no caller anywhere in the repo**. The type
-    is what would hold them in agreement if it were wired back up.
+    One builder, `load_hprc_results`, and one renderer, `build_source_section`.
+    `metadata_coverage` is optional because that builder returns early — with
+    only the three required keys — when its input file is absent, not because a
+    second builder writes a different subset.
 
-    The optional half is what only `load_hprc_results` writes, though not for one
-    reason: `catalog_summary` comes from the per-catalog counts in the file it
-    reads, `catalog_dimensions` is a hard-coded literal, and `metadata_coverage`
-    is summed from `dimensions`, which `compare_source` could compute just as
-    well. Of the three, only `metadata_coverage` has a reader —
-    `build_source_section` guards on it before rendering.
-
-    `datasets` is declared because `build_source_section` reads it, but **no
-    builder in this file writes it**, so that branch never renders today. It is
-    declared rather than omitted so the type says what the renderer expects;
-    omitting it would hide a dead branch behind a shape that looks complete.
+    It is the only optional key left: #466 removed `datasets` (read, never
+    written) and `catalog_summary` / `catalog_dimensions` (written, never read)
+    together, so every key here now has both a writer and a reader.
 
     Two classes because `NotRequired` needs 3.11 and this targets 3.10.
     """
 
     metadata_coverage: dict[str, int]
-    catalog_summary: list[_CatalogSummary]
-    catalog_dimensions: dict[str, list[str]]
-    datasets: list[_NamedCount]
-
-
-def compare_field(inferred_value, truth_value) -> _Outcome:
-    """Compare a single field value against ground truth.
-
-    Returns one of: agree, discrepancy, we_inferred, not_classified, no_truth
-    """
-    has_truth = truth_value is not None and truth_value != ""
-    classified = inferred_value not in SENTINELS
-
-    if not has_truth:
-        if classified:
-            return "we_inferred"
-        return "no_truth"  # neither has a value, nothing to compare
-
-    # Ground truth exists
-    if not classified:
-        return "not_classified"  # we couldn't classify but truth exists
-
-    if inferred_value == truth_value:
-        return "agree"
-
-    return "discrepancy"
-
-
-def compare_source(
-    our_by_key: dict, truth_records: list[dict], key_field: str, field_mappings: dict[str, dict], dimensions: list[str]
-) -> _ComparisonResults:
-    """Compare our classifications against a ground truth source.
-
-    Args:
-        our_by_key: our classifications keyed by md5 or filename
-        truth_records: list of ground truth records
-        key_field: field in truth records to match against our keys
-        field_mappings: {our_dimension: {truth_field, value_map}}
-        dimensions: which dimensions to compare
-
-    Returns dict with per-dimension comparison stats and sample discrepancies.
-    """
-    results: _ComparisonResults = {
-        "matched": 0,
-        "unmatched": 0,
-        "dimensions": {},
-    }
-
-    for dim in dimensions:
-        results["dimensions"][dim] = {
-            "agree": 0,
-            "discrepancy": 0,
-            "we_inferred": 0,
-            "not_classified": 0,
-            "no_truth": 0,
-            "discrepancy_categories": {},  # (ours, truth_mapped) -> {count, example_key}
-        }
-
-    for truth_rec in truth_records:
-        key = truth_rec.get(key_field)
-        if not key:
-            continue
-
-        ours = our_by_key.get(key)
-        if not ours:
-            results["unmatched"] += 1
-            continue
-
-        results["matched"] += 1
-
-        for dim in dimensions:
-            mapping = field_mappings.get(dim)
-            if not mapping:
-                continue
-
-            truth_field = mapping["truth_field"]
-            value_map = mapping.get("value_map", {})
-
-            raw_truth = truth_rec.get(truth_field)
-            mapped_truth = value_map.get(raw_truth, raw_truth) if raw_truth else None
-
-            inferred_value = ours.get(dim)
-            outcome = compare_field(inferred_value, mapped_truth)
-
-            results["dimensions"][dim][outcome] += 1
-
-            if outcome == "discrepancy":
-                cat_key = f"{inferred_value} vs {mapped_truth}"
-                cats = results["dimensions"][dim]["discrepancy_categories"]
-                if cat_key not in cats:
-                    cats[cat_key] = {
-                        "ours": inferred_value,
-                        "truth_mapped": mapped_truth,
-                        "count": 0,
-                        "example": str(key),
-                    }
-                cats[cat_key]["count"] += 1
-
-    return results
 
 
 # =============================================================================
@@ -289,7 +118,7 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
     """Load pre-computed HPRC validation results and convert to report format.
 
     Reads from output/hprc/hprc_validation_results.json (produced by validate_against_hprc.py)
-    and converts to the same format used by compare_source().
+    and converts it to the report format.
     """
     if not hprc_results_path.is_file():
         return {"matched": 0, "unmatched": 0, "dimensions": {}}
@@ -349,28 +178,6 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
             "discrepancy_categories": {},
         }
 
-    # Build catalog summary for display
-    catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
-    by_catalog = data.get("by_catalog", {})
-    catalog_summary: list[_CatalogSummary] = []
-    for cat_name, cat_total in catalogs_loaded.items():
-        matched = by_catalog.get(cat_name, {}).get("matched", 0)
-        catalog_summary.append(
-            {
-                "name": cat_name,
-                "total": cat_total,
-                "matched": matched,
-            }
-        )
-
-    # Which dimensions each catalog provides
-    catalog_dimensions = {
-        "sequencing-data": ["platform", "data_modality", "assay_type"],
-        "alignments": ["reference_assembly"],
-        "annotations": ["reference_assembly"],
-        "assemblies": [],
-    }
-
     # Build metadata coverage from dimension stats
     # (match + mismatch + unknown = files where HPRC has ground truth)
     metadata_coverage: dict[str, int] = {}
@@ -382,8 +189,6 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
         "unmatched": 0,
         "dimensions": dimensions,
         "metadata_coverage": metadata_coverage,
-        "catalog_summary": catalog_summary,
-        "catalog_dimensions": catalog_dimensions,
     }
 
 
@@ -423,21 +228,7 @@ def build_source_section(name: str, results: _ComparisonResults) -> str:
     lines.append(f"## {name}")
     lines.append("")
 
-    # Show source description with dataset listing if available
-    datasets = results.get("datasets", [])
-    info = SOURCE_INFO.get(name)
-    if info and datasets:
-        total_files = sum(d["count"] for d in datasets)
-        lines.append(
-            f"Validated against file-level metadata from the "
-            f"[{info['link_label']}]({info['url']})'s open-access projects "
-            f"with **{total_files:,}** files across **{len(datasets)}** datasets:"
-        )
-        lines.append("")
-        for d in datasets:
-            lines.append(f"- {d['name']} ({d['count']:,} files)")
-        lines.append("")
-    elif info:
+    if SOURCE_INFO.get(name):
         lines.append(source_desc_md(name))
         lines.append("")
 
@@ -555,7 +346,7 @@ def generate_html_dashboard(all_results: dict, run_time: str, output_path: Path)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
-    parser.add_argument("--run-dir", type=Path, help="Classification run directory")
+    parser.add_argument("--run-dir", type=Path, help="Run directory, read for its name as the report timestamp")
     parser.add_argument(
         "--hprc-results",
         type=Path,
@@ -570,10 +361,9 @@ def main():
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from None
-    print(f"Loading classifications from: {run_dir}")
-
-    our_by_md5, _ = load_our_classifications(run_dir)
-    print(f"Loaded {len(our_by_md5):,} classifications by MD5")
+    # Only the directory *name* is read, for the run timestamp below — since #466
+    # deleted `load_our_classifications`, nothing in this script opens the run.
+    print(f"Run: {run_dir.name}")
 
     try:
         run_time = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")

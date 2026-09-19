@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Unified header classification for BAM, VCF, FASTQ, and FASTA files.
+"""Unified header classification for every type in FILE_TYPE_REGISTRY.
 
-Replaces the 4 separate classify_*_files.py scripts with a single entry point.
+Single entry point for header-based classification; #466 deleted the four
+per-type wrappers it replaced.
 
 Examples:
     python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam.json
