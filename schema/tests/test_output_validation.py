@@ -240,23 +240,30 @@ def test_output_records_validate_against_schema(validator):
 
 
 # What the whole-record gate above actually reaches depends on what the fixtures carry,
-# and they are regenerated from inputs. These two say what those inputs have to keep
+# and they are regenerated from inputs. These three say what those inputs have to keep
 # producing: without them a regeneration from published-value-free inputs would quietly
 # take `Published`, `PublishedVocabulary` and `DerivationEdge` back out of the gate —
 # the state #465 found and closed.
 
 
-def test_a_producers_published_block_reaches_the_gate():
-    """One fixture record carries both dimensions with an `in_vocabulary` map holding a
-    term and lacking one, and another carries the one-sided block.
+@pytest.mark.parametrize("path", [_GOLDEN, _STANDALONE], ids=["pipeline", "standalone"])
+def test_a_producers_published_block_reaches_the_gate(path):
+    """Each fixture carries a record publishing both dimensions, with an `in_vocabulary`
+    map holding a term and lacking one.
 
-    Both halves of the map on the *same* record, which is what #465 asks for: aggregated
-    over records, a fixture could satisfy each half separately and no producer would ever
-    have written the mixed map that every corpus record with values in both dimensions
-    takes. Satisfying it on one record supplies the separate halves by construction.
+    Per fixture, not pooled over both, because the two fixtures are the two construction
+    sites: ``OutputRecord.from_work_item`` off the pipeline's typed work item, and
+    ``from_record`` off a standalone producer's raw dict. Pooled, the golden's rows alone
+    satisfied this — measured by dropping the published values from the standalone inputs
+    and regenerating, which nulled all five of its blocks with the whole suite still
+    green, since the root deep-equal accepts a fixture that matches the run that made it.
+
+    Both halves of the map on one record, which is what #465 asks for: aggregated over
+    records a fixture could satisfy each half separately and no producer would ever have
+    written the mixed map. Satisfying it on one record supplies each half by construction.
     """
-    blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
-    assert blocks, f"no fixture record carries a published block; regenerate with `{_REGEN}`"
+    blocks = [record["published"] for _, record in _records_in(path) if record.get("published")]
+    assert blocks, f"no record in {path.name} carries a published block; regenerate with `{_REGEN}`"
 
     def vocabulary(block):
         return block.get("in_vocabulary", {}).values()
@@ -266,10 +273,20 @@ def test_a_producers_published_block_reaches_the_gate():
         and any(terms for terms in vocabulary(block))
         and any(not terms for terms in vocabulary(block))
         for block in blocks
-    ), "no one fixture record publishes both dimensions with a value this vocabulary has a term for and one it lacks"
-    # `field in block`, not `block.get(field) is None`: `build_published` emits every
-    # dimension key and spells "publishes nothing for this one" as an explicit null, so
-    # accepting an omitted key would let a block that had dropped one satisfy this.
+    ), f"no one record in {path.name} publishes both dimensions with a term this vocabulary has and one it lacks"
+
+
+def test_a_one_sided_published_block_reaches_the_gate():
+    """Some record publishes one dimension and explicitly nulls the other — the shape
+    almost every published record in the corpus takes.
+
+    Not per fixture: only the pipeline's inputs carry a one-sided record, and which
+    construction site built it does not change the shape. `field in block` rather than
+    `block.get(field) is None`, because `build_published` emits every dimension key and
+    spells "publishes nothing here" as an explicit null — accepting an omitted key would
+    let a block that had dropped one satisfy this.
+    """
+    blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
     assert any(any(block[field] is None for field in _PUBLISHED_FIELDS if field in block) for block in blocks), (
         "no fixture record carries a block naming one dimension and explicitly nulling the other"
     )
