@@ -798,6 +798,18 @@ class TestSpecialFileTypes:
         result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
 
+    @pytest.mark.parametrize("name", ["plot.png", "plot.jpg", "plot.jpeg", "slide.tif", "slide.tiff"])
+    def test_derived_image_spellings(self, engine, name):
+        """Every spelling `image_derived` lists reaches it, parse included.
+
+        The rule keys on the *parsed core*, so an extension missing from
+        `EXTENSION_MAP` never reaches a rule that names it, and one missing from the
+        rule parses to nothing classifiable (#451 added `.jpeg` to both). Asserting the
+        outcome catches either half regressing alone.
+        """
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.data_type == "images"
+
 
 class TestFastqFiles:
     """Test FASTQ file classification."""
