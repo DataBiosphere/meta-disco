@@ -231,9 +231,14 @@ INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file 
 # schema by `test_rule_vocabulary`, as `INDEX_DATA_TYPE` is.
 INDEX_RELATION = "index_of"
 
+# Written verbatim into a declined record's evidence, so it is read by someone deciding
+# what to do about the file. Both say "carries", matched case-insensitively (#455): two
+# files can be ambiguous here without carrying the same name literally, and a reason that
+# sent a reader looking for two identical names would misdescribe the cause — the defect
+# this producer's own `no_matching_parent_in_dataset` had before #455.
 DECLINED_REASON_TEXT = {
-    NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name",
-    AMBIGUOUS_PARENT: "more than one file in this dataset carries the parent name",
+    NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name, matched case-insensitively",
+    AMBIGUOUS_PARENT: "more than one file in this dataset carries that parent name, matched case-insensitively",
 }
 
 
