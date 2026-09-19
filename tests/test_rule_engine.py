@@ -2,7 +2,7 @@
 
 import pytest
 
-from meta_disco.file_name import FileName, Format
+from meta_disco.file_name import EXTENSION_MAP, FileName, Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -798,16 +798,23 @@ class TestSpecialFileTypes:
         result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
         assert result.data_modality == "imaging.histology"
 
-    @pytest.mark.parametrize("name", ["plot.png", "plot.jpg", "plot.jpeg", "slide.tif", "slide.tiff"])
-    def test_derived_image_spellings(self, engine, name):
-        """Every spelling `image_derived` lists reaches it, parse included.
+    @pytest.mark.parametrize(
+        "extension",
+        sorted(ext for ext, category in EXTENSION_MAP.items() if category in {"image", "histology_image"}),
+    )
+    def test_every_image_extension_classifies_as_an_image(self, engine, extension):
+        """Every extension the vocabulary calls an image is one some rule covers.
 
-        The rule keys on the *parsed core*, so an extension missing from
-        `EXTENSION_MAP` never reaches a rule that names it, and one missing from the
-        rule parses to nothing classifiable (#451 added `.jpeg` to both). Asserting the
-        outcome catches either half regressing alone.
+        Parametrized off `EXTENSION_MAP` rather than a written-out list, so an extension
+        added to those categories and to no rule fails here. The rule keys on the
+        *parsed core*, so the two halves regress independently: an extension missing
+        from `EXTENSION_MAP` never reaches a rule that names it, and one missing from
+        the rules parses to nothing classifiable — which is what `.jpeg` was until #451
+        added it to both. The existing rule-vocabulary check is a subset check (a rule
+        may not name an extension the parse cannot yield) and so cannot see this
+        direction.
         """
-        result = engine.classify_extended(FileInfo.from_filename(name))
+        result = engine.classify_extended(FileInfo.from_filename(f"plot{extension}"))
         assert result.data_type == "images"
 
 
