@@ -61,7 +61,9 @@ RECORD_KEYS = {
     "file_id",
     "drs_uri",
     # The repository's published values (#424). Present on every record, null on most —
-    # these fixtures declare nothing, so the golden pins it as null throughout.
+    # `valid_record` declares none, so a record built straight off it pins null. Two of
+    # the golden's inputs and the standalone producers' override that, so those fixtures
+    # pin the populated block for the schema gate (#465).
     "published",
     # The typed derivation edge (#450). Null on every producer but the index one, which
     # is the only one that resolves a parent; emitted rather than omitted so the
