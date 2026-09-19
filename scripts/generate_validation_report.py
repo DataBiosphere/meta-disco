@@ -102,8 +102,14 @@ class _DiscrepancyCategory(TypedDict):
 
     # `ours` and `truth_mapped` are whatever the two sources put in the field:
     # rendered through `str()`, never compared, so `object` is the honest width.
-    # `example` is narrower because both writers coerce it — `or ""` rather than
-    # a `get` default, which would pass a null through.
+    #
+    # `example` is narrower because of where it comes from, not because the two
+    # writers coerce it. `hprc_validation_results.json` has one producer,
+    # `validate_against_hprc.py`, which writes `file_name` off a run record —
+    # a string the input contract validates with `strict=True`, or `""` when the
+    # key is absent. The `or ""` guards the one case that producer can still
+    # emit as null; a non-string needs the generated file to be edited by hand,
+    # so it is not coerced for here.
     ours: object
     truth_mapped: object
     count: int
