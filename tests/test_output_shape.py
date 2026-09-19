@@ -95,19 +95,17 @@ REGEN = "python -m tests.test_output_shape"
 #
 # Two of the seven carry published values, so the `published` block the pipeline writes
 # reaches the schema gate as a record rather than as a dict typed by hand there (#465).
-# The other five publish nothing, keeping real `published: null` rows in the gate too —
-# the shape ~98% of the corpus takes.
+# The other five publish nothing, keeping real `published: null` rows in the gate too.
 
 # GRCh38 is a reference_assembly_enum term and GRCm39 is not, so one published list
 # yields both halves of `in_vocabulary`: a populated entry and, on the other dimension,
-# an empty one. `single-nucleus ATAC-seq` is AnVIL's spelling, which this vocabulary has
-# no word for — the state of every published value in the corpus today (#424).
+# an empty one.
 PUBLISHED_BOTH = {
     "data_modality": ["single-nucleus ATAC-seq"],
     "reference_assembly": ["GRCh38", "GRCm39"],
 }
-# The one-sided shape: 4,476 corpus records are assembly-only like this, and the
-# dimension the repository says nothing for is absent from `in_vocabulary` entirely.
+# The one-sided shape, where the dimension the repository says nothing for is absent
+# from `in_vocabulary` entirely rather than present and empty.
 PUBLISHED_ASSEMBLY_ONLY = {"reference_assembly": ["GRCh38 + Gencode40"]}
 
 
@@ -186,11 +184,11 @@ GOLDEN_INPUTS = {
 # The index producer's inputs. Its two record paths both have to reach the schema gate,
 # because `DerivationEdge` models them as one class: a required verb with nullable
 # grounding. `sample.rnaseq.bam` is the golden's own bam input, so the matched `.bai`
-# inherits from a row a real producer wrote rather than a hand-built stand-in — the
-# `inherited_evidence` shape is one of the two `make_claim` does not build (#413), which
-# makes it the likeliest to drift from the schema unnoticed. `orphan.bai` names a parent
-# the snapshot does not hold, so this producer declines it (#438) and writes the
-# ungrounded edge, whose `parent_file` and `parent_md5sum` are null.
+# inherits from a row a real producer wrote rather than a hand-built stand-in — and the
+# `inherited_evidence` it inherits through is built outside `make_claim` (#413), so no
+# constructor's invariants cover its shape. `orphan.bai` names a parent the snapshot does
+# not hold, so this producer declines it (#438) and writes the ungrounded edge, whose
+# `parent_file` and `parent_md5sum` are null.
 INDEX_INPUTS = [
     GOLDEN_INPUTS["bam"][0],
     _golden_record("1", file_name="sample.rnaseq.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
@@ -339,12 +337,10 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
     for i, param in enumerate(STANDALONE_PRODUCERS):
         producer, file_name, file_format = param.values
         # Positional rather than a hand-kept pool, so a producer added to
-        # STANDALONE_PRODUCERS gets a seed without a second list to extend. A seed is one
-        # hex digit because `_golden_record` repeats it 32 times, so both bounds are
-        # checked: length here, and collision against `SEEDS_TAKEN` below. Neither is
-        # decorative — two digits would build a 64-character `file_md5sum`, which is
-        # excluded at load as unusable (#376) rather than refused, so the producer would
-        # write no rows at all.
+        # STANDALONE_PRODUCERS gets a seed without a second list to extend. One hex digit,
+        # because `_golden_record` repeats it 32 times: two would build a 64-character
+        # `file_md5sum`, which is excluded at load as unusable (#376) rather than refused,
+        # and the producer would write no rows at all.
         seed = f"{i + 3:x}"
         assert len(seed) == 1, f"{len(STANDALONE_PRODUCERS)} standalone producers is more seeds than hex digits"
         # The param's id is the producer's registry name, which is the key this fixture
@@ -376,11 +372,11 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
     out["index"] = run_index_producer(
         index_work, INDEX_INPUTS, parent_classifications=pipeline_output["bam"]["classifications"]
     )
-    # `build_output` asserts the same thing for the same reason. A producer that wrote no
+    # `build_output` asserts the same thing for the same reason: a producer that wrote no
     # rows would regenerate as an empty `classifications` list and reach no schema
-    # validation at all — the hole #465 closes — while every test stayed green, since the
-    # coverage test compares only the fixture's keys and a deep-equal against an
-    # empty-regenerated fixture holds. Two index rows, one per record path (#438).
+    # validation, with every test still green — the coverage test compares only keys, and
+    # the deep-equal holds against the empty fixture it just wrote. Two index rows, one
+    # per record path (#438).
     expected_rows = dict.fromkeys(out, 1) | {"index": 2}
     for name, envelope in out.items():
         assert len(envelope["classifications"]) == expected_rows[name], (

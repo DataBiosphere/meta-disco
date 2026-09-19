@@ -13,12 +13,9 @@ dimension's enum.
 ones, which until #465 reached no schema validation at all. Between them they also put
 the two blocks only some producers emit in front of the schema as records a producer
 wrote: ``published`` (#424) and ``derived_from`` (#450), whose classes were otherwise
-exercised only by dicts typed by hand below. The root suite pins that the two fixtures'
-producer keys together equal ``producers.PRODUCERS``
-(``test_the_schema_gate_covers_every_producer``) and that each is fresh
-(``test_output_matches_golden``, ``test_standalone_output_matches_fixture``) — this gate
-reads committed files, so a stale one would validate cleanly while the producers had
-moved on.
+exercised only by dicts typed by hand below. The root suite owns what this side cannot
+check: that the two fixtures' producer keys together equal ``producers.PRODUCERS``, and
+that each fixture is what a fresh run produces.
 
 Two levels of validation:
 
@@ -80,15 +77,14 @@ DIMENSION_CLASS = _dimension_classes()
 def _published_fields() -> list:
     """The dimensions a ``Published`` block speaks to, off the schema's own attributes.
 
-    The root component's ``records.PUBLISHED_FIELDS`` is the authority, but this project
-    is a separate uv env that cannot import it — so read the schema, which has to agree
-    with that tuple anyway, rather than spelling the two dimensions a third time.
+    ``records.PUBLISHED_FIELDS`` is the authority, but this project cannot import it — so
+    read the schema, which has to agree with that tuple, rather than spell the dimensions
+    a third time.
 
-    Read off ``PublishedVocabulary``, whose attributes *are* the dimensions (its own
-    description says so), rather than off ``Published`` minus the names that are not
-    dimensions: a future non-dimension attribute on ``Published`` would slip into that
-    list, and the one-sided-block check below would then be vacuously true for every
-    block — a guard that stops guarding without failing.
+    Off ``PublishedVocabulary``, whose attributes *are* the dimensions, and not off
+    ``Published`` minus the names that are not: a future non-dimension attribute would
+    slip into that list and make the one-sided-block check below vacuously true — a guard
+    that stops guarding without failing.
     """
     schema = yaml.safe_load(_SCHEMA.read_text(encoding="utf-8"))
     return list(schema["classes"]["PublishedVocabulary"]["attributes"])
@@ -146,13 +142,12 @@ def _records_in(path: Path):
         assert "classifications" in payload, f"{producer}: {path.name} payload missing 'classifications'"
         records = payload["classifications"]
         assert isinstance(records, list), f"{producer}: 'classifications' is not a list"
-        # A producer keyed here with no records is a producer this gate does not validate,
-        # which is the hole #465 closes — and nothing else in *this* suite notices: the
-        # entry and record gates' `checked > 0` is satisfied by the other ten. The root
-        # suite does notice, twice (the key union, and the deep-equal against a fresh
-        # run), so such a fixture cannot reach `main` past CI, which runs `make
-        # test-all`. This assert is what holds when the gate runs alone, under `make
-        # test-schema` — the suite that reads committed files and so must not trust them.
+        # A producer keyed here with no records is a producer this gate does not validate
+        # — the hole #465 closes — and nothing else in *this* suite notices: the entry and
+        # record gates' `checked > 0` is satisfied by the other ten. The root suite
+        # notices twice (the key union, and the deep-equal against a fresh run), so such a
+        # fixture cannot reach `main` past CI. This is what holds when the gate runs alone
+        # under `make test-schema`, reading committed files it must not trust.
         assert records, f"{producer}: {path.name} carries no records, so nothing of it is validated"
         for i, record in enumerate(records):
             assert isinstance(record, dict), f"{producer}[{i}]: record is not a mapping"
@@ -219,7 +214,7 @@ def test_a_derivation_edge_without_a_verb_is_refused(validator):
     edge = {"parent_md5sum": None, "parent_file": None, "parent_kind": None}
     report = validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord")
     # Assert it fails *because of* the missing verb, as this file's other negative cases
-    # do. The base record is a real fixture row and now carries a `published` block, so a
+    # do. The base record is a real fixture row carrying a `published` block, so a
     # regression there would invalidate the record itself and leave a bare
     # `assert report.results` green while saying nothing about `relation`.
     assert any("relation" in result.message for result in report.results), (
@@ -252,10 +247,10 @@ def test_output_records_validate_against_schema(validator):
 
 
 def test_a_producers_published_block_reaches_the_gate():
-    """Some fixture record carries a populated `published`, and between them the
-    fixtures cover both `in_vocabulary` halves — a dimension whose published value is a
-    term of this vocabulary, and one whose is not — and the one-sided block, which is
-    the shape all but 220 of the corpus's published records take."""
+    """Some fixture record carries a populated `published`, and between them the fixtures
+    cover both `in_vocabulary` halves — a dimension whose published value is a term of
+    this vocabulary, and one whose is not — and the one-sided block, which is the shape
+    almost every published record in the corpus takes."""
     blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
     assert blocks, f"no fixture record carries a published block; regenerate with `{_REGEN}`"
     vocabularies = [block.get("in_vocabulary", {}) for block in blocks]
