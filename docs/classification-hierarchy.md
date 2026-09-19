@@ -209,7 +209,7 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 | .pgen/.pvar/.psam | genotypes | genomic | PLINK files |
 | .idat | array_signal | epigenomic.methylation | Illumina methylation arrays |
 | .svs | images | imaging.histology | Whole-slide histology |
-| .png/.jpg/.tiff | images | not_applicable | Derived plots/QC |
+| .png/.jpg/.jpeg/.tiff/.tif | images | not_applicable | Derived plots/QC |
 | .bai/.crai/.tbi/.csi/.pbi/.fai/.idx | index | _(inherited from parent)_ | Index files — `data_type` is the file's own kind, the rest describe the data it points into (#437) |
 | .md5 | checksum | not_applicable | Checksums |
 | .log | log | not_applicable | Log files |

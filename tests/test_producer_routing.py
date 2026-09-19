@@ -10,7 +10,14 @@ overlapping extensions.
 
 import pytest
 
-from meta_disco.producers import PRODUCERS, Producer, producer_of, validate_registry
+from meta_disco.file_name import EXTENSION_MAP
+from meta_disco.producers import (
+    PRODUCERS,
+    Producer,
+    _extensions_in,
+    producer_of,
+    validate_registry,
+)
 from tests.metadata_fixtures import valid_record
 from tests.producer_sweep import classify_auxiliary_genomic, run_producer
 
@@ -152,3 +159,35 @@ class TestTheRegistryRefusesAnOverlap:
         `validate_registry` over it, so an overlap would have failed collection.
         """
         assert {".vcf.gz", ".g.vcf.gz"} <= set(PRODUCERS["vcf"].extensions)
+
+
+class TestAClaimThatIsACategoryComesFromTheCategory:
+    """The images and auxiliary producers take their extensions from `EXTENSION_MAP`
+    rather than re-listing them, so the drift that cost #451 — images claiming `.tiff`
+    but not `.tif`, leaving a `.tif` claimed by no producer — is not constructible for
+    them. The index producer still declares its own, off `INDEX_TO_PARENT`, so it is the
+    one claim that can still drift from the vocabulary; this pins it.
+    """
+
+    def test_a_renamed_category_is_refused_rather_than_claiming_nothing(self):
+        """Deriving turns a rename into an empty claim, which would silently send a
+        producer's whole population to the catch-all. `_extensions_in` refuses it."""
+        with pytest.raises(ValueError, match="renamed category"):
+            _extensions_in("image", "histology_imagery")
+
+    def test_the_index_producer_claims_the_index_category(self):
+        """`INDEX_TO_PARENT`'s keys and the `index` category are the same extensions by
+        two routes. An index extension added to one and not the other is a file claimed
+        by no producer, or a parent this producer cannot look up."""
+        expected = {ext for ext, category in EXTENSION_MAP.items() if category == "index"}
+        assert set(PRODUCERS["index"].extensions) == expected
+
+    @pytest.mark.parametrize(
+        "file_name, file_format",
+        [("slide.tif", ".tif"), ("plot.jpeg", ".jpeg")],
+        ids=["tif", "jpeg"],
+    )
+    def test_the_spellings_the_drift_left_homeless_are_claimed(self, file_name, file_format):
+        """End to end for the two #451 added: both route to the images producer rather
+        than falling through to the catch-all."""
+        assert producer_of(valid_record(file_name=file_name, file_format=file_format)) is PRODUCERS["images"]
