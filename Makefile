@@ -1,4 +1,4 @@
-.PHONY: test test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"

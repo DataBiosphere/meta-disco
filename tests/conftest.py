@@ -28,7 +28,13 @@ def pytest_collection_modifyitems(config, items):
 
     The `-m` check matches marker *names*, not a substring of the expression, so
     a future marker whose name contains this one (`network_slow`) cannot switch
-    the gate off by accident.
+    the gate off by accident. A `not` anywhere in the expression closes the gate
+    too: `-m "not network"` mentions the marker while asking to exclude it, and
+    pytest's own deselection is then what keeps those tests out — the gate should
+    not be the thing relying on that. The bias is deliberate and one-directional:
+    an expression this cannot read as a clear opt-in skips, because the cost of
+    skipping is a check not run, and the cost of the opposite is an unasked-for
+    call to someone else's API.
     """
     if not _EVIDENCE_CACHE.is_dir():
         skip_e2e = pytest.mark.skip(
@@ -38,7 +44,8 @@ def pytest_collection_modifyitems(config, items):
             if "e2e" in item.keywords:
                 item.add_marker(skip_e2e)
 
-    if "network" not in re.findall(r"[A-Za-z_]\w*", config.getoption("-m") or ""):
+    selectors = re.findall(r"[A-Za-z_]\w*", config.getoption("-m") or "")
+    if "network" not in selectors or "not" in selectors:
         skip_network = pytest.mark.skip(reason="network tests are opt-in; select them with -m network")
         for item in items:
             if "network" in item.keywords:

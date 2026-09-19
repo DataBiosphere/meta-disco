@@ -100,9 +100,16 @@ def test_ensembl_covers_enough_of_our_table_to_be_a_real_check(build):
 
     If Ensembl changed its payload shape, or the names stopped matching, the
     mismatch set would be empty for the wrong reason and the check would report
-    success while comparing nothing. All 24 primary chromosomes must match by
-    name — the whole comparable set, not a floor beneath a larger one.
+    success while comparing nothing.
+
+    Every bare-named contig we hold must be one Ensembl also publishes — not a
+    floor, the whole set. A count would drift quietly: add ``MT`` to the table
+    and a `>= 24` guard still passes while one contig silently stops being
+    checked. This is where an upstream omission is meant to bite, which is why
+    the test above tolerates one: that test is about conflicting values, this one
+    about coverage not eroding.
     """
     upstream = _ensembl_top_level(ENSEMBL_HOSTS[build])
-    compared = [c for c in REFERENCE_CONTIG_LENGTHS[build] if not c.startswith("chr") and c in upstream]
-    assert len(compared) >= 24, f"only {len(compared)} {build} contigs matched Ensembl by name: {sorted(compared)}"
+    comparable = [c for c in REFERENCE_CONTIG_LENGTHS[build] if not c.startswith("chr")]
+    missing = sorted(set(comparable) - set(upstream))
+    assert not missing, f"{build}: Ensembl no longer publishes {missing}, so those contigs are unchecked"

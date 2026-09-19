@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified header classification for BAM, VCF, FASTQ, and FASTA files.
+"""Unified header classification for every type in FILE_TYPE_REGISTRY.
 
 Single entry point for header-based classification; #466 deleted the four
 per-type wrappers it replaced.
