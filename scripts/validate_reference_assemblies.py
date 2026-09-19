@@ -14,7 +14,6 @@ Output saved to: output/anvil/reference_validation_results.json
 import argparse
 import json
 from pathlib import Path
-from typing import Literal, TypedDict
 
 import requests
 
@@ -56,45 +55,13 @@ def fetch_grch37_assembly() -> dict | None:
         return None
 
 
-class _MismatchBase(TypedDict):
-    contig: str
-    ours: int
-
-
-class _Mismatch(_MismatchBase, total=False):
-    """One contig whose length disagrees with the source it was checked against.
-
-    The two optional keys are that source: `ensembl` for the builds checked
-    against the Ensembl REST API, `expected` for CHM13. Note what the CHM13
-    branch actually compares against — `chm13_v2`, a hand-copy of our own
-    `REFERENCE_CONTIG_LENGTHS["CHM13"]`, not an external source. The consortium
-    numbers sit in `_chm13_official`, which nothing reads, and whose own comment
-    records that one of them already disagrees with ours. So `expected` is
-    written by a check that cannot currently fail.
-
-    Declaring both optional records that the two branches write different keys —
-    a reader of the JSON has to handle either.
-
-    Two classes because `NotRequired` needs 3.11 and this targets 3.10.
-    """
-
-    ensembl: int
-    expected: int
-
-
-class _BuildValidation(TypedDict):
-    status: Literal["pending", "valid", "mismatch", "api_error"]
-    matches: int
-    mismatches: list[_Mismatch]
-
-
-def validate_internal_mappings() -> dict[str, _BuildValidation]:
+def validate_internal_mappings() -> dict:
     """Validate our internal chromosome length mappings against Ensembl."""
     print("=" * 60)
     print("VALIDATING INTERNAL REFERENCE MAPPINGS")
     print("=" * 60)
 
-    results: dict[str, _BuildValidation] = {
+    results = {
         "GRCh38": {"status": "pending", "matches": 0, "mismatches": []},
         "GRCh37": {"status": "pending", "matches": 0, "mismatches": []},
         "CHM13": {"status": "pending", "matches": 0, "mismatches": []},
@@ -211,19 +178,13 @@ def validate_internal_mappings() -> dict[str, _BuildValidation]:
     return results
 
 
-class _FormatStats(TypedDict):
-    total: int
-    with_ref: int
-    by_assembly: dict[str, int]
-
-
-def validate_classified_files(sample_size: int = 0) -> dict[str, _FormatStats]:
+def validate_classified_files(sample_size: int = 0) -> dict:
     """Validate a sample of classified files."""
     print("\n" + "=" * 60)
     print("VALIDATING CLASSIFIED FILES")
     print("=" * 60)
 
-    results: dict[str, _FormatStats] = {
+    results = {
         "vcf": {"total": 0, "with_ref": 0, "by_assembly": {}},
         "bam": {"total": 0, "with_ref": 0, "by_assembly": {}},
     }

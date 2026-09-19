@@ -6,7 +6,6 @@ import csv
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
 
 # Add project root to path for imports
 from meta_disco import FileInfo, RuleEngine
@@ -74,30 +73,10 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
     return results
 
 
-class _Stats(TypedDict):
-    """The run summary: counters, and three breakdowns keyed by value.
-
-    The counters and the breakdowns are what a bare dict literal cannot keep
-    apart — inferred together they widen to `int | dict`, and `+= 1` on one is
-    then indistinguishable from `+= 1` on the other.
-    """
-
-    total_files: int
-    classified_with_modality: int
-    classified_with_reference: int
-    modality_breakdown: dict[str, int]
-    reference_breakdown: dict[str, int]
-    file_format_breakdown: dict[str, int]
-    api_had_modality: int
-    api_had_reference: int
-    filled_missing_modality: int
-    filled_missing_reference: int
-
-
-def compute_stats(results: list[dict]) -> _Stats:
+def compute_stats(results: list[dict]) -> dict:
     """Compute classification statistics."""
     total = len(results)
-    stats: _Stats = {
+    stats = {
         "total_files": total,
         "classified_with_modality": 0,
         "classified_with_reference": 0,
@@ -142,7 +121,7 @@ def compute_stats(results: list[dict]) -> _Stats:
     return stats
 
 
-def save_results(results: list[dict], stats: _Stats, output_dir: Path):
+def save_results(results: list[dict], stats: dict, output_dir: Path):
     """Save classification results and stats."""
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

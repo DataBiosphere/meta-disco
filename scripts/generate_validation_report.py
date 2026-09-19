@@ -89,8 +89,11 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
 SENTINELS = {"not_classified", "not_applicable", None}
 
 # The outcome vocabulary, named once. `compare_field` returns one of these and
-# `_DimStats` counts one per name, so the two cannot drift apart silently:
-# an outcome this does not list stops being a legal key of the counter.
+# `_DimStats` counts one per name. The check runs one way only: an outcome named
+# here with no matching `_DimStats` key is an error where the counter is indexed,
+# while a key added to `_DimStats` and not named here is not. That index sits in
+# `compare_source`, which nothing calls, so nothing reachable enforces the
+# correspondence today.
 _Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_truth"]
 
 
@@ -126,7 +129,12 @@ class _NamedCount(TypedDict):
 
 
 class _CatalogSummary(TypedDict):
-    """One catalog's file counts, for the dashboard's per-catalog table."""
+    """One catalog's file counts. Written by `load_hprc_results`, read by nothing.
+
+    `validation-dashboard-template.html` contains no reference to it and no Python
+    reads it back; it reaches the generated dashboard only inside the `json.dumps`
+    of the whole results dict. Same dead payload as `datasets`, from the other end.
+    """
 
     name: str
     total: int
@@ -149,11 +157,12 @@ class _ComparisonResults(_ComparisonResultsBase, total=False):
     alone, and **`compare_source` has no caller anywhere in the repo**. The type
     is what would hold them in agreement if it were wired back up.
 
-    The optional half is what only `load_hprc_results` can know, because only
-    it reads a per-catalog file: `build_source_section` guards on
-    `metadata_coverage` before rendering it, and `catalog_summary` /
-    `catalog_dimensions` reach the dashboard template through `json.dumps` of
-    the whole results dict.
+    The optional half is what only `load_hprc_results` writes, though not for one
+    reason: `catalog_summary` comes from the per-catalog counts in the file it
+    reads, `catalog_dimensions` is a hard-coded literal, and `metadata_coverage`
+    is summed from `dimensions`, which `compare_source` could compute just as
+    well. Of the three, only `metadata_coverage` has a reader —
+    `build_source_section` guards on it before rendering.
 
     `datasets` is declared because `build_source_section` reads it, but **no
     builder in this file writes it**, so that branch never renders today. It is

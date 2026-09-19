@@ -4,7 +4,6 @@
 import json
 from collections import Counter
 from pathlib import Path
-from typing import TypedDict
 
 # matplotlib/numpy are required at runtime by this standalone report script but
 # are not declared (base) dependencies — it is the repo's only user of them and
@@ -22,24 +21,8 @@ from meta_disco.models import field_value as _val
 # FILE FORMAT CATEGORY RULES
 # =============================================================================
 
-
-class _FormatRuleBase(TypedDict):
-    extensions: list[str]
-    category: str
-
-
-class _FormatRule(_FormatRuleBase, total=False):
-    """One extension -> category rule, with an optional filename qualifier.
-
-    Two classes because `NotRequired` needs 3.11 and this targets 3.10
-    (`requires-python`, `[tool.pyright].pythonVersion`).
-    """
-
-    name_contains: str
-
-
 # Extension -> category mapping (first match wins for extension lookups)
-FORMAT_CATEGORY_RULES: list[_FormatRule] = [
+FORMAT_CATEGORY_RULES = [
     # Index files
     {"extensions": [".bai", ".tbi", ".csi", ".crai", ".pbi"], "category": "Index"},
     # Alignment files

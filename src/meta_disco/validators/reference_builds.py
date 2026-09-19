@@ -115,7 +115,6 @@ from collections.abc import Mapping
 from dataclasses import asdict, astuple, dataclass, fields
 from itertools import pairwise
 from pathlib import PurePosixPath
-from typing import TypedDict
 
 # The key contigs and the row layout live beside ``ReferenceBuild`` in the
 # loader, which validates ``absent`` against them at load (#351).
@@ -416,25 +415,6 @@ def _signature_for(signatures: list[ContigSignature], contig: str) -> ContigSign
     return next((sig for sig in signatures if sig.bare_name == contig), None)
 
 
-class _Observed(TypedDict):
-    """What was read off one file for the key contigs.
-
-    The keys are ``ReferenceBuild`` field names, because :func:`_consistent`
-    looks each one up — ``FIELD_CONTIG[field]`` first, then ``getattr``. Nothing
-    in the type system checks them against that dataclass; a key that is not a
-    build field raises ``KeyError`` at match time exactly as it did before. What
-    this does check is narrower and still worth having: the literal below cannot
-    drift from this list. ``test_observed_matches_the_signature_fields`` pins the
-    list itself to ``rule_loader.SIGNATURE_FIELDS``, which is where the set is
-    declared and which ``FIELD_CONTIG`` is derived from.
-    """
-
-    chr1_length: int | None
-    chr1_m5: str | None
-    chry_length: int | None
-    chry_m5: str | None
-
-
 def _consistent(build: ReferenceBuild, field: str, value: object) -> bool:
     """Whether one observation is consistent with one build.
 
@@ -507,7 +487,7 @@ def resolve_identity(signatures: list[ContigSignature], declared: DeclaredRefere
     """
     chr1 = _signature_for(signatures, KEY_CONTIGS[0])
     chry = _signature_for(signatures, KEY_CONTIGS[1])
-    observed: _Observed = {
+    observed = {
         "chr1_length": chr1.length if chr1 else None,
         "chr1_m5": chr1.md5 if chr1 else None,
         "chry_length": chry.length if chry else None,
