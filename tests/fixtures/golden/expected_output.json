@@ -76,7 +76,22 @@
         "file_name": "sample.rnaseq.bam",
         "file_size": 12345678,
         "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "published": null
+        "published": {
+          "data_modality": [
+            "single-nucleus ATAC-seq"
+          ],
+          "in_vocabulary": {
+            "data_modality": [],
+            "reference_assembly": [
+              "GRCh38"
+            ]
+          },
+          "reference_assembly": [
+            "GRCh38",
+            "GRCm39"
+          ],
+          "source": "anvil/anvil15"
+        }
       }
     ],
     "metadata": {
@@ -690,7 +705,16 @@
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
         "md5sum": "cccccccccccccccccccccccccccccccc",
-        "published": null
+        "published": {
+          "data_modality": null,
+          "in_vocabulary": {
+            "reference_assembly": []
+          },
+          "reference_assembly": [
+            "GRCh38 + Gencode40"
+          ],
+          "source": "anvil/anvil15"
+        }
       }
     ],
     "metadata": {

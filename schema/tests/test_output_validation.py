@@ -1,12 +1,24 @@
-"""Hard gate: real pipeline output conforms to the status-required schema.
+"""Hard gate: real producer output conforms to the status-required schema.
 
 Epic #116 Stage 4a (#122). Stage 0's golden guardrail checked output *shape* and
 values-in-vocabulary but deferred full schema validation to here. This validates
-each per-field classification entry from the golden output against its
+each per-field classification entry from the committed output fixtures against its
 ``Classification`` subclass in ``classification.yaml`` — enforcing the Stage 3
 contract at the schema level: ``status`` is required and drawn from
 ``classification_status_enum``, and ``value`` is either null or a member of that
 dimension's enum.
+
+**Two fixtures, all eleven producers** (#465). The golden carries the seven
+``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
+ones, which until #465 reached no schema validation at all. Between them they also put
+the two blocks only some producers emit in front of the schema as records a producer
+wrote: ``published`` (#424) and ``derived_from`` (#450), whose classes were otherwise
+exercised only by dicts typed by hand below. The root suite pins that the two fixtures'
+producer keys together equal ``producers.PRODUCERS``
+(``test_the_schema_gate_covers_every_producer``) and that each is fresh
+(``test_output_matches_golden``, ``test_standalone_output_matches_fixture``) — this gate
+reads committed files, so a stale one would validate cleanly while the producers had
+moved on.
 
 Two levels of validation:
 
@@ -37,12 +49,15 @@ from linkml.validator.plugins.jsonschema_validation_plugin import JsonschemaVali
 from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidationPlugin
 
 # schema/tests/ -> schema/ -> repo root. This gate deliberately validates the
-# root component's golden output (the real classifier shape), so it reads across
-# the component boundary — it expects a repo checkout, not a standalone install of
-# the schema package. test_golden_present fails loudly if the golden is missing.
+# root component's committed output fixtures (the real classifier shape), so it reads
+# across the component boundary — it expects a repo checkout, not a standalone install
+# of the schema package. `test_golden_present` and `test_standalone_fixture_present`
+# fail loudly if either is missing.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
+_STANDALONE = _REPO_ROOT / "tests/fixtures/golden/standalone_output.json"
+_REGEN = "python -m tests.test_output_shape"
 
 
 def _dimension_classes() -> dict:
@@ -98,28 +113,39 @@ def envelope_validator():
     )
 
 
-def _golden_records():
-    """Yield (label, record) for every classification record in the golden.
+def _records_in(path: Path):
+    """Yield (label, record) for every classification record in one output fixture.
 
-    Guard here (not just in test_golden_present) so a missing fixture fails with a
+    Guard here (not just in the presence tests) so a missing fixture fails with a
     clear message regardless of test order, never a bare FileNotFoundError. Assert
     the nested shape too, so a producer/fixture drift fails legibly rather than a
     bare KeyError.
     """
-    assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
-    data = json.loads(_GOLDEN.read_text(encoding="utf-8"))
-    for ftype, payload in data.items():
-        assert "classifications" in payload, f"{ftype}: golden payload missing 'classifications'"
+    assert path.exists(), f"output fixture not found at {path}; regenerate with `{_REGEN}`"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for producer, payload in data.items():
+        assert "classifications" in payload, f"{producer}: {path.name} payload missing 'classifications'"
         records = payload["classifications"]
-        assert isinstance(records, list), f"{ftype}: 'classifications' is not a list"
+        assert isinstance(records, list), f"{producer}: 'classifications' is not a list"
         for i, record in enumerate(records):
-            assert isinstance(record, dict), f"{ftype}[{i}]: record is not a mapping"
-            yield f"{ftype}[{i}]", record
+            assert isinstance(record, dict), f"{producer}[{i}]: record is not a mapping"
+            yield f"{producer}[{i}]", record
 
 
-def _golden_entries():
-    """Yield (label, dimension, entry) for every dimension entry in the golden."""
-    for label, record in _golden_records():
+def _golden_records():
+    """Yield (label, record) for every record the pipeline's seven producers wrote."""
+    yield from _records_in(_GOLDEN)
+
+
+def _fixture_records():
+    """Yield (label, record) for every record in both fixtures — all eleven producers."""
+    yield from _records_in(_GOLDEN)
+    yield from _records_in(_STANDALONE)
+
+
+def _fixture_entries():
+    """Yield (label, dimension, entry) for every dimension entry in both fixtures."""
+    for label, record in _fixture_records():
         classifications = record.get("classifications")
         assert isinstance(classifications, dict), f"{label}: record missing a 'classifications' dict"
         for dim in DIMENSION_CLASS:
@@ -131,25 +157,30 @@ def test_golden_present():
     assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
 
 
+def test_standalone_fixture_present():
+    assert _STANDALONE.exists(), f"standalone fixture not found at {_STANDALONE}; regenerate with `{_REGEN}`"
+
+
 def test_output_entries_validate_against_schema(validator):
     failures = []
     checked = 0
-    for label, dim, entry in _golden_entries():
+    for label, dim, entry in _fixture_entries():
         checked += 1
         report = validator.validate(entry, target_class=DIMENSION_CLASS[dim])
         for result in report.results:
             failures.append(f"{label}: {result.severity}: {result.message}")
 
-    assert checked > 0, "no golden entries were validated"
-    assert not failures, "Pipeline output violates the classification schema:\n  " + "\n  ".join(failures)
+    assert checked > 0, "no fixture entries were validated"
+    assert not failures, "Producer output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
 def test_a_populated_derivation_edge_validates(validator):
-    """The golden is `ClassifyPipeline`'s output, where `derived_from` is null on every
-    record, so nothing else puts a populated edge in front of the schema (#450).
-
-    Both shapes the index producer emits: grounded, and ungrounded where it took no
+    """Both shapes the index producer emits: grounded, and ungrounded where it took no
     parent (#438) — the case `parent_md5sum`'s own schema description anticipates.
+
+    The standalone fixture now carries both off the producer itself (#465). This case
+    stays because it is written out: it says which members make an edge, where reading
+    that off the fixture means reading a record the producer happened to write.
     """
     _, record = next(_golden_records())
     grounded = {"relation": "index_of", "parent_md5sum": "b" * 32, "parent_file": "s.bam", "parent_kind": "alignment"}
@@ -172,18 +203,55 @@ def test_a_derivation_edge_without_a_verb_is_refused(validator):
 
 
 def test_output_records_validate_against_schema(validator):
-    # Whole-record gate (#134): each golden record validates against
-    # ClassificationRecord, exercising the `classifications` container end to end.
+    # Whole-record gate (#134): every record from both fixtures — all eleven producers
+    # (#465) — validates against ClassificationRecord, exercising the `classifications`
+    # container end to end, and with it the `published` and `derived_from` blocks those
+    # records carry.
     failures = []
     checked = 0
-    for label, record in _golden_records():
+    for label, record in _fixture_records():
         checked += 1
         report = validator.validate(record, target_class="ClassificationRecord")
         for result in report.results:
             failures.append(f"{label}: {result.severity}: {result.message}")
 
-    assert checked > 0, "no golden records were validated"
-    assert not failures, "Pipeline output violates the record schema:\n  " + "\n  ".join(failures)
+    assert checked > 0, "no fixture records were validated"
+    assert not failures, "Producer output violates the record schema:\n  " + "\n  ".join(failures)
+
+
+# What the whole-record gate above actually reaches depends on what the fixtures carry,
+# and they are regenerated from inputs. These two say what those inputs have to keep
+# producing: without them a regeneration from published-value-free inputs would quietly
+# take `Published`, `PublishedVocabulary` and `DerivationEdge` back out of the gate —
+# the state #465 found and closed.
+
+
+def test_a_producers_published_block_reaches_the_gate():
+    """Some fixture record carries a populated `published`, and between them the
+    fixtures cover both `in_vocabulary` halves: a dimension whose published value is a
+    term of this vocabulary, and one whose is not."""
+    blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
+    assert blocks, f"no fixture record carries a published block; regenerate with `{_REGEN}`"
+    vocabularies = [block.get("in_vocabulary", {}) for block in blocks]
+    assert any(terms for vocab in vocabularies for terms in vocab.values()), (
+        "no fixture record publishes a value this vocabulary has a term for"
+    )
+    assert any(not terms for vocab in vocabularies for terms in vocab.values()), (
+        "no fixture record publishes a value this vocabulary lacks a term for"
+    )
+
+
+def test_a_producers_derivation_edge_reaches_the_gate():
+    """Some fixture record carries each `derived_from` shape: grounded, and the
+    ungrounded one whose parent members are null (#438)."""
+    edges = [record["derived_from"] for _, record in _fixture_records() if record.get("derived_from")]
+    assert edges, f"no fixture record carries a derivation edge; regenerate with `{_REGEN}`"
+    assert any(edge.get("parent_md5sum") and edge.get("parent_file") for edge in edges), (
+        "no fixture record carries a grounded derivation edge"
+    )
+    assert any(edge.get("parent_md5sum") is None and edge.get("parent_file") is None for edge in edges), (
+        "no fixture record carries the ungrounded derivation edge #438 emits"
+    )
 
 
 def test_record_gate_rejects_missing_classifications(validator):
@@ -224,7 +292,7 @@ def test_gate_rejects_out_of_enum_value(validator):
 # --- EvidenceFileEnvelope (#401, #421) ------------------------------------------
 #
 # The envelope is a standalone class: it describes an artefact exchanged *between*
-# runs and is referenced by no slot in ClassificationRecord, so the golden-output
+# runs and is referenced by no slot in ClassificationRecord, so the output-fixture
 # gates above never reach it. Without these, a typo in its required members or
 # ranges would pass the schema gate even though this class defines the on-disk
 # evidence-file contract (#401 review).
@@ -493,11 +561,12 @@ def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validato
 
 # --- Published, the repository's own values (#424) --------------------------------
 #
-# The golden fixture carries `published: null` on every record, because those fixtures
-# have no published values — so the populated shape, which is the one all 11,231 files
-# with a published value actually take, would otherwise reach no gate at all. A wrong
-# range, a lost `multivalued`, or a malformed `in_vocabulary` would pass CI while every
-# real record used that path.
+# Records a producer wrote now carry the populated shape into the gates above (#465),
+# which is what catches a `build_published` that stops emitting a key. These cases
+# overlap them on purpose and stay: each is one shape written out together with what
+# would pass CI without it — a wrong range, a lost `multivalued`, a malformed or absent
+# `in_vocabulary` — where the same coverage read off a fixture holds only for as long as
+# its inputs go on publishing those values.
 
 
 def _record_with(published):

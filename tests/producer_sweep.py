@@ -50,11 +50,21 @@ def write_snapshot(tmp_path, records):
     return path
 
 
-def run_producer(producer, tmp_path, records):
-    """Run one of :data:`STANDALONE_PRODUCERS` over ``records``; return the rows it wrote."""
+def run_producer_envelope(producer, tmp_path, records):
+    """Run one of :data:`STANDALONE_PRODUCERS` over ``records``; return the whole envelope.
+
+    The envelope rather than the rows, for the callers that read the ``metadata`` tally
+    beside them or commit the whole thing as a fixture (#465) — matching
+    :func:`run_index_producer`, which returns one for its own reason.
+    """
     output = tmp_path / "out_classifications.json"
     producer(write_snapshot(tmp_path, records), output)
-    return json.loads(output.read_text())["classifications"]
+    return json.loads(output.read_text())
+
+
+def run_producer(producer, tmp_path, records):
+    """Run one of :data:`STANDALONE_PRODUCERS` over ``records``; return the rows it wrote."""
+    return run_producer_envelope(producer, tmp_path, records)["classifications"]
 
 
 def run_index_producer(tmp_path, records, parent_classifications=()):
