@@ -168,8 +168,9 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
     ``SAMPLE.BAM.BAI`` that reaches this producer can find its parent instead of being
     declined for a missing one. A candidate keeps whatever casing it was built with —
     Pattern 1 the name's own, Pattern 2 the name's stem plus a lowercase extension from
-    ``INDEX_TO_PARENT`` — and the caller looks it up against a case-folded name index, so
-    the case of a constructed extension does not decide whether a parent is found (#455).
+    ``INDEX_TO_PARENT``, which is therefore a spelling no file need carry. So a candidate
+    is a lookup probe and not a filename: the caller matches it against a case-folded name
+    index and reads the real name off the file it finds (#455).
     """
     candidates = []
     # Folded here, not just at the comparisons below: `INDEX_TO_PARENT` is keyed in
@@ -392,19 +393,17 @@ def propagate_to_index_files(
     # nothing about names: a name reaching more than one record is the case this exists
     # to detect.
     #
-    # The name half of the key is case-folded (#455). `route` already folds case when it
-    # decides this producer owns a file (#449), so an exact lookup here left the two
-    # halves of one path disagreeing about what a name is: a `SAMPLE.BAI` routed here and
-    # was then declined for a missing parent, because the Pattern 2 candidate is built by
-    # appending an extension from the lowercase-keyed `INDEX_TO_PARENT` and so cannot
-    # match a real `SAMPLE.BAM`. Folding makes two names differing only by case identify
-    # neither file, which is #438's rule read case-insensitively.
+    # The name half of the key is case-folded, so this agrees with `route`, which has
+    # folded case since #449 (#455). Folding makes two names differing only by case
+    # identify neither file, which is #438's rule read case-insensitively. `str` first
+    # for the same reason `route` does it: the key is built from a catalog value that may
+    # have drifted off the contract, and a non-string one must bucket rather than raise.
     files_by_folded_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
             name = f.get("file_name")
             if name:
-                files_by_folded_name[(ds, name.lower())].append(f)
+                files_by_folded_name[(ds, str(name).lower())].append(f)
 
     # Find index files and match to parents
     results = []
@@ -426,7 +425,11 @@ def propagate_to_index_files(
             index_ext = INDEX.claim(f)
             if index_ext is None:
                 continue
-            name = f.get("file_name", "")
+            # Coerced like the folded key above, and for the same reason: `route` reaches
+            # this producer by `file_format` when the name claims nothing, so a record
+            # whose `file_name` drifted off the contract still arrives here and must be
+            # written as a declined row rather than raise on `.lower()` (#455).
+            name = str(f.get("file_name") or "")
 
             stats[index_ext]["total"] += 1
 
@@ -445,22 +448,15 @@ def propagate_to_index_files(
             # falling through have found a unique later one. It is here for the shape of
             # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
-            # Both halves are kept: the folded key addresses the name index, and the
-            # candidate as tried is what the diagnostic echoes. Echoing the key instead
-            # would print a lowercased name that no file in the dataset carries.
-            parent_match = next(
-                ((c, (ds, c.lower())) for c in parent_candidates if (ds, c.lower()) in files_by_folded_name),
-                None,
-            )
+            candidate_tried = next((c for c in parent_candidates if (ds, c.lower()) in files_by_folded_name), None)
 
-            if parent_match is None:
+            if candidate_tried is None:
                 stats[index_ext]["unmatched"] += 1
                 unmatched.append(unmatched_entry(f, index_ext, parent_candidates, NO_MATCHING_PARENT))
                 declined.append((f, index_ext, NO_MATCHING_PARENT))
                 continue
 
-            candidate_tried, parent_key = parent_match
-            parent_files = files_by_folded_name[parent_key]
+            parent_files = files_by_folded_name[(ds, candidate_tried.lower())]
 
             if len(parent_files) > 1:
                 # Not a failed lookup: the parent is present, and present more than once.
@@ -469,8 +465,11 @@ def propagate_to_index_files(
                 # and told apart by `reason`, because the causes are not the same.
                 #
                 # Under a folded key the two files need not share a name literally, only
-                # up to case (#455). `parent_names_matched` is what tells those apart: one
-                # name means a true duplicate, several mean case was the difference.
+                # up to case (#455), and the reason cannot say which. `parent_names_matched`
+                # is what does: one name means a true duplicate, several mean case was the
+                # difference. Echoed through `coerce_identity`, as every other name in the
+                # entry is. `ambiguous_candidate` is the candidate as tried rather than the
+                # folded key, which is a lookup key and not a filename at all.
                 stats[index_ext]["ambiguous"] += 1
                 unmatched.append(
                     unmatched_entry(
@@ -480,15 +479,15 @@ def propagate_to_index_files(
                         AMBIGUOUS_PARENT,
                         ambiguous_candidate=candidate_tried,
                         files_sharing_that_name=len(parent_files),
-                        parent_names_matched=sorted({p["file_name"] for p in parent_files}),
+                        parent_names_matched=sorted({coerce_identity(p.get("file_name")) for p in parent_files}),
                     )
                 )
                 declined.append((f, index_ext, AMBIGUOUS_PARENT))
                 continue
 
-            # The matched file's own name, not the candidate that found it: a Pattern 2
-            # candidate guesses the parent extension's case, and this is the row and the
-            # `derived_from` edge, which must name the file as the catalog spells it.
+            # The matched file's own name, not the candidate that found it: this reaches
+            # the row and the `derived_from` edge, which name the file as the catalog
+            # spells it (#455).
             parent = parent_files[0]
             parent_name = parent["file_name"]
             parent_md5 = parent["file_md5sum"]
@@ -586,11 +585,13 @@ def propagate_to_index_files(
             print(f"    Dataset: {u['dataset_id']}")
             print(f"    Reason: {u['reason']}")
             if u["reason"] == AMBIGUOUS_PARENT:
-                print(f"    Ambiguous: {u['ambiguous_candidate']} names {u['files_sharing_that_name']} files")
-                # Only when case is what differed — one distinct name is a plain
-                # duplicate, which the line above already reports in full.
-                if len(u["parent_names_matched"]) > 1:
-                    print(f"    Matched, differing only by case: {u['parent_names_matched']}")
+                # The matched spellings, not just the probe: the probe is a Pattern 2
+                # construction that no file need carry, and naming the real ones is what
+                # tells an operator a case collision from a true duplicate (#455).
+                print(
+                    f"    Ambiguous: {u['ambiguous_candidate']} matched "
+                    f"{u['files_sharing_that_name']} files: {', '.join(u['parent_names_matched'])}"
+                )
             else:
                 print(f"    Tried: {u['candidates_tried']}")
 
