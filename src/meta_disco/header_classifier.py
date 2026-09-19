@@ -1158,36 +1158,3 @@ def classify_from_bed_signals(
             )
 
     return result.to_output_dict()
-
-
-def get_rules_documentation() -> str:
-    """Generate documentation pointing to the unified rules file."""
-    return """# BAM/CRAM, VCF, FASTQ, FASTA, and BED Header Classification Rules
-
-## Overview
-
-Classification rules are defined in the bundled `unified_rules.yaml` (package data of `meta_disco.rules`).
-
-This file contains all rules organized by:
-- **Tier 1**: Extension-based rules (fastest)
-- **Tier 2**: Filename pattern and file size rules
-- **Tier 3**: Header-based rules (BAM @RG/@PG/@SQ, VCF ##, FASTQ read names)
-- **FASTA**: Contig name analysis (heuristic, not YAML rules) for assembly/reference/transcriptome detection
-
-## Rule Schema
-
-Each rule has:
-- `id`: Unique identifier
-- `tier`: 1, 2, or 3
-- `scope`: extension, filename, header, vcf_header, fastq_header, or file_size
-- `when`: Conditions that must match
-- `then`: Effects to apply
-- `rationale`: Explanation
-
-## Viewing Rules
-
-To view the full rules, see:
-- `unified_rules.yaml`, package data of `meta_disco.rules` (at `src/meta_disco/rules/` in a source checkout) - All classification rules
-- The documentation header in that file explains the rule engine
-
-"""

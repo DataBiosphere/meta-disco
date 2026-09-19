@@ -83,19 +83,6 @@ class _DimStats(TypedDict):
     discrepancy_categories: dict[str, _DiscrepancyCategory]
 
 
-class _CatalogSummary(TypedDict):
-    """One catalog's file counts. Written by `load_hprc_results`, read by nothing.
-
-    `validation-dashboard-template.html` contains no reference to it and no Python
-    reads it back; it reaches the generated dashboard only inside the `json.dumps`
-    of the whole results dict.
-    """
-
-    name: str
-    total: int
-    matched: int
-
-
 class _ComparisonResultsBase(TypedDict):
     """The three keys every comparison produces."""
 
@@ -108,17 +95,18 @@ class _ComparisonResults(_ComparisonResultsBase, total=False):
     """What one ground-truth source's comparison produced.
 
     One builder, `load_hprc_results`, and one renderer, `build_source_section`.
-    The optional half exists because that builder returns early — with only the
-    three required keys — when its input file is absent, not because a second
-    builder writes a different subset. Of the three, only `metadata_coverage`
-    has a reader; `build_source_section` guards on it before rendering.
+    `metadata_coverage` is optional because that builder returns early — with
+    only the three required keys — when its input file is absent, not because a
+    second builder writes a different subset.
+
+    It is the only optional key left: #466 removed `datasets` (read, never
+    written) and `catalog_summary` / `catalog_dimensions` (written, never read)
+    together, so every key here now has both a writer and a reader.
 
     Two classes because `NotRequired` needs 3.11 and this targets 3.10.
     """
 
     metadata_coverage: dict[str, int]
-    catalog_summary: list[_CatalogSummary]
-    catalog_dimensions: dict[str, list[str]]
 
 
 # =============================================================================
@@ -190,28 +178,6 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
             "discrepancy_categories": {},
         }
 
-    # Build catalog summary for display
-    catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
-    by_catalog = data.get("by_catalog", {})
-    catalog_summary: list[_CatalogSummary] = []
-    for cat_name, cat_total in catalogs_loaded.items():
-        matched = by_catalog.get(cat_name, {}).get("matched", 0)
-        catalog_summary.append(
-            {
-                "name": cat_name,
-                "total": cat_total,
-                "matched": matched,
-            }
-        )
-
-    # Which dimensions each catalog provides
-    catalog_dimensions = {
-        "sequencing-data": ["platform", "data_modality", "assay_type"],
-        "alignments": ["reference_assembly"],
-        "annotations": ["reference_assembly"],
-        "assemblies": [],
-    }
-
     # Build metadata coverage from dimension stats
     # (match + mismatch + unknown = files where HPRC has ground truth)
     metadata_coverage: dict[str, int] = {}
@@ -223,8 +189,6 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
         "unmatched": 0,
         "dimensions": dimensions,
         "metadata_coverage": metadata_coverage,
-        "catalog_summary": catalog_summary,
-        "catalog_dimensions": catalog_dimensions,
     }
 
 
