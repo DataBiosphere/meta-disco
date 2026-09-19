@@ -109,8 +109,8 @@ uncached fetches, so the real count is higher and is the number task 4 must repo
 
 ## Coverage / report denominators (issue task 5)
 
-`scripts/generate_coverage_report.py` and `scripts/generate_classification_report.py`
-consume the run metadata / classification rows. A `not_classified` spike must not
+`scripts/generate_coverage_report.py` consumes the run metadata / classification
+rows. A `not_classified` spike must not
 misreport denominators: verify these scripts count total emitted rows (a
 `not_classified` row is a *present* row with a status, not a missing one) and that
 `dropped`/`failed` going to ~0 doesn't skew a "classified / total" ratio. Inspect
