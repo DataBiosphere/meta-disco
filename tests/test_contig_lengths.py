@@ -46,6 +46,10 @@ from meta_disco.validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
 
 pytestmark = pytest.mark.network
 
+# 1-22, X, Y. The table's own comment calls this "all 22 autosomes + X and Y for
+# each assembly"; naming it here is what makes that checkable rather than stated.
+PRIMARY_CHROMOSOMES = frozenset([*(str(n) for n in range(1, 23)), "X", "Y"])
+
 # The GRCh37 archive is a separate host; the current assembly lives on the main one.
 ENSEMBL_HOSTS = {
     "GRCh38": "https://rest.ensembl.org",
@@ -109,14 +113,26 @@ def test_ensembl_covers_enough_of_our_table_to_be_a_real_check(build):
     mismatch set would be empty for the wrong reason and the check would report
     success while comparing nothing.
 
-    Every bare-named contig we hold must be one Ensembl also publishes — not a
-    floor, the whole set. A count would drift quietly: add ``MT`` to the table
-    and a `>= 24` guard still passes while one contig silently stops being
-    checked. This is where an upstream omission is meant to bite, which is why
-    the test above tolerates one: that test is about conflicting values, this one
-    about coverage not eroding.
+    Two ways the comparison can quietly stop comparing, and each needs its own
+    assertion — neither implies the other:
+
+    - **Our table loses a contig.** Every remaining one still matches, so a
+      relationship check passes while the dropped contig goes unverified. Pinning
+      the expected set is what catches that.
+    - **Ensembl stops publishing one.** Our set is intact, but a contig is no
+      longer checked against anything.
+
+    A count catches neither cleanly: add ``MT`` and lose ``chr5``, and the total
+    is still 24. This is where an upstream omission is meant to bite, which is
+    why the test above tolerates one — that test is about conflicting values,
+    this one about the comparison still covering what it claims to.
     """
     upstream = _ensembl_top_level(ENSEMBL_HOSTS[build])
-    comparable = [c for c in REFERENCE_CONTIG_LENGTHS[build] if not c.startswith("chr")]
-    missing = sorted(set(comparable) - set(upstream))
+    comparable = {c for c in REFERENCE_CONTIG_LENGTHS[build] if not c.startswith("chr")}
+
+    assert comparable == PRIMARY_CHROMOSOMES, (
+        f"{build}: table holds {sorted(comparable - PRIMARY_CHROMOSOMES)} beyond the primary "
+        f"chromosomes and is missing {sorted(PRIMARY_CHROMOSOMES - comparable)}"
+    )
+    missing = sorted(comparable - set(upstream))
     assert not missing, f"{build}: Ensembl no longer publishes {missing}, so those contigs are unchecked"
