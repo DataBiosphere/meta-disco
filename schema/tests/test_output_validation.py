@@ -147,11 +147,12 @@ def _records_in(path: Path):
         records = payload["classifications"]
         assert isinstance(records, list), f"{producer}: 'classifications' is not a list"
         # A producer keyed here with no records is a producer this gate does not validate,
-        # which is the hole #465 closes — and it passes everything else: the entry and
-        # record gates' `checked > 0` is satisfied by the other ten, and the key-union
-        # check that would notice lives in the root suite, which `make test-schema` does
-        # not run. `build_standalone_output` refuses to *write* such a fixture; this
-        # refuses to *read* one, which is the half that holds when the gate runs alone.
+        # which is the hole #465 closes — and nothing else in *this* suite notices: the
+        # entry and record gates' `checked > 0` is satisfied by the other ten. The root
+        # suite does notice, twice (the key union, and the deep-equal against a fresh
+        # run), so such a fixture cannot reach `main` past CI, which runs `make
+        # test-all`. This assert is what holds when the gate runs alone, under `make
+        # test-schema` — the suite that reads committed files and so must not trust them.
         assert records, f"{producer}: {path.name} carries no records, so nothing of it is validated"
         for i, record in enumerate(records):
             assert isinstance(record, dict), f"{producer}[{i}]: record is not a mapping"
