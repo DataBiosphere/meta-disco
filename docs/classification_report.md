@@ -797,7 +797,9 @@ Result: Parent VCF not found in dataset
 Two reasons land in that array, and they are not the same problem:
 
 - **`no_matching_parent_in_dataset`** — no file in the dataset carries any candidate parent name. The orphan case described above.
-- **`ambiguous_parent_in_dataset`** — the parent name is present and names *more than one* file, so no parent can be chosen (#438). Such an entry also carries `ambiguous_candidate` (the name that was ambiguous) and `files_sharing_that_name` (how many files it names). The file inherits nothing; on the anvil15 corpus this is 15,006 index files, almost all in `ANVIL_T2T_CHRY`, which calls one sample against both CHM13v2 and GRCh38 and stores the outputs under the same filename in different directories.
+- **`ambiguous_parent_in_dataset`** — the parent name is present and names *more than one* file, so no parent can be chosen (#438). Such an entry also carries `ambiguous_candidate` (the candidate name as it was tried), `files_sharing_that_name` (how many files it names), and `parent_names_matched` (the distinct names it matched, as the catalog spells them). The file inherits nothing; on the anvil15 corpus this is 15,006 index files, almost all in `ANVIL_T2T_CHRY`, which calls one sample against both CHM13v2 and GRCh38 and stores the outputs under the same filename in different directories.
+
+Candidate names are matched **case-insensitively** (#455), as routing matches extensions (#449). So an index file and its parent may disagree about case — `SAMPLE.BAI` finds `SAMPLE.BAM` — and, conversely, two files in one dataset whose names differ only by case identify neither, which is the ambiguous case above. `parent_names_matched` is what tells the two apart: one name is a true duplicate, several mean case was the difference. No file in the anvil15 corpus is affected either way — none of its 224,726 index-suffixed files carries a non-lowercase index extension, and no case-folded name there covers more than one distinct spelling.
 
 The `metadata` block counts the two separately, as `unmatched` and `ambiguous_parent`.
 

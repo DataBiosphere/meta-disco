@@ -867,3 +867,160 @@ class TestLoadClassifications:
         assert entry["reason"] == AMBIGUOUS_PARENT
         assert entry["ambiguous_candidate"] == "sample.bed.gz"
         assert entry["files_sharing_that_name"] == 2
+
+
+class TestMixedCaseNames:
+    """Parent lookup folds case, so an index and its parent may disagree about it (#455).
+
+    Nothing covered mixed case before this. The bug it pins: a Pattern 2 candidate is
+    built by appending an extension from the lowercase-keyed `INDEX_TO_PARENT`, so
+    `SAMPLE.BAI` yields `SAMPLE.bam`, which an exact lookup could never match against a
+    real `SAMPLE.BAM`. The file was then declined for a missing parent that was present.
+
+    Latent on the anvil15 corpus — none of its 224,726 index-suffixed files carries a
+    non-lowercase index extension, and no `(dataset_id, file_name.lower())` key there
+    covers more than one distinct cased name — so these are fixtures, not samples.
+    """
+
+    def _run(self, tmp_path, records, classified_md5s):
+        """Run the producer over `records`, with `classified_md5s` given GRCh38 parents."""
+        metadata_file = _write_metadata(tmp_path / "metadata.json", records)
+        cls_file = tmp_path / "cls.json"
+        cls_file.write_text(
+            json.dumps({"classifications": [_classified_record(md5, "GRCh38") for md5 in classified_md5s]})
+        )
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        with output_file.open() as f:
+            return json.load(f)
+
+    def _assert_inherited(self, output, index_name, parent_name, parent_md5):
+        """`index_name` took `parent_name` as its parent and inherited from it."""
+        records = [r for r in output["classifications"] if r["file_name"] == index_name]
+        assert len(records) == 1, f"{index_name} should get exactly one record"
+        record = records[0]
+        assert output["unmatched_files"] == []
+        assert field_value(record["classifications"], "reference_assembly") == "GRCh38"
+        # The edge names the parent as the catalog spells it, not as the candidate
+        # that found it was built — a Pattern 2 candidate guesses the extension's case.
+        assert record["derived_from"]["parent_file"] == parent_name
+        assert record["derived_from"]["parent_md5sum"] == parent_md5
+        # The parent's kind still resolves off an upper-case extension, because
+        # `FileName.parse` lowers the extension it returns.
+        assert record["derived_from"]["parent_kind"] == "alignment"
+        return record
+
+    def test_upper_case_pattern2_index_finds_its_upper_case_parent(self, tmp_path):
+        """`SAMPLE.BAI` -> `SAMPLE.BAM`. The issue's bug: this declined before #455."""
+        output = self._run(
+            tmp_path,
+            [
+                _file("SAMPLE.BAM", ".bam", "11111111111111111111111111111111", "e1"),
+                _file("SAMPLE.BAI", ".BAI", "22222222222222222222222222222222", "e2"),
+            ],
+            ["11111111111111111111111111111111"],
+        )
+        self._assert_inherited(output, "SAMPLE.BAI", "SAMPLE.BAM", "11111111111111111111111111111111")
+
+    def test_lower_case_pattern2_index_finds_an_upper_case_parent(self, tmp_path):
+        """`sample.bai` -> `SAMPLE.BAM`: the constructed candidate from the other side.
+
+        The index file's own casing is unremarkable here; it is the *parent* that is
+        spelled unexpectedly, which an exact lookup misses just the same.
+        """
+        output = self._run(
+            tmp_path,
+            [
+                _file("SAMPLE.BAM", ".bam", "11111111111111111111111111111111", "e1"),
+                _file("sample.bai", ".bai", "22222222222222222222222222222222", "e2"),
+            ],
+            ["11111111111111111111111111111111"],
+        )
+        self._assert_inherited(output, "sample.bai", "SAMPLE.BAM", "11111111111111111111111111111111")
+
+    def test_upper_case_pattern1_index_finds_its_parent(self, tmp_path):
+        """`SAMPLE.BAM.BAI` -> `SAMPLE.BAM`.
+
+        A Pattern 1 candidate is a slice of the index file's own name, so it carried the
+        right casing even before folding. This is the regression guard for that: folding
+        must not disturb the pattern that already worked.
+        """
+        output = self._run(
+            tmp_path,
+            [
+                _file("SAMPLE.BAM", ".bam", "11111111111111111111111111111111", "e1"),
+                _file("SAMPLE.BAM.BAI", ".BAI", "22222222222222222222222222222222", "e2"),
+            ],
+            ["11111111111111111111111111111111"],
+        )
+        self._assert_inherited(output, "SAMPLE.BAM.BAI", "SAMPLE.BAM", "11111111111111111111111111111111")
+
+    def test_two_parents_differing_only_by_case_are_ambiguous(self, tmp_path):
+        """The one decline folding creates: neither parent is picked (#438 read for case).
+
+        `sample.bam` and `SAMPLE.BAM` are two files an exact lookup told apart. Folded,
+        the name identifies neither, so the index takes no parent rather than the one
+        that happens to match literally — the same rule as for a name two files share.
+        """
+        output = self._run(
+            tmp_path,
+            [
+                _file("sample.bam", ".bam", "11111111111111111111111111111111", "e1"),
+                _file("SAMPLE.BAM", ".bam", "22222222222222222222222222222222", "e2"),
+                _file("sample.bam.bai", ".bai", "33333333333333333333333333333333", "e3"),
+            ],
+            ["11111111111111111111111111111111", "22222222222222222222222222222222"],
+        )
+        _assert_declined(output, "sample.bam.bai")
+        assert len(output["unmatched_files"]) == 1
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        # The candidate as tried, not the folded key: a lowercased key would print a
+        # name no file in the dataset carries.
+        assert entry["ambiguous_candidate"] == "sample.bam"
+        assert entry["files_sharing_that_name"] == 2
+        # What tells a case collision from a plain duplicate, since the reason cannot.
+        assert entry["parent_names_matched"] == ["SAMPLE.BAM", "sample.bam"]
+
+    def test_a_plain_duplicate_lists_the_one_name_it_matched(self, tmp_path):
+        """Two files with the literally same name: still one entry in `parent_names_matched`.
+
+        The field is present on every ambiguous entry, not only the case-collision ones,
+        so a reader tells the two apart by its length rather than by its absence.
+        """
+        output = self._run(
+            tmp_path,
+            [
+                _file("sample.bam", ".bam", "11111111111111111111111111111111", "e1"),
+                _file("sample.bam", ".bam", "22222222222222222222222222222222", "e2"),
+                _file("sample.bam.bai", ".bai", "33333333333333333333333333333333", "e3"),
+            ],
+            ["11111111111111111111111111111111", "22222222222222222222222222222222"],
+        )
+        _assert_declined(output, "sample.bam.bai")
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        assert entry["parent_names_matched"] == ["sample.bam"]
+        assert entry["files_sharing_that_name"] == 2
+
+    def test_an_upper_case_index_with_no_parent_still_reports_no_parent(self, tmp_path):
+        """Folding widens what matches; it does not invent a parent that is absent."""
+        output = self._run(
+            tmp_path,
+            [_file("ORPHAN.BAM.BAI", ".BAI", "11111111111111111111111111111111", "e1")],
+            [],
+        )
+        _assert_declined(output, "ORPHAN.BAM.BAI")
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == NO_MATCHING_PARENT
+        assert entry["candidates_tried"] == ["ORPHAN.BAM"]
+
+    def test_candidates_keep_the_casing_they_were_built_with(self):
+        """`get_parent_candidates` does not lower the name; the lookup folds instead.
+
+        Pattern 1 slices the index file's own name, so its candidate is upper throughout.
+        Pattern 2 appends a lowercase extension from `INDEX_TO_PARENT`, which is why the
+        candidate is mixed and why matching it exactly was the bug.
+        """
+        assert get_parent_candidates("SAMPLE.BAM.BAI", ".BAI") == ["SAMPLE.BAM"]
+        assert get_parent_candidates("SAMPLE.BAI", ".BAI") == ["SAMPLE" + ext for ext in INDEX_TO_PARENT[".bai"]]
