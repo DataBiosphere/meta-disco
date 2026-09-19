@@ -51,8 +51,7 @@ from linkml.validator.plugins.pydantic_validation_plugin import PydanticValidati
 # schema/tests/ -> schema/ -> repo root. This gate deliberately validates the
 # root component's committed output fixtures (the real classifier shape), so it reads
 # across the component boundary — it expects a repo checkout, not a standalone install
-# of the schema package. `test_golden_present` and `test_standalone_fixture_present`
-# fail loudly if either is missing.
+# of the schema package. `test_output_fixture_present` fails loudly if either is missing.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
@@ -76,6 +75,26 @@ def _dimension_classes() -> dict:
 
 
 DIMENSION_CLASS = _dimension_classes()
+
+
+def _published_fields() -> list:
+    """The dimensions a ``Published`` block speaks to, off the schema's own attributes.
+
+    The root component's ``records.PUBLISHED_FIELDS`` is the authority, but this project
+    is a separate uv env that cannot import it — so read the schema, which has to agree
+    with that tuple anyway, rather than spelling the two dimensions a third time.
+
+    Read off ``PublishedVocabulary``, whose attributes *are* the dimensions (its own
+    description says so), rather than off ``Published`` minus the names that are not
+    dimensions: a future non-dimension attribute on ``Published`` would slip into that
+    list, and the one-sided-block check below would then be vacuously true for every
+    block — a guard that stops guarding without failing.
+    """
+    schema = yaml.safe_load(_SCHEMA.read_text(encoding="utf-8"))
+    return list(schema["classes"]["PublishedVocabulary"]["attributes"])
+
+
+_PUBLISHED_FIELDS = _published_fields()
 
 
 @pytest.fixture(scope="session")
@@ -132,11 +151,6 @@ def _records_in(path: Path):
             yield f"{producer}[{i}]", record
 
 
-def _golden_records():
-    """Yield (label, record) for every record the pipeline's seven producers wrote."""
-    yield from _records_in(_GOLDEN)
-
-
 def _fixture_records():
     """Yield (label, record) for every record in both fixtures — all eleven producers."""
     yield from _records_in(_GOLDEN)
@@ -153,12 +167,9 @@ def _fixture_entries():
             yield f"{label}.{dim}", dim, classifications[dim]
 
 
-def test_golden_present():
-    assert _GOLDEN.exists(), f"golden fixture not found at {_GOLDEN}"
-
-
-def test_standalone_fixture_present():
-    assert _STANDALONE.exists(), f"standalone fixture not found at {_STANDALONE}; regenerate with `{_REGEN}`"
+@pytest.mark.parametrize("path", [_GOLDEN, _STANDALONE], ids=["golden", "standalone"])
+def test_output_fixture_present(path):
+    assert path.exists(), f"output fixture not found at {path}; regenerate with `{_REGEN}`"
 
 
 def test_output_entries_validate_against_schema(validator):
@@ -182,7 +193,7 @@ def test_a_populated_derivation_edge_validates(validator):
     stays because it is written out: it says which members make an edge, where reading
     that off the fixture means reading a record the producer happened to write.
     """
-    _, record = next(_golden_records())
+    _, record = next(_records_in(_GOLDEN))
     grounded = {"relation": "index_of", "parent_md5sum": "b" * 32, "parent_file": "s.bam", "parent_kind": "alignment"}
     ungrounded = {"relation": "index_of", "parent_md5sum": None, "parent_file": None, "parent_kind": None}
 
@@ -196,10 +207,16 @@ def test_a_populated_derivation_edge_validates(validator):
 def test_a_derivation_edge_without_a_verb_is_refused(validator):
     """`relation` is required, which is why there is no half-edge to emit: the producer
     must name the verb even where it cannot name the parent."""
-    _, record = next(_golden_records())
+    _, record = next(_records_in(_GOLDEN))
     edge = {"parent_md5sum": None, "parent_file": None, "parent_kind": None}
     report = validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord")
-    assert report.results, "a derived_from with no relation should not validate"
+    # Assert it fails *because of* the missing verb, as this file's other negative cases
+    # do. The base record is a real fixture row and now carries a `published` block, so a
+    # regression there would invalidate the record itself and leave a bare
+    # `assert report.results` green while saying nothing about `relation`.
+    assert any("relation" in result.message for result in report.results), (
+        f"expected a failure citing the missing relation, got: {[r.message for r in report.results]}"
+    )
 
 
 def test_output_records_validate_against_schema(validator):
@@ -228,8 +245,9 @@ def test_output_records_validate_against_schema(validator):
 
 def test_a_producers_published_block_reaches_the_gate():
     """Some fixture record carries a populated `published`, and between them the
-    fixtures cover both `in_vocabulary` halves: a dimension whose published value is a
-    term of this vocabulary, and one whose is not."""
+    fixtures cover both `in_vocabulary` halves — a dimension whose published value is a
+    term of this vocabulary, and one whose is not — and the one-sided block, which is
+    the shape all but 220 of the corpus's published records take."""
     blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
     assert blocks, f"no fixture record carries a published block; regenerate with `{_REGEN}`"
     vocabularies = [block.get("in_vocabulary", {}) for block in blocks]
@@ -238,6 +256,9 @@ def test_a_producers_published_block_reaches_the_gate():
     )
     assert any(not terms for vocab in vocabularies for terms in vocab.values()), (
         "no fixture record publishes a value this vocabulary lacks a term for"
+    )
+    assert any(any(block.get(field) is None for field in _PUBLISHED_FIELDS) for block in blocks), (
+        "no fixture record carries a block for one dimension only"
     )
 
 

@@ -78,6 +78,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"
 # The four standalone producers' rows, for the same schema gate the golden feeds (#465).
 STANDALONE_PATH = FIXTURES / "standalone_output.json"
+# Named once, because every message that reports a stale or missing fixture has to say
+# it — as `schema/tests/test_output_validation.py` does on its side of the boundary.
+REGEN = "python -m tests.test_output_shape"
 
 # Deterministic synthetic inputs per file type. Filenames target tier-1/2
 # (extension/filename) rules so classification needs no real header and is stable
@@ -180,11 +183,6 @@ GOLDEN_INPUTS = {
     ],
 }
 
-# The md5 seeds the standalone producers' inputs draw from, in order, one each, so every
-# fixture record has its own identity. `_golden_record`'s own seeds (a-f, 7), the index
-# inputs' (1, 2) and `valid_record`'s default (0) are the ones already spoken for.
-STANDALONE_SEEDS = "3456"
-
 # The index producer's inputs. Its two record paths both have to reach the schema gate,
 # because `DerivationEdge` models them as one class: a required verb with nullable
 # grounding. `sample.rnaseq.bam` is the golden's own bam input, so the matched `.bai`
@@ -198,6 +196,16 @@ INDEX_INPUTS = [
     _golden_record("1", file_name="sample.rnaseq.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
     _golden_record("2", file_name="orphan.bai", file_size=9001, file_format=".bai", entry_id="g-bai-2"),
 ]
+
+# The md5 seeds spoken for above, so the standalone producers' inputs below can be
+# checked against them rather than against a comment listing which hex digits are free.
+# Every fixture record needs its own identity for the reason `_golden_record` gives, and
+# nothing else here would notice a reused one: #445's duplicate-`file_id` check scans a
+# whole run directory (`output_utils.row_identities`), and these fixtures run each
+# producer over its own single-record snapshot, so it never sees them.
+SEEDS_TAKEN = {record["file_md5sum"] for records in GOLDEN_INPUTS.values() for record in records} | {
+    record["file_md5sum"] for record in INDEX_INPUTS
+}
 
 STUB_HEADER = "stub-header-no-network"
 # Real fetchers return str (bam/vcf header text), list[str] (fastq reads / fasta
@@ -328,15 +336,17 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
     why a real producer's rows and not a stand-in.
     """
     out = {}
-    # Asserted rather than left to `strict=True`, which would raise from inside this
-    # session fixture with no mention of what to add — the problem
-    # `test_stub_payloads_cover_all_file_types` exists to avoid. The pool is deliberately
-    # longer than the list, so `strict=False` is the honest pairing.
-    assert len(STANDALONE_PRODUCERS) <= len(STANDALONE_SEEDS), (
-        f"add an md5 seed to STANDALONE_SEEDS: {len(STANDALONE_PRODUCERS)} producers, {len(STANDALONE_SEEDS)} seeds"
-    )
-    for seed, param in zip(STANDALONE_SEEDS, STANDALONE_PRODUCERS, strict=False):
+    for i, param in enumerate(STANDALONE_PRODUCERS):
         producer, file_name, file_format = param.values
+        # Positional rather than a hand-kept pool, so a producer added to
+        # STANDALONE_PRODUCERS gets a seed without a second list to extend. A seed is one
+        # hex digit because `_golden_record` repeats it 32 times, so both bounds are
+        # checked: length here, and collision against `SEEDS_TAKEN` below. Neither is
+        # decorative — two digits would build a 64-character `file_md5sum`, which is
+        # excluded at load as unusable (#376) rather than refused, so the producer would
+        # write no rows at all.
+        seed = f"{i + 3:x}"
+        assert len(seed) == 1, f"{len(STANDALONE_PRODUCERS)} standalone producers is more seeds than hex digits"
         # The param's id is the producer's registry name, which is the key this fixture
         # is read by — `test_the_schema_gate_covers_every_producer` checks those keys
         # against `PRODUCERS`, so an id-less param would key a record under "None".
@@ -356,6 +366,9 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
             entry_id=f"g-{name}-1",
             **PUBLISHED_BOTH,
         )
+        assert record["file_md5sum"] not in SEEDS_TAKEN, (
+            f"the {name!r} input's md5 seed {seed!r} is already used by another fixture input"
+        )
         out[name] = run_producer_envelope(producer, work, [record])
 
     index_work = tmp_path / "index"
@@ -363,6 +376,17 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
     out["index"] = run_index_producer(
         index_work, INDEX_INPUTS, parent_classifications=pipeline_output["bam"]["classifications"]
     )
+    # `build_output` asserts the same thing for the same reason. A producer that wrote no
+    # rows would regenerate as an empty `classifications` list and reach no schema
+    # validation at all — the hole #465 closes — while every test stayed green, since the
+    # coverage test compares only the fixture's keys and a deep-equal against an
+    # empty-regenerated fixture holds. Two index rows, one per record path (#438).
+    expected_rows = dict.fromkeys(out, 1) | {"index": 2}
+    for name, envelope in out.items():
+        assert len(envelope["classifications"]) == expected_rows[name], (
+            f"{name!r} wrote {len(envelope['classifications'])} rows, expected {expected_rows[name]}: "
+            "check its input's file_name/file_format against what the producer routes on"
+        )
     return out
 
 
@@ -407,33 +431,28 @@ def test_stub_payloads_cover_all_file_types():
     )
 
 
+def _assert_matches_fixture(actual: dict, path: Path, what: str):
+    """Deep-equal ``actual`` against the committed fixture at ``path``.
+
+    Shared by both fixtures' guards, so a change to the regen flow or to either message
+    is made once. Deep-equal is what makes the schema gate bite: that gate reads
+    committed files, so without this a change to `build_published` or `derivation_edge`
+    would leave a fixture stale and the gate green.
+    """
+    assert path.exists(), f"{what} fixture missing at {path}. Regenerate with `{REGEN}`."
+    assert actual == json.loads(path.read_text()), (
+        f"{what} output changed. If intentional, regenerate the fixture with `{REGEN}` and review the diff."
+    )
+
+
 def test_output_matches_golden(output):
     """The real pipeline output must deep-equal the committed golden fixture."""
-    assert GOLDEN_PATH.exists(), (
-        f"Golden fixture missing at {GOLDEN_PATH}. Regenerate with `python -m tests.test_output_shape`."
-    )
-    expected = json.loads(GOLDEN_PATH.read_text())
-    assert output == expected, (
-        "Classification output shape changed. If intentional, regenerate the golden "
-        "with `python -m tests.test_output_shape` and review the diff."
-    )
+    _assert_matches_fixture(output, GOLDEN_PATH, "Classification")
 
 
 def test_standalone_output_matches_fixture(standalone_output):
-    """The four standalone producers' output must deep-equal its committed fixture.
-
-    The same guard the golden has, and what makes the schema gate bite: the gate reads
-    a committed file, so without this a change to `build_published` or `derivation_edge`
-    would leave the fixture stale and the gate green.
-    """
-    assert STANDALONE_PATH.exists(), (
-        f"Standalone fixture missing at {STANDALONE_PATH}. Regenerate with `python -m tests.test_output_shape`."
-    )
-    expected = json.loads(STANDALONE_PATH.read_text())
-    assert standalone_output == expected, (
-        "Standalone producer output changed. If intentional, regenerate the fixture "
-        "with `python -m tests.test_output_shape` and review the diff."
-    )
+    """The four standalone producers' output must deep-equal its committed fixture."""
+    _assert_matches_fixture(standalone_output, STANDALONE_PATH, "Standalone producer")
 
 
 def test_the_schema_gate_covers_every_producer():
