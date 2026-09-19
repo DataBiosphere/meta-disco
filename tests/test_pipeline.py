@@ -17,9 +17,11 @@ from tests.metadata_fixtures import valid_record as _valid_record
 
 def _make_config(**overrides):
     """Create a FileTypeConfig with test defaults."""
-    # `dict[str, Any]`, not a declared shape: this is a kwargs bag on its way to
-    # `FileTypeConfig(**defaults)`, where that constructor's own signature does
-    # the checking. A TypedDict here would restate it and go stale beside it.
+    # `dict[str, Any]`, not a declared shape: a TypedDict here would restate
+    # `FileTypeConfig`'s signature and go stale beside it. Be aware of what
+    # that trades away — unpacking a dict switches off static arity and type
+    # checking at the call site, so a wrong or unknown key here is caught by the
+    # constructor at run time, not by `make type`.
     defaults: dict[str, Any] = {
         "name": "test",
         "extensions": (".test",),

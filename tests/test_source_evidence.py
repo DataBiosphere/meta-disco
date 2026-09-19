@@ -89,9 +89,11 @@ ISO_NOW = FETCHED_AT.isoformat()
 def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
     """An HPRC catalog envelope: filenames the catalog publishes, matched against
     AnVIL's ``file_name`` within the dataset that makes that key usable."""
-    # `dict[str, Any]`, not a declared shape: this is a kwargs bag on its way to
-    # `EvidenceFileEnvelope(**...)`, where that constructor's own signature does
-    # the checking. A TypedDict here would restate it and go stale beside it.
+    # `dict[str, Any]`, not a declared shape: a TypedDict here would restate
+    # `EvidenceFileEnvelope`'s signature and go stale beside it. Be aware of what
+    # that trades away — unpacking a dict switches off static arity and type
+    # checking at the call site, so a wrong or unknown key here is caught by the
+    # constructor at run time, not by `make type`.
     kwargs: dict[str, Any] = {
         "source": HPRC_CATALOG,
         "source_type": SOURCE_REPOSITORY_METADATA,

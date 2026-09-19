@@ -420,9 +420,13 @@ class _Observed(TypedDict):
     """What was read off one file for the key contigs.
 
     The keys are ``ReferenceBuild`` field names, because :func:`_consistent`
-    looks each one up on the build with ``getattr``. Declaring them keeps that
-    correspondence checkable: a key that is not a build field is now an error
-    here rather than an ``AttributeError`` at match time.
+    looks each one up — ``FIELD_CONTIG[field]`` first, then ``getattr``. Nothing
+    in the type system checks them against that dataclass; a key that is not a
+    build field raises ``KeyError`` at match time exactly as it did before. What
+    this does check is narrower and still worth having: the literal below cannot
+    drift from this list. ``test_observed_matches_the_signature_fields`` pins the
+    list itself to ``rule_loader.SIGNATURE_FIELDS``, which is where the set is
+    declared and which ``FIELD_CONTIG`` is derived from.
     """
 
     chr1_length: int | None

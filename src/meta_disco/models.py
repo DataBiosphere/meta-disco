@@ -155,8 +155,13 @@ def _field_entry(record: Mapping[str, Any], field_name: str):
 
     ``Mapping``, not ``dict``: this only reads, and ``dict`` is invariant in its
     value type, so a caller holding a declared record shape could not pass it.
-    The value type stays ``Any`` — what bare ``dict`` already meant here — so
-    widening the parameter changes nothing about what callers infer.
+
+    The value type stays ``Any``, which is what bare ``dict`` already meant, so
+    the widening changes nothing about what callers infer. That is a deliberate
+    deferral, not a free choice: ``Mapping[str, object]`` is the stricter and
+    truer type, and it reports 5 diagnostics — the substantive one being that
+    :func:`field_label` declares ``-> str | None`` while returning whatever the
+    record held at that key. Tightening it is #464's call (#461).
 
     Normalizes the layouts classification records appear in:
     - per-field:  record["classifications"][field] -> {"value", ...}

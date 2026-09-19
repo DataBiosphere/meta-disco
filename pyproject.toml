@@ -97,12 +97,15 @@ exclude = ["src/meta_disco/schema/metadata_model.py", "**/__pycache__"]
 # dict[str, object] and every use of it type-checks, so an accumulator that
 # mixes counters with sub-dicts goes unchecked until it runs (#461).
 #
-# The eight rules #461 names — reportArgumentType, reportOperatorIssue,
+# #461 asked for eight rules instead (reportArgumentType, reportOperatorIssue,
 # reportAttributeAccessIssue, reportIndexIssue, reportCallIssue,
-# reportReturnType, reportOptionalMemberAccess, reportOptionalSubscript — are
-# already `error` under `standard`, so listing them is a no-op: measured, they
-# add 0 diagnostics. This setting is what surfaced the 70 they reported, and
-# they are the rules that then do the reporting.
+# reportReturnType, reportOptionalMemberAccess, reportOptionalSubscript). They
+# are already `error` under `standard`, so they are not listed here: forcing all
+# eight changed the count by 0 on the tree that measured the 70. Those rules do
+# the reporting; this setting is what gives them something to see.
+# strictListInference / strictSetInference close the same hole for list and set
+# literals and measure 0 today — deliberately left off, as the narrowest change
+# that fixes what was found.
 strictDictionaryInference = true
 
 [tool.pytest.ini_options]

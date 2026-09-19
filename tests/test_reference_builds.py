@@ -39,6 +39,7 @@ from meta_disco.validators.reference_builds import (
     _candidates,
     _consistent,
     _has_signatures,
+    _Observed,
     identity_from_sam,
     identity_from_vcf,
     observe_sam,
@@ -761,6 +762,19 @@ class TestSchemaContract:
         """The same constraint on the path that actually produces output."""
         entry = classify_from_header(CHM13_V2)["reference_assembly"]
         assert schema_vocab.value_in_vocabulary("reference_assembly", entry["build"]["base"])
+
+    def test_observed_matches_the_signature_fields(self):
+        """``_Observed``'s keys are the signature field set, in its order.
+
+        ``_consistent`` looks each key up as ``FIELD_CONTIG[field]`` and then as
+        a ``ReferenceBuild`` attribute, and neither lookup is visible to the type
+        checker — a key that drifted from the table would raise ``KeyError`` at
+        match time. ``SIGNATURE_FIELDS`` is where that set is declared (and what
+        ``FIELD_CONTIG`` is built from), so pinning to it is what makes the
+        TypedDict's key list a checked correspondence rather than a fifth
+        hand-written copy.
+        """
+        assert tuple(_Observed.__annotations__) == SIGNATURE_FIELDS
 
     def test_the_emitted_build_carries_exactly_the_declared_attributes(self):
         """The schema declares five class-local attributes; the emitted object

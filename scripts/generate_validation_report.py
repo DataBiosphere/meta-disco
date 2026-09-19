@@ -97,12 +97,14 @@ _Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_
 class _DiscrepancyCategory(TypedDict):
     """One (ours, truth) pair we disagreed on, with a count and one example."""
 
-    # Both sides are whatever the two sources put in the field: rendered through
-    # `str()`, never compared, so `object` is the honest width.
+    # All three are whatever the two sources put in the field: rendered through
+    # `str()`, never compared, so `object` is the honest width. `example` is no
+    # narrower than the other two — `load_hprc_results` writes `m.get("file",
+    # "")`, and that default covers a missing key, not a null one.
     ours: object
     truth_mapped: object
     count: int
-    example: str
+    example: object
 
 
 class _DimStats(TypedDict):
@@ -114,6 +116,13 @@ class _DimStats(TypedDict):
     not_classified: int
     no_truth: int
     discrepancy_categories: dict[str, _DiscrepancyCategory]
+
+
+class _NamedCount(TypedDict):
+    """A name and a file count, as the `datasets` listing renders them."""
+
+    name: str
+    count: int
 
 
 class _CatalogSummary(TypedDict):
@@ -135,23 +144,29 @@ class _ComparisonResultsBase(TypedDict):
 class _ComparisonResults(_ComparisonResultsBase, total=False):
     """What one ground-truth source's comparison produced.
 
-    Built two ways — by `compare_source` from records, and by
-    `load_hprc_results` from a file another script already wrote — and
-    `build_source_section` renders either. Declaring it is what holds those
-    three in agreement.
+    Declared once for two builders and one renderer, though only one builder is
+    reachable today: `main` populates `all_results` from `load_hprc_results`
+    alone, and **`compare_source` has no caller anywhere in the repo**. The type
+    is what would hold them in agreement if it were wired back up.
 
     The optional half is what only `load_hprc_results` can know, because only
     it reads a per-catalog file: `build_source_section` guards on
-    `metadata_coverage` before rendering it, and the other two reach the
-    dashboard template through `json.dumps` of the whole results dict.
+    `metadata_coverage` before rendering it, and `catalog_summary` /
+    `catalog_dimensions` reach the dashboard template through `json.dumps` of
+    the whole results dict.
 
-    Split across two classes because `NotRequired` needs 3.11 and this targets
-    3.10 (`[tool.pyright].pythonVersion`).
+    `datasets` is declared because `build_source_section` reads it, but **no
+    builder in this file writes it**, so that branch never renders today. It is
+    declared rather than omitted so the type says what the renderer expects;
+    omitting it would hide a dead branch behind a shape that looks complete.
+
+    Two classes because `NotRequired` needs 3.11 and this targets 3.10.
     """
 
     metadata_coverage: dict[str, int]
     catalog_summary: list[_CatalogSummary]
     catalog_dimensions: dict[str, list[str]]
+    datasets: list[_NamedCount]
 
 
 def compare_field(inferred_value, truth_value) -> _Outcome:
@@ -497,7 +512,7 @@ def build_source_section(name: str, results: _ComparisonResults) -> str:
                     f"| {cat['count']:,} "
                     f"| {escape_md_cell(str(cat['ours']))} "
                     f"| {escape_md_cell(str(cat['truth_mapped']))} "
-                    f"| {escape_md_cell(cat['example'])} |"
+                    f"| {escape_md_cell(str(cat['example']))} |"
                 )
             lines.append("")
 

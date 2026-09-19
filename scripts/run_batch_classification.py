@@ -75,7 +75,7 @@ def run_classification(files: list[dict], engine: RuleEngine) -> list[dict]:
 
 
 class _Stats(TypedDict):
-    """The run summary: four counters, then three breakdowns keyed by value.
+    """The run summary: counters, and three breakdowns keyed by value.
 
     The counters and the breakdowns are what a bare dict literal cannot keep
     apart — inferred together they widen to `int | dict`, and `+= 1` on one is

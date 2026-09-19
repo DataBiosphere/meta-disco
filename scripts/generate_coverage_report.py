@@ -273,15 +273,11 @@ class _ExtensionCount(TypedDict):
     count: int
 
 
-class _ValueBreakdown(TypedDict):
-    name: str
-    count: int
+class _ValueBreakdown(_NamedCount):
     extensions: list[_ExtensionCount]
 
 
-class _NotClassifiedRow(TypedDict):
-    ext: str
-    count: int
+class _NotClassifiedRow(_ExtensionCount):
     why: str
 
 

@@ -31,9 +31,8 @@ class _FormatRuleBase(TypedDict):
 class _FormatRule(_FormatRuleBase, total=False):
     """One extension -> category rule, with an optional filename qualifier.
 
-    Split across two classes because `name_contains` is optional and
-    `NotRequired` needs 3.11, while this targets 3.10
-    (`[tool.pyright].pythonVersion`).
+    Two classes because `NotRequired` needs 3.11 and this targets 3.10
+    (`requires-python`, `[tool.pyright].pythonVersion`).
     """
 
     name_contains: str

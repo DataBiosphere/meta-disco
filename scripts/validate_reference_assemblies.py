@@ -65,13 +65,17 @@ class _Mismatch(_MismatchBase, total=False):
     """One contig whose length disagrees with the source it was checked against.
 
     The two optional keys are that source: `ensembl` for the builds checked
-    against the REST API, `expected` for CHM13, which is checked against
-    hard-coded T2T consortium values because no Ensembl archive serves it.
-    Declaring both optional records that the two branches write different keys
-    — a reader of the JSON has to handle either.
+    against the Ensembl REST API, `expected` for CHM13. Note what the CHM13
+    branch actually compares against — `chm13_v2`, a hand-copy of our own
+    `REFERENCE_CONTIG_LENGTHS["CHM13"]`, not an external source. The consortium
+    numbers sit in `_chm13_official`, which nothing reads, and whose own comment
+    records that one of them already disagrees with ours. So `expected` is
+    written by a check that cannot currently fail.
 
-    Split across two classes because `NotRequired` needs 3.11 and this targets
-    3.10 (`[tool.pyright].pythonVersion`).
+    Declaring both optional records that the two branches write different keys —
+    a reader of the JSON has to handle either.
+
+    Two classes because `NotRequired` needs 3.11 and this targets 3.10.
     """
 
     ensembl: int
