@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Classify image files using RuleEngine.
 
-Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
+Takes what `PRODUCERS["images"]` claims, and uses rules from the bundled
+unified_rules.yaml (package data of meta_disco.rules):
 - .svs -> imaging.histology (Aperio whole-slide images)
-- .png -> derived visualizations (QC plots)
+- the rest -> derived visualizations (QC plots), data_type images only
 """
 
 import argparse

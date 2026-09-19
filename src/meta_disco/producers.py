@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
+from .file_name import EXTENSION_MAP
 from .file_types import FILE_TYPE_REGISTRY, FileTypeConfig
 
 # Index extension -> parent extension mapping.
@@ -95,26 +96,43 @@ def _header_producer(config: FileTypeConfig) -> Producer:
     )
 
 
+def _extensions_in(*categories: str) -> tuple[str, ...]:
+    """Every ``EXTENSION_MAP`` extension in ``categories``, sorted.
+
+    A producer whose claim *is* a category of the extension vocabulary takes it from
+    there rather than re-listing it. Re-listing is what let the images producer claim
+    ``.tiff`` but not ``.tif``, so a ``.tif`` was claimed by no producer at all and fell
+    to the catch-all (#451). Sorted, because a producer's per-extension summary is
+    ordered by this tuple and must not reorder with the map.
+
+    ``index`` is the one claim not built this way: it reads ``INDEX_TO_PARENT``, whose
+    keys are the same extensions but which also carries the parent lists that producer
+    inherits from — so its routing and its inheritance cannot drift apart.
+    """
+    if unknown := set(categories) - set(EXTENSION_MAP.values()):
+        raise ValueError(
+            f"No extension carries {sorted(unknown)}; a renamed category leaves a producer claiming nothing."
+        )
+    return tuple(sorted(ext for ext, category in EXTENSION_MAP.items() if category in categories))
+
+
 PRODUCERS: dict[str, Producer] = {
     **{name: _header_producer(config) for name, config in FILE_TYPE_REGISTRY.items()},
-    # The `image` and `histology_image` categories of `file_name.EXTENSION_MAP`, in full.
-    # Declared rather than derived, so routing does not import the rules vocabulary;
-    # `test_producer_routing` asserts the two agree, so a future divergence is a failing
-    # test rather than a file claimed by no one — which is what `.tif` was (#451).
+    # Whole-slide histology and derived plots.
     "images": Producer(
         name="images",
         script="classify_images.py",
         output="image_classifications.json",
         phase=1,
-        extensions=(".jpeg", ".jpg", ".png", ".svs", ".tif", ".tiff"),
+        extensions=_extensions_in("image", "histology_image"),
     ),
-    # ONT raw signal (.fast5, .pod5) and PLINK2 genotypes (.pgen, .psam, .pvar).
+    # ONT raw signal and PLINK2 genotypes.
     "auxiliary": Producer(
         name="auxiliary",
         script="classify_auxiliary_genomic.py",
         output="auxiliary_classifications.json",
         phase=1,
-        extensions=(".fast5", ".pgen", ".pod5", ".psam", ".pvar"),
+        extensions=_extensions_in("nanopore", "genotype_plink"),
     ),
     "index": Producer(
         name="index",
