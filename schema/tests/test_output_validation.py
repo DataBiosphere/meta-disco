@@ -53,7 +53,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 _STANDALONE = _REPO_ROOT / "tests/fixtures/golden/standalone_output.json"
-_REGEN = "python -m tests.test_output_shape"
+# Absolute, because this suite runs with `schema/` as its working directory (`make
+# test-schema` is a sub-make): from there `python -m tests.test_output_shape` resolves
+# against `schema/tests/`, finds no such module, and would need the root project's env
+# anyway. A message telling a reader to run something that cannot run where they are
+# reading it is worse than no message.
+_REGEN = f"cd {_REPO_ROOT} && uv run python -m tests.test_output_shape"
 
 
 def _dimension_classes() -> dict:
@@ -274,6 +279,33 @@ def test_a_producers_published_block_reaches_the_gate(path):
         and any(not terms for terms in vocabulary(block))
         for block in blocks
     ), f"no one record in {path.name} publishes both dimensions with a term this vocabulary has and one it lacks"
+
+
+def test_in_vocabulary_names_the_dimensions_the_block_speaks_to():
+    """``in_vocabulary``'s keys are exactly the dimensions carrying a published value.
+
+    The class's own description: a dimension the repository publishes nothing for is
+    absent here rather than present and empty. Checked against the output because the
+    record gate cannot — it runs ``closed=False``, so an unmodeled key inside the map is
+    tolerated there, and the reachability checks above read only the map's values, where
+    a renamed key still leaves one populated list and one empty one. Measured: renaming
+    ``reference_assembly`` to ``ref`` in ``build_published`` and regenerating passed all
+    91 tests in this suite.
+
+    ``build_published``'s own tests in ``tests/test_published_comparison.py`` also catch
+    that rename — nine of them — so this is the schema side holding its half of an
+    invariant it declares, rather than the only thing standing between the drift and
+    ``main``.
+    """
+    for label, record in _fixture_records():
+        block = record.get("published")
+        if not block:
+            continue
+        speaks_to = {field for field in _PUBLISHED_FIELDS if block.get(field)}
+        assert set(block["in_vocabulary"]) == speaks_to, (
+            f"{label}: in_vocabulary names {sorted(block['in_vocabulary'])}, "
+            f"but the block publishes {sorted(speaks_to)}"
+        )
 
 
 def test_a_one_sided_published_block_reaches_the_gate():
