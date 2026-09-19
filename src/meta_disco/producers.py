@@ -97,12 +97,16 @@ def _header_producer(config: FileTypeConfig) -> Producer:
 
 PRODUCERS: dict[str, Producer] = {
     **{name: _header_producer(config) for name, config in FILE_TYPE_REGISTRY.items()},
+    # The `image` and `histology_image` categories of `file_name.EXTENSION_MAP`, in full.
+    # Declared rather than derived, so routing does not import the rules vocabulary;
+    # `test_producer_routing` asserts the two agree, so a future divergence is a failing
+    # test rather than a file claimed by no one — which is what `.tif` was (#451).
     "images": Producer(
         name="images",
         script="classify_images.py",
         output="image_classifications.json",
         phase=1,
-        extensions=(".jpg", ".png", ".svs", ".tiff"),
+        extensions=(".jpeg", ".jpg", ".png", ".svs", ".tif", ".tiff"),
     ),
     # ONT raw signal (.fast5, .pod5) and PLINK2 genotypes (.pgen, .psam, .pvar).
     "auxiliary": Producer(

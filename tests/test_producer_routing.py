@@ -10,6 +10,7 @@ overlapping extensions.
 
 import pytest
 
+from meta_disco.file_name import EXTENSION_MAP
 from meta_disco.producers import PRODUCERS, Producer, producer_of, validate_registry
 from tests.metadata_fixtures import valid_record
 from tests.producer_sweep import classify_auxiliary_genomic, run_producer
@@ -152,3 +153,42 @@ class TestTheRegistryRefusesAnOverlap:
         `validate_registry` over it, so an overlap would have failed collection.
         """
         assert {".vcf.gz", ".g.vcf.gz"} <= set(PRODUCERS["vcf"].extensions)
+
+
+# The `EXTENSION_MAP` categories each producer's declared set stands for. The three
+# producers here are the ones whose claim is a category of the rules vocabulary; the
+# seven header producers and the catch-all are deliberately absent — their extensions
+# come from `FileTypeConfig`, not from a category.
+CATEGORIES_CLAIMED = {
+    "images": {"image", "histology_image"},
+    "auxiliary": {"nanopore", "genotype_plink"},
+    "index": {"index"},
+}
+
+
+class TestADeclaredSetMatchesTheCategoryItStandsFor:
+    """Routing declares its extensions; the rules vocabulary declares the same ones as
+    categories. The two are independent on purpose — `producers` imports nothing from
+    `file_name` — which is exactly why they can drift, and did: the images producer
+    claimed `.tiff` but not `.tif`, so a `.tif` was claimed by no producer and fell to
+    the catch-all (#451). Deriving one from the other would close that permanently at
+    the cost of the independence; asserting it here leaves a divergence possible but
+    deliberate, since making one means changing this test.
+    """
+
+    @pytest.mark.parametrize("name", sorted(CATEGORIES_CLAIMED))
+    def test_the_producer_claims_its_categories_exactly(self, name):
+        categories = CATEGORIES_CLAIMED[name]
+        expected = {ext for ext, category in EXTENSION_MAP.items() if category in categories}
+        assert expected, f"no extension carries any of {sorted(categories)} — a renamed category?"
+        assert set(PRODUCERS[name].extensions) == expected
+
+    @pytest.mark.parametrize(
+        "file_name, file_format",
+        [("slide.tif", ".tif"), ("plot.jpeg", ".jpeg")],
+        ids=["tif", "jpeg"],
+    )
+    def test_the_spellings_the_drift_left_homeless_are_claimed(self, file_name, file_format):
+        """The outcome the set equality is for: both spellings route to the images
+        producer rather than falling through to the catch-all."""
+        assert producer_of(valid_record(file_name=file_name, file_format=file_format)) is PRODUCERS["images"]

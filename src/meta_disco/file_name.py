@@ -164,6 +164,7 @@ EXTENSION_MAP: dict[str, str] = {
     ".tif": "image",
     ".png": "image",
     ".jpg": "image",
+    ".jpeg": "image",
     ".fasta": "sequence",
     ".fa": "sequence",
     ".gfa": "pangenome",

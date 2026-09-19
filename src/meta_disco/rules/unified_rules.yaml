@@ -346,7 +346,7 @@ rules:
     tier: 2
     scope: extension
     when:
-      extensions: [".png", ".jpg", ".tiff", ".tif"]
+      extensions: [".png", ".jpg", ".jpeg", ".tiff", ".tif"]
     then:
       data_type: images
       status:
