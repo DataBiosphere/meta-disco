@@ -127,4 +127,8 @@ markers = [
     # auto-skips them when that cache is absent — e.g. in CI, where a miss would
     # otherwise fall through to a live S3 + samtools fetch. See issue #180.
     "e2e: needs the local evidence cache; auto-skipped when it is absent",
+    # Checks that call a third-party API (Ensembl). Opt-in only — tests/conftest.py
+    # skips them unless `-m network` selects them — so `make test` and CI stay
+    # offline and deterministic. Run with: uv run pytest -m network
+    "network: calls an external API; opt-in, run with -m network",
 ]

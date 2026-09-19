@@ -14,17 +14,26 @@ import pytest
 _EVIDENCE_CACHE = Path("data/evidence/anvil")
 
 
-def pytest_collection_modifyitems(items):
-    """Skip e2e-marked tests when the local evidence cache is absent (e.g. CI).
+def pytest_collection_modifyitems(config, items):
+    """Skip e2e tests without the evidence cache, and network tests unless selected.
 
-    pytest injects only the hook arguments a plugin declares, so we request just
-    `items` and omit the unused `session`/`config`.
+    Two independent gates, both defaulting to "do not run":
+
+    - **e2e** is skipped when the cache directory is absent (e.g. CI), per above.
+    - **network** is skipped unless `-m` names it. There is no local precondition
+      to test for, so opting in is the signal: a default `make test` run must not
+      depend on a third-party API being up.
     """
-    if _EVIDENCE_CACHE.is_dir():
-        return
-    skip_e2e = pytest.mark.skip(
-        reason=f"evidence cache {_EVIDENCE_CACHE}/ absent; e2e eval tests are local-only (issue #180)"
-    )
-    for item in items:
-        if "e2e" in item.keywords:
-            item.add_marker(skip_e2e)
+    if not _EVIDENCE_CACHE.is_dir():
+        skip_e2e = pytest.mark.skip(
+            reason=f"evidence cache {_EVIDENCE_CACHE}/ absent; e2e eval tests are local-only (issue #180)"
+        )
+        for item in items:
+            if "e2e" in item.keywords:
+                item.add_marker(skip_e2e)
+
+    if "network" not in (config.getoption("-m") or ""):
+        skip_network = pytest.mark.skip(reason="network tests are opt-in; select them with -m network")
+        for item in items:
+            if "network" in item.keywords:
+                item.add_marker(skip_network)
