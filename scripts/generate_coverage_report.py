@@ -15,6 +15,7 @@ import sys
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 from meta_disco.file_name import FileName
 from meta_disco.models import field_label
@@ -262,13 +263,55 @@ def main():
     print(f"Written to {html_output}")
 
 
+class _NamedCount(TypedDict):
+    name: str
+    count: int
+
+
+class _ExtensionCount(TypedDict):
+    ext: str
+    count: int
+
+
+class _ValueBreakdown(_NamedCount):
+    extensions: list[_ExtensionCount]
+
+
+class _NotClassifiedRow(_ExtensionCount):
+    why: str
+
+
+class _DimensionPanel(TypedDict):
+    field: str
+    label: str
+    classified: int
+    not_classified: int
+    values: list[_ValueBreakdown]
+    not_classified_breakdown: list[_NotClassifiedRow]
+    notes: str
+
+
+class _DashboardData(TypedDict):
+    """The payload `coverage-dashboard-template.html` reads.
+
+    These key names are the contract with that template's JavaScript, which no
+    type can reach across — renaming one here still breaks the page silently.
+    Declaring the shape at least holds the Python side to one spelling.
+    """
+
+    total: int
+    run_time: str
+    datasets: list[_NamedCount]
+    dimensions: list[_DimensionPanel]
+
+
 def generate_html_dashboard(records: list[dict], run_time: str, dataset_counts: Counter, output_path: Path):
     """Generate HTML dashboard with embedded chart data."""
     total = len(records)
-    datasets = (
+    datasets: list[_NamedCount] = (
         [{"name": name, "count": count} for name, count in dataset_counts.most_common()] if dataset_counts else []
     )
-    dashboard_data = {
+    dashboard_data: _DashboardData = {
         "total": total,
         "run_time": run_time,
         "datasets": datasets,
@@ -286,14 +329,14 @@ def generate_html_dashboard(records: list[dict], run_time: str, dataset_counts: 
         classified = sum(c for v, c in totals.items() if v not in ("not_classified", "None"))
         nc = totals.get("not_classified", 0) + totals.get("None", 0)
 
-        values = [
+        values: list[_ValueBreakdown] = [
             {"name": val, "count": count, "extensions": [{"ext": e, "count": c} for e, c in by_ext[val].most_common()]}
             for val, count in totals.most_common()
         ]
 
         nc_exts = by_ext.get("not_classified", Counter()) + by_ext.get("None", Counter())
         reasons_by_ext = get_nc_reasons(records, field)
-        nc_breakdown = []
+        nc_breakdown: list[_NotClassifiedRow] = []
         for ext, count in nc_exts.most_common():
             ext_reasons = reasons_by_ext.get(ext, Counter())
             top_reason = ext_reasons.most_common(1)[0][0] if ext_reasons else "No reason recorded"

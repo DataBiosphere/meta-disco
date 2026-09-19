@@ -33,6 +33,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Literal, TypedDict
 
 from meta_disco.models import field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
@@ -87,8 +88,103 @@ def load_our_classifications(run_dir: Path) -> tuple[dict, dict]:
 
 SENTINELS = {"not_classified", "not_applicable", None}
 
+# The outcome vocabulary, named once. `compare_field` returns one of these and
+# `_DimStats` counts one per name. The check runs one way only: an outcome named
+# here with no matching `_DimStats` key is an error where the counter is indexed,
+# while a key added to `_DimStats` and not named here is not. That index sits in
+# `compare_source`, which nothing calls, so nothing reachable enforces the
+# correspondence today.
+_Outcome = Literal["agree", "discrepancy", "we_inferred", "not_classified", "no_truth"]
 
-def compare_field(inferred_value, truth_value) -> str:
+
+class _DiscrepancyCategory(TypedDict):
+    """One (ours, truth) pair we disagreed on, with a count and one example."""
+
+    # `ours` and `truth_mapped` are whatever the two sources put in the field:
+    # rendered through `str()`, never compared, so `object` is the honest width.
+    #
+    # `example` is narrower because of where it comes from, not because the two
+    # writers coerce it. `hprc_validation_results.json` has one producer,
+    # `validate_against_hprc.py`, which writes `file_name` off a run record —
+    # a string the input contract validates with `strict=True`, or `""` when the
+    # key is absent. The `or ""` guards the one case that producer can still
+    # emit as null; a non-string needs the generated file to be edited by hand,
+    # so it is not coerced for here.
+    ours: object
+    truth_mapped: object
+    count: int
+    example: str
+
+
+class _DimStats(TypedDict):
+    """Per-dimension outcome counts. The first five keys are exactly `_Outcome`."""
+
+    agree: int
+    discrepancy: int
+    we_inferred: int
+    not_classified: int
+    no_truth: int
+    discrepancy_categories: dict[str, _DiscrepancyCategory]
+
+
+class _NamedCount(TypedDict):
+    """A name and a file count, as the `datasets` listing renders them."""
+
+    name: str
+    count: int
+
+
+class _CatalogSummary(TypedDict):
+    """One catalog's file counts. Written by `load_hprc_results`, read by nothing.
+
+    `validation-dashboard-template.html` contains no reference to it and no Python
+    reads it back; it reaches the generated dashboard only inside the `json.dumps`
+    of the whole results dict. Same dead payload as `datasets`, from the other end.
+    """
+
+    name: str
+    total: int
+    matched: int
+
+
+class _ComparisonResultsBase(TypedDict):
+    """The three keys every comparison produces."""
+
+    matched: int
+    unmatched: int
+    dimensions: dict[str, _DimStats]
+
+
+class _ComparisonResults(_ComparisonResultsBase, total=False):
+    """What one ground-truth source's comparison produced.
+
+    Declared once for two builders and one renderer, though only one builder is
+    reachable today: `main` populates `all_results` from `load_hprc_results`
+    alone, and **`compare_source` has no caller anywhere in the repo**. The type
+    is what would hold them in agreement if it were wired back up.
+
+    The optional half is what only `load_hprc_results` writes, though not for one
+    reason: `catalog_summary` comes from the per-catalog counts in the file it
+    reads, `catalog_dimensions` is a hard-coded literal, and `metadata_coverage`
+    is summed from `dimensions`, which `compare_source` could compute just as
+    well. Of the three, only `metadata_coverage` has a reader —
+    `build_source_section` guards on it before rendering.
+
+    `datasets` is declared because `build_source_section` reads it, but **no
+    builder in this file writes it**, so that branch never renders today. It is
+    declared rather than omitted so the type says what the renderer expects;
+    omitting it would hide a dead branch behind a shape that looks complete.
+
+    Two classes because `NotRequired` needs 3.11 and this targets 3.10.
+    """
+
+    metadata_coverage: dict[str, int]
+    catalog_summary: list[_CatalogSummary]
+    catalog_dimensions: dict[str, list[str]]
+    datasets: list[_NamedCount]
+
+
+def compare_field(inferred_value, truth_value) -> _Outcome:
     """Compare a single field value against ground truth.
 
     Returns one of: agree, discrepancy, we_inferred, not_classified, no_truth
@@ -113,7 +209,7 @@ def compare_field(inferred_value, truth_value) -> str:
 
 def compare_source(
     our_by_key: dict, truth_records: list[dict], key_field: str, field_mappings: dict[str, dict], dimensions: list[str]
-) -> dict:
+) -> _ComparisonResults:
     """Compare our classifications against a ground truth source.
 
     Args:
@@ -125,7 +221,7 @@ def compare_source(
 
     Returns dict with per-dimension comparison stats and sample discrepancies.
     """
-    results = {
+    results: _ComparisonResults = {
         "matched": 0,
         "unmatched": 0,
         "dimensions": {},
@@ -177,7 +273,7 @@ def compare_source(
                         "ours": inferred_value,
                         "truth_mapped": mapped_truth,
                         "count": 0,
-                        "example": key,
+                        "example": str(key),
                     }
                 cats[cat_key]["count"] += 1
 
@@ -189,7 +285,7 @@ def compare_source(
 # =============================================================================
 
 
-def load_hprc_results(hprc_results_path: Path) -> dict:
+def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
     """Load pre-computed HPRC validation results and convert to report format.
 
     Reads from output/hprc/hprc_validation_results.json (produced by validate_against_hprc.py)
@@ -206,7 +302,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     mismatches = data.get("mismatches", [])
 
     total_matched = 0
-    dimensions = {}
+    dimensions: dict[str, _DimStats] = {}
 
     for dim, stats in dim_results.items():
         match = stats.get("match", 0)
@@ -215,7 +311,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
         total_matched = max(total_matched, match + mismatch + unknown)
 
         # Group discrepancies by category
-        discrepancy_categories = {}
+        discrepancy_categories: dict[str, _DiscrepancyCategory] = {}
         for m in mismatches:
             if dim in m:
                 info = m[dim]
@@ -227,7 +323,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
                         "ours": ours,
                         "truth_mapped": expected,
                         "count": 0,
-                        "example": m.get("file", ""),
+                        "example": m.get("file") or "",
                     }
                 discrepancy_categories[cat_key]["count"] += 1
 
@@ -256,7 +352,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
     # Build catalog summary for display
     catalogs_loaded = data.get("metadata", {}).get("catalogs_loaded", {})
     by_catalog = data.get("by_catalog", {})
-    catalog_summary = []
+    catalog_summary: list[_CatalogSummary] = []
     for cat_name, cat_total in catalogs_loaded.items():
         matched = by_catalog.get(cat_name, {}).get("matched", 0)
         catalog_summary.append(
@@ -277,7 +373,7 @@ def load_hprc_results(hprc_results_path: Path) -> dict:
 
     # Build metadata coverage from dimension stats
     # (match + mismatch + unknown = files where HPRC has ground truth)
-    metadata_coverage = {}
+    metadata_coverage: dict[str, int] = {}
     for dim, stats in dimensions.items():
         metadata_coverage[dim] = stats["agree"] + stats["discrepancy"] + stats["not_classified"]
 
@@ -319,7 +415,7 @@ def source_desc_html(name: str) -> str | None:
     return f'{info["text"]} <a href="{info["url"]}">{info["link_label"]}</a>.'
 
 
-def build_source_section(name: str, results: dict) -> str:
+def build_source_section(name: str, results: _ComparisonResults) -> str:
     # Short label for column headers: "Some Source (detail)" -> "Some Source"
     source_label = name.split("(")[0].strip() if "(" in name else name
 
@@ -366,7 +462,7 @@ def build_source_section(name: str, results: dict) -> str:
         lines.append("No dimensions to compare.")
         return "\n".join(lines)
 
-    EMPTY_DIM = {
+    EMPTY_DIM: _DimStats = {
         "agree": 0,
         "discrepancy": 0,
         "we_inferred": 0,

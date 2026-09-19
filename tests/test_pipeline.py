@@ -1,6 +1,7 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,14 +17,15 @@ from tests.metadata_fixtures import valid_record as _valid_record
 
 def _make_config(**overrides):
     """Create a FileTypeConfig with test defaults."""
-    defaults = {
-        "name": "test",
-        "extensions": (".test",),
-        "fetcher": lambda evidence_dir, md5, **kw: f"header_for_{md5}",
-        "classifier": lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
-    }
-    defaults.update(overrides)
-    return FileTypeConfig(**defaults)
+    return replace(
+        FileTypeConfig(
+            name="test",
+            extensions=(".test",),
+            fetcher=lambda evidence_dir, md5, **kw: f"header_for_{md5}",
+            classifier=lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
+        ),
+        **overrides,
+    )
 
 
 @pytest.fixture

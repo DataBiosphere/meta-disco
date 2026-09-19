@@ -8,6 +8,7 @@ over a run directory (``published.gather``).
 
 import json
 import pathlib
+from typing import TypedDict
 
 import pytest
 
@@ -36,8 +37,26 @@ def _entry(value=None, status=None):
     return {"value": value, "status": status or ("classified" if value else NOT_CLASSIFIED)}
 
 
-def _record(name, *, modality=None, assembly=None, published=None, dataset="AnVIL_IGVF_Mouse_R1"):
-    """One output record as a run writes it."""
+class _Record(TypedDict):
+    """One output record as a run writes it.
+
+    ``entry_id`` is ``object`` rather than ``str`` because the identity a run
+    reads back is not guaranteed to be one: `records.coerce_identity` exists for
+    exactly that, and `gather` stringifies the value inside its type tag. Two
+    cases below feed it an int and a list, and they are asserting a tolerance
+    the code has, not injecting a wrong type — declaring it ``str`` here would
+    make the contract's own test cases unwritable.
+    """
+
+    file_name: str
+    md5sum: str
+    entry_id: object
+    dataset_title: str
+    classifications: dict[str, dict]
+    published: dict | None
+
+
+def _record(name, *, modality=None, assembly=None, published=None, dataset="AnVIL_IGVF_Mouse_R1") -> _Record:
     return {
         "file_name": name,
         "md5sum": name,

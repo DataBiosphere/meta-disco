@@ -111,6 +111,7 @@ from __future__ import annotations
 
 import re
 import shlex
+from collections.abc import Mapping
 from dataclasses import asdict, astuple, dataclass, fields
 from itertools import pairwise
 from pathlib import PurePosixPath
@@ -459,8 +460,13 @@ def _has_signatures(build: ReferenceBuild) -> bool:
     return bool(build.chr1_length or build.chr1_m5 or build.chry_length or build.chry_m5)
 
 
-def _candidates(observed: dict[str, object]) -> list[ReferenceBuild]:
-    """Builds whose recorded signatures are consistent with the evidence."""
+def _candidates(observed: Mapping[str, object]) -> list[ReferenceBuild]:
+    """Builds whose recorded signatures are consistent with the evidence.
+
+    ``Mapping``, not ``dict``: this only reads, and ``dict`` is invariant in its
+    value type, so a caller's ``dict[str, int | str | None]`` would not be
+    assignable to ``dict[str, object]`` however correct it is.
+    """
     return [
         build
         for build in get_unified_rules().reference_builds

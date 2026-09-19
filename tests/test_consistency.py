@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 
@@ -14,9 +15,23 @@ RULES = load_rules()
 _DIMS = ("data_modality", "data_type", "reference_assembly", "assay_type", "platform")
 
 
-def _rec(md5="m", name="f.bam", **dims):
+class _Record(TypedDict):
+    """The three fields `check_record` reads.
+
+    ``classifications`` stays ``dict[str, dict]``: the linter's whole subject is
+    records that are malformed *inside* an entry — a non-list ``evidence``, a
+    ``classified`` status with a null value — so declaring the entry shape here
+    would make the cases this file exists to cover unwritable.
+    """
+
+    md5sum: str
+    file_name: str
+    classifications: dict[str, dict]
+
+
+def _rec(md5="m", name="f.bam", **dims) -> _Record:
     """Build a record; each dim kwarg is a (value, status) tuple, default not_classified."""
-    classifications = {}
+    classifications: dict[str, dict] = {}
     for dim in _DIMS:
         value, status = dims.get(dim, (None, "not_classified"))
         classifications[dim] = {"value": value, "status": status, "evidence": []}

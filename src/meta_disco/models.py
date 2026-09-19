@@ -1,5 +1,6 @@
 """Data models for file classification."""
 
+from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields
 from functools import cache
 from typing import Any
@@ -149,8 +150,23 @@ CLASSIFICATION_FIELDS = (
 )
 
 
-def _field_entry(record: dict, field_name: str):
+def _field_entry(record: Mapping[str, Any], field_name: str):
     """Return the per-field classification entry/value from a record, or None.
+
+    ``Mapping``, not ``dict``: this only reads, and a ``TypedDict`` is not
+    assignable to ``dict`` at all — whatever its value types (PEP 589) — so a
+    caller holding a declared record shape could not pass one. The old parameter
+    was bare ``dict``, so value-type variance was never what blocked it.
+
+    The value type stays ``Any``, which is what bare ``dict`` already meant, so
+    the widening changes nothing about what callers infer. ``Mapping[str,
+    object]`` is the truer type — it surfaces that :func:`field_label` declares
+    ``-> str | None`` while returning whatever the record held at that key, a
+    claim nothing checks. #464 weighed that and closed not-planned: reads here
+    go through ``.get``, which Pyright does not key-check even under ``strict``,
+    and the shapes that matter are declared in LinkML and validated against real
+    output. Revisit on evidence of a bug a declared shape would have caught, not
+    on a count of dict-shaped signatures (#461).
 
     Normalizes the layouts classification records appear in:
     - per-field:  record["classifications"][field] -> {"value", ...}

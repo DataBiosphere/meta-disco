@@ -88,17 +88,17 @@ ISO_NOW = FETCHED_AT.isoformat()
 def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
     """An HPRC catalog envelope: filenames the catalog publishes, matched against
     AnVIL's ``file_name`` within the dataset that makes that key usable."""
-    return EvidenceFileEnvelope(
-        **{
-            "source": HPRC_CATALOG,
-            "source_type": SOURCE_REPOSITORY_METADATA,
-            "source_version": "2026-09-01",
-            "source_key": "filename",
-            "target": ANVIL_TARGET,
-            "target_key": JOIN_KEY_FILE_NAME,
-            "fetched_at": FETCHED_AT,
-            **overrides,
-        }
+    return replace(
+        EvidenceFileEnvelope(
+            source=HPRC_CATALOG,
+            source_type=SOURCE_REPOSITORY_METADATA,
+            source_version="2026-09-01",
+            source_key="filename",
+            target=ANVIL_TARGET,
+            target_key=JOIN_KEY_FILE_NAME,
+            fetched_at=FETCHED_AT,
+        ),
+        **overrides,
     )
 
 
@@ -275,19 +275,30 @@ class TestTheEnvelopeIsFactoredOut:
         """
         path = tmp_path / "evidence.ndjson"
         seen = []
-        # Both writers have opened their temporary and written a row into it by the
-        # time they reach this, and neither proceeds until the other arrives — so the
-        # sample below cannot miss the overlap. Without it the main-thread writer can
-        # finish before the other starts, and the test passes or fails on scheduling
-        # (#401 review). The timeout turns a writer that raises before the barrier
-        # into a failure here rather than a hang.
+        # Two barriers, and both are load-bearing.
+        #
+        # The first: each writer has opened its temporary and written a row into it by
+        # the time it arrives, so neither samples until both are mid-write. Without it
+        # the main-thread writer can finish before the other starts (#401 review).
+        #
+        # The second: arriving together is not sampling together. Released from the
+        # first barrier, one writer can run to completion and rename before the other
+        # reads the directory — which is what made this test fail intermittently in
+        # CI, on a sample that saw the finished `evidence.ndjson` and one `.tmp`
+        # instead of two. Holding both here until each has sampled is what makes the
+        # assertion below independent of scheduling.
+        #
+        # Each timeout turns a writer that raises before its barrier into a failure
+        # here rather than a hang.
         both_writing = threading.Barrier(2, timeout=10)
+        both_sampled = threading.Barrier(2, timeout=10)
 
         def entries(tag):
             for n in range(3):
                 if n == 1:
                     both_writing.wait()
                     seen.append(sorted(p.name for p in tmp_path.iterdir()))
+                    both_sampled.wait()
                 yield _entry(name=f"{tag}{n}.bam")
 
         first = threading.Thread(target=write_evidence_file, args=(path, evidence_file_envelope(), entries("a")))
