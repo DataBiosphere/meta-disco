@@ -387,7 +387,7 @@ def generate_html_dashboard(all_results: dict, run_time: str, output_path: Path)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
-    parser.add_argument("--run-dir", type=Path, help="Classification run directory")
+    parser.add_argument("--run-dir", type=Path, help="Run directory, read for its name as the report timestamp")
     parser.add_argument(
         "--hprc-results",
         type=Path,
@@ -402,7 +402,9 @@ def main():
     except FileNotFoundError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from None
-    print(f"Loading classifications from: {run_dir}")
+    # Only the directory *name* is read, for the run timestamp below — since #466
+    # deleted `load_our_classifications`, nothing in this script opens the run.
+    print(f"Run: {run_dir.name}")
 
     try:
         run_time = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")

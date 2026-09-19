@@ -2,14 +2,20 @@
 
 These go through ``ClassifyPipeline.classify_single`` with REAL cached evidence
 files, not the internal classify functions directly. The input is a file
-(via md5 -> cached evidence), the output is the JSON record that would
-appear in the output file — the same call `make classify` makes for one file,
-with the same ``*_CONFIG`` it uses.
+(via md5 -> cached evidence), the output is the JSON record that would appear in
+the output file.
+
+What that shares with `make classify` is the part these tests are about: the same
+``*_CONFIG`` and the same ``_fetch_and_classify`` core. It is not the same call —
+the batch path reaches ``OutputRecord.from_work_item`` and this one
+``from_single``, which leaves the catalog identity and ``dataset_title`` null. The
+record's *shape* across both is pinned by ``tests/producer_sweep``, not here.
 
 Until #466 these imported four ``scripts/classify_<type>_files.py`` wrappers,
-which had been the entry points before `make classify` moved to
-``classify_headers.py``. Each was a pass-through to the call below, so the evals
-were testing a path production no longer ran; the wrappers are gone.
+whose own banners had said DEPRECATED since `make classify` moved to
+``classify_headers.py``. Each imported function was a pass-through to the call
+below, so the evals were testing an entry point production no longer ran; the
+wrappers are gone.
 
 For rule-engine-only classifiers (BED, images, auxiliary), the input
 is a FileInfo and the output is an ExtendedClassificationResult.

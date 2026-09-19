@@ -1,21 +1,35 @@
-"""Check ``REFERENCE_CONTIG_LENGTHS`` against Ensembl, the authority it came from.
+"""Cross-check ``REFERENCE_CONTIG_LENGTHS`` against Ensembl.
 
-Every other test in this suite compares the repo against itself. This one is the
-only check that our contig table matches an external source, so a silent edit to
-it — or an upstream correction we never picked up — is caught here and nowhere
-else. It came from ``scripts/validate_reference_assemblies.py``, deleted in #466
-as one of the nine scripts nothing ran; the script's other two checks did not
-survive with it. Its file-sampling half duplicated what the corpus reports
-already cover, and its CHM13 half compared the table against a hand-copy of
-itself, so it could not fail (see #466 for the numbers that check never
-compared).
+The table is copied from NCBI assembly reports (the accessions are in
+``validators/contig_lengths.py``) and lives in ``unified_rules.yaml``. Ensembl is
+an independent publisher of the same assemblies, so this is a second opinion on
+our numbers rather than a read-back of their source. No other test compares a
+table in this repo against an upstream copy of it: a silent edit here, or an
+upstream correction we never picked up, is caught here or not at all.
 
-CHM13 is therefore not covered: Ensembl's main REST API does not serve it, and
-there is no equivalent endpoint to point at.
+It came from ``scripts/validate_reference_assemblies.py``, deleted in #466. That
+script had three checks and only this one worked:
 
-Network-marked, so it is opt-in and neither ``make test`` nor CI runs it:
+- **Files.** ``validate_classified_files`` ignored its ``sample_size`` argument and
+  read ``record["reference_assembly"]``, while records nest the five dimensions
+  under ``classifications``. It reported 0 files with a reference assembly, for
+  every file, in every run. ``generate_coverage_report.py`` covers that ground
+  correctly.
+- **CHM13.** Compared our live table against ``chm13_v2``, a frozen hand-copy of
+  the same five values — so an edit to our table would have failed it, but it
+  could never disagree with the consortium, because the consortium's numbers sat
+  in ``_chm13_official`` and nothing read them.
+- **GRCh37/GRCh38 against Ensembl.** This one. Ported.
 
-    uv run pytest tests/test_contig_lengths.py -m network
+CHM13 is not covered here. Ensembl's REST API does not serve it, and while NCBI
+does publish the accession our table cites, pointing at it is not free: its
+lengths disagree with ours on three of the twenty-four contigs. Whether that is a
+release difference or an error in our table is open, and recorded on #466 with the
+numbers.
+
+Network-marked, so neither ``make test`` nor CI runs it. Run it with::
+
+    make test-network
 """
 
 import pytest
@@ -33,18 +47,24 @@ ENSEMBL_HOSTS = {
 
 
 def _ensembl_top_level(host: str) -> dict[str, int]:
-    """``{contig name: length}`` for one assembly, or skip if Ensembl is unreachable.
+    """``{contig name: length}`` for one assembly.
 
-    A skip rather than a failure: this test asserts about our table, so an
-    outage upstream is not evidence of a defect here.
+    Skips on a transport error, a 5xx or a 429 — this test asserts about our
+    table, and an outage upstream is not evidence of a defect here. A 4xx fails
+    instead: that means *this* URL is wrong, and since nothing in `make test` or
+    CI runs this file, skipping would retire the check without anyone noticing.
     """
     url = f"{host}/info/assembly/homo_sapiens"
     try:
         resp = requests.get(url, headers={"Content-Type": "application/json"}, timeout=30)
     except requests.RequestException as exc:
         pytest.skip(f"Ensembl unreachable at {url}: {exc}")
-    if resp.status_code != 200:
+    if resp.status_code >= 500 or resp.status_code == 429:
         pytest.skip(f"Ensembl returned {resp.status_code} for {url}")
+    assert resp.status_code == 200, (
+        f"Ensembl returned {resp.status_code} for {url} — a 4xx means this test's URL is wrong, "
+        "not that upstream is down, and skipping it would retire the check silently"
+    )
     regions = resp.json().get("top_level_region", [])
     return {r["name"]: r["length"] for r in regions if "name" in r and "length" in r}
 
@@ -58,9 +78,10 @@ def test_our_contig_lengths_match_ensembl(build):
     way; Ensembl publishes the bare form, so the prefixed keys are skipped
     rather than reported as absent upstream.
 
-    Contigs Ensembl does not list are not failures either — the table holds
-    entries the assembly report omits, and this test is about disagreement, not
-    coverage.
+    A contig Ensembl does not list is skipped rather than failed: absence upstream
+    is not disagreement. That case does not arise today — the guard below pins
+    that all 24 are compared — but the check is about conflicting values, so a
+    future omission should not read as one.
     """
     upstream = _ensembl_top_level(ENSEMBL_HOSTS[build])
     assert upstream, f"Ensembl returned no top-level regions for {build}"
@@ -79,7 +100,8 @@ def test_ensembl_covers_enough_of_our_table_to_be_a_real_check(build):
 
     If Ensembl changed its payload shape, or the names stopped matching, the
     mismatch set would be empty for the wrong reason and the check would report
-    success while comparing nothing. The 24 primary chromosomes are the floor.
+    success while comparing nothing. All 24 primary chromosomes must match by
+    name — the whole comparable set, not a floor beneath a larger one.
     """
     upstream = _ensembl_top_level(ENSEMBL_HOSTS[build])
     compared = [c for c in REFERENCE_CONTIG_LENGTHS[build] if not c.startswith("chr") and c in upstream]

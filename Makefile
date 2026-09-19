@@ -35,10 +35,17 @@ help:
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
 	@echo ""
+	@echo "  make test-network       Run the opt-in checks that call an external API"
 	@echo "  make clean              Remove cached .pyc files"
 
 test:
 	uv run pytest tests/ -v
+
+# The network-marked checks, which `make test` deliberately skips: they call a
+# third-party API, so they are opt-in rather than part of the default gate.
+# Today that is the Ensembl cross-check on REFERENCE_CONTIG_LENGTHS (#466).
+test-network:
+	uv run pytest tests/ -v -m network
 
 # Runs the schema tooling project's own suite (its own uv env, has linkml).
 test-schema:

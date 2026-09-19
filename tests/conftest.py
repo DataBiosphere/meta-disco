@@ -1,5 +1,6 @@
 # tests/conftest.py
 
+import re
 from pathlib import Path
 
 import pytest
@@ -17,12 +18,17 @@ _EVIDENCE_CACHE = Path("data/evidence/anvil")
 def pytest_collection_modifyitems(config, items):
     """Skip e2e tests without the evidence cache, and network tests unless selected.
 
-    Two independent gates, both defaulting to "do not run":
+    Two independent gates. Neither runs unless its precondition holds:
 
-    - **e2e** is skipped when the cache directory is absent (e.g. CI), per above.
-    - **network** is skipped unless `-m` names it. There is no local precondition
-      to test for, so opting in is the signal: a default `make test` run must not
-      depend on a third-party API being up.
+    - **e2e** needs the cache directory; it is skipped where that is absent (CI),
+      and runs by default where it is present.
+    - **network** has no local precondition to test for, so opting in is the
+      signal: it runs only when the `-m` expression mentions the marker. A
+      default `make test` must not depend on a third-party API being up.
+
+    The `-m` check matches marker *names*, not a substring of the expression, so
+    a future marker whose name contains this one (`network_slow`) cannot switch
+    the gate off by accident.
     """
     if not _EVIDENCE_CACHE.is_dir():
         skip_e2e = pytest.mark.skip(
@@ -32,7 +38,7 @@ def pytest_collection_modifyitems(config, items):
             if "e2e" in item.keywords:
                 item.add_marker(skip_e2e)
 
-    if "network" not in (config.getoption("-m") or ""):
+    if "network" not in re.findall(r"[A-Za-z_]\w*", config.getoption("-m") or ""):
         skip_network = pytest.mark.skip(reason="network tests are opt-in; select them with -m network")
         for item in items:
             if "network" in item.keywords:
