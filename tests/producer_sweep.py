@@ -57,18 +57,19 @@ def run_producer(producer, tmp_path, records):
     return json.loads(output.read_text())["classifications"]
 
 
-def run_index_producer(tmp_path, records):
+def run_index_producer(tmp_path, records, parent_classifications=()):
     """Run the index producer over ``records``; return its whole output envelope.
 
-    The parent classifications file is empty, so a matched index inherits nothing: its
-    callers are about what this producer echoes off the index file's *own* record, not
-    what it inherits from a parent.
+    ``parent_classifications`` are the parent rows a matched index inherits from, in the
+    shape ``load_classifications`` reads. It defaults to none, because most callers are
+    about what this producer echoes off the index file's *own* record rather than what it
+    inherits — with none, a matched index inherits nothing.
 
     The envelope rather than the rows, because this producer writes a second key —
     ``unmatched_files`` — that a sweep may want to read.
     """
     parents = tmp_path / "bam_classifications.json"
-    parents.write_text(json.dumps({"classifications": []}))
+    parents.write_text(json.dumps({"classifications": list(parent_classifications)}))
     output = tmp_path / "index_classifications.json"
     propagate_to_index_files(write_snapshot(tmp_path, records), [parents], output)
     return json.loads(output.read_text())

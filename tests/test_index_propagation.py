@@ -867,3 +867,155 @@ class TestLoadClassifications:
         assert entry["reason"] == AMBIGUOUS_PARENT
         assert entry["ambiguous_candidate"] == "sample.bed.gz"
         assert entry["files_sharing_that_name"] == 2
+        # Two files with the literally same name still list one: `parent_names_matched`
+        # is on every ambiguous entry, so a reader tells a case collision from a plain
+        # duplicate by its length rather than by its absence (#455).
+        assert entry["parent_names_matched"] == ["sample.bed.gz"]
+
+
+def _assert_inherited(output, index_name, parent_name, parent_md5):
+    """`index_name` took `parent_name` as its parent and inherited from it.
+
+    Also asserts the run declined nothing at all, which for these one-index fixtures is
+    the same statement: if this file had taken no parent it would be listed there.
+    """
+    records = [r for r in output["classifications"] if r["file_name"] == index_name]
+    assert len(records) == 1, f"{index_name} should get exactly one record"
+    record = records[0]
+    assert output["unmatched_files"] == []
+    assert field_value(record["classifications"], "reference_assembly") == "GRCh38"
+    # The edge names the parent as the catalog spells it, not as the candidate that
+    # found it — see `get_parent_candidates` on why a candidate is only a probe.
+    assert record["derived_from"]["parent_file"] == parent_name
+    assert record["derived_from"]["parent_md5sum"] == parent_md5
+    # The parent's kind still resolves off an upper-case extension, because
+    # `FileName.parse` lowers the extension it returns.
+    assert record["derived_from"]["parent_kind"] == "alignment"
+
+
+class TestMixedCaseNames:
+    """Parent lookup folds case, so an index and its parent may disagree about it (#455).
+
+    Nothing covered mixed case before this, and nothing in the corpus exercises it today
+    — these are fixtures, not samples. The bug they pin: a Pattern 2 candidate is built by
+    appending an extension from the lowercase-keyed `INDEX_TO_PARENT`, so `SAMPLE.BAI`
+    yields `SAMPLE.bam`, which an exact lookup could never match against a real
+    `SAMPLE.BAM`. The file was then declined for a missing parent that was present.
+    """
+
+    def test_pattern2_index_finds_a_differently_cased_parent(self, tmp_path):
+        """`SAMPLE.BAI` -> `Sample.Bam`. The issue's bug: this declined before #455.
+
+        The parent is cased differently from the index file *and* from the candidate
+        built for it (`SAMPLE.bam`), so this also pins that the row takes the matched
+        file's own name rather than the probe's spelling.
+        """
+        output = run_index_producer(
+            tmp_path,
+            [
+                _file("Sample.Bam", ".bam", "1" * 32, "e1"),
+                _file("SAMPLE.BAI", ".BAI", "2" * 32, "e2"),
+            ],
+            [_classified_record("1" * 32, "GRCh38", "Sample.Bam")],
+        )
+        _assert_inherited(output, "SAMPLE.BAI", "Sample.Bam", "1" * 32)
+
+    def test_pattern1_index_finds_a_differently_cased_parent(self, tmp_path):
+        """`SAMPLE.BAM.BAI` -> `sample.bam`.
+
+        A Pattern 1 candidate is a slice of the index file's own name, so it was already
+        spelled like a real sibling — but only like *that* sibling. This is the guard that
+        folding did not disturb the pattern that already worked, and that it now also
+        reaches a parent spelled the other way.
+        """
+        output = run_index_producer(
+            tmp_path,
+            [
+                _file("sample.bam", ".bam", "1" * 32, "e1"),
+                _file("SAMPLE.BAM.BAI", ".BAI", "2" * 32, "e2"),
+            ],
+            [_classified_record("1" * 32, "GRCh38")],
+        )
+        _assert_inherited(output, "SAMPLE.BAM.BAI", "sample.bam", "1" * 32)
+
+    def test_two_parents_differing_only_by_case_are_ambiguous(self, tmp_path):
+        """The one decline folding creates: neither parent is picked (#438 read for case).
+
+        `sample.bam` and `SAMPLE.BAM` are two files an exact lookup told apart. Folded,
+        the name identifies neither, so the index takes no parent rather than the one that
+        happens to match literally — the same rule as for a name two files share.
+        """
+        output = run_index_producer(
+            tmp_path,
+            [
+                _file("sample.bam", ".bam", "1" * 32, "e1"),
+                _file("SAMPLE.BAM", ".bam", "2" * 32, "e2"),
+                _file("sample.bam.bai", ".bai", "3" * 32, "e3"),
+            ],
+            [_classified_record("1" * 32, "GRCh38"), _classified_record("2" * 32, "CHM13", "SAMPLE.BAM")],
+        )
+        _assert_declined(output, "sample.bam.bai")
+        assert len(output["unmatched_files"]) == 1
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == AMBIGUOUS_PARENT
+        assert entry["ambiguous_candidate"] == "sample.bam"
+        assert entry["files_sharing_that_name"] == 2
+        # Both spellings, which is what says case was the difference here.
+        assert entry["parent_names_matched"] == ["SAMPLE.BAM", "sample.bam"]
+
+    def test_an_upper_case_index_with_no_parent_still_reports_no_parent(self, tmp_path):
+        """Folding widens what matches; it does not invent a parent that is absent.
+
+        The `candidates_tried` echo is the end-to-end half of
+        `test_candidates_keep_the_casing_they_were_built_with`: the diagnostic reports the
+        probe as it was built, not the folded key it was looked up by.
+        """
+        output = run_index_producer(tmp_path, [_file("ORPHAN.BAM.BAI", ".BAI", "1" * 32, "e1")])
+        _assert_declined(output, "ORPHAN.BAM.BAI")
+        entry = output["unmatched_files"][0]
+        assert entry["reason"] == NO_MATCHING_PARENT
+        assert entry["candidates_tried"] == ["ORPHAN.BAM"]
+
+    def test_candidates_keep_the_casing_they_were_built_with(self):
+        """`get_parent_candidates` does not lower the name; the lookup folds instead."""
+        assert get_parent_candidates("SAMPLE.BAM.BAI", ".BAI") == ["SAMPLE.BAM"]
+        assert get_parent_candidates("SAMPLE.BAI", ".BAI") == ["SAMPLE" + ext for ext in INDEX_TO_PARENT[".bai"]]
+
+    def test_a_drifted_bystander_name_does_not_take_the_producer_down(self, tmp_path):
+        """Folding reads every record in the dataset, not only the index files (#455).
+
+        An exact key took a drifted non-string `file_name` as-is and `.lower()` does not,
+        so without the coercion one bystander record anywhere in a dataset would raise
+        and lose the whole producer. It cannot become a parent either way: no candidate
+        probe equals `"12345"`.
+
+        This is only about a record this producer does *not* classify. A drifted name on
+        an index file still raises — see
+        `test_a_drifted_name_on_a_file_this_producer_owns_still_raises`.
+        """
+        output = run_index_producer(
+            tmp_path,
+            [
+                {**_file("placeholder", ".bam", "1" * 32, "e1"), "file_name": 12345},
+                _file("sample.bam.bai", ".bai", "2" * 32, "e2"),
+            ],
+        )
+        entry = output["unmatched_files"][0]
+        assert entry["file_name"] == "sample.bam.bai"
+        assert entry["reason"] == NO_MATCHING_PARENT
+
+    def test_a_drifted_name_on_a_file_this_producer_owns_still_raises(self, tmp_path):
+        """A drifted name on a file this producer classifies fails loudly, as elsewhere.
+
+        `route` falls back to `file_format` when the name claims nothing, so a record with
+        a drifted `file_name` and an index `file_format` is routed here. It raises, which
+        is what the three sibling filename producers do through `FileInfo.from_filename`,
+        and what lets `OutputRecord.from_record` promise that no producer hands it a
+        drifted `file_name` for a field typed `str`. Coercing here instead would write a
+        row whose `file_name` is an int, swallowing a drift that currently fails loudly.
+        """
+        with pytest.raises(AttributeError):
+            run_index_producer(
+                tmp_path,
+                [{**_file("placeholder", ".bai", "1" * 32, "e1"), "file_name": 67890}],
+            )

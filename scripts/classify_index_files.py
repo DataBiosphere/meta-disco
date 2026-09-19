@@ -6,7 +6,9 @@ An index file's ``data_type`` is ``index``, from its extension. The other four o
 its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
-A filename does not always identify one file. Where two files in a dataset share
+A filename does not always identify one file. Names are compared case-insensitively,
+as routing compares extensions (#449), so two files in a dataset whose names differ
+only by case identify neither (#455). Where two files in a dataset share — up to case —
 the name an index points at, no parent is chosen. Such a file still gets a record,
 but it inherits nothing: ``declined_record`` gives it ``data_type: index``, which the
 extension establishes without a parent, and ``not_classified`` on the other four,
@@ -164,9 +166,11 @@ def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
 
     Extensions are matched case-insensitively, as routing matches them, so a
     ``SAMPLE.BAM.BAI`` that reaches this producer can find its parent instead of being
-    declined for a missing one. The candidate keeps the name's own casing, since it is
-    looked up against real filenames — only Pattern 2, which appends an extension this
-    file does not carry, has to guess that extension's case.
+    declined for a missing one. A candidate keeps whatever casing it was built with —
+    Pattern 1 the name's own, Pattern 2 the name's stem plus a lowercase extension from
+    ``INDEX_TO_PARENT``, which is therefore a spelling no file need carry. So a candidate
+    is a lookup probe and not a filename: the caller matches it against a case-folded name
+    index and reads the real name off the file it finds (#455).
     """
     candidates = []
     # Folded here, not just at the comparisons below: `INDEX_TO_PARENT` is keyed in
@@ -227,9 +231,14 @@ INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file 
 # schema by `test_rule_vocabulary`, as `INDEX_DATA_TYPE` is.
 INDEX_RELATION = "index_of"
 
+# Written verbatim into a declined record's evidence, so it is read by someone deciding
+# what to do about the file. Both say "carries", matched case-insensitively (#455): two
+# files can be ambiguous here without carrying the same name literally, and a reason that
+# sent a reader looking for two identical names would misdescribe the cause — the defect
+# this producer's own `no_matching_parent_in_dataset` had before #455.
 DECLINED_REASON_TEXT = {
-    NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name",
-    AMBIGUOUS_PARENT: "more than one file in this dataset carries the parent name",
+    NO_MATCHING_PARENT: "no file in this dataset carries a candidate parent name, matched case-insensitively",
+    AMBIGUOUS_PARENT: "more than one file in this dataset carries that parent name, matched case-insensitively",
 }
 
 
@@ -388,12 +397,23 @@ def propagate_to_index_files(
     # the rest (#376) — so reading one off a chosen file never needs a guard. That says
     # nothing about names: a name reaching more than one record is the case this exists
     # to detect.
-    files_by_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
+    #
+    # The name half of the key is case-folded, so this agrees with `route`, which has
+    # folded case since #449 (#455). Folding makes two names differing only by case
+    # identify neither file, which is #438's rule read case-insensitively.
+    #
+    # `str` only because folding reads every record in the dataset, index file or not: an
+    # exact key took a drifted non-string name as-is, and `.lower()` would not, so one
+    # bystander could take the producer down. It does not make a drifted name safe to
+    # *classify* — a record this producer owns still raises below, as the three sibling
+    # filename producers do via `FileInfo.from_filename`, which is what lets
+    # `OutputRecord.from_record` promise no producer hands it a drifted `file_name`.
+    files_by_folded_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
             name = f.get("file_name")
             if name:
-                files_by_name[(ds, name)].append(f)
+                files_by_folded_name[(ds, str(name).lower())].append(f)
 
     # Find index files and match to parents
     results = []
@@ -434,19 +454,28 @@ def propagate_to_index_files(
             # falling through have found a unique later one. It is here for the shape of
             # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
-            parent_key = next(((ds, c) for c in parent_candidates if (ds, c) in files_by_name), None)
+            candidate_tried = next((c for c in parent_candidates if (ds, c.lower()) in files_by_folded_name), None)
 
-            if parent_key is None:
+            if candidate_tried is None:
                 stats[index_ext]["unmatched"] += 1
                 unmatched.append(unmatched_entry(f, index_ext, parent_candidates, NO_MATCHING_PARENT))
                 declined.append((f, index_ext, NO_MATCHING_PARENT))
                 continue
 
-            if len(files_by_name[parent_key]) > 1:
+            parent_files = files_by_folded_name[(ds, candidate_tried.lower())]
+
+            if len(parent_files) > 1:
                 # Not a failed lookup: the parent is present, and present more than once.
                 # Listed beside the no-parent case because the outcome is the same — no
                 # parent taken, so `declined_record` writes what is known without one —
                 # and told apart by `reason`, because the causes are not the same.
+                #
+                # Under a folded key the two files need not share a name literally, only
+                # up to case (#455), and the reason cannot say which. `parent_names_matched`
+                # is what does: one name means a true duplicate, several mean case was the
+                # difference. Echoed through `coerce_identity`, as every other name in the
+                # entry is. `ambiguous_candidate` is the candidate as tried rather than the
+                # folded key, which is a lookup key and not a filename at all.
                 stats[index_ext]["ambiguous"] += 1
                 unmatched.append(
                     unmatched_entry(
@@ -454,15 +483,20 @@ def propagate_to_index_files(
                         index_ext,
                         parent_candidates,
                         AMBIGUOUS_PARENT,
-                        ambiguous_candidate=parent_key[1],
-                        files_sharing_that_name=len(files_by_name[parent_key]),
+                        ambiguous_candidate=candidate_tried,
+                        files_sharing_that_name=len(parent_files),
+                        parent_names_matched=sorted({coerce_identity(p.get("file_name")) for p in parent_files}),
                     )
                 )
                 declined.append((f, index_ext, AMBIGUOUS_PARENT))
                 continue
 
-            parent_name = parent_key[1]
-            parent_md5 = files_by_name[parent_key][0]["file_md5sum"]
+            # The matched file's own name, not the candidate that found it: this reaches
+            # the row and the `derived_from` edge, which name the file as the catalog
+            # spells it (#455).
+            parent = parent_files[0]
+            parent_name = parent["file_name"]
+            parent_md5 = parent["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
             # Get parent classification
@@ -557,7 +591,13 @@ def propagate_to_index_files(
             print(f"    Dataset: {u['dataset_id']}")
             print(f"    Reason: {u['reason']}")
             if u["reason"] == AMBIGUOUS_PARENT:
-                print(f"    Ambiguous: {u['ambiguous_candidate']} names {u['files_sharing_that_name']} files")
+                # The matched spellings, not just the probe: the probe is a Pattern 2
+                # construction that no file need carry, and naming the real ones is what
+                # tells an operator a case collision from a true duplicate (#455).
+                print(
+                    f"    Ambiguous: {u['ambiguous_candidate']} matched "
+                    f"{u['files_sharing_that_name']} files: {', '.join(u['parent_names_matched'])}"
+                )
             else:
                 print(f"    Tried: {u['candidates_tried']}")
 
