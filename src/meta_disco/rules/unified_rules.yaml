@@ -573,7 +573,7 @@ rules:
     scope: filename
     when:
       format: FASTA
-      filename_pattern: "(?i)((^|[._-])(assembly|hifiasm|verkko|flye|canu|wtdbg|diploid)|hap[12]|[._](pat|mat)(ernal)?[._])"
+      filename_pattern: "(?i)(assembly|(^|[._-])(hifiasm|verkko|flye|canu|wtdbg|diploid|hap[12])|[._](pat|mat)(ernal)?[._])"
     then:
       data_modality: genomic
       data_type: assembly
@@ -586,7 +586,7 @@ rules:
     scope: filename
     when:
       format: FASTA
-      filename_pattern: "(?i)(^|[._-])(haplotype|phased|hapdup|purge_dups)"
+      filename_pattern: "(?i)(haplotype|purge_dups|(^|[._-])(phased|hapdup))"
     then:
       data_modality: genomic
       data_type: assembly
@@ -602,7 +602,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(^|[._-])(modbam2bed|cpg|methylat|bisulfite|wgbs)"
+      filename_pattern: "(?i)(modbam2bed|methylat|bisulfite|(^|[._-])(cpg|wgbs))"
     then:
       data_modality: epigenomic.methylation
       data_type: annotations
@@ -614,7 +614,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)((^|[._-])(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter)|\\.TSS\\.)"
+      filename_pattern: "(?i)((^|[._-])(TMM|TPM|RPKM|FPKM)|counts|expression|leafcutter|\\.TSS\\.)"
     then:
       data_modality: transcriptomic.bulk
       data_type: annotations
@@ -626,7 +626,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|(^|[._-])flagger|\\.lowQ\\.|(^|[._-])unreliable|issues\\.bed|_genbank\\.)"
+      filename_pattern: "(?i)(\\.hap[12]\\.|[\\./_]paternal[\\./_]|[\\./_]maternal[\\./_]|\\.dip\\.bed|\\.switch\\.|(^|[._-])flagger|\\.lowQ\\.|unreliable|issues\\.bed|_genbank\\.)"
     then:
       data_modality: genomic
       data_type: annotations
@@ -682,7 +682,7 @@ rules:
     scope: filename
     when:
       extensions: [".txt", ".tsv"]
-      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|(^|[._-])(mosdepth|flagstat)"
+      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|mosdepth|flagstat"
     then:
       status:
         data_modality: not_applicable
@@ -696,7 +696,7 @@ rules:
     scope: filename
     when:
       extensions: [".txt", ".tsv", ".csv"]
-      filename_pattern: "(?i)counts?\\.txt|(^|[._-])expression|tpm\\.txt|fpkm\\.txt"
+      filename_pattern: "(?i)counts?\\.txt|expression|tpm\\.txt|fpkm\\.txt"
     then:
       data_modality: transcriptomic.bulk
       data_type: expression_matrix

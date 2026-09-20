@@ -240,60 +240,95 @@ def _subdir(tmp_path, name):
     return path
 
 
-def _literal_runs(pattern):
-    """Every run of literal characters ``pattern`` can match, via ``re``'s own parser.
+def _sample_matches(pattern, cap=64):
+    """Concrete strings ``pattern`` can match — one per alternative it offers.
 
-    Parsed rather than split on ``|``, because a rule's alternatives nest
-    (``(assembly|…|[._](pat|mat)(ernal)?[._])``) and string-splitting silently drops
-    whatever it cannot read — the one failure a completeness check must not have.
-    Private API, and deliberately: if it moves, this raises rather than quietly
-    covering less.
+    Walks ``re``'s own parse tree rather than splitting on ``|``: a rule's
+    alternatives nest (``(assembly|…|[._](pat|mat)(ernal)?[._])``), and
+    string-splitting drops what it cannot read, which is the one failure a
+    completeness check must not have. Private API, deliberately — if it moves this
+    raises rather than quietly covering less.
+
+    A character class contributes its first member, so ``hap[12]`` yields ``hap1``
+    rather than the literal run ``hap``. That distinction is the point: extracting
+    literal runs alone let `hap[12]` match inside an accession unnoticed, because the
+    run ``hap`` on its own matches nothing.
     """
-    runs = []
 
     def walk(seq):
-        current = []
+        out = [""]
         for op, av in seq:
             name = str(op)
             if name.endswith("LITERAL"):
-                current.append(chr(av))
-                continue
-            if current:
-                runs.append("".join(current))
-                current = []
-            if name.endswith("BRANCH"):
-                for branch in av[1]:
-                    walk(branch)
+                out = [s + chr(av) for s in out]
+            elif name.endswith("IN"):
+                members = [chr(a) for o, a in av if str(o).endswith("LITERAL")]
+                if not members:  # a negated or range-only class contributes a stand-in
+                    members = ["x"]
+                out = [s + members[0] for s in out]
+            elif name.endswith("ANY"):
+                out = [s + "x" for s in out]
+            elif name.endswith("BRANCH"):
+                out = [s + b for s in out for branch in av[1] for b in walk(branch)][:cap]
             elif name.endswith("SUBPATTERN"):
-                walk(av[3])
+                out = [s + b for s in out for b in walk(av[3])][:cap]
             elif name.endswith(("MAX_REPEAT", "MIN_REPEAT")):
-                walk(av[2])
-        if current:
-            runs.append("".join(current))
+                least, _, item = av
+                inner = walk(item) if least else [""]
+                out = [s + b for s in out for b in inner][:cap]
+            # AT (anchors) and anything else contribute nothing to the sample text
+        return out[:cap]
 
-    walk(_sre_parse(pattern))
-    return runs
+    return walk(_sre_parse(pattern))
+
+
+# Tokens deliberately left unanchored, because matching them *inside* a word is the
+# wanted behavior and no realistic accession can spell them. Each is at least eight
+# characters, so it cannot fit inside the eight-character variable part of an IGVF
+# accession; the risk anchoring would guard against does not exist for them, and the
+# cost is real — `hypermethylation.bed` and `pseudocounts.bed` both stop matching.
+#
+# The rule of thumb this encodes: anchor a token only where a collision is plausible
+# *and* an intra-word match would be meaningless. Where those conflict, word-forming
+# wins. Measuring zero corpus cost is not a reason to anchor — this corpus holding no
+# `hypermethylation.bed` says nothing about whether the match is wanted.
+WORD_FORMING = {
+    "assembly": "reassembly, subassembly",
+    "haplotype": "pseudohaplotype",
+    "methylat": "hypermethylation, demethylation",
+    "bisulfite": "post-bisulfite",
+    "counts": "pseudocounts, readcounts",
+    "expression": "overexpression, coexpression",
+    "leafcutter": "a tool name, never inside an accession",
+    "modbam2bed": "a tool name, never inside an accession",
+    "unreliable": "long enough that no accession spells it",
+    "mosdepth": "a tool name, never inside an accession",
+    "flagstat": "a tool name, never inside an accession",
+    "purgedups": "a tool name, never inside an accession",
+}
 
 
 def accession_probes(rules):
-    """One synthetic accession per literal token a rule could match on.
+    """One synthetic accession per token a rule could match on, derived from the rules.
 
     The nine hand-listed names this replaced only covered tokens someone had already
     thought of, so a rule authored with an uncovered word passed the check without
-    being safe (#430). Deriving the probes from the rules themselves removes that
-    escape: a new bare token generates its own probe.
+    being safe (#430). Generating a probe per alternative removes that escape: naming
+    a token is what creates its probe.
 
-    A token already bounded in its pattern (``[._]paternal[._]``) yields a probe it
-    cannot match inside, so it is not reported — the check is behavioural, and does
-    not care how the boundary was written.
+    Only an all-alphanumeric sample becomes a probe. A sample carrying its own
+    separator (``[._]paternal[._]`` yields ``.paternal.``) cannot sit inside an
+    alphanumeric run at all, so the pattern that produced it needs no anchor — which
+    is why `paternal` is not reported despite being spelled out in its rule.
     """
     probes = []
     for rule in rules.rules:
         pattern = (rule.when or {}).get("filename_pattern")
         if not pattern or rule.id in KNOWN_UNANCHORED:
             continue
-        for token in sorted({t for t in _literal_runs(pattern) if len(t) >= 3 and t.isalnum()}):
-            probes.append(f"IGVFFI7{token.upper()}K2.fastq.gz")
+        for sample in sorted(set(_sample_matches(pattern))):
+            if len(sample) >= 3 and sample.isalnum() and sample.lower() not in WORD_FORMING:
+                probes.append(f"IGVFFI7{sample.upper()}K2.fastq.gz")
     return tuple(dict.fromkeys(probes))
 
 
@@ -379,18 +414,31 @@ def test_the_probes_are_generated_from_the_rules(tmp_path):
     assert not _accession_internal_matches(anchored, accession_probes(anchored))
 
 
-def test_an_already_bounded_token_is_not_reported():
-    """A token whose pattern already bounds it needs no anchor and must not be flagged.
+def test_an_already_bounded_token_never_becomes_a_probe():
+    """A token its pattern already bounds needs no anchor, and is not asked to have one.
 
-    `bed_assembly_qc` matches `[./_]paternal[./_]`, so `paternal` is a literal run and
-    gets a probe — but the pattern cannot match it inside an accession, because the
-    delimiters are part of the pattern. Anchoring it anyway would have cost 135 real
-    filenames, which is how this check earns its place: the test is behavioural, and
-    does not care how the boundary was spelled.
+    `bed_assembly_qc` spells `paternal` out, but as `[./_]paternal[./_]` — so the
+    sample it generates is `.paternal.`, which carries its own separators and cannot
+    sit inside an alphanumeric run. It never becomes a probe, and the rule is not
+    reported. Anchoring it on the strength of the spelled-out word alone would have
+    cost 135 real filenames.
     """
-    rules = get_unified_rules()
-    assert "IGVFFI7PATERNALK2.fastq.gz" in accession_probes(rules)
-    assert not _accession_internal_matches(rules, ("IGVFFI7PATERNALK2.fastq.gz",))
+    probes = accession_probes(get_unified_rules())
+    assert not any("PATERNAL" in p for p in probes)
+    assert not any("MATERNAL" in p for p in probes)
+
+
+def test_a_character_class_alternative_is_covered():
+    """`hap[12]` gets a probe, which extracting literal runs alone did not give it.
+
+    The run `hap` matches nothing on its own, so a literal-only extractor generated a
+    probe the pattern could not match and reported nothing — while
+    `IGVFFI7HAP1K2.fasta` really did match inside the accession and was called a de
+    novo assembly. Sampling the class supplies the digit, so the probe is one the
+    pattern would actually fire on.
+    """
+    probes = accession_probes(get_unified_rules())
+    assert "IGVFFI7HAP1K2.fastq.gz" in probes
 
 
 def test_known_unanchored_entries_still_exist():
