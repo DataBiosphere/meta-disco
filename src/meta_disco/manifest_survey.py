@@ -208,8 +208,8 @@ def name_tokens(name: str) -> list[str]:
     """A table or column name as the lowercased tokens :data:`NAME_TOKENS` is keyed by.
 
     Split on every non-alphanumeric run, so ``PAR_interval_CHM13v2`` yields ``par``,
-    ``interval``, ``chm13v2``. One definition, shared with the slot map's forecast
-    (`anvil_forecast`), so the two cannot tokenize a name differently.
+    ``interval``, ``chm13v2``. One definition, shared with `slot_map` and
+    `anvil_forecast`, so no caller tokenizes a name differently.
     """
     return [token for token in _NAME_SPLIT.split(name.lower()) if token]
 

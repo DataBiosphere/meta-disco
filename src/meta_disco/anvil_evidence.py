@@ -1,6 +1,6 @@
 """Read AnVIL's submitter tables into evidence files, through the slot map (#369).
 
-The verbatim manifests (#368) carry every submitter table unaltered, and the slot map
+The verbatim manifests (#368) carry the submitter tables unaltered, and the slot map
 (`slot_map`) says which of their columns and names speak to which slot. This module is
 the importer between the two: it checks the map against the manifests, then writes,
 per dataset, one generation of evidence files with one file per mapped table. It is an
@@ -8,26 +8,23 @@ importer in the contract's sense (1.2, 1.3): it transcribes what a source wrote 
 maps structure, never meaning. No vocabulary, no value mapping, no claim — ``PACBIO_SMRT``
 is written as ``PACBIO_SMRT`` and what it means is the translation table's (#414).
 
-**Transcription** (contract 1.4). A string cell is written verbatim, the empty string
-included. A list cell is written as its JSON array, so a set of assay titles is
-recoverable as the set it was. A cell that is null, or an empty list — which observes
-nothing, where an empty string is something the source published — is skipped and
-counted against the column, once per row and column on the rows whose link resolved —
-not once per slot the column feeds, so a diagnostic can never exceed the table it
-describes. A name span is written as the span itself, in the name's casing.
+**Transcription** (contract 1.4) is :func:`_transcribe`'s: a string verbatim, the
+empty string included; a list as its JSON array; a null or empty-list cell skipped and
+counted once per row and column. A name span is written in the name's casing.
 
 **Provenance** names the value's column. An evidence row's ``column`` is the cell the
 raw value came from, not the file-link column that reached the file; a ``table_name``
 source has no column, and a ``column_name`` source names the column whose name it is.
 The file itself is named by its DRS URI, which the submitter wrote in the link column
-and AnVIL publishes unchanged as ``drs_uri`` — so ``source_key`` and ``target_key``
-are the same string, resolved here against the dataset's own ``anvil_file`` entities:
+and AnVIL's ``anvil_file`` entity carries in ``drs_uri`` or ``file_ref``
+(``ANVIL_FILE_HANDLE_COLUMNS``) — so ``source_key`` and ``target_key`` are the same
+string, resolved here against the dataset's own ``anvil_file`` entities:
 a link an importer cannot resolve is counted per column and not written.
 
 **An import is a generation** (`source_evidence.generation_dir`): written once, never
 over an earlier one, and read by ``discover`` as the newest per dataset. Within-source
-contradictions pass through — a FASTQ reached by both an SGDP CHM13v2 table and an
-SGDP GRCh38 table receives both spans, and which is right is the resolver's (4.5).
+contradictions pass through — a file reached by two tables of one dataset that spell
+different assemblies receives both spans, and which is right is the resolver's (4.8).
 """
 
 from __future__ import annotations
@@ -71,12 +68,11 @@ class TableImport:
 
     ``no_link``, ``not_link`` and ``unresolved`` are per file-link column: rows whose link
     cell held nothing, rows whose cell held something that is not a DRS URI (which
-    ``check`` reports and an import still counts, so a drifted manifest cannot pass
-    silently), and handles not among the dataset's own files. ``null_cells`` is per cell
-    column, once per row and column, counting null and empty-list cells on the rows
-    whose link resolved. ``files`` is the distinct files that received at
-    least one evidence row; ``written`` counts the rows, which exceeds it wherever a
-    file has several slots or sources.
+    ``check`` reports and an import still counts, so ``describe`` shows it), and handles
+    not among the dataset's own files. ``null_cells`` is per cell column, once per row
+    and column, counting null and empty-list cells on the rows whose link resolved.
+    ``files`` is the distinct files that received at least one evidence row;
+    ``written`` counts the rows, and exceeds it wherever a file receives more than one.
     """
 
     table: str
@@ -111,8 +107,8 @@ class DatasetImport:
 def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[str] | None = None) -> list[str]:
     """How the map disagrees with the manifests on disk, one line per problem; empty when none.
 
-    Per mapped dataset (or those in ``datasets``): the sidecar names it and its verbatim
-    manifest is on disk. Per mapped table: at least one row of that type exists. Per
+    Per mapped dataset (or those in ``datasets``, which must be in the map): the sidecar
+    names it and its verbatim manifest is on disk. Per mapped table: at least one row of that type exists. Per
     file-link column: it appears on some row, and every non-empty value it holds is a
     DRS URI or a list of them. Per cell: the column appears on some row of its table
     and is not itself a file-link column — a column is one kind, never two (contract
@@ -226,13 +222,14 @@ def import_dataset(
 
     The generation directory must not exist: an import never writes over another. It
     is a generation only once every table is written: a failure part-way — a bad row,
-    a full disk, an interrupt — removes the directory before the error propagates, so
-    ``discover`` cannot take a half-written generation for the dataset's newest. A hard
-    kill leaves that residue to remove by hand. A mapped table that writes no row at all
+    a full disk, an interrupt — removes the directory before the error propagates
+    (``ignore_errors``: a removal that itself fails is silent), so a failed import
+    normally leaves no generation for ``discover`` to take as the dataset's newest. A
+    hard kill leaves that residue to remove by hand. A mapped table that writes no row at all
     is such a failure: a table the map names should reach files, and one that reaches
     none is the map disagreeing with the catalog (contract 5.3), not an empty result.
-    The evidence root directory and the target system are both the repository the
-    manifests came from.
+    The source directory under the evidence root and the target system are both
+    ``REPOSITORY``, the repository the manifests came from.
     """
     stamp = generation if generation is not None else new_generation()
     directory = generation_dir(evidence_root, REPOSITORY, catalog, dataset, stamp)
@@ -332,9 +329,9 @@ def _transcribe(
     ``None`` for a null or empty-list cell, counted once per row against its column:
     ``nulls`` is the row's own set, shared across every slot and file the row feeds. An
     empty list is treated as null and not as the JSON ``[]`` because it observes
-    nothing; the empty string is kept because the source wrote it. A non-string scalar
-    (a number, a boolean the manifest carries as JSON) is written as its JSON literal —
-    still what the source wrote, in the one spelling JSON has for it.
+    nothing; the empty string is kept because the source wrote it. A non-string cell — a
+    number, a boolean, a nested object — is written as ``json.dumps`` spells it, still
+    what the source wrote.
     """
     if spec.form == SOURCE_CELL:
         value = row.get(spec.value)

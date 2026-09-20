@@ -3,8 +3,8 @@
 A slot map is the importer's half of reading a source (claims contract 1.3, 2.2): it
 says *where* a raw value for a slot comes from and nothing about what the value means.
 It holds no vocabulary (1.5). `anvil_evidence` reads the AnVIL map to turn the verbatim
-manifests into evidence files; the translation table (#414) is what turns the raw
-values those carry into terms.
+manifests into evidence files; a translation table (#414, not built) is where raw
+values become terms.
 
 **One entry shape.** An entry is keyed by the **file-link column** — the column whose
 DRS URI says which file a row is about — and names, per slot, where the raw value comes
@@ -57,10 +57,10 @@ Contract 2.7 sorts columns into file links, metadata values and foreign keys. A
 facts. A table with **one** file-link column is a file table: its name describes the
 file, so its name tokens map. A table with **several** is an entity table (one row per
 sample, one column per file): its column names describe the files and map, and its
-name maps for a slot only where the fact is one every file in the row shares — the
-reference build under `1KGP_CHM13v2_sample`, the annotation kind under
-`assembly_annotation`, the PLINK kind under `plink_file_wide`, but not `assembly`
-under `assembly_sample`, whose files are an assembly and its alignments.
+name maps for a slot only where the fact is one every file in the row shares (a
+reference build named in the table name), and not for one the row's files differ on
+(an entity table holding an assembly and its alignments takes no `data_type` from
+`assembly` in its name).
 """
 
 from __future__ import annotations
@@ -82,11 +82,10 @@ SOURCE_COLUMN_NAME = "column_name"
 SOURCE_FORMS = (SOURCE_CELL, SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME)
 _NAME_FORMS = frozenset({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME})
 
-# A column whose name ends in one of these, after the last underscore or dot, is a
-# sidecar of another column's file: an index or a checksum. It takes no `data_type` from
-# a name (its own name already says what it is) and keeps the payload's
-# `reference_assembly`. `idx` and `index` are how the T2T workflows spell it, `fai` /
-# `gzi` are samtools', `crai` / `bai` / `tbi` / `csi` are htslib's.
+# A column whose last name token (`name_tokens`) is one of these is a sidecar of
+# another column's file: an index or a checksum. It takes no `data_type` from any
+# source, name or cell (its own name already says what it is), and keeps the payload's
+# `reference_assembly`.
 DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "fai", "gzi", "md5"})
 
 # Name tokens that describe what a *row* is rather than what its files are. Only the
@@ -226,11 +225,12 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
 
     The shape rules — one entry shape, three source forms, a span inside its name, no
     source twice, no ``notes``, the two structural exclusions — are checked here, and
-    the first violation raises ``ValueError`` naming the dataset, table, column and
-    slot it sits on. Source purity (R1) is not a shape and is ``test_slot_map``'s to
-    check. Load time rather than import time: a map that cannot load must not be able
-    to produce an evidence file, and an importer running against millions of rows
-    should learn about a malformed entry before it reads the first one.
+    the first violation raises ``ValueError`` naming where it sits, as far down as the
+    level allows (dataset, table, column, slot; a duplicate key by its line). Source
+    purity (contract 3.4) is not a shape and is ``test_slot_map``'s to check. Checked
+    when the map loads, not when an import reaches a bad entry: a map that cannot load
+    must not produce an evidence file, and an importer should fail before it reads the
+    first of millions of rows.
     """
     resource = source if source is not None else default_slot_map_resource()
     document = yaml.load(resource.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)

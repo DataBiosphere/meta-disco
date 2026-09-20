@@ -63,8 +63,8 @@ MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
 # so a reader names the publisher rather than assuming one (#424).
 REPOSITORY = "anvil"
 
-# The catalog generation the tooling reads by default. Named once here; the
-# Makefile's `CATALOG ?= anvil15` is the same value for `make download`.
+# The catalog generation the tooling reads by default. The Makefile's `CATALOG ?=`
+# default is a second spelling of it for `make download`; nothing checks they agree.
 DEFAULT_CATALOG = "anvil15"
 
 FORMAT_COMPACT = "compact"
@@ -80,8 +80,8 @@ SIDECAR = "manifests.json"
 VERBATIM_FILE = "anvil_file"
 VERBATIM_ACTIVITY = "anvil_activity"
 VERBATIM_BIOSAMPLE = "anvil_biosample"
-# Every harmonized entity type starts with this; every other type is a submitter's
-# own table, carried through unaltered.
+# An entity type starting with this is read as harmonized; any other type is read as a
+# submitter's own table.
 HARMONIZED_PREFIX = "anvil_"
 # The two columns of an `anvil_file` entity that carry the file's DRS URI; both are
 # read because a submitter table may point at a file by either.
@@ -325,8 +325,8 @@ def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str)
     """When one dataset's manifest in one format was requested, per the sidecar; None if unrecorded.
 
     Read here rather than by a consumer unpacking the sidecar, for the reason
-    :func:`sidecar_datasets` exists: this module writes the shape. The importer (#369)
-    writes it into an evidence file's envelope as ``fetched_at`` — when the *source*
+    :func:`sidecar_datasets` exists: this module writes the shape.
+    `anvil_evidence.import_dataset` writes it into an evidence file's envelope as ``fetched_at`` — when the *source*
     was fetched, which is the manifest's request time and not the import's.
     """
     entry = (load_sidecar(root, catalog).get("datasets") or {}).get(dataset_title) or {}
@@ -335,7 +335,7 @@ def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str)
         return None
     # A trailing `Z` is normalized to `+00:00` first: `fromisoformat` rejects it on
     # Python 3.10, this project's floor, and accepts it from 3.11 — the same interpreter
-    # divergence `source_evidence._parse_fetched_at` closes for the envelope.
+    # divergence `source_evidence` closes for the envelope's `fetched_at`.
     normalized = requested.removesuffix("Z") + "+00:00" if requested.endswith("Z") else requested
     try:
         return datetime.fromisoformat(normalized)
@@ -659,7 +659,7 @@ def is_submitter_table(entity_type: str) -> bool:
 def link_handles(value: Any) -> list[str] | None:
     """The DRS URIs a submitter cell holds, or None where the cell holds no link.
 
-    Contract 2.7's definition of a file-link column, spelled once: a cell is a link
+    Contract 2.7's file-link test, per cell and spelled once: a cell is a link
     when it is a ``drs://`` URI or a list of them. An empty string, an empty list or
     a null is "no link" and reads as None; a non-empty value that is not a link — a
     name, an accession, a list holding one — reads as an empty list, which is how a
@@ -683,9 +683,8 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
     it must not do.
 
     ``types`` narrows the stream to those entity types, and cheaply: a line is
-    parsed only if it contains one of the quoted type names, which keeps a pass
-    over a half-gigabyte manifest that wants one table from parsing every line.
-    The substring test is a gate, not the decision — a submitter cell that happens
+    parsed only if it contains one of the quoted type names, so a pass that wants
+    one table does not parse every line. The substring test is a gate, not the decision — a submitter cell that happens
     to hold the same word costs one extra parse and nothing else, and the parsed
     type is what selects the row. :func:`count_rows` uses the same trick. The
     price of the gate is that a malformed line it does not pass is never seen: a

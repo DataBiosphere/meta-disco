@@ -2,7 +2,8 @@
 """Read AnVIL's submitter tables into evidence files, through the slot map (#369).
 
 Checks the bundled map against the manifests on disk first and refuses to write if
-anything disagrees — every problem is listed, not the first. Then writes one generation
+anything disagrees — every problem ``check`` finds is listed, not only the first (a
+missing manifest or an empty table masks what is beneath it). Then writes one generation
 per dataset under ``data/source_evidence/anvil/<catalog>/<dataset>/<generation>/``, one
 file per mapped table, and prints what each table produced. Offline: it reads what
 ``make download`` left on disk. The logic lives in ``meta_disco.anvil_evidence``.
@@ -11,8 +12,9 @@ file per mapped table, and prints what each table produced. Offline: it reads wh
     uv run python scripts/import_anvil_evidence.py
     uv run python scripts/import_anvil_evidence.py --dataset AnVIL_HPRC_R2
 
-Nothing reads what this writes until the join (#402) and reconcile (#432) land, so a
-classification run's output is unchanged by it.
+A classification run lists these files (``report_evidence_files``) and consumes none,
+so its output is unchanged by them; ``make name-signals ARGS=--evidence`` is what reads
+them today.
 """
 
 import argparse

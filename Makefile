@@ -189,7 +189,7 @@ import-anvil-evidence:
 	uv run python scripts/import_anvil_evidence.py $(ARGS)
 
 # What a submitter table or column *name* would claim, measured against a stored
-# run (#369 R8): agreement, disagreement, and where inference is silent. A decision
+# run (#369): agreement, disagreement, and where inference is silent. A decision
 # aid for the translation table and the resolver, never an authoring input to the
 # map — it runs on every dataset and needs no map. `ARGS="--evidence"` measures the
 # written evidence instead of the names.

@@ -1,36 +1,28 @@
-"""What a submitter name would claim, forecast against a stored run (#369, R8).
+"""What a submitter name would claim, forecast against a stored run (#369).
 
 Two measurements, one join. Both take a stored classification run, index it by
 ``drs_uri``, and ask of each claim a source would make: does the run have a value for
 that file and slot, and does it agree?
 
-- :func:`name_signals` needs **no map**. For every dataset the catalog's sidecar names it
-  reads every submitter table, and for every file-link column it takes what the table
+- :func:`name_signals` needs **no map**. For every dataset the catalog's sidecar names
+  (or ``datasets``) it reads every submitter table, and for every file-link column it takes what the table
   name and the column name would claim by `manifest_survey.NAME_TOKENS` — the survey's
   reading aid, which says what a name *mentions* — and reports, per dataset and slot,
   how many claims join a run record, agree, disagree, meet a ``not_applicable``, or land
   where inference has no value. It also says plainly which tokens it cannot translate,
   because the vocabulary has no term for them.
-- :func:`evidence_forecast` reads the **written** evidence — the newest generation of
-  each dataset under the evidence root — and reports the same join over what the
-  importer actually produced: files with evidence, file-and-slot pairs where inference
-  reaches no value, FASTQs that received a ``data_modality``, and the claims that
-  disagree with an inferred value or meet an inferred ``not_applicable`` — the two
-  kinds of conflict, 4.5's and 4.6's, reported apart because the second is a
-  within-source contradiction the map passes through on purpose (R9). A raw value is
-  compared only where it spells a name token the survey has a term for, whether it
-  came from a name or from a cell that happens to spell one (``ILLUMINA``); every raw
-  value is listed by slot regardless, because that list is the translation table's
-  input (#414) and must not omit the ones a token happened to cover.
+- :func:`evidence_forecast` reads the **written** evidence — what ``discover`` returns
+  under the evidence root — and reports the same join over what the importer produced,
+  plus every raw value by slot as the translation table's input (#414).
 
 **This forecasts; it never authors.** A disagreement here is the resolver's to record
-(contract 4.5) and an agreement is a source earning trust (4.4); neither is grounds to
-change the map, which is authored from the source's own schema and from nothing a run
-concluded (R1, 3.4). :func:`name_signals` applies the two structural exclusions the
+(contract 4.5) and an agreement is what 4.4 records; neither is grounds to change
+the map, which is authored from the source's own schema and from nothing a run
+concluded (3.4). :func:`name_signals` applies the two structural exclusions the
 loader enforces, through the one predicate that states them
 (`slot_map.structural_exclusion`); :func:`evidence_forecast` reads evidence the loader
 already admitted and applies nothing. The authoring rule the map follows beyond those
-two is a judgment neither applies, so `name_signals` forecasts more than the map says.
+two is a judgment neither applies, so `name_signals` can forecast more than the map says.
 
 The run is read through ``output_utils.iter_records_with_source``, which loads each
 producer's file whole; that is the run's existing reader and its memory ceiling
@@ -161,7 +153,7 @@ def name_signals(
 
     A claim is one ``(file, slot, token)``, counted once however many rows reach the
     file — a file in two tables that spell different assemblies is two claims, which is
-    what a within-source contradiction looks like from here (R9). A dataset named twice
+    what a within-source contradiction looks like from here (4.8). A dataset named twice
     is measured once; one whose manifest is not on disk is refused by name.
     """
     titles = sorted(sidecar_datasets(manifest_root, catalog)) if datasets is None else list(dict.fromkeys(datasets))
@@ -261,8 +253,8 @@ class EvidenceForecast:
     ``by_verdict`` holds the claims whose raw value spells a name token, as
     ``(file, slot, term)``, under each of :data:`VERDICTS` except ``gap`` — a translated
     claim on a slot inference left open is in ``gaps`` with every other such pair.
-    ``raw_values`` counts every row by ``(slot, raw_value)``; ``translated`` maps the
-    pairs a token covered to the term the comparison used.
+    ``raw_values`` counts every row by ``(slot, raw_value)``, joined or not;
+    ``translated`` maps the pairs a token covers to its term, joined or not.
     """
 
     files: set[str] = field(default_factory=set)
@@ -281,11 +273,11 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
     """Join every current evidence file under ``evidence_root`` to ``run``.
 
     Only a file whose envelope keys its rows by ``drs_uri`` is joined — that is what
-    ``run`` is indexed by; a file keyed otherwise (another source's) is listed as
-    skipped rather than counted as files that never join. A raw value is compared only
-    when it spells a name token with a term (``CHM13v2``, ``grch38``, ``hifi``, and a
-    cell value such as ``ILLUMINA``); every raw value is counted by slot either way, so
-    the translation table's authors see everything that arrives.
+    ``run`` is indexed by; a file keyed otherwise is listed as skipped rather than
+    counted as files that never join. A raw value is compared only when, lowercased, it
+    is one name token with a term in that row's slot (``CHM13v2``, ``grch38``, ``hifi``,
+    and a cell value such as ``ILLUMINA``); every raw value is counted by slot either
+    way, so the translation table's authors see everything that arrives.
     """
     forecast = EvidenceForecast()
     for path in discover(evidence_root):
@@ -299,6 +291,10 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
             # Counted before the join: what arrives for #414 does not depend on which run
             # the forecast happens to be measured against.
             forecast.raw_values[(slot, entry.raw_value)] += 1
+            meaning = NAME_TOKENS.get(entry.raw_value.lower())
+            term = meaning[1] if meaning is not None and meaning[0] == slot else None
+            if term is not None:
+                forecast.translated[(slot, entry.raw_value)] = term
             record = run.get(handle)
             if record is None:
                 forecast.unjoined.add(handle)
@@ -310,11 +306,8 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
                 forecast.gaps.add((handle, slot))
             if slot == "data_modality" and record.is_fastq:
                 forecast.fastq_modality.add(handle)
-            meaning = NAME_TOKENS.get(entry.raw_value.lower())
-            if meaning is None or meaning[0] != slot or meaning[1] is None:
+            if term is None:
                 continue
-            term = meaning[1]
-            forecast.translated[(slot, entry.raw_value)] = term
             verdict = record.verdict(slot, term)
             if verdict != GAP:
                 forecast.by_verdict[verdict].add((handle, slot, term))

@@ -160,7 +160,8 @@ EVIDENCE_FILE_GLOB = f"*{EVIDENCE_FILE_SUFFIX}"
 DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "source_evidence"
 
 # An import is a generation (#369). An importer writes
-# `<root>/<source>/<version>/<dataset>/<generation>/<table>.ndjson` and never overwrites:
+# `<root>/<source>/<version>/<dataset>/<generation>/<table>.ndjson` and never overwrites
+# (`anvil_evidence.import_dataset` refuses an existing generation directory; nothing here does):
 # a mapping removed between two imports is absent from the next generation rather than
 # left on disk as a valid-looking file. `discover` returns the newest generation of each
 # dataset and only that one; the ones behind it are kept as history. The generation sits
@@ -775,7 +776,7 @@ def new_generation(now: datetime | None = None) -> str:
     """A generation stamp for an import starting now, in UTC: ``20260920T031500Z``.
 
     Second resolution: two imports of one dataset within a second is not a case worth
-    a longer name, and :func:`generation_dir`'s caller refuses to write over one that
+    a longer name, and `anvil_evidence.import_dataset` refuses to write over one that
     exists. ``now`` fixes the clock for tests.
     """
     moment = now if now is not None else datetime.now(timezone.utc)
@@ -788,7 +789,8 @@ def is_generation(name: str) -> bool:
 
 
 def generation_dir(root: Path, source: str, version: str, dataset: str, generation: str) -> Path:
-    """Where one import of one dataset writes its files: the R5 layout, spelled once.
+    """Where one import of one dataset writes its files: the generation layout (contract
+    2.5), spelled once.
 
     ``generation`` must be a stamp :func:`is_generation` accepts, because that is what
     :func:`discover` keys on: a directory named otherwise would be read as history-less

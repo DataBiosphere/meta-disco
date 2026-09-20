@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""What a submitter name would claim, measured against a stored run (#369 R8).
+"""What a submitter name would claim, measured against a stored run (#369).
 
 By default measures every dataset the catalog's sidecar names, with no slot map: for
 each file a submitter table links, what its table name and column name would claim by
-``manifest_survey.NAME_TOKENS``, and whether the latest run agrees. With ``--evidence``
+``manifest_survey.NAME_TOKENS``, and whether a run (the latest under output/anvil by
+default) agrees. With ``--evidence``
 it measures the written evidence instead — the newest generation of each dataset under
 the evidence root — and prints the numbers an import is judged on. Both are forecasts
 for the translation table (#414) and the resolver; neither is an input to the map.

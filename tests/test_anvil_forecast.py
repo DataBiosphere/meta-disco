@@ -148,8 +148,9 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
             anvil_file(3),
             anvil_file(9),
             (DATASET, {"cram": drs(1), "read_1_fastq": drs(2), "mosdepth_regions_bed": drs(3)}),
+            ("SGDP_GRCh38_sample", {"cram": drs(9)}),  # a file the run never saw
             ("hifi", {"path": drs(2), "library_source": "GENOMIC"}),
-            ("hifi", {"path": drs(9), "library_source": "METAGENOMIC"}),  # a file the run never saw
+            ("hifi", {"path": drs(9), "library_source": "METAGENOMIC"}),
         ],
     )
     text = (
@@ -157,6 +158,7 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
         f"    {DATASET}:\n"
         "      cram: &t\n        reference_assembly:\n          - {table_name: CHM13v2}\n"
         "      read_1_fastq: *t\n      mosdepth_regions_bed: *t\n"
+        "    SGDP_GRCh38_sample:\n      cram:\n        reference_assembly:\n          - {table_name: GRCh38}\n"
         "    hifi:\n      path:\n        data_modality:\n          - {cell: library_source}\n"
     )
     path = tmp_path / "map.yaml"
@@ -172,7 +174,7 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
 
     forecast = af.evidence_forecast(tmp_path / "ev", run)
     assert [p.name for p in forecast.skipped] == ["catalog.ndjson"]
-    assert forecast.rows == 5
+    assert forecast.rows == 6
     assert forecast.files == {drs(1), drs(2), drs(3), drs(9)}
     assert forecast.unjoined == {drs(9)}
     assert forecast.gaps == {(drs(3), "reference_assembly"), (drs(2), "data_modality")}
@@ -184,10 +186,15 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
     # Every raw value that arrives is counted, joined to the run or not.
     assert forecast.raw_values == {
         ("reference_assembly", "CHM13v2"): 3,
+        ("reference_assembly", "GRCh38"): 1,
         ("data_modality", "GENOMIC"): 1,
         ("data_modality", "METAGENOMIC"): 1,
     }
-    assert forecast.translated == {("reference_assembly", "CHM13v2"): "CHM13"}
+    # A token's term is recorded for the pair whether or not its file joined the run.
+    assert forecast.translated == {
+        ("reference_assembly", "CHM13v2"): "CHM13",
+        ("reference_assembly", "GRCh38"): "GRCh38",
+    }
     report = af.render_evidence_forecast(forecast, tmp_path / "ev", Path("run"))
     assert "Skipped 1 evidence file(s) not keyed by `drs_uri`: `hprc/catalog.ndjson`" in report
     assert "| FASTQs receiving data_modality | 1 |" in report
