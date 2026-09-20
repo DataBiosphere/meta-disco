@@ -121,7 +121,7 @@ import os
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, fields
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
 from uuid import uuid4
@@ -157,6 +157,18 @@ EVIDENCE_FILE_GLOB = "*.ndjson"
 # a shared name would have read as one. This module is
 # <root>/src/meta_disco/source_evidence.py, so the repo root is three levels up.
 DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "source_evidence"
+
+# An import is a generation (#369). An importer writes
+# `<root>/<source>/<version>/<dataset>/<generation>/<table>.ndjson` and never overwrites:
+# a mapping removed between two imports is absent from the next generation rather than
+# left on disk as a valid-looking file. `discover` returns the newest generation of each
+# dataset and only that one; the ones behind it are kept as history. The generation sits
+# under the dataset, not above it, because a dataset is imported whole while a run may
+# import one or all. Three "when"s stay distinct: `version` is the source's own (a
+# catalog such as anvil15), the generation is ours (when we imported), and the
+# envelope's `fetched_at` is when the source was fetched.
+GENERATION_FORMAT = "%Y%m%dT%H%M%SZ"
+_GENERATION = re.compile(r"^\d{8}T\d{6}Z\Z")
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
@@ -758,8 +770,43 @@ def _decode(raw: bytes, where: str) -> str:
         raise ValueError(f"{where}: not valid UTF-8: {exc}") from None
 
 
+def new_generation(now: datetime | None = None) -> str:
+    """A generation stamp for an import starting now, in UTC: ``20260920T031500Z``.
+
+    Second resolution: two imports of one dataset within a second would share a
+    directory, and an importer is a networked, minutes-long process, so that is not a
+    case worth a longer name. ``now`` fixes the clock for tests.
+    """
+    moment = now if now is not None else datetime.now(timezone.utc)
+    return moment.astimezone(timezone.utc).strftime(GENERATION_FORMAT)
+
+
+def is_generation(name: str) -> bool:
+    """Whether a directory name is a generation stamp as :func:`new_generation` writes one."""
+    return _GENERATION.match(name) is not None
+
+
+def generation_dir(root: Path, source: str, version: str, dataset: str, generation: str) -> Path:
+    """Where one import of one dataset writes its files: the R5 layout, spelled once.
+
+    ``generation`` must be a stamp :func:`is_generation` accepts, because that is what
+    :func:`discover` keys on: a directory named otherwise would be read as history-less
+    flat files and never superseded.
+    """
+    if not is_generation(generation):
+        raise ValueError(f"{generation!r} is not a generation stamp ({GENERATION_FORMAT}); see new_generation")
+    return root / source / version / dataset / generation
+
+
 def discover(root: Path) -> list[Path]:
-    """Every evidence file under ``root``, in a stable order; empty when there are none.
+    """Every current evidence file under ``root``, in a stable order; empty when there are none.
+
+    *Current* means: of the files written under a generation directory
+    (:func:`generation_dir`), only those of the newest generation of each dataset —
+    an older generation is history, kept on disk and never read by a run. A file not
+    under a generation directory has no history to supersede it and is always current.
+    Newest is by stamp, which sorts as time because of the format; the run does not
+    consult mtimes.
 
     A missing ``root`` is not an error: no evidence files present is the ordinary state
     of a run today, and it means the run imports nothing — not that it is
@@ -767,7 +814,13 @@ def discover(root: Path) -> list[Path]:
     """
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
+    found = sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
+    newest: dict[Path, str] = {}
+    for path in found:
+        if is_generation(path.parent.name):
+            dataset_dir = path.parent.parent
+            newest[dataset_dir] = max(newest.get(dataset_dir, ""), path.parent.name)
+    return [p for p in found if not is_generation(p.parent.name) or p.parent.name == newest[p.parent.parent]]
 
 
 def report_evidence_files(root: Path, now: datetime | None = None) -> list[EvidenceFileStatus]:

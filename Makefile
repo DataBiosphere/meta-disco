@@ -1,4 +1,4 @@
-.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence name-signals corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -26,6 +26,9 @@ help:
 	@echo "  make coverage-report    Generate coverage report from latest run"
 	@echo "  make manifest-survey    Survey what the downloaded manifests carry (offline)"
 	@echo "  make download-and-survey Pull manifests, then survey what they carry"
+	@echo "  make check-slot-map     Check the AnVIL slot map against the manifests on disk (offline)"
+	@echo "  make import-anvil-evidence Import AnVIL submitter tables as a generation of evidence files"
+	@echo "  make name-signals       What submitter names would claim, measured against a stored run"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make published-comparison Compare a run against the values the repository publishes"
 	@echo "  make validation-report  Generate validation report against ground truth"
@@ -175,6 +178,24 @@ manifest-survey:
 # The survey reads what `make download` leaves on disk, so the two belong
 # together after a catalog refresh — the same shape as classify-and-report.
 download-and-survey: download manifest-survey
+
+# The AnVIL slot map (#369): check it against the manifests on disk, or import
+# every dataset it names as one new generation of evidence files under
+# data/source_evidence/anvil/. Offline. Nothing reads the evidence until the join
+# (#402) lands, so classification output is unchanged by an import.
+check-slot-map:
+	uv run python scripts/import_anvil_evidence.py --check
+
+import-anvil-evidence:
+	uv run python scripts/import_anvil_evidence.py $(ARGS)
+
+# What a submitter table or column *name* would claim, measured against a stored
+# run (#369 R8): agreement, disagreement, and where inference is silent. A decision
+# aid for the translation table and the resolver, never an authoring input to the
+# map — it runs on every dataset and needs no map. `ARGS="--evidence"` measures the
+# written evidence instead of the names.
+name-signals:
+	uv run python scripts/name_signals.py $(ARGS)
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
 # comparison to published-comparison). Its input, output/hprc/hprc_validation_results.json,

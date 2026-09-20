@@ -120,7 +120,12 @@ evidence}` entry — plus the controlled vocabulary:
     number (#226). Tiers 1–3 are the rule tiers declared in `unified_rules.yaml`.
   - Evidence files under `data/source_evidence/<source>/` are NDJSON, written and
     read through `source_evidence.write_evidence_file` / `iter_evidence` and never
-    with a whole-file `json.load` — the corpus is millions of records (#374). Line 1
+    with a whole-file `json.load` — the corpus is millions of records (#374). An
+    import is a **generation** (#369): `<source>/<version>/<dataset>/<generation>/`,
+    written once and never over an earlier one; `discover` returns the newest per
+    dataset. The AnVIL importer is `anvil_evidence`, driven by the slot map in
+    `sources/anvil_slot_map.yaml` (`slot_map` loads it; `make check-slot-map`
+    checks it against the manifests; `make import-anvil-evidence` writes). Line 1
     is the envelope, naming both sides of the join and the source's kind
     (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant for the file — the two
     kinds an importer may write. `wrangler_annotation` is deliberately not among

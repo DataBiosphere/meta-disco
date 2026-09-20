@@ -119,9 +119,13 @@ READY_LOW = 0.10
 # un-vocabularized.
 #
 # Split the name on non-alphanumeric boundaries, lowercase, and look each token
-# up. This says what a name mentions, never what a file is. Entity-shaped tokens
-# (``sample``, ``participant``, ``donor``) name no dimension and are absent on
-# purpose.
+# up (:func:`name_tokens`). This says what a name mentions, never what a file is.
+# A token may be entity-shaped — it says what a *row* is, not what its files are —
+# and this list does not judge that: ``sample``, ``participant`` and ``donor`` name
+# no dimension and are absent, but ``interval`` is here because a name that
+# mentions it does mention an interval set, whether or not the files under it are
+# one. The slot map (`slot_map.ENTITY_TOKENS`) is where that is judged, and it
+# refuses such a token as a source for any slot.
 NAME_TOKENS: dict[str, tuple[str, str | None]] = {
     # reference_assembly
     "chm13": ("reference_assembly", "CHM13"),
@@ -196,6 +200,18 @@ FIELD_TOKENS: dict[str, str] = {
 NO_VOCABULARY_TERM = "(no vocabulary term)"
 
 _NAME_SPLIT = re.compile(r"[^0-9a-z]+")
+
+
+def name_tokens(name: str) -> list[str]:
+    """A table or column name as the lowercased tokens :data:`NAME_TOKENS` is keyed by.
+
+    Split on every non-alphanumeric run, so ``PAR_interval_CHM13v2`` yields ``par``,
+    ``interval``, ``chm13v2``. One definition, shared with the slot map's forecast
+    (`anvil_forecast`), so the two cannot tokenize a name differently.
+    """
+    return [token for token in _NAME_SPLIT.split(name.lower()) if token]
+
+
 # The Azul file id inside a DRS URI: ``drs://drs.anv0:v2_<uuid>``. A submitter
 # table points at files either this way or by the bare id, so both are looked for.
 _DRS_FILE_ID = re.compile(r"v2_([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})", re.IGNORECASE)
@@ -500,7 +516,7 @@ def _table_encodes(name: str) -> list[tuple[str, str | None]]:
     sees the ambiguity instead of having it resolved silently here.
     """
     found: list[tuple[str, str | None]] = []
-    for token in _NAME_SPLIT.split(name.lower()):
+    for token in name_tokens(name):
         meaning = NAME_TOKENS.get(token)
         if meaning is not None and meaning not in found:
             found.append(meaning)
@@ -1268,7 +1284,7 @@ def _vocabulary_gaps(survey: Survey) -> list[str]:
     seen: dict[str, set[str]] = defaultdict(set)
     for dataset in survey.datasets:
         for table in dataset.name_encoding_tables:
-            for token in _NAME_SPLIT.split(table.name.lower()):
+            for token in name_tokens(table.name):
                 meaning = NAME_TOKENS.get(token)
                 if meaning is not None and meaning[1] is None:
                     seen[meaning[0]].add(token)

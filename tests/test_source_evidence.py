@@ -59,7 +59,10 @@ from meta_disco.source_evidence import (
     EvidenceFileSource,
     EvidenceTarget,
     discover,
+    generation_dir,
+    is_generation,
     iter_evidence,
+    new_generation,
     read_envelope,
     report_evidence_files,
     write_evidence_file,
@@ -892,6 +895,38 @@ class TestDiscovery:
             "anvil/manifest.ndjson",
             "hprc/catalog.ndjson",
         ]
+
+    def test_only_the_newest_generation_of_a_dataset_is_current(self, tmp_path):
+        """An import is a generation (#369): the one behind it is history, on disk and unread."""
+        for name in (
+            "anvil/anvil15/D/20260920T000000Z/hifi.ndjson",
+            "anvil/anvil15/D/20260921T000000Z/hifi.ndjson",
+            "anvil/anvil15/D/20260921T000000Z/ont.ndjson",
+            "anvil/anvil15/E/20260919T000000Z/file.ndjson",
+            "hprc/catalog.ndjson",
+        ):
+            path = tmp_path / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+
+        assert [p.relative_to(tmp_path).as_posix() for p in discover(tmp_path)] == [
+            "anvil/anvil15/D/20260921T000000Z/hifi.ndjson",
+            "anvil/anvil15/D/20260921T000000Z/ont.ndjson",
+            "anvil/anvil15/E/20260919T000000Z/file.ndjson",
+            "hprc/catalog.ndjson",
+        ]
+
+    def test_the_generation_layout_is_spelled_once(self, tmp_path):
+        stamp = new_generation(datetime(2026, 9, 20, 6, 41, 31, tzinfo=timezone.utc))
+        assert stamp == "20260920T064131Z"
+        assert is_generation(stamp) and not is_generation("20260920_064131")
+        assert generation_dir(tmp_path, "anvil", "anvil15", "D", stamp) == tmp_path / "anvil" / "anvil15" / "D" / stamp
+        with pytest.raises(ValueError, match="not a generation stamp"):
+            generation_dir(tmp_path, "anvil", "anvil15", "D", "latest")
+
+    def test_a_naive_clock_is_read_as_local_time_and_stamped_in_utc(self):
+        stamp = new_generation(datetime(2026, 9, 20, 6, 41, 31))
+        assert is_generation(stamp)
 
 
 class TestTheRunReport:
