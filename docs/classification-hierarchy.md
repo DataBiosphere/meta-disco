@@ -133,15 +133,18 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 ## Intervals/Peaks (.bed, .bed.gz, .narrowPeak, .broadPeak)
 
-**data_type**: `annotations`
+**data_type**: `annotations` (`.bed`), `peaks` (`.narrowPeak`, `.broadPeak`)
 
-`.narrowPeak` and `.broadPeak` still resolve to the `intervals` category by extension,
-but no rule emits `data_type: peaks` any more. Four rules used to — `bed_peaks_generic`,
+`peaks` comes from the extension alone, via `intervals_called_peaks`: a `.narrowPeak` or
+`.broadPeak` file says what it holds, and no filename token is consulted. Its
+`data_modality` is deliberately left unset — the format serves ATAC (accessibility) and
+ChIP (histone/TF) alike, so the extension cannot tell them apart.
+
+Four rules used to claim `peaks` from a filename instead — `bed_peaks_generic`,
 `bed_atac_peaks`, `bed_chip_peaks` and `intervals_chip_peaks` — and all four fired on no
 file in either corpus, so #430 deleted them. Two matched a bare `peak`/`atac` token; the
 other two were delimiter-carrying (`\.chip\.|chip[-_]?seq|…`) and went for being dead,
-not for being unanchored. The enum keeps the term for when a rule can claim it on real
-evidence.
+not for being unanchored.
 
 **data_modality**:
 - `genomic` ← regions.bed pattern, fallback default

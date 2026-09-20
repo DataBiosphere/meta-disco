@@ -229,9 +229,10 @@ the "conflict" becomes structured provenance instead of an error.
 
 ### 5a. Representation — one pointer, not copied values
 
-A classification record is identified by its `md5sum` and `file_name` together —
-md5 alone is not an identity, since two differently-named files can hold the same
-bytes and classify differently (#430). The BAM:
+A classification record is identified by its `file_id`, the catalog identity that
+survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). `md5sum` is not an identity:
+two differently-named files can hold the same bytes and classify differently (#430).
+The BAM:
 
 ```json
 {
@@ -336,7 +337,7 @@ distinction.
 > inside this repo** — meta-disco produces classification JSON; the actual
 > filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers are the
 > batch **report generators**, and they already load every classification into a
-> dict keyed by `(md5sum, file_name)` (see `classify_index_files.py:load_classifications`), so
+> dict keyed by `file_id` (see `classify_index_files.py:load_classifications`), so
 > "follow the link" is a trivial dict lookup they can already do — no new
 > infrastructure needed to compute an inherited view for the reports.
 >

@@ -67,8 +67,9 @@ def _file(name: str, fmt: str, md5: str, entry_id: str, dataset_id: str = "ds1",
     """One input metadata record, in the shape `write_metadata` expects.
 
     Carries `file_id` because the input contract requires it and the parent join
-    keys on it (`classify_index_files.load_classifications`); it is derived from
-    `entry_id` so a fixture never has to invent a second identifier by hand.
+    keys on it (`classify_index_files.load_classifications`). It defaults to `_fid(md5)`,
+    so a fixture's two sides join without either spelling an identifier; pass it
+    explicitly where two records share one md5.
     """
     return {
         "file_name": name,
