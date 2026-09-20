@@ -240,6 +240,10 @@ def _accession_internal_matches(rules, filenames):
     that makes the match a coincidence rather than a signal. The extension gate is
     deliberately *not* applied: a match a gate happens to block today is still a
     latent defect, waiting for the same three characters to land on a gated extension.
+
+    A zero-width match is not a hit either. A pattern that is purely a lookaround
+    consumes no characters, so it lands inside every token in the name while matching
+    none of them — the containment test alone would report it on every accession.
     """
     hits = []
     # Accession runs are maximal, so "inside a longer one" is containment plus a
@@ -253,6 +257,8 @@ def _accession_internal_matches(rules, filenames):
         for filename, spans in spans_by_filename.items():
             for match in compiled.finditer(filename):
                 start, end = match.span()
+                if end == start:
+                    continue
                 if any(s <= start and end <= e and (e - s) > (end - start) for s, e in spans):
                     hits.append((rule.id, filename, match.group(0)))
     return hits

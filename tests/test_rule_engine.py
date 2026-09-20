@@ -832,8 +832,19 @@ class TestCalledPeaks:
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_modality is None
 
+    @pytest.mark.parametrize("name", ["sample.narrowPeak.bed", "sample.broadPeak.bed", "sample.narrowPeak.bed.gz"])
+    def test_a_compound_peak_name_answers_the_same(self, engine, name):
+        """`sample.narrowPeak.bed` parses to core `.bed`, so the extension-keyed rule
+        cannot see it — `intervals_called_peaks_compound` reads the delimited token
+        instead. Without it these fell through to `intervals_fallback` and were called
+        `genomic` annotations, which is what the deleted BED tests used to catch."""
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.data_type == "peaks"
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
+
     def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
-        """Narrowing `intervals_fallback` to `.bed` left its own case untouched."""
+        """Narrowing `intervals_fallback` to `.bed` and excluding the peak token left
+        its own case untouched — it still answers for a BED with no other signal."""
         result = engine.classify_extended(FileInfo.from_filename("sample.bed"))
         assert result.data_modality == "genomic"
         assert result.data_type == "annotations"

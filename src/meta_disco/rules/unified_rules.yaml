@@ -1700,6 +1700,15 @@ rules:
       extensions: [".narrowpeak", ".broadpeak"]
     then:
       data_type: peaks
+
+  - id: intervals_called_peaks_compound
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".bed"]
+      filename_pattern: "(?i)[._-](narrow|broad)peak[._-]"
+    then:
+      data_type: peaks
     rationale: "A .narrowPeak/.broadPeak file holds called peaks — the extension states it"
 
   - id: intervals_fallback
@@ -1707,6 +1716,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
+      filename_pattern: "(?i)^(?![^\\n]*[._-](narrow|broad)peak[._-])"
       modality_not_set: true
     then:
       data_modality: genomic
