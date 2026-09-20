@@ -240,6 +240,33 @@ def _subdir(tmp_path, name):
     return path
 
 
+# One character per category a class can name. A sample is only useful as a probe if
+# the pattern actually matches it, so a stand-in that satisfies nothing — `"x"` for
+# `\d`, as this first did — produces a probe the rule cannot fire on and quietly
+# exempts it. `test_every_generated_sample_matches_its_pattern` is what stops that
+# recurring.
+_CATEGORY_MEMBERS = {"DIGIT": "0", "WORD": "a", "SPACE": " ", "NOT_DIGIT": "a", "NOT_WORD": ".", "NOT_SPACE": "a"}
+
+
+def _class_member(items):
+    """A character the character class ``items`` accepts."""
+    negated = bool(items) and str(items[0][0]).endswith("NEGATE")
+    if negated:
+        excluded = {chr(a) for o, a in items[1:] if str(o).endswith("LITERAL")}
+        return next(c for c in "a0z1x" if c not in excluded)
+    for op, av in items:
+        name = str(op)
+        if name.endswith("LITERAL"):
+            return chr(av)
+        if name.endswith("RANGE"):
+            return chr(av[0])
+        if name.endswith("CATEGORY"):
+            key = str(av).rsplit("CATEGORY_", 1)[-1]
+            if key in _CATEGORY_MEMBERS:
+                return _CATEGORY_MEMBERS[key]
+    return "x"
+
+
 def _sample_matches(pattern, cap=64):
     """Concrete strings ``pattern`` can match — one per alternative it offers.
 
@@ -262,10 +289,7 @@ def _sample_matches(pattern, cap=64):
             if name.endswith("LITERAL"):
                 out = [s + chr(av) for s in out]
             elif name.endswith("IN"):
-                members = [chr(a) for o, a in av if str(o).endswith("LITERAL")]
-                if not members:  # a negated or range-only class contributes a stand-in
-                    members = ["x"]
-                out = [s + members[0] for s in out]
+                out = [s + _class_member(av) for s in out]
             elif name.endswith("ANY"):
                 out = [s + "x" for s in out]
             elif name.endswith("BRANCH"):
@@ -273,9 +297,11 @@ def _sample_matches(pattern, cap=64):
             elif name.endswith("SUBPATTERN"):
                 out = [s + b for s in out for b in walk(av[3])][:cap]
             elif name.endswith(("MAX_REPEAT", "MIN_REPEAT")):
+                # Repeated `least` times, not once: `\d{4}` needs four digits or the
+                # sample its own pattern cannot match, which probes nothing.
                 least, _, item = av
                 inner = walk(item) if least else [""]
-                out = [s + b for s in out for b in inner][:cap]
+                out = [s + b * least for s in out for b in inner][:cap]
             # AT (anchors) and anything else contribute nothing to the sample text
         return out[:cap]
 
@@ -426,6 +452,32 @@ def test_an_already_bounded_token_never_becomes_a_probe():
     probes = accession_probes(get_unified_rules())
     assert not any("PATERNAL" in p for p in probes)
     assert not any("MATERNAL" in p for p in probes)
+
+
+def test_every_generated_sample_matches_its_pattern():
+    """A probe the rule cannot fire on exempts it silently, so no sample may be one.
+
+    The sampler first used `"x"` wherever a class named no literal, which makes
+    `foo\\d+` yield `foox` — a probe the pattern does not match, so an unanchored
+    `foo\\d+` rule would have passed the accession check by generating something
+    inapplicable. This is the guard on the guard: a sampler that cannot represent a
+    construct fails here rather than quietly covering less.
+    """
+    unmatched = []
+    for rule in get_unified_rules().rules:
+        pattern = (rule.when or {}).get("filename_pattern")
+        if not pattern:
+            continue
+        compiled = re.compile(pattern, re.IGNORECASE)
+        unmatched += [
+            f"{rule.id}: {sample!r} from {pattern}"
+            for sample in _sample_matches(pattern)
+            if not compiled.search(sample)
+        ]
+    assert not unmatched, (
+        "The sampler produced strings their own pattern does not match, so those "
+        "alternatives are not really probed:\n  " + "\n  ".join(unmatched)
+    )
 
 
 def test_a_character_class_alternative_is_covered():
