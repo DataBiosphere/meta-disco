@@ -916,6 +916,23 @@ class TestDiscovery:
             "hprc/catalog.ndjson",
         ]
 
+    def test_a_stamp_named_directory_at_another_depth_is_not_a_generation(self, tmp_path):
+        """Only the fourth segment under the root is a generation; a stamp elsewhere is a name."""
+        for name in (
+            "anvil/20260921T000000Z/D/20260920T000000Z/hifi.ndjson",  # a version spelled like a stamp
+            "anvil/20260921T000000Z/D/20260921T000000Z/hifi.ndjson",
+            "20260919T000000Z/flat.ndjson",  # a stamp one level under the root
+            "anvil/anvil15/20260918T000000Z/x.ndjson",  # a dataset spelled like a stamp, no generation
+        ):
+            path = tmp_path / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+        assert [p.relative_to(tmp_path).as_posix() for p in discover(tmp_path)] == [
+            "20260919T000000Z/flat.ndjson",
+            "anvil/20260921T000000Z/D/20260921T000000Z/hifi.ndjson",
+            "anvil/anvil15/20260918T000000Z/x.ndjson",
+        ]
+
     def test_the_generation_layout_is_spelled_once(self, tmp_path):
         stamp = new_generation(datetime(2026, 9, 20, 6, 41, 31, tzinfo=timezone.utc))
         assert stamp == "20260920T064131Z"

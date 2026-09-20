@@ -809,12 +809,13 @@ def evidence_file_path(directory: Path, table: str) -> Path:
 def discover(root: Path) -> list[Path]:
     """Every current evidence file under ``root``, in a stable order; empty when there are none.
 
-    *Current* means: of the files written under a generation directory
-    (:func:`generation_dir`), only those of the newest generation of each dataset —
-    an older generation is history, kept on disk and never read by a run. A file not
-    under a generation directory has no history to supersede it and is always current.
-    Newest is by stamp, which sorts as time because of the format; the run does not
-    consult mtimes.
+    *Current* means: of the files written in the generation layout
+    (:func:`generation_dir` — a stamp-named directory exactly four levels under
+    ``root``), only those of the newest generation of each dataset — an older
+    generation is history, kept on disk and never read by a run. A file anywhere else
+    has no history to supersede it and is always current, a stamp-named directory at
+    another depth included. Newest is by stamp, which sorts as time because of the
+    format; the run does not consult mtimes.
 
     A missing ``root`` is not an error: no evidence files present is the ordinary state
     of a run today, and it means the run imports nothing — not that it is
@@ -825,10 +826,20 @@ def discover(root: Path) -> list[Path]:
     found = sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
     newest: dict[Path, str] = {}
     for path in found:
-        if is_generation(path.parent.name):
-            dataset_dir = path.parent.parent
-            newest[dataset_dir] = max(newest.get(dataset_dir, ""), path.parent.name)
-    return [p for p in found if not is_generation(p.parent.name) or p.parent.name == newest[p.parent.parent]]
+        if (generation := _generation_of(root, path)) is not None:
+            newest[path.parent.parent] = max(newest.get(path.parent.parent, ""), generation)
+    return [p for p in found if (g := _generation_of(root, p)) is None or g == newest[p.parent.parent]]
+
+
+def _generation_of(root: Path, path: Path) -> str | None:
+    """The generation stamp a file sits under in the generation layout, or None where it does not.
+
+    The layout is ``<root>/<source>/<version>/<dataset>/<generation>/<file>``, so the
+    stamp is the fourth segment under ``root`` and nothing else: a version or dataset
+    that happened to be spelled like a stamp would otherwise read as one.
+    """
+    parts = path.relative_to(root).parts
+    return parts[3] if len(parts) == 5 and is_generation(parts[3]) else None
 
 
 def report_evidence_files(root: Path, now: datetime | None = None) -> list[EvidenceFileStatus]:
