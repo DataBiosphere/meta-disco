@@ -26,10 +26,11 @@ that file and slot, and does it agree?
 **This forecasts; it never authors.** A disagreement here is the resolver's to record
 (contract 4.5) and an agreement is a source earning trust (4.4); neither is grounds to
 change the map, which is authored from the source's own schema and from nothing a run
-concluded (R1, 3.4). Both measurements apply the two structural exclusions the loader
-enforces, through the one predicate that states them (`slot_map.structural_exclusion`);
-the authoring rule the map follows beyond those is a judgment the forecast does not
-apply, so `name_signals` forecasts more than the map says.
+concluded (R1, 3.4). :func:`name_signals` applies the two structural exclusions the
+loader enforces, through the one predicate that states them
+(`slot_map.structural_exclusion`); :func:`evidence_forecast` reads evidence the loader
+already admitted and applies nothing. The authoring rule the map follows beyond those
+two is a judgment neither applies, so `name_signals` forecasts more than the map says.
 
 The run is read through ``output_utils.iter_records_with_source``, which loads each
 producer's file whole; that is the run's existing reader and its memory ceiling
