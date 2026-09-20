@@ -43,17 +43,6 @@ def engine():
 class TestRuleMatching:
     """Test rule matching logic."""
 
-    def test_alignment_rnaseq_filename(self, engine):
-        """RNA-seq indicators in filename should set transcriptomic modality."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam"))
-        assert result.data_modality == "transcriptomic.bulk"
-        assert "alignment_rnaseq_filename" in result.rules_matched
-
-    def test_alignment_wgs_filename(self, engine):
-        """WGS indicators should set genomic modality with WGS assay_type."""
-        result = engine.classify(FileInfo.from_filename("sample_WGS_aligned.bam"))
-        assert result.data_modality == "genomic"
-
     def test_alignment_ref_grch38(self, engine):
         """hg38/GRCh38 in filename should set reference assembly."""
         result = engine.classify(FileInfo.from_filename("sample.hg38.cram"))
@@ -69,9 +58,10 @@ class TestRuleMatching:
         result = engine.classify(FileInfo.from_filename("sample.chm13.cram"))
         assert result.reference_assembly == "CHM13"
 
-    def test_rna_filename_sets_modality_regardless_of_size(self, engine):
-        """RNA filename indicator should set transcriptomic modality."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam", file_size=60_000_000_000))
+    def test_filename_indicator_sets_modality_regardless_of_size(self, engine):
+        """A filename indicator settles modality even at a size the heuristics would
+        otherwise speak to — the tier-2 name rule is not displaced by file size."""
+        result = engine.classify(FileInfo.from_filename("sample.isoseq.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_star_aligner_indicates_rnaseq(self, engine):
@@ -783,11 +773,6 @@ class TestSpecialFileTypes:
         result = engine.classify(FileInfo.from_filename("sample.h5ad"))
         assert result.data_modality == "transcriptomic.single_cell"
 
-    def test_single_cell_atac(self, engine):
-        """Single-cell ATAC matrix should be epigenomic."""
-        result = engine.classify(FileInfo.from_filename("sample_atac_peaks.h5ad"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
     def test_methylation_idat(self, engine):
         """IDAT files should be epigenomic.methylation."""
         result = engine.classify(FileInfo.from_filename("sample.idat"))
@@ -821,58 +806,10 @@ class TestSpecialFileTypes:
 class TestFastqFiles:
     """Test FASTQ file classification."""
 
-    def test_fastq_rna(self, engine):
-        """FASTQ with RNA indicator."""
-        result = engine.classify(FileInfo.from_filename("sample_rnaseq_R1.fastq.gz"))
-        assert result.data_modality == "transcriptomic.bulk"
-
     def test_fastq_ambiguous(self, engine):
         """FASTQ without indicators is not classified for modality."""
         result = engine.classify_extended(FileInfo.from_filename("sample_R1.fastq.gz"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-
-class TestSignalTracks:
-    """Test signal track classification."""
-
-    def test_bigwig_chip(self, engine):
-        """ChIP-seq bigwig files."""
-        result = engine.classify(FileInfo.from_filename("sample_H3K27ac.bigwig"))
-        assert result.data_modality == "epigenomic.histone_modification"
-
-    def test_bigwig_atac(self, engine):
-        """ATAC-seq bigwig files."""
-        result = engine.classify(FileInfo.from_filename("sample_atac.bw"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-
-class TestPeakFiles:
-    """Test peak file classification (narrowPeak, broadPeak, etc.)."""
-
-    def test_narrowpeak_chromatin_accessibility(self, engine):
-        """narrowPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample.narrowPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-    def test_broadpeak_chromatin_accessibility(self, engine):
-        """broadPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample.broadPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-    def test_peaks_bed_chromatin_accessibility(self, engine):
-        """BED files with 'peaks' should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("atac_peaks.bed"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-    def test_chip_peaks_histone_modification(self, engine):
-        """ChIP-seq peak files should be epigenomic.histone_modification."""
-        result = engine.classify(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
-        assert result.data_modality == "epigenomic.histone_modification"
-
-    def test_summit_bed_chromatin_accessibility(self, engine):
-        """Summit files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample_summits.bed"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
 
 
 class TestTextFiles:
@@ -955,7 +892,7 @@ class TestConflictingClassificationFields:
 
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
-        result = engine.classify_extended(FileInfo.from_filename("sample_rnaseq_wgs_aligned.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.isoseq.hifi_reads.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
@@ -1402,7 +1339,7 @@ class TestReasonChain:
 
     def test_multiple_reasons(self, engine):
         """Multiple matching rules should accumulate reasons."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA.hg38.bam"))
+        result = engine.classify(FileInfo.from_filename("sample.isoseq.hg38.bam"))
         assert len(result.reasons) >= 2
         assert len(result.rules_matched) >= 2
 
@@ -1496,7 +1433,7 @@ class TestOutputDictStatus:
     def test_status_pins_each_sentinel_state(self, engine):
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives
         # in `status` with `value` nulled out — no sentinels in `value`.
-        classified = engine.classify_extended(FileInfo.from_filename("sample_WGS_aligned.bam")).to_output_dict()[
+        classified = engine.classify_extended(FileInfo.from_filename("sample.hifi_reads.bam")).to_output_dict()[
             "data_modality"
         ]
         assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)

@@ -92,6 +92,14 @@
 #     to a single identity, so key on this instead of re-listing extensions
 #     (see EXTENSION_TO_FORMAT in meta_disco.file_name; issue #243)
 # - filename_pattern: regex pattern for filename (case-insensitive)
+#     A short bare token (`10x`, `cpg`, `rna`) tests as an unanchored substring and
+#     so can match inside an opaque accession — `10X` sits inside IGVFFI1310XKZG,
+#     which classified one FASTQ single-cell on three characters of an identifier
+#     (#430). Anchor such a token on its left with `(^|[._-])`; that stops the
+#     accession match while keeping `scRNAseq_R1` and `10xGenomics`, which a
+#     trailing `([._-]|$)` would reject. Leave long or word-forming alternatives
+#     bare — `counts` has to keep matching inside `pseudocounts`.
+#     `test_no_pattern_matches_inside_an_accession` enforces this.
 # - dataset_pattern: regex pattern for dataset title
 # - file_format: required format (.bam, .cram, etc)
 #
@@ -439,19 +447,8 @@ rules:
   # ===========================================================================
 
   # ---------------------------------------------------------------------------
-  # Alignment files - RNA-seq indicators
+  # Alignment files - assay/platform indicators in the filename
   # ---------------------------------------------------------------------------
-  - id: alignment_rnaseq_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)_rna_|rnaseq|rna-seq|transcriptome|_RNA\\."
-    then:
-      data_modality: transcriptomic.bulk
-      data_type: alignments
-    rationale: "Filename contains RNA-seq indicator"
-
   - id: alignment_isoseq_filename
     tier: 2
     scope: filename
@@ -462,65 +459,6 @@ rules:
       data_modality: transcriptomic.bulk
       data_type: alignments
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
-
-  - id: alignment_scrna_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)scrna|sc_rna|single.?cell|10x|chromium"
-    then:
-      data_modality: transcriptomic.single_cell
-      data_type: alignments
-    rationale: "Filename contains single-cell RNA indicator"
-
-  - id: alignment_atac_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)atac|_ATAC_"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: alignments
-      assay_type: ATAC-seq
-    rationale: "Filename contains ATAC-seq indicator"
-
-  - id: alignment_chip_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)chip|_ChIP_|chipseq"
-    then:
-      data_modality: epigenomic.histone_modification
-      data_type: alignments
-      assay_type: ChIP-seq
-    rationale: "Filename contains ChIP-seq indicator"
-
-  - id: alignment_wgs_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)_wgs_|_WGS\\.|whole.?genome"
-    then:
-      data_modality: genomic
-      data_type: alignments
-      assay_type: WGS
-    rationale: "Filename contains WGS indicator"
-
-  - id: alignment_wes_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)_wes_|exome|_WES\\."
-    then:
-      data_modality: genomic
-      data_type: alignments
-      assay_type: WES
-    rationale: "Filename contains exome indicator"
 
   - id: alignment_hifi_filename
     tier: 2
@@ -616,51 +554,16 @@ rules:
   # ---------------------------------------------------------------------------
   # FASTQ reads - modality from filename
   # ---------------------------------------------------------------------------
-  - id: reads_rna_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fastq", ".fq"]
-      filename_pattern: "(?i)_rna_|rnaseq|transcriptome"
-    then:
-      data_modality: transcriptomic.bulk
-      data_type: reads
-    rationale: "Filename contains RNA indicator"
-
   - id: reads_scrna_filename
     tier: 2
     scope: filename
     when:
       extensions: [".fastq", ".fq"]
-      filename_pattern: "(?i)scrna|single.?cell|10x"
+      filename_pattern: "(?i)(^|[._-])(scrna|single.?cell|10x)"
     then:
       data_modality: transcriptomic.single_cell
       data_type: reads
     rationale: "Filename contains single-cell indicator"
-
-  - id: reads_atac_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fastq", ".fq"]
-      filename_pattern: "(?i)atac"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: reads
-      assay_type: ATAC-seq
-    rationale: "Filename contains ATAC indicator"
-
-  - id: reads_wgs_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fastq", ".fq"]
-      filename_pattern: "(?i)_wgs_|whole.?genome"
-    then:
-      data_modality: genomic
-      data_type: reads
-      assay_type: WGS
-    rationale: "Filename contains WGS indicator"
 
   # ---------------------------------------------------------------------------
   # FASTA assembly indicators
@@ -692,36 +595,6 @@ rules:
     rationale: "Filename contains haplotype/phasing indicator — de novo assembly"
 
   # ---------------------------------------------------------------------------
-  # Single-cell matrix - ATAC variant
-  # ---------------------------------------------------------------------------
-  - id: sc_matrix_atac
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".h5ad", ".loom", ".mtx"]
-      filename_pattern: "(?i)atac|peaks"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: expression_matrix
-      assay_type: ATAC-seq
-    rationale: "Single-cell matrix with ATAC indicator"
-
-  # ---------------------------------------------------------------------------
-  # Nanopore - direct RNA
-  # ---------------------------------------------------------------------------
-  - id: nanopore_rna_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fast5", ".pod5"]
-      filename_pattern: "(?i)rna|direct.?rna"
-    then:
-      data_modality: transcriptomic.bulk
-      data_type: raw_signal
-      platform: ONT
-    rationale: "Nanopore direct RNA sequencing"
-
-  # ---------------------------------------------------------------------------
   # BED file classification rules (applied by classify_from_bed_signals)
   # ---------------------------------------------------------------------------
   - id: bed_methylation
@@ -729,7 +602,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(modbam2bed|cpg|methylat|bisulfite|wgbs)"
+      filename_pattern: "(?i)(modbam2bed|(^|[._-])cpg|methylat|bisulfite|wgbs)"
     then:
       data_modality: epigenomic.methylation
       data_type: annotations
@@ -741,47 +614,12 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(TMM|TPM|RPKM|FPKM|counts|expression|leafcutter|\\.TSS\\.)"
+      filename_pattern: "(?i)((^|[._-])(TMM|TPM|RPKM|FPKM)|counts|expression|leafcutter|\\.TSS\\.)"
     then:
       data_modality: transcriptomic.bulk
       data_type: annotations
       assay_type: RNA-seq
     rationale: "BED file contains gene expression quantification or splicing data"
-
-  - id: bed_atac_peaks
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed"]
-      filename_pattern: "(?i)(\\.atac\\.|atac[-_]?seq|atacseq)"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: peaks
-      assay_type: ATAC-seq
-    rationale: "BED file contains ATAC-seq peak calls for chromatin accessibility"
-
-  - id: bed_chip_peaks
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed"]
-      filename_pattern: "(?i)(\\.chip\\.|chip[-_]?seq|chipseq|histone|h3k\\d+)"
-    then:
-      data_modality: epigenomic.histone_modification
-      data_type: peaks
-      assay_type: ChIP-seq
-    rationale: "BED file contains ChIP-seq peak calls for histone marks or TF binding"
-
-  - id: bed_peaks_generic
-    tier: 1
-    scope: filename
-    when:
-      extensions: [".bed", ".narrowpeak", ".broadpeak"]
-      filename_pattern: "(?i)(peak|summit|narrowPeak|broadPeak)"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: peaks
-    rationale: "BED file contains ChIP-seq or ATAC-seq peak calls"
 
   - id: bed_assembly_qc
     tier: 2
@@ -808,30 +646,6 @@ rules:
   # ---------------------------------------------------------------------------
   # Signal track classification
   # ---------------------------------------------------------------------------
-  - id: signal_chip
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
-      filename_pattern: "(?i)chip|h3k|histone"
-    then:
-      data_modality: epigenomic.histone_modification
-      data_type: signal
-      assay_type: ChIP-seq
-    rationale: "Signal track with ChIP/histone indicator"
-
-  - id: signal_atac
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
-      filename_pattern: "(?i)atac"
-    then:
-      data_modality: epigenomic.chromatin_accessibility
-      data_type: signal
-      assay_type: ATAC-seq
-    rationale: "Signal track with ATAC indicator"
-
   - id: signal_rnaseq
     tier: 2
     scope: filename
@@ -851,7 +665,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)targets?|regions?|capture|exome"
+      filename_pattern: "(?i)(^|[._-])(targets?|regions?|capture|exome)"
     then:
       status:
         data_modality: not_applicable
@@ -859,21 +673,6 @@ rules:
         assay_type: not_applicable
         platform: not_applicable
     rationale: "Target/capture region file — reference data, not primary experimental data"
-
-  # ---------------------------------------------------------------------------
-  # Intervals - ChIP-seq peaks
-  # ---------------------------------------------------------------------------
-  - id: intervals_chip_peaks
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed", ".narrowpeak", ".broadpeak"]
-      filename_pattern: "(?i)chip|h3k|histone"
-    then:
-      data_modality: epigenomic.histone_modification
-      data_type: peaks
-      assay_type: ChIP-seq
-    rationale: "ChIP-seq histone modification peaks"
 
   # ---------------------------------------------------------------------------
   # Text files - QC stats (not primary data)

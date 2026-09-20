@@ -163,30 +163,6 @@ class TestExpressionPattern:
         assert rule_id == "bed_expression"
 
 
-class TestPeakPattern:
-    """Test peak/chromatin accessibility pattern matching."""
-
-    def test_narrowpeak_matches(self):
-        """narrowPeak files should match peaks rule."""
-        filename = "sample.narrowPeak.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
-        result = classify_bed(filename)
-        assert result["data_modality"] == "epigenomic.chromatin_accessibility"
-
-    def test_broadpeak_matches(self):
-        """broadPeak files should match peaks rule."""
-        filename = "sample.broadPeak.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
-
-    def test_summit_matches(self):
-        """Summit files should match peaks rule."""
-        filename = "sample_summit.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
-
-
 class TestRegionsPattern:
     """Test regions pattern matching."""
 
@@ -256,13 +232,6 @@ class TestPatternEdgeCases:
         rule_id = get_matched_rule_id(filename)
         # Should NOT match assembly_qc because pattern requires .maternal. with dots
         assert rule_id != "bed_assembly_qc"
-
-    def test_chip_peak_beats_generic_peak(self):
-        """ChIP-seq specific rule (tier 2) overrides generic peaks rule (tier 1)."""
-        filename = "chipseq_peak_calls.bed"
-        result = classify_bed(filename)
-        # bed_chip_peaks (tier 2) wins over bed_peaks_generic (tier 1) due to "chipseq" in filename
-        assert _get_val(result, "data_modality") == "epigenomic.histone_modification"
 
 
 def _get_val(result: dict, field: str):

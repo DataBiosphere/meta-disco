@@ -22,18 +22,13 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (WGS, WES, HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs), file size heuristics
-- `transcriptomic.bulk` ← filename (RNA, transcriptome, STAR), header @PG PN (STAR, HISAT2, TopHat, Salmon, Kallisto, IsoSeq)
-- `transcriptomic.single_cell` ← filename (scRNA, 10x, chromium)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
-- `epigenomic.histone_modification` ← filename (ChIP)
+- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs), file size heuristics
+- `transcriptomic.bulk` ← filename (IsoSeq, STAR), header @PG PN (STAR, HISAT2, TopHat, Salmon, Kallisto, IsoSeq)
 
 **assay_type**:
-- `WGS` ← filename, file size (Illumina BAM >20GB, CRAM >8GB), PacBio HiFi header, CCS program
-- `WES` ← filename (exome), file size (Illumina BAM <20GB, CRAM <8GB)
+- `WGS` ← filename (HiFi), file size (Illumina BAM >20GB, CRAM >8GB), PacBio HiFi header, CCS program
+- `WES` ← file size (Illumina BAM <20GB, CRAM <8GB)
 - `RNA-seq` ← STAR/HISAT2/TopHat/Salmon/Kallisto in @PG, IsoSeq
-- `ATAC-seq` ← filename
-- `ChIP-seq` ← filename
 
 **platform**:
 - `ILLUMINA` ← header @RG PL:ILLUMINA
@@ -73,15 +68,12 @@ file_format (extension)
 **data_type**: `reads`
 
 **data_modality**:
-- `genomic` ← filename (WGS), PacBio/ONT read names (but see issue #37)
-- `transcriptomic.bulk` ← filename (RNA, transcriptome)
-- `transcriptomic.single_cell` ← filename (scRNA, 10x)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
+- `genomic` ← PacBio/ONT read names (but see issue #37)
+- `transcriptomic.single_cell` ← filename (scRNA, single-cell, 10x — as a delimited token, #430)
 - `not_classified` ← **default when no signal** (issue #35, merged)
 
 **assay_type**:
-- `WGS` ← filename, PacBio CCS read names
-- `ATAC-seq` ← filename
+- `WGS` ← PacBio CCS read names
 
 **platform**:
 - `ILLUMINA` ← read name pattern (@instrument:run:flowcell:lane:tile:x:y)
@@ -141,19 +133,20 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 ## Intervals/Peaks (.bed, .bed.gz, .narrowPeak, .broadPeak)
 
-**data_type**: `annotations`, `peaks`
+**data_type**: `annotations`
+
+`.narrowPeak` and `.broadPeak` still resolve to the `intervals` category by extension,
+but no rule emits `data_type: peaks` any more: the three peak rules matched a bare
+`peak`/`atac`/`chip` token and fired on no file in either corpus, so #430 deleted them.
+The enum keeps the term for when a rule can claim it on real evidence.
 
 **data_modality**:
 - `genomic` ← regions.bed pattern, fallback default
 - `transcriptomic.bulk` ← filename (expression, TPM, leafcutter, TSS)
-- `epigenomic.methylation` ← filename (CpG, methylation, bisulfite, modbam2bed)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC), peak patterns
-- `epigenomic.histone_modification` ← filename (ChIP, histone, H3K)
+- `epigenomic.methylation` ← filename (CpG as a delimited token, methylation, bisulfite, modbam2bed)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
 
 **assay_type**:
-- `ATAC-seq` ← filename
-- `ChIP-seq` ← filename (ChIP, histone)
 - `Bisulfite-seq` ← filename (methylation, bisulfite)
 - `RNA-seq` ← filename (expression)
 
@@ -168,11 +161,10 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 **data_type**: `signal`
 
 **data_modality**:
-- `epigenomic.histone_modification` ← filename (ChIP, histone, H3K)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
-- `transcriptomic.bulk` ← filename (RNA, coverage)
+- `transcriptomic.bulk` ← filename (RNA, transcriptome, coverage)
 
-**Coverage**: Filename-dependent only. No header inspection available.
+**Coverage**: Filename-dependent only. No header inspection available. The surviving
+RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
 
 ---
 
@@ -182,9 +174,8 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_modality**:
 - `transcriptomic.single_cell` ← extension default
-- `epigenomic.chromatin_accessibility` ← filename (ATAC, peaks)
 
-**Coverage**: Good defaults from extension. ATAC variant detected from filename.
+**Coverage**: Good defaults from extension.
 
 ---
 
@@ -194,7 +185,6 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_modality**:
 - `genomic` ← extension default (but see issue #37)
-- `transcriptomic.bulk` ← filename (RNA, direct RNA)
 
 **platform**: `ONT` (always)
 

@@ -404,11 +404,6 @@ class TestRuleEngineE2E:
         result = engine.classify_extended(FileInfo.from_filename("HG01928.paternal.f1_assembly.hap1.bed"))
         assert result.data_modality == "genomic"
 
-    def test_fastq_rna_filename(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample_RNA_001.fastq.gz"))
-        assert result.data_modality == "transcriptomic.bulk"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
     def test_checksum_file(self):
         """A checksum file is a checksum — a term the vocabulary has (#437).
 
@@ -476,14 +471,6 @@ class TestRuleEngineE2E:
             result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
             assert result.data_type == "index", f"{ext} should be data_type index"
             assert result.status_of("data_modality") == NOT_CLASSIFIED, f"{ext} modality should be open"
-
-    def test_narrowpeak_is_chromatin(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample.narrowPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-    def test_bigwig_with_chip_keyword(self):
-        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_ChIP.bw"))
-        assert result.data_modality == "epigenomic.histone_modification"
 
     def test_bed_reference_from_filename(self):
         """BED file with hg38 in filename should detect GRCh38."""
@@ -940,11 +927,6 @@ class TestDerivedFileTierPrecedence:
             FileInfo.from_filename("HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed")
         )
         assert result.data_modality == "genomic"  # not not_applicable
-
-    def test_chip_peaks_beat_generic_peaks(self):
-        """ChIP-seq peaks (tier 2) should override generic peaks (tier 1)."""
-        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
-        assert result.data_modality == "epigenomic.histone_modification"
 
     def test_capture_targets_not_applicable(self):
         """Capture target BED without competing rules should get not_applicable."""

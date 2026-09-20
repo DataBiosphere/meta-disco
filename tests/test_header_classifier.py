@@ -777,10 +777,10 @@ class TestBamCramClassification:
 
     def test_real_filename_drives_tier2_rule(self):
         """The real file_name feeds the filename rules — a header carrying no
-        modality signal still classifies rnaseq from the name (#152). Before the
+        modality signal still classifies IsoSeq from the name (#152). Before the
         fix the classifier synthesized `sample.bam` and dropped the name."""
         header = "@HD\tVN:1.6"
-        result = classify_from_header(header, name=FileName.parse("sample.rnaseq.bam"))
+        result = classify_from_header(header, name=FileName.parse("sample.isoseq.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
         assert val(result, "data_type") == "alignments"
 

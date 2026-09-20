@@ -19,8 +19,8 @@
           "data_modality": {
             "evidence": [
               {
-                "reason": "Filename contains RNA-seq indicator",
-                "rule_id": "alignment_rnaseq_filename",
+                "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
+                "rule_id": "alignment_isoseq_filename",
                 "source_type": "filename_rule",
                 "tier": 2,
                 "value": "transcriptomic.bulk"
@@ -32,8 +32,8 @@
           "data_type": {
             "evidence": [
               {
-                "reason": "Filename contains RNA-seq indicator",
-                "rule_id": "alignment_rnaseq_filename",
+                "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
+                "rule_id": "alignment_isoseq_filename",
                 "source_type": "filename_rule",
                 "tier": 2,
                 "value": "alignments"
@@ -73,7 +73,7 @@
         "entry_id": "g-bam-1",
         "file_format": ".bam",
         "file_id": "g-file-b",
-        "file_name": "sample.rnaseq.bam",
+        "file_name": "sample.isoseq.bam",
         "file_size": 12345678,
         "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "published": {

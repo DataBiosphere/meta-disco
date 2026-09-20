@@ -12,6 +12,7 @@ Two layers of protection:
 Together they keep the rules and the schema from drifting apart.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -194,6 +195,132 @@ def test_rule_extensions_are_producible_cores():
         "Rules key on extensions that parse_file_name can never produce "
         "(dead conditions). Use a core extension or fix the rule:\n  " + "\n  ".join(dead)
     )
+
+
+# Filenames drawn from identifier namespaces that are arbitrary alphanumerics by
+# design, so a short token a rule matches on can land inside one by coincidence. The
+# first four are real corpus filenames; the rest are synthetic members of the same
+# namespaces, covering the tokens most at risk.
+ACCESSION_FILENAMES = (
+    "IGVFFI1310XKZG.fastq.gz",  # holds `10X` — the file #430 was filed for
+    "IGVFFI5210XHHO.tar.gz",  # holds `10X`
+    "IGVFFI4961CPGT.fastq.gz",  # holds `CPG`
+    "IGVFFI0729UTMM.fastq.gz",  # holds `TMM`
+    "ENCFF001ATAC.bam",  # holds `ATAC`
+    "ENCFF210CHIP.bed",  # holds `CHIP`
+    "ENCFF33H3K9ME.bigWig",  # holds `H3K`
+    "SRR10PEAKS1.fastq.gz",  # holds `PEAK`
+    "IGVFFI77EXOME2.bed",  # holds `EXOME`
+)
+
+# A maximal alphanumeric run long enough to be an accession rather than a word.
+_ACCESSION_TOKEN = re.compile(r"[A-Za-z0-9]{8,}")
+
+# Rules knowingly left unanchored, with the reason each was exempted (#430).
+#
+# The three reference rules are exempt on measurement, not oversight: an assembly name
+# is routinely written into the middle of a word, and anchoring them costs real matches
+# — 499 for GRCh38 (`…uncoveredByGRCh38WinnowmapAlignments…`, `Homo_sapiens_assembly38`)
+# and 105 for CHM13 (`HG002vCHM13…`, where the `v` is "versus"). `grch37` is listed with
+# them because `b37` and `hs37` are the same shape, though only one file matches it
+# today. For these, an intra-word match is the wanted behavior.
+#
+# `signal_rnaseq` matches `rna` inside the gene symbol TRNAU1AP on 16 ENCORE signal
+# tracks; whether to anchor the token or teach the series' naming is an open question
+# there, so #430 left it alone rather than pre-empting the answer.
+KNOWN_UNANCHORED = {
+    "filename_ref_grch38": "an assembly name is written mid-word; anchoring loses 499 matches",
+    "filename_ref_grch37": "same shape as the other two reference rules",
+    "filename_ref_chm13": "an assembly name is written mid-word; anchoring loses 105 matches",
+    "signal_rnaseq": "#471 owns the choice between anchoring and teaching the ENCORE naming",
+}
+
+
+def _subdir(tmp_path, name):
+    """A fresh directory under `tmp_path`, so two probe rules files can coexist."""
+    path = tmp_path / name
+    path.mkdir()
+    return path
+
+
+def _accession_internal_matches(rules, filenames):
+    """Rule patterns that match strictly inside an accession-shaped token.
+
+    Returns ``(rule_id, filename, matched_text)`` per hit. A match equal to the whole
+    token is not reported — only one buried inside a longer run, which is the shape
+    that makes the match a coincidence rather than a signal. The extension gate is
+    deliberately *not* applied: a match a gate happens to block today is still a
+    latent defect, waiting for the same three characters to land on a gated extension.
+    """
+    hits = []
+    for rule in rules.rules:
+        pattern = (rule.when or {}).get("filename_pattern")
+        if not pattern or rule.id in KNOWN_UNANCHORED:
+            continue
+        compiled = re.compile(pattern, re.IGNORECASE)
+        for filename in filenames:
+            spans = [t.span() for t in _ACCESSION_TOKEN.finditer(filename)]
+            for match in compiled.finditer(filename):
+                start, end = match.span()
+                if any(s <= start and end <= e and (e - s) > (end - start) for s, e in spans):
+                    hits.append((rule.id, filename, match.group(0)))
+    return hits
+
+
+def test_no_pattern_matches_inside_an_accession():
+    """No `filename_pattern` fires on characters buried in an opaque identifier (#430).
+
+    `reads_scrna_filename` matched `10X` inside the IGVF accession IGVFFI1310XKZG and
+    classified that FASTQ `transcriptomic.single_cell` on three characters of an
+    identifier. Anchoring one pattern fixes one rule; this check is what makes the fix
+    hold for the next rule someone authors with a bare `10x`, `cpg` or `atac`.
+    """
+    hits = _accession_internal_matches(get_unified_rules(), ACCESSION_FILENAMES)
+    assert not hits, (
+        "Rule patterns match inside an opaque accession — anchor the short token on "
+        "its left with `(^|[._-])`:\n  "
+        + "\n  ".join(f"{rule_id}: matched {text!r} in {filename}" for rule_id, filename, text in hits)
+    )
+
+
+def test_accession_check_catches_an_unanchored_token(tmp_path):
+    """The guard load-bears: an unanchored short token is reported, an anchored one is
+    not. Without this, the check above could pass by matching nothing at all."""
+    bare, anchored = (
+        _write_rules_file(
+            _subdir(tmp_path, spelling),
+            {
+                "id": "probe",
+                "tier": 2,
+                "scope": "filename",
+                "when": {"extensions": [".fastq"], "filename_pattern": pattern},
+                "then": {"data_modality": "transcriptomic.single_cell"},
+            },
+        )
+        for spelling, pattern in (("bare", "(?i)10x"), ("anchored", "(?i)(^|[._-])10x"))
+    )
+    names = ("IGVFFI1310XKZG.fastq.gz",)
+    assert _accession_internal_matches(RuleLoader(bare).load(), names)
+    assert not _accession_internal_matches(RuleLoader(anchored).load(), names)
+
+
+def test_anchored_patterns_still_match_delimited_tokens():
+    """Anchoring stops the accession match without costing the real spellings (#430).
+
+    `scRNAseq` and `10xGenomics` are the cases a both-sided anchor
+    (`([._-]|$)`) would have rejected, which is why the fix anchors on the left only.
+    """
+    rules = {rule.id: rule for rule in get_unified_rules().rules}
+    pattern = re.compile(rules["reads_scrna_filename"].when["filename_pattern"], re.IGNORECASE)
+    for filename in (
+        "sample_10x_R1.fastq.gz",
+        "SCRNA-seq.fastq",
+        "single_cell.fq",
+        "scRNAseq_R1.fastq.gz",
+        "run.10xGenomics.fastq.gz",
+    ):
+        assert pattern.search(filename), filename
+    assert not pattern.search("IGVFFI1310XKZG.fastq.gz")
 
 
 def test_when_value_check_rejects_bogus_platform(tmp_path):
