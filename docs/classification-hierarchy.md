@@ -135,10 +135,13 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_type**: `annotations` (`.bed`), `peaks` (`.narrowPeak`, `.broadPeak`)
 
-`peaks` comes from the extension alone, via `intervals_called_peaks`: a `.narrowPeak` or
-`.broadPeak` file says what it holds, and no filename token is consulted. Its
-`data_modality` is deliberately left unset — the format serves ATAC (accessibility) and
-ChIP (histone/TF) alike, so the extension cannot tell them apart.
+`peaks` comes from the extension, via `intervals_called_peaks`: a `.narrowPeak` or
+`.broadPeak` file says what it holds. `intervals_called_peaks_compound` covers the
+spelling where that name sits mid-filename and the parsed extension is `.bed`
+(`sample.narrowPeak.bed`), which the extension-keyed rule cannot see — the one place a
+filename token is still read for peaks, and it is a ten-character one on a delimiter.
+Either way `data_modality` is deliberately left unset: the format serves ATAC
+(accessibility) and ChIP (histone/TF) alike, so the extension cannot tell them apart.
 
 Four rules used to claim `peaks` from a filename instead — `bed_peaks_generic`,
 `bed_atac_peaks`, `bed_chip_peaks` and `intervals_chip_peaks` — and all four fired on no

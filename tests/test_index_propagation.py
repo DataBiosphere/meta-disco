@@ -107,6 +107,9 @@ def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam", f
         "md5sum": md5,
         "file_name": file_name,
         "file_id": file_id or _fid(md5),
+        # Producers write this on every row, and the fallback parent key is scoped by
+        # it, so a fixture without one would join on a dataset no real record has.
+        "dataset_title": "test",
         "classifications": {fld: build_field_entry(values[fld]) for fld in CLASSIFICATION_FIELDS},
     }
 
@@ -462,8 +465,18 @@ class TestLoadClassifications:
         simply miss, so only a non-empty string is taken as the identity; anything else
         falls back to bytes and name.
         """
-        assert parent_key(bad, "a" * 32, "sample.bam") == ("a" * 32, "sample.bam")
-        assert parent_key("fid-1", "a" * 32, "sample.bam") == "fid-1"
+        assert parent_key(bad, "a" * 32, "sample.bam", "ds") == ("ds", "a" * 32, "sample.bam")
+        assert parent_key("fid-1", "a" * 32, "sample.bam", "ds") == "fid-1"
+
+    def test_the_fallback_is_scoped_to_a_dataset(self):
+        """The parent match above is scoped to a dataset, so the fallback key must be.
+
+        Two datasets can hold the same bytes under the same name and classify them
+        differently — `dataset_pattern` rules such as `dataset_1000g_reference` key on
+        the dataset itself — so a global fallback would let one dataset's answer reach
+        the other's index files.
+        """
+        assert parent_key(None, "a" * 32, "ref.fa", "ANVIL_1000G") != parent_key(None, "a" * 32, "ref.fa", "ANVIL_T2T")
 
     def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
         """Two byte-identical parents with different names keep their own answers.

@@ -338,7 +338,7 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ).to_dict()
 
 
-def parent_key(file_id, md5sum, file_name):
+def parent_key(file_id, md5sum, file_name, dataset_title=None):
     """The identity a parent joins on: ``file_id`` where the catalog carries one.
 
     ``file_id`` is the catalog identity a consumer joins on
@@ -359,6 +359,13 @@ def parent_key(file_id, md5sum, file_name):
     separates the two FASTAs above, but 3,733 such pairs cover more than one AnVIL
     entry, and it matches exactly where the parent match upstream folds case (#455).
 
+    The fallback carries ``dataset_title`` because the parent match above is scoped to
+    a dataset and this must not be wider: two datasets can hold the same bytes under
+    the same name and classify them differently, since ``dataset_pattern`` rules like
+    ``dataset_1000g_reference`` key on the dataset itself. Scoped by title rather than
+    by ``entry_id``, which a re-index regenerates, or ``dataset_id``, which an output
+    record deliberately does not carry (#450).
+
     A non-string ``file_id`` is not an identity either. ``file_id`` is not a
     classifier-blocking field, so a drifted value survives to a ``validation_failed``
     row, and a truthy one — ``["x"]`` — would raise ``TypeError`` as a dict key rather
@@ -366,7 +373,7 @@ def parent_key(file_id, md5sum, file_name):
     """
     if isinstance(file_id, str) and file_id:
         return file_id
-    return (md5sum, file_name)
+    return (dataset_title, md5sum, file_name)
 
 
 def load_classifications(*paths: Path) -> dict[str | tuple, dict]:
@@ -384,7 +391,7 @@ def load_classifications(*paths: Path) -> dict[str | tuple, dict]:
         for c in data.get("classifications", []):
             md5 = c.get("md5sum")
             if md5 or c.get("file_id"):
-                classifications[parent_key(c.get("file_id"), md5, c.get("file_name"))] = {
+                classifications[parent_key(c.get("file_id"), md5, c.get("file_name"), c.get("dataset_title"))] = {
                     "data_modality": field_label(c, "data_modality"),
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
@@ -535,7 +542,9 @@ def propagate_to_index_files(
 
             # Joined on the parent's identity, by the same rule that keyed the map —
             # its `file_id` where the catalog has one, its bytes and name where not.
-            parent_class = classifications.get(parent_key(parent.get("file_id"), parent_md5, parent_name), {})
+            parent_class = classifications.get(
+                parent_key(parent.get("file_id"), parent_md5, parent_name, parent.get("dataset_title")), {}
+            )
 
             result = {
                 # The raw input record this row is about; the output is built from it.
