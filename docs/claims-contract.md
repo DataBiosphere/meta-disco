@@ -392,8 +392,10 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **The slot map and its importer exist for AnVIL only** (#369): `slot_map` loads
   `sources/anvil_slot_map.yaml`, `anvil_evidence` writes generations of evidence files under
-  `data/source_evidence/anvil/`, and `source_evidence.discover` reads the newest per dataset. So 2.4,
-  2.5's generations and 2.8 are enforced for that one source. No other source has a map, there is no
+  `data/source_evidence/anvil/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
+  absence-is-the-statement half, 2.5's generations and 2.8's two exclusions are enforced for that one
+  source; that the map was authored from nothing a run concluded is not enforceable, and a test greps
+  the file for the strings that would say otherwise. No other source has a map, there is no
   rule scope for source evidence, and nothing consumes what is written: section 2 is produced and not
   yet read.
 - **There is no mapping row, and nothing to hold one.** 3.9-3.12 describe a record nothing constructs and

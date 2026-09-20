@@ -262,18 +262,13 @@ class TestTheBundledMap:
         for forbidden in ("output/", "classifications", "notes:", "agree", "inference"):
             assert forbidden not in text, forbidden
 
-    def test_the_column_name_form_is_used_only_where_the_table_name_says_nothing_of_the_slot(self):
-        """A file-link column's name carries the slot in an entity table; the table name in a
-        file table. Both on one slot would be the same word twice or two words for one fact."""
+    def test_a_table_name_and_a_column_name_on_one_slot_are_different_words(self):
+        """`assembly_annotation.mat_repeat_masker` says `annotation` and `repeat_masker` for data_type:
+        two facts. The same word from both names is one source, and the loader refuses it twice."""
         for entry in load_slot_map().entries:
             for slot, sources in entry.slots.items():
-                forms = {s.form for s in sources}
-                assert not ({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME} <= forms), (
-                    entry.dataset,
-                    entry.table,
-                    entry.column,
-                    slot,
-                )
+                spans = [s.value.casefold() for s in sources if s.is_name]
+                assert len(spans) == len(set(spans)), (entry.dataset, entry.table, entry.column, slot)
 
     def test_every_slot_in_the_map_is_a_classification_field(self):
         for entry in load_slot_map().entries:

@@ -236,6 +236,25 @@ class TestTranscription:
         assert row == ("assay_type", drs(1), json.dumps(titles), "assay_titles")
         assert json.loads(row[2]) == titles
 
+    def test_an_empty_list_cell_observes_nothing_and_is_counted_with_the_nulls(self, tmp_path):
+        """IGVF's assay_titles is `[]` on 31 rows: not a set of titles, and not written as one."""
+        write_dataset(
+            tmp_path,
+            "D",
+            [
+                anvil_file(1),
+                anvil_file(2),
+                ("file", {"file_path": drs(1), "assay_titles": []}),
+                ("file", {"file_path": drs(2), "assay_titles": ""}),
+            ],
+        )
+        text = "catalog: anvil15\ndatasets:\n  D:\n    file:\n      file_path:\n        assay_type:\n          - {cell: assay_titles}\n"
+        result = ae.import_dataset(
+            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+        )
+        assert rows_of(result.tables[0].path) == [("assay_type", drs(2), "", "assay_titles")]
+        assert result.tables[0].null_cells == {"assay_titles": 1}
+
     def test_a_non_string_scalar_is_its_json_literal(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), ("t", {"c": drs(1), "depth": 30, "flag": True})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    t:\n      c:\n        platform:\n          - {cell: depth}\n          - {cell: flag}\n"

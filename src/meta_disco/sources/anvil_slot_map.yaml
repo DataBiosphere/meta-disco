@@ -23,18 +23,45 @@ datasets:
           - {cell: library_source}
       gvcf: *g1000_sample
       gvcf_tbi: *g1000_sample
+  ANVIL_1000G_PRIMED_data_model:
+    plink_file_wide:
+      pgen: &primed_plink
+        data_type:
+          - {table_name: plink}
+      psam: *primed_plink
+      pvar: *primed_plink
   ANVIL_HPRC:
     assembly_annotation:
+      all_flagger: &hprc_annotation
+        data_type:
+          - {table_name: annotation}
+      mat_asat: *hprc_annotation
+      mat_dna_brnn: *hprc_annotation
+      mat_hsat: *hprc_annotation
+      mat_seg_dups: *hprc_annotation
+      mat_trf: *hprc_annotation
+      pat_asat: *hprc_annotation
+      pat_dna_brnn: *hprc_annotation
+      pat_hsat: *hprc_annotation
+      pat_seg_dups: *hprc_annotation
+      pat_trf: *hprc_annotation
+      unreliable_only_flagger: *hprc_annotation
+      unreliable_only_no_mt_flagger: *hprc_annotation
       mat_chm13_cat_genes: &hprc_annotation_chm13
+        data_type:
+          - {table_name: annotation}
         reference_assembly:
           - {column_name: chm13}
       pat_chm13_cat_genes: *hprc_annotation_chm13
       mat_hg38_cat_genes: &hprc_annotation_hg38
+        data_type:
+          - {table_name: annotation}
         reference_assembly:
           - {column_name: hg38}
       pat_hg38_cat_genes: *hprc_annotation_hg38
       mat_repeat_masker: &hprc_annotation_repeat_masker
         data_type:
+          - {table_name: annotation}
           - {column_name: repeat_masker}
       pat_repeat_masker: *hprc_annotation_repeat_masker
     assembly_sample:

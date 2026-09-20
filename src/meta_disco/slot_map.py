@@ -38,9 +38,8 @@ by name: findings and reasoning belong in the pull request and on the issue, whe
 are read, not in a data file.
 
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
-concluded; ``test_slot_map`` checks the file for that. The only exclusions are
-structural, and the loader enforces the two named ones so that authoring discipline is
-not what they rest on:
+concluded; ``test_slot_map`` checks the file for the strings that would. The only
+exclusions are structural. Two are enforced by the loader:
 
 - A **derivative column** — an index or a checksum sidecar, named by
   :data:`DERIVATIVE_SUFFIXES` — carries no ``data_type`` of its own payload. An index is
@@ -51,8 +50,17 @@ not what they rest on:
   scatter window; its ``interval`` token says what the row is, and its files are that
   window's VCFs. No slot reads such a span.
 
-The rest of what is and is not mapped is a judgment about the source's own schema,
-recorded on the issue (#369) — never about a run.
+The rest is the authoring rule, a judgment about the source's own schema that the
+loader does not enforce, recorded here and on the issue (#369) — never about a run.
+Contract 2.7 sorts columns into file links, metadata values and foreign keys. A
+**cell** maps where the column's name, in the source's schema, names one of our five
+facts. A table with **one** file-link column is a file table: its name describes the
+file, so its name tokens map. A table with **several** is an entity table (one row per
+sample, one column per file): its column names describe the files and map, and its
+name maps for a slot only where the fact is one every file in the row shares — the
+reference build under `1KGP_CHM13v2_sample`, the annotation kind under
+`assembly_annotation`, the PLINK kind under `plink_file_wide`, but not `assembly`
+under `assembly_sample`, whose files are an assembly and its alignments.
 """
 
 from __future__ import annotations

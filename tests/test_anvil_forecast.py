@@ -178,8 +178,10 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
     assert forecast.by_verdict[af.AGREE] == {(drs(1), "reference_assembly", "CHM13")}
     assert forecast.by_verdict[af.DISAGREE] == set()
     assert forecast.by_verdict[NOT_APPLICABLE] == {(drs(2), "reference_assembly", "CHM13")}
-    assert forecast.untranslated == {("data_modality", "GENOMIC"): 1}
+    assert forecast.raw_values == {("reference_assembly", "CHM13v2"): 3, ("data_modality", "GENOMIC"): 1}
+    assert forecast.translated == {("reference_assembly", "CHM13v2"): "CHM13"}
     report = af.render_evidence_forecast(forecast, tmp_path / "ev", Path("run"))
     assert "Skipped 1 evidence file(s) not keyed by `drs_uri`: `hprc/catalog.ndjson`" in report
     assert "| FASTQs receiving data_modality | 1 |" in report
-    assert "| data_modality | `GENOMIC` | 1 |" in report
+    assert "| data_modality | `GENOMIC` | 1 |  |" in report
+    assert "| reference_assembly | `CHM13v2` | 3 | CHM13 |" in report

@@ -10,10 +10,11 @@ is written as ``PACBIO_SMRT`` and what it means is the translation table's (#414
 
 **Transcription** (contract 1.4). A string cell is written verbatim, the empty string
 included. A list cell is written as its JSON array, so a set of assay titles is
-recoverable as the set it was. A cell that is null is skipped and counted against the
-column that was null, once per row and column — not once per slot the column feeds, so
-a diagnostic can never exceed the table it describes. A name span is written as the
-span itself, in the name's casing.
+recoverable as the set it was. A cell that is null, or an empty list — which observes
+nothing, where an empty string is something the source published — is skipped and
+counted against the column, once per row and column on the rows whose link resolved —
+not once per slot the column feeds, so a diagnostic can never exceed the table it
+describes. A name span is written as the span itself, in the name's casing.
 
 **Provenance** names the value's column. An evidence row's ``column`` is the cell the
 raw value came from, not the file-link column that reached the file; a ``table_name``
@@ -72,7 +73,8 @@ class TableImport:
     cell held nothing, rows whose cell held something that is not a DRS URI (which
     ``check`` reports and an import still counts, so a drifted manifest cannot pass
     silently), and handles not among the dataset's own files. ``null_cells`` is per cell
-    column, once per row and column. ``files`` is the distinct files that received at
+    column, once per row and column, counting null and empty-list cells on the rows
+    whose link resolved. ``files`` is the distinct files that received at
     least one evidence row; ``written`` counts the rows, which exceeds it wherever a
     file has several slots or sources.
     """
@@ -327,14 +329,16 @@ def _transcribe(
 ) -> tuple[str | None, str | None]:
     """The raw value one source yields for this row, and the column to record for it.
 
-    ``None`` for a null cell, counted once per row against its column: ``nulls`` is the
-    row's own set, shared across every slot and file the row feeds. A non-string scalar
+    ``None`` for a null or empty-list cell, counted once per row against its column:
+    ``nulls`` is the row's own set, shared across every slot and file the row feeds. An
+    empty list is treated as null and not as the JSON ``[]`` because it observes
+    nothing; the empty string is kept because the source wrote it. A non-string scalar
     (a number, a boolean the manifest carries as JSON) is written as its JSON literal —
     still what the source wrote, in the one spelling JSON has for it.
     """
     if spec.form == SOURCE_CELL:
         value = row.get(spec.value)
-        if value is None:
+        if value is None or value == []:
             if spec.value not in nulls:
                 nulls.add(spec.value)
                 result.null_cells[spec.value] += 1

@@ -14,19 +14,22 @@ that file and slot, and does it agree?
 - :func:`evidence_forecast` reads the **written** evidence — the newest generation of
   each dataset under the evidence root — and reports the same join over what the
   importer actually produced: files with evidence, file-and-slot pairs where inference
-  reaches no value, FASTQs that received a ``data_modality``, and the name-derived
-  claims that disagree with an inferred value or meet an inferred ``not_applicable`` —
-  the two kinds of conflict, 4.5's and 4.6's, reported apart because the second is a
-  within-source contradiction the map passes through on purpose (R9). Only a raw value
-  that is a name token is compared; a cell value such as ``PACBIO_SMRT`` has no
-  translation until #414 and is counted as untranslated.
+  reaches no value, FASTQs that received a ``data_modality``, and the claims that
+  disagree with an inferred value or meet an inferred ``not_applicable`` — the two
+  kinds of conflict, 4.5's and 4.6's, reported apart because the second is a
+  within-source contradiction the map passes through on purpose (R9). A raw value is
+  compared only where it spells a name token the survey has a term for, whether it
+  came from a name or from a cell that happens to spell one (``ILLUMINA``); every raw
+  value is listed by slot regardless, because that list is the translation table's
+  input (#414) and must not omit the ones a token happened to cover.
 
 **This forecasts; it never authors.** A disagreement here is the resolver's to record
 (contract 4.5) and an agreement is a source earning trust (4.4); neither is grounds to
 change the map, which is authored from the source's own schema and from nothing a run
-concluded (R1, 3.4). Both measurements apply the map's structural exclusions through
-the one predicate that states them (`slot_map.structural_exclusion`), so that what they
-forecast is what the map can say.
+concluded (R1, 3.4). Both measurements apply the two structural exclusions the loader
+enforces, through the one predicate that states them (`slot_map.structural_exclusion`);
+the authoring rule the map follows beyond those is a judgment the forecast does not
+apply, so `name_signals` forecasts more than the map says.
 
 The run is read through ``output_utils.iter_records_with_source``, which loads each
 producer's file whole; that is the run's existing reader and its memory ceiling
@@ -254,9 +257,11 @@ def render_name_signals(results: list[DatasetSignals], run_dir: Path) -> str:
 class EvidenceForecast:
     """The written evidence joined to a run: the numbers the import is judged on.
 
-    ``by_verdict`` holds the name-derived claims, as ``(file, slot, term)``, under each
-    of :data:`VERDICTS` except ``gap`` — a translated claim on a slot inference left open
-    is in ``gaps`` with every other such pair.
+    ``by_verdict`` holds the claims whose raw value spells a name token, as
+    ``(file, slot, term)``, under each of :data:`VERDICTS` except ``gap`` — a translated
+    claim on a slot inference left open is in ``gaps`` with every other such pair.
+    ``raw_values`` counts every row by ``(slot, raw_value)``; ``translated`` maps the
+    pairs a token covered to the term the comparison used.
     """
 
     files: set[str] = field(default_factory=set)
@@ -267,7 +272,8 @@ class EvidenceForecast:
     not_applicable: set[tuple[str, str]] = field(default_factory=set)
     fastq_modality: set[str] = field(default_factory=set)
     by_verdict: dict[str, set[tuple[str, str, str]]] = field(default_factory=lambda: defaultdict(set))
-    untranslated: Counter = field(default_factory=Counter)  # (slot, raw_value) -> rows
+    raw_values: Counter = field(default_factory=Counter)  # (slot, raw_value) -> rows, every row
+    translated: dict[tuple[str, str], str] = field(default_factory=dict)  # (slot, raw_value) -> token term
 
 
 def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> EvidenceForecast:
@@ -276,9 +282,9 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
     Only a file whose envelope keys its rows by ``drs_uri`` is joined — that is what
     ``run`` is indexed by; a file keyed otherwise (another source's) is listed as
     skipped rather than counted as files that never join. A raw value is compared only
-    when it is a name token with a term (``CHM13v2``, ``grch38``, ``hifi``); every
-    other raw value is counted as untranslated, with its slot, so the translation
-    table's authors can see what arrives.
+    when it spells a name token with a term (``CHM13v2``, ``grch38``, ``hifi``, and a
+    cell value such as ``ILLUMINA``); every raw value is counted by slot either way, so
+    the translation table's authors see everything that arrives.
     """
     forecast = EvidenceForecast()
     for path in discover(evidence_root):
@@ -300,11 +306,12 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
                 forecast.gaps.add((handle, slot))
             if slot == "data_modality" and record.is_fastq:
                 forecast.fastq_modality.add(handle)
+            forecast.raw_values[(slot, entry.raw_value)] += 1
             meaning = NAME_TOKENS.get(entry.raw_value.lower())
             if meaning is None or meaning[0] != slot or meaning[1] is None:
-                forecast.untranslated[(slot, entry.raw_value)] += 1
                 continue
             term = meaning[1]
+            forecast.translated[(slot, entry.raw_value)] = term
             verdict = record.verdict(slot, term)
             if verdict != GAP:
                 forecast.by_verdict[verdict].add((handle, slot, term))
@@ -336,24 +343,33 @@ def render_evidence_forecast(forecast: EvidenceForecast, evidence_root: Path, ru
             ],
             ["file-and-slot pairs where inference says not_applicable", f"{len(forecast.not_applicable):,}"],
             ["FASTQs receiving data_modality", f"{len(forecast.fastq_modality):,}"],
-            ["name-derived claims agreeing with inference", f"{len(forecast.by_verdict[AGREE]):,}"],
             [
-                "name-derived claims disagreeing with an inferred value (a conflict, 4.5)",
+                "claims whose raw value spells a name token, agreeing with inference",
+                f"{len(forecast.by_verdict[AGREE]):,}",
+            ],
+            [
+                "claims whose raw value spells a name token, disagreeing with an inferred value (a conflict, 4.5)",
                 f"{len(forecast.by_verdict[DISAGREE]):,}",
             ],
             [
-                "name-derived claims against an inferred not_applicable (a conflict, 4.6)",
+                "claims whose raw value spells a name token, against an inferred not_applicable (a conflict, 4.6)",
                 f"{len(forecast.by_verdict[NOT_APPLICABLE]):,}",
             ],
         ],
         align="right",
     )
-    out += ["", "Raw values with no name-token translation, by slot (the translation table's input, #414):", ""]
+    out += [
+        "",
+        "Every raw value that arrives, by slot — the translation table's input (#414). The last column "
+        "is the term `NAME_TOKENS` gives the value where it spells a token, which is what the counts "
+        "above compared; blank means no translation exists yet.",
+        "",
+    ]
     out += md_table(
-        ["slot", "raw value", "rows"],
+        ["slot", "raw value", "rows", "token term"],
         [
-            [slot, f"`{raw}`", f"{n:,}"]
-            for (slot, raw), n in sorted(forecast.untranslated.items(), key=lambda i: (i[0][0], -i[1]))
+            [slot, f"`{raw}`", f"{n:,}", forecast.translated.get((slot, raw), "")]
+            for (slot, raw), n in sorted(forecast.raw_values.items(), key=lambda i: (i[0][0], -i[1]))
         ],
         align="right",
     )
