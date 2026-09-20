@@ -19,6 +19,13 @@ from pathlib import Path
 import pytest
 import yaml
 
+try:  # the regex parser moved in 3.11; both spellings expose `parse`
+    from re import _parser as _sre_mod  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover - 3.10
+    import sre_parse as _sre_mod  # type: ignore[no-redef]
+
+_sre_parse = _sre_mod.parse
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
@@ -197,20 +204,14 @@ def test_rule_extensions_are_producible_cores():
     )
 
 
-# Filenames drawn from identifier namespaces that are arbitrary alphanumerics by
-# design, so a short token a rule matches on can land inside one by coincidence. The
-# first four are real corpus filenames; the rest are synthetic members of the same
-# namespaces, covering the tokens most at risk.
+# Real corpus filenames whose accession happens to spell a rule's token. Kept as
+# named cases beside the generated probes below, because these are the ones that
+# actually happened — `IGVFFI1310XKZG.fastq.gz` is the file #430 was filed for.
 ACCESSION_FILENAMES = (
-    "IGVFFI1310XKZG.fastq.gz",  # holds `10X` — the file #430 was filed for
+    "IGVFFI1310XKZG.fastq.gz",  # holds `10X`
     "IGVFFI5210XHHO.tar.gz",  # holds `10X`
     "IGVFFI4961CPGT.fastq.gz",  # holds `CPG`
     "IGVFFI0729UTMM.fastq.gz",  # holds `TMM`
-    "ENCFF001ATAC.bam",  # holds `ATAC`
-    "ENCFF210CHIP.bed",  # holds `CHIP`
-    "ENCFF33H3K9ME.bigWig",  # holds `H3K`
-    "SRR10PEAKS1.fastq.gz",  # holds `PEAK`
-    "IGVFFI77EXOME2.bed",  # holds `EXOME`
 )
 
 # A maximal alphanumeric run long enough to be an accession rather than a word.
@@ -230,6 +231,70 @@ _ACCESSION_TOKEN = re.compile(r"[A-Za-z0-9]{8,}")
 # tracks; whether to anchor the token or teach the series' naming is an open question
 # there, so #430 left it alone rather than pre-empting the answer.
 KNOWN_UNANCHORED = frozenset({"filename_ref_grch38", "filename_ref_grch37", "filename_ref_chm13", "signal_rnaseq"})
+
+
+def _subdir(tmp_path, name):
+    """A fresh directory under `tmp_path`, so two probe rules files can coexist."""
+    path = tmp_path / name
+    path.mkdir()
+    return path
+
+
+def _literal_runs(pattern):
+    """Every run of literal characters ``pattern`` can match, via ``re``'s own parser.
+
+    Parsed rather than split on ``|``, because a rule's alternatives nest
+    (``(assembly|…|[._](pat|mat)(ernal)?[._])``) and string-splitting silently drops
+    whatever it cannot read — the one failure a completeness check must not have.
+    Private API, and deliberately: if it moves, this raises rather than quietly
+    covering less.
+    """
+    runs = []
+
+    def walk(seq):
+        current = []
+        for op, av in seq:
+            name = str(op)
+            if name.endswith("LITERAL"):
+                current.append(chr(av))
+                continue
+            if current:
+                runs.append("".join(current))
+                current = []
+            if name.endswith("BRANCH"):
+                for branch in av[1]:
+                    walk(branch)
+            elif name.endswith("SUBPATTERN"):
+                walk(av[3])
+            elif name.endswith(("MAX_REPEAT", "MIN_REPEAT")):
+                walk(av[2])
+        if current:
+            runs.append("".join(current))
+
+    walk(_sre_parse(pattern))
+    return runs
+
+
+def accession_probes(rules):
+    """One synthetic accession per literal token a rule could match on.
+
+    The nine hand-listed names this replaced only covered tokens someone had already
+    thought of, so a rule authored with an uncovered word passed the check without
+    being safe (#430). Deriving the probes from the rules themselves removes that
+    escape: a new bare token generates its own probe.
+
+    A token already bounded in its pattern (``[._]paternal[._]``) yields a probe it
+    cannot match inside, so it is not reported — the check is behavioural, and does
+    not care how the boundary was written.
+    """
+    probes = []
+    for rule in rules.rules:
+        pattern = (rule.when or {}).get("filename_pattern")
+        if not pattern or rule.id in KNOWN_UNANCHORED:
+            continue
+        for token in sorted({t for t in _literal_runs(pattern) if len(t) >= 3 and t.isalnum()}):
+            probes.append(f"IGVFFI7{token.upper()}K2.fastq.gz")
+    return tuple(dict.fromkeys(probes))
 
 
 def _accession_internal_matches(rules, filenames):
@@ -270,14 +335,62 @@ def test_no_pattern_matches_inside_an_accession():
     `reads_scrna_filename` matched `10X` inside the IGVF accession IGVFFI1310XKZG and
     classified that FASTQ `transcriptomic.single_cell` on three characters of an
     identifier. Anchoring one pattern fixes one rule; this check is what makes the fix
-    hold for the next rule someone authors with a bare `10x`, `cpg` or `atac`.
+    hold for the next rule someone authors with a bare token.
+
+    Scope, stated exactly: every *literal* run a pattern can match gets a probe, so a
+    new bare word cannot slip past for want of a hand-written example. A token spelled
+    with regex syntax (`hap[12]`) is not a literal run and is not covered, and neither
+    is a rule in `KNOWN_UNANCHORED`. So this establishes "no literal token matches
+    inside an accession", not "no pattern does" — the general form is #475, which moves
+    the boundary into the engine and makes the question structural.
     """
-    hits = _accession_internal_matches(get_unified_rules(), ACCESSION_FILENAMES)
+    rules = get_unified_rules()
+    hits = _accession_internal_matches(rules, ACCESSION_FILENAMES + accession_probes(rules))
     assert not hits, (
         "Rule patterns match inside an opaque accession — anchor the short token on "
         "its left with `(^|[._-])`:\n  "
         + "\n  ".join(f"{rule_id}: matched {text!r} in {filename}" for rule_id, filename, text in hits)
     )
+
+
+def test_the_probes_are_generated_from_the_rules(tmp_path):
+    """A bare token no hand-written filename covers is still caught.
+
+    The nine names this replaced would have passed `hic` — the word appears in none
+    of them — which is the hole that made the guard's claim untrue. The probe for it
+    comes from the rule now, so the rule cannot supply a token and escape its own
+    check.
+    """
+
+    def probe(pattern):
+        return {
+            "id": "probe",
+            "tier": 2,
+            "scope": "filename",
+            "when": {"extensions": [".bam"], "filename_pattern": pattern},
+            "then": {"data_modality": "genomic"},
+        }
+
+    bare = RuleLoader(_write_rules_file(_subdir(tmp_path, "bare"), probe("(?i)hic"))).load()
+    assert "IGVFFI7HICK2.fastq.gz" in accession_probes(bare)
+    assert _accession_internal_matches(bare, accession_probes(bare))
+
+    anchored = RuleLoader(_write_rules_file(_subdir(tmp_path, "anchored"), probe("(?i)(^|[._-])hic"))).load()
+    assert not _accession_internal_matches(anchored, accession_probes(anchored))
+
+
+def test_an_already_bounded_token_is_not_reported():
+    """A token whose pattern already bounds it needs no anchor and must not be flagged.
+
+    `bed_assembly_qc` matches `[./_]paternal[./_]`, so `paternal` is a literal run and
+    gets a probe — but the pattern cannot match it inside an accession, because the
+    delimiters are part of the pattern. Anchoring it anyway would have cost 135 real
+    filenames, which is how this check earns its place: the test is behavioural, and
+    does not care how the boundary was spelled.
+    """
+    rules = get_unified_rules()
+    assert "IGVFFI7PATERNALK2.fastq.gz" in accession_probes(rules)
+    assert not _accession_internal_matches(rules, ("IGVFFI7PATERNALK2.fastq.gz",))
 
 
 def test_known_unanchored_entries_still_exist():
