@@ -854,6 +854,26 @@ class TestCalledPeaks:
         assert result.data_type == "peaks"
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
+    @pytest.mark.parametrize(
+        "name",
+        ["atac_peaks.bed", "H3K27ac_chip_peaks.bed", "sample_summits.bed", "H3K27ac.bed", "sample.chip.bed"],
+    )
+    def test_a_peak_indicator_declines_rather_than_asserting_genomic(self, engine, name):
+        """A name carrying a peak indicator gets no answer, not a confident wrong one.
+
+        Deleting the bare-token peak rules left these falling through to
+        `intervals_fallback`, which called them `genomic` annotations — on `main` they
+        were `epigenomic.chromatin_accessibility`. The token is too weak to say which
+        epigenomic assay it is, which is why those rules went; it is strong enough to
+        say we should not answer `genomic`.
+
+        So the indicator returns to the rules file in an exclusion only. A token used
+        to withhold a claim can cost coverage; it cannot assert a wrong value, which is
+        the failure #430 is about.
+        """
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
+
     def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
         """Narrowing `intervals_fallback` to `.bed` and excluding the peak token left
         its own case untouched — it still answers for a BED with no other signal."""

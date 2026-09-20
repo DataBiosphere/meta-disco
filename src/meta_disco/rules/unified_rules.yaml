@@ -1716,7 +1716,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)^(?!(?:[^\\n]*[._-])?(narrow|broad)peak[._-])"
+      filename_pattern: "(?i)^(?!(?:[^\\n]*[._-])?(?:(?:narrow|broad)peak|h3k\\w*|atac|chip|peaks?|summits?)[._-])"
       modality_not_set: true
     then:
       data_modality: genomic

@@ -143,6 +143,14 @@ filename token is still read for peaks, and it is a ten-character one on a delim
 Either way `data_modality` is deliberately left unset: the format serves ATAC
 (accessibility) and ChIP (histone/TF) alike, so the extension cannot tell them apart.
 
+A `.bed` whose name carries a peak indicator (`atac`, `chip`, `h3k*`, `peak`,
+`summit`) is excluded from `intervals_fallback` and so reports nothing, rather than
+being called `genomic` annotations by default. The indicator is too weak to say which
+epigenomic assay produced the file — which is why the rules that claimed one were
+deleted — and strong enough to say the genomic default is wrong. It appears in the
+rules only as an exclusion: a token that withholds a claim can cost coverage, but
+cannot assert a wrong value.
+
 Four rules used to claim `peaks` from a filename instead — `bed_peaks_generic`,
 `bed_atac_peaks`, `bed_chip_peaks` and `intervals_chip_peaks` — and all four fired on no
 file in either corpus, so #430 deleted them. Two matched a bare `peak`/`atac` token; the
