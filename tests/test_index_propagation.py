@@ -21,6 +21,7 @@ from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
+    NOT_APPLICABLE,
     NOT_CLASSIFIED,
     build_field_entry,
     field_status,
@@ -257,9 +258,9 @@ class TestLoadClassifications:
             )
         )
         result = load_classifications(cls_file)
-        assert "abc123" in result
-        assert result["abc123"]["data_modality"] == "genomic"
-        assert result["abc123"]["platform"] == "ILLUMINA"
+        assert ("abc123", "sample.bam") in result
+        assert result[("abc123", "sample.bam")]["data_modality"] == "genomic"
+        assert result[("abc123", "sample.bam")]["platform"] == "ILLUMINA"
 
     def test_loads_from_multiple_files(self, tmp_path):
         """Load classifications from BAM + BED files."""
@@ -304,13 +305,14 @@ class TestLoadClassifications:
             )
         )
         result = load_classifications(bam_file, bed_file)
-        assert "bam_md5" in result
-        assert "bed_md5" in result
-        assert result["bed_md5"]["data_modality"] == "genomic"
+        bed_key = ("bed_md5", "sample.regions.bed.gz")
+        assert ("bam_md5", "sample.bam") in result
+        assert bed_key in result
+        assert result[bed_key]["data_modality"] == "genomic"
         # The map holds only what an index inherits. `data_type` is not inherited
         # since #437 — an index has its own — so the parent's is not read at all.
-        assert "data_type" not in result["bed_md5"]
-        assert set(result["bed_md5"]) == {
+        assert "data_type" not in result[bed_key]
+        assert set(result[bed_key]) == {
             "data_modality",
             "assay_type",
             "platform",
@@ -400,6 +402,77 @@ class TestLoadClassifications:
         # Propagated entries carry the Stage 2 `status` key (epic #116), like to_output_dict.
         assert "status" in cls["data_modality"]
         assert field_status(cls, "data_modality") == CLASSIFIED
+
+    def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
+        """Two byte-identical parents with different names keep their own answers.
+
+        `grch38.fasta` and `Homo_sapiens_assembly38.fasta` hold the same bytes and so
+        the same md5, but classify differently — a filename rule reads `GRCh38` off the
+        first, the assembly rule marks the second's reference `not_applicable`. Keyed by
+        md5 alone, whichever record load order reached last won for both, so each `.fai`
+        inherited the other's answer half the time and the run was not reproducible.
+        """
+        shared_md5 = "77777777777777777777777777777777"
+        metadata_file = tmp_path / "metadata.json"
+        _write_metadata(
+            metadata_file,
+            [
+                {
+                    "file_name": name,
+                    "file_format": fmt,
+                    "file_md5sum": md5,
+                    "dataset_id": "ds1",
+                    "dataset_title": "test_dataset",
+                    "entry_id": entry,
+                }
+                for name, fmt, md5, entry in (
+                    ("grch38.fasta", ".fasta", shared_md5, "entry_ref"),
+                    ("Homo_sapiens_assembly38.fasta", ".fasta", shared_md5, "entry_asm"),
+                    ("grch38.fasta.fai", ".fai", "88888888888888888888888888888888", "entry_ref_fai"),
+                    ("Homo_sapiens_assembly38.fasta.fai", ".fai", "99999999999999999999999999999999", "entry_asm_fai"),
+                )
+            ],
+        )
+
+        def parent(name, reference_assembly):
+            return {
+                "md5sum": shared_md5,
+                "file_name": name,
+                "classifications": {
+                    "data_modality": {"value": "genomic", "evidence": []},
+                    "data_type": {"value": "sequence", "evidence": []},
+                    "platform": {"value": "not_classified", "evidence": []},
+                    "reference_assembly": reference_assembly,
+                    "assay_type": {"value": "not_classified", "evidence": []},
+                },
+            }
+
+        fasta_cls_file = tmp_path / "fasta_classifications.json"
+        fasta_cls_file.write_text(
+            json.dumps(
+                {
+                    "classifications": [
+                        parent("grch38.fasta", {"value": "GRCh38", "evidence": []}),
+                        parent(
+                            "Homo_sapiens_assembly38.fasta",
+                            {"value": None, "status": NOT_APPLICABLE, "evidence": []},
+                        ),
+                    ]
+                }
+            )
+        )
+
+        output_file = tmp_path / "index_output.json"
+        propagate_to_index_files(metadata_file, [fasta_cls_file], output_file)
+
+        with output_file.open() as f:
+            rows = {r["file_name"]: r for r in json.load(f)["classifications"]}
+
+        ref_fai = rows["grch38.fasta.fai"]["classifications"]
+        asm_fai = rows["Homo_sapiens_assembly38.fasta.fai"]["classifications"]
+        assert field_value(ref_fai, "reference_assembly") == "GRCh38"
+        assert field_value(asm_fai, "reference_assembly") is None
+        assert field_status(asm_fai, "reference_assembly") == NOT_APPLICABLE
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
         """End-to-end: a .tbi index inherits from its .vcf.gz parent."""

@@ -338,8 +338,23 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ).to_dict()
 
 
-def load_classifications(*paths: Path) -> dict[str, dict]:
-    """Load classifications from one or more classification JSON files, keyed by md5sum."""
+def load_classifications(*paths: Path) -> dict[tuple[str, str | None], dict]:
+    """Load classifications from one or more classification JSON files.
+
+    Keyed by ``(md5sum, file_name)`` — both halves, because md5 alone does not
+    identify a parent. Two differently-named files can hold the same bytes and be
+    classified differently: ``grch38.fasta`` takes ``GRCh38`` from a filename rule
+    while the byte-identical ``Homo_sapiens_assembly38.fasta`` takes
+    ``not_applicable`` from the assembly rule. Keyed by md5 alone, whichever record
+    load order reached last won for both, so the two ``.fai`` files that index them
+    inherited the same answer — and which answer it was changed between runs, since
+    producer output order is not fixed. Their evidence said so out loud: a reason
+    naming ``grch38.fasta`` beside a value that came from the other file's record.
+
+    The caller matches a parent by name first and so holds both halves already
+    (``parent_name`` / ``parent_md5``). Across the anvil15 corpus the pair resolves
+    every one of the 209,202 matched parents, so nothing falls back to md5 alone.
+    """
     classifications = {}
 
     for path in paths:
@@ -350,7 +365,7 @@ def load_classifications(*paths: Path) -> dict[str, dict]:
         for c in data.get("classifications", []):
             md5 = c.get("md5sum")
             if md5:
-                classifications[md5] = {
+                classifications[(md5, c.get("file_name"))] = {
                     "data_modality": field_label(c, "data_modality"),
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
@@ -500,8 +515,10 @@ def propagate_to_index_files(
             parent_md5 = parent["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
-            # Get parent classification
-            parent_class = classifications.get(parent_md5, {})
+            # Get parent classification. Keyed by both halves: the md5 alone is not
+            # an identity when two differently-named files hold the same bytes and
+            # classify differently (see `load_classifications`).
+            parent_class = classifications.get((parent_md5, parent_name), {})
 
             result = {
                 # The raw input record this row is about; the output is built from it.

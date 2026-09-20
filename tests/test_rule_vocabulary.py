@@ -277,9 +277,7 @@ def test_no_pattern_matches_inside_an_accession():
     """
     rules = get_unified_rules()
     stale = sorted(KNOWN_UNANCHORED.keys() - {rule.id for rule in rules.rules})
-    assert not stale, (
-        "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
-    )
+    assert not stale, "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
 
     hits = _accession_internal_matches(rules, ACCESSION_FILENAMES)
     assert not hits, (
