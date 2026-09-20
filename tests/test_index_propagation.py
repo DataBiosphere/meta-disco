@@ -13,6 +13,7 @@ from classify_index_files import (
     NO_MATCHING_PARENT,
     get_parent_candidates,
     load_classifications,
+    parent_key,
     parent_kind_of,
     propagate_to_index_files,
 )
@@ -428,6 +429,41 @@ class TestLoadClassifications:
         # Propagated entries carry the Stage 2 `status` key (epic #116), like to_output_dict.
         assert "status" in cls["data_modality"]
         assert field_status(cls, "data_modality") == CLASSIFIED
+
+    def test_a_catalog_without_file_id_still_inherits(self, tmp_path):
+        """A parent joins on bytes and name where its catalog carries no `file_id`.
+
+        The HPRC catalog carries none on any of its 15,436 records, so keying the
+        parent map on `file_id` alone silently cost every HPRC index file its parent —
+        not an error, just an empty inheritance. The key falls back rather than
+        requiring an identity a catalog may not have.
+        """
+        parent = _file("sample.bam", ".bam", "a" * 32, "e1")
+        index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
+        for record in (parent, index):
+            del record["file_id"]
+        metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index])
+
+        cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
+        del cls["file_id"]
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"classifications": [cls]}))
+
+        output_file = tmp_path / "out.json"
+        propagate_to_index_files(metadata_file, [cls_file], output_file)
+        rows = {r["file_name"]: r for r in json.loads(output_file.read_text())["classifications"]}
+        assert field_value(rows["sample.bam.bai"]["classifications"], "reference_assembly") == "GRCh38"
+
+    @pytest.mark.parametrize("bad", [["x"], {"a": 1}, 7, ""])
+    def test_a_non_string_file_id_is_not_used_as_a_key(self, bad):
+        """`file_id` is not classifier-blocking, so a drifted value reaches here.
+
+        A truthy non-string — `["x"]` — would raise TypeError as a dict key rather than
+        simply miss, so only a non-empty string is taken as the identity; anything else
+        falls back to bytes and name.
+        """
+        assert parent_key(bad, "a" * 32, "sample.bam") == ("a" * 32, "sample.bam")
+        assert parent_key("fid-1", "a" * 32, "sample.bam") == "fid-1"
 
     def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
         """Two byte-identical parents with different names keep their own answers.
