@@ -308,6 +308,22 @@ class TestLinks:
         assert result.files == 2
         assert {r[1] for r in rows_of(table.path)} == {drs(1), drs(2)}
 
+    def test_a_value_that_is_not_a_link_is_counted_not_passed_over(self, tmp_path):
+        """`check` reports such a column; an import that runs anyway still says how many rows it met."""
+        write_dataset(
+            tmp_path,
+            "D",
+            [anvil_file(1), ("hifi", {"path": drs(1), "platform": "x"}), ("hifi", {"path": "HG002", "platform": "x"})],
+        )
+        text = "catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
+        result = ae.import_dataset(
+            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+        )
+        (table,) = result.tables
+        assert table.not_link == {"path": 1}
+        assert table.written == 1
+        assert "    path: not a DRS URI on 1 rows" in ae.describe([result])
+
     def test_a_list_link_fans_one_row_out_to_every_file_in_it(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"hifi": [drs(1), drs(2), drs(7)]})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      hifi:\n        platform:\n          - {column_name: hifi}\n"

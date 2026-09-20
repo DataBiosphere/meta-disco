@@ -68,8 +68,10 @@ from .source_evidence import (
 class TableImport:
     """What one mapped table produced, and what it could not.
 
-    ``no_link`` and ``unresolved`` are per file-link column: rows whose link cell held
-    nothing, and handles not among the dataset's own files. ``null_cells`` is per cell
+    ``no_link``, ``not_link`` and ``unresolved`` are per file-link column: rows whose link
+    cell held nothing, rows whose cell held something that is not a DRS URI (which
+    ``check`` reports and an import still counts, so a drifted manifest cannot pass
+    silently), and handles not among the dataset's own files. ``null_cells`` is per cell
     column, once per row and column. ``files`` is the distinct files that received at
     least one evidence row; ``written`` counts the rows, which exceeds it wherever a
     file has several slots or sources.
@@ -81,6 +83,7 @@ class TableImport:
     written: int = 0
     files: set[str] = field(default_factory=set)
     no_link: Counter = field(default_factory=Counter)
+    not_link: Counter = field(default_factory=Counter)
     unresolved: Counter = field(default_factory=Counter)
     null_cells: Counter = field(default_factory=Counter)
 
@@ -298,6 +301,9 @@ def _table_entries(
             if links is None:
                 result.no_link[entry.column] += 1
                 continue
+            if not links:
+                result.not_link[entry.column] += 1
+                continue
             for handle in links:
                 if handle not in handles:
                     result.unresolved[entry.column] += 1
@@ -351,6 +357,8 @@ def describe(imports: list[DatasetImport]) -> list[str]:
             lines.append(f"  {table.table}: {table.rows:,} rows, {table.written:,} evidence rows")
             for column, n in sorted(table.no_link.items()):
                 lines.append(f"    {column}: no link on {n:,} rows")
+            for column, n in sorted(table.not_link.items()):
+                lines.append(f"    {column}: not a DRS URI on {n:,} rows")
             for column, n in sorted(table.unresolved.items()):
                 lines.append(f"    {column}: {n:,} links not among the dataset's files")
             for column, n in sorted(table.null_cells.items()):
