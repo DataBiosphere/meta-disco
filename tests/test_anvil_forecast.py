@@ -7,9 +7,11 @@ from pathlib import Path
 
 from meta_disco import anvil_forecast as af
 from meta_disco.anvil_evidence import import_dataset
-from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
+from meta_disco.models import CLASSIFIED, JOIN_KEY_FILE_MD5SUM, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from meta_disco.slot_map import load_slot_map
+from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
 from tests.test_anvil_evidence import CATALOG, anvil_file, drs, write_dataset
+from tests.test_source_evidence import evidence_file_envelope
 
 DATASET = "SGDP_CHM13v2_sample"
 
@@ -149,7 +151,15 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
     path.write_text(text)
     import_dataset(load_slot_map(path), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
 
+    # A file keyed by something other than drs_uri — another source's — is skipped, not counted.
+    write_evidence_file(
+        tmp_path / "ev" / "hprc" / "catalog.ndjson",
+        evidence_file_envelope(target_key=JOIN_KEY_FILE_MD5SUM, target=EvidenceTarget(system="anvil")),
+        [],
+    )
+
     forecast = af.evidence_forecast(tmp_path / "ev", run)
+    assert [p.name for p in forecast.skipped] == ["catalog.ndjson"]
     assert forecast.rows == 4
     assert forecast.files == {drs(1), drs(2), drs(3)}
     assert forecast.gaps == {(drs(3), "reference_assembly"), (drs(2), "data_modality")}
@@ -160,5 +170,6 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
     assert forecast.by_verdict[NOT_APPLICABLE] == {(drs(2), "reference_assembly", "CHM13")}
     assert forecast.untranslated == {("data_modality", "GENOMIC"): 1}
     report = af.render_evidence_forecast(forecast, tmp_path / "ev", Path("run"))
+    assert "Skipped 1 evidence file(s) not keyed by `drs_uri`: `hprc/catalog.ndjson`" in report
     assert "| FASTQs receiving data_modality | 1 |" in report
     assert "| data_modality | `GENOMIC` | 1 |" in report

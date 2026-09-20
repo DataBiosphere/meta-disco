@@ -1,7 +1,8 @@
 # The AnVIL slot map (#369): which submitter table and column speaks to which slot.
-# Shape and rules: src/meta_disco/slot_map.py. Candidate names came from
-# `make name-signals`, which uses manifest_survey.NAME_TOKENS, so a name that list does
-# not know is unmapped unless someone adds it by hand; candidate cells came from
+# Shape and rules: src/meta_disco/slot_map.py. Candidate names are the tokens
+# manifest_survey.NAME_TOKENS knows, as `make name-signals` lists them per dataset, so a
+# name that list does not know is unmapped unless someone adds it by hand; that tool's
+# measurement against a classification run authored nothing here. Candidate cells are
 # manifest_survey.FIELD_TOKENS. A dataset, table or column with nothing to map is absent.
 catalog: anvil15
 datasets:

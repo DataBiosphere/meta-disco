@@ -21,7 +21,7 @@ source has no column, and a ``column_name`` source names the column whose name i
 The file itself is named by its DRS URI, which the submitter wrote in the link column
 and AnVIL publishes unchanged as ``drs_uri`` — so ``source_key`` and ``target_key``
 are the same string, resolved here against the dataset's own ``anvil_file`` entities:
-a link an importer cannot resolve is counted, not written (5.3).
+a link an importer cannot resolve is counted per column and not written.
 
 **An import is a generation** (`source_evidence.generation_dir`): written once, never
 over an earlier one, and read by ``discover`` as the newest per dataset. Within-source
@@ -32,6 +32,7 @@ SGDP GRCh38 table receives both spans, and which is right is the resolver's (4.5
 from __future__ import annotations
 
 import json
+import shutil
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -102,20 +103,26 @@ class DatasetImport:
 # --- checking the map against the manifests -----------------------------------
 
 
-def check(slot_map: SlotMap, manifest_root: Path, catalog: str) -> list[str]:
+def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[str] | None = None) -> list[str]:
     """How the map disagrees with the manifests on disk, one line per problem; empty when none.
 
-    Per mapped dataset: the sidecar names it and its verbatim manifest is on disk. Per
-    mapped table: at least one row of that type exists. Per file-link column: it appears
-    on some row, and every non-empty value it holds is a DRS URI or a list of them. Per
-    cell: the column appears on some row of its table. Every dataset is checked, and
-    within one every table and column, so a map edited in one sitting is answered in
-    one pass; a dataset whose manifest is missing, or a table with no rows, masks the
-    problems beneath it until that one is fixed.
+    Per mapped dataset (or those in ``datasets``): the sidecar names it and its verbatim
+    manifest is on disk. Per mapped table: at least one row of that type exists. Per
+    file-link column: it appears on some row, and every non-empty value it holds is a
+    DRS URI or a list of them. Per cell: the column appears on some row of its table
+    and is not itself a file-link column — a column is one kind, never two (contract
+    2.7). Every chosen dataset is checked, and within one every table and column, so a
+    map edited in one sitting is answered in one pass; a dataset whose manifest is
+    missing, or a table with no rows, masks the problems beneath it until that one is
+    fixed.
     """
     problems: list[str] = []
     named = sidecar_datasets(manifest_root, catalog)
-    for dataset in slot_map.datasets():
+    known = slot_map.datasets()
+    for dataset in known if datasets is None else dict.fromkeys(datasets):
+        if dataset not in known:
+            problems.append(f"{dataset}: not in the slot map")
+            continue
         if dataset not in named:
             problems.append(f"{dataset}: not a dataset the {catalog} sidecar names")
             continue
@@ -130,15 +137,23 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str) -> list[str]:
 def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
     tables = slot_map.tables(dataset)
     wanted = {table: [entry.column for entry in slot_map.columns(dataset, table)] for table in tables}
+    cells = {table: sorted(slot_map.cells(dataset, table)) for table in tables}
     rows: Counter = Counter()
     columns_seen: dict[str, set[str]] = {table: set() for table in tables}
     not_links: dict[tuple[str, str], object] = {}
+    # A cell is a link column when every non-empty value it holds is a link: `None`
+    # until a non-empty value is seen, then whether all of them so far were links.
+    cell_is_link: dict[tuple[str, str], bool | None] = {(t, c): None for t in tables for c in cells[t]}
     for table, row in iter_verbatim_entities(path, tables):
         rows[table] += 1
         columns_seen[table].update(row)
         for column in wanted[table]:
             if (table, column) not in not_links and link_handles(row.get(column)) == []:
                 not_links[(table, column)] = row[column]
+        for cell in cells[table]:
+            handles = link_handles(row.get(cell))
+            if handles is not None and cell_is_link[(table, cell)] is not False:
+                cell_is_link[(table, cell)] = handles != []
     problems = []
     for table in tables:
         if not rows[table]:
@@ -152,9 +167,13 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
                     f"{dataset}/{table}/{column}: holds {not_links[(table, column)]!r}, "
                     "not a DRS URI or a list of them — not a file-link column"
                 )
-        for cell in sorted(slot_map.cells(dataset, table)):
+        for cell in cells[table]:
             if cell not in columns_seen[table]:
                 problems.append(f"{dataset}/{table}: cell {cell!r} is not a column of this table")
+            elif cell_is_link[(table, cell)]:
+                problems.append(
+                    f"{dataset}/{table}: cell {cell!r} holds DRS URIs — a file-link column, not a metadata value"
+                )
     return problems
 
 
@@ -172,11 +191,11 @@ def import_all(
     """Import every dataset the map names (or ``datasets``), each as one new generation.
 
     The stamp is shared across the datasets of one run so the run is one generation on
-    disk; each dataset is still imported whole and independently. Raises before writing
-    anything if a named dataset is not in the map.
+    disk; each dataset is still imported whole and independently, and once however many
+    times it is named. Raises before writing anything if a named dataset is not in the map.
     """
     known = slot_map.datasets()
-    chosen = known if datasets is None else list(datasets)
+    chosen = known if datasets is None else list(dict.fromkeys(datasets))
     unknown = [d for d in chosen if d not in known]
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
@@ -200,8 +219,14 @@ def import_dataset(
     file keeps ``write_evidence_file``'s write-then-rename guarantee on its own; each
     pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
 
-    The generation directory must not exist: an import never writes over another. The
-    evidence root directory under it and the target system are both the repository the
+    The generation directory must not exist: an import never writes over another. It
+    is a generation only once every table is written: a failure part-way — a bad row,
+    a full disk, an interrupt — removes the directory before the error propagates, so
+    ``discover`` cannot take a half-written generation for the dataset's newest. A hard
+    kill leaves that residue to remove by hand. A mapped table that writes no row at all
+    is such a failure: a table the map names should reach files, and one that reaches
+    none is the map disagreeing with the catalog (contract 5.3), not an empty result.
+    The evidence root directory and the target system are both the repository the
     manifests came from.
     """
     stamp = generation if generation is not None else new_generation()
@@ -219,21 +244,30 @@ def import_dataset(
         )
     handles = _file_handles(path)
     tables = []
-    for table in slot_map.tables(dataset):
-        source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
-        envelope = EvidenceFileEnvelope(
-            source=source,
-            source_type=SOURCE_REPOSITORY_METADATA,
-            source_version=catalog,
-            source_key=JOIN_KEY_DRS_URI,
-            target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
-            target_key=JOIN_KEY_DRS_URI,
-            fetched_at=fetched_at,
-        )
-        result = TableImport(table=table, path=evidence_file_path(directory, table))
-        entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result)
-        result.written = write_evidence_file(result.path, envelope, entries)
-        tables.append(result)
+    try:
+        for table in slot_map.tables(dataset):
+            source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
+            envelope = EvidenceFileEnvelope(
+                source=source,
+                source_type=SOURCE_REPOSITORY_METADATA,
+                source_version=catalog,
+                source_key=JOIN_KEY_DRS_URI,
+                target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
+                target_key=JOIN_KEY_DRS_URI,
+                fetched_at=fetched_at,
+            )
+            result = TableImport(table=table, path=evidence_file_path(directory, table))
+            entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result)
+            result.written = write_evidence_file(result.path, envelope, entries)
+            if not result.written:
+                raise ValueError(
+                    f"{dataset}/{table}: no evidence row written — every link was empty or outside the "
+                    f"dataset's files, or every mapped cell was null; the map disagrees with {catalog} here"
+                )
+            tables.append(result)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
     return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 

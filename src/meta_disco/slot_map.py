@@ -292,10 +292,14 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
         raise ValueError(f"{at}: {form} is {value!r}, not a non-empty string")
     if form == SOURCE_CELL and value == column:
         raise ValueError(f"{at}: cell {value!r} is the file-link column itself, which holds a pointer and no value")
-    if form == SOURCE_TABLE_NAME and value not in table:
-        raise ValueError(f"{at}: span {value!r} is not part of the table name {table!r}, in the name's own casing")
-    if form == SOURCE_COLUMN_NAME and value not in column:
-        raise ValueError(f"{at}: span {value!r} is not part of the column name {column!r}, in the name's own casing")
+    if form == SOURCE_TABLE_NAME and not _span_of(value, table):
+        raise ValueError(
+            f"{at}: span {value!r} is not a run of whole tokens of the table name {table!r}, in the name's own casing"
+        )
+    if form == SOURCE_COLUMN_NAME and not _span_of(value, column):
+        raise ValueError(
+            f"{at}: span {value!r} is not a run of whole tokens of the column name {column!r}, in the name's own casing"
+        )
     excluded = structural_exclusion(slot, column, value if form in _NAME_FORMS else "")
     if excluded == ENTITY:
         raise ValueError(
@@ -308,6 +312,22 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
             f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES)}); its reference_assembly may be mapped"
         )
     return SlotSource(form=form, value=value)
+
+
+def _span_of(span: str, name: str) -> bool:
+    """Whether ``span`` is a run of whole tokens of ``name``, spelled as the name spells it.
+
+    Whole tokens, not a substring: ``ont`` is inside ``montage`` and says nothing about
+    it. The tokens are :func:`name_tokens`'s, so the test agrees with the survey's; the
+    casing check is on the raw text, because a span is transcribed as the name's raw
+    value and must be the name's own spelling.
+    """
+    if span not in name:
+        return False
+    tokens, wanted = name_tokens(name), name_tokens(span)
+    if not wanted:
+        return False
+    return any(tokens[i : i + len(wanted)] == wanted for i in range(len(tokens) - len(wanted) + 1))
 
 
 def _refuse_notes(mapping: dict, at: str) -> None:

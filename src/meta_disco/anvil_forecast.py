@@ -49,11 +49,11 @@ from .azul_manifest import (
     sidecar_datasets,
 )
 from .manifest_survey import NAME_TOKENS, NO_VOCABULARY_TERM, name_tokens
-from .models import CLASSIFICATION_FIELDS, CLASSIFIED, NOT_APPLICABLE, field_status, field_value
+from .models import CLASSIFICATION_FIELDS, CLASSIFIED, JOIN_KEY_DRS_URI, NOT_APPLICABLE, field_status, field_value
 from .output_utils import iter_records_with_source
 from .producers import PRODUCERS
 from .slot_map import DERIVATIVE, ENTITY, structural_exclusion
-from .source_evidence import discover, iter_evidence
+from .source_evidence import discover, iter_evidence, read_envelope
 from .summaries import md_table
 
 AGREE = "agree"
@@ -258,6 +258,7 @@ class EvidenceForecast:
 
     files: set[str] = field(default_factory=set)
     unjoined: set[str] = field(default_factory=set)
+    skipped: list[Path] = field(default_factory=list)  # evidence files not keyed by drs_uri
     rows: int = 0
     gaps: set[tuple[str, str]] = field(default_factory=set)  # (file, slot) inference left without a value
     not_applicable: set[tuple[str, str]] = field(default_factory=set)
@@ -269,12 +270,18 @@ class EvidenceForecast:
 def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> EvidenceForecast:
     """Join every current evidence file under ``evidence_root`` to ``run``.
 
-    A raw value is compared only when it is a name token with a term (``CHM13v2``,
-    ``grch38``, ``hifi``); every other raw value is counted as untranslated, with its
-    slot, so the translation table's authors can see what arrives.
+    Only a file whose envelope keys its rows by ``drs_uri`` is joined — that is what
+    ``run`` is indexed by; a file keyed otherwise (another source's) is listed as
+    skipped rather than counted as files that never join. A raw value is compared only
+    when it is a name token with a term (``CHM13v2``, ``grch38``, ``hifi``); every
+    other raw value is counted as untranslated, with its slot, so the translation
+    table's authors can see what arrives.
     """
     forecast = EvidenceForecast()
     for path in discover(evidence_root):
+        if read_envelope(path).target_key != JOIN_KEY_DRS_URI:
+            forecast.skipped.append(path)
+            continue
         for entry in iter_evidence(path):
             forecast.rows += 1
             handle, slot = entry.target_key_value, entry.field
@@ -308,6 +315,12 @@ def render_evidence_forecast(forecast: EvidenceForecast, evidence_root: Path, ru
         f"The newest generation of each dataset under `{evidence_root}`, joined by `drs_uri` to `{run_dir}`.",
         "",
     ]
+    if forecast.skipped:
+        out += [
+            f"Skipped {len(forecast.skipped)} evidence file(s) not keyed by `drs_uri`: "
+            + ", ".join(f"`{p.relative_to(evidence_root)}`" for p in forecast.skipped),
+            "",
+        ]
     out += md_table(
         ["measure", "count"],
         [

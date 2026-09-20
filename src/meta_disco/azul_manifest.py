@@ -657,11 +657,7 @@ def link_handles(value: Any) -> list[str] | None:
     if value is None or value == "" or value == []:
         return None
     handles = value if isinstance(value, list) else [value]
-    return (
-        [h for h in handles if isinstance(h, str) and h.startswith(DRS_PREFIX)]
-        if all(isinstance(h, str) and h.startswith(DRS_PREFIX) for h in handles)
-        else []
-    )
+    return list(handles) if all(isinstance(h, str) and h.startswith(DRS_PREFIX) for h in handles) else []
 
 
 def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> Iterator[tuple[str, dict[str, Any]]]:

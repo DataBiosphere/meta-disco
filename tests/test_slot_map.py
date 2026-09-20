@@ -128,9 +128,22 @@ def test_there_is_no_notes_member_at_any_level(tmp_path, text):
 
 def test_a_span_must_be_part_of_the_name_it_claims_in_the_names_casing(tmp_path):
     table = "catalog: c\ndatasets:\n  D:\n    SGDP_CHM13v2_sample:\n      cram:\n        reference_assembly:\n          - {table_name: chm13}\n"
-    refuses(tmp_path, table, "span 'chm13' is not part of the table name 'SGDP_CHM13v2_sample'", "own casing")
+    refuses(
+        tmp_path,
+        table,
+        "span 'chm13' is not a run of whole tokens of the table name 'SGDP_CHM13v2_sample'",
+        "own casing",
+    )
     column = "catalog: c\ndatasets:\n  D:\n    assembly_sample:\n      mat_chm13_aln_bam:\n        reference_assembly:\n          - {column_name: grch38}\n"
-    refuses(tmp_path, column, "span 'grch38' is not part of the column name 'mat_chm13_aln_bam'")
+    refuses(tmp_path, column, "span 'grch38' is not a run of whole tokens of the column name 'mat_chm13_aln_bam'")
+
+
+def test_a_span_is_whole_tokens_of_the_name_not_a_substring(tmp_path):
+    """`ont` sits inside `montage` and says nothing about it."""
+    text = "catalog: c\ndatasets:\n  D:\n    montage:\n      path:\n        platform:\n          - {table_name: ont}\n"
+    refuses(tmp_path, text, "span 'ont' is not a run of whole tokens of the table name 'montage'")
+    text = "catalog: c\ndatasets:\n  D:\n    ont_methylation:\n      location:\n        data_modality:\n          - {table_name: methylation}\n"
+    assert load(tmp_path, text).entries
 
 
 def test_a_span_is_transcribed_in_the_names_casing(tmp_path):

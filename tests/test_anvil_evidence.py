@@ -157,6 +157,22 @@ datasets:
         (problem,) = ae.check(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG)
         assert problem.startswith("D: no verbatim manifest at ")
 
+    def test_a_cell_that_is_itself_a_file_link_column_is_a_problem(self, tmp_path):
+        """A column is one kind, never two (contract 2.7): `cram` holds pointers, not a value."""
+        write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"gvcf": drs(1), "cram": drs(2)})])
+        text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      gvcf:\n        reference_assembly:\n          - {cell: cram}\n"
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == [
+            "D/sample: cell 'cram' holds DRS URIs — a file-link column, not a metadata value"
+        ]
+
+    def test_check_can_be_narrowed_to_the_datasets_an_import_will_touch(self, tmp_path):
+        write_dataset(tmp_path, "D", HIFI_ROWS)
+        text = HIFI_MAP + "  E:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
+        m = slot_map(tmp_path, text)
+        assert ae.check(m, tmp_path, CATALOG) == ["E: not a dataset the anvil15 sidecar names"]
+        assert ae.check(m, tmp_path, CATALOG, datasets=["D"]) == []
+        assert ae.check(m, tmp_path, CATALOG, datasets=["Z"]) == ["Z: not in the slot map"]
+
     def test_a_list_of_drs_uris_is_a_file_link(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"hifi": [drs(1), drs(2)]})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      hifi:\n        platform:\n          - {column_name: hifi}\n"
@@ -333,6 +349,37 @@ class TestGenerations:
         ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
         with pytest.raises(FileExistsError, match="never overwrites"):
             ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+
+    def test_a_failure_part_way_leaves_no_half_written_generation(self, tmp_path, monkeypatch):
+        """The previous complete generation stays current; the partial one is removed."""
+        write_dataset(tmp_path, "D", HIFI_ROWS)
+        text = HIFI_MAP + "    ont:\n      path:\n        platform:\n          - {cell: platform}\n"
+        m = slot_map(tmp_path, text)
+        write_dataset(tmp_path, "D", [*HIFI_ROWS, ("ont", {"path": drs(3), "platform": "OXFORD_NANOPORE"})])
+        first = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        real = ae.write_evidence_file
+        calls = []
+
+        def failing(path, envelope, entries):
+            calls.append(path.name)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real(path, envelope, entries)
+
+        monkeypatch.setattr(ae, "write_evidence_file", failing)
+        with pytest.raises(OSError, match="disk full"):
+            ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260921T000000Z")
+        assert calls == ["hifi.ndjson", "ont.ndjson"]
+        assert not (tmp_path / "ev" / "anvil" / CATALOG / "D" / "20260921T000000Z").exists()
+        assert discover(tmp_path / "ev") == [t.path for t in first.tables]
+
+    def test_a_mapped_table_that_reaches_no_file_is_an_error_not_an_empty_file(self, tmp_path):
+        """Contract 5.3: evidence matching no file is the map disagreeing with the catalog."""
+        write_dataset(tmp_path, "D", [anvil_file(1), ("hifi", {"path": drs(9), "platform": "PACBIO_SMRT"})])
+        text = "catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
+        with pytest.raises(ValueError, match="D/hifi: no evidence row written"):
+            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        assert discover(tmp_path / "ev") == []
 
     def test_import_all_refuses_a_dataset_the_map_does_not_name(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)

@@ -40,15 +40,15 @@ def main() -> int:
     if catalog != slot_map.catalog:
         print(f"The map was authored against {slot_map.catalog}; importing {catalog} through it.", file=sys.stderr)
 
-    problems = check(slot_map, args.data_dir, catalog)
+    problems = check(slot_map, args.data_dir, catalog, args.dataset)
     if problems:
         print(f"The slot map disagrees with the {catalog} manifests in {len(problems)} place(s):", file=sys.stderr)
         for line in problems:
             print(f"  {line}", file=sys.stderr)
         return 1
-    print(
-        f"Slot map checked against {catalog}: {len(slot_map.entries)} column entries across {len(slot_map.datasets())} datasets."
-    )
+    checked = slot_map.datasets() if args.dataset is None else list(dict.fromkeys(args.dataset))
+    entries = sum(1 for e in slot_map.entries if e.dataset in checked)
+    print(f"Slot map checked against {catalog}: {entries} column entries across {len(checked)} dataset(s).")
     if args.check:
         return 0
 
