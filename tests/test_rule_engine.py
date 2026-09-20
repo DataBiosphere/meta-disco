@@ -832,7 +832,19 @@ class TestCalledPeaks:
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         assert result.data_modality is None
 
-    @pytest.mark.parametrize("name", ["sample.narrowPeak.bed", "sample.broadPeak.bed", "sample.narrowPeak.bed.gz"])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "sample.narrowPeak.bed",
+            "sample.broadPeak.bed",
+            "sample.narrowPeak.bed.gz",
+            # The token can also open the name, so its left boundary is `(^|[._-])` —
+            # the same shape every pattern this issue anchored uses.
+            "narrowPeak.bed",
+            "broadPeak.bed",
+            "narrowPeak.bed.gz",
+        ],
+    )
     def test_a_compound_peak_name_answers_the_same(self, engine, name):
         """`sample.narrowPeak.bed` parses to core `.bed`, so the extension-keyed rule
         cannot see it — `intervals_called_peaks_compound` reads the delimited token
