@@ -333,8 +333,12 @@ def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str)
     requested = (entry.get(fmt) or {}).get("requested_at")
     if not isinstance(requested, str):
         return None
+    # A trailing `Z` is normalized to `+00:00` first: `fromisoformat` rejects it on
+    # Python 3.10, this project's floor, and accepts it from 3.11 — the same interpreter
+    # divergence `source_evidence._parse_fetched_at` closes for the envelope.
+    normalized = requested.removesuffix("Z") + "+00:00" if requested.endswith("Z") else requested
     try:
-        return datetime.fromisoformat(requested)
+        return datetime.fromisoformat(normalized)
     except ValueError:
         raise ValueError(
             f"{catalog} sidecar, {dataset_title} ({fmt}): requested_at {requested!r} is not an ISO 8601 datetime"

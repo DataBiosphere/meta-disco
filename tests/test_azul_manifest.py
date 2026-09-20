@@ -4,7 +4,7 @@ rebuild-from-disk behaviour with the same fake injected."""
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -393,11 +393,16 @@ class TestVerbatimReader:
                     "D": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47"}},
                     "E": {"file_count": 1, "verbatim.jsonl": {"requested_at": "last tuesday"}},
                     "F": {"file_count": 1},
+                    "G": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47Z"}},
                 },
             },
         )
         assert am.sidecar_requested_at(tmp_path, "anvil15", "D", "verbatim.jsonl") == datetime(2026, 9, 3, 21, 45, 47)
         assert am.sidecar_requested_at(tmp_path, "anvil15", "F", "verbatim.jsonl") is None
+        # A trailing Z is read as UTC on every interpreter, as the envelope's own parser reads it.
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "G", "verbatim.jsonl") == datetime(
+            2026, 9, 3, 21, 45, 47, tzinfo=timezone.utc
+        )
         with pytest.raises(ValueError, match=r"anvil15 sidecar, E \(verbatim.jsonl\): requested_at 'last tuesday'"):
             am.sidecar_requested_at(tmp_path, "anvil15", "E", "verbatim.jsonl")
 
