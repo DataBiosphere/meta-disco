@@ -146,8 +146,10 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
             anvil_file(1),
             anvil_file(2),
             anvil_file(3),
+            anvil_file(9),
             (DATASET, {"cram": drs(1), "read_1_fastq": drs(2), "mosdepth_regions_bed": drs(3)}),
             ("hifi", {"path": drs(2), "library_source": "GENOMIC"}),
+            ("hifi", {"path": drs(9), "library_source": "METAGENOMIC"}),  # a file the run never saw
         ],
     )
     text = (
@@ -170,15 +172,21 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
 
     forecast = af.evidence_forecast(tmp_path / "ev", run)
     assert [p.name for p in forecast.skipped] == ["catalog.ndjson"]
-    assert forecast.rows == 4
-    assert forecast.files == {drs(1), drs(2), drs(3)}
+    assert forecast.rows == 5
+    assert forecast.files == {drs(1), drs(2), drs(3), drs(9)}
+    assert forecast.unjoined == {drs(9)}
     assert forecast.gaps == {(drs(3), "reference_assembly"), (drs(2), "data_modality")}
     assert forecast.not_applicable == {(drs(2), "reference_assembly")}
     assert forecast.fastq_modality == {drs(2)}
     assert forecast.by_verdict[af.AGREE] == {(drs(1), "reference_assembly", "CHM13")}
     assert forecast.by_verdict[af.DISAGREE] == set()
     assert forecast.by_verdict[NOT_APPLICABLE] == {(drs(2), "reference_assembly", "CHM13")}
-    assert forecast.raw_values == {("reference_assembly", "CHM13v2"): 3, ("data_modality", "GENOMIC"): 1}
+    # Every raw value that arrives is counted, joined to the run or not.
+    assert forecast.raw_values == {
+        ("reference_assembly", "CHM13v2"): 3,
+        ("data_modality", "GENOMIC"): 1,
+        ("data_modality", "METAGENOMIC"): 1,
+    }
     assert forecast.translated == {("reference_assembly", "CHM13v2"): "CHM13"}
     report = af.render_evidence_forecast(forecast, tmp_path / "ev", Path("run"))
     assert "Skipped 1 evidence file(s) not keyed by `drs_uri`: `hprc/catalog.ndjson`" in report

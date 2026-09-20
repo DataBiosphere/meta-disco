@@ -295,6 +295,9 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
             forecast.rows += 1
             handle, slot = entry.target_key_value, entry.field
             forecast.files.add(handle)
+            # Counted before the join: what arrives for #414 does not depend on which run
+            # the forecast happens to be measured against.
+            forecast.raw_values[(slot, entry.raw_value)] += 1
             record = run.get(handle)
             if record is None:
                 forecast.unjoined.add(handle)
@@ -306,7 +309,6 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
                 forecast.gaps.add((handle, slot))
             if slot == "data_modality" and record.is_fastq:
                 forecast.fastq_modality.add(handle)
-            forecast.raw_values[(slot, entry.raw_value)] += 1
             meaning = NAME_TOKENS.get(entry.raw_value.lower())
             if meaning is None or meaning[0] != slot or meaning[1] is None:
                 continue
