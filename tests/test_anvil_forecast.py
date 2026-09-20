@@ -7,7 +7,7 @@ from pathlib import Path
 
 from meta_disco import anvil_forecast as af
 from meta_disco.anvil_evidence import import_dataset
-from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
+from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from meta_disco.slot_map import load_slot_map
 from tests.test_anvil_evidence import CATALOG, anvil_file, drs, write_dataset
 
@@ -15,7 +15,7 @@ DATASET = "SGDP_CHM13v2_sample"
 
 
 def classification(slot_values: dict[str, tuple[str, str | None]]) -> dict:
-    return {slot: {"status": status, "value": value, "evidence": []} for slot, (status, value) in slot_values.items()}
+    return {slot: build_field_entry(value, status) for slot, (status, value) in slot_values.items()}
 
 
 def write_run(root: Path) -> Path:
@@ -155,9 +155,9 @@ def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
     assert forecast.gaps == {(drs(3), "reference_assembly"), (drs(2), "data_modality")}
     assert forecast.not_applicable == {(drs(2), "reference_assembly")}
     assert forecast.fastq_modality == {drs(2)}
-    assert forecast.agree == {(drs(1), "reference_assembly", "CHM13")}
-    assert forecast.disagree == set()
-    assert forecast.against_not_applicable == {(drs(2), "reference_assembly", "CHM13")}
+    assert forecast.by_verdict[af.AGREE] == {(drs(1), "reference_assembly", "CHM13")}
+    assert forecast.by_verdict[af.DISAGREE] == set()
+    assert forecast.by_verdict[NOT_APPLICABLE] == {(drs(2), "reference_assembly", "CHM13")}
     assert forecast.untranslated == {("data_modality", "GENOMIC"): 1}
     report = af.render_evidence_forecast(forecast, tmp_path / "ev", Path("run"))
     assert "| FASTQs receiving data_modality | 1 |" in report

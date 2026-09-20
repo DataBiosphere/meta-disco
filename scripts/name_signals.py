@@ -24,10 +24,10 @@ from meta_disco.anvil_forecast import (
     render_evidence_forecast,
     render_name_signals,
 )
+from meta_disco.azul_manifest import DEFAULT_CATALOG
 from meta_disco.output_utils import find_latest_run
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
 
-DEFAULT_CATALOG = "anvil15"
 DEFAULT_DATA_DIR = Path("data/anvil")
 DEFAULT_OUTPUT_DIR = Path("output/anvil")
 

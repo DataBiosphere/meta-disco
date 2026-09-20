@@ -147,7 +147,8 @@ ENVELOPE_KEY = "evidence_file"
 
 # What `discover` treats as an evidence file. NDJSON is the format, so the suffix is the
 # membership test — a README or a scratch .json beside them is not picked up.
-EVIDENCE_FILE_GLOB = "*.ndjson"
+EVIDENCE_FILE_SUFFIX = ".ndjson"
+EVIDENCE_FILE_GLOB = f"*{EVIDENCE_FILE_SUFFIX}"
 
 # Where an importer leaves the evidence files a run reads. One directory per source
 # under it (`data/source_evidence/hprc/`, `.../anvil/`): an evidence file is the same
@@ -168,7 +169,7 @@ DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "s
 # catalog such as anvil15), the generation is ours (when we imported), and the
 # envelope's `fetched_at` is when the source was fetched.
 GENERATION_FORMAT = "%Y%m%dT%H%M%SZ"
-_GENERATION = re.compile(r"^\d{8}T\d{6}Z\Z")
+_GENERATION = re.compile(r"\d{8}T\d{6}Z")
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
@@ -665,7 +666,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     no-op with a success return, which is the one failure mode an import must not
     have (#401 review).
     """
-    if path.suffix != EVIDENCE_FILE_GLOB.lstrip("*"):
+    if path.suffix != EVIDENCE_FILE_SUFFIX:
         raise ValueError(
             f"{path.name}: an evidence file must be named {EVIDENCE_FILE_GLOB} — "
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
@@ -773,9 +774,9 @@ def _decode(raw: bytes, where: str) -> str:
 def new_generation(now: datetime | None = None) -> str:
     """A generation stamp for an import starting now, in UTC: ``20260920T031500Z``.
 
-    Second resolution: two imports of one dataset within a second would share a
-    directory, and an importer is a networked, minutes-long process, so that is not a
-    case worth a longer name. ``now`` fixes the clock for tests.
+    Second resolution: two imports of one dataset within a second is not a case worth
+    a longer name, and :func:`generation_dir`'s caller refuses to write over one that
+    exists. ``now`` fixes the clock for tests.
     """
     moment = now if now is not None else datetime.now(timezone.utc)
     return moment.astimezone(timezone.utc).strftime(GENERATION_FORMAT)
@@ -783,7 +784,7 @@ def new_generation(now: datetime | None = None) -> str:
 
 def is_generation(name: str) -> bool:
     """Whether a directory name is a generation stamp as :func:`new_generation` writes one."""
-    return _GENERATION.match(name) is not None
+    return _GENERATION.fullmatch(name) is not None
 
 
 def generation_dir(root: Path, source: str, version: str, dataset: str, generation: str) -> Path:
@@ -796,6 +797,11 @@ def generation_dir(root: Path, source: str, version: str, dataset: str, generati
     if not is_generation(generation):
         raise ValueError(f"{generation!r} is not a generation stamp ({GENERATION_FORMAT}); see new_generation")
     return root / source / version / dataset / generation
+
+
+def evidence_file_path(directory: Path, table: str) -> Path:
+    """The file one table's rows go to inside a generation directory: ``<table>.ndjson``."""
+    return directory / f"{table}{EVIDENCE_FILE_SUFFIX}"
 
 
 def discover(root: Path) -> list[Path]:
@@ -824,7 +830,10 @@ def discover(root: Path) -> list[Path]:
 
 
 def report_evidence_files(root: Path, now: datetime | None = None) -> list[EvidenceFileStatus]:
-    """Report every evidence file under ``root``, and return what each one's status is.
+    """Report every current evidence file under ``root``, and return what each one's status is.
+
+    *Current* as :func:`discover` defines it: a superseded generation is neither
+    reported nor read.
 
     Prints one line per file — source, table, version, the catalog it was built for
     if it names one, fetch date and age — so a run says which evidence files it found

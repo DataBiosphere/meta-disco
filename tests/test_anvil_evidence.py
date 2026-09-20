@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from meta_disco import anvil_evidence as ae
-from meta_disco.azul_manifest import FORMAT_VERBATIM, manifest_dir, manifest_path, save_sidecar
+from meta_disco.azul_manifest import FORMAT_VERBATIM, load_sidecar, manifest_dir, manifest_path, save_sidecar
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_REPOSITORY_METADATA
 from meta_disco.slot_map import load_slot_map
 from meta_disco.source_evidence import discover, is_generation, iter_evidence, read_envelope
@@ -31,10 +31,7 @@ def write_dataset(root: Path, title: str, entities: list[tuple[str, dict]], fetc
     manifest_path(root, CATALOG, title, FORMAT_VERBATIM).write_text(
         "".join(json.dumps({"value": value, "type": entity_type}) + "\n" for entity_type, value in entities)
     )
-    sidecar: dict[str, Any] = {"catalog": CATALOG, "datasets": {}}
-    sidecar_path = manifest_dir(root, CATALOG) / "manifests.json"
-    if sidecar_path.is_file():
-        sidecar = json.loads(sidecar_path.read_text())
+    sidecar = load_sidecar(root, CATALOG)
     entry: dict[str, Any] = {"file_count": sum(1 for t, _ in entities if t == "anvil_file")}
     if fetched is not None:
         entry[FORMAT_VERBATIM] = {"requested_at": fetched, "rows": entry["file_count"]}

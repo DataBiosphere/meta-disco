@@ -35,27 +35,32 @@ import json
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
-from .azul_manifest import API_URL, FORMAT_VERBATIM, REPOSITORY, VERBATIM_FILE, load_sidecar, manifest_path
+from .azul_manifest import (
+    ANVIL_FILE_HANDLE_COLUMNS,
+    API_URL,
+    FORMAT_VERBATIM,
+    REPOSITORY,
+    VERBATIM_FILE,
+    iter_verbatim_entities,
+    link_handles,
+    manifest_path,
+    sidecar_datasets,
+    sidecar_requested_at,
+)
 from .models import JOIN_KEY_DRS_URI, SOURCE_REPOSITORY_METADATA, ClaimSource
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
-    EVIDENCE_FILE_GLOB,
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
     EvidenceTarget,
+    evidence_file_path,
     generation_dir,
     new_generation,
     write_evidence_file,
 )
-
-# The source's directory under the evidence root, and the target system: both are the
-# repository the manifests came from.
-SOURCE = REPOSITORY
-_DRS_PREFIX = "drs://"
 
 
 @dataclass
@@ -64,14 +69,16 @@ class TableImport:
 
     ``no_link`` and ``unresolved`` are per file-link column: rows whose link cell held
     nothing, and handles not among the dataset's own files. ``null_cells`` is per cell
-    column, once per row and column. ``written`` is evidence lines, which exceeds the
-    number of files reached wherever a file has several slots or sources.
+    column, once per row and column. ``files`` is the distinct files that received at
+    least one evidence row; ``written`` counts the rows, which exceeds it wherever a
+    file has several slots or sources.
     """
 
     table: str
     path: Path
     rows: int = 0
     written: int = 0
+    files: set[str] = field(default_factory=set)
     no_link: Counter = field(default_factory=Counter)
     unresolved: Counter = field(default_factory=Counter)
     null_cells: Counter = field(default_factory=Counter)
@@ -85,24 +92,29 @@ class DatasetImport:
     generation: str
     directory: Path
     tables: list[TableImport]
-    files: int  # distinct files that received at least one evidence row
+
+    @property
+    def files(self) -> int:
+        """Distinct files that received at least one evidence row, across the tables."""
+        return len(set().union(*(table.files for table in self.tables)))
 
 
 # --- checking the map against the manifests -----------------------------------
 
 
 def check(slot_map: SlotMap, manifest_root: Path, catalog: str) -> list[str]:
-    """Every way the map disagrees with the manifests on disk, all at once; empty when none.
+    """How the map disagrees with the manifests on disk, one line per problem; empty when none.
 
     Per mapped dataset: the sidecar names it and its verbatim manifest is on disk. Per
     mapped table: at least one row of that type exists. Per file-link column: it appears
-    on some row, and every value it holds is a DRS URI or a list of them. Per cell: the
-    column appears on some row of its table. Reported together rather than at the first,
-    because a map is edited in one sitting and each problem costs a pass over a
-    half-gigabyte manifest to find.
+    on some row, and every non-empty value it holds is a DRS URI or a list of them. Per
+    cell: the column appears on some row of its table. Every dataset is checked, and
+    within one every table and column, so a map edited in one sitting is answered in
+    one pass; a dataset whose manifest is missing, or a table with no rows, masks the
+    problems beneath it until that one is fixed.
     """
     problems: list[str] = []
-    named = load_sidecar(manifest_root, catalog).get("datasets") or {}
+    named = sidecar_datasets(manifest_root, catalog)
     for dataset in slot_map.datasets():
         if dataset not in named:
             problems.append(f"{dataset}: not a dataset the {catalog} sidecar names")
@@ -117,38 +129,31 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str) -> list[str]:
 
 def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
     tables = slot_map.tables(dataset)
+    wanted = {table: [entry.column for entry in slot_map.columns(dataset, table)] for table in tables}
     rows: Counter = Counter()
-    columns_seen: set[tuple[str, str]] = set()
+    columns_seen: dict[str, set[str]] = {table: set() for table in tables}
     not_links: dict[tuple[str, str], object] = {}
-    wanted = {(table, entry.column) for table in tables for entry in slot_map.columns(dataset, table)}
-    for table, row in _rows(path, set(tables)):
+    for table, row in iter_verbatim_entities(path, tables):
         rows[table] += 1
-        for column in row:
-            columns_seen.add((table, column))
-        for table_name, column in wanted:
-            if table_name != table or (table, column) in not_links:
-                continue
-            value = row.get(column)
-            if value is None or value == "" or value == []:
-                continue
-            handles = value if isinstance(value, list) else [value]
-            if not all(isinstance(h, str) and h.startswith(_DRS_PREFIX) for h in handles):
-                not_links[(table, column)] = value
+        columns_seen[table].update(row)
+        for column in wanted[table]:
+            if (table, column) not in not_links and link_handles(row.get(column)) == []:
+                not_links[(table, column)] = row[column]
     problems = []
     for table in tables:
         if not rows[table]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
             continue
-        for entry in slot_map.columns(dataset, table):
-            if (table, entry.column) not in columns_seen:
-                problems.append(f"{dataset}/{table}/{entry.column}: no row carries this column")
-            elif (table, entry.column) in not_links:
+        for column in wanted[table]:
+            if column not in columns_seen[table]:
+                problems.append(f"{dataset}/{table}/{column}: no row carries this column")
+            elif (table, column) in not_links:
                 problems.append(
-                    f"{dataset}/{table}/{entry.column}: holds {not_links[(table, entry.column)]!r}, "
+                    f"{dataset}/{table}/{column}: holds {not_links[(table, column)]!r}, "
                     "not a DRS URI or a list of them — not a file-link column"
                 )
         for cell in sorted(slot_map.cells(dataset, table)):
-            if (table, cell) not in columns_seen:
+            if cell not in columns_seen[table]:
                 problems.append(f"{dataset}/{table}: cell {cell!r} is not a column of this table")
     return problems
 
@@ -170,8 +175,9 @@ def import_all(
     disk; each dataset is still imported whole and independently. Raises before writing
     anything if a named dataset is not in the map.
     """
-    chosen = slot_map.datasets() if datasets is None else list(datasets)
-    unknown = [d for d in chosen if d not in slot_map.datasets()]
+    known = slot_map.datasets()
+    chosen = known if datasets is None else list(datasets)
+    unknown = [d for d in chosen if d not in known]
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
     stamp = generation if generation is not None else new_generation()
@@ -191,20 +197,27 @@ def import_dataset(
     Two kinds of pass over the manifest: one to collect the dataset's own file handles
     (its ``anvil_file`` DRS URIs), then one per mapped table to write that table's file.
     Per-table passes rather than one pass fanning out to every table's writer, so each
-    file keeps ``write_evidence_file``'s write-then-rename guarantee on its own. A pass
-    parses only the lines that name its table, which the cheap substring test in
-    :func:`_rows` gates.
+    file keeps ``write_evidence_file``'s write-then-rename guarantee on its own; each
+    pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
 
-    The generation directory must not exist: an import never writes over another.
+    The generation directory must not exist: an import never writes over another. The
+    evidence root directory under it and the target system are both the repository the
+    manifests came from.
     """
     stamp = generation if generation is not None else new_generation()
-    directory = generation_dir(evidence_root, SOURCE, catalog, dataset, stamp)
+    directory = generation_dir(evidence_root, REPOSITORY, catalog, dataset, stamp)
     if directory.exists():
         raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
     path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
-    fetched_at = _fetched_at(manifest_root, catalog, dataset)
+    # When the *source* was fetched — the manifest's request time, not the import's. A
+    # sidecar that cannot say is refused: an evidence file must record it, and inventing
+    # the import time would be a fetch the file never made.
+    fetched_at = sidecar_requested_at(manifest_root, catalog, dataset, FORMAT_VERBATIM)
+    if fetched_at is None:
+        raise ValueError(
+            f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at to write as fetched_at"
+        )
     handles = _file_handles(path)
-    files: set[str] = set()
     tables = []
     for table in slot_map.tables(dataset):
         source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
@@ -213,66 +226,24 @@ def import_dataset(
             source_type=SOURCE_REPOSITORY_METADATA,
             source_version=catalog,
             source_key=JOIN_KEY_DRS_URI,
-            target=EvidenceTarget(system=SOURCE, dataset=dataset, version=catalog),
+            target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
             target_key=JOIN_KEY_DRS_URI,
             fetched_at=fetched_at,
         )
-        result = TableImport(table=table, path=directory / f"{table}{EVIDENCE_FILE_GLOB.lstrip('*')}")
-        entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result, files)
+        result = TableImport(table=table, path=evidence_file_path(directory, table))
+        entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result)
         result.written = write_evidence_file(result.path, envelope, entries)
         tables.append(result)
-    return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables, files=len(files))
-
-
-def _fetched_at(manifest_root: Path, catalog: str, dataset: str) -> datetime:
-    """When the dataset's verbatim manifest was fetched, from the download sidecar.
-
-    The envelope's ``fetched_at`` is when the *source* was fetched, which is the
-    manifest's request time and not the import's. A sidecar that cannot say is refused:
-    an evidence file must record it, and inventing the import time would be a fetch
-    the file never made.
-    """
-    entry = (load_sidecar(manifest_root, catalog).get("datasets") or {}).get(dataset) or {}
-    requested = (entry.get(FORMAT_VERBATIM) or {}).get("requested_at")
-    if not isinstance(requested, str):
-        raise ValueError(
-            f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at to write as fetched_at"
-        )
-    return datetime.fromisoformat(requested)
+    return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 
 def _file_handles(path: Path) -> set[str]:
     """The dataset's own files, as the DRS URIs its ``anvil_file`` entities carry."""
     handles = set()
-    for _table, value in _rows(path, {VERBATIM_FILE}):
-        for key in ("drs_uri", "file_ref"):
-            handle = value.get(key)
-            if isinstance(handle, str) and handle.startswith(_DRS_PREFIX):
-                handles.add(handle)
+    for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
+        for column in ANVIL_FILE_HANDLE_COLUMNS:
+            handles.update(link_handles(value.get(column)) or [])
     return handles
-
-
-def _rows(path: Path, tables: set[str]) -> Iterator[tuple[str, dict]]:
-    """Every ``(type, value)`` of the named types, streamed, parsing only candidate lines.
-
-    A verbatim line is ``{"value": {...}, "type": "..."}``; the type sits at the end, so
-    a substring test on ``"<table>"`` is what keeps a per-table pass from parsing every
-    line of a half-gigabyte file. The test is a gate, not the decision: the parsed type
-    is what selects the row. Malformed lines raise naming the file and line, as
-    ``azul_manifest.iter_verbatim_entities`` does.
-    """
-    needles = [f'"{table}"' for table in tables]
-    with path.open(encoding="utf-8") as f:
-        for n, line in enumerate(f, start=1):
-            if not any(needle in line for needle in needles):
-                continue
-            try:
-                entity = json.loads(line)
-                entity_type, value = entity["type"], entity["value"]
-            except (json.JSONDecodeError, KeyError, TypeError) as exc:
-                raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
-            if entity_type in tables and isinstance(value, dict):
-                yield entity_type, value
 
 
 def _table_entries(
@@ -282,20 +253,19 @@ def _table_entries(
     handles: set[str],
     source: EvidenceFileSource,
     result: TableImport,
-    files: set[str],
 ) -> Iterator[EvidenceEntry]:
-    """Every evidence row one table yields, streamed row by row."""
+    """Every evidence row one table yields, streamed row by row, counting into ``result``."""
     by_column: dict[str | None, ClaimSource] = {}
-    for _type, row in _rows(path, {table}):
+    for _type, row in iter_verbatim_entities(path, {table}):
         result.rows += 1
         nulls: set[str] = set()
         for entry in columns:
-            link = row.get(entry.column)
-            if link is None or link == "" or link == []:
+            links = link_handles(row.get(entry.column))
+            if links is None:
                 result.no_link[entry.column] += 1
                 continue
-            for handle in link if isinstance(link, list) else [link]:
-                if not isinstance(handle, str) or handle not in handles:
+            for handle in links:
+                if handle not in handles:
                     result.unresolved[entry.column] += 1
                     continue
                 for slot, sources in entry.slots.items():
@@ -308,7 +278,7 @@ def _table_entries(
                             claim_source = by_column[column] = source.as_claim_source(column)
                         # Counted here and not when the link resolved: a file whose every
                         # mapped cell is null receives nothing, and is not "a file with evidence".
-                        files.add(handle)
+                        result.files.add(handle)
                         yield EvidenceEntry(field=slot, target_key_value=handle, raw_value=raw, source=claim_source)
 
 

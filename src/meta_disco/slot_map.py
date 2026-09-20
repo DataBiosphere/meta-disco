@@ -35,8 +35,7 @@ the file, and the loader does not require it to be. The ``catalog`` stamp record
 the whole of that catalog was considered, so absence means *considered and not mapped*
 rather than overlooked (2.4). There is no ``notes`` member and the loader refuses one
 by name: findings and reasoning belong in the pull request and on the issue, where they
-are read, not in a data file where they were found pasted between datasets describing
-columns that did not exist.
+are read, not in a data file.
 
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
 concluded; ``test_slot_map`` checks the file for that. The only exclusions are
@@ -65,6 +64,7 @@ from typing import Protocol
 
 import yaml
 
+from .manifest_survey import name_tokens
 from .models import CLASSIFICATION_FIELDS
 
 # The three forms a source can take, by the key its mapping carries.
@@ -86,11 +86,13 @@ DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "f
 # entity-shaped too but no slot token maps them, so there is nothing to refuse.
 ENTITY_TOKENS = frozenset({"interval"})
 
-# The one member a map must not carry. Refused by name so the refusal can say why.
-_REFUSED_MEMBERS = {
-    "notes": "there is no notes member — findings and reasoning go in the pull request and on the issue, "
-    "where they are read; a data file maps what maps and is otherwise silent",
-}
+# The one member a map must not carry, and what the refusal says.
+_NOTES = "notes"
+_NO_NOTES = (
+    "there is no notes member — findings and reasoning go in the pull request and on the issue, "
+    "where they are read; a data file maps what maps and is otherwise silent"
+)
+_WHERE = "slot map"
 
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 DATA_TYPE = "data_type"
@@ -112,9 +114,9 @@ class SlotSource:
 class ColumnEntry:
     """One file-link column and what its files' slots are read from.
 
-    ``slots`` maps a slot to its sources in file order. Every column named here holds a
-    DRS handle in the source — `anvil_evidence.check` verifies that against the
-    manifests, since the map cannot.
+    ``slots`` maps a slot to its sources in file order. Every non-empty value a column
+    named here holds in the source is a DRS URI or a list of them — `anvil_evidence.check`
+    verifies that against the manifests, since the map cannot.
     """
 
     dataset: str
@@ -157,8 +159,27 @@ class SlotMap:
 
 def is_derivative_column(column: str) -> bool:
     """Whether a column name says its file is an index or checksum of another file."""
-    tail = column.replace(".", "_").rsplit("_", 1)[-1].lower()
-    return tail in DERIVATIVE_SUFFIXES
+    tokens = name_tokens(column)
+    return bool(tokens) and tokens[-1] in DERIVATIVE_SUFFIXES
+
+
+ENTITY = "entity"
+DERIVATIVE = "derivative"
+
+
+def structural_exclusion(slot: str, column: str, span: str) -> str | None:
+    """Which of the two structural rules refuses ``span`` as a source for ``slot`` on ``column``, if either.
+
+    The one statement of both rules: the loader raises on what this returns, and the
+    forecast (`anvil_forecast.name_claims`) counts it, so a rule added here reaches
+    both. ``ENTITY`` — a token of the span names what a row is; ``DERIVATIVE`` — the
+    slot is ``data_type`` and the column is an index or checksum sidecar.
+    """
+    if any(token in ENTITY_TOKENS for token in name_tokens(span)):
+        return ENTITY
+    if slot == DATA_TYPE and is_derivative_column(column):
+        return DERIVATIVE
+    return None
 
 
 class Readable(Protocol):
@@ -176,8 +197,7 @@ class _UniqueKeyLoader(yaml.SafeLoader):
     """A YAML loader that refuses a duplicate mapping key instead of keeping the last.
 
     PyYAML's default silently takes the later value, so a column listed twice under one
-    table — the easy mistake in a file with four hundred column entries — would drop
-    one of them without a word. Refused naming the key and the line.
+    table would drop one of them without a word. Refused naming the key and the line.
     """
 
     def construct_mapping(self, node, deep=False):
@@ -196,36 +216,36 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 def load_slot_map(source: Readable | None = None) -> SlotMap:
     """Load and check a slot map; the bundled AnVIL one by default.
 
-    Every shape rule in the module docstring is checked here, and the first violation
-    raises ``ValueError`` naming the dataset, table, column and slot it sits on. Load
-    time rather than import time: a map that cannot load must not be able to produce
-    an evidence file, and an importer running against millions of rows should learn
-    about a malformed entry before it reads the first one.
+    The shape rules — one entry shape, three source forms, a span inside its name, no
+    source twice, no ``notes``, the two structural exclusions — are checked here, and
+    the first violation raises ``ValueError`` naming the dataset, table, column and
+    slot it sits on. Source purity (R1) is not a shape and is ``test_slot_map``'s to
+    check. Load time rather than import time: a map that cannot load must not be able
+    to produce an evidence file, and an importer running against millions of rows
+    should learn about a malformed entry before it reads the first one.
     """
     resource = source if source is not None else default_slot_map_resource()
     document = yaml.load(resource.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
-    where = "slot map"
-    _expect_mapping(document, where, ("catalog", "datasets"))
+    if not isinstance(document, dict):
+        raise ValueError(f"{_WHERE}: the document is {type(document).__name__}, not a mapping")
+    _refuse_notes(document, _WHERE)
+    if set(document) != {"catalog", "datasets"}:
+        raise ValueError(f"{_WHERE}: top-level keys are {sorted(document)}, expected exactly ['catalog', 'datasets']")
     catalog = document["catalog"]
     if not isinstance(catalog, str) or not catalog:
-        raise ValueError(f"{where}: catalog is {catalog!r}, not the name of the catalog the map was authored against")
+        raise ValueError(f"{_WHERE}: catalog is {catalog!r}, not the name of the catalog the map was authored against")
     datasets = document["datasets"]
-    if not isinstance(datasets, dict) or not datasets:
-        raise ValueError(f"{where}: datasets is {type(datasets).__name__}, not a mapping of at least one dataset")
-    return SlotMap(catalog=catalog, entries=tuple(_entries(datasets, where)))
+    _expect_nonempty_mapping(datasets, _WHERE, "dataset")
+    return SlotMap(catalog=catalog, entries=tuple(_entries(datasets)))
 
 
-def _entries(datasets: dict, where: str) -> Iterator[ColumnEntry]:
+def _entries(datasets: dict) -> Iterator[ColumnEntry]:
     for dataset, tables in datasets.items():
-        at = f"{where} {dataset}"
-        if dataset in _REFUSED_MEMBERS:
-            raise ValueError(f"{where} datasets: {_REFUSED_MEMBERS[dataset]}")
-        _expect_nonempty_mapping(tables, at, "table")
+        _expect_nonempty_mapping(tables, f"{_WHERE} {dataset}", "table")
         for table, columns in tables.items():
-            at = f"{where} {dataset}/{table}"
-            _expect_nonempty_mapping(columns, at, "file-link column")
+            _expect_nonempty_mapping(columns, f"{_WHERE} {dataset}/{table}", "file-link column")
             for column, slots in columns.items():
-                at = f"{where} {dataset}/{table}/{column}"
+                at = f"{_WHERE} {dataset}/{table}/{column}"
                 _expect_nonempty_mapping(slots, at, "slot")
                 yield ColumnEntry(
                     dataset=dataset,
@@ -237,8 +257,6 @@ def _entries(datasets: dict, where: str) -> Iterator[ColumnEntry]:
 
 def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tuple[SlotSource, ...]:
     """Check one slot's source list, returning it typed."""
-    if slot in _REFUSED_MEMBERS:
-        raise ValueError(f"{at}: {_REFUSED_MEMBERS[slot]}")
     if slot not in _FIELDS:
         raise ValueError(f"{at}: {slot!r} is not a slot (expected one of {sorted(_FIELDS)})")
     at = f"{at} {slot}"
@@ -249,12 +267,7 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
         )
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"{at}: must be a non-empty list of sources, not {type(sources).__name__}")
-    parsed = [_source(item, table, column, at) for item in sources]
-    if slot == DATA_TYPE and is_derivative_column(column):
-        raise ValueError(
-            f"{at}: {column!r} is an index or checksum column and carries no data_type of its own "
-            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES)}); its reference_assembly may be mapped"
-        )
+    parsed = [_source(slot, item, table, column, at) for item in sources]
     seen: dict[tuple[str, str], SlotSource] = {}
     for source in parsed:
         key = ("name", source.value.casefold()) if source.is_name else (source.form, source.value)
@@ -267,12 +280,12 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
     return tuple(parsed)
 
 
-def _source(item: object, table: str, column: str, at: str) -> SlotSource:
+def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSource:
     if not isinstance(item, dict) or len(item) != 1:
         raise ValueError(f"{at}: a source is one mapping with one key ({', '.join(SOURCE_FORMS)}), not {item!r}")
     ((form, value),) = item.items()
-    if form in _REFUSED_MEMBERS:
-        raise ValueError(f"{at}: {_REFUSED_MEMBERS[form]}")
+    if form == _NOTES:
+        raise ValueError(f"{at}: {_NO_NOTES}")
     if form not in SOURCE_FORMS:
         raise ValueError(f"{at}: {form!r} is not a source form (expected one of {SOURCE_FORMS})")
     if not isinstance(value, str) or not value:
@@ -283,32 +296,27 @@ def _source(item: object, table: str, column: str, at: str) -> SlotSource:
         raise ValueError(f"{at}: span {value!r} is not part of the table name {table!r}, in the name's own casing")
     if form == SOURCE_COLUMN_NAME and value not in column:
         raise ValueError(f"{at}: span {value!r} is not part of the column name {column!r}, in the name's own casing")
-    if form in _NAME_FORMS and _has_entity_token(value):
+    excluded = structural_exclusion(slot, column, value if form in _NAME_FORMS else "")
+    if excluded == ENTITY:
         raise ValueError(
             f"{at}: span {value!r} names what a row is, not what its files are (entity tokens: "
             f"{sorted(ENTITY_TOKENS)}), so no slot reads it"
         )
+    if excluded == DERIVATIVE:
+        raise ValueError(
+            f"{at}: {column!r} is an index or checksum column and carries no data_type of its own "
+            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES)}); its reference_assembly may be mapped"
+        )
     return SlotSource(form=form, value=value)
 
 
-def _has_entity_token(span: str) -> bool:
-    return any(token in ENTITY_TOKENS for token in span.replace(".", "_").lower().split("_"))
-
-
-def _expect_mapping(document: object, where: str, keys: tuple[str, ...]) -> None:
-    if not isinstance(document, dict):
-        raise ValueError(f"{where}: the document is {type(document).__name__}, not a mapping")
-    for key in document:
-        if key in _REFUSED_MEMBERS:
-            raise ValueError(f"{where}: {_REFUSED_MEMBERS[key]}")
-    if set(document) != set(keys):
-        raise ValueError(f"{where}: top-level keys are {sorted(document)}, expected exactly {sorted(keys)}")
+def _refuse_notes(mapping: dict, at: str) -> None:
+    if _NOTES in mapping:
+        raise ValueError(f"{at}: {_NO_NOTES}")
 
 
 def _expect_nonempty_mapping(value: object, at: str, noun: str) -> None:
     """An empty level maps nothing, and nothing-to-map is spelled by absence, not by an empty block."""
     if not isinstance(value, dict) or not value:
         raise ValueError(f"{at}: must be a mapping of at least one {noun} — a level with nothing to map is left out")
-    for key in value:
-        if key in _REFUSED_MEMBERS:
-            raise ValueError(f"{at}: {_REFUSED_MEMBERS[key]}")
+    _refuse_notes(value, at)

@@ -181,8 +181,7 @@ download-and-survey: download manifest-survey
 
 # The AnVIL slot map (#369): check it against the manifests on disk, or import
 # every dataset it names as one new generation of evidence files under
-# data/source_evidence/anvil/. Offline. Nothing reads the evidence until the join
-# (#402) lands, so classification output is unchanged by an import.
+# data/source_evidence/anvil/. Offline.
 check-slot-map:
 	uv run python scripts/import_anvil_evidence.py --check
 

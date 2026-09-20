@@ -344,6 +344,56 @@ class TestLayout:
         assert not (tmp_path / "manifest").exists() or not list((tmp_path / "manifest").rglob("*.tsv"))
 
 
+class TestVerbatimReader:
+    """The shared verbatim reader, and the two definitions the importer (#369) reads through it."""
+
+    def _write(self, tmp_path, lines):
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+        return path
+
+    def test_types_narrows_the_stream_and_the_gate_is_not_the_decision(self, tmp_path):
+        """A cell holding the word `hifi` costs a parse, not a wrong row: the parsed type selects."""
+        path = self._write(
+            tmp_path,
+            [
+                {"value": {"hifi_id": "a"}, "type": "hifi"},
+                {"value": {"notes": "see the hifi run"}, "type": "sample"},
+                {"value": {"ont_id": "b"}, "type": "ont"},
+                {"value": {"file_id": "f"}, "type": "anvil_file"},
+            ],
+        )
+        assert [t for t, _ in am.iter_verbatim_entities(path, {"hifi", "ont"})] == ["hifi", "ont"]
+        assert [t for t, _ in am.iter_verbatim_entities(path)] == ["hifi", "sample", "ont", "anvil_file"]
+
+    def test_a_malformed_line_is_named_whether_or_not_it_passes_the_gate(self, tmp_path):
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "hifi"\n')
+        with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
+            list(am.iter_verbatim_entities(path, {"hifi"}))
+
+    def test_submitter_tables_are_everything_not_harmonized(self):
+        assert am.is_submitter_table("hifi") and am.is_submitter_table("1KGP_CHM13v2_sample")
+        assert not am.is_submitter_table(am.VERBATIM_FILE) and not am.is_submitter_table("anvil_activity")
+
+    @pytest.mark.parametrize(
+        "cell, handles",
+        [
+            (None, None),
+            ("", None),
+            ([], None),
+            ("drs://drs.anv0:v2_a", ["drs://drs.anv0:v2_a"]),
+            (["drs://drs.anv0:v2_a", "drs://drs.anv0:v2_b"], ["drs://drs.anv0:v2_a", "drs://drs.anv0:v2_b"]),
+            ("HG002", []),
+            (["drs://drs.anv0:v2_a", "HG002"], []),
+            (7, []),
+        ],
+    )
+    def test_link_handles_is_contract_2_7s_file_link_test(self, cell, handles):
+        """No link reads as None; a value that is not a pointer reads as an empty list."""
+        assert am.link_handles(cell) == handles
+
+
 class TestRecordMapping:
     def test_a_compact_manifest_row_becomes_a_record_the_contract_accepts(self, tmp_path):
         (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))

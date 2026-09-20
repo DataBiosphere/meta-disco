@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import time
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -62,6 +63,10 @@ MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
 # so a reader names the publisher rather than assuming one (#424).
 REPOSITORY = "anvil"
 
+# The catalog generation the tooling reads by default. Named once here; the
+# Makefile's `CATALOG ?= anvil15` is the same value for `make download`.
+DEFAULT_CATALOG = "anvil15"
+
 FORMAT_COMPACT = "compact"
 FORMAT_VERBATIM = "verbatim.jsonl"
 FORMATS = (FORMAT_COMPACT, FORMAT_VERBATIM)
@@ -75,6 +80,14 @@ SIDECAR = "manifests.json"
 VERBATIM_FILE = "anvil_file"
 VERBATIM_ACTIVITY = "anvil_activity"
 VERBATIM_BIOSAMPLE = "anvil_biosample"
+# Every harmonized entity type starts with this; every other type is a submitter's
+# own table, carried through unaltered.
+HARMONIZED_PREFIX = "anvil_"
+# The two columns of an `anvil_file` entity that carry the file's DRS URI; both are
+# read because a submitter table may point at a file by either.
+ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", "file_ref")
+# What a file pointer in a submitter cell starts with.
+DRS_PREFIX = "drs://"
 
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
@@ -306,6 +319,19 @@ def load_sidecar(root: Path, catalog: str) -> dict[str, Any]:
         with path.open() as f:
             return json.load(f)
     return {"catalog": catalog, "datasets": {}}
+
+
+def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str) -> datetime | None:
+    """When one dataset's manifest in one format was requested, per the sidecar; None if unrecorded.
+
+    Read here rather than by a consumer unpacking the sidecar, for the reason
+    :func:`sidecar_datasets` exists: this module writes the shape. The importer (#369)
+    writes it into an evidence file's envelope as ``fetched_at`` — when the *source*
+    was fetched, which is the manifest's request time and not the import's.
+    """
+    entry = (load_sidecar(root, catalog).get("datasets") or {}).get(dataset_title) or {}
+    requested = (entry.get(fmt) or {}).get("requested_at")
+    return datetime.fromisoformat(requested) if isinstance(requested, str) else None
 
 
 def sidecar_datasets(root: Path, catalog: str) -> dict[str, Dataset]:
@@ -614,20 +640,55 @@ def iter_compact_records(path: Path) -> Iterator[dict[str, Any]]:
             raise ValueError(f"{path.name} line {n}: cannot map row to a record: {exc!r}") from None
 
 
-def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
+def is_submitter_table(entity_type: str) -> bool:
+    """Whether a verbatim entity type is a submitter's own table rather than a harmonized one."""
+    return not entity_type.startswith(HARMONIZED_PREFIX)
+
+
+def link_handles(value: Any) -> list[str] | None:
+    """The DRS URIs a submitter cell holds, or None where the cell holds no link.
+
+    Contract 2.7's definition of a file-link column, spelled once: a cell is a link
+    when it is a ``drs://`` URI or a list of them. An empty string, an empty list or
+    a null is "no link" and reads as None; a non-empty value that is not a link — a
+    name, an accession, a list holding one — reads as an empty list, which is how a
+    caller tells "nothing here" from "something here that is not a pointer".
+    """
+    if value is None or value == "" or value == []:
+        return None
+    handles = value if isinstance(value, list) else [value]
+    return (
+        [h for h in handles if isinstance(h, str) and h.startswith(DRS_PREFIX)]
+        if all(isinstance(h, str) and h.startswith(DRS_PREFIX) for h in handles)
+        else []
+    )
+
+
+def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> Iterator[tuple[str, dict[str, Any]]]:
     """Every ``(type, value)`` pair in one verbatim manifest on disk, streamed.
 
-    One JSON object per line, ``{"type": ..., "value": {...}}``. Both harmonized
+    One JSON object per line, ``{"value": {...}, "type": ...}``. Both harmonized
     ``anvil_*`` entities and the submitter's own tables come through here; the
     caller decides which types it cares about. A blank line carries no entity and
     is passed over. Any other line whose JSON will not parse, or that is not that
     shape, raises with its line number rather than being skipped — a survey that
     silently dropped entities would understate coverage, which is the one thing
     it must not do.
+
+    ``types`` narrows the stream to those entity types, and cheaply: a line is
+    parsed only if it contains one of the quoted type names, which keeps a pass
+    over a half-gigabyte manifest that wants one table from parsing every line.
+    The substring test is a gate, not the decision — a submitter cell that happens
+    to hold the same word costs one extra parse and nothing else, and the parsed
+    type is what selects the row. :func:`count_rows` uses the same trick.
     """
+    wanted = None if types is None else set(types)
+    gate = None if wanted is None else re.compile("|".join(re.escape(f'"{t}"') for t in sorted(wanted)))
     with path.open(encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):
             if not line.strip():
+                continue
+            if gate is not None and gate.search(line) is None:
                 continue
             try:
                 entity = json.loads(line)
@@ -638,7 +699,8 @@ def iter_verbatim_entities(path: Path) -> Iterator[tuple[str, dict[str, Any]]]:
                 raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
             if not isinstance(value, dict):
                 raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
-            yield entity_type, value
+            if wanted is None or entity_type in wanted:
+                yield entity_type, value
 
 
 def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime) -> dict[str, Any]:

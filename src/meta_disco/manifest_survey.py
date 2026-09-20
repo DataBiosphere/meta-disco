@@ -46,9 +46,11 @@ from pathlib import Path
 from typing import Any
 
 from .azul_manifest import (
+    ANVIL_FILE_HANDLE_COLUMNS,
     FORMAT_COMPACT,
     FORMAT_VERBATIM,
     FORMATS,
+    HARMONIZED_PREFIX,
     VERBATIM_ACTIVITY,
     VERBATIM_BIOSAMPLE,
     VERBATIM_FILE,
@@ -217,8 +219,6 @@ def name_tokens(name: str) -> list[str]:
 _DRS_FILE_ID = re.compile(r"v2_([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})", re.IGNORECASE)
 _DRS_MARKER = "v2_"  # the cheap substring test that gates the regex above
 
-_HARMONIZED_PREFIX = "anvil_"
-
 
 # --- measured shapes ----------------------------------------------------------
 
@@ -261,7 +261,7 @@ class TableCoverage:
 
     @property
     def is_submitter(self) -> bool:
-        return not self.name.startswith(_HARMONIZED_PREFIX)
+        return not self.name.startswith(HARMONIZED_PREFIX)
 
     @property
     def filled_fields(self) -> list[tuple[str, int]]:
@@ -551,7 +551,7 @@ class FileKeys:
         """Index one ``anvil_file`` entity, and return its ``file_id``."""
         file_id = value["file_id"]
         self._keys[file_id] = file_id
-        for handle in (value.get("drs_uri"), value.get("file_ref")):
+        for handle in (value.get(column) for column in ANVIL_FILE_HANDLE_COLUMNS):
             if isinstance(handle, str):
                 for match in _DRS_FILE_ID.finditer(handle):
                     self._keys[match.group(1).lower()] = file_id
@@ -638,7 +638,7 @@ def survey_verbatim(path: Path) -> tuple[list[TableCoverage], Reach, int]:
             rows=rows,
             fields=dict(fields[name]),
             files_named=len(named[name]),
-            encodes=_table_encodes(name) if not name.startswith(_HARMONIZED_PREFIX) else [],
+            encodes=_table_encodes(name) if not name.startswith(HARMONIZED_PREFIX) else [],
         )
         for name, rows in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     ]
@@ -703,7 +703,7 @@ def _verbatim_reach(
     single_hop_donor: set[str] = set()
 
     for entity_type, value in iter_verbatim_entities(path):
-        if not entity_type.startswith(_HARMONIZED_PREFIX):
+        if not entity_type.startswith(HARMONIZED_PREFIX):
             named[entity_type] |= _file_ids_in(value, file_keys)
             continue
         if entity_type != VERBATIM_ACTIVITY:

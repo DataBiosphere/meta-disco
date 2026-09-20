@@ -18,15 +18,15 @@ that file and slot, and does it agree?
   claims that disagree with an inferred value or meet an inferred ``not_applicable`` —
   the two kinds of conflict, 4.5's and 4.6's, reported apart because the second is a
   within-source contradiction the map passes through on purpose (R9). Only a raw value
-  that is a name token is compared; a cell value such as
-  ``PACBIO_SMRT`` has no translation until #414 and is counted as untranslated.
+  that is a name token is compared; a cell value such as ``PACBIO_SMRT`` has no
+  translation until #414 and is counted as untranslated.
 
 **This forecasts; it never authors.** A disagreement here is the resolver's to record
 (contract 4.5) and an agreement is a source earning trust (4.4); neither is grounds to
 change the map, which is authored from the source's own schema and from nothing a run
-concluded (R1, 3.4). Both measurements apply the map's two structural exclusions —
-an entity-shaped token claims nothing, a derivative column takes no ``data_type`` — so
-that what they forecast is what the map can say.
+concluded (R1, 3.4). Both measurements apply the map's structural exclusions through
+the one predicate that states them (`slot_map.structural_exclusion`), so that what they
+forecast is what the map can say.
 
 The run is read through ``output_utils.iter_records_with_source``, which loads each
 producer's file whole; that is the run's existing reader and its memory ceiling
@@ -35,22 +35,26 @@ producer's file whole; that is the run's existing reader and its memory ceiling
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .azul_manifest import FORMAT_VERBATIM, manifest_path, sidecar_datasets
+from .azul_manifest import (
+    FORMAT_VERBATIM,
+    is_submitter_table,
+    iter_verbatim_entities,
+    link_handles,
+    manifest_path,
+    sidecar_datasets,
+)
 from .manifest_survey import NAME_TOKENS, NO_VOCABULARY_TERM, name_tokens
-from .models import CLASSIFICATION_FIELDS, CLASSIFIED, NOT_APPLICABLE
+from .models import CLASSIFICATION_FIELDS, CLASSIFIED, NOT_APPLICABLE, field_status, field_value
 from .output_utils import iter_records_with_source
-from .slot_map import DATA_TYPE, ENTITY_TOKENS, is_derivative_column
+from .producers import PRODUCERS
+from .slot_map import DERIVATIVE, ENTITY, structural_exclusion
 from .source_evidence import discover, iter_evidence
 from .summaries import md_table
-
-_DRS_PREFIX = "drs://"
-_HARMONIZED_PREFIX = "anvil_"
-_FASTQ_FILE = "fastq_classifications.json"
 
 AGREE = "agree"
 DISAGREE = "disagree"
@@ -59,14 +63,15 @@ GAP = "gap"
 # own column because contract 4.6 makes it a conflict with a value, where `gap` is a
 # slot inference left open and a source fills (4.4).
 VERDICTS = (AGREE, DISAGREE, NOT_APPLICABLE, GAP)
+_FASTQ_OUTPUT = PRODUCERS["fastq"].output
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RunRecord:
     """One run record, reduced to what the join needs: per slot, its status and value."""
 
     is_fastq: bool
-    slots: dict[str, tuple[str | None, str | None]]
+    slots: dict[str, tuple[str, str | None]]
 
     def verdict(self, slot: str, term: str) -> str:
         status, value = self.slots.get(slot, (None, None))
@@ -78,19 +83,14 @@ class RunRecord:
 
 
 def index_run(run_dir: Path) -> dict[str, RunRecord]:
-    """Every record of a run by its ``drs_uri``; a record without one cannot be joined."""
+    """A run's records by ``drs_uri`` — the last seen per key; a record without one cannot be joined."""
     index: dict[str, RunRecord] = {}
     for fname, record in iter_records_with_source(run_dir):
         drs = record.get("drs_uri")
         if not isinstance(drs, str) or not drs:
             continue
-        classifications = record.get("classifications") or {}
-        slots = {}
-        for slot in CLASSIFICATION_FIELDS:
-            entry = classifications.get(slot)
-            if isinstance(entry, dict):
-                slots[slot] = (entry.get("status"), entry.get("value"))
-        index[drs] = RunRecord(is_fastq=fname == _FASTQ_FILE, slots=slots)
+        slots = {slot: (field_status(record, slot), field_value(record, slot)) for slot in CLASSIFICATION_FIELDS}
+        index[drs] = RunRecord(is_fastq=fname == _FASTQ_OUTPUT, slots=slots)
     return index
 
 
@@ -109,13 +109,17 @@ class SlotSignals:
 
 @dataclass
 class DatasetSignals:
-    dataset: str
-    slots: dict[str, SlotSignals] = field(default_factory=dict)
-    excluded_entity: int = 0  # claims an entity-shaped token would have made
-    excluded_derivative: int = 0  # data_type claims on index/checksum columns
+    """One dataset's signals per slot, plus what the structural rules excluded.
 
-    def slot(self, name: str) -> SlotSignals:
-        return self.slots.setdefault(name, SlotSignals())
+    The two ``excluded_*`` counts are per row and link, not per distinct file: an
+    exclusion is counted where it would have been applied, which is each time a link
+    is read. ``claimed`` in :class:`SlotSignals` is per distinct ``(file, slot, token)``.
+    """
+
+    dataset: str
+    slots: dict[str, SlotSignals] = field(default_factory=lambda: defaultdict(SlotSignals))
+    excluded_entity: int = 0
+    excluded_derivative: int = 0
 
 
 def name_claims(table: str, column: str) -> tuple[list[tuple[str, str, str | None]], int, int]:
@@ -124,7 +128,7 @@ def name_claims(table: str, column: str) -> tuple[list[tuple[str, str, str | Non
     Returns ``(claims, entity_excluded, derivative_excluded)``: each claim is
     ``(slot, token, term)`` with ``term`` None where the vocabulary has no word for the
     token; a token spelled in both names counts once per slot, excluded or not; and the
-    two structural exclusions the slot map enforces are applied and counted rather than
+    structural exclusions the slot map enforces are applied and counted rather than
     silently dropped.
     """
     distinct: dict[tuple[str, str], str | None] = {}
@@ -136,9 +140,10 @@ def name_claims(table: str, column: str) -> tuple[list[tuple[str, str, str | Non
     claims: list[tuple[str, str, str | None]] = []
     entity = derivative = 0
     for (slot, token), term in distinct.items():
-        if token in ENTITY_TOKENS:
+        excluded = structural_exclusion(slot, column, token)
+        if excluded == ENTITY:
             entity += 1
-        elif slot == DATA_TYPE and is_derivative_column(column):
+        elif excluded == DERIVATIVE:
             derivative += 1
         else:
             claims.append((slot, token, term))
@@ -161,11 +166,12 @@ def name_signals(
         signals = DatasetSignals(dataset=dataset)
         claims: set[tuple[str, str, str, str | None]] = set()
         by_names: dict[tuple[str, str], tuple] = {}
-        for table, row in _submitter_rows(path):
+        for table, row in iter_verbatim_entities(path):
+            if not is_submitter_table(table):
+                continue
             for column, value in row.items():
-                handles = value if isinstance(value, list) else [value]
-                links = [h for h in handles if isinstance(h, str) and h.startswith(_DRS_PREFIX)]
-                if not links or len(links) != len(handles):
+                links = link_handles(value)
+                if not links:
                     continue
                 if (table, column) not in by_names:
                     by_names[(table, column)] = name_claims(table, column)
@@ -176,7 +182,7 @@ def name_signals(
                     for slot, token, term in column_claims:
                         claims.add((handle, slot, token, term))
         for handle, slot, token, term in claims:
-            per_slot = signals.slot(slot)
+            per_slot = signals.slots[slot]
             per_slot.claimed += 1
             if term is None:
                 per_slot.untranslatable[token] += 1
@@ -188,27 +194,6 @@ def name_signals(
             per_slot.verdicts[record.verdict(slot, term)] += 1
         results.append(signals)
     return results
-
-
-def _submitter_rows(path: Path):
-    """Every submitter-table row of one verbatim manifest, with its table name."""
-    with path.open(encoding="utf-8") as f:
-        import json
-
-        for n, line in enumerate(f, start=1):
-            try:
-                entity = json.loads(line)
-                entity_type, value = entity["type"], entity["value"]
-            except (json.JSONDecodeError, KeyError, TypeError) as exc:
-                if not line.strip():
-                    continue
-                raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
-            if (
-                isinstance(entity_type, str)
-                and not entity_type.startswith(_HARMONIZED_PREFIX)
-                and isinstance(value, dict)
-            ):
-                yield entity_type, value
 
 
 def render_name_signals(results: list[DatasetSignals], run_dir: Path) -> str:
@@ -240,7 +225,7 @@ def render_name_signals(results: list[DatasetSignals], run_dir: Path) -> str:
         if signals.excluded_entity or signals.excluded_derivative
     ]
     if excluded:
-        out += ["", "Excluded before counting, by the map's two structural rules:", ""]
+        out += ["", "Excluded before counting, by the map's structural rules (per row and link):", ""]
         out += md_table(
             ["dataset", "entity-shaped token", "data_type on an index or checksum column"], excluded, align="right"
         )
@@ -264,7 +249,12 @@ def render_name_signals(results: list[DatasetSignals], run_dir: Path) -> str:
 
 @dataclass
 class EvidenceForecast:
-    """The written evidence joined to a run: the numbers the import is judged on."""
+    """The written evidence joined to a run: the numbers the import is judged on.
+
+    ``by_verdict`` holds the name-derived claims, as ``(file, slot, term)``, under each
+    of :data:`VERDICTS` except ``gap`` — a translated claim on a slot inference left open
+    is in ``gaps`` with every other such pair.
+    """
 
     files: set[str] = field(default_factory=set)
     unjoined: set[str] = field(default_factory=set)
@@ -272,9 +262,7 @@ class EvidenceForecast:
     gaps: set[tuple[str, str]] = field(default_factory=set)  # (file, slot) inference left without a value
     not_applicable: set[tuple[str, str]] = field(default_factory=set)
     fastq_modality: set[str] = field(default_factory=set)
-    agree: set[tuple[str, str, str]] = field(default_factory=set)  # (file, slot, term)
-    disagree: set[tuple[str, str, str]] = field(default_factory=set)
-    against_not_applicable: set[tuple[str, str, str]] = field(default_factory=set)
+    by_verdict: dict[str, set[tuple[str, str, str]]] = field(default_factory=lambda: defaultdict(set))
     untranslated: Counter = field(default_factory=Counter)  # (slot, raw_value) -> rows
 
 
@@ -308,12 +296,8 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
                 continue
             term = meaning[1]
             verdict = record.verdict(slot, term)
-            if verdict == AGREE:
-                forecast.agree.add((handle, slot, term))
-            elif verdict == DISAGREE:
-                forecast.disagree.add((handle, slot, term))
-            elif verdict == NOT_APPLICABLE:
-                forecast.against_not_applicable.add((handle, slot, term))
+            if verdict != GAP:
+                forecast.by_verdict[verdict].add((handle, slot, term))
     return forecast
 
 
@@ -336,11 +320,14 @@ def render_evidence_forecast(forecast: EvidenceForecast, evidence_root: Path, ru
             ],
             ["file-and-slot pairs where inference says not_applicable", f"{len(forecast.not_applicable):,}"],
             ["FASTQs receiving data_modality", f"{len(forecast.fastq_modality):,}"],
-            ["name-derived claims agreeing with inference", f"{len(forecast.agree):,}"],
-            ["name-derived claims disagreeing with an inferred value (a conflict, 4.5)", f"{len(forecast.disagree):,}"],
+            ["name-derived claims agreeing with inference", f"{len(forecast.by_verdict[AGREE]):,}"],
+            [
+                "name-derived claims disagreeing with an inferred value (a conflict, 4.5)",
+                f"{len(forecast.by_verdict[DISAGREE]):,}",
+            ],
             [
                 "name-derived claims against an inferred not_applicable (a conflict, 4.6)",
-                f"{len(forecast.against_not_applicable):,}",
+                f"{len(forecast.by_verdict[NOT_APPLICABLE]):,}",
             ],
         ],
         align="right",
