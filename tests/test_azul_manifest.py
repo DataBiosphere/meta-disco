@@ -366,11 +366,22 @@ class TestVerbatimReader:
         assert [t for t, _ in am.iter_verbatim_entities(path, {"hifi", "ont"})] == ["hifi", "ont"]
         assert [t for t, _ in am.iter_verbatim_entities(path)] == ["hifi", "sample", "ont", "anvil_file"]
 
-    def test_a_malformed_line_is_named_whether_or_not_it_passes_the_gate(self, tmp_path):
+    def test_a_malformed_line_is_named_when_it_is_parsed(self, tmp_path):
+        """A narrowed pass validates the lines it parses; the full pass validates every line."""
         path = tmp_path / "D.verbatim.jsonl"
-        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "hifi"\n')
+        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "hifi"\n{"type": "ont"\n')
         with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
             list(am.iter_verbatim_entities(path, {"hifi"}))
+        with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
+            list(am.iter_verbatim_entities(path))
+        # The bad `ont` line never passes an `hifi` gate, so a pass wanting `hifi` alone does not see it.
+        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "ont"\n')
+        assert [t for t, _ in am.iter_verbatim_entities(path, {"hifi"})] == ["hifi"]
+
+    def test_an_empty_type_set_reads_nothing(self, tmp_path):
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text('{"value": {}, "type": "hifi"}\nnot json at all\n')
+        assert list(am.iter_verbatim_entities(path, set())) == []
 
     def test_a_sidecar_request_time_is_read_or_named_when_malformed(self, tmp_path):
         am.save_sidecar(

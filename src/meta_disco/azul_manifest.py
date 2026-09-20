@@ -683,9 +683,14 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
     over a half-gigabyte manifest that wants one table from parsing every line.
     The substring test is a gate, not the decision — a submitter cell that happens
     to hold the same word costs one extra parse and nothing else, and the parsed
-    type is what selects the row. :func:`count_rows` uses the same trick.
+    type is what selects the row. :func:`count_rows` uses the same trick. The
+    price of the gate is that a malformed line it does not pass is never seen: a
+    narrowed pass validates only the lines it parses, and the full pass is what
+    validates the whole file. An empty ``types`` wants nothing and reads nothing.
     """
     wanted = None if types is None else set(types)
+    if wanted is not None and not wanted:
+        return
     gate = None if wanted is None else re.compile("|".join(re.escape(f'"{t}"') for t in sorted(wanted)))
     with path.open(encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):
