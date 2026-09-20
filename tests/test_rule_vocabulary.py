@@ -275,7 +275,13 @@ def test_no_pattern_matches_inside_an_accession():
     identifier. Anchoring one pattern fixes one rule; this check is what makes the fix
     hold for the next rule someone authors with a bare `10x`, `cpg` or `atac`.
     """
-    hits = _accession_internal_matches(get_unified_rules(), ACCESSION_FILENAMES)
+    rules = get_unified_rules()
+    stale = sorted(KNOWN_UNANCHORED.keys() - {rule.id for rule in rules.rules})
+    assert not stale, (
+        "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
+    )
+
+    hits = _accession_internal_matches(rules, ACCESSION_FILENAMES)
     assert not hits, (
         "Rule patterns match inside an opaque accession — anchor the short token on "
         "its left with `(^|[._-])`:\n  "
