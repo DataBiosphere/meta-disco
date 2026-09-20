@@ -157,12 +157,15 @@ def name_signals(
 
     A claim is one ``(file, slot, token)``, counted once however many rows reach the
     file — a file in two tables that spell different assemblies is two claims, which is
-    what a within-source contradiction looks like from here (R9).
+    what a within-source contradiction looks like from here (R9). A dataset named twice
+    is measured once; one whose manifest is not on disk is refused by name.
     """
-    titles = sorted(sidecar_datasets(manifest_root, catalog)) if datasets is None else list(datasets)
+    titles = sorted(sidecar_datasets(manifest_root, catalog)) if datasets is None else list(dict.fromkeys(datasets))
     results = []
     for dataset in titles:
         path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
+        if not path.is_file():
+            raise ValueError(f"{dataset}: no verbatim manifest at {path} — run `make download` for {catalog} first")
         signals = DatasetSignals(dataset=dataset)
         claims: set[tuple[str, str, str, str | None]] = set()
         by_names: dict[tuple[str, str], tuple] = {}

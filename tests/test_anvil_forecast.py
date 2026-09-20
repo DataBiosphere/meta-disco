@@ -5,6 +5,8 @@ over written evidence — on a synthetic run and manifests."""
 import json
 from pathlib import Path
 
+import pytest
+
 from meta_disco import anvil_forecast as af
 from meta_disco.anvil_evidence import import_dataset
 from meta_disco.models import CLASSIFIED, JOIN_KEY_FILE_MD5SUM, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
@@ -125,6 +127,14 @@ def test_name_signals_needs_no_map_and_reports_every_verdict(tmp_path):
     report = af.render_name_signals([signals], Path("run"))
     assert "| D | reference_assembly | 7 | 2 | 3 | 0 | 1 | 1 | 0 |" in report
     assert "`chains`" in report
+
+
+def test_name_signals_measures_a_dataset_once_and_names_a_missing_manifest(tmp_path):
+    run = af.index_run(write_run(tmp_path))
+    write_dataset(tmp_path, "D", [anvil_file(1), (DATASET, {"cram": drs(1)})])
+    assert [s.dataset for s in af.name_signals(tmp_path, CATALOG, run, ["D", "D"])] == ["D"]
+    with pytest.raises(ValueError, match="E: no verbatim manifest at"):
+        af.name_signals(tmp_path, CATALOG, run, ["E"])
 
 
 def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
