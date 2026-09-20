@@ -812,6 +812,33 @@ class TestFastqFiles:
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
+class TestCalledPeaks:
+    """`.narrowPeak`/`.broadPeak` answer from the extension, and stop there (#430)."""
+
+    @pytest.mark.parametrize("name", ["sample.narrowPeak", "sample.broadPeak"])
+    def test_the_extension_states_the_data_type(self, engine, name):
+        """The extension says these hold called peaks, so `data_type` is evidence,
+        not a filename guess — unlike the bare `peak`/`atac` token rules #430 deleted."""
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.data_type == "peaks"
+
+    @pytest.mark.parametrize("name", ["sample.narrowPeak", "sample.broadPeak"])
+    def test_the_modality_is_left_unknown(self, engine, name):
+        """The format serves ATAC and ChIP alike, so the extension cannot tell
+        accessibility from histone modification and neither may we. This also pins
+        that `intervals_fallback` no longer reaches these files: it would assert
+        `genomic`, which is what deleting the peak rules accidentally caused."""
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
+        assert result.data_modality is None
+
+    def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
+        """Narrowing `intervals_fallback` to `.bed` left its own case untouched."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.bed"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "annotations"
+
+
 class TestTextFiles:
     """Test text/tabular file classification."""
 

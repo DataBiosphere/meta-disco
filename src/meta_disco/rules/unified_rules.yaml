@@ -1680,11 +1680,33 @@ rules:
   # FALLBACK RULES
   # ===========================================================================
 
+  # A `.narrowPeak`/`.broadPeak` extension states the content: these are called
+  # peaks, whatever called them. That is extension evidence, not a filename guess,
+  # which is why #430's deletion of the bare-token peak rules should not have taken
+  # it with them — it left these files falling through to `intervals_fallback` and
+  # being asserted `genomic` annotations.
+  #
+  # `data_modality` is deliberately left for no rule to set, so it reports
+  # not_classified: the format is used for ATAC (accessibility) and for ChIP
+  # (histone/TF) alike, and the extension cannot tell them apart. Naming one would
+  # be the same guess this issue removed. They are excluded from `intervals_fallback`
+  # below rather than declaring a status here, because `modality_not_set` counts a
+  # not_classified declaration as unset — the fallback would still fire and assert
+  # `genomic` over it.
+  - id: intervals_called_peaks
+    tier: 2
+    scope: filename
+    when:
+      extensions: [".narrowpeak", ".broadpeak"]
+    then:
+      data_type: peaks
+    rationale: "A .narrowPeak/.broadPeak file holds called peaks — the extension states it"
+
   - id: intervals_fallback
     tier: 2
     scope: filename
     when:
-      extensions: [".bed", ".narrowpeak", ".broadpeak"]
+      extensions: [".bed"]
       modality_not_set: true
     then:
       data_modality: genomic

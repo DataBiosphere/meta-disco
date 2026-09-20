@@ -53,12 +53,28 @@ def _assert_declined(output: dict, file_name: str) -> dict:
     return records[0]
 
 
-def _file(name: str, fmt: str, md5: str, entry_id: str, dataset_id: str = "ds1") -> dict:
-    """One input metadata record, in the shape `write_metadata` expects."""
+def _fid(md5: str) -> str:
+    """The catalog identity a fixture's two sides join on, derived from its md5.
+
+    Distinct files have distinct md5s in every fixture but the same-bytes one, which
+    passes its ids explicitly — so deriving here keeps the join right without any
+    fixture inventing a second identifier by hand.
+    """
+    return f"fid-{md5[:8]}"
+
+
+def _file(name: str, fmt: str, md5: str, entry_id: str, dataset_id: str = "ds1", file_id: str | None = None) -> dict:
+    """One input metadata record, in the shape `write_metadata` expects.
+
+    Carries `file_id` because the input contract requires it and the parent join
+    keys on it (`classify_index_files.load_classifications`); it is derived from
+    `entry_id` so a fixture never has to invent a second identifier by hand.
+    """
     return {
         "file_name": name,
         "file_format": fmt,
         "file_md5sum": md5,
+        "file_id": file_id or _fid(md5),
         "dataset_id": dataset_id,
         "dataset_title": "test",
         "entry_id": entry_id,
@@ -73,18 +89,22 @@ _PARENT_VALUES = {
 }
 
 
-def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam") -> dict:
+def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam", file_id: str | None = None) -> dict:
     """A parent classification whose ``reference_assembly`` is ``assembly``.
 
     Entries come from :func:`models.build_field_entry`, the single place that
     assembles the ``{value, status, evidence}`` shape, so the fixture follows the
     output shape rather than restating it — and the dimensions come from
     ``CLASSIFICATION_FIELDS`` rather than a fourth hand-written copy of them.
+
+    ``file_id`` is what the index producer joins a parent on, so a fixture without
+    one would be joined by nothing.
     """
     values = {**_PARENT_VALUES, "reference_assembly": assembly}
     return {
         "md5sum": md5,
         "file_name": file_name,
+        "file_id": file_id or _fid(md5),
         "classifications": {fld: build_field_entry(values[fld]) for fld in CLASSIFICATION_FIELDS},
     }
 
@@ -244,6 +264,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "abc123",
+                            "file_id": "fid-abc123",
                             "file_name": "sample.bam",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
@@ -258,9 +279,9 @@ class TestLoadClassifications:
             )
         )
         result = load_classifications(cls_file)
-        assert ("abc123", "sample.bam") in result
-        assert result[("abc123", "sample.bam")]["data_modality"] == "genomic"
-        assert result[("abc123", "sample.bam")]["platform"] == "ILLUMINA"
+        assert "fid-abc123" in result
+        assert result["fid-abc123"]["data_modality"] == "genomic"
+        assert result["fid-abc123"]["platform"] == "ILLUMINA"
 
     def test_loads_from_multiple_files(self, tmp_path):
         """Load classifications from BAM + BED files."""
@@ -271,6 +292,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "bam_md5",
+                            "file_id": "fid-bam_md5",
                             "file_name": "sample.bam",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
@@ -291,6 +313,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "bed_md5",
+                            "file_id": "fid-bed_md5",
                             "file_name": "sample.regions.bed.gz",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
@@ -305,8 +328,8 @@ class TestLoadClassifications:
             )
         )
         result = load_classifications(bam_file, bed_file)
-        bed_key = ("bed_md5", "sample.regions.bed.gz")
-        assert ("bam_md5", "sample.bam") in result
+        bed_key = "fid-bed_md5"
+        assert "fid-bam_md5" in result
         assert bed_key in result
         assert result[bed_key]["data_modality"] == "genomic"
         # The map holds only what an index inherits. `data_type` is not inherited
@@ -318,7 +341,6 @@ class TestLoadClassifications:
             "platform",
             "reference_assembly",
             "detail",
-            "source_file",
         }
 
     def test_skips_missing_files(self, tmp_path):
@@ -340,6 +362,7 @@ class TestLoadClassifications:
                     "file_name": "HG03652.regions.bed.gz",
                     "file_format": ".bed.gz",
                     "file_md5sum": "33333333333333333333333333333333",
+                    "file_id": "fid-33333333",
                     "dataset_id": "ds1",
                     "dataset_title": "test_dataset",
                     "entry_id": "entry_bed",
@@ -348,6 +371,7 @@ class TestLoadClassifications:
                     "file_name": "HG03652.regions.bed.gz.csi",
                     "file_format": ".csi",
                     "file_md5sum": "44444444444444444444444444444444",
+                    "file_id": "fid-44444444",
                     "dataset_id": "ds1",
                     "dataset_title": "test_dataset",
                     "entry_id": "entry_csi",
@@ -363,6 +387,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "33333333333333333333333333333333",
+                            "file_id": "fid-33333333",
                             "file_name": "HG03652.regions.bed.gz",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
@@ -406,56 +431,35 @@ class TestLoadClassifications:
     def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
         """Two byte-identical parents with different names keep their own answers.
 
-        `grch38.fasta` and `Homo_sapiens_assembly38.fasta` hold the same bytes and so
-        the same md5, but classify differently — a filename rule reads `GRCh38` off the
-        first, the assembly rule marks the second's reference `not_applicable`. Keyed by
-        md5 alone, whichever record load order reached last won for both, so each `.fai`
-        inherited the other's answer half the time and the run was not reproducible.
+        Keyed by md5 alone, whichever record load order reached last won for both, so
+        one `.fai` took the other's answer — which one depending on a file order
+        nothing guarantees.
         """
+        # One md5 for two files, so `_fid`'s md5-derived default would collapse them —
+        # these are the fixtures that pass their ids explicitly.
         shared_md5 = "77777777777777777777777777777777"
         metadata_file = tmp_path / "metadata.json"
         _write_metadata(
             metadata_file,
             [
-                {
-                    "file_name": name,
-                    "file_format": fmt,
-                    "file_md5sum": md5,
-                    "dataset_id": "ds1",
-                    "dataset_title": "test_dataset",
-                    "entry_id": entry,
-                }
-                for name, fmt, md5, entry in (
-                    ("grch38.fasta", ".fasta", shared_md5, "entry_ref"),
-                    ("Homo_sapiens_assembly38.fasta", ".fasta", shared_md5, "entry_asm"),
-                    ("grch38.fasta.fai", ".fai", "88888888888888888888888888888888", "entry_ref_fai"),
-                    ("Homo_sapiens_assembly38.fasta.fai", ".fai", "99999999999999999999999999999999", "entry_asm_fai"),
-                )
+                _file("grch38.fasta", ".fasta", shared_md5, "entry_ref", file_id="fid-ref"),
+                _file("Homo_sapiens_assembly38.fasta", ".fasta", shared_md5, "entry_asm", file_id="fid-asm"),
+                _file("grch38.fasta.fai", ".fai", "8" * 32, "entry_ref_fai"),
+                _file("Homo_sapiens_assembly38.fasta.fai", ".fai", "9" * 32, "entry_asm_fai"),
             ],
         )
 
-        def parent(name, reference_assembly):
-            return {
-                "md5sum": shared_md5,
-                "file_name": name,
-                "classifications": {
-                    "data_modality": {"value": "genomic", "evidence": []},
-                    "data_type": {"value": "sequence", "evidence": []},
-                    "platform": {"value": "not_classified", "evidence": []},
-                    "reference_assembly": reference_assembly,
-                    "assay_type": {"value": "not_classified", "evidence": []},
-                },
-            }
-
+        # Both parents through `_classified_record`, so the fixture follows the shape
+        # `build_field_entry` emits rather than restating it: the assembly one carries
+        # the sentinel, which that builder turns into a status with a null value.
         fasta_cls_file = tmp_path / "fasta_classifications.json"
         fasta_cls_file.write_text(
             json.dumps(
                 {
                     "classifications": [
-                        parent("grch38.fasta", {"value": "GRCh38", "evidence": []}),
-                        parent(
-                            "Homo_sapiens_assembly38.fasta",
-                            {"value": None, "status": NOT_APPLICABLE, "evidence": []},
+                        _classified_record(shared_md5, "GRCh38", "grch38.fasta", file_id="fid-ref"),
+                        _classified_record(
+                            shared_md5, NOT_APPLICABLE, "Homo_sapiens_assembly38.fasta", file_id="fid-asm"
                         ),
                     ]
                 }
@@ -484,6 +488,7 @@ class TestLoadClassifications:
                     "file_name": "sample.vcf.gz",
                     "file_format": ".vcf.gz",
                     "file_md5sum": "77777777777777777777777777777777",
+                    "file_id": "fid-77777777",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e1",
@@ -492,6 +497,7 @@ class TestLoadClassifications:
                     "file_name": "sample.vcf.gz.tbi",
                     "file_format": ".tbi",
                     "file_md5sum": "66666666666666666666666666666666",
+                    "file_id": "fid-66666666",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e2",
@@ -505,6 +511,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "77777777777777777777777777777777",
+                            "file_id": "fid-77777777",
                             "file_name": "sample.vcf.gz",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
@@ -538,6 +545,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e1",
@@ -546,6 +554,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e2",
@@ -559,6 +568,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "22222222222222222222222222222222",
+                            "file_id": "fid-22222222",
                             "file_name": "sample.bam",
                             "classifications": {
                                 "data_modality": {"value": "transcriptomic.bulk", "evidence": []},
@@ -601,12 +611,14 @@ class TestLoadClassifications:
                     "file_name": "s.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds1",
                 },
                 {
                     "file_name": "s.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                 },
             ],
@@ -618,6 +630,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "22222222222222222222222222222222",
+                            "file_id": "fid-22222222",
                             "file_name": "s.bam",
                             "classifications": {
                                 "reference_assembly": {"value": "CHM13", "evidence": [], "build": build}
@@ -645,12 +658,14 @@ class TestLoadClassifications:
                     "file_name": "s.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds1",
                 },
                 {
                     "file_name": "s.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                 },
             ],
@@ -662,6 +677,7 @@ class TestLoadClassifications:
                     "classifications": [
                         {
                             "md5sum": "22222222222222222222222222222222",
+                            "file_id": "fid-22222222",
                             "file_name": "s.bam",
                             "classifications": {
                                 "reference_assembly": {"value": None, "status": CONFLICT, "evidence": []}
@@ -689,6 +705,7 @@ class TestLoadClassifications:
                     "file_name": "orphan.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "55555555555555555555555555555555",
+                    "file_id": "fid-55555555",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e1",
@@ -718,6 +735,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e1",
@@ -726,6 +744,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e2",
@@ -762,6 +781,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e1",
@@ -770,6 +790,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e2",
@@ -778,6 +799,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "33333333333333333333333333333333",
+                    "file_id": "fid-33333333",
                     "dataset_id": "ds1",
                     "dataset_title": "test",
                     "entry_id": "e3",
@@ -824,6 +846,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "11111111111111111111111111111111",
+                    "file_id": "fid-11111111",
                     "dataset_id": "ds1",
                     "dataset_title": "one",
                     "entry_id": "e1",
@@ -832,6 +855,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam",
                     "file_format": ".bam",
                     "file_md5sum": "22222222222222222222222222222222",
+                    "file_id": "fid-22222222",
                     "dataset_id": "ds2",
                     "dataset_title": "two",
                     "entry_id": "e2",
@@ -840,6 +864,7 @@ class TestLoadClassifications:
                     "file_name": "sample.bam.bai",
                     "file_format": ".bai",
                     "file_md5sum": "33333333333333333333333333333333",
+                    "file_id": "fid-33333333",
                     "dataset_id": "ds1",
                     "dataset_title": "one",
                     "entry_id": "e3",

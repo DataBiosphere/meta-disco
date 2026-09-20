@@ -338,22 +338,26 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ).to_dict()
 
 
-def load_classifications(*paths: Path) -> dict[tuple[str, str | None], dict]:
+def load_classifications(*paths: Path) -> dict[str, dict]:
     """Load classifications from one or more classification JSON files.
 
-    Keyed by ``(md5sum, file_name)`` — both halves, because md5 alone does not
-    identify a parent. Two differently-named files can hold the same bytes and be
-    classified differently: ``grch38.fasta`` takes ``GRCh38`` from a filename rule
+    Keyed by ``file_id`` — the catalog identity a consumer joins on
+    (``records.CATALOG_IDENTITY_FIELDS``), and the only key here that is one.
+    ``md5sum`` is not: two differently-named files can hold the same bytes and
+    classify differently — ``grch38.fasta`` takes ``GRCh38`` from a filename rule
     while the byte-identical ``Homo_sapiens_assembly38.fasta`` takes
     ``not_applicable`` from the assembly rule. Keyed by md5 alone, whichever record
     load order reached last won for both, so the two ``.fai`` files that index them
-    inherited the same answer — and which answer it was changed between runs, since
-    producer output order is not fixed. Their evidence said so out loud: a reason
-    naming ``grch38.fasta`` beside a value that came from the other file's record.
+    inherited one answer between them — one right, one wrong, the loser decided by
+    a file order nothing here guarantees.
 
-    The caller matches a parent by name first and so holds both halves already
-    (``parent_name`` / ``parent_md5``). Across the anvil15 corpus the pair resolves
-    every one of the 209,202 matched parents, so nothing falls back to md5 alone.
+    ``(md5sum, file_name)`` would separate those two, but it is still not an
+    identity: 3,733 such pairs cover more than one catalog entry, and it matches
+    exactly where the parent match upstream folds case (#455), so a spelling drift
+    would miss silently and inherit ``not_classified``. ``file_id`` has neither
+    problem, and both sides of this join already carry it — the input contract
+    requires it (``schema/metadata.yaml``) and every output record has carried it
+    since #433.
     """
     classifications = {}
 
@@ -363,9 +367,9 @@ def load_classifications(*paths: Path) -> dict[tuple[str, str | None], dict]:
         with path.open() as f:
             data = json.load(f)
         for c in data.get("classifications", []):
-            md5 = c.get("md5sum")
-            if md5:
-                classifications[(md5, c.get("file_name"))] = {
+            file_id = c.get("file_id")
+            if file_id:
+                classifications[file_id] = {
                     "data_modality": field_label(c, "data_modality"),
                     "assay_type": field_label(c, "assay_type"),
                     "platform": field_label(c, "platform"),
@@ -374,7 +378,6 @@ def load_classifications(*paths: Path) -> dict[tuple[str, str | None], dict]:
                     # rides along with the labels: an index record must not describe
                     # its parent less precisely than the parent does.
                     "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
-                    "source_file": c.get("file_name"),
                 }
 
     return classifications
@@ -515,10 +518,11 @@ def propagate_to_index_files(
             parent_md5 = parent["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
-            # Get parent classification. Keyed by both halves: the md5 alone is not
-            # an identity when two differently-named files hold the same bytes and
-            # classify differently (see `load_classifications`).
-            parent_class = classifications.get((parent_md5, parent_name), {})
+            # Joined on the parent's catalog identity, not its bytes or its name
+            # (load_classifications). A parent with no file_id cannot be joined, so it
+            # inherits nothing rather than every other id-less record's answer.
+            parent_file_id = parent.get("file_id")
+            parent_class = classifications.get(parent_file_id, {}) if parent_file_id else {}
 
             result = {
                 # The raw input record this row is about; the output is built from it.

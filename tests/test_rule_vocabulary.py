@@ -220,27 +220,16 @@ _ACCESSION_TOKEN = re.compile(r"[A-Za-z0-9]{8,}")
 #
 # The three reference rules are exempt on measurement, not oversight: an assembly name
 # is routinely written into the middle of a word, and anchoring them costs real matches
-# — 499 for GRCh38 (`…uncoveredByGRCh38WinnowmapAlignments…`, `Homo_sapiens_assembly38`)
-# and 105 for CHM13 (`HG002vCHM13…`, where the `v` is "versus"). `grch37` is listed with
-# them because `b37` and `hs37` are the same shape, though only one file matches it
-# today. For these, an intra-word match is the wanted behavior.
+# — 499 distinct filenames for GRCh38 (`…uncoveredByGRCh38WinnowmapAlignments…`,
+# `Homo_sapiens_assembly38`) and 105 for CHM13 (`HG002vCHM13…`, where the `v` is
+# "versus"), the latter 117 records. `grch37` is listed with them because `b37` and
+# `hs37` are the same shape, though only one file matches it today. For these, an
+# intra-word match is the wanted behavior.
 #
 # `signal_rnaseq` matches `rna` inside the gene symbol TRNAU1AP on 16 ENCORE signal
 # tracks; whether to anchor the token or teach the series' naming is an open question
 # there, so #430 left it alone rather than pre-empting the answer.
-KNOWN_UNANCHORED = {
-    "filename_ref_grch38": "an assembly name is written mid-word; anchoring loses 499 matches",
-    "filename_ref_grch37": "same shape as the other two reference rules",
-    "filename_ref_chm13": "an assembly name is written mid-word; anchoring loses 105 matches",
-    "signal_rnaseq": "#471 owns the choice between anchoring and teaching the ENCORE naming",
-}
-
-
-def _subdir(tmp_path, name):
-    """A fresh directory under `tmp_path`, so two probe rules files can coexist."""
-    path = tmp_path / name
-    path.mkdir()
-    return path
+KNOWN_UNANCHORED = frozenset({"filename_ref_grch38", "filename_ref_grch37", "filename_ref_chm13", "signal_rnaseq"})
 
 
 def _accession_internal_matches(rules, filenames):
@@ -253,13 +242,15 @@ def _accession_internal_matches(rules, filenames):
     latent defect, waiting for the same three characters to land on a gated extension.
     """
     hits = []
+    # Accession runs are maximal, so "inside a longer one" is containment plus a
+    # length difference. Scanned once per filename rather than once per rule pair.
+    spans_by_filename = {f: [t.span() for t in _ACCESSION_TOKEN.finditer(f)] for f in filenames}
     for rule in rules.rules:
         pattern = (rule.when or {}).get("filename_pattern")
         if not pattern or rule.id in KNOWN_UNANCHORED:
             continue
         compiled = re.compile(pattern, re.IGNORECASE)
-        for filename in filenames:
-            spans = [t.span() for t in _ACCESSION_TOKEN.finditer(filename)]
+        for filename, spans in spans_by_filename.items():
             for match in compiled.finditer(filename):
                 start, end = match.span()
                 if any(s <= start and end <= e and (e - s) > (end - start) for s, e in spans):
@@ -275,11 +266,7 @@ def test_no_pattern_matches_inside_an_accession():
     identifier. Anchoring one pattern fixes one rule; this check is what makes the fix
     hold for the next rule someone authors with a bare `10x`, `cpg` or `atac`.
     """
-    rules = get_unified_rules()
-    stale = sorted(KNOWN_UNANCHORED.keys() - {rule.id for rule in rules.rules})
-    assert not stale, "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
-
-    hits = _accession_internal_matches(rules, ACCESSION_FILENAMES)
+    hits = _accession_internal_matches(get_unified_rules(), ACCESSION_FILENAMES)
     assert not hits, (
         "Rule patterns match inside an opaque accession — anchor the short token on "
         "its left with `(^|[._-])`:\n  "
@@ -287,24 +274,32 @@ def test_no_pattern_matches_inside_an_accession():
     )
 
 
+def test_known_unanchored_entries_still_exist():
+    """Every exemption names a live rule, so anchoring or deleting one cannot leave a
+    silent entry behind excusing a rule that is gone (#430)."""
+    stale = sorted(KNOWN_UNANCHORED - {rule.id for rule in get_unified_rules().rules})
+    assert not stale, "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
+
+
 def test_accession_check_catches_an_unanchored_token(tmp_path):
     """The guard load-bears: an unanchored short token is reported, an anchored one is
     not. Without this, the check above could pass by matching nothing at all."""
-    bare, anchored = (
-        _write_rules_file(
-            _subdir(tmp_path, spelling),
-            {
-                "id": "probe",
-                "tier": 2,
-                "scope": "filename",
-                "when": {"extensions": [".fastq"], "filename_pattern": pattern},
-                "then": {"data_modality": "transcriptomic.single_cell"},
-            },
-        )
-        for spelling, pattern in (("bare", "(?i)10x"), ("anchored", "(?i)(^|[._-])10x"))
-    )
+
+    def probe(pattern):
+        return {
+            "id": "probe",
+            "tier": 2,
+            "scope": "filename",
+            "when": {"extensions": [".fastq"], "filename_pattern": pattern},
+            "then": {"data_modality": "transcriptomic.single_cell"},
+        }
+
     names = ("IGVFFI1310XKZG.fastq.gz",)
+    bare = _write_rules_file(tmp_path, probe("(?i)10x"))
     assert _accession_internal_matches(RuleLoader(bare).load(), names)
+    # `_write_rules_file` reuses the one path, so the anchored probe replaces the bare
+    # one — written after the assertion above has read it.
+    anchored = _write_rules_file(tmp_path, probe("(?i)(^|[._-])10x"))
     assert not _accession_internal_matches(RuleLoader(anchored).load(), names)
 
 
