@@ -331,7 +331,14 @@ def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str)
     """
     entry = (load_sidecar(root, catalog).get("datasets") or {}).get(dataset_title) or {}
     requested = (entry.get(fmt) or {}).get("requested_at")
-    return datetime.fromisoformat(requested) if isinstance(requested, str) else None
+    if not isinstance(requested, str):
+        return None
+    try:
+        return datetime.fromisoformat(requested)
+    except ValueError:
+        raise ValueError(
+            f"{catalog} sidecar, {dataset_title} ({fmt}): requested_at {requested!r} is not an ISO 8601 datetime"
+        ) from None
 
 
 def sidecar_datasets(root: Path, catalog: str) -> dict[str, Dataset]:

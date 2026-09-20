@@ -372,6 +372,24 @@ class TestVerbatimReader:
         with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
             list(am.iter_verbatim_entities(path, {"hifi"}))
 
+    def test_a_sidecar_request_time_is_read_or_named_when_malformed(self, tmp_path):
+        am.save_sidecar(
+            tmp_path,
+            "anvil15",
+            {
+                "catalog": "anvil15",
+                "datasets": {
+                    "D": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47"}},
+                    "E": {"file_count": 1, "verbatim.jsonl": {"requested_at": "last tuesday"}},
+                    "F": {"file_count": 1},
+                },
+            },
+        )
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "D", "verbatim.jsonl") == datetime(2026, 9, 3, 21, 45, 47)
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "F", "verbatim.jsonl") is None
+        with pytest.raises(ValueError, match=r"anvil15 sidecar, E \(verbatim.jsonl\): requested_at 'last tuesday'"):
+            am.sidecar_requested_at(tmp_path, "anvil15", "E", "verbatim.jsonl")
+
     def test_submitter_tables_are_everything_not_harmonized(self):
         assert am.is_submitter_table("hifi") and am.is_submitter_table("1KGP_CHM13v2_sample")
         assert not am.is_submitter_table(am.VERBATIM_FILE) and not am.is_submitter_table("anvil_activity")
