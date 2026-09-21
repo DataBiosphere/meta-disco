@@ -179,10 +179,12 @@ def run_all_classifications(
     same input after every earlier phase had run (#446). That preflight reads the
     envelope alone (:func:`pipeline.load_envelope`), not the records.
 
-    Before any of that it reports the evidence files under ``source_evidence_root``
+    After those two refusals and before the run directory exists, it reports the
+    evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
-    it is and refuses none of them. Reporting first, ahead of the run directory, puts
-    what the run found at the top of its log rather than behind the phases. *Found*
+    it is and refuses none of them — so a run refused at preflight reports none.
+    Reporting there, ahead of the run directory, puts what the run found at the top of
+    its log rather than behind the phases. *Found*
     and not *consumed*: the rows go no further than that report, because matching
     them to our files is #402, so until then an evidence file changes what a run *says*,
     never what it writes.

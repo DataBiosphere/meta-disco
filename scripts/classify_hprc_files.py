@@ -244,7 +244,7 @@ def main():
         json.dump({"metadata": {"repository": HPRC_REPOSITORY}, "files": all_records}, f)
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 
-    # Step 4: call the one classifier, exactly as AnVIL does; propagate its success.
+    # Step 6: call the one classifier, exactly as AnVIL does; propagate its success.
     ok = run_all_classifications(args.metadata_out, args.output_dir, args.evidence_base, workers=args.workers)
     sys.exit(0 if ok else 1)
 
