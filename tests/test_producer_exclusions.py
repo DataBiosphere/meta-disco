@@ -44,11 +44,17 @@ def _names(output_path):
 
 
 def _pair(name, fmt, *, md5):
-    """One contract-shaped record for a producer to classify, keyed by the md5 under test."""
+    """One contract-shaped record for a producer to classify, keyed by the md5 under test.
+
+    `file_id` derives from the name, which these tests keep unique, so each record has
+    its own: the index producer refuses a key two input records share (#486). Not
+    from the md5, which is the field under test and may be malformed or missing.
+    """
     return valid_record(
         file_name=name,
         file_format=fmt,
         file_md5sum=md5,
+        file_id=f"fid-{name}",
         file_size=10,
         dataset_id="ds1",
         dataset_title="Study A",
@@ -105,6 +111,9 @@ class TestStandaloneProducers:
                         {
                             "file_name": "s.bam",
                             "md5sum": parent_md5,
+                            # The source's key, as `_pair` derives it for `s.bam` above;
+                            # a parent row without it is refused (#486).
+                            "file_id": "fid-s.bam",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
                                 "data_type": {"value": "alignments", "evidence": []},

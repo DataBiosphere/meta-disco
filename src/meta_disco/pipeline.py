@@ -6,6 +6,7 @@ which carries extension filters, fetcher, classifier, and summary printer.
 """
 
 import json
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
@@ -126,15 +127,16 @@ HPRC_REPOSITORY = "hprc"
 
 # One declaration per source of the identity that names a file exactly once in that
 # source's snapshot, keyed by the ``repository`` its input envelope carries (#446). It
-# serves the two places a run needs one — the catch-all producer's skip set (which rows
-# the earlier producers already wrote) and the post-run one-row-per-file check (#445) —
-# and both read it through :func:`record_key`, never a hard-coded field, because the
-# unique field differs by source:
+# serves the input gate (``scripts/validate_metadata.py``, which checks the key is
+# unique), the catch-all producer's skip set, the index producer's parent join (#486)
+# and the post-run one-row-per-file check (#445), and each reads it through
+# :func:`record_key`, never a hard-coded field, because the unique field differs by
+# source:
 #
 # - AnVIL: ``file_id``, the repository's own durable identifier — unique on every
 #   record and unchanged by a catalog re-index (#433), which is why the duplicate check
 #   chose it. Not ``entry_id``, equally unique but regenerated per index: one key serves
-#   both readers only if it is the durable one. Not ``file_name``, which identifies a
+#   every reader only if it is the durable one. Not ``file_name``, which identifies a
 #   file only about 60% of the time there.
 # - HPRC: ``file_md5sum``. The HPRC catalogs issue no file identifier and none is
 #   minted — ``entry_id``, ``file_id`` and ``drs_uri`` are Azul's catalog identity and
@@ -170,6 +172,77 @@ def record_key(metadata: dict, input_path: Path) -> RecordKey:
     return key
 
 
+def is_key_value(value) -> TypeGuard[str]:
+    """Whether ``value`` can serve as a record key: a non-empty string, nothing else."""
+    return isinstance(value, str) and bool(value)
+
+
+def keyed_rows(paths: Iterable[Path], key: RecordKey) -> Iterator[tuple[str, dict]]:
+    """``(key value, row)`` for every row of the ``*_classifications.json`` files named.
+
+    For a reader keyed on :data:`SOURCE_RECORD_KEYS` over another producer's output.
+    The key is read under its output spelling. A row without it raises rather than
+    being skipped, because a skip is silent: the caller sees one row fewer and cannot
+    tell. How a row comes to lack it differs by source. AnVIL's ``file_id`` is
+    deliberately *not* classifier-relevant (``records.ClassifierRecord``), so a drifted
+    one reaches the valid stream and is echoed into a producer's row untouched;
+    ``make validate-metadata`` rejects it before ``make classify``, so seeing one means
+    that gate was bypassed. HPRC's key is the checksum field, which the shared load
+    excludes when unusable (#376), so a row without one means the producer omitted the
+    field.
+
+    A path that is not a file yields nothing: a run writes only the producers that ran.
+    The envelope's record list is read under ``classifications``, then a legacy
+    ``results``, the precedence ``output_utils._records_in`` uses; unlike that tolerant
+    reader, a file of any other shape — no list under either key, a bare list, a
+    non-dict row — raises rather than reading as empty, since a reader keyed on identity
+    cannot count a row it did not read.
+    """
+    for path in paths:
+        if not path.is_file():
+            continue
+        with path.open() as f:
+            data = json.load(f)
+        rows = data.get("classifications", data.get("results")) if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError(
+                f"{path}: not a classification file — no list under `classifications` (or the "
+                f"legacy `results`); a reader keyed on identity cannot treat that as empty."
+            )
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError(f"{path}: classification row is not an object: {row!r}")
+            value = row.get(key.output_field)
+            if not is_key_value(value):
+                raise ValueError(
+                    f"{path}: classification row for {row.get('file_name')!r} has "
+                    f"{key.output_field} {value!r}; this reader keys on it and cannot skip the "
+                    f"row. Either the input carried a drifted {key.input_field} that no gate "
+                    f"refused, or the producer that wrote this file omitted the field and "
+                    f"needs re-running."
+                )
+            yield value, row
+
+
+def input_key_value(record: dict, key: RecordKey, purpose: str) -> str:
+    """The source's key as an input record carries it, or a ``ValueError``.
+
+    The input side of :func:`keyed_rows`: a producer that compares its input records
+    against rows keyed that way. A drifted key here would match nothing, silently, so
+    it raises instead. ``purpose`` completes "this producer keys on it to ..." in the
+    message. The input gate rejects such a record before ``make classify``; reaching
+    here means that gate was bypassed.
+    """
+    value = record.get(key.input_field)
+    if not is_key_value(value):
+        raise ValueError(
+            f"input record for {record.get('file_name', '')!r} has {key.input_field} {value!r}; "
+            f"this producer keys on it to {purpose}. `make validate-metadata` rejects this "
+            f"before `make classify` runs."
+        )
+    return value
+
+
 def repeated_key_values(records: list, key: RecordKey) -> dict[str, int]:
     """Values of the source's key that more than one input record carries, with counts.
 
@@ -186,7 +259,7 @@ def repeated_key_values(records: list, key: RecordKey) -> dict[str, int]:
         for record in records
         if isinstance(record, dict)
         for value in (record.get(key.input_field),)
-        if isinstance(value, str) and value
+        if is_key_value(value)
     )
     return {value: n for value, n in counts.items() if n > 1}
 

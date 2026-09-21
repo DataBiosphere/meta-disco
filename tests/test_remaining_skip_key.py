@@ -183,6 +183,13 @@ class TestTheKeyIsTheSources:
         assert written["md5sum"] == b["file_md5sum"], "the row another producer wrote is skipped on its hash"
         assert written["file_id"] is None and written["entry_id"] is None and written["drs_uri"] is None
 
+    def test_a_legacy_results_envelope_is_read(self, tmp_path):
+        """The record list may sit under the legacy `results` key, as the report readers
+        allow (`output_utils._records_in`); both producers read it the same way."""
+        other = tmp_path / "other.json"
+        other.write_text(json.dumps({"results": [{"file_name": "a.weird", "md5sum": "a" * 32}]}))
+        assert load_already_classified([other], HPRC_KEY) == {"a" * 32}
+
     def test_the_set_is_read_under_the_output_spelling(self, tmp_path):
         """Input says `file_md5sum`, an output row says `md5sum`; the key carries both."""
         other = tmp_path / "other.json"

@@ -229,15 +229,14 @@ the "conflict" becomes structured provenance instead of an error.
 
 ### 5a. Representation — one pointer, not copied values
 
-A classification record is identified by its `file_id`, the catalog identity that
-survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). `md5sum` is not an identity:
-two differently-named files can hold the same bytes and classify differently (#430).
-A catalog that carries no `file_id` at all — HPRC — is joined on
-`(dataset_title, md5sum, file_name)` instead, scoped to a dataset because a
-`dataset_pattern` rule can classify the same bytes differently in two of them. The
-emitted `derived_from` edge still grounds on the parent's md5 and name — those are what
-the catalog spells — while the *lookup* that fills the index's inherited fields is by
-`file_id` where the catalog has one. The BAM:
+A classification record is identified by the source's record key
+(`pipeline.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
+that survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). An AnVIL `md5sum` is not
+an identity: two differently-named files can hold the same bytes and classify
+differently (#486). HPRC issues no `file_id`; its key is the hash of the file's URL,
+which its builder writes as the checksum. The emitted `derived_from` edge still grounds
+on the parent's md5 and name — those are what the catalog spells — while the *lookup*
+that fills the index's inherited fields is by the source's key. The BAM:
 
 ```json
 {
@@ -281,9 +280,11 @@ Two things to notice. First, the index's own identity is complete and honest:
 `data_type: index` (its real content type), and the three biological dimensions
 `not_applicable`. Nothing about the parent is copied into these values. Second,
 the `derived_from` block is a **typed edge**: `relation` is the verb (`index_of`),
-`parent_md5sum` is the pointer to the record where the parent's real values live,
-and `parent_file` / `parent_kind` ride along so a human or a report can read the
-relationship without a second lookup.
+`parent_md5sum` and `parent_file` ground it in the parent as the catalog spells it,
+and `parent_kind` rides along so a human or a report can read the relationship
+without a second lookup. What the edge does *not* yet carry is the parent's record
+key, so today it is a grounding, not a resolvable pointer: an AnVIL md5 can name two
+records that classify differently (#486). Carrying the key is #371.
 
 The crucial difference from today's behavior: the index's own `data_modality`
 stays `not_applicable`. We store a **pointer** to where "genomic" lives, we do
@@ -322,12 +323,15 @@ files** that didn't match on their own:
 
 - `NA12878.bam` → own value `genomic` → **include**.
 - `NA12878.bam.bai` → own value `not_applicable`. Before discarding, check for a
-  `derived_from`. It has one: `parent_md5sum: aaa111`. Look up record `aaa111` —
-  that's the BAM, which is `genomic`. So **include the index too**, labeled
-  "genomic (inherited from NA12878.bam)."
+  `derived_from`. It has one, and once the edge carries the parent's record key
+  (#371) the search looks that record up — that's the BAM, which is `genomic`. So
+  **include the index too**, labeled "genomic (inherited from NA12878.bam)."
 
-"Look up record `aaa111`" — `records["aaa111"]` — *is* following the link. It
+That lookup — `records[<parent's record key>]` — *is* following the link. It
 happens at search time precisely so we don't have to bake the value into storage.
+It is not possible on today's edge: `parent_md5sum` is not a record key (the
+same-bytes case in #486 makes `records[md5]` ambiguous), which is why the index's
+inherited values are copied at write time for now.
 
 ### 5c. Why follow at query time instead of copying once?
 
@@ -342,15 +346,17 @@ If we pre-copy "genomic" onto the index (today's behavior), the index permanentl
 again. Storing a pointer instead of a copy is exactly what preserves the
 distinction.
 
-> **The consuming layer (verified 2026-06-25).** There is **no search layer
-> inside this repo** — meta-disco produces classification JSON; the actual
-> filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers are the
-> batch **report generators**, and they already load every classification into a
-> dict keyed by `parent_key` — `file_id` where the catalog carries one, and
-> `(dataset_title, md5sum, file_name)` where it does not, as the HPRC catalog does not
-> (see `classify_index_files.py`) — so
-> "follow the link" is a trivial dict lookup they can already do — no new
-> infrastructure needed to compute an inherited view for the reports.
+> **The consuming layer (verified 2026-06-25, edge re-checked 2026-09-21).** There
+> is **no search layer inside this repo** — meta-disco produces classification JSON;
+> the actual filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers
+> are the batch **report generators**, and none of them follows a link: an index
+> record's inherited values are copied onto it at write time (`classify_index_files.py`
+> looks the parent up by the source's record key, `pipeline.SOURCE_RECORD_KEYS`, and
+> writes the parent's labels into the index's own record). The emitted `derived_from`
+> edge grounds on `parent_md5sum` and `parent_file` only — it carries no `file_id`
+> — so a consumer cannot resolve it into a key-indexed map today, and in the
+> same-bytes case (#486) an md5 alone cannot say which parent row is meant. A linked
+> view needs the edge to carry the parent's record key; widening the edge is #371.
 >
 > The real decision is **what meta-disco hands to the Explorer**: records with
 > inherited values pre-copied in (today), or clean identity records plus links

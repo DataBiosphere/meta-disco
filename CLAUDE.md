@@ -194,9 +194,15 @@ evidence}` entry — plus the controlled vocabulary:
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
     is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
     because its catalogs issue no identifier — no catalog identity is minted for an HPRC
-    record. Two readers use it and neither may hard-code a field: the catch-all producer's
-    skip set (`scripts/classify_remaining_files.py`) and the post-run one-row-per-file
-    check (#445). An envelope naming no repository is refused before a run starts.
+    record. Four readers use it and none may hard-code a field: the input gate
+    (`scripts/validate_metadata.py`), the catch-all producer's skip set
+    (`scripts/classify_remaining_files.py`), the index producer's parent join
+    (`scripts/classify_index_files.py`, #486) and the post-run one-row-per-file check
+    (#445). The two producers read another producer's rows through `pipeline.keyed_rows`
+    and the input record each compares against those rows — every record for the
+    catch-all, the matched parent for the index producer — through
+    `pipeline.input_key_value`; both raise on a missing key rather than skip. An
+    envelope naming no repository is refused before a run starts.
   - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
     owner because one function says so — the name decides and `file_format` is only a
     fallback, for reasons `route`'s docstring gives. Four hand-written predicates are
