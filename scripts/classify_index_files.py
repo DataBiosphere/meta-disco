@@ -52,7 +52,14 @@ from meta_disco.models import (
     field_label,
     status_for_value,
 )
-from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, output_key_value, record_key
+from meta_disco.pipeline import (
+    RecordKey,
+    input_key_value,
+    keyed_rows,
+    load_classifiable_snapshot,
+    load_envelope,
+    record_key,
+)
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
 
@@ -345,38 +352,44 @@ def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, An
     """The parent rows of one or more ``*_classifications.json`` files, by the source's key.
 
     ``key`` is the field the source declares unique per file
-    (``pipeline.SOURCE_RECORD_KEYS``, which says which field and why), read here under
-    its output spelling; the caller looks a matched parent up under the input one.
-    Not the checksum: two differently-named files can hold the same bytes and classify
-    differently — ``grch38.fasta`` takes ``GRCh38`` from a filename rule while the
-    byte-identical ``Homo_sapiens_assembly38.fasta`` does not — and a map keyed on
-    bytes alone held whichever the producer's thread-completion order wrote last, so
-    the two ``.fai`` files indexing them inherited one answer between them, chosen
-    per run (#486). HPRC's key is spelled ``md5sum`` but is a hash of the file's URL,
-    so the same bytes at two paths are two keys there too.
+    (``pipeline.SOURCE_RECORD_KEYS``), read here under its output spelling; the caller
+    looks a matched parent up under the input one. Not the checksum: two
+    differently-named files can hold the same bytes and classify differently —
+    ``grch38.fasta`` takes ``GRCh38`` from a filename rule while the byte-identical
+    ``Homo_sapiens_assembly38.fasta`` does not — and a map keyed on bytes alone held
+    whichever row the producer wrote last, an order that varies run to run under the
+    thread pool, so the two ``.fai`` files indexing them inherited one answer between
+    them, chosen per run (#486).
 
-    A row without the key raises (``pipeline.output_key_value``) rather than being
-    left out: left out, the index file it parents would inherit nothing, silently.
+    A row without the key raises (``pipeline.keyed_rows``) rather than being left out:
+    left out, the index file it parents would inherit nothing, silently. A key two rows
+    carry raises too, naming the key and the file it repeated in, rather than keeping
+    whichever row came last — the order-dependent silent choice this map used to make
+    on md5. The input gate rejects a repeated key before ``make classify``, and the
+    post-run one-row-per-file check (#445) fails the run on one, but that check runs
+    after this producer has written; refusing here keeps a wrong index row from being
+    written at all.
     """
-    classifications = {}
-
-    for path in paths:
-        if not path.is_file():
-            continue
-        with path.open() as f:
-            data = json.load(f)
-        for c in data.get("classifications", []):
-            classifications[output_key_value(c, key, path)] = {
-                "data_modality": field_label(c, "data_modality"),
-                "assay_type": field_label(c, "assay_type"),
-                "platform": field_label(c, "platform"),
-                "reference_assembly": field_label(c, "reference_assembly"),
-                # Per-field detail (the first is reference_assembly's build, #340)
-                # rides along with the labels: an index record must not describe
-                # its parent less precisely than the parent does.
-                "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
-            }
-
+    classifications: dict[str, dict[str, Any]] = {}
+    for value, c in keyed_rows(paths, key):
+        if value in classifications:
+            raise ValueError(
+                f"{key.output_field} {value!r} is carried by more than one classification row "
+                f"(a repeat is {c.get('file_name')!r}); the index producer keys a parent on it as "
+                f"unique per file and would inherit from whichever row it read last. "
+                f"`make validate-metadata` rejects a repeated {key.input_field} before "
+                f"`make classify` runs."
+            )
+        classifications[value] = {
+            "data_modality": field_label(c, "data_modality"),
+            "assay_type": field_label(c, "assay_type"),
+            "platform": field_label(c, "platform"),
+            "reference_assembly": field_label(c, "reference_assembly"),
+            # Per-field detail (the first is reference_assembly's build, #340)
+            # rides along with the labels: an index record must not describe
+            # its parent less precisely than the parent does.
+            "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
+        }
     return classifications
 
 
@@ -521,18 +534,10 @@ def propagate_to_index_files(
 
             # Joined on the source's key, under its input spelling; the map was keyed
             # on the same field under its output spelling. Not on `parent_md5`: for
-            # AnVIL a checksum is not an identity (see `load_classifications`). The
-            # same guard `output_key_value` applies to the rows: a drifted key on the
-            # parent would match nothing and the index would inherit nothing, silently.
-            # `make validate-metadata` rejects such a record before `make classify`.
-            parent_identity = parent.get(key.input_field)
-            if not isinstance(parent_identity, str) or not parent_identity:
-                raise ValueError(
-                    f"input record for {parent_name!r} has {key.input_field} {parent_identity!r}; "
-                    f"this producer keys on it to find the parent's classification. "
-                    f"`make validate-metadata` rejects this before `make classify` runs."
-                )
-            parent_class = classifications.get(parent_identity, {})
+            # AnVIL a checksum is not an identity (see `load_classifications`). A
+            # drifted key on the parent would match nothing and the index would inherit
+            # nothing, silently, so `input_key_value` raises on one.
+            parent_class = classifications.get(input_key_value(parent, key, "find the parent's classification"), {})
 
             result = {
                 # The raw input record this row is about; the output is built from it.

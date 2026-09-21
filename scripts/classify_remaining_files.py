@@ -27,9 +27,10 @@ from meta_disco.metadata_schema import (
 from meta_disco.models import FileInfo
 from meta_disco.pipeline import (
     RecordKey,
+    input_key_value,
+    keyed_rows,
     load_classifiable_snapshot,
     load_envelope,
-    output_key_value,
     record_key,
     repeated_key_values,
 )
@@ -56,18 +57,10 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
     stays because the collision is real and the next producer to send a colliding name
     here would hit it silently.
     """
-    seen = set()
-    for path in classification_paths:
-        if not path.is_file():
-            continue
-        with path.open() as f:
-            data = json.load(f)
-        for r in data.get("classifications", data.get("results", [])):
-            # Raises on a row without the key rather than skipping it: skipped, the row
-            # would drop from this set and hand the file a *second* classification
-            # record, inflating coverage and making `corpus_diff` report a phantom gain.
-            seen.add(output_key_value(r, key, path))
-    return seen
+    # `keyed_rows` raises on a row without the key rather than skipping it: skipped, the
+    # row would drop from this set and hand the file a *second* classification record,
+    # inflating coverage and making `corpus_diff` report a phantom gain.
+    return {value for value, _ in keyed_rows(classification_paths, key)}
 
 
 def classify_remaining(metadata_path: Path, output_path: Path, classification_paths: list[Path]):
@@ -108,17 +101,11 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
     for rec in files:
         name = rec.get("file_name", "")
-        identity = rec.get(key.input_field)
         # The same guard `load_already_classified` applies to the other side of this
         # comparison. A drifted key here would match nothing in `already`, so an
         # already-classified file would be classified a second time — the failure the
         # key change was made to prevent, entering by the input rather than the output.
-        if not isinstance(identity, str) or not identity:
-            raise ValueError(
-                f"input record for {name!r} has {key.input_field} {identity!r}; this producer "
-                f"keys on it to know what another producer already classified. "
-                f"`make validate-metadata` rejects this before `make classify` runs."
-            )
+        identity = input_key_value(rec, key, "know what another producer already classified")
         if identity in already:
             continue
         if not name:

@@ -110,8 +110,7 @@ def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam", f
         "md5sum": md5,
         "file_name": file_name,
         "file_id": file_id or _fid(md5),
-        # Producers write this on every row, and the fallback parent key is scoped by
-        # it, so a fixture without one would join on a dataset no real record has.
+        # Producers write this on every row.
         "dataset_title": "test",
         "classifications": {fld: build_field_entry(values[fld]) for fld in CLASSIFICATION_FIELDS},
     }
@@ -463,7 +462,8 @@ class TestLoadClassifications:
         """A parent row missing the source's key raises rather than being left out.
 
         Left out, the index file it parents would inherit nothing and no one would
-        know. The raise names the field expected, which is the source's, not `file_id`.
+        know. Under both keys, so the parent map is pinned to the shared reader for
+        HPRC too, not only for the AnVIL default the fixtures write.
         """
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         cls["file_id"] = None
@@ -475,6 +475,22 @@ class TestLoadClassifications:
         cls_file.write_text(json.dumps({"classifications": [cls]}))
         with pytest.raises(ValueError, match="md5sum"):
             load_classifications(cls_file, key=HPRC_KEY)
+
+    def test_a_key_two_parent_rows_carry_is_refused(self, tmp_path):
+        """Two rows with one key raise rather than the last one winning.
+
+        Last-wins on a shared key is the order-dependent choice #486 removed; a repeat
+        can only reach here on a run that bypassed the input gate, and the post-run
+        one-row-per-file check would fail it later — after this producer had written.
+        """
+        rows = [
+            _classified_record("a" * 32, "GRCh38", "one.bam", file_id="fid-dup"),
+            _classified_record("b" * 32, "CHM13", "two.bam", file_id="fid-dup"),
+        ]
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"classifications": rows}))
+        with pytest.raises(ValueError, match=r"file_id 'fid-dup' is carried by more than one.*'two\.bam'"):
+            load_classifications(cls_file, key=ANVIL_KEY)
 
     def test_a_matched_parent_without_the_key_is_refused(self, tmp_path):
         """The guard is symmetric: a drifted key on the *input* parent raises too.
@@ -507,10 +523,10 @@ class TestLoadClassifications:
     def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
         """Two byte-identical parents with different names keep their own answers.
 
-        Keyed by md5 alone, whichever record load order reached last won for both, so
-        one `.fai` took the other's answer — which one depending on a file order
-        nothing guarantees (#486). Keyed on the source's record key, each `.fai` finds
-        the parent whose identity it names.
+        Keyed by md5 alone, whichever row the producer wrote last won for both, so one
+        `.fai` took the other's answer — which one depending on a write order nothing
+        guarantees (#486). Keyed on the source's record key, each `.fai` finds the
+        parent whose identity it names.
         """
         # One md5 for two files, so `_fid`'s md5-derived default would collapse them —
         # these are the fixtures that pass their ids explicitly.

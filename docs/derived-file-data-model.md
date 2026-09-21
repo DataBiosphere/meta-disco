@@ -229,15 +229,14 @@ the "conflict" becomes structured provenance instead of an error.
 
 ### 5a. Representation — one pointer, not copied values
 
-A classification record is identified by its `file_id`, the catalog identity that
-survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). `md5sum` is not an identity:
-two differently-named files can hold the same bytes and classify differently (#430).
-A catalog that carries no `file_id` at all — HPRC — is joined on
-`(dataset_title, md5sum, file_name)` instead, scoped to a dataset because a
-`dataset_pattern` rule can classify the same bytes differently in two of them. The
-emitted `derived_from` edge still grounds on the parent's md5 and name — those are what
-the catalog spells — while the *lookup* that fills the index's inherited fields is by
-`file_id` where the catalog has one. The BAM:
+A classification record is identified by the source's record key
+(`pipeline.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
+that survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). An AnVIL `md5sum` is not
+an identity: two differently-named files can hold the same bytes and classify
+differently (#486). HPRC issues no `file_id`; its key is the hash of the file's URL,
+which its builder writes as the checksum. The emitted `derived_from` edge still grounds
+on the parent's md5 and name — those are what the catalog spells — while the *lookup*
+that fills the index's inherited fields is by the source's key. The BAM:
 
 ```json
 {
