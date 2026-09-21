@@ -11,7 +11,7 @@ import yaml
 
 from . import file_name
 from .file_name import FileName, Format
-from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
+from .models import AUTHORABLE_STATUSES, CLASSIFICATION_FIELDS
 
 # A read-only view of the shared in-code extension_map, built once — the
 # UnifiedRules.extension_map property returns this rather than allocating a new
@@ -244,7 +244,7 @@ class RuleLoader:
     # Statuses a rule may author in a `then.status` sub-map. `classified` is
     # implied by a real value and `conflict` is engine-derived, so neither may be
     # written by a rule (mirrors schema_vocab's antecedent/emitted split).
-    AUTHORABLE_STATUSES: ClassVar[set[str]] = {NOT_APPLICABLE, NOT_CLASSIFIED}
+    AUTHORABLE_STATUSES: ClassVar[frozenset[str]] = AUTHORABLE_STATUSES
 
     # assay_type_rules condition keys that infer_assay_type() treats as iterables
     # (`x not in platform_in`, `any(r in ... for r in matched_rules_any)`). A

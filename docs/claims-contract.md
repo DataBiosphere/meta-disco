@@ -387,7 +387,7 @@ depends on that, and a second repository needs no change to these assertions.
 ## What is not true yet
 
 No code reads this document, and the pipeline it describes does not exist — with section 7 excepted, which
-describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in six places:
+describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **The slot map and its importer exist for AnVIL only** (#369): `slot_map` loads
@@ -401,8 +401,8 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
   read by a run.
 - **The translation table exists and nothing in a run reads it** (#414). `value_map` holds 3.9's row,
   enforces 3.11's split, 3.12's scope and collision rules and 3.5's bound, seeds from evidence and lists
-  5.2's queue; `claims_from` builds a line's claims through `make_claim`. Its rows cover the two HPRC
-  datasets. No stage calls it, so 3.7's queue is a listing a person runs, not a place a run sends a
+  5.2's queue; `claims_from` builds a line's claims through `make_claim`. Which values have a row is
+  `make review-queue`'s to say, not this document's. No stage calls it, so 3.7's queue is a listing a person runs, not a place a run sends a
   value to, and no claim it can make reaches a record until reconcile (#432).
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
 - **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
@@ -428,9 +428,9 @@ A line leaves this section when the assertion above it is enforced, not when it 
 ## Open
 
 - ~~Rule-id namespace: unique across the whole rule set, or namespaced per source.~~ **Answered by #414: one
-  namespace.** A claim cites either kind by `rule_id`, so the value map's loader refuses a row id that a rule
-  in `unified_rules.yaml` uses. Row ids are minted `<slot>.<slug>`, scope appended, which keeps the two apart
-  in practice without a rule saying they must be.
+  namespace, kept disjoint by shape.** A claim cites either kind by `rule_id`. A row id is `<slot>.<slug>`
+  and the value map's loader requires the slot prefix; no rule id contains a dot, and `test_value_map` checks
+  that against the loaded rule set, so neither loader reads the other.
 - What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
 - ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered by #424: it is not an

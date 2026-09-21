@@ -27,6 +27,10 @@ CONFLICT = "conflict"
 # silently counted as a value.
 STATUS_LABELS = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED, CONFLICT})
 
+# The two statuses a rule may declare (claims contract 3.6): a rule's `then.status`, a
+# value-map row's declaration, and `make_claim`'s status check all read this one set.
+AUTHORABLE_STATUSES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
+
 # Claim states (issue #392): why a claim that consulted a source produced no
 # vocabulary value. These are NOT statuses — a claim in one of these states
 # declares nothing, so it never competes in resolution and can never become a

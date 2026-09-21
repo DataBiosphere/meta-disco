@@ -1,10 +1,6 @@
 # The value translation table (#414): raw source values to vocabulary terms.
-# Shape, matching and selection: src/meta_disco/value_map.py. Contract: docs/claims-contract.md 3.5-3.12.
-#
-# A row with a `reason` is authored and claims what it `declares`; a row without one is
-# seeded and declares nothing, whatever it spells. `make seed-value-map` appends seeded
-# rows below the last row and never rewrites one, so `rows` stays the last key.
-# `make review-queue` lists every evidence value whose selected row is not authored.
+# Shape, matching, selection and the seeder: src/meta_disco/value_map.py.
+# A row with a `reason` is authored; without one it is seeded and declares nothing.
 rows:
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"

@@ -198,10 +198,9 @@ import-anvil-evidence:
 name-signals:
 	uv run python scripts/name_signals.py $(ARGS)
 
-# The value translation table (#414). `seed-value-map` appends a seeded row for every
-# `(slot, raw_value)` the current evidence carries and no row matches, and never
-# rewrites a row; pass `ARGS="--dataset X"` to scan one dataset. `review-queue` lists
-# every evidence value whose selected row is not authored (contract 5.2). Both offline.
+# The value translation table (#414; src/meta_disco/value_map.py). Seed it from the
+# current evidence, or list its review queue; `ARGS="--dataset X"` scans one dataset.
+# Both offline.
 seed-value-map:
 	uv run python scripts/value_map.py $(ARGS) seed
 

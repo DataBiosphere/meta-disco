@@ -137,17 +137,12 @@ evidence}` entry — plus the controlled vocabulary:
     vocabulary check on a *mapped* value belongs to the translation table (`value_map`,
     #414), which checks an authored row's terms when it loads. Do not reintroduce one here.
   - **The value translation table** is `rules/value_map.yaml`, loaded and applied by
-    `value_map.py` (#414, contract 3.9-3.12). A row is keyed on `(slot, normalized
-    raw_value)` with explicit alternates, optionally scoped to a source or a source and
-    dataset, and **authored iff it carries a `reason`**: only an authored row may
-    `declares`, and only its terms are checked against the slot's vocabulary at load.
-    Normalization is casefold and strip, nothing more; a list cell matches as a whole
-    set. No row carries a table or column name — the loader refuses the keys. Row ids
-    share one namespace with `unified_rules.yaml` and the loader refuses a collision.
-    `make seed-value-map` **appends** seeded rows and never rewrites one, so `rows` stays
-    the file's last key; `make review-queue` lists every evidence value whose selected
-    row is not authored (5.2). `claims_from` builds the claims a line makes, through
-    `make_claim`, for reconcile (#432) — nothing in a run calls it.
+    `value_map.py` (#414; the row is contract 3.9, matching 3.5, seeded/authored 3.11,
+    scope 3.12, the queue 5.2). A row without a `reason` is seeded and declares nothing.
+    Row ids are `<slot>.<slug>`, and no rule id contains a dot, which is what keeps the
+    two apart. `make seed-value-map` appends seeded rows and never rewrites one;
+    `make review-queue` lists the unauthored values. `claims_from` builds a line's
+    claims through `make_claim` for reconcile (#432) — nothing in a run calls it.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;

@@ -718,6 +718,26 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     return written
 
 
+def list_cell(raw_value: str) -> list[str] | None:
+    """The elements of a list-valued cell, or None where ``raw_value`` is one scalar.
+
+    The inverse of how ``anvil_evidence._transcribe`` writes a list cell: a string is
+    written verbatim and anything else as its JSON, so a list arrives as a JSON array
+    of strings. Only that shape is a list here; a scalar that happens to start with
+    ``[`` and is not one stays a scalar. Kept beside the line format so the encoding
+    and its decoding are one fact in one module.
+    """
+    if not raw_value.lstrip().startswith("["):
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except ValueError:
+        return None
+    if isinstance(parsed, list) and all(isinstance(e, str) for e in parsed):
+        return parsed
+    return None
+
+
 def read_envelope(path: Path) -> EvidenceFileEnvelope:
     """The evidence file's envelope, read from its first line alone.
 

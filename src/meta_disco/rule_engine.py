@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from .file_name import FileName, Format
 from .models import (
+    AUTHORABLE_STATUSES,
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -241,9 +242,9 @@ def make_claim(
             f"claim from {producer!r} must declare exactly one of value/status/state "
             f"(got value={value!r}, status={status!r}, state={state!r})"
         )
-    if status is not None and status not in (NOT_APPLICABLE, NOT_CLASSIFIED):
+    if status is not None and status not in AUTHORABLE_STATUSES:
         raise ValueError(
-            f"claim from {producer!r} has unknown status {status!r} (expected {NOT_APPLICABLE!r} or {NOT_CLASSIFIED!r})"
+            f"claim from {producer!r} has unknown status {status!r} (expected one of {sorted(AUTHORABLE_STATUSES)})"
         )
     if state is not None and state not in CLAIM_STATES:
         raise ValueError(

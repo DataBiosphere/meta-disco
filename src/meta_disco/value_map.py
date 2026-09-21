@@ -2,91 +2,96 @@
 
 An importer writes ``(slot, raw_value)`` and stops (contract 1.2-1.4). This table is
 the one step between that observation and a claim: a lookup from ``(slot, normalized
-raw_value)`` to a **declaration**, applied per evidence line. It shares nothing with
-``unified_rules.yaml``'s engine — no tiers, no ``when``/``then`` over file attributes —
-and a row qualifies as a rule only in contract 3.8's sense: it makes a claim and is
-cited by it.
+raw_value)`` to a **declaration**, applied per evidence line. A row is a rule only in
+contract 3.8's sense — it makes a claim and is cited by it — and shares nothing with
+``unified_rules.yaml``'s engine. The row's members are contract 3.9's; matching is 3.5;
+seeded against authored is 3.11; scope and selection are 3.12; the queue is 5.2.
 
-**The file** is ``rules/value_map.yaml``, a mapping whose one key is ``rows``, a list::
+**The file** is ``rules/value_map.yaml``, a mapping whose one key is ``rows``::
 
     rows:
       - id: platform.revio
         match: {slot: platform, value: Revio, alternates: [REVIO]}
-        scope: {source: anvil, dataset: AnVIL_HPRC_R2}   # optional; a source, or a source and dataset
+        scope: {source: anvil, dataset: AnVIL_HPRC_R2}   # optional
         declares: {platform: PACBIO}
         reason: PacBio's current long-read instrument; the source spells it two ways.
         seeded_from: [anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z]
 
-A row is **authored** when it carries a ``reason`` and **seeded** otherwise (3.11).
-Only an authored row may carry ``declares``; a seeded one declares nothing whatever it
-spells, and an authored row may declare ``{}`` to rule that a value means nothing here
-(the ``bam``-in-a-data_type-column case). ``declares`` names at most one pair per
-slot, each a term of *that slot's* vocabulary or one of the two rule-authorable
-statuses (3.9), and may name slots other than the match slot (3.10). ``value`` is a
-string or, for a list-valued cell, a list of strings; ``alternates`` are further
-spellings of the same key. No row carries a table or column name (3.4): the loader
-refuses the keys outright.
+A row is **authored** when it carries a ``reason`` and **seeded** otherwise. Only an
+authored row may carry ``declares``, which names at most one term or status per slot
+and may name slots other than the match slot; ``declares: {}`` with a reason is a
+ruling that the value means nothing here. ``value`` is a string or, for a list cell, a
+list of strings; ``alternates`` are further spellings. An id is ``<slot>.<slug>``,
+which is what keeps row ids apart from rule ids without either loader reading the
+other: no rule id contains a dot, and ``test_value_map`` checks that.
 
-**Matching** (3.5) casefolds and strips, and nothing more; ``test_value_map`` checks
-that this cannot merge two terms of any slot's vocabulary. A cell whose raw value is a
-JSON array of strings is one fact and matches as the **set** of its elements, so
-``["A", "B"]`` and ``["B", "A"]`` share a key and ``["A"]`` matches the row for ``A``.
-Every key is therefore a frozenset. Nothing matches by similarity.
-
-**Selection** (3.12) takes the narrowest of the row scoped to the evidence's source
-and dataset, the row scoped to its source, and the unscoped row, and returns it whole.
-Two rows keyed the same on one slot at one scope, alternates included, cannot load.
-Two rows with different keys declaring the same slot can: whether they collide depends
-on which cells a file has, which is not knowable at load (4.8).
+**Matching** casefolds and strips, nothing more; ``test_value_map`` checks that this
+cannot merge two terms of any slot's vocabulary. A list cell (a JSON array of strings,
+``source_evidence.list_cell``) matches as the **set** of its elements, so ``["A", "B"]``
+and ``["B", "A"]`` share a key and ``["A"]`` matches the row for ``A``; every key is
+therefore a frozenset. **Selection** takes the narrowest of source-and-dataset, source,
+unscoped, and returns the row whole. Two rows keyed alike on one slot at one scope,
+alternates included, cannot load; two rows with different keys declaring one slot can,
+since whether they collide depends on which cells a file has (4.8).
 
 **Nothing in a classification run reads this module.** :func:`claims_from` exists for
-the reconcile stage (#432) and for the tests; the seeder and the review queue read
-evidence files, never a run's output. Both go through
-``source_evidence.iter_evidence`` one line at a time (#374).
-
-**The seeder appends and never rewrites.** It loads the table, walks the evidence,
-and appends one seeded row per ``(slot, key)`` no row of any scope matches, each
-recording the generation directories it was seen in. An authored row is untouched
-byte for byte; ``rows`` is the document's only key, so an item appended at the end
-extends it. After appending it reloads the file and restores the original bytes if
-the reload fails.
+the reconcile stage (#432) and the tests. The seeder and the review queue read evidence
+files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
+output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
+key)`` no row of any scope matches, after the last row, so an authored row is untouched
+byte for byte; it reloads the file afterwards and restores the original bytes if the
+reload fails.
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import re
 import sys
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
+from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, NOT_CLASSIFIED
+from .manifest_survey import name_tokens
+from .models import AUTHORABLE_STATUSES, CLASSIFICATION_FIELDS
 from .rule_engine import make_claim
-from .rule_loader import get_unified_rules
-from .schema_vocab import dimension_values
-from .source_evidence import EvidenceEntry, discover, iter_evidence, read_envelope
+from .schema_vocab import value_in_vocabulary
+from .slot_map import NO_NOTES, NOTES
+from .source_evidence import (
+    DEFAULT_SOURCE_EVIDENCE_ROOT,
+    EvidenceEntry,
+    discover,
+    iter_evidence,
+    list_cell,
+    read_envelope,
+)
+from .summaries import md_table
 
 Key = frozenset[str]
 """A normalized match key: one element for a scalar cell, several for a list cell."""
 
-STATUSES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
-"""The two statuses a row may declare in place of a term (contract 3.6)."""
-
 ROW_KEYS = frozenset({"id", "match", "scope", "declares", "reason", "seeded_from"})
 MATCH_KEYS = frozenset({"slot", "value", "alternates"})
 SCOPE_KEYS = frozenset({"source", "dataset"})
-_FORBIDDEN_ROW_KEYS = frozenset({"table", "column", "notes"})
+# Refused by name, with the reason, ahead of the anonymous unknown-key check — the
+# shape `source_evidence._RETIRED_LINE_KEYS` uses. A mapping row sees only the slot,
+# the raw value and `(source, dataset)` (contract 3.4).
+_REFUSED_ROW_KEYS = {
+    "table": "a row is slot and value only; which table a value comes from is the slot map's (contract 3.4)",
+    "column": "a row is slot and value only; which column a value comes from is the slot map's (contract 3.4)",
+    NOTES: NO_NOTES,
+}
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 _WHERE = "value map"
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
-_SLUG = re.compile(r"[^a-z0-9]+")
-_SET_JOIN = "+"
-_SCOPE_MARK = "@"
+_ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -102,37 +107,17 @@ def normalize(text: str) -> str:
     return text.casefold().strip()
 
 
-def match_key(raw_value: str | list[str]) -> Key:
-    """The key a raw value matches on: the normalized set of a list cell's elements, else a one-element set.
-
-    A string is parsed as a list only when it is a JSON array of strings, which is how
-    the AnVIL importer transcribes a list-valued cell (its JSON, verbatim). Anything
-    else is one scalar, brackets included.
-    """
-    if isinstance(raw_value, list):
+def match_key(raw_value: str | Iterable[str]) -> Key:
+    """The key a raw value matches on: a list cell's elements normalized as a set, else a one-element set."""
+    if not isinstance(raw_value, str):
         return frozenset(normalize(e) for e in raw_value)
-    parsed = _json_string_list(raw_value)
-    return frozenset(normalize(e) for e in parsed) if parsed is not None else frozenset({normalize(raw_value)})
+    elements = list_cell(raw_value)
+    return frozenset(normalize(e) for e in elements) if elements is not None else frozenset({normalize(raw_value)})
 
 
-def _json_string_list(text: str) -> list[str] | None:
-    if not text.lstrip().startswith("["):
-        return None
-    try:
-        parsed = json.loads(text)
-    except ValueError:
-        return None
-    if isinstance(parsed, list) and all(isinstance(e, str) for e in parsed):
-        return parsed
-    return None
-
-
-def row_id(slot: str, key: Key, scope: Scope | None = None) -> str:
-    """The id a seeded row is minted with: ``<slot>.<slug>``, set elements sorted and joined, scope appended."""
-    slug = _SET_JOIN.join(_SLUG.sub("_", e).strip("_") or "_" for e in sorted(key))
-    if scope is not None:
-        slug += _SCOPE_MARK + scope.source + ("" if scope.dataset is None else f".{scope.dataset}")
-    return f"{slot}.{slug}"
+def row_id(slot: str, key: Key) -> str:
+    """The id a seeded row is minted with: ``<slot>.<slug>``, set elements sorted and joined with ``+``."""
+    return f"{slot}." + "+".join("_".join(name_tokens(e)) or "_" for e in sorted(key))
 
 
 # --- rows -------------------------------------------------------------------------
@@ -148,7 +133,7 @@ class Scope:
 
 @dataclass(frozen=True, eq=False)
 class Row:
-    """One row of the table, as loaded. ``value`` and ``alternates`` are verbatim; ``keys`` are normalized.
+    """One row as loaded. ``value`` and ``alternates`` are verbatim; ``keys`` are normalized.
 
     Identity equality: a loaded row is one object the index and the selection share, and
     ``declares`` is a mapping, which a field-wise hash could not take.
@@ -167,23 +152,20 @@ class Row:
     def authored(self) -> bool:
         return self.reason is not None
 
-    @property
+    @cached_property
     def keys(self) -> frozenset[Key]:
         """Every key this row matches on: its value and each alternate."""
-        return frozenset(match_key(_as_key_input(v)) for v in (self.value, *self.alternates))
-
-
-def _as_key_input(value: str | tuple[str, ...]) -> str | list[str]:
-    return list(value) if isinstance(value, tuple) else value
+        return frozenset(match_key(v) for v in (self.value, *self.alternates))
 
 
 @dataclass(frozen=True)
 class ValueMap:
-    """A loaded table and its selection index."""
+    """A loaded table, its selection index, and a memo of selections already made."""
 
     rows: tuple[Row, ...]
-    _index: dict[tuple[str, Key, Scope | None], Row] = field(
-        default_factory=dict, init=False, repr=False, compare=False
+    _index: dict[tuple[str, Key, Scope | None], Row] = field(default_factory=dict, init=False, repr=False)
+    _selected: dict[tuple[str, str, str | None, str | None], Row | None] = field(
+        default_factory=dict, init=False, repr=False
     )
 
     def __post_init__(self) -> None:
@@ -192,22 +174,28 @@ class ValueMap:
                 self._index[(row.slot, key, row.scope)] = row
 
     def select(self, slot: str, raw_value: str, source: str | None, dataset: str | None) -> Row | None:
-        """The narrowest row matching this evidence, or None. Its declaration is taken whole (3.12)."""
+        """The narrowest row matching this evidence, or None. Its declaration is taken whole (3.12).
+
+        Memoized on the arguments: a file's lines repeat a handful of distinct values a
+        few million times, and each lookup otherwise re-parses and re-hashes the same key.
+        """
+        memo = (slot, raw_value, source, dataset)
+        if memo in self._selected:
+            return self._selected[memo]
         key = match_key(raw_value)
-        candidates: list[Scope | None] = [None]
+        scopes: list[Scope | None] = []
+        if source is not None and dataset is not None:
+            scopes.append(Scope(source, dataset))
         if source is not None:
-            candidates.insert(0, Scope(source))
-            if dataset is not None:
-                candidates.insert(0, Scope(source, dataset))
-        for scope in candidates:
-            row = self._index.get((slot, key, scope))
-            if row is not None:
-                return row
-        return None
+            scopes.append(Scope(source))
+        scopes.append(None)
+        row = next((r for scope in scopes if (r := self._index.get((slot, key, scope))) is not None), None)
+        self._selected[memo] = row
+        return row
 
     def keyed(self) -> frozenset[tuple[str, Key]]:
         """Every ``(slot, key)`` some row of any scope matches — what the seeder does not mint again."""
-        return frozenset((row.slot, key) for row in self.rows for key in row.keys)
+        return frozenset((slot, key) for slot, key, _ in self._index)
 
     def by_id(self, id: str) -> Row:
         return next(row for row in self.rows if row.id == id)
@@ -219,14 +207,12 @@ class ValueMap:
 def load_value_map(path: Path | None = None) -> ValueMap:
     """Load and check the table; the bundled one by default.
 
-    The checks the contract puts on a row are here, bar 3.5's bound on the normalizer,
-    which is a property of :func:`normalize` that ``test_value_map`` checks. The first
-    violation raises ``ValueError`` naming the row (by id where it has one, else by position): unknown
-    or forbidden keys, a duplicate key inside a row, a duplicate id or one the rule set
-    already uses, a malformed match or scope, ``declares`` on a seeded row, a declared
-    term outside its slot's vocabulary on an authored row, and two rows keyed the same
-    on one slot at one scope. A seeded row's *match* value is never checked against
-    anything — it is the source's spelling (3.11).
+    The first violation raises ``ValueError`` naming the row, by id where it has one.
+    The document is walked as YAML nodes rather than loaded to dicts so that a key
+    given twice *inside* a row — two declarations for one slot — can be refused
+    naming that row, which a loader-level duplicate check (``slot_map._UniqueKeyLoader``)
+    cannot do: it sees the line before any row exists. Contract 3.5's bound on the
+    normalizer is a property of :func:`normalize`, checked by ``test_value_map``.
     """
     text = path.read_text(encoding="utf-8") if path is not None else default_value_map_resource().read_text()
     return ValueMap(rows=tuple(_rows(_parse(text))))
@@ -280,25 +266,20 @@ def _kind(node: yaml.Node) -> str:
 
 
 def _rows(nodes: list[yaml.Node]) -> Iterator[Row]:
-    rule_ids = {rule.id for rule in get_unified_rules().rules}
     seen_ids: dict[str, int] = {}
     seen_keys: dict[tuple[str, Key, Scope | None], str] = {}
     for n, node in enumerate(nodes, start=1):
         row = _row(node, n)
         if row.id in seen_ids:
             raise ValueError(f"{_WHERE}: row {n} repeats id {row.id!r} (first at row {seen_ids[row.id]})")
-        if row.id in rule_ids:
-            raise ValueError(
-                f"{_WHERE}: row {row.id!r} has the id of a rule in unified_rules.yaml — "
-                "a claim cites either by rule_id, so the two sets share one namespace"
-            )
         seen_ids[row.id] = n
         for key in row.keys:
             at = (row.slot, key, row.scope)
             if at in seen_keys:
+                scope = "(unscoped)" if row.scope is None else f"{row.scope.source}/{row.scope.dataset or ''}"
                 raise ValueError(
                     f"{_WHERE}: rows {seen_keys[at]!r} and {row.id!r} both match {sorted(key)} on {row.slot} "
-                    f"at scope {_scope_text(row.scope)} — one row per key at a scope, alternates included"
+                    f"at scope {scope} — one row per key at a scope, alternates included"
                 )
             seen_keys[at] = row.id
         yield row
@@ -307,38 +288,28 @@ def _rows(nodes: list[yaml.Node]) -> Iterator[Row]:
 def _row(node: yaml.Node, n: int) -> Row:
     at = f"{_WHERE} row {n}"
     entries = _mapping(node, at)
-    if "id" in entries:
-        at = f"{_WHERE} row {_scalar(entries['id'], at)!r}"
-    forbidden = _FORBIDDEN_ROW_KEYS & set(entries)
-    if forbidden:
-        raise ValueError(
-            f"{at}: carries {sorted(forbidden)} — a row is slot and value only; table and column belong to the "
-            "slot map (contract 3.4), and the reason for a ruling is `reason`"
-        )
+    if "id" not in entries:
+        raise ValueError(f"{at}: missing id")
+    id = _scalar(entries["id"], at)
+    at = f"{_WHERE} row {id!r}"
+    for key, why in _REFUSED_ROW_KEYS.items():
+        if key in entries:
+            raise ValueError(f"{at}: carries {key!r} — {why}")
     unknown = set(entries) - ROW_KEYS
     if unknown:
         raise ValueError(f"{at}: unknown keys {sorted(unknown)}; a row has {sorted(ROW_KEYS)}")
-    missing = {"id", "match"} - set(entries)
-    if missing:
-        raise ValueError(f"{at}: missing {sorted(missing)}")
-    id = _scalar(entries["id"], at)
-    if not id.strip():
-        raise ValueError(f"{at}: id is empty")
+    if "match" not in entries:
+        raise ValueError(f"{at}: missing match")
     slot, value, alternates = _match(entries["match"], at)
+    if not id.startswith(f"{slot}."):
+        raise ValueError(
+            f"{at}: id must start with {slot + '.'!r} — ids are `<slot>.<slug>`, which keeps them apart from rule ids"
+        )
     scope = _scope(entries["scope"], at) if "scope" in entries else None
     reason = _reason(entries["reason"], at) if "reason" in entries else None
     declares = _declares(entries.get("declares"), at, reason is not None)
     seeded_from = _seeded_from(entries["seeded_from"], at) if "seeded_from" in entries else ()
-    return Row(
-        id=id,
-        slot=slot,
-        value=value,
-        alternates=alternates,
-        scope=scope,
-        declares=declares,
-        reason=reason,
-        seeded_from=seeded_from,
-    )
+    return Row(id, slot, value, alternates, scope, declares, reason, seeded_from)
 
 
 def _match(node: yaml.Node, at: str) -> tuple[str, str | tuple[str, ...], tuple[str | tuple[str, ...], ...]]:
@@ -385,16 +356,15 @@ def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, s
         return {}
     if not authored:
         raise ValueError(f"{at}: declares something but has no reason — a seeded row declares nothing (contract 3.11)")
-    entries = _mapping(node, f"{at} declares")
     declares: dict[str, str] = {}
-    for slot, value_node in entries.items():
+    for slot, value_node in _mapping(node, f"{at} declares").items():
         if slot not in _FIELDS:
             raise ValueError(f"{at}: declares {slot!r}, which is not a slot; slots are {sorted(_FIELDS)}")
         term = _scalar(value_node, f"{at} declares {slot}")
-        if term not in STATUSES and term not in dimension_values(slot):
+        if term not in AUTHORABLE_STATUSES and not value_in_vocabulary(slot, term):
             raise ValueError(
                 f"{at}: declares {slot}: {term!r}, which is not a term of {slot}'s vocabulary "
-                f"nor one of {sorted(STATUSES)}"
+                f"nor one of {sorted(AUTHORABLE_STATUSES)}"
             )
         declares[slot] = term
     return declares
@@ -406,32 +376,23 @@ def _seeded_from(node: yaml.Node, at: str) -> tuple[str, ...]:
     return tuple(_scalar(item, f"{at} seeded_from") for item in node.value)
 
 
-def _scope_text(scope: Scope | None) -> str:
-    if scope is None:
-        return "(unscoped)"
-    return scope.source if scope.dataset is None else f"{scope.source}/{scope.dataset}"
-
-
 # --- claims -----------------------------------------------------------------------
 
 
 def claims_from(entry: EvidenceEntry, source_type: str, table: ValueMap) -> list[tuple[str, dict]]:
-    """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else nothing.
+    """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else ``[]``.
 
-    Selection reads the line's slot, raw value and provenance (3.7). A seeded row, an
-    authored row declaring nothing, or no row at all yields ``[]``. Each claim goes
-    through ``make_claim`` citing the row's id, carrying the verbatim raw value and the
-    line's :class:`ClaimSource` — source, dataset, table and column — so two claims on
-    one slot from two cells of one file can be told apart afterwards (4.8). Nothing
-    here compares, merges or ranks: that is reconcile's (#432). ``source_type`` is the
-    envelope's, which the line does not carry.
+    Each goes through ``make_claim`` citing the row's id and carrying the verbatim raw
+    value and the line's ``ClaimSource``, so two claims on one slot from two cells of
+    one file stay distinguishable (4.8). Nothing here compares, merges or ranks: that
+    is reconcile's (#432). ``source_type`` is the envelope's, which the line does not carry.
     """
     row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
     if row is None or not row.authored:
         return []
     claims = []
     for slot, declared in row.declares.items():
-        is_status = declared in STATUSES
+        is_status = declared in AUTHORABLE_STATUSES
         claim = make_claim(
             source_type=source_type,
             rule_id=row.id,
@@ -447,15 +408,13 @@ def claims_from(entry: EvidenceEntry, source_type: str, table: ValueMap) -> list
 # --- evidence walks -----------------------------------------------------------------
 
 
-def _current_files(evidence_root: Path, datasets: Iterable[str] | None) -> list[tuple[Path, str]]:
-    """Each current evidence file with its envelope's source type, restricted to ``datasets`` when given."""
-    wanted = None if datasets is None else set(datasets)
-    found = []
-    for path in discover(evidence_root):
-        envelope = read_envelope(path)
-        if wanted is None or envelope.source.dataset in wanted:
-            found.append((path, envelope.source_type))
-    return found
+def _current_paths(evidence_root: Path, datasets: Iterable[str] | None) -> list[Path]:
+    """Every current evidence file, restricted to the envelopes naming one of ``datasets`` when given."""
+    paths = discover(evidence_root)
+    if datasets is None:
+        return paths
+    wanted = set(datasets)
+    return [p for p in paths if read_envelope(p).source.dataset in wanted]
 
 
 @dataclass(frozen=True)
@@ -463,92 +422,6 @@ class SeedResult:
     files_scanned: int
     lines_scanned: int
     rows_added: tuple[str, ...]
-
-
-def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None = None) -> SeedResult:
-    """Append one seeded row per ``(slot, key)`` the evidence carries and no row matches.
-
-    A key any row of any scope already matches is left alone, so a rerun over the same
-    evidence adds nothing and an authored row is never touched. Each new row is
-    unscoped, has no reason, spells the value as the first line that carried it did
-    (a list cell as a list), lists every other spelling that normalized to the same
-    key as an alternate, and records the generation directories it was seen in.
-    Rows are appended in ``(slot, key)`` order after the last existing row, at the
-    existing rows' indentation, then the file is reloaded; a reload failure restores the
-    original bytes and raises.
-    """
-    original = table_path.read_bytes()
-    text = original.decode("utf-8")
-    table = load_value_map(table_path)
-    keyed = table.keyed()
-    seen: dict[tuple[str, Key], _Seen] = {}
-    files_scanned = lines_scanned = 0
-    for path, _ in _current_files(evidence_root, datasets):
-        files_scanned += 1
-        where = _generation_name(evidence_root, path)
-        for entry in iter_evidence(path):
-            lines_scanned += 1
-            key = (entry.field, match_key(entry.raw_value))
-            if key in keyed:
-                continue
-            parsed = _json_string_list(entry.raw_value)
-            spelling = parsed if parsed is not None else entry.raw_value
-            if key not in seen:
-                seen[key] = _Seen(spelling, [], [where])
-            else:
-                seen[key].add(spelling, where)
-    if not seen:
-        return SeedResult(files_scanned, lines_scanned, ())
-    ids = {row.id for row in table.rows}
-    indent = _row_indent(text)
-    added: list[str] = []
-    block = []
-    for (slot, key), found in sorted(seen.items(), key=lambda kv: (kv[0][0], sorted(kv[0][1]))):
-        id = _fresh_id(row_id(slot, key), ids)
-        ids.add(id)
-        added.append(id)
-        block.append(_row_text(id, slot, found, indent))
-    new_text = text if text.endswith("\n") or not text else text + "\n"
-    table_path.write_text(new_text + "".join(block), encoding="utf-8")
-    try:
-        reloaded = load_value_map(table_path)
-        if len(reloaded.rows) != len(table.rows) + len(added):
-            raise ValueError(f"reloaded {len(reloaded.rows)} rows, expected {len(table.rows) + len(added)}")
-    except Exception as exc:
-        table_path.write_bytes(original)
-        raise ValueError(
-            f"{_WHERE}: seeding {table_path} produced a table that does not load; restored: {exc}"
-        ) from exc
-    return SeedResult(files_scanned, lines_scanned, tuple(added))
-
-
-def _generation_name(root: Path, path: Path) -> str:
-    try:
-        return path.parent.relative_to(root).as_posix()
-    except ValueError:
-        return path.parent.as_posix()
-
-
-def _row_indent(text: str) -> str:
-    """The indentation of the existing row items, or two spaces where there are none."""
-    root = yaml.compose(text, Loader=yaml.SafeLoader)
-    rows_node = _mapping(root, _WHERE)["rows"]
-    if isinstance(rows_node, yaml.SequenceNode) and rows_node.value:
-        if rows_node.flow_style:
-            raise ValueError(f"{_WHERE}: `rows` is a flow-style list ([...]); the seeder appends block items")
-        # A block sequence's own mark is at its first dash; an item's is at its first key.
-        return " " * rows_node.start_mark.column
-    return "  "
-
-
-def _fresh_id(candidate: str, taken: set[str]) -> str:
-    """``candidate``, or the first ``candidate_N`` not taken: two values can slug alike (``a-b`` and ``a_b``)."""
-    if candidate not in taken:
-        return candidate
-    n = 2
-    while f"{candidate}_{n}" in taken:
-        n += 1
-    return f"{candidate}_{n}"
 
 
 @dataclass
@@ -564,6 +437,84 @@ class _Seen:
             self.alternates.append(spelling)
         if where not in self.seeded_from:
             self.seeded_from.append(where)
+
+
+def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None = None) -> SeedResult:
+    """Append one seeded row per ``(slot, key)`` the evidence carries and no row of any scope matches.
+
+    A new row is unscoped, has no reason, spells the value as the first line that
+    carried it did (a list cell as a list), lists every other spelling of the same key
+    as an alternate, and records the generation directories it was seen in. A rerun
+    over the same evidence adds nothing.
+    """
+    original = table_path.read_bytes()
+    text = original.decode("utf-8")
+    table = load_value_map(table_path)
+    keyed = table.keyed()
+    seen: dict[tuple[str, Key], _Seen] = {}
+    paths = _current_paths(evidence_root, datasets)
+    lines_scanned = 0
+    for path in paths:
+        where = _generation_name(evidence_root, path)
+        for entry in iter_evidence(path):
+            lines_scanned += 1
+            elements = list_cell(entry.raw_value)
+            spelling = entry.raw_value if elements is None else elements
+            key = (entry.field, match_key(spelling))
+            if key in keyed:
+                continue
+            if key not in seen:
+                seen[key] = _Seen(spelling, [], [where])
+            else:
+                seen[key].add(spelling, where)
+    if not seen:
+        return SeedResult(len(paths), lines_scanned, ())
+    ids = {row.id for row in table.rows}
+    indent = _row_indent(text)
+    added: list[str] = []
+    block = []
+    for (slot, key), found in sorted(seen.items(), key=lambda kv: (kv[0][0], sorted(kv[0][1]))):
+        id = _fresh_id(row_id(slot, key), key, ids)
+        ids.add(id)
+        added.append(id)
+        block.append(_row_text(id, slot, found, indent))
+    new_text = text if text.endswith("\n") or not text else text + "\n"
+    table_path.write_text(new_text + "".join(block), encoding="utf-8")
+    try:
+        reloaded = load_value_map(table_path)
+        if len(reloaded.rows) != len(table.rows) + len(added):
+            raise ValueError(f"reloaded {len(reloaded.rows)} rows, expected {len(table.rows) + len(added)}")
+    except Exception as exc:
+        table_path.write_bytes(original)
+        raise ValueError(
+            f"{_WHERE}: seeding {table_path} produced a table that does not load; restored: {exc}"
+        ) from exc
+    return SeedResult(len(paths), lines_scanned, tuple(added))
+
+
+def _generation_name(root: Path, path: Path) -> str:
+    try:
+        return path.parent.relative_to(root).as_posix()
+    except ValueError:
+        return path.parent.as_posix()
+
+
+def _row_indent(text: str) -> str:
+    """The indentation of the existing row items, or two spaces where there are none."""
+    found = _ROW_DASH.search(text)
+    return found.group(1) if found else "  "
+
+
+def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
+    """``candidate``, or ``candidate_<digest>`` where another key already slugged to it (``a-b`` and ``a_b``).
+
+    The digest is of the key, so the id a key gets does not depend on how many others
+    collided before it — the same scan on a fresh table mints the same ids.
+    """
+    if candidate not in taken:
+        return candidate
+    digest = hashlib.sha1("\0".join(sorted(key)).encode()).hexdigest()[:6]
+    return f"{candidate}_{digest}"
 
 
 def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
@@ -604,27 +555,46 @@ class QueueEntry:
     """The seeded row it selects, or None where no row matches."""
 
 
+_Group = tuple[str, str | None, str | None, str | None, str, str]
+
+
 def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> list[QueueEntry]:
     """Every evidence value whose selected row is not authored, grouped by provenance and slot, most files first.
 
     Driven by the evidence, not the rows (5.2): a value with no row and a value with a
-    seeded row are listed the same way, and a value whose selected row is an authored
-    no-op is not listed at all. ``files`` counts distinct target key values in the
-    group. Selection is per line, so the same value can be listed under one dataset
-    and absent under another that has an authored scoped row.
+    seeded row are listed the same way; a value whose selected row is an authored no-op
+    is not listed. ``files`` counts distinct target key values within each file and sums
+    across files — a group's table names one current file per dataset in the generation
+    layout, so the sum is exact there, and the per-file fold keeps memory at the largest
+    file rather than the corpus.
     """
-    groups: dict[tuple[str, str | None, str | None, str | None, str, str], tuple[set[str], str | None]] = {}
-    for path, _ in _current_files(evidence_root, datasets):
+    files: dict[_Group, int] = {}
+    row_ids: dict[_Group, str | None] = {}
+    for path in _current_paths(evidence_root, datasets):
+        targets: dict[_Group, set[str]] = {}
         for entry in iter_evidence(path):
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
                 continue
             src = entry.source
             group = (src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
-            if group not in groups:
-                groups[group] = (set(), None if row is None else row.id)
-            groups[group][0].add(entry.target_key_value)
-    entries = [QueueEntry(*group, files=len(targets), row_id=row_id) for group, (targets, row_id) in groups.items()]
+            targets.setdefault(group, set()).add(entry.target_key_value)
+            row_ids.setdefault(group, None if row is None else row.id)
+        for group, seen in targets.items():
+            files[group] = files.get(group, 0) + len(seen)
+    entries = [
+        QueueEntry(
+            source=source,
+            dataset=dataset,
+            table=table_name,
+            column=column,
+            slot=slot,
+            raw_value=raw_value,
+            files=count,
+            row_id=row_ids[(source, dataset, table_name, column, slot, raw_value)],
+        )
+        for (source, dataset, table_name, column, slot, raw_value), count in files.items()
+    ]
     entries.sort(
         key=lambda e: (-e.files, e.slot, e.raw_value, e.source, e.dataset or "", e.table or "", e.column or "")
     )
@@ -640,23 +610,28 @@ def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
         "table and column it arrives through (contract 5.2). `row` is the seeded row it selects, or `—` where "
         "no row matches.",
         "",
-        "| files | slot | raw value | source | dataset | table | column | row |",
-        "|---:|---|---|---|---|---|---|---|",
+        *md_table(
+            ["files", "slot", "raw value", "source", "dataset", "table", "column", "row"],
+            [
+                [
+                    f"{e.files:,}",
+                    e.slot,
+                    f"`{e.raw_value}`",
+                    e.source,
+                    e.dataset or "",
+                    e.table or "",
+                    e.column or "",
+                    e.row_id or "—",
+                ]
+                for e in entries
+            ],
+        ),
     ]
-    for e in entries:
-        lines.append(
-            f"| {e.files:,} | {e.slot} | `{e.raw_value}` | {e.source} | {e.dataset or ''} | {e.table or ''} | "
-            f"{e.column or ''} | {e.row_id or '—'} |"
-        )
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for ``scripts/value_map.py``: ``seed`` appends seeded rows, ``queue`` prints the queue."""
-    import argparse
-
-    from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
-
     parser = argparse.ArgumentParser(
         description="The value translation table: seed it from evidence, or list its queue"
     )
