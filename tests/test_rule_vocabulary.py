@@ -15,6 +15,7 @@ Together they keep the rules and the schema from drifting apart.
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -270,6 +271,10 @@ def _class_member(items):
 def _sample_matches(pattern, cap=64):
     """Concrete strings ``pattern`` can match — one per alternative it offers.
 
+    Raises when a pattern offers more than ``cap`` alternatives rather than sampling
+    the first ``cap``: a guard that silently covers less is the failure it exists to
+    prevent.
+
     Walks ``re``'s own parse tree rather than splitting on ``|``: a rule's
     alternatives nest (``(assembly|…|[._](pat|mat)(ernal)?[._])``), and
     string-splitting drops what it cannot read, which is the one failure a
@@ -282,6 +287,11 @@ def _sample_matches(pattern, cap=64):
     run ``hap`` on its own matches nothing.
     """
 
+    def bounded(out):
+        if len(out) > cap:
+            raise ValueError(f"{pattern!r} offers more than {cap} alternatives; raise the cap")
+        return out
+
     def walk(seq):
         out = [""]
         for op, av in seq:
@@ -293,17 +303,17 @@ def _sample_matches(pattern, cap=64):
             elif name.endswith("ANY"):
                 out = [s + "x" for s in out]
             elif name.endswith("BRANCH"):
-                out = [s + b for s in out for branch in av[1] for b in walk(branch)][:cap]
+                out = bounded([s + b for s in out for branch in av[1] for b in walk(branch)])
             elif name.endswith("SUBPATTERN"):
-                out = [s + b for s in out for b in walk(av[3])][:cap]
+                out = bounded([s + b for s in out for b in walk(av[3])])
             elif name.endswith(("MAX_REPEAT", "MIN_REPEAT")):
                 # Repeated `least` times, not once: `\d{4}` needs four digits or the
                 # sample its own pattern cannot match, which probes nothing.
                 least, _, item = av
                 inner = walk(item) if least else [""]
-                out = [s + b * least for s in out for b in inner][:cap]
+                out = bounded([s + b * least for s in out for b in inner])
             # AT (anchors) and anything else contribute nothing to the sample text
-        return out[:cap]
+        return out
 
     return walk(_sre_parse(pattern))
 
@@ -327,7 +337,7 @@ WORD_FORMING = {
 }
 
 
-def accession_probes(rules):
+def accession_probes(rules, exempt=KNOWN_UNANCHORED):
     """One synthetic accession per token a rule could match on, derived from the rules.
 
     The nine hand-listed names this replaced only covered tokens someone had already
@@ -343,7 +353,7 @@ def accession_probes(rules):
     probes = []
     for rule in rules.rules:
         pattern = (rule.when or {}).get("filename_pattern")
-        if not pattern or rule.id in KNOWN_UNANCHORED:
+        if not pattern or rule.id in exempt:
             continue
         for sample in sorted(set(_sample_matches(pattern))):
             if sample.isalnum() and sample.lower() not in WORD_FORMING:
@@ -351,7 +361,7 @@ def accession_probes(rules):
     return tuple(dict.fromkeys(probes))
 
 
-def _accession_internal_matches(rules, filenames):
+def _accession_internal_matches(rules, filenames, exempt=KNOWN_UNANCHORED):
     """Rule patterns that match strictly inside an accession-shaped token.
 
     Returns ``(rule_id, filename, matched_text)`` per hit. A match equal to the whole
@@ -370,7 +380,7 @@ def _accession_internal_matches(rules, filenames):
     spans_by_filename = {f: [t.span() for t in _ACCESSION_TOKEN.finditer(f)] for f in filenames}
     for rule in rules.rules:
         pattern = (rule.when or {}).get("filename_pattern")
-        if not pattern or rule.id in KNOWN_UNANCHORED:
+        if not pattern or rule.id in exempt:
             continue
         compiled = re.compile(pattern, re.IGNORECASE)
         for filename, spans in spans_by_filename.items():
@@ -486,10 +496,26 @@ def test_a_character_class_alternative_is_covered():
 
 
 def test_known_unanchored_entries_still_exist():
-    """Every exemption names a live rule, so anchoring or deleting one cannot leave a
-    silent entry behind excusing a rule that is gone (#430)."""
-    stale = sorted(KNOWN_UNANCHORED - {rule.id for rule in get_unified_rules().rules})
+    """Every exemption names a live rule that still matches inside an accession, so
+    deleting or anchoring one cannot leave a silent entry behind (#430)."""
+    by_id = {rule.id: rule for rule in get_unified_rules().rules}
+    stale = sorted(KNOWN_UNANCHORED - by_id.keys())
     assert not stale, "KNOWN_UNANCHORED exempts rules that no longer exist — drop the entry:\n  " + "\n  ".join(stale)
+
+    def alone(rule_id):
+        return SimpleNamespace(rules=[by_id[rule_id]])
+
+    idle = sorted(
+        rule_id
+        for rule_id in KNOWN_UNANCHORED
+        if not _accession_internal_matches(
+            alone(rule_id), accession_probes(alone(rule_id), exempt=frozenset()), exempt=frozenset()
+        )
+    )
+    assert not idle, (
+        "KNOWN_UNANCHORED exempts rules that no longer match inside an accession — drop the entry:\n  "
+        + "\n  ".join(idle)
+    )
 
 
 def test_accession_check_catches_an_unanchored_token(tmp_path):

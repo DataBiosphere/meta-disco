@@ -449,23 +449,24 @@ size does not distinguish the two. The engine still accepts `file_size_min_gb` /
 
 **Platform Detection (from @RG PL field):**
 
-| Pattern       | Platform | Confidence | Rationale             |
-| ------------- | -------- | ---------- | --------------------- |
-| `PL:ILLUMINA` | ILLUMINA | 95%        | Explicit platform tag |
-| `PL:PACBIO`   | PACBIO   | 95%        | Explicit platform tag |
-| `PL:ONT`      | ONT      | 95%        | Oxford Nanopore       |
-| `PL:DNBSEQ`   | MGI      | 90%        | MGI/BGI sequencers    |
+| Pattern       | Platform | Rule                |
+| ------------- | -------- | ------------------- |
+| `PL:ILLUMINA` | ILLUMINA | `platform_illumina` |
+| `PL:PACBIO`   | PACBIO   | `platform_pacbio`   |
+| `PL:ONT`      | ONT      | `platform_ont`      |
+| `PN:ccs`      | PACBIO   | `program_ccs`       |
 
-**Modality Detection (from @PG programs):**
+**Modality Detection (from @PG programs and @RG DS):**
 
-| Program  | Modality       | Confidence | Rationale                |
-| -------- | -------------- | ---------- | ------------------------ |
-| STAR     | transcriptomic | 95%        | Splice-aware RNA aligner |
-| HISAT2   | transcriptomic | 90%        | RNA-seq aligner          |
-| TopHat   | transcriptomic | 85%        | Legacy RNA aligner       |
-| BWA      | genomic        | 85%        | DNA short-read aligner   |
-| minimap2 | genomic        | 80%        | Long-read aligner        |
-| pbmm2    | genomic        | 90%        | PacBio-specific aligner  |
+| Signal                    | Modality            | Rule               |
+| ------------------------- | ------------------- | ------------------ |
+| `PN:STAR`                 | transcriptomic.bulk | `program_star`     |
+| `PN:bwa`                  | genomic             | `program_bwa`      |
+| `PN:minimap2`             | genomic             | `program_minimap2` |
+| `DS:basecall_model=…dna_` | genomic             | `ont_basecall_dna` |
+
+Every other aligner, basecaller and platform tag rule fired on nothing in either
+catalog and was removed (#430).
 
 ### 4.2 VCF Header Rules
 
@@ -481,11 +482,7 @@ Chromosome lengths are unique to each reference assembly, providing definitive i
 | chr10      | 135,534,747 | 133,797,422 | 134,758,134 |
 | chr22      |  51,304,566 |  50,818,468 |  51,324,926 |
 
-| Rule ID            | Method                        | Confidence |
-| ------------------ | ----------------------------- | ---------- |
-| `vcf_contig_length` | Exact match on contig lengths | 98%        |
-| `vcf_contig_length` | Fuzzy match (±1000bp)         | 95%        |
-| `vcf_max_positions` | Position exceeds chrom length | 90%        |
+Emitted as `vcf_contig_length`, a content classifier rather than a YAML rule.
 
 **Reference Assembly Detection (by Variant Position):**
 
@@ -493,28 +490,28 @@ When header-based detection fails, max variant positions can rule out references
 
 **Variant Caller Detection:**
 
-| Caller          | Variant Type         | Confidence |
-| --------------- | -------------------- | ---------- |
-| HaplotypeCaller | germline_variants    | 90%        |
-| DeepVariant     | germline_variants    | 90%        |
-| Mutect2         | somatic_variants     | 90%        |
-| Strelka         | somatic_variants     | 90%        |
-| Manta           | structural_variants  | 90%        |
-| DELLY           | structural_variants  | 90%        |
-| CNVkit          | copy_number_variants | 90%        |
+| `##source`      | data_type           | Rule                       |
+| --------------- | ------------------- | -------------------------- |
+| HaplotypeCaller | variants.germline   | `vcf_gatk_haplotypecaller` |
+| sniffles        | variants.structural | `vcf_sniffles`             |
+| svim            | variants.structural | `vcf_svim`                 |
+
+An `##INFO` line declaring `SVTYPE`, `SVLEN`, `CIPOS`, `CIEND`, `MATEID` or
+`IMPRECISE` also marks `variants.structural` (`vcf_info_sv`). The somatic and CNV
+caller rules fired on nothing across 204,149 VCFs and were removed (#430).
 
 ### 4.3 FASTQ Read Name Rules
 
 **Platform Detection from Read Name Format:**
 
-| Platform          | Pattern Example                         | Confidence |
-| ----------------- | --------------------------------------- | ---------- |
-| Illumina (modern) | `@A00297:44:HFKH3DSXX:1:1101:...`       | 90%        |
-| Illumina (legacy) | `@HWUSI-EAS100R:6:73:941:1973#0/1`      | 85%        |
-| PacBio CCS        | `@m64011_190830_220126/1/ccs`           | 95%        |
-| PacBio CLR        | `@m64011_190830_220126/1234/0_5000`     | 90%        |
-| ONT               | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | 95%        |
-| MGI/BGI           | `@V350012345L1C001R0010000001/1`        | 90%        |
+| Platform          | Pattern Example                         | Rule                                                        |
+| ----------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Illumina          | `@A00297:44:HFKH3DSXX:1:1101:...`       | `fastq_illumina_modern`                                     |
+| Illumina (HiSeq)  | `@ERR3242571.1 HS2500...`               | `fastq_illumina_hiseq_desc`, `fastq_illumina_ena_hiseq`     |
+| PacBio            | `@m64011_190830_220126/1/ccs`           | `fastq_pacbio_ccs`, `fastq_pacbio_generic`                  |
+| ONT               | `@a1b2c3d4-e5f6-7890-abcd-ef1234567890` | `fastq_ont_uuid`, `fastq_ont_metadata` (`runid=`)           |
+
+The legacy-Illumina, PacBio CLR and MGI rules fired on nothing and were removed (#430).
 
 **Archive Accession Extraction:**
 
@@ -912,217 +909,14 @@ every image extension has a rule.
 | FASTQ read name (tier 3)     |          8 |
 | **Total**                    | **59** |
 
-Beside the rules: 3 post-hoc assay rules (`rnaseq_program`, `rnaseq_modality`, `wgs_longread`) and
+Beside the rules: 2 post-hoc assay rules (`rnaseq_program`, `rnaseq_modality`) and
 6 Python validators the header rules call into. No rule or assay rule reads file size.
 
 ---
 
 ## Appendix B: Sample Classifications
 
-Example classification records from each file type, showing the evidence chain and confidence scoring.
-
-#### BAM/CRAM Examples
-
-```json
-{
-  "file_name": "HG04047.cram",
-  "data_modality": "genomic.whole_genome",
-  "reference_assembly": "CHM13",
-  "confidence": 0.84,
-  "matched_rules": ["platform_illumina", "program_bwa", "ref_chm13_t2t"],
-  "evidence": [
-    {
-      "rule_id": "platform_illumina",
-      "matched": "PL:ILLUMINA",
-      "confidence": 0.95,
-      "rationale": "Illumina short-read sequencing platform detected from @RG header."
-    },
-    {
-      "rule_id": "program_bwa",
-      "matched": "PN:bwa",
-      "classification": "genomic",
-      "confidence": 0.80,
-      "rationale": "BWA is the standard short-read aligner for DNA sequencing (WGS/WES)."
-    },
-    {
-      "rule_id": "ref_chm13_t2t",
-      "matched": "UR:...chm13v2.0.fasta (25 contigs)",
-      "classification": "CHM13",
-      "confidence": 0.95,
-      "rationale": "Reference path in @SQ headers contains 'chm13' indicating T2T-CHM13 assembly."
-    }
-  ]
-}
-```
-
-#### VCF Examples
-
-```json
-{
-  "file_name": "HG01874.chr17.hc.vcf.gz",
-  "data_modality": "genomic.germline_variants",
-  "reference_assembly": "CHM13",
-  "confidence": 0.90,
-  "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller", "vcf_info_sv"],
-  "evidence": [
-    {
-      "rule_id": "vcf_contig_length",
-      "matched": "4 contigs matched CHM13 chromosome lengths",
-      "confidence": 0.98
-    },
-    {
-      "rule_id": "vcf_gatk_haplotypecaller",
-      "matched": "##source=HaplotypeCaller",
-      "confidence": 0.90
-    }
-  ]
-}
-```
-
-#### FASTQ Examples
-
-```json
-{
-  "file_name": "5D1_S11_L002_R2_001.fastq.gz",
-  "data_modality": "genomic",
-  "platform": "ILLUMINA",
-  "confidence": 0.95,
-  "matched_rules": ["fastq_illumina_modern", "fastq_paired_r1"],
-  "evidence": [
-    {
-      "rule_id": "fastq_illumina_modern",
-      "matched": "@D00360:78:H2YVCBCXX:2:1101:1196:2250 2:N:0:11",
-      "confidence": 0.90
-    },
-    {
-      "rule_id": "fastq_paired_r1",
-      "matched": "Paired-end indicator found",
-      "confidence": 0.80
-    }
-  ]
-}
-```
-
-#### Index File Examples
-
-```json
-{
-  "file_name": "NA18637.chr15.hc.vcf.gz.tbi",
-  "data_modality": "genomic.germline_variants",
-  "reference_assembly": "CHM13",
-  "confidence": 0.90,
-  "derived_from": {
-    "relation": "index_of",
-    "parent_file": "NA18637.chr15.hc.vcf.gz",
-    "parent_md5sum": "e14408e079ec0e0d91573e25dcc078eb",
-    "parent_kind": "variants"
-  },
-  "evidence": [
-    {
-      "rule_id": "inherited_from_parent",
-      "matched": "Parent file: NA18637.chr15.hc.vcf.gz",
-      "confidence": 0.90
-    }
-  ]
-}
-```
-
-#### Image Examples
-
-```json
-{
-  "file_name": "GTEX-18A6Q-1126.svs",
-  "data_modality": "imaging.histology",
-  "confidence": 0.95,
-  "evidence": [
-    {
-      "rule_id": "image_ext_.svs",
-      "matched": "Extension: .svs",
-      "confidence": 0.95
-    }
-  ]
-}
-```
-
-#### Auxiliary Genomic Examples
-
-```json
-{
-  "file_name": "PAK57726_28c8475f_fcf1fc64_1794.fast5",
-  "data_modality": "genomic",
-  "reference_assembly": null,
-  "confidence": 0.90,
-  "evidence": [
-    {
-      "rule_id": "ext_fast5",
-      "matched": "Extension: .fast5",
-      "confidence": 0.90
-    }
-  ]
-}
-```
-
-```json
-{
-  "file_name": "IBS.3.pgen",
-  "data_modality": "genomic.germline_variants",
-  "reference_assembly": "GRCh38",
-  "confidence": 0.95,
-  "evidence": [
-    {
-      "rule_id": "ext_pgen",
-      "matched": "Extension: .pgen",
-      "confidence": 0.90
-    },
-    {
-      "rule_id": "dataset_reference",
-      "matched": "Dataset: ANVIL_1000G_PRIMED_data_model",
-      "confidence": 0.95
-    }
-  ]
-}
-```
-
-#### BED Examples
-
-```json
-{
-  "file_name": "HG01928.paternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed",
-  "data_modality": null,
-  "reference_assembly": null,
-  "confidence": 0.85,
-  "evidence": [
-    {
-      "rule_id": "bed_assembly_qc",
-      "matched": "Pattern: assembly QC file (paternal/haplotype)",
-      "confidence": 0.85
-    }
-  ]
-}
-```
-
-```json
-{
-  "file_name": "HG04191.regions.bed.gz",
-  "data_modality": "genomic",
-  "reference_assembly": "CHM13",
-  "confidence": 0.90,
-  "evidence": [
-    {
-      "rule_id": "bed_regions",
-      "matched": "Pattern: .regions.bed",
-      "confidence": 0.80
-    },
-    {
-      "rule_id": "dataset_t2t",
-      "matched": "Dataset: ANVIL_T2T_CHRY",
-      "confidence": 0.90
-    }
-  ]
-}
-```
-
----
-
-_Generated by meta-disco classification system_
-_Report date: 2026-01-24_
+Real records for every producer, in the shape a run writes and validated against the
+schema, are the golden fixtures: `tests/fixtures/golden/expected_output.json` (the
+pipeline) and `tests/fixtures/golden/standalone_output.json` (the standalone
+producers). They are regenerated with `uv run python -m tests.test_output_shape`.

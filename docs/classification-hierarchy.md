@@ -22,12 +22,12 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, ccs)
+- `genomic` ← filename (HiFi), header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
 - `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
-- `WGS` ← filename (HiFi), long-read platform with genomic modality (`wgs_longread`), PacBio HiFi header, CCS program
 - `RNA-seq` ← STAR in @PG (`rnaseq_program`), or any transcriptomic modality (`rnaseq_modality`)
+- `WGS` is no longer inferred: `hifi` names a chemistry and a long-read platform is not an assay (#430)
 
 **platform**:
 - `ILLUMINA` ← header @RG PL:ILLUMINA
@@ -40,7 +40,7 @@ file_format (extension)
 - `CHM13` ← filename (chm13, t2t, hs1), contig lengths (definitive)
 - `not_applicable` ← no @SQ lines (unaligned)
 
-**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the platform is long-read (`wgs_longread`) or the aligner is STAR. The `@SQ` name-pattern reference rules and the file-size assay rules were removed in #430 — the first fired on nothing, the second on nothing that meant anything.
+**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the aligner is STAR or the modality is transcriptomic. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
 
 ---
 
@@ -73,8 +73,7 @@ file_format (extension)
 - `genomic` ← PacBio/ONT read names (but see issue #37)
 - `not_classified` ← **default when no signal** (issue #35, merged)
 
-**assay_type**:
-- `WGS` ← long-read platform with genomic modality (`wgs_longread`)
+**assay_type**: _(not determined — a read name does not say what was sequenced)_
 
 **platform**:
 - `ILLUMINA` ← read name pattern (@instrument:run:flowcell:lane:tile:x:y)

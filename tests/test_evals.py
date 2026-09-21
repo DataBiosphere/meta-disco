@@ -167,7 +167,8 @@ class TestBamE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "ONT"
-        assert get_val(result, "assay_type") == "WGS"
+        # Long-read platform + genomic modality no longer infers WGS (#430).
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
     def test_no_stale_evidence(self):
         """reference_assembly should not have stale not_classified evidence."""

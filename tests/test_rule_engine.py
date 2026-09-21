@@ -1354,18 +1354,17 @@ class TestAssayTypeInference:
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        # Set conditions that trigger the long-read WGS inference (set_field to stay coherent)
-        result.set_field("data_modality", "genomic")
-        result.set_field("platform", "PACBIO")
+        # Set the condition that triggers the modality inference (set_field to stay coherent)
+        result.set_field("data_modality", "transcriptomic.bulk")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = []
         engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "WGS"
+        assert result.assay_type == "RNA-seq"
         evidence = result.field_evidence["assay_type"]
         assert len(evidence) == 1
-        # The matched assay rule's own id, not a shared constant: a genomic PacBio
-        # BAM is `wgs_longread`, and the evidence says so (#430).
-        assert evidence[0]["rule_id"] == "wgs_longread"
+        # The matched assay rule's own id, not a shared constant: a transcriptomic
+        # BAM is `rnaseq_modality`, and the evidence says so (#430).
+        assert evidence[0]["rule_id"] == "rnaseq_modality"
         assert evidence[0]["source_type"] == "signal_inference"
 
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
@@ -1376,8 +1375,7 @@ class TestAssayTypeInference:
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        result.set_field("data_modality", "genomic")
-        result.set_field("platform", "PACBIO")
+        result.set_field("data_modality", "transcriptomic.bulk")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = [
             {
@@ -1387,11 +1385,11 @@ class TestAssayTypeInference:
             }
         ]
         engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "WGS"
+        assert result.assay_type == "RNA-seq"
         markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
         assert "not_classified" not in markers
         rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
-        assert "wgs_longread" in rule_ids
+        assert "rnaseq_modality" in rule_ids
 
 
 class TestReasonChain:

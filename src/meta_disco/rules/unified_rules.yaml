@@ -60,7 +60,7 @@
 #  meta_disco.file_name in #252, so it is no longer a document here.)
 # 1. rules: The classification rules (main content)
 # 2. validators: Python validator configurations for complex logic
-# 3. assay_type_rules: Rules for inferring WGS/RNA-seq from platform and modality
+# 3. assay_type_rules: Rules for inferring RNA-seq from the aligner and modality
 # 4. illumina_instruments: Instrument ID prefix to model mapping
 # 5. reference_contig_lengths: Chromosome sizes for reference detection
 #
@@ -443,9 +443,8 @@ rules:
     then:
       data_modality: genomic
       data_type: alignments
-      assay_type: WGS
       platform: PACBIO
-    rationale: "HiFi/PacBio reads typically used for genome assembly"
+    rationale: "HiFi names PacBio's read chemistry: it says the platform, not the assay (#430)"
 
   - id: alignment_star_aligner
     tier: 2
@@ -1108,12 +1107,6 @@ assay_type_rules:
       data_modality_contains: transcriptomic
     assay_type: RNA-seq
 
-  - id: wgs_longread
-    priority: 80
-    conditions:
-      data_modality: genomic
-      platform_in: [PACBIO, ONT]
-    assay_type: WGS
 
 
 
