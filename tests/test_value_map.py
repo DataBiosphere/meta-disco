@@ -594,8 +594,10 @@ def test_a_row_scoped_to_one_dataset_does_not_cover_the_same_key_from_another(tm
     write_generation(evidence_root, "ANVIL_T2T", "hifi", [entry("platform", "Revio", dataset="ANVIL_T2T")])
     assert seed(table_path, evidence_root).rows_added == ("platform.revio",)
     table = load_value_map(table_path)
-    assert table.select("platform", "Revio", "anvil", "AnVIL_HPRC_R2").id == "platform.revio@anvil.AnVIL_HPRC_R2"
-    assert table.select("platform", "Revio", "anvil", "ANVIL_T2T").id == "platform.revio"
+    assert table.select("platform", "Revio", "anvil", "AnVIL_HPRC_R2") is table.by_id(
+        "platform.revio@anvil.AnVIL_HPRC_R2"
+    )
+    assert table.select("platform", "Revio", "anvil", "ANVIL_T2T") is table.by_id("platform.revio")
 
 
 def test_a_seed_that_would_not_reload_restores_the_file(empty_table, evidence_root, monkeypatch):
