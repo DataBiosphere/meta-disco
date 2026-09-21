@@ -346,7 +346,7 @@ def accession_probes(rules):
         if not pattern or rule.id in KNOWN_UNANCHORED:
             continue
         for sample in sorted(set(_sample_matches(pattern))):
-            if len(sample) >= 3 and sample.isalnum() and sample.lower() not in WORD_FORMING:
+            if sample.isalnum() and sample.lower() not in WORD_FORMING:
                 probes.append(f"IGVFFI7{sample.upper()}K2.fastq.gz")
     return tuple(dict.fromkeys(probes))
 
