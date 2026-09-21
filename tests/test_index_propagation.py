@@ -355,6 +355,29 @@ class TestLoadClassifications:
         result = load_classifications(tmp_path / "nonexistent.json", key=ANVIL_KEY)
         assert result == {}
 
+    @pytest.mark.parametrize(
+        "document",
+        [{"metadata": {}}, {"classifications": None}, {"classifications": {"a": 1}}, ["bare", "list"], "text"],
+        ids=["no-list-key", "null-list", "object-not-list", "bare-list", "scalar"],
+    )
+    def test_a_file_that_is_not_a_classification_file_is_refused(self, tmp_path, document):
+        """A present file with no record list raises rather than reading as empty.
+
+        Read as empty, every index parented in it would inherit nothing and the
+        catch-all would write its files a second row; only an absent file means
+        "that producer did not run".
+        """
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps(document))
+        with pytest.raises(ValueError, match="not a classification file"):
+            load_classifications(cls_file, key=ANVIL_KEY)
+
+    def test_a_row_that_is_not_an_object_is_refused(self, tmp_path):
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"classifications": ["stray"]}))
+        with pytest.raises(ValueError, match="row is not an object"):
+            load_classifications(cls_file, key=ANVIL_KEY)
+
     def test_csi_inherits_from_bed_parent(self, tmp_path):
         """End-to-end: a .csi index file inherits classification from its .bed.gz parent.
 

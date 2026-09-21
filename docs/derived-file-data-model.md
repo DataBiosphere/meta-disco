@@ -280,9 +280,11 @@ Two things to notice. First, the index's own identity is complete and honest:
 `data_type: index` (its real content type), and the three biological dimensions
 `not_applicable`. Nothing about the parent is copied into these values. Second,
 the `derived_from` block is a **typed edge**: `relation` is the verb (`index_of`),
-`parent_md5sum` is the pointer to the record where the parent's real values live,
-and `parent_file` / `parent_kind` ride along so a human or a report can read the
-relationship without a second lookup.
+`parent_md5sum` and `parent_file` ground it in the parent as the catalog spells it,
+and `parent_kind` rides along so a human or a report can read the relationship
+without a second lookup. What the edge does *not* yet carry is the parent's record
+key, so today it is a grounding, not a resolvable pointer: an AnVIL md5 can name two
+records that classify differently (#486). Carrying the key is #371.
 
 The crucial difference from today's behavior: the index's own `data_modality`
 stays `not_applicable`. We store a **pointer** to where "genomic" lives, we do
@@ -321,12 +323,15 @@ files** that didn't match on their own:
 
 - `NA12878.bam` → own value `genomic` → **include**.
 - `NA12878.bam.bai` → own value `not_applicable`. Before discarding, check for a
-  `derived_from`. It has one: `parent_md5sum: aaa111`. Look up record `aaa111` —
-  that's the BAM, which is `genomic`. So **include the index too**, labeled
-  "genomic (inherited from NA12878.bam)."
+  `derived_from`. It has one, and once the edge carries the parent's record key
+  (#371) the search looks that record up — that's the BAM, which is `genomic`. So
+  **include the index too**, labeled "genomic (inherited from NA12878.bam)."
 
-"Look up record `aaa111`" — `records["aaa111"]` — *is* following the link. It
+That lookup — `records[<parent's record key>]` — *is* following the link. It
 happens at search time precisely so we don't have to bake the value into storage.
+It is not possible on today's edge: `parent_md5sum` is not a record key (the
+same-bytes case in #486 makes `records[md5]` ambiguous), which is why the index's
+inherited values are copied at write time for now.
 
 ### 5c. Why follow at query time instead of copying once?
 

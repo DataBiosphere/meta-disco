@@ -194,16 +194,24 @@ def keyed_rows(paths: Iterable[Path], key: RecordKey) -> Iterator[tuple[str, dic
     A path that is not a file yields nothing: a run writes only the producers that ran.
     The envelope's record list is read under ``classifications``, then a legacy
     ``results``, the precedence ``output_utils._records_in`` uses; unlike that tolerant
-    reader, a file of any other shape (a bare list, a non-dict row) is not skipped here
-    but fails on the shape, since a reader keyed on identity cannot count a row it did
-    not read.
+    reader, a file of any other shape — no list under either key, a bare list, a
+    non-dict row — raises rather than reading as empty, since a reader keyed on identity
+    cannot count a row it did not read.
     """
     for path in paths:
         if not path.is_file():
             continue
         with path.open() as f:
             data = json.load(f)
-        for row in data.get("classifications", data.get("results", [])):
+        rows = data.get("classifications", data.get("results")) if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError(
+                f"{path}: not a classification file — no list under `classifications` (or the "
+                f"legacy `results`); a reader keyed on identity cannot treat that as empty."
+            )
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError(f"{path}: classification row is not an object: {row!r}")
             value = row.get(key.output_field)
             if not is_key_value(value):
                 raise ValueError(
