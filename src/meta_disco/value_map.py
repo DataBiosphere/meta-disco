@@ -23,8 +23,9 @@ and may name slots other than the match slot; an authored row must carry it, and
 ``declares: {}`` is the deliberate ruling that the value means nothing here. ``value`` is a string or, for a list cell, a
 list of strings; ``alternates`` are further spellings. An id is ``<slot>.<slug>``,
 which is what keeps row ids apart from rule ids without either loader reading the
-other: no rule id in the rule set, its assay rules, or the ``rule_id=`` literals of
-the content classifiers contains a dot, and ``test_value_map`` checks all three.
+other: no rule id in the rule set, its assay rules, or the literals the content
+classifiers write (keyword, dictionary entry or ``*_RULE_ID`` constant) contains a
+dot, and ``test_value_map`` checks each.
 
 **Matching** casefolds and strips, nothing more; ``test_value_map`` checks that this
 cannot merge two terms of any slot's vocabulary. A list cell (a JSON array of strings,
@@ -60,7 +61,7 @@ from pathlib import Path
 import yaml
 
 from .manifest_survey import name_tokens
-from .models import AUTHORABLE_STATUSES, CLASSIFICATION_FIELDS
+from .models import AUTHORABLE_STATUSES, CLASSIFICATION_FIELDS, required_str
 from .rule_engine import make_claim
 from .schema_vocab import value_in_vocabulary
 from .slot_map import NO_NOTES, NOTES
@@ -347,11 +348,14 @@ def _scope(node: yaml.Node, at: str) -> Scope:
 
 
 def _identifier(node: yaml.Node, at: str) -> str:
-    """A scope member: a non-empty, single-line string, as ``ClaimSource`` requires of the provenance it must equal."""
+    """A scope member, held to ``required_str`` — the check ``ClaimSource`` puts on the provenance a scoped row must equal."""
     text = _scalar(node, at)
-    if not text.strip() or "\n" in text:
+    if not text.strip():
         raise ValueError(f"{at}: {text!r} is not an identifier — a scope names a source or dataset evidence can carry")
-    return text
+    try:
+        return required_str(text, "identifier", at)
+    except ValueError as exc:
+        raise ValueError(f"{at}: {text!r} is not an identifier — {exc}") from exc
 
 
 def _reason(node: yaml.Node, at: str) -> str:
