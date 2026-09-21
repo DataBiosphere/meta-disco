@@ -386,14 +386,10 @@ datasets:
       location:
         data_type:
           - {table_name: chains}
-        reference_assembly:
-          - {table_name: chm13}
     chains_to_grch38_mc:
       location:
         data_type:
           - {table_name: chains}
-        reference_assembly:
-          - {table_name: grch38}
     deepconsensus:
       path:
         platform:

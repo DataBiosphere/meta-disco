@@ -940,7 +940,7 @@ def test_the_bundled_table_covers_every_hprc_fixture_value():
     queued = review_queue(FIXTURE_EVIDENCE_ROOT, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
     assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE
-    assert len(queued) == 17
+    assert len(queued) == 16
 
 
 def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
