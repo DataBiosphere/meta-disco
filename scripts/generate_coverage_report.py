@@ -38,9 +38,10 @@ DIMENSIONS = [
         "assay_type",
         "Assay Type",
         "**Note**: Like platform, assay type is inherently unknowable for most "
-        "derived formats. Only BAM/CRAM (via `@PG` programs and, for long-read "
-        "platforms, the resolved modality) and filename patterns can determine "
-        "assay; no rule reads file size (#430). The high not-classified rate is "
+        "derived formats. It is determined by BAM/CRAM headers (`@PG` programs "
+        "and, for long-read platforms, the resolved modality), by filename patterns, "
+        "and by extension where the format implies it (`.idat` is a methylation "
+        "array); no rule reads file size (#430). The high not-classified rate is "
         "expected.",
     ),
 ]

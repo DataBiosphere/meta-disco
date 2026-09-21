@@ -916,7 +916,10 @@ All rules are defined in `src/meta_disco/rules/unified_rules.yaml`. The counts b
 by the rule's `scope` — the kind of evidence it reads — as the loader reports them, so
 they describe the file as it is rather than as it was last summarised. #430 cut the set
 from 129 rules to 59, deleting every rule that fired on no file in either
-catalog; every rule left fires on something in the data.
+catalog. Every rule left fires on something in the data, with two deliberate exceptions kept for
+what they guard rather than what they match: `index_file`, the engine's backstop for an index the
+index producer misses, and `image_svs_histology`, which `EXTENSION_MAP` binds by an invariant that
+every image extension has a rule.
 
 | Scope                        | Rule Count |
 | ---------------------------- | ---------- |
