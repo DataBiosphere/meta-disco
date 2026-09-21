@@ -37,6 +37,7 @@ from meta_disco.value_map import (
     load_value_map,
     match_key,
     normalize,
+    render_queue,
     review_queue,
     row_id,
     seed,
@@ -582,6 +583,21 @@ def test_ac22_reseeding_leaves_an_authored_row_untouched_and_mints_no_second_row
     assert table_path.read_bytes() == after
 
 
+def test_a_row_scoped_to_one_dataset_does_not_cover_the_same_key_from_another(tmp_path, evidence_root):
+    """The seeder asks selection with the line's provenance (3.7); a key with a row only under another scope has none here."""
+    table_path = tmp_path / "map.yaml"
+    table_path.write_text(
+        "rows:\n  - id: platform.revio@anvil.AnVIL_HPRC_R2\n    match: {slot: platform, value: Revio}\n"
+        "    scope: {source: anvil, dataset: AnVIL_HPRC_R2}\n"
+    )
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
+    write_generation(evidence_root, "ANVIL_T2T", "hifi", [entry("platform", "Revio", dataset="ANVIL_T2T")])
+    assert seed(table_path, evidence_root).rows_added == ("platform.revio",)
+    table = load_value_map(table_path)
+    assert table.select("platform", "Revio", "anvil", "AnVIL_HPRC_R2").id == "platform.revio@anvil.AnVIL_HPRC_R2"
+    assert table.select("platform", "Revio", "anvil", "ANVIL_T2T").id == "platform.revio"
+
+
 def test_a_seed_that_would_not_reload_restores_the_file(empty_table, evidence_root, monkeypatch):
     import meta_disco.value_map as vm
 
@@ -638,6 +654,18 @@ rows:
         "library_strategy",
     )
     assert (listed.slot, listed.raw_value, listed.files, listed.row_id) == ("assay_type", "Hi-C", 3, "assay_type.hi_c")
+
+
+def test_a_raw_value_with_a_line_ending_stays_in_one_queue_row(tmp_path, evidence_root):
+    """Evidence keeps a raw value verbatim, line endings included; the rendered queue must not split on them."""
+    table = load(tmp_path, "rows:\n")
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Sequel\r\nII"), entry("platform", "a|b")]
+    )
+    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
+    rows = [line for line in rendered.splitlines() if line.startswith("| 1 ")]
+    assert len(rows) == 2
+    assert "\r" not in rendered and "`Sequel II`" in rendered and "a\\|b" in rendered
 
 
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):

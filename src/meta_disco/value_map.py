@@ -40,7 +40,7 @@ since whether they collide depends on which cells a file has (4.8).
 the reconcile stage (#432) and the tests. The seeder and the review queue read evidence
 files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
 output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
-key)`` no row of any scope matches, after the last row, so an authored row is untouched
+key)`` no row selects for, after the last row, so an authored row is untouched
 byte for byte; it reloads the file afterwards and restores the original bytes if the
 reload fails.
 """
@@ -203,10 +203,6 @@ class ValueMap:
         row = next((r for scope in scopes if (r := self._index.get((slot, key, scope))) is not None), None)
         self._selected[memo] = row
         return row
-
-    def keyed(self) -> frozenset[tuple[str, Key]]:
-        """Every ``(slot, key)`` some row of any scope matches — what the seeder does not mint again."""
-        return frozenset((slot, key) for slot, key, _ in self._index)
 
     def by_id(self, id: str) -> Row:
         return next(row for row in self.rows if row.id == id)
@@ -459,9 +455,11 @@ class _Seen:
 
 
 def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None = None) -> SeedResult:
-    """Append one seeded row per ``(slot, key)`` the evidence carries and no row of any scope matches.
+    """Append one seeded row per ``(slot, key)`` the evidence carries and no row selects for.
 
-    A new row is unscoped, has no reason, spells the value as the first line that
+    "Selects" is :meth:`ValueMap.select` with the line's provenance (3.7), so a row scoped
+    to one source or dataset does not stand in for the same key seen from another — that
+    evidence has no row and gets its unscoped seed. A new row is unscoped, has no reason, spells the value as the first line that
     carried it did (a list cell as a list), lists every other spelling of the same key
     as an alternate, and records the generation directories it was seen in. A rerun
     over the same evidence adds nothing.
@@ -469,7 +467,6 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     original = table_path.read_bytes()
     text = original.decode("utf-8")
     table = load_value_map(table_path)
-    keyed = table.keyed()
     seen: dict[tuple[str, Key], _Seen] = {}
     paths = _current_paths(evidence_root, datasets)
     lines_scanned = 0
@@ -477,11 +474,11 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         where = _generation_name(evidence_root, path)
         for entry in iter_evidence(path):
             lines_scanned += 1
+            if table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset) is not None:
+                continue
             elements = list_cell(entry.raw_value)
             spelling = entry.raw_value if elements is None else elements
             key = (entry.field, match_key(spelling))
-            if key in keyed:
-                continue
             if key not in seen:
                 seen[key] = _Seen(spelling, [], [where])
             else:

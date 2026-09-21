@@ -8,11 +8,12 @@ from .models import field_label, field_value
 def escape_md_cell(text: str) -> str:
     """Escape characters that break a markdown table cell.
 
-    A pipe closes the cell and a newline closes the row, so a value carrying
-    either — a catalog-supplied dataset title, an evidence reason — would silently
-    reshape the table. Shared by every report that renders one.
+    A pipe closes the cell and a line ending closes the row — CommonMark reads a
+    carriage return as one too — so a value carrying any of them (a catalog-supplied
+    dataset title, an evidence reason, a verbatim raw value) would silently reshape
+    the table. Shared by every report that renders one.
     """
-    return text.replace("|", "\\|").replace("\n", " ")
+    return text.replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
 
 def md_table(header: list[str], rows: list[list[str]], align: Literal["left", "right"] = "left") -> list[str]:
