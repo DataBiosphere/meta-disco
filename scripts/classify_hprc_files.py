@@ -11,16 +11,18 @@ AnVIL's own catalog includes the HPRC dataset, and the HPRC Data Explorer's meta
 richer ground truth, so classifying the HPRC catalogs and comparing against them
 (``validate_against_hprc.py``) is how we quality-check our calls on the AnVIL HPRC files.
 
-Steps (issue #276):
+Steps (issue #276), in the order ``main`` runs them:
   1. Load the catalogs (downloaded by ``download_hprc_catalogs.py`` / ``make download-hprc``).
-  2. Fill ``file_size`` from S3 (HTTP HEAD) where the catalog omits it — only the
+  2. Map every record into the meta-disco shape (``file_name``, ``file_format``,
+     ``file_md5sum``, ``url``, ``file_size``) — ``map_catalog``, no network.
+  3. Keep one record per URL (``one_record_per_url``): the alignments catalog lists some
+     files twice. Before the size fill, so a repeated URL is looked up once.
+  4. Fill ``file_size`` from S3 (HTTP HEAD) where the catalog omits it — only the
      sequencing-data catalog does; assemblies/alignments/annotations carry ``fileSize``.
-  3. Map every record into the meta-disco shape (``file_name``, ``file_format``,
-     ``file_md5sum``, ``url``, ``file_size``) and write one metadata file, in an
-     envelope naming the repository, one record per URL (``one_record_per_url``). A
-     record with no URL has no ``file_md5sum`` and is excluded at the shared load,
-     named in the run's ``excluded_files.json`` (#376).
-  4. Run the shared classifier over it, exactly as AnVIL does.
+  5. Write one metadata file, in an envelope naming the repository. A record with no URL
+     has no ``file_md5sum`` and is excluded at the shared load, named in the run's
+     ``excluded_files.json`` (#376).
+  6. Run the shared classifier over it, exactly as AnVIL does.
 """
 
 import argparse
