@@ -44,8 +44,11 @@ def get_evidence_path(evidence_dir: Path, md5sum: str) -> Path:
 
 
 def cached_md5sums(evidence_dir: Path) -> set[str]:
-    """The stem of every ``<shard>/*.json`` under ``evidence_dir`` — the cached md5s,
-    from one walk of the shard directories.
+    """The stem of every ``<shard>/<shard>*.json`` under ``evidence_dir`` — the cached
+    md5s, from one walk of the shard directories.
+
+    An entry counts only in the shard :func:`get_evidence_path` would put it in, so a
+    file misplaced under another shard is not reported cached and then never read.
 
     The inverse of :func:`get_evidence_path`, kept beside it so the layout lives in
     one place. A producer asking which of its files are cached used to ``stat``
@@ -54,14 +57,18 @@ def cached_md5sums(evidence_dir: Path) -> set[str]:
     """
     cached: set[str] = set()
     try:
-        shards = [shard.path for shard in os.scandir(evidence_dir) if shard.is_dir()]
+        shards = [(shard.name, shard.path) for shard in os.scandir(evidence_dir) if shard.is_dir()]
     except FileNotFoundError:
         return cached
-    for shard in shards:
+    for name, path in shards:
         # `data/` is shared by every clone; a shard cleared by another run between
         # the two listings is an empty shard here, as its files were uncached before.
         try:
-            cached.update(entry.name[:-5] for entry in os.scandir(shard) if entry.name.endswith(".json"))
+            cached.update(
+                entry.name[:-5]
+                for entry in os.scandir(path)
+                if entry.name.endswith(".json") and entry.name.startswith(name)
+            )
         except FileNotFoundError:
             continue
     return cached

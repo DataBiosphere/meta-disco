@@ -293,6 +293,10 @@ class TestCachedMd5sums:
             path.write_text("{}")
         (tmp_path / "ab" / "notes.txt").write_text("")  # not evidence
         (tmp_path / "README").write_text("")  # not a shard
+        # A file in the wrong shard is one get_evidence_path would never read, so it
+        # is not cached either — reporting it would skip the record as done.
+        misplaced = "ef" + "2" * 30
+        (tmp_path / "ab" / f"{misplaced}.json").write_text("{}")
         assert cached_md5sums(tmp_path) == {a, b}
 
     def test_a_missing_cache_is_empty(self, tmp_path):
