@@ -441,10 +441,9 @@ rules:
       extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)(^|[._-])hifi|_pb_"
     then:
-      data_modality: genomic
       data_type: alignments
       platform: PACBIO
-    rationale: "HiFi names PacBio's read chemistry: it says the platform, not the assay (#430)"
+    rationale: "HiFi names PacBio's read chemistry: it says the platform, not the assay or the modality — Iso-Seq is HiFi too (#430)"
 
   - id: alignment_star_aligner
     tier: 2

@@ -329,8 +329,8 @@ data_modality
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   Tier 3: Header Inspection                         │
-│  BAM @RG/@PG, VCF ##source/##contig, FASTQ read names               │
+│           Tier 3: Header Rules · Tier 4: Content Reads              │
+│  @RG/@PG, ##source, read names · contig lengths, FASTA/GFA/BED bytes │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -365,12 +365,11 @@ Rules are evaluated in order of confidence, with higher-confidence rules taking 
 
 Match regular expressions against filenames to infer modality or reference.
 
-| Example Pattern  | Classification       | Confidence           |
-| ---------------- | -------------------- | -------------------- | -------------- | --- |
-| `(?i)(rna        | rnaseq               | transcriptom)`       | transcriptomic | 85% |
-| `(?i)(wgs        | whole.?genome)`      | genomic.whole_genome | 85%            |
-| `(?i)(hg38       | grch38)`             | GRCh38               | 90%            |
-| `(?i)\.hifi[_.]` | genomic.whole_genome | 80%                  |
+| Rule                        | Pattern                  | Classification               |
+| --------------------------- | ------------------------ | ---------------------------- |
+| `alignment_isoseq_filename` | `(?i)\.flnc\.`           | data_modality transcriptomic.bulk |
+| `filename_ref_grch38`       | `(?i)(hg38\|grch38\|…)`   | reference_assembly GRCh38    |
+| `alignment_hifi_filename`   | `(?i)(^\|[._-])hifi\|_pb_` | platform PACBIO — the chemistry, not a modality or assay (#430) |
 
 #### Header Inspection Rules
 

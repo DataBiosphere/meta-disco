@@ -22,12 +22,12 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (HiFi), header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
+- `genomic` ← header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
 - `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
 - `RNA-seq` ← STAR in @PG (`rnaseq_program`), or any transcriptomic modality (`rnaseq_modality`)
-- `WGS` is no longer inferred: `hifi` names a chemistry and a long-read platform is not an assay (#430)
+- `WGS` is no longer inferred: `hifi` names a chemistry, which says neither assay nor modality, and a long-read platform is not an assay (#430)
 
 **platform**:
 - `ILLUMINA` ← header @RG PL:ILLUMINA

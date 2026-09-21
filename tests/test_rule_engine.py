@@ -892,9 +892,10 @@ class TestIntegration:
     """Integration tests against real filenames from API exploration."""
 
     def test_hifi_bam(self, engine):
-        """HiFi reads BAM file."""
-        result = engine.classify(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
-        assert result.data_modality == "genomic"
+        """HiFi reads BAM file: the name says the platform, not the modality (#430)."""
+        result = engine.classify_extended(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
+        assert result.platform == "PACBIO"
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_vcf_with_chr(self, engine):
         """VCF with chromosome in filename."""
@@ -949,7 +950,8 @@ class TestConflictingClassificationFields:
 
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.flnc.hifi_reads.bam"))
+        # `cpg` says methylation and `counts` says expression, both at tier 2.
+        result = engine.classify_extended(FileInfo.from_filename("sample.cpg.counts.bed"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
@@ -1492,9 +1494,9 @@ class TestOutputDictStatus:
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives
         # in `status` with `value` nulled out — no sentinels in `value`.
         classified = engine.classify_extended(FileInfo.from_filename("sample.hifi_reads.bam")).to_output_dict()[
-            "data_modality"
+            "platform"
         ]
-        assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)
+        assert (classified["value"], classified["status"]) == ("PACBIO", CLASSIFIED)
 
         n_a = engine.classify_extended(FileInfo.from_filename("plot.png")).to_output_dict()["reference_assembly"]
         assert (n_a["value"], n_a["status"]) == (None, NOT_APPLICABLE)
