@@ -308,29 +308,23 @@ def _sample_matches(pattern, cap=64):
     return walk(_sre_parse(pattern))
 
 
-# Tokens deliberately left unanchored, because matching them *inside* a word is the
-# wanted behavior and no realistic accession can spell them. Each is at least eight
-# characters, so it cannot fit inside the eight-character variable part of an IGVF
-# accession; the risk anchoring would guard against does not exist for them, and the
-# cost is real — `hypermethylation.bed` and `pseudocounts.bed` both stop matching.
+# Tokens deliberately left unanchored. Each is nine or ten characters, so it cannot
+# fit inside the eight-character variable part of an IGVF accession — the collision
+# this guard exists to catch is not available to them.
 #
-# The rule of thumb this encodes: anchor a token only where a collision is plausible
-# *and* an intra-word match would be meaningless. Where those conflict, word-forming
-# wins. Measuring zero corpus cost is not a reason to anchor — this corpus holding no
-# `hypermethylation.bed` says nothing about whether the match is wanted.
+# The shorter word-forming tokens this set used to hold are gone rather than exempt:
+# measured across 444,321 filenames in both catalogs, `assembly`, `mosdepth`, `counts`
+# and the rest are never used intra-word, and the compounds that argued for them
+# (`hypermethylation`, `reassembly`) do not occur. Where an alternative matched nothing
+# at all it was deleted outright; where it carries files it is anchored. The claim
+# above is what is left once both were done, and it is now true of every member.
 WORD_FORMING = {
-    "assembly": "reassembly, subassembly",
-    "haplotype": "pseudohaplotype",
-    "methylat": "hypermethylation, demethylation",
-    "bisulfite": "post-bisulfite",
-    "counts": "pseudocounts, readcounts",
-    "expression": "overexpression, coexpression",
-    "leafcutter": "a tool name, never inside an accession",
-    "modbam2bed": "a tool name, never inside an accession",
-    "unreliable": "long enough that no accession spells it",
-    "mosdepth": "a tool name, never inside an accession",
-    "flagstat": "a tool name, never inside an accession",
-    "purgedups": "a tool name, never inside an accession",
+    "haplotype": "nine characters; carries 12,808 files, all delimited",
+    "bisulfite": "nine characters; an assay name",
+    "leafcutter": "ten characters; a tool name",
+    "expression": "ten characters; carries five `text_counts` files",
+    "modbam2bed": "ten characters; a tool name",
+    "unreliable": "ten characters",
 }
 
 
