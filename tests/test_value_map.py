@@ -860,11 +860,12 @@ rows:
 
 def test_every_empty_spelling_of_rows_can_be_seeded(tmp_path, evidence_root):
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
-    for spelling in ("rows:\n", "rows: []\n", "rows: null\n", "rows: ~\n"):
+    for spelling in ("rows:\n", "rows: []\n", "rows: null\n", "rows: ~\n", "rows: []  # awaiting evidence\n"):
         table_path = tmp_path / "map.yaml"
         table_path.write_text(spelling)
         assert seed(table_path, evidence_root).rows_added == ("platform.revio",), spelling
         assert len(load_value_map(table_path).rows) == 1
+    assert "# awaiting evidence" in table_path.read_text(), "the comment survives the rewrite"
 
 
 def test_the_text_of_an_empty_array_is_a_scalar_not_a_list_cell():
@@ -914,18 +915,29 @@ rows:
     )
 
 
+SEEDED_IN_BUNDLED_TABLE = [
+    "assay_type.isoseq",
+    "data_modality.transcriptomic",
+    "data_type.alignments",
+    "data_type.chains",
+    "data_type.gaps",
+    "data_type.sequences",
+    "reference_assembly.chm13",
+]
+
+
+def test_the_bundled_table_covers_every_hprc_fixture_value():
+    """Every fixture line selects a row of the bundled table, and the ones it leaves queued are exactly the
+    seven seeded values — so a deleted or misspelled authored row would surface here as a new queue entry."""
+    queued = review_queue(FIXTURE_EVIDENCE_ROOT, load_value_map(), datasets=HPRC_DATASETS)
+    assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
+    assert sorted({e.row_id for e in queued}) == SEEDED_IN_BUNDLED_TABLE
+    assert len(queued) == 17
+
+
 def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     table = load_value_map()
-    seeded = sorted(row.id for row in table.rows if not row.authored)
-    assert seeded == [
-        "assay_type.isoseq",
-        "data_modality.transcriptomic",
-        "data_type.alignments",
-        "data_type.chains",
-        "data_type.gaps",
-        "data_type.sequences",
-        "reference_assembly.chm13",
-    ]
+    assert sorted(row.id for row in table.rows if not row.authored) == SEEDED_IN_BUNDLED_TABLE
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}

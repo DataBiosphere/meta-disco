@@ -96,8 +96,9 @@ _WHERE = "value map"
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
 _ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
-# Every spelling of an empty `rows` the loader accepts: an empty flow list or a YAML null.
-_EMPTY_ROWS = re.compile(r"^rows:[ \t]*(?:\[[ \t]*\]|~|null|Null|NULL)?[ \t]*$", re.MULTILINE)
+# Every spelling of an empty `rows` the loader accepts — an empty flow list or a YAML
+# null — with any trailing comment kept.
+_EMPTY_ROWS = re.compile(r"^rows:[ \t]*(?:\[[ \t]*\]|~|null|Null|NULL)?[ \t]*(?P<comment>#.*)?$", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -502,7 +503,7 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     if not table.rows:
         # `rows: []` and `rows: null` load as an empty table, but a block item cannot
         # follow either, so the empty value is spelled as the bare key before appending.
-        text = _EMPTY_ROWS.sub("rows:", text)
+        text = _EMPTY_ROWS.sub(lambda m: "rows:" + (f"  {m['comment']}" if m["comment"] else ""), text)
     indent = _row_indent(text)
     added: list[str] = []
     block = []
