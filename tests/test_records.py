@@ -170,3 +170,13 @@ class TestRunMetadata:
             total=3, successful=2, from_cache=1, content_unreadable=0, errored=1, validation_failed=0
         ).to_dict()
         assert list(d) == _METADATA_KEYS
+
+
+def test_the_output_spelling_of_the_checksum_is_the_records_field():
+    """`OUTPUT_MD5SUM_FIELD` is what an HPRC run keys its rows on (#446); a rename of the
+    record's field without it would leave every HPRC row keyless."""
+    from dataclasses import fields
+
+    from meta_disco.records import OUTPUT_MD5SUM_FIELD, OutputRecord
+
+    assert OUTPUT_MD5SUM_FIELD in {f.name for f in fields(OutputRecord)}

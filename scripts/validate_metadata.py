@@ -6,7 +6,10 @@ multi-hour `make classify`, so an API shape change (a renamed key, a newly-null
 column, a stringified `file_size`) is caught in seconds with a grouped summary
 instead of surfacing as a per-record failure deep in the run. See issue #161.
 
-Exits non-zero if any record violates the contract.
+Exits non-zero if any record violates the contract, if the envelope names no repository
+with a declared record key (`pipeline.SOURCE_RECORD_KEYS`, #446), or if that key is
+carried by more than one record — the two things a run needs of its input beyond the
+records themselves, checked here so they stop a run before it starts.
 
 Usage:
     python scripts/validate_metadata.py
@@ -19,7 +22,7 @@ import sys
 from pathlib import Path
 
 from meta_disco.metadata_schema import validate_records
-from meta_disco.pipeline import load_records
+from meta_disco.pipeline import load_snapshot, record_key, repeated_key_values
 
 DEFAULT_INPUT = Path("data/anvil/anvil_files_metadata.json")
 
@@ -41,7 +44,7 @@ def main(argv=None) -> int:
 
     print(f"Validating {args.input} …")
     try:
-        records = load_records(args.input)
+        metadata, records = load_snapshot(args.input)
     except (json.JSONDecodeError, TypeError, ValueError, OSError) as exc:
         # A truncated or wrong-shaped download — or an unreadable file (OSError) — is
         # exactly what this gate exists to catch: report it as a failure, not an
@@ -57,7 +60,30 @@ def main(argv=None) -> int:
 
     report = validate_records(records)
     print(report.summary())
-    return 0 if report.ok else 1
+    ok = report.ok
+
+    # The envelope, which the record contract never sees: a run resolves its record key
+    # from it, and refuses to start without one.
+    try:
+        key = record_key(metadata, args.input)
+    except ValueError as exc:
+        print(f"FAIL — {exc}")
+        return 1
+
+    repeated = repeated_key_values(records, key)
+    if repeated:
+        examples = ", ".join(f"{value} (x{n})" for value, n in sorted(repeated.items())[:_REPEATS_SHOWN])
+        more = f", +{len(repeated) - _REPEATS_SHOWN:,} more" if len(repeated) > _REPEATS_SHOWN else ""
+        print(
+            f"FAIL — {len(repeated):,} value(s) of {key.input_field} are carried by more than one "
+            f"record, but a run keys on it as unique per file: {examples}{more}"
+        )
+        ok = False
+    return 0 if ok else 1
+
+
+# Repeated key values to name before printing a count instead.
+_REPEATS_SHOWN = 10
 
 
 if __name__ == "__main__":

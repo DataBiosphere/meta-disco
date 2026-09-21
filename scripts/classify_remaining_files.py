@@ -25,7 +25,7 @@ from meta_disco.metadata_schema import (
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, record_key
+from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, record_key
 from meta_disco.producers import PRODUCERS
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
@@ -83,6 +83,10 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
 def classify_remaining(metadata_path: Path, output_path: Path, classification_paths: list[Path]):
     """Classify files not handled by other classifiers."""
 
+    # Before the load: an envelope naming no repository is refused without parsing the
+    # corpus or writing anything into the run directory.
+    key = record_key(load_envelope(metadata_path), metadata_path)
+
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
@@ -90,7 +94,6 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     source, files = snapshot.source, snapshot.records
     print(f"Loaded {len(files):,} files from metadata")
 
-    key = record_key(snapshot.metadata, metadata_path)
     already = load_already_classified(classification_paths, key)
     print(f"Already classified by other scripts: {len(already):,}")
 

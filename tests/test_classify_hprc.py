@@ -133,3 +133,20 @@ class TestOneRecordPerUrl:
         assert [r["file_md5sum"] for r in records] == [None, None]
         kept, collapsed = hprc.one_record_per_url(records)
         assert collapsed == 0 and len(kept) == 2
+
+    def test_a_repeated_url_without_a_size_is_headed_once(self, monkeypatch):
+        """The collapse runs on mapped records, before the size fill: one HEAD per URL,
+        and a lookup that failed on one copy cannot make the two records differ."""
+        calls = []
+
+        def head(url, **kw):
+            calls.append(url)
+            return 7
+
+        monkeypatch.setattr(hprc, "fetch_content_length", head)
+        rows = [{"filename": "r.bam", "path": "s3://bucket/r.bam"}] * 2
+        kept, collapsed = hprc.one_record_per_url(hprc.map_catalog(rows, "path"))
+        hprc.fill_sizes(kept, workers=1)
+        assert collapsed == 1
+        assert [r["file_size"] for r in kept] == [7]
+        assert len(calls) == 1

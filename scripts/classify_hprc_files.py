@@ -70,17 +70,25 @@ def path_key(path: str) -> str:
 def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int) -> list[dict]:
     """Map one HPRC catalog into meta-disco records, S3-HEAD-filling any missing file_size.
 
+    :func:`map_catalog` then :func:`fill_sizes`. ``main`` calls the two apart, with
+    :func:`one_record_per_url` between them, so a URL the catalogs list twice is
+    HEADed once and cannot come out of the fill with two sizes.
+    """
+    records = map_catalog(catalog, url_field)
+    fill_sizes(records, workers=workers)
+    return records
+
+
+def map_catalog(catalog: list[dict], url_field: str) -> list[dict]:
+    """Map one HPRC catalog into meta-disco records; no network.
+
     Each record carries the meta-disco fields the classifier reads: ``file_name``,
     ``file_format``, ``file_md5sum`` (synthesized as the cache key — a hash of the full
     path, not the basename, so same-named files at different paths don't collide),
-    ``url`` (explicit S3, from the catalog's own location field), and ``file_size``. A
-    size the catalog omits is read from S3 in parallel (HEAD); a size that cannot be
-    obtained is left ``None`` — never fabricated — so the classifier's contract gate
-    marks the file not_classified rather than guessing (issue #276). In practice only
-    the sequencing-data catalog lacks ``fileSize``; the others supply it and are never HEADed.
+    ``url`` (explicit S3, from the catalog's own location field), and ``file_size``,
+    ``None`` where the catalog omits it (:func:`fill_sizes` reads those from S3).
     """
     records = []
-    needs_size = []  # records missing a catalog fileSize — filled by S3 HEAD below
     for rec in catalog:
         fn = rec.get("filename", "")
         s3_path = rec.get(url_field, "")
@@ -101,9 +109,18 @@ def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int)
             "file_size": size if isinstance(size, int) else None,
         }
         records.append(record)
-        if record["file_size"] is None and url:
-            needs_size.append(record)
+    return records
 
+
+def fill_sizes(records: list[dict], *, workers: int) -> None:
+    """Read from S3 (HEAD, in parallel) the ``file_size`` of every record that has a URL and no size.
+
+    A size that cannot be obtained is left ``None`` — never fabricated — so the
+    classifier's contract gate marks the file not_classified rather than guessing
+    (issue #276). In practice only the sequencing-data catalog lacks ``fileSize``; the
+    others supply it and are never HEADed.
+    """
+    needs_size = [r for r in records if r["file_size"] is None and r["url"]]
     if needs_size:
         print(f"Fetching {len(needs_size)} file sizes from S3 (HEAD, {workers} workers)...", flush=True)
 
@@ -119,19 +136,19 @@ def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int)
         if failed:
             print(f"  {failed} size lookups failed — those files are not_classified (size unavailable)")
 
-    return records
-
 
 def one_record_per_url(records: list[dict]) -> tuple[list[dict], int]:
     """Collapse records that name the same URL into one; return the count collapsed.
 
     The alignments catalog lists some files twice: the same location as ``https://``
-    and as ``s3://``, and one index under two alignment names. The record built from
+    and as ``s3://``, and one index under two alignment names. The record mapped from
     either row is identical, so the first is kept — and that is checked, because a
     catalog row that differed would be a second fact about the file, not a repeat, and
-    halving it silently would lose it. Without the collapse the one-row-per-file check
-    (#445) fails the run on the URL-hash key (#446). A record with no URL has no key
-    and is kept for the shared load to exclude (#376).
+    halving it silently would lose it. Runs on mapped records before :func:`fill_sizes`,
+    or one URL would be HEADed per row and a lookup that failed on one copy would make
+    the two differ. Without the collapse the one-row-per-file check (#445) fails the run
+    on the URL-hash key (#446). A record with no URL has no key and is kept for the
+    shared load to exclude (#376).
     """
     kept: list[dict] = []
     first: dict[str, dict] = {}
@@ -208,11 +225,12 @@ def main():
         if args.limit is not None:
             catalog = catalog[: args.limit]
         print(f"Mapping {len(catalog)} {catalog_name} records into the meta-disco shape...")
-        all_records += build_metadata_records(catalog, url_field, workers=args.workers)
+        all_records += map_catalog(catalog, url_field)
 
     all_records, collapsed = one_record_per_url(all_records)
     if collapsed:
         print(f"Collapsed {collapsed} catalog row(s) listing a file already listed at the same URL")
+    fill_sizes(all_records, workers=args.workers)
 
     args.metadata_out.parent.mkdir(parents=True, exist_ok=True)
     with args.metadata_out.open("w") as f:
