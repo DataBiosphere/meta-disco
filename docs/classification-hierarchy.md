@@ -22,43 +22,46 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs)
-- `transcriptomic.bulk` ← filename (IsoSeq, STAR), header @PG PN (STAR, HISAT2, TopHat, Salmon, Kallisto, IsoSeq)
+- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, ccs)
+- `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
 - `WGS` ← filename (HiFi), long-read platform with genomic modality (`wgs_longread`), PacBio HiFi header, CCS program
-- `RNA-seq` ← STAR/HISAT2/TopHat/Salmon/Kallisto in @PG, IsoSeq
+- `RNA-seq` ← STAR in @PG (`rnaseq_program`), or any transcriptomic modality (`rnaseq_modality`)
 
 **platform**:
 - `ILLUMINA` ← header @RG PL:ILLUMINA
-- `PACBIO` ← header @RG PL:PACBIO, filename (HiFi, PacBio), @PG PN:ccs/lima/isoseq
-- `ONT` ← header @RG PL:ONT/NANOPORE
+- `PACBIO` ← header @RG PL:PACBIO, filename (HiFi), @PG PN:ccs
+- `ONT` ← header @RG PL:ONT
 
 **reference_assembly**:
-- `GRCh38` ← filename (hg38, grch38), header @SQ SN/AS pattern, contig lengths (definitive)
-- `GRCh37` ← filename (hg19, grch37, b37), header @SQ SN/AS pattern, contig lengths (definitive)
-- `CHM13` ← filename (chm13, t2t, hs1), header @SQ SN/AS pattern, contig lengths (definitive)
+- `GRCh38` ← filename (hg38, grch38), contig lengths (definitive)
+- `GRCh37` ← filename (hg19, grch37, b37), contig lengths (definitive)
+- `CHM13` ← filename (chm13, t2t, hs1), contig lengths (definitive)
 - `not_applicable` ← no @SQ lines (unaligned)
 
-**Coverage**: Best covered format. All 5 dimensions determinable from headers.
+**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the platform is long-read (`wgs_longread`) or the aligner is STAR. The `@SQ` name-pattern reference rules and the file-size assay rules were removed in #430 — the first fired on nothing, the second on nothing that meant anything.
 
 ---
 
 ## Variants (.vcf, .vcf.gz, .g.vcf.gz, .gvcf.gz, .bcf)
 
-**data_type**: `variants`, `variants.germline`, `variants.somatic`, `variants.structural`, `variants.cnv`
+**data_type**: `variants`, `variants.germline`, `variants.structural`
+
+`variants.somatic` and `variants.cnv` are in the vocabulary but no rule emits them: every somatic and CNV caller rule fired on nothing across 204,149 VCFs and was removed (#430). Caller detection survives for GATK HaplotypeCaller, sniffles and svim, which is what the catalogs actually hold.
 
 **data_modality**:
-- `genomic` ← extension default + caller-specific rules
+- `genomic` ← extension default; the three surviving caller rules assert it too
 
 **assay_type**: _(not determined — VCF doesn't encode assay)_
 
 **platform**: _(not determined — VCF doesn't encode platform)_
 
 **reference_assembly**:
-- `GRCh38/GRCh37/CHM13` ← ##reference line, ##contig assembly= tag, contig lengths (definitive), filename
+- `GRCh38/CHM13` ← ##reference line, ##contig assembly= tag, contig lengths (definitive), filename
+- `GRCh37` ← contig lengths (definitive), filename — its header-pattern rules fired on nothing and were removed (#430)
 
-**Coverage**: Good for reference and variant subtype. No modality diversity (always genomic). No platform/assay info.
+**Coverage**: Good for reference; variant subtype only where the caller is one of the three seen. No modality diversity (always genomic). No platform/assay info.
 
 ---
 
@@ -71,14 +74,12 @@ file_format (extension)
 - `not_classified` ← **default when no signal** (issue #35, merged)
 
 **assay_type**:
-- `WGS` ← PacBio CCS read names
+- `WGS` ← long-read platform with genomic modality (`wgs_longread`)
 
 **platform**:
 - `ILLUMINA` ← read name pattern (@instrument:run:flowcell:lane:tile:x:y)
 - `PACBIO` ← read name pattern (@movie/zmw/ccs or /start_end)
 - `ONT` ← read name UUID pattern
-- `MGI` ← read name pattern
-- `ELEMENT`, `ULTIMA` ← read name patterns
 
 **reference_assembly**: `not_applicable` (raw reads, not aligned)
 
