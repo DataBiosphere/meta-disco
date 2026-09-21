@@ -588,6 +588,24 @@ def _assay_condition_violations(rules):
     return violations
 
 
+def test_assay_rules_name_only_rules_that_exist():
+    """A `matched_rules_any` entry must name a rule the file still declares (#430).
+
+    Deleting five program rules left `rnaseq_program` listing all five; each entry was
+    a branch that could never be satisfied, and nothing said so. The rule ids are the
+    join between the two documents, and this is the drift check for it.
+    """
+    rules = get_unified_rules()
+    ids = {rule.id for rule in rules.rules}
+    dangling = [
+        f"{assay.id}: {ref}"
+        for assay in rules.assay_type_rules
+        for ref in (assay.conditions.get("matched_rules_any") or [])
+        if ref not in ids
+    ]
+    assert not dangling, "Assay rules reference rule ids that no longer exist:\n  " + "\n  ".join(dangling)
+
+
 def test_assay_type_condition_values_in_vocabulary():
     """Enum-backed assay_type_rules *conditions* must use vocabulary values too.
 

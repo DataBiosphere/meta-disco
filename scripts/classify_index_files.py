@@ -36,6 +36,7 @@ import functools
 import json
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from meta_disco.file_name import EXTENSION_MAP, FileName
 from meta_disco.models import (
@@ -388,7 +389,7 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     return (coerce_identity(dataset_title), coerce_identity(md5sum), coerce_identity(file_name).lower())
 
 
-def load_classifications(*paths: Path) -> dict[str | tuple, dict]:
+def load_classifications(*paths: Path) -> dict[str | tuple[str, str, str], dict[str, Any]]:
     """Load classifications from one or more classification JSON files.
 
     Keyed by ``parent_key``, which the caller uses to look a parent up.

@@ -84,7 +84,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Inferred from platform and modality.
+The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_hifi_filename`, `alignment_star_aligner`, `bed_methylation`, `salmon_quant`); where none did, inferred post hoc from platform and modality.
 
 ```
 assay_type
