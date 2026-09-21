@@ -41,8 +41,8 @@ the reconcile stage (#432) and the tests. The seeder and the review queue read e
 files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
 output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
 key)`` no row selects for, after the last row, so an authored row is untouched
-byte for byte; it reloads the file afterwards and restores the original bytes if the
-reload fails.
+byte for byte; the result is written beside the table and renamed over it only once it
+loads, so a failure leaves the table as it was.
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from collections.abc import Iterable, Iterator, Mapping
@@ -57,6 +58,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
+from uuid import uuid4
 
 import yaml
 
@@ -94,7 +96,8 @@ _WHERE = "value map"
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
 _ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
-_EMPTY_ROWS = re.compile(r"^rows:[ \t]*\[[ \t]*\][ \t]*$", re.MULTILINE)
+# Every spelling of an empty `rows` the loader accepts: an empty flow list or a YAML null.
+_EMPTY_ROWS = re.compile(r"^rows:[ \t]*(?:\[[ \t]*\]|~|null|Null|NULL)?[ \t]*$", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -462,10 +465,10 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     evidence has no row and gets its unscoped seed. A new row is unscoped, has no reason, spells the value as the first line that
     carried it did (a list cell as a list), lists every other spelling of the same key
     as an alternate, and records the generation directories it was seen in. A rerun
-    over the same evidence adds nothing.
+    over the same evidence adds nothing. The table is replaced only once the result
+    loads; otherwise it is left as it was and this raises.
     """
-    original = table_path.read_bytes()
-    text = original.decode("utf-8")
+    text = table_path.read_text(encoding="utf-8")
     table = load_value_map(table_path)
     seen: dict[tuple[str, Key], _Seen] = {}
     paths = _current_paths(evidence_root, datasets)
@@ -487,8 +490,8 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         return SeedResult(len(paths), lines_scanned, ())
     ids = {row.id for row in table.rows}
     if not table.rows:
-        # `rows: []` loads as an empty table but a block item cannot follow a flow
-        # sequence, so the empty list is spelled as the bare key before appending.
+        # `rows: []` and `rows: null` load as an empty table, but a block item cannot
+        # follow either, so the empty value is spelled as the bare key before appending.
         text = _EMPTY_ROWS.sub("rows:", text)
     indent = _row_indent(text)
     added: list[str] = []
@@ -499,15 +502,20 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         added.append(id)
         block.append(_row_text(id, slot, found, indent))
     new_text = text if text.endswith("\n") or not text else text + "\n"
-    table_path.write_text(new_text + "".join(block), encoding="utf-8")
+    # Written beside the table and renamed over it only once it loads, as
+    # `write_evidence_file` does: an interrupted write or a table that would not load
+    # leaves the original untouched rather than truncated or half-replaced.
+    tmp = table_path.with_name(f"{table_path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
     try:
-        reloaded = load_value_map(table_path)
+        tmp.write_text(new_text + "".join(block), encoding="utf-8")
+        reloaded = load_value_map(tmp)
         if len(reloaded.rows) != len(table.rows) + len(added):
             raise ValueError(f"reloaded {len(reloaded.rows)} rows, expected {len(table.rows) + len(added)}")
+        tmp.replace(table_path)
     except Exception as exc:
-        table_path.write_bytes(original)
+        tmp.unlink(missing_ok=True)
         raise ValueError(
-            f"{_WHERE}: seeding {table_path} produced a table that does not load; restored: {exc}"
+            f"{_WHERE}: seeding {table_path} produced a table that does not load; left unchanged: {exc}"
         ) from exc
     return SeedResult(len(paths), lines_scanned, tuple(added))
 

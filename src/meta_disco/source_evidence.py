@@ -13,8 +13,9 @@ transcribes what a source wrote about a slot and stops; only the rule engine tur
 that raw value into one of our terms. #401 shipped the other arrangement — a line
 carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
-(``value_map``, #414), applied by reconcile; the table checks a declared term against
-its slot's vocabulary when it loads.
+(``value_map``, #414), whose ``claims_from`` is built for the reconcile stage (#432)
+and is called by nothing in a run until that stage exists; the table checks a declared
+term against its slot's vocabulary when it loads.
 
 This module is the artefact and everything about it: the envelope record and its
 parts, the layout on disk, the line format, the streaming writer and reader, and the

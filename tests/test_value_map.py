@@ -45,6 +45,7 @@ from meta_disco.value_map import (
 from tests.test_source_evidence import evidence_file_envelope
 
 REAL_EVIDENCE_ROOT = Path("data/source_evidence")
+FIXTURE_EVIDENCE_ROOT = Path("tests/fixtures/source_evidence")
 HPRC_DATASETS = ["AnVIL_HPRC_R2", "ANVIL_HPRC"]
 STAMP = "20260920T175642Z"
 HPRC_GENERATIONS = [generation_dir(REAL_EVIDENCE_ROOT, "anvil", "anvil15", d, STAMP) for d in HPRC_DATASETS]

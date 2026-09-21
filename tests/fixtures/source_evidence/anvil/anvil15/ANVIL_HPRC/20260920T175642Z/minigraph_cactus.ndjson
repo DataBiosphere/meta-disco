@@ -1,0 +1,4 @@
+{"evidence_file":{"source":{"repository":"anvil","dataset":"ANVIL_HPRC","table":"minigraph_cactus","url":"https://service.explore.anvilproject.org"},"source_type":"repository_metadata","source_version":"anvil15","source_key":"drs_uri","target":{"system":"anvil","dataset":"ANVIL_HPRC","version":"anvil15"},"target_key":"drs_uri","fetched_at":"2026-09-03T21:45:12.469780"}}
+{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/minigraph_cactus/0","raw_value":"grch38","column":"grch38_xg"}
+{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/minigraph_cactus/1","raw_value":"grch38","column":"grch38_vcf"}
+{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/minigraph_cactus/2","raw_value":"grch38","column":"grch38_vcf_index"}

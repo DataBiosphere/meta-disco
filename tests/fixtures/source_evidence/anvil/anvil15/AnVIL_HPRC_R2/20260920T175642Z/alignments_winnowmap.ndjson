@@ -1,0 +1,2 @@
+{"evidence_file":{"source":{"repository":"anvil","dataset":"AnVIL_HPRC_R2","table":"alignments_winnowmap","url":"https://service.explore.anvilproject.org"},"source_type":"repository_metadata","source_version":"anvil15","source_key":"drs_uri","target":{"system":"anvil","dataset":"AnVIL_HPRC_R2","version":"anvil15"},"target_key":"drs_uri","fetched_at":"2026-09-03T21:45:47.517283"}}
+{"field":"data_type","target_key_value":"drs://fixture/AnVIL_HPRC_R2/alignments_winnowmap/0","raw_value":"alignments"}

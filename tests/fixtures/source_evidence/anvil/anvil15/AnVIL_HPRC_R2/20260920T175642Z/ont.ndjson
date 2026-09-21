@@ -1,0 +1,10 @@
+{"evidence_file":{"source":{"repository":"anvil","dataset":"AnVIL_HPRC_R2","table":"ont","url":"https://service.explore.anvilproject.org"},"source_type":"repository_metadata","source_version":"anvil15","source_key":"drs_uri","target":{"system":"anvil","dataset":"AnVIL_HPRC_R2","version":"anvil15"},"target_key":"drs_uri","fetched_at":"2026-09-03T21:45:47.517283"}}
+{"field":"platform","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/0","raw_value":"OXFORD_NANOPORE","column":"platform"}
+{"field":"platform","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/1","raw_value":"PromethION","column":"instrument_model"}
+{"field":"platform","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/2","raw_value":"ont"}
+{"field":"assay_type","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/3","raw_value":"WGS","column":"library_strategy"}
+{"field":"data_modality","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/4","raw_value":"GENOMIC","column":"library_source"}
+{"field":"data_type","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/5","raw_value":"unaligned reads with 5mC mods","column":"data_type"}
+{"field":"data_type","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/6","raw_value":"unaligned reads with 5mCG_5hmCG mods","column":"data_type"}
+{"field":"platform","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/7","raw_value":"MinION","column":"instrument_model"}
+{"field":"platform","target_key_value":"drs://fixture/AnVIL_HPRC_R2/ont/8","raw_value":"GridION","column":"instrument_model"}
