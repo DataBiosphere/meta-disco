@@ -251,8 +251,8 @@ class TestARecordWithNoNameIsWrittenNotDropped:
         envelope = self._run(
             tmp_path,
             [
-                valid_record(file_name="", file_format=".xyz", entry_id="e1"),
-                valid_record(file_name="mystery.xyz", file_format=".xyz", entry_id="e2"),
+                valid_record(file_name="", file_format=".xyz", entry_id="e1", file_id="f1"),
+                valid_record(file_name="mystery.xyz", file_format=".xyz", entry_id="e2", file_id="f2"),
             ],
         )
         meta = envelope["metadata"]
