@@ -105,6 +105,9 @@ class TestStandaloneProducers:
                         {
                             "file_name": "s.bam",
                             "md5sum": parent_md5,
+                            # The source's key, which `valid_record` gives every input
+                            # record above; a parent row without it is refused (#486).
+                            "file_id": "f1",
                             "classifications": {
                                 "data_modality": {"value": "genomic", "evidence": []},
                                 "data_type": {"value": "alignments", "evidence": []},

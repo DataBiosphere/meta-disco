@@ -346,9 +346,9 @@ distinction.
 > inside this repo** — meta-disco produces classification JSON; the actual
 > filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers are the
 > batch **report generators**, and they already load every classification into a
-> dict keyed by `parent_key` — `file_id` where the catalog carries one, and
-> `(dataset_title, md5sum, file_name)` where it does not, as the HPRC catalog does not
-> (see `classify_index_files.py`) — so
+> dict keyed by the source's record key — `file_id` for AnVIL, the URL hash HPRC
+> writes as the checksum (`pipeline.SOURCE_RECORD_KEYS`; see `classify_index_files.py`)
+> — so
 > "follow the link" is a trivial dict lookup they can already do — no new
 > infrastructure needed to compute an inherited view for the reports.
 >

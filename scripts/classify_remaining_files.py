@@ -25,7 +25,14 @@ from meta_disco.metadata_schema import (
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, record_key, repeated_key_values
+from meta_disco.pipeline import (
+    RecordKey,
+    load_classifiable_snapshot,
+    load_envelope,
+    output_key_value,
+    record_key,
+    repeated_key_values,
+)
 from meta_disco.producers import PRODUCERS
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
@@ -49,7 +56,6 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
     stays because the collision is real and the next producer to send a colliding name
     here would hit it silently.
     """
-    field = key.output_field
     seen = set()
     for path in classification_paths:
         if not path.is_file():
@@ -57,25 +63,10 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
         with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
-            value = r.get(field)
-            # Raise rather than skip. Skipping such a row would drop it from this set and
-            # hand the file a *second* classification record, inflating coverage and
-            # making `corpus_diff` report a phantom gain. How a null gets here differs by
-            # key. AnVIL's `file_id` is deliberately *not* classifier-relevant
-            # (`records.ClassifierRecord`), so a drifted one reaches the valid stream and
-            # is echoed into a producer's row untouched; `make validate-metadata` rejects
-            # it before `make classify`, so seeing one means that gate was bypassed.
-            # HPRC's key is the checksum, which the shared load excludes when unusable
-            # (#376), so a row without one means the producer omitted the field.
-            if not isinstance(value, str) or not value:
-                raise ValueError(
-                    f"{path}: classification row for {r.get('file_name')!r} has {field} "
-                    f"{value!r}; this producer keys on it and cannot skip a row without "
-                    f"risking a duplicate record. Either the input carried a drifted "
-                    f"{key.input_field} that no gate refused, or the producer that wrote "
-                    f"this file omitted the field and needs re-running."
-                )
-            seen.add(value)
+            # Raises on a row without the key rather than skipping it: skipped, the row
+            # would drop from this set and hand the file a *second* classification
+            # record, inflating coverage and making `corpus_diff` report a phantom gain.
+            seen.add(output_key_value(r, key, path))
     return seen
 
 

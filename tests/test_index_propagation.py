@@ -13,7 +13,6 @@ from classify_index_files import (
     NO_MATCHING_PARENT,
     get_parent_candidates,
     load_classifications,
-    parent_key,
     parent_kind_of,
     propagate_to_index_files,
 )
@@ -28,9 +27,13 @@ from meta_disco.models import (
     field_status,
     field_value,
 )
+from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
 from tests.producer_sweep import run_index_producer
+
+ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
+HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
 
 
 def _assert_declined(output: dict, file_name: str) -> dict:
@@ -283,7 +286,7 @@ class TestLoadClassifications:
                 }
             )
         )
-        result = load_classifications(cls_file)
+        result = load_classifications(cls_file, key=ANVIL_KEY)
         assert "fid-abc123" in result
         assert result["fid-abc123"]["data_modality"] == "genomic"
         assert result["fid-abc123"]["platform"] == "ILLUMINA"
@@ -332,7 +335,7 @@ class TestLoadClassifications:
                 }
             )
         )
-        result = load_classifications(bam_file, bed_file)
+        result = load_classifications(bam_file, bed_file, key=ANVIL_KEY)
         bed_key = "fid-bed_md5"
         assert "fid-bam_md5" in result
         assert bed_key in result
@@ -350,7 +353,7 @@ class TestLoadClassifications:
 
     def test_skips_missing_files(self, tmp_path):
         """Missing files are silently skipped."""
-        result = load_classifications(tmp_path / "nonexistent.json")
+        result = load_classifications(tmp_path / "nonexistent.json", key=ANVIL_KEY)
         assert result == {}
 
     def test_csi_inherits_from_bed_parent(self, tmp_path):
@@ -433,19 +436,18 @@ class TestLoadClassifications:
         assert "status" in cls["data_modality"]
         assert field_status(cls, "data_modality") == CLASSIFIED
 
-    def test_a_catalog_without_file_id_still_inherits(self, tmp_path):
-        """A parent joins on bytes and name where its catalog carries no `file_id`.
+    def test_an_hprc_parent_joins_on_the_url_hash(self, tmp_path):
+        """Where the source declares the checksum field its key, the join uses it.
 
-        The HPRC catalog carries none on any of its 15,436 records, so keying the
-        parent map on `file_id` alone silently cost every HPRC index file its parent —
-        not an error, just an empty inheritance. The key falls back rather than
-        requiring an identity a catalog may not have.
+        The HPRC catalog issues no `file_id`; what it guarantees unique is the file's
+        URL, whose hash its builder writes as the checksum (`pipeline.SOURCE_RECORD_KEYS`).
+        Read off the envelope rather than guessed from which fields a record carries.
         """
         parent = _file("sample.bam", ".bam", "a" * 32, "e1")
         index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
         for record in (parent, index):
             del record["file_id"]
-        metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index])
+        metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index], repository="hprc")
 
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         del cls["file_id"]
@@ -457,56 +459,58 @@ class TestLoadClassifications:
         rows = {r["file_name"]: r for r in json.loads(output_file.read_text())["classifications"]}
         assert field_value(rows["sample.bam.bai"]["classifications"], "reference_assembly") == "GRCh38"
 
-    @pytest.mark.parametrize("bad", [["x"], {"a": 1}, 7, ""])
-    def test_a_non_string_file_id_is_not_used_as_a_key(self, bad):
-        """`file_id` is not classifier-blocking, so a drifted value reaches here.
+    def test_a_parent_row_without_the_key_is_refused(self, tmp_path):
+        """A parent row missing the source's key raises rather than being left out.
 
-        A truthy non-string — `["x"]` — would raise TypeError as a dict key rather than
-        simply miss, so only a non-empty string is taken as the identity; anything else
-        falls back to bytes and name.
+        Left out, the index file it parents would inherit nothing and no one would
+        know. The raise names the field expected, which is the source's, not `file_id`.
         """
-        assert parent_key(bad, "a" * 32, "sample.bam", "ds") == ("ds", "a" * 32, "sample.bam")
-        assert parent_key("fid-1", "a" * 32, "sample.bam", "ds") == "fid-1"
+        cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
+        cls["file_id"] = None
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        with pytest.raises(ValueError, match="file_id"):
+            load_classifications(cls_file, key=ANVIL_KEY)
+        del cls["md5sum"]
+        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        with pytest.raises(ValueError, match="md5sum"):
+            load_classifications(cls_file, key=HPRC_KEY)
 
-    @pytest.mark.parametrize("drifted", [["a"], {"k": "v"}, 7, None, False])
-    def test_a_drifted_fallback_component_stays_hashable(self, drifted):
-        """None of the three fallback components is validated as a string.
+    def test_a_matched_parent_without_the_key_is_refused(self, tmp_path):
+        """The guard is symmetric: a drifted key on the *input* parent raises too.
 
-        A drifted-but-classifiable record can carry a list or dict in any of them, and
-        a tuple holding one is unhashable — the lookup would raise TypeError rather
-        than miss. Each goes through `coerce_identity`, which also keeps two
-        differently-drifted records apart instead of collapsing both to empty.
+        `file_id` is not classifier-relevant, so a drifted one reaches this producer.
+        Matched by name, such a parent would match nothing in the map and the index
+        would inherit nothing — the same silent miss, entering by the other side.
         """
-        key = parent_key(None, "a" * 32, "sample.bam", drifted)
-        assert isinstance(hash(key), int)
-        assert key != parent_key(None, "a" * 32, "sample.bam", "other")
+        parent = _file("sample.bam", ".bam", "a" * 32, "e1")
+        parent["file_id"] = None
+        index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
+        metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index])
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"classifications": [_classified_record("a" * 32, "GRCh38", "sample.bam")]}))
+        with pytest.raises(ValueError, match=r"'sample\.bam' has file_id None"):
+            propagate_to_index_files(metadata_file, [cls_file], tmp_path / "out.json")
 
-    def test_the_fallback_folds_the_name_like_the_parent_match(self):
-        """The parent match folds case (#455), so the fallback key must fold too.
+    def test_an_envelope_naming_no_repository_is_refused_before_any_record_loads(self, tmp_path):
+        """No repository, no key to join on; guessing a field is what #486 removed.
 
-        A metadata parent spelled `Sample.Bam` beside a classification row spelled
-        `sample.bam` is found as one parent up there; on an exact key it would then
-        miss here and inherit nothing — a silent half-join, only on the catalogs the
-        fallback exists to serve.
+        Refused before the snapshot loads, so nothing — not even `excluded_files.json`
+        — is written into the run directory for an input the producer cannot join.
         """
-        assert parent_key(None, "a" * 32, "Sample.Bam", "ds") == parent_key(None, "a" * 32, "sample.bam", "ds")
-
-    def test_the_fallback_is_scoped_to_a_dataset(self):
-        """The parent match above is scoped to a dataset, so the fallback key must be.
-
-        Two datasets can hold the same bytes under the same name and classify them
-        differently — `dataset_pattern` rules such as `dataset_1000g_reference` key on
-        the dataset itself — so a global fallback would let one dataset's answer reach
-        the other's index files.
-        """
-        assert parent_key(None, "a" * 32, "ref.fa", "ANVIL_1000G") != parent_key(None, "a" * 32, "ref.fa", "ANVIL_T2T")
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text(json.dumps({"files": [_file("sample.bam.bai", ".bai", "b" * 32, "e2")]}))
+        with pytest.raises(ValueError, match=r"metadata\.json.*repository None, which declares no record key"):
+            propagate_to_index_files(metadata_file, [], tmp_path / "out.json")
+        assert not (tmp_path / "excluded_files.json").exists()
 
     def test_same_md5_parents_do_not_share_a_classification(self, tmp_path):
         """Two byte-identical parents with different names keep their own answers.
 
         Keyed by md5 alone, whichever record load order reached last won for both, so
         one `.fai` took the other's answer — which one depending on a file order
-        nothing guarantees.
+        nothing guarantees (#486). Keyed on the source's record key, each `.fai` finds
+        the parent whose identity it names.
         """
         # One md5 for two files, so `_fid`'s md5-derived default would collapse them —
         # these are the fixtures that pass their ids explicitly.

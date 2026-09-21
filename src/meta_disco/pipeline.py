@@ -126,10 +126,11 @@ HPRC_REPOSITORY = "hprc"
 
 # One declaration per source of the identity that names a file exactly once in that
 # source's snapshot, keyed by the ``repository`` its input envelope carries (#446). It
-# serves the two places a run needs one — the catch-all producer's skip set (which rows
-# the earlier producers already wrote) and the post-run one-row-per-file check (#445) —
-# and both read it through :func:`record_key`, never a hard-coded field, because the
-# unique field differs by source:
+# serves the three places a run needs one — the catch-all producer's skip set (which rows
+# the earlier producers already wrote), the index producer's parent join (#486) and the
+# post-run one-row-per-file check (#445) — and all three read it through
+# :func:`record_key`, never a hard-coded field, because the unique field differs by
+# source:
 #
 # - AnVIL: ``file_id``, the repository's own durable identifier — unique on every
 #   record and unchanged by a catalog re-index (#433), which is why the duplicate check
@@ -168,6 +169,32 @@ def record_key(metadata: dict, input_path: Path) -> RecordKey:
             f"(pipeline.SOURCE_RECORD_KEYS)."
         )
     return key
+
+
+def output_key_value(row: dict, key: RecordKey, path: Path) -> str:
+    """The source's key as an output row carries it, or a ``ValueError`` naming ``path``.
+
+    For a reader keyed on :data:`SOURCE_RECORD_KEYS` over another producer's
+    ``*_classifications.json``: the catch-all's skip set and the index producer's parent
+    map. Both raise rather than skip a row without the key, because each skip is silent
+    and wrong in its own way — a second classification record for the file there, an
+    index file inheriting nothing here. How a row comes to lack it differs by source.
+    AnVIL's ``file_id`` is deliberately *not* classifier-relevant
+    (``records.ClassifierRecord``), so a drifted one reaches the valid stream and is
+    echoed into a producer's row untouched; ``make validate-metadata`` rejects it before
+    ``make classify``, so seeing one means that gate was bypassed. HPRC's key is the
+    checksum field, which the shared load excludes when unusable (#376), so a row
+    without one means the producer omitted the field.
+    """
+    value = row.get(key.output_field)
+    if not isinstance(value, str) or not value:
+        raise ValueError(
+            f"{path}: classification row for {row.get('file_name')!r} has {key.output_field} "
+            f"{value!r}; this reader keys on it and cannot skip the row. Either the input "
+            f"carried a drifted {key.input_field} that no gate refused, or the producer that "
+            f"wrote this file omitted the field and needs re-running."
+        )
+    return value
 
 
 def repeated_key_values(records: list, key: RecordKey) -> dict[str, int]:

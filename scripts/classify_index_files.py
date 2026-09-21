@@ -52,7 +52,7 @@ from meta_disco.models import (
     field_label,
     status_for_value,
 )
-from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, output_key_value, record_key
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
 
@@ -341,58 +341,22 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     ).to_dict()
 
 
-def parent_key(file_id, md5sum, file_name, dataset_title=None):
-    """The identity a parent joins on: ``file_id`` where the catalog carries one.
+def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, Any]]:
+    """The parent rows of one or more ``*_classifications.json`` files, by the source's key.
 
-    ``file_id`` is the catalog identity a consumer joins on
-    (``records.CATALOG_IDENTITY_FIELDS``), and the only key here that is one.
-    ``md5sum`` is not: two differently-named files can hold the same bytes and
-    classify differently — ``grch38.fasta`` takes ``GRCh38`` from a filename rule
-    while the byte-identical ``Homo_sapiens_assembly38.fasta`` names no reference
-    and stays ``not_classified``. Keyed by md5 alone, whichever record load order
-    reached last won for both, so the two ``.fai`` files that index them inherited
-    one answer between them — one right, one wrong, the loser decided by a file
-    order nothing here guarantees.
+    ``key`` is the field the source declares unique per file
+    (``pipeline.SOURCE_RECORD_KEYS``, which says which field and why), read here under
+    its output spelling; the caller looks a matched parent up under the input one.
+    Not the checksum: two differently-named files can hold the same bytes and classify
+    differently — ``grch38.fasta`` takes ``GRCh38`` from a filename rule while the
+    byte-identical ``Homo_sapiens_assembly38.fasta`` does not — and a map keyed on
+    bytes alone held whichever the producer's thread-completion order wrote last, so
+    the two ``.fai`` files indexing them inherited one answer between them, chosen
+    per run (#486). HPRC's key is spelled ``md5sum`` but is a hash of the file's URL,
+    so the same bytes at two paths are two keys there too.
 
-    Not every catalog has one, which is why this falls back rather than requiring it.
-    The AnVIL input contract mandates ``file_id`` (``schema/metadata.yaml``) and every
-    AnVIL output record has carried it since #433, but the HPRC catalog carries none
-    on any of its 15,436 records — keying on ``file_id`` alone silently cost every
-    HPRC index file its parent. ``(md5sum, file_name)`` is the weaker fallback: it
-    separates the two FASTAs above, but 3,733 such pairs cover more than one AnVIL
-    entry. Its name half is case-folded, because the parent match upstream folds case
-    (#455) and the two must agree: a metadata parent spelled ``Sample.Bam`` beside a
-    classification row spelled ``sample.bam`` is found as one parent up there, and
-    would miss here on an exact key. Coerced before folding, since a drifted
-    non-string name has no ``.lower()``.
-
-    The fallback carries ``dataset_title`` because the parent match above is scoped to
-    a dataset and this must not be wider: two datasets can hold the same bytes under
-    the same name and classify them differently, since ``dataset_pattern`` rules like
-    ``dataset_1000g_reference`` key on the dataset itself. Scoped by title rather than
-    by ``entry_id``, which a re-index regenerates, or ``dataset_id``, which an output
-    record deliberately does not carry (#450).
-
-    Every fallback component goes through ``records.coerce_identity``, because none of
-    the three is validated as a string either: a drifted-but-classifiable record can
-    carry a list or dict, and a tuple holding one is unhashable — the lookup would
-    raise ``TypeError`` rather than miss. Coerced rather than dropped, so two records
-    whose values drifted differently stay different keys.
-
-    A non-string ``file_id`` is not an identity either. ``file_id`` is not a
-    classifier-blocking field, so a drifted value survives to a ``validation_failed``
-    row, and a truthy one — ``["x"]`` — would raise ``TypeError`` as a dict key rather
-    than miss. Only a non-empty string is taken.
-    """
-    if isinstance(file_id, str) and file_id:
-        return file_id
-    return (coerce_identity(dataset_title), coerce_identity(md5sum), coerce_identity(file_name).lower())
-
-
-def load_classifications(*paths: Path) -> dict[str | tuple[str, str, str], dict[str, Any]]:
-    """Load classifications from one or more classification JSON files.
-
-    Keyed by ``parent_key``, which the caller uses to look a parent up.
+    A row without the key raises (``pipeline.output_key_value``) rather than being
+    left out: left out, the index file it parents would inherit nothing, silently.
     """
     classifications = {}
 
@@ -402,18 +366,16 @@ def load_classifications(*paths: Path) -> dict[str | tuple[str, str, str], dict[
         with path.open() as f:
             data = json.load(f)
         for c in data.get("classifications", []):
-            md5 = c.get("md5sum")
-            if md5 or c.get("file_id"):
-                classifications[parent_key(c.get("file_id"), md5, c.get("file_name"), c.get("dataset_title"))] = {
-                    "data_modality": field_label(c, "data_modality"),
-                    "assay_type": field_label(c, "assay_type"),
-                    "platform": field_label(c, "platform"),
-                    "reference_assembly": field_label(c, "reference_assembly"),
-                    # Per-field detail (the first is reference_assembly's build, #340)
-                    # rides along with the labels: an index record must not describe
-                    # its parent less precisely than the parent does.
-                    "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
-                }
+            classifications[output_key_value(c, key, path)] = {
+                "data_modality": field_label(c, "data_modality"),
+                "assay_type": field_label(c, "assay_type"),
+                "platform": field_label(c, "platform"),
+                "reference_assembly": field_label(c, "reference_assembly"),
+                # Per-field detail (the first is reference_assembly's build, #340)
+                # rides along with the labels: an index record must not describe
+                # its parent less precisely than the parent does.
+                "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
+            }
 
     return classifications
 
@@ -425,6 +387,10 @@ def propagate_to_index_files(
 ):
     """Propagate metadata from parent files to index files."""
 
+    # Before the load: an envelope naming no repository is refused without parsing the
+    # corpus or writing anything into the run directory, as the catch-all producer does.
+    key = record_key(load_envelope(metadata_path), metadata_path)
+
     # Load source metadata
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
@@ -434,7 +400,7 @@ def propagate_to_index_files(
     print(f"Loaded {len(files):,} files from metadata")
 
     # Load classifications
-    classifications = load_classifications(*classification_paths)
+    classifications = load_classifications(*classification_paths, key=key)
     print(f"Loaded {len(classifications):,} parent classifications")
 
     # Group files by dataset for matching
@@ -553,11 +519,20 @@ def propagate_to_index_files(
             parent_md5 = parent["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
-            # Joined on the parent's identity, by the same rule that keyed the map —
-            # its `file_id` where the catalog has one, its bytes and name where not.
-            parent_class = classifications.get(
-                parent_key(parent.get("file_id"), parent_md5, parent_name, parent.get("dataset_title")), {}
-            )
+            # Joined on the source's key, under its input spelling; the map was keyed
+            # on the same field under its output spelling. Not on `parent_md5`: for
+            # AnVIL a checksum is not an identity (see `load_classifications`). The
+            # same guard `output_key_value` applies to the rows: a drifted key on the
+            # parent would match nothing and the index would inherit nothing, silently.
+            # `make validate-metadata` rejects such a record before `make classify`.
+            parent_identity = parent.get(key.input_field)
+            if not isinstance(parent_identity, str) or not parent_identity:
+                raise ValueError(
+                    f"input record for {parent_name!r} has {key.input_field} {parent_identity!r}; "
+                    f"this producer keys on it to find the parent's classification. "
+                    f"`make validate-metadata` rejects this before `make classify` runs."
+                )
+            parent_class = classifications.get(parent_identity, {})
 
             result = {
                 # The raw input record this row is about; the output is built from it.
