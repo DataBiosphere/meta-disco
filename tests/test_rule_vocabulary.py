@@ -391,12 +391,15 @@ def test_no_pattern_matches_inside_an_accession():
     identifier. Anchoring one pattern fixes one rule; this check is what makes the fix
     hold for the next rule someone authors with a bare token.
 
-    Scope, stated exactly: every *literal* run a pattern can match gets a probe, so a
-    new bare word cannot slip past for want of a hand-written example. A token spelled
-    with regex syntax (`hap[12]`) is not a literal run and is not covered, and neither
-    is a rule in `KNOWN_UNANCHORED`. So this establishes "no literal token matches
-    inside an accession", not "no pattern does" — the general form is #475, which moves
-    the boundary into the engine and makes the question structural.
+    Scope, stated exactly: every alternative a pattern offers gets a probe built by
+    `_sample_matches` — literal runs as written, a character class or `.` as one
+    member it accepts (`hap[12]` probes as `hap1`), a repeat at its minimum count —
+    so a new bare token cannot slip past for want of a hand-written example. One
+    sample per alternative is the limit: a class is probed by one of its members, not
+    all, and a rule in `KNOWN_UNANCHORED` is not probed. So this establishes "no
+    generated sample matches inside an accession", not "no string the pattern accepts
+    does" — the general form is #475, which moves the boundary into the engine and
+    makes the question structural.
     """
     rules = get_unified_rules()
     hits = _accession_internal_matches(rules, ACCESSION_FILENAMES + accession_probes(rules))

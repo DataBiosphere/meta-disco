@@ -192,7 +192,7 @@ Each record in `classifications` contains all five classification dimensions:
 | 0.95-1.0 | Definitive | Explicit metadata tag or exact match (e.g., contig lengths) |
 | 0.85-0.94 | High | Strong program indicator (e.g., STAR aligner → transcriptomic) |
 | 0.70-0.84 | Medium | Filename pattern match or dataset context |
-| 0.50-0.69 | Low | Size heuristic or weak signal |
+| 0.50-0.69 | Low | Weak signal |
 | <0.50 | Uncertain | Needs manual review |
 
 The overall `confidence` score is the maximum confidence from matched rules. When multiple rules agree (convergent evidence), confidence increases. When rules conflict, confidence decreases and warnings are added.
@@ -329,19 +329,13 @@ data_modality
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   Tier 3: File Size Heuristics                      │
-│  BAM >50GB → likely WGS, CRAM 10-30GB → likely WES, etc.            │
-└─────────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   Tier 4: Header Inspection                         │
+│                   Tier 3: Header Inspection                         │
 │  BAM @RG/@PG, VCF ##source/##contig, FASTQ read names               │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   Tier 5: Consistency Validation                    │
+│                   Consistency Validation                            │
 │  Cross-check signals, boost/reduce confidence                       │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
@@ -359,8 +353,7 @@ Rules are evaluated in order of confidence, with higher-confidence rules taking 
 1. **Definitive signals** (95-98%): Explicit tags like `PL:PACBIO`, contig lengths, `##source=HaplotypeCaller`
 2. **Strong indicators** (85-90%): Aligner programs like STAR (RNA-seq), BWA (DNA)
 3. **Pattern matches** (70-85%): Filename patterns like `_RNA_`, `_WGS_`, `.hg38.`
-4. **Size heuristics** (60-70%): File size ranges typical for WGS vs WES
-5. **Fallback defaults** (50%): Extension-based defaults when no other signal
+4. **Fallback defaults** (50%): Extension-based defaults when no other signal
 
 ---
 
@@ -421,22 +414,13 @@ Cross-validation checks for consistency between multiple signals:
 | PL:PACBIO   | PN:STAR      | STAR is short-read only     |
 | PN:bwa      | PN:STAR      | Mutually exclusive aligners |
 
-### 3.3 File Size Heuristics
+### 3.3 File Size
 
-Size-based rules provide fallback classification when other signals are absent:
-
-| File Type | Size Range | Classification       | Confidence |
-| --------- | ---------- | -------------------- | ---------- |
-| BAM       | >50 GB     | genomic.whole_genome | 65%        |
-| BAM       | 5-50 GB    | genomic.whole_exome  | 60%        |
-| CRAM      | >15 GB     | genomic.whole_genome | 65%        |
-| CRAM      | 3-15 GB    | genomic.whole_exome  | 60%        |
-
-**Platform-specific adjustments:**
-
-- PacBio HiFi BAMs tend to be larger (100+ GB for WGS)
-- ONT BAMs can be very large due to longer reads
-- Illumina CRAMs compress well (~3:1 vs BAM)
+No rule reads file size (#430). The six size-based assay rules that once inferred
+`WGS` or `WES` from an Illumina BAM's or CRAM's size were deleted: a 12 GB CRAM is
+neither, and across the corpus those rules produced 20,176 `WGS` values that nothing
+verified. The engine still accepts `file_size_min_gb` / `file_size_max_gb` conditions
+for a future rule; `file_size` remains an input-contract field for that reason.
 
 ### 3.4 Confidence Scoring System
 
@@ -447,7 +431,7 @@ Size-based rules provide fallback classification when other signals are absent:
 | Definitive | 95-99% | Explicit metadata tag or contig length match         |
 | High       | 85-94% | Strong program indicator (e.g., STAR aligner) |
 | Medium     | 70-84% | Filename pattern match                        |
-| Low        | 50-69% | Size heuristic or weak pattern                |
+| Low        | 50-69% | Weak pattern                                  |
 | Uncertain  | <50%   | Needs manual review                           |
 
 #### Confidence Adjustments
@@ -947,7 +931,7 @@ Example classification records from each file type, showing the evidence chain a
   "data_modality": "genomic.whole_genome",
   "reference_assembly": "CHM13",
   "confidence": 0.84,
-  "matched_rules": ["platform_illumina", "program_bwa", "ref_chm13_t2t", "illumina_cram_wgs_medium"],
+  "matched_rules": ["platform_illumina", "program_bwa", "ref_chm13_t2t"],
   "evidence": [
     {
       "rule_id": "platform_illumina",
@@ -968,13 +952,6 @@ Example classification records from each file type, showing the evidence chain a
       "classification": "CHM13",
       "confidence": 0.95,
       "rationale": "Reference path in @SQ headers contains 'chm13' indicating T2T-CHM13 assembly."
-    },
-    {
-      "rule_id": "illumina_cram_wgs_medium",
-      "matched": "file_size=14.8GB",
-      "classification": "genomic.whole_genome",
-      "confidence": 0.65,
-      "rationale": "Illumina CRAM files 10-20 GB indicate WGS at moderate coverage."
     }
   ]
 }

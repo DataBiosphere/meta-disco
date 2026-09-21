@@ -348,11 +348,11 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     (``records.CATALOG_IDENTITY_FIELDS``), and the only key here that is one.
     ``md5sum`` is not: two differently-named files can hold the same bytes and
     classify differently — ``grch38.fasta`` takes ``GRCh38`` from a filename rule
-    while the byte-identical ``Homo_sapiens_assembly38.fasta`` takes
-    ``not_applicable`` from the assembly rule. Keyed by md5 alone, whichever record
-    load order reached last won for both, so the two ``.fai`` files that index them
-    inherited one answer between them — one right, one wrong, the loser decided by
-    a file order nothing here guarantees.
+    while the byte-identical ``Homo_sapiens_assembly38.fasta`` names no reference
+    and stays ``not_classified``. Keyed by md5 alone, whichever record load order
+    reached last won for both, so the two ``.fai`` files that index them inherited
+    one answer between them — one right, one wrong, the loser decided by a file
+    order nothing here guarantees.
 
     Not every catalog has one, which is why this falls back rather than requiring it.
     The AnVIL input contract mandates ``file_id`` (``schema/metadata.yaml``) and every
