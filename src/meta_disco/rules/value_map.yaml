@@ -71,8 +71,6 @@ rows:
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_type.gaps"
     match: {slot: data_type, value: "gaps"}
-    declares: {data_type: annotations}
-    reason: Assembly gap tracks (BED).
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_type.liftoff"
     match: {slot: data_type, value: "liftoff"}

@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+from classify_index_files import AMBIGUOUS_PARENT, NO_MATCHING_PARENT
 
 from meta_disco.models import CLASSIFICATION_FIELDS, JOIN_KEY_DRS_URI, NOT_APPLICABLE, SOURCE_REPOSITORY_METADATA
 from meta_disco.rule_loader import get_unified_rules
@@ -603,6 +604,16 @@ def test_two_keys_that_slug_alike_get_stable_distinct_ids(empty_table, evidence_
     assert first[1].startswith("platform.a_b_") and len(first[1]) == len("platform.a_b_") + 6
 
 
+def test_a_digest_id_already_in_the_table_is_extended_until_unused():
+    from meta_disco.value_map import _fresh_id
+
+    key = frozenset({"a-b"})
+    short = _fresh_id("platform.a_b", key, {"platform.a_b"})
+    assert len(short) == len("platform.a_b_") + 6
+    longer = _fresh_id("platform.a_b", key, {"platform.a_b", short})
+    assert longer.startswith(short) and len(longer) == len(short) + 1
+
+
 def test_ac23_the_queue_lists_a_seeded_value_with_its_provenance_and_file_count(tmp_path, evidence_root):
     table = load(
         tmp_path,
@@ -752,6 +763,9 @@ def test_row_ids_and_rule_ids_are_disjoint_by_shape(tmp_path):
             ids.update(re.findall(r"\"rule_id\":\s*\"([^\"\s]+)\"", path.read_text()))
             # And the third: a module constant handed to `make_claim` (`FETCH_FAILED_RULE_ID`, `VALIDATION_RULE_ID`).
             ids.update(re.findall(r"RULE_ID\s*=\s*\"([^\"\s]+)\"", path.read_text()))
+    # The index producer writes its *reason* for taking no parent as the `rule_id` (#438); those two
+    # values flow through constants no regex names, so they are imported rather than scanned for.
+    ids.update({NO_MATCHING_PARENT, AMBIGUOUS_PARENT})
     assert {"inherited_from_parent", "index_by_extension", "fetch_failed", "input_validation"} <= ids, (
         "each spelling a rule id is written in is collected"
     )
@@ -833,6 +847,7 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
         "data_modality.transcriptomic",
         "data_type.alignments",
         "data_type.chains",
+        "data_type.gaps",
         "data_type.sequences",
         "reference_assembly.chm13",
     ]

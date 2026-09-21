@@ -532,12 +532,19 @@ def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
     """``candidate``, or ``candidate_<digest>`` where another key already slugged to it (``a-b`` and ``a_b``).
 
     The digest is of the key, so the id a key gets does not depend on how many others
-    collided before it — the same scan on a fresh table mints the same ids.
+    collided before it — the same scan on a fresh table mints the same ids. Six hex
+    characters, extended one at a time while the result is taken, so a table that
+    already holds the short form still gets an unused id.
     """
     if candidate not in taken:
         return candidate
-    digest = hashlib.sha1("\0".join(sorted(key)).encode()).hexdigest()[:6]
-    return f"{candidate}_{digest}"
+    digest = hashlib.sha1("\0".join(sorted(key)).encode()).hexdigest()
+    for n in range(6, len(digest) + 1):
+        if (id := f"{candidate}_{digest[:n]}") not in taken:
+            return id
+    raise ValueError(
+        f"{_WHERE}: no unused id for {candidate!r} — the table already holds every digest of {sorted(key)}"
+    )
 
 
 def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
