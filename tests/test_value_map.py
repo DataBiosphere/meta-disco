@@ -931,7 +931,7 @@ def test_the_bundled_table_covers_every_hprc_fixture_value():
     seven seeded values — so a deleted or misspelled authored row would surface here as a new queue entry."""
     queued = review_queue(FIXTURE_EVIDENCE_ROOT, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
-    assert sorted({e.row_id for e in queued}) == SEEDED_IN_BUNDLED_TABLE
+    assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE
     assert len(queued) == 17
 
 
