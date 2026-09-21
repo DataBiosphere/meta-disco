@@ -454,7 +454,7 @@ rules:
     scope: filename
     when:
       extensions: [".bam", ".cram"]
-      filename_pattern: "(?i)\\.flnc\\.|(^|[._-])(isoseq|iso-seq)"
+      filename_pattern: "(?i)\\.flnc\\."
     then:
       data_modality: transcriptomic.bulk
       data_type: alignments
@@ -465,7 +465,7 @@ rules:
     scope: filename
     when:
       extensions: [".bam", ".cram", ".sam"]
-      filename_pattern: "(?i)(^|[._-])(hifi|pacbio)|\\.hifi_reads\\.|_pb_"
+      filename_pattern: "(?i)(^|[._-])hifi|_pb_"
     then:
       data_modality: genomic
       data_type: alignments
@@ -573,7 +573,7 @@ rules:
     scope: filename
     when:
       format: FASTA
-      filename_pattern: "(?i)(^|[._-])(assembly|hifiasm|verkko|flye|canu|wtdbg|diploid|hap[12])|[._](pat|mat)(ernal)?[._]"
+      filename_pattern: "(?i)(^|[._-])(assembly|hap[12])|[._](pat|mat)(ernal)?[._]"
     then:
       data_modality: genomic
       data_type: assembly
@@ -586,7 +586,7 @@ rules:
     scope: filename
     when:
       format: FASTA
-      filename_pattern: "(?i)haplotype|(^|[._-])(phased|hapdup|purge_dups)"
+      filename_pattern: "(?i)haplotype|(^|[._-])(phased|hapdup)"
     then:
       data_modality: genomic
       data_type: assembly
@@ -602,7 +602,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)modbam2bed|bisulfite|(^|[._-])(cpg|wgbs|methylat)"
+      filename_pattern: "(?i)modbam2bed|(^|[._-])cpg"
     then:
       data_modality: epigenomic.methylation
       data_type: annotations
@@ -614,7 +614,7 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(^|[._-])(TMM|TPM|RPKM|FPKM|counts)|expression|leafcutter|\\.TSS\\."
+      filename_pattern: "(?i)(^|[._-])(TMM|counts)|leafcutter|\\.TSS\\."
     then:
       data_modality: transcriptomic.bulk
       data_type: annotations
@@ -682,7 +682,7 @@ rules:
     scope: filename
     when:
       extensions: [".txt", ".tsv"]
-      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|(^|[._-])(mosdepth|flagstat)"
+      filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|(^|[._-])mosdepth"
     then:
       status:
         data_modality: not_applicable

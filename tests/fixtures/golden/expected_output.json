@@ -73,7 +73,7 @@
         "entry_id": "g-bam-1",
         "file_format": ".bam",
         "file_id": "g-file-b",
-        "file_name": "sample.isoseq.bam",
+        "file_name": "sample.flnc.bam",
         "file_size": 12345678,
         "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "published": {

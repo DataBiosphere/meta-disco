@@ -320,7 +320,6 @@ def _sample_matches(pattern, cap=64):
 # above is what is left once both were done, and it is now true of every member.
 WORD_FORMING = {
     "haplotype": "nine characters; carries 12,808 files, all delimited",
-    "bisulfite": "nine characters; an assay name",
     "leafcutter": "ten characters; a tool name",
     "expression": "ten characters; carries five `text_counts` files",
     "modbam2bed": "ten characters; a tool name",

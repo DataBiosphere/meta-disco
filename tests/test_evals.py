@@ -362,8 +362,8 @@ class TestRuleEngineE2E:
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_isoseq_bam_is_transcriptomic(self):
-        """BAM with isoseq in filename should be transcriptomic."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.isoseq.bam"))
+        """BAM with `.flnc.` — full-length non-chimeric IsoSeq reads — in the filename is transcriptomic."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.flnc.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_plain_bam_no_modality(self):
@@ -507,13 +507,6 @@ class TestRuleEngineE2E:
     def test_fasta_haplotype_filename(self):
         """FASTA with haplotype keyword in filename."""
         result = engine.classify_extended(FileInfo.from_filename("hapdup_contigs_2.fasta"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "assembly"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_fasta_verkko_filename(self):
-        """FASTA with verkko assembler keyword."""
-        result = engine.classify_extended(FileInfo.from_filename("HG02300_verkko_gfase_diploid.fasta.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE

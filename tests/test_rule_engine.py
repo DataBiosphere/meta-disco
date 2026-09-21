@@ -61,7 +61,7 @@ class TestRuleMatching:
     def test_filename_indicator_sets_modality_regardless_of_size(self, engine):
         """A filename indicator settles modality even at a size the heuristics would
         otherwise speak to — the tier-2 name rule is not displaced by file size."""
-        result = engine.classify(FileInfo.from_filename("sample.isoseq.bam", file_size=60_000_000_000))
+        result = engine.classify(FileInfo.from_filename("sample.flnc.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_star_aligner_indicates_rnaseq(self, engine):
@@ -165,7 +165,7 @@ class TestFormatMatching:
     def test_format_keyed_filename_rule_still_fires(self, engine):
         """A tier-2 rule that pairs `format: FASTA` with a filename_pattern still
         matches on both conditions (fasta_assembly_filename)."""
-        result = engine.classify_extended(FileInfo.from_filename("HG002.hifiasm.bp.p_ctg.fa"))
+        result = engine.classify_extended(FileInfo.from_filename("HG002.f1_assembly_v2.fa"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
 
@@ -973,7 +973,7 @@ class TestConflictingClassificationFields:
 
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.isoseq.hifi_reads.bam"))
+        result = engine.classify_extended(FileInfo.from_filename("sample.flnc.hifi_reads.bam"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
@@ -1420,7 +1420,7 @@ class TestReasonChain:
 
     def test_multiple_reasons(self, engine):
         """Multiple matching rules should accumulate reasons."""
-        result = engine.classify(FileInfo.from_filename("sample.isoseq.hg38.bam"))
+        result = engine.classify(FileInfo.from_filename("sample.flnc.hg38.bam"))
         assert len(result.reasons) >= 2
         assert len(result.rules_matched) >= 2
 

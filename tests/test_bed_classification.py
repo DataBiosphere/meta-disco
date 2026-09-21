@@ -132,23 +132,9 @@ class TestMethylationPattern:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_methylation"
 
-    def test_bisulfite_matches(self):
-        """Bisulfite files should match methylation rule."""
-        filename = "sample_bisulfite_regions.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_methylation"
-
 
 class TestExpressionPattern:
     """Test expression/transcriptomic pattern matching."""
-
-    def test_tpm_matches(self):
-        """TPM files should match expression rule."""
-        filename = "genes_TPM.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_expression"
-        result = classify_bed(filename)
-        assert result["data_modality"] == "transcriptomic.bulk"
 
     def test_leafcutter_matches(self):
         """Leafcutter files should match expression rule."""

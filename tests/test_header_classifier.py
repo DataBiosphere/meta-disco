@@ -780,7 +780,7 @@ class TestBamCramClassification:
         modality signal still classifies IsoSeq from the name (#152). Before the
         fix the classifier synthesized `sample.bam` and dropped the name."""
         header = "@HD\tVN:1.6"
-        result = classify_from_header(header, name=FileName.parse("sample.isoseq.bam"))
+        result = classify_from_header(header, name=FileName.parse("sample.flnc.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
         assert val(result, "data_type") == "alignments"
 
@@ -1112,9 +1112,11 @@ class TestFastaContigClassification:
         still classify the file, and no content claim is invented on top of them.
 
         Replaces the e2e fixture HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz — a valid
-        20-byte gzip whose decompressed content holds no header line.
+        20-byte gzip whose decompressed content holds no header line. The name is the
+        catalog's own `f1_assembly_v2` form now, since the assembler-name alternatives
+        matched nothing in either catalog and were dropped (#430).
         """
-        result = classify_from_fasta_header([], name=FileName.parse("HG02647.hifiasm_0.19.3_hic.diploid.mito.fa.gz"))
+        result = classify_from_fasta_header([], name=FileName.parse("HG02647.f1_assembly_v2.mito.fa.gz"))
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "assembly"
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
