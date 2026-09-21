@@ -563,7 +563,7 @@ def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
     """
     if candidate not in taken:
         return candidate
-    digest = hashlib.sha1("\0".join(sorted(key)).encode()).hexdigest()
+    digest = hashlib.sha1("\0".join(sorted(key)).encode("utf-8", "surrogatepass")).hexdigest()
     for n in range(6, len(digest) + 1):
         if (id := f"{candidate}_{digest[:n]}") not in taken:
             return id
@@ -586,7 +586,15 @@ def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
 
 
 def _yaml_scalar(text: str) -> str:
-    return json.dumps(text, ensure_ascii=False)
+    """``text`` as a YAML double-quoted scalar, readable where it can be and an escape where it cannot.
+
+    JSON's escapes are a subset of YAML's, so ``json.dumps`` does the quoting; what it leaves
+    verbatim (``ensure_ascii=False``) is then swept for anything non-printable — a lone
+    surrogate the NDJSON reader round-trips, a C1 control — and spelled ``\\uXXXX``, which
+    YAML reads back to the same code point and UTF-8 can write.
+    """
+    quoted = json.dumps(text, ensure_ascii=False)
+    return "".join(c if c.isprintable() or c == " " else f"\\u{ord(c):04x}" for c in quoted)
 
 
 def _yaml_value(value: str | list[str]) -> str:
@@ -666,6 +674,10 @@ def _code(raw_value: str) -> str:
     backtick or a space — CommonMark strips one space from each end of a span, so the
     padding is what it strips and the value's own boundary spaces survive.
     """
+    if raw_value == "":
+        # Two bare backticks are not an empty code span to CommonMark; the empty string is
+        # shown as the quoted empty scalar instead.
+        return '`""`'
     text = "".join(_visible_char(c) for c in raw_value)
     fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
     # CommonMark strips one space from each end only when both ends are spaces and the

@@ -722,6 +722,24 @@ def test_every_non_printable_character_is_escaped_and_the_queue_stays_writable(t
     (tmp_path / "queue.md").write_text(rendered, encoding="utf-8")
 
 
+def test_an_empty_raw_value_renders_as_the_quoted_empty_scalar(tmp_path, evidence_root):
+    table = load(tmp_path, "rows:\n")
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "")])
+    assert '| `""` |' in render_queue(review_queue(evidence_root, table), evidence_root)
+
+
+def test_a_lone_surrogate_can_be_seeded_even_where_its_slug_collides(empty_table, evidence_root):
+    """The digest and the YAML scalar both spell a surrogate rather than encoding it strictly, so the row
+    is minted, written as UTF-8, and read back to the same key."""
+    cells = [entry("platform", "a b", "drs://a"), entry("platform", "a\ud800b", "drs://b")]
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", cells)
+    added = seed(empty_table, evidence_root).rows_added
+    assert added[0] == "platform.a_b" and added[1].startswith("platform.a_b_")
+    table = load_value_map(empty_table)
+    assert table.select("platform", "a\ud800b", "anvil", "AnVIL_HPRC_R2") is table.by_id(added[1])
+    assert seed(empty_table, evidence_root).rows_added == ()
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,
