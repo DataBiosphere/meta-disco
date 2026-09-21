@@ -549,7 +549,8 @@ def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, f
 @pytest.mark.parametrize("with_parent", [True, False], ids=["matched", "declined"])
 def test_the_index_producer_emits_the_record_keys(tmp_path, with_parent):
     """Both of its record paths: a matched parent, and one it declined (#438)."""
-    parent = [valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32)]
+    # Its own `file_id`: the index producer refuses a key two input records share (#486).
+    parent = [valid_record(file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32, file_id="fp")]
     records = (parent if with_parent else []) + [valid_record(file_name="sample.bam.bai", file_format=".bai")]
     for row in run_index_producer(tmp_path, records)["classifications"]:
         assert set(row) == RECORD_KEYS, f"{set(row) ^ RECORD_KEYS}"

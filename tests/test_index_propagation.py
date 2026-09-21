@@ -515,6 +515,24 @@ class TestLoadClassifications:
         with pytest.raises(ValueError, match=r"file_id 'fid-dup' is carried by more than one.*'two\.bam'"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
+    def test_a_key_two_input_records_carry_is_refused(self, tmp_path):
+        """A repeated input key is refused before any parent is joined.
+
+        `load_classifications` catches a repeat only among Phase 1 rows; a duplicate
+        whose row the catch-all writes later is absent there, so an index matched to it
+        would find the other record's labels under the shared key and inherit them.
+        """
+        bam = _file("sample.bam", ".bam", "a" * 32, "e1", file_id="fid-dup")
+        txt = _file("notes.txt.gz", ".txt.gz", "c" * 32, "e3", file_id="fid-dup")
+        index = _file("notes.txt.gz.tbi", ".tbi", "b" * 32, "e2")
+        metadata_file = _write_metadata(tmp_path / "metadata.json", [bam, txt, index])
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(
+            json.dumps({"classifications": [_classified_record("a" * 32, "GRCh38", "sample.bam", file_id="fid-dup")]})
+        )
+        with pytest.raises(ValueError, match=r"1 value\(s\) of file_id are carried by more than one.*fid-dup \(x2\)"):
+            propagate_to_index_files(metadata_file, [cls_file], tmp_path / "out.json")
+
     def test_a_matched_parent_without_the_key_is_refused(self, tmp_path):
         """The guard is symmetric: a drifted key on the *input* parent raises too.
 

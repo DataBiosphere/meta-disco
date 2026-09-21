@@ -59,6 +59,7 @@ from meta_disco.pipeline import (
     load_classifiable_snapshot,
     load_envelope,
     record_key,
+    repeated_key_values,
 )
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
@@ -411,6 +412,21 @@ def propagate_to_index_files(
     snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
     source, files = snapshot.source, snapshot.records
     print(f"Loaded {len(files):,} files from metadata")
+
+    # A key two input records share would let an index inherit the wrong parent's
+    # answer: `load_classifications` sees a repeat only among the rows Phase 1 wrote,
+    # and a duplicate whose own row the catch-all writes later is not among them, so a
+    # matched index would look its key up and find the other record's labels. Refused
+    # here, as the catch-all refuses it, for a run started outside `make classify`;
+    # `make validate-metadata` reports it before one.
+    repeated = repeated_key_values(files, key)
+    if repeated:
+        examples = ", ".join(f"{value} (x{n})" for value, n in sorted(repeated.items())[:10])
+        raise ValueError(
+            f"{metadata_path}: {len(repeated):,} value(s) of {key.input_field} are carried by more "
+            f"than one input record, but this producer keys a parent on it as unique per file "
+            f"and would inherit from whichever record carries a classification row: {examples}"
+        )
 
     # Load classifications
     classifications = load_classifications(*classification_paths, key=key)

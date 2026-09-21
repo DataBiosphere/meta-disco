@@ -358,7 +358,12 @@ class TestTheIndexProducerPublishesItsOwnValues:
         # Not the parent's: AnVIL carries the set's modality on a .bai, and that row is
         # where the two sides most often both speak.
         parent = valid_record(
-            file_name="sample.bam", file_format=".bam", file_md5sum="b" * 32, entry_id="p1", dataset_id="ds1"
+            file_name="sample.bam",
+            file_format=".bam",
+            file_md5sum="b" * 32,
+            file_id="fp",
+            entry_id="p1",
+            dataset_id="ds1",
         )
         envelope = run_index_producer(tmp_path, [parent, self._input("sample.bam.bai", ".bai")])
 
