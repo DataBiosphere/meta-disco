@@ -366,6 +366,12 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     by ``entry_id``, which a re-index regenerates, or ``dataset_id``, which an output
     record deliberately does not carry (#450).
 
+    Every fallback component goes through ``records.coerce_identity``, because none of
+    the three is validated as a string either: a drifted-but-classifiable record can
+    carry a list or dict, and a tuple holding one is unhashable — the lookup would
+    raise ``TypeError`` rather than miss. Coerced rather than dropped, so two records
+    whose values drifted differently stay different keys.
+
     A non-string ``file_id`` is not an identity either. ``file_id`` is not a
     classifier-blocking field, so a drifted value survives to a ``validation_failed``
     row, and a truthy one — ``["x"]`` — would raise ``TypeError`` as a dict key rather
@@ -373,7 +379,7 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     """
     if isinstance(file_id, str) and file_id:
         return file_id
-    return (dataset_title, md5sum, file_name)
+    return tuple(coerce_identity(part) for part in (dataset_title, md5sum, file_name))
 
 
 def load_classifications(*paths: Path) -> dict[str | tuple, dict]:

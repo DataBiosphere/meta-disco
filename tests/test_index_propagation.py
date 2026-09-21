@@ -468,6 +468,19 @@ class TestLoadClassifications:
         assert parent_key(bad, "a" * 32, "sample.bam", "ds") == ("ds", "a" * 32, "sample.bam")
         assert parent_key("fid-1", "a" * 32, "sample.bam", "ds") == "fid-1"
 
+    @pytest.mark.parametrize("drifted", [["a"], {"k": "v"}, 7, None, False])
+    def test_a_drifted_fallback_component_stays_hashable(self, drifted):
+        """None of the three fallback components is validated as a string.
+
+        A drifted-but-classifiable record can carry a list or dict in any of them, and
+        a tuple holding one is unhashable — the lookup would raise TypeError rather
+        than miss. Each goes through `coerce_identity`, which also keeps two
+        differently-drifted records apart instead of collapsing both to empty.
+        """
+        key = parent_key(None, "a" * 32, "sample.bam", drifted)
+        assert isinstance(hash(key), int)
+        assert key != parent_key(None, "a" * 32, "sample.bam", "other")
+
     def test_the_fallback_is_scoped_to_a_dataset(self):
         """The parent match above is scoped to a dataset, so the fallback key must be.
 
