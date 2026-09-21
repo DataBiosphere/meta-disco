@@ -416,11 +416,9 @@ Cross-validation checks for consistency between multiple signals:
 
 ### 3.3 File Size
 
-No rule reads file size (#430). The six size-based assay rules that once inferred
-`WGS` or `WES` from an Illumina BAM's or CRAM's size were deleted: a 12 GB CRAM is
-neither, and across the corpus those rules produced 20,176 `WGS` values that nothing
-verified. The engine still accepts `file_size_min_gb` / `file_size_max_gb` conditions
-for a future rule; `file_size` remains an input-contract field for that reason.
+No rule reads file size. The six size-based WGS/WES assay rules were deleted in #430:
+size does not distinguish the two. The engine still accepts `file_size_min_gb` /
+`file_size_max_gb` conditions.
 
 ### 3.4 Confidence Scoring System
 

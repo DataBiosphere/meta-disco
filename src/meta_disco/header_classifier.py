@@ -162,9 +162,8 @@ def classify_from_header(
         header_text: Raw SAM/BAM header text (lines starting with @)
         name: Optional parsed :class:`FileName`; its tokens (hifi_reads / rnaseq /
             assembly) drive the tier-2 filename rules
-        file_size: Optional file size in bytes, carried to the engine for the
-            `file_size_min_gb` / `file_size_max_gb` rule conditions; no rule
-            declares one since #430, so today nothing reads it
+        file_size: Optional file size in bytes, for `file_size_*` rule
+            conditions; no rule declares one (#430)
         file_format: Optional file format string (e.g., ".bam", ".cram");
             accepted for call uniformity but not consulted — the extension is
             hardcoded ".bam" below
