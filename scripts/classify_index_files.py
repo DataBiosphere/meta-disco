@@ -357,7 +357,11 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     on any of its 15,436 records — keying on ``file_id`` alone silently cost every
     HPRC index file its parent. ``(md5sum, file_name)`` is the weaker fallback: it
     separates the two FASTAs above, but 3,733 such pairs cover more than one AnVIL
-    entry, and it matches exactly where the parent match upstream folds case (#455).
+    entry. Its name half is case-folded, because the parent match upstream folds case
+    (#455) and the two must agree: a metadata parent spelled ``Sample.Bam`` beside a
+    classification row spelled ``sample.bam`` is found as one parent up there, and
+    would miss here on an exact key. Coerced before folding, since a drifted
+    non-string name has no ``.lower()``.
 
     The fallback carries ``dataset_title`` because the parent match above is scoped to
     a dataset and this must not be wider: two datasets can hold the same bytes under
@@ -379,7 +383,7 @@ def parent_key(file_id, md5sum, file_name, dataset_title=None):
     """
     if isinstance(file_id, str) and file_id:
         return file_id
-    return tuple(coerce_identity(part) for part in (dataset_title, md5sum, file_name))
+    return (coerce_identity(dataset_title), coerce_identity(md5sum), coerce_identity(file_name).lower())
 
 
 def load_classifications(*paths: Path) -> dict[str | tuple, dict]:

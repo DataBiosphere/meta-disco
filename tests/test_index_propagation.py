@@ -481,6 +481,16 @@ class TestLoadClassifications:
         assert isinstance(hash(key), int)
         assert key != parent_key(None, "a" * 32, "sample.bam", "other")
 
+    def test_the_fallback_folds_the_name_like_the_parent_match(self):
+        """The parent match folds case (#455), so the fallback key must fold too.
+
+        A metadata parent spelled `Sample.Bam` beside a classification row spelled
+        `sample.bam` is found as one parent up there; on an exact key it would then
+        miss here and inherit nothing — a silent half-join, only on the catalogs the
+        fallback exists to serve.
+        """
+        assert parent_key(None, "a" * 32, "Sample.Bam", "ds") == parent_key(None, "a" * 32, "sample.bam", "ds")
+
     def test_the_fallback_is_scoped_to_a_dataset(self):
         """The parent match above is scoped to a dataset, so the fallback key must be.
 
