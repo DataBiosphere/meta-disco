@@ -86,37 +86,42 @@ def iter_records_with_source(run_dir: Path):
 
 @dataclass(frozen=True)
 class RowIdentities:
-    """What a run's rows say about their own identity.
+    """What a run's rows say about their own identity, under the field ``key``.
 
-    ``duplicates`` maps a ``file_id`` carried by more than one row to the classification
+    ``duplicates`` maps a key value carried by more than one row to the classification
     files that wrote it, in ``CLASSIFICATION_FILES`` order and with repeats, so a producer
-    that wrote the same file twice on its own is visible as such. ``without_file_id``
-    counts rows carrying no usable ``file_id`` — not checkable for uniqueness, which is a
+    that wrote the same file twice on its own is visible as such. ``without_key`` counts
+    rows carrying no usable value under ``key`` — not checkable for uniqueness, which is a
     different fact from being unique.
     """
 
+    key: str
     total_rows: int
-    without_file_id: int
+    without_key: int
     duplicates: dict[str, list[str]]
 
 
-def row_identities(run_dir: Path) -> RowIdentities:
-    """Report which ``file_id`` values more than one of a run's rows carries."""
-    # Only the first source per file_id is kept until a second row claims it: a
+def row_identities(run_dir: Path, key: str = JOIN_KEY_FILE_ID) -> RowIdentities:
+    """Report which values of ``key`` more than one of a run's rows carries.
+
+    ``key`` is the output-row spelling of the field the run's source guarantees unique
+    (``pipeline.RECORD_KEYS``); the default is AnVIL's.
+    """
+    # Only the first source per key value is kept until a second row claims it: a
     # duplicate is the exception, so the list is paid for only where one occurs.
     first_source: dict[str, str] = {}
     duplicates: dict[str, list[str]] = {}
     total_rows = 0
-    without_file_id = 0
+    without_key = 0
     for fname, record in iter_records_with_source(run_dir):
         total_rows += 1
-        file_id = record.get(JOIN_KEY_FILE_ID)
-        if not isinstance(file_id, str) or not file_id:
-            without_file_id += 1
-        elif file_id in duplicates:
-            duplicates[file_id].append(fname)
-        elif file_id in first_source:
-            duplicates[file_id] = [first_source[file_id], fname]
+        value = record.get(key)
+        if not isinstance(value, str) or not value:
+            without_key += 1
+        elif value in duplicates:
+            duplicates[value].append(fname)
+        elif value in first_source:
+            duplicates[value] = [first_source[value], fname]
         else:
-            first_source[file_id] = fname
-    return RowIdentities(total_rows, without_file_id, duplicates)
+            first_source[value] = fname
+    return RowIdentities(key, total_rows, without_key, duplicates)

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
+from meta_disco.pipeline import RecordKey, load_snapshot, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
@@ -111,35 +112,42 @@ def _report_exclusions(output_dir: Path) -> int | None:
 _DUPLICATES_SHOWN = 10
 
 
-def _check_one_row_per_file(output_dir: Path) -> bool:
-    """Print whether every ``file_id`` in the run is unique; False if any repeats.
+def _check_one_row_per_file(output_dir: Path, key: RecordKey) -> bool:
+    """Print whether every value of the source's key in the run is unique; False if any repeats.
 
-    A repeated ``file_id`` means the run holds more than one row for a file, so every
-    count over the output double-counts it and no identifier is a primary key. The
-    files listed beside each ``file_id`` say which producers wrote those rows — two
-    that claimed the same file, or one that wrote it twice.
+    ``key`` is the field the run's source guarantees unique per file
+    (``pipeline.RECORD_KEYS``), read from the run's input envelope — ``file_id`` for
+    AnVIL, the URL hash an HPRC record carries as ``md5sum``. A repeated value means the
+    run holds more than one row for a file, so every count over the output double-counts
+    it and no identifier is a primary key. The files listed beside each value say which
+    producers wrote those rows — two that claimed the same file, or one that wrote it
+    twice.
 
-    Rows carrying no ``file_id`` are counted and not failed: a source whose catalog
-    gives files no identity writes them that way.
+    Rows carrying no value under the key are counted and not failed here. In a full
+    run that count is zero on the path that reaches this check: Phase 3 refuses a row
+    with no key before it runs (``scripts/classify_remaining_files.py``). It is
+    reported rather than assumed so a run directory assembled any other way says what
+    it did not check.
     """
-    identities = row_identities(output_dir)
-    checked = identities.total_rows - identities.without_file_id
-    if identities.without_file_id:
-        print(f"{identities.without_file_id:,} of {identities.total_rows:,} rows carry no file_id — not checked.")
+    field = key.output_field
+    identities = row_identities(output_dir, field)
+    checked = identities.total_rows - identities.without_key
+    if identities.without_key:
+        print(f"{identities.without_key:,} of {identities.total_rows:,} rows carry no {field} — not checked.")
     if not identities.duplicates:
         # Nothing checkable is not the same fact as one row per file, so it does not
-        # get that line: a source whose catalog gives files no identity lands here.
+        # get that line.
         if checked:
-            print(f"One row per file: {checked:,} rows, no repeated file_id.")
+            print(f"One row per file: {checked:,} rows, no repeated {field}.")
         else:
-            print("No row carries a file_id — uniqueness was not checked.")
+            print(f"No row carries a {field} — uniqueness was not checked.")
         return True
 
-    print(f"DUPLICATE ROWS: {len(identities.duplicates):,} file_ids appear in more than one row.")
+    print(f"DUPLICATE ROWS: {len(identities.duplicates):,} {field} values appear in more than one row.")
     # nsmallest, not sorted()[:n]: a mis-routed file type duplicates its whole
     # population, so the map this samples can hold hundreds of thousands of entries.
-    for file_id, sources in heapq.nsmallest(_DUPLICATES_SHOWN, identities.duplicates.items()):
-        print(f"  {file_id}: {', '.join(sources)}")
+    for value, sources in heapq.nsmallest(_DUPLICATES_SHOWN, identities.duplicates.items()):
+        print(f"  {value}: {', '.join(sources)}")
     if len(identities.duplicates) > _DUPLICATES_SHOWN:
         print(f"  ... and {len(identities.duplicates) - _DUPLICATES_SHOWN:,} more")
     print("A file has more than one row — see the files named above. Every count over this output double-counts it.")
@@ -162,12 +170,17 @@ def run_all_classifications(
     Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
     Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded and
-    no ``file_id`` repeats across the completed run (:func:`_check_one_row_per_file`,
-    which passes a run whose rows carry no ``file_id`` at all rather than checking it).
+    no value of the source's record key repeats across the completed run
+    (:func:`_check_one_row_per_file`, which passes rows that carry none rather than
+    checking them).
 
     Raises ``ValueError`` before any of that if two producers claim overlapping
     extensions (:func:`producers.validate_registry`) — a run that cannot say who owns a
-    file must not start one.
+    file must not start one — or if the input envelope names no repository with a
+    declared record key (:func:`pipeline.record_key`), since Phase 3 would refuse the
+    same input after every earlier phase had run (#446). That preflight parses the
+    input once more than the producers do; on the AnVIL corpus that is seconds against
+    a run of minutes.
 
     Before any of that it reports the evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
@@ -188,6 +201,9 @@ def run_all_classifications(
     # at the end, hours in (#445) — the whole point of checking here is that the answer
     # costs nothing and arrives first.
     validate_registry()
+    # Same reasoning for the record key: the catch-all raises without one, and the
+    # duplicate check reads the same field, so an input that cannot name it fails here.
+    key = record_key(load_snapshot(metadata)[0], metadata)
 
     report_evidence_files(source_evidence_root)
 
@@ -245,7 +261,7 @@ def run_all_classifications(
     # Only meaningful once every producer has written: a file claimed twice is visible
     # only when both rows are on disk.
     if success:
-        success &= _check_one_row_per_file(output_dir)
+        success &= _check_one_row_per_file(output_dir, key)
 
     print(f"\n{'=' * 70}")
     if success:

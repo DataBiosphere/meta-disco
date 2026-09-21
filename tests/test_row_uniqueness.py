@@ -9,6 +9,10 @@ import json
 
 from meta_disco.classify_run import _check_one_row_per_file
 from meta_disco.output_utils import CLASSIFICATION_FILES, row_identities
+from meta_disco.pipeline import RECORD_KEYS
+
+ANVIL_KEY = RECORD_KEYS["anvil"]
+HPRC_KEY = RECORD_KEYS["hprc"]
 
 
 def _write(run_dir, fname, rows):
@@ -44,16 +48,28 @@ class TestRowIdentities:
         identities = row_identities(tmp_path)
         assert identities.total_rows == 3
         assert identities.duplicates == {}
-        assert identities.without_file_id == 0
+        assert identities.without_key == 0
 
     def test_rows_with_no_file_id_are_counted_not_paired(self, tmp_path):
-        """A source whose catalog gives files no identity writes them that way, and
-        rows that carry no identity cannot be compared for uniqueness at all."""
+        """Rows that carry no identity cannot be compared for uniqueness at all."""
         _write(tmp_path, "bam_classifications.json", [_row(None), _row(""), _row("f1")])
 
         identities = row_identities(tmp_path)
-        assert identities.without_file_id == 2
+        assert identities.without_key == 2
         assert identities.duplicates == {}
+
+    def test_the_key_is_the_sources_not_always_file_id(self, tmp_path):
+        """An HPRC row carries no `file_id`; its identity is the URL hash written as
+        `md5sum` (#446), and the scan keys on whichever field it is told."""
+        hprc_row = {"file_name": "HG002.bam", "file_id": None, "entry_id": None, "md5sum": "a" * 32}
+        _write(tmp_path, "bam_classifications.json", [hprc_row, dict(hprc_row, file_name="HG003.bam")])
+
+        by_file_id = row_identities(tmp_path, ANVIL_KEY.output_field)
+        assert by_file_id.without_key == 2 and by_file_id.duplicates == {}
+        by_md5 = row_identities(tmp_path, HPRC_KEY.output_field)
+        assert by_md5.key == "md5sum"
+        assert by_md5.without_key == 0
+        assert by_md5.duplicates == {"a" * 32: ["bam_classifications.json", "bam_classifications.json"]}
 
 
 class TestTheRunFailsOnDuplicates:
@@ -61,7 +77,7 @@ class TestTheRunFailsOnDuplicates:
         _write(tmp_path, "tar_classifications.json", [_row("f1")])
         _write(tmp_path, "auxiliary_classifications.json", [_row("f1")])
 
-        assert _check_one_row_per_file(tmp_path) is False
+        assert _check_one_row_per_file(tmp_path, ANVIL_KEY) is False
         out = capsys.readouterr().out
         assert "f1" in out
         assert "tar_classifications.json" in out
@@ -70,14 +86,29 @@ class TestTheRunFailsOnDuplicates:
     def test_one_row_per_file_passes(self, tmp_path, capsys):
         _write(tmp_path, "bam_classifications.json", [_row("f1"), _row("f2")])
 
-        assert _check_one_row_per_file(tmp_path) is True
+        assert _check_one_row_per_file(tmp_path, ANVIL_KEY) is True
         assert "2 rows" in capsys.readouterr().out
 
     def test_rows_without_a_file_id_do_not_fail_the_run(self, tmp_path, capsys):
         """And are not reported as one row per file: nothing was checkable."""
         _write(tmp_path, "bam_classifications.json", [_row(None), _row(None)])
 
-        assert _check_one_row_per_file(tmp_path) is True
+        assert _check_one_row_per_file(tmp_path, ANVIL_KEY) is True
         out = capsys.readouterr().out
         assert "no file_id" in out
         assert "One row per file" not in out
+
+    def test_an_hprc_run_is_checked_on_its_own_key(self, tmp_path, capsys):
+        """Before #446 an HPRC run reported "not checked": every row lacks a `file_id`.
+        Keyed on the field its source guarantees unique, the same rows are checked."""
+        rows = [{"file_name": n, "file_id": None, "md5sum": m} for n, m in (("a.bam", "a" * 32), ("b.bam", "b" * 32))]
+        _write(tmp_path, "bam_classifications.json", rows)
+
+        assert _check_one_row_per_file(tmp_path, HPRC_KEY) is True
+        out = capsys.readouterr().out
+        assert "One row per file: 2 rows, no repeated md5sum" in out
+        assert "not checked" not in out
+
+        _write(tmp_path, "tar_classifications.json", [rows[0]])
+        assert _check_one_row_per_file(tmp_path, HPRC_KEY) is False
+        assert "a" * 32 in capsys.readouterr().out

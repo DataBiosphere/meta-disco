@@ -694,7 +694,7 @@ def test_a_checksum_less_record_is_excluded_rather_than_refusing_the_run(tmp_pat
     path = tmp_path / "in.json"
     path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [good, excluded]}))
 
-    source, records = load_classifiable_snapshot(path)
+    source, records, _metadata = load_classifiable_snapshot(path)
     assert source == "anvil/anvil15"
     assert [r["entry_id"] for r in records] == ["ok"], "the drifted record was excluded, not refused"
 

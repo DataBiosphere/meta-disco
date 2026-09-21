@@ -16,7 +16,9 @@ Steps (issue #276):
   2. Fill ``file_size`` from S3 (HTTP HEAD) where the catalog omits it — only the
      sequencing-data catalog does; assemblies/alignments/annotations carry ``fileSize``.
   3. Map every record into the meta-disco shape (``file_name``, ``file_format``,
-     ``file_md5sum``, ``url``, ``file_size``) and write one metadata file.
+     ``file_md5sum``, ``url``, ``file_size``) and write one metadata file, in an
+     envelope naming the repository. A record with no URL has no ``file_md5sum`` and
+     is excluded at the shared load, named in the run's ``excluded_files.json`` (#376).
   4. Run the shared classifier over it, exactly as AnVIL does.
 """
 
@@ -30,6 +32,7 @@ from pathlib import Path
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.fetchers import FetchError, fetch_content_length
 from meta_disco.file_name import FileName
+from meta_disco.pipeline import HPRC_REPOSITORY
 
 # The S3 location field differs per HPRC catalog; each maps to the meta-disco ``url``.
 # All four catalogs carry one, so records normally get a content URL — but a record that
@@ -179,7 +182,12 @@ def main():
     with args.metadata_out.open("w") as f:
         # "files" is the canonical meta-disco metadata key (what the AnVIL source emits);
         # every classifier loads it, so the mapped HPRC input is shape-identical to AnVIL's.
-        json.dump({"files": all_records}, f)
+        # The envelope names the repository so the run can look up which field this
+        # source guarantees unique per file (`pipeline.RECORD_KEYS`: here `file_md5sum`,
+        # the URL hash above, because the catalogs issue no file identifier — #446). No
+        # `catalog` is named: the HPRC catalogs carry no generation, and no record here
+        # carries a published value for a `published.source` to attribute.
+        json.dump({"metadata": {"repository": HPRC_REPOSITORY}, "files": all_records}, f)
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 
     # Step 4: call the one classifier, exactly as AnVIL does; propagate its success.
