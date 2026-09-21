@@ -7,7 +7,7 @@
             "evidence": [
               {
                 "reason": "Inferred RNA-seq from platform/modality/file size signals",
-                "rule_id": "infer_assay_type",
+                "rule_id": "rnaseq_modality",
                 "source_type": "signal_inference",
                 "tier": 3,
                 "value": "RNA-seq"

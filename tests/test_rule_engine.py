@@ -1371,7 +1371,7 @@ class TestAssayTypeInference:
     """Test that infer_assay_type records evidence correctly."""
 
     def test_inferred_assay_type_has_evidence(self, engine):
-        """Inferred assay_type should have evidence from the infer_assay_type rule."""
+        """Inferred assay_type carries the matched assay rule's id as its evidence."""
         file_info = ExtendedFileInfo(
             name=FileName.parse("sample.bam"),
             file_size=60_000_000_000,
@@ -1387,7 +1387,10 @@ class TestAssayTypeInference:
         assert result.assay_type == "WGS"
         evidence = result.field_evidence["assay_type"]
         assert len(evidence) == 1
-        assert evidence[0]["rule_id"] == "infer_assay_type"
+        # The matched assay rule's own id, not a shared constant: a 60 GB Illumina
+        # BAM is `wgs_illumina_bam_large`, and the evidence says so (#430).
+        assert evidence[0]["rule_id"] == "wgs_illumina_bam_large"
+        assert evidence[0]["source_type"] == "signal_inference"
 
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
         """Inference should remove stale not_classified placeholder evidence."""
@@ -1412,7 +1415,7 @@ class TestAssayTypeInference:
         markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
         assert "not_classified" not in markers
         rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
-        assert "infer_assay_type" in rule_ids
+        assert "wgs_illumina_bam_large" in rule_ids
 
 
 class TestReasonChain:

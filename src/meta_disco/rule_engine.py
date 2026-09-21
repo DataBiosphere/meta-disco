@@ -1225,9 +1225,13 @@ class RuleEngine:
             ):
                 continue
 
-            # All conditions passed — record the inference as a claim. add_claim
-            # sets the field, drops the synthetic not_classified placeholder, and
-            # enforces make_claim's invariants. tier 3: the inference derives from
+            # All conditions passed — record the inference as a claim, under the
+            # matched rule's own id. Nine assay rules used to emit one constant id
+            # with a reason naming only the value, so six WGS size rules with
+            # different thresholds collapsed into one line and "does
+            # wgs_illumina_cram_medium ever fire" was unanswerable from any run
+            # (#430). add_claim sets the field, drops the synthetic not_classified
+            # placeholder, and enforces make_claim's invariants. tier 3: the inference derives from
             # already-resolved signals (the header-derived platform is typically
             # tier 3), so it carries a tier rather than the tier-0 default #228
             # will forbid; it never competes (the is_declared guard above means it
@@ -1237,7 +1241,7 @@ class RuleEngine:
             # values, plus the file's format and size — not a header (#392).
             result.add_claim(
                 "assay_type",
-                rule_id="infer_assay_type",
+                rule_id=assay_rule.id,
                 tier=3,
                 source_type=SOURCE_SIGNAL_INFERENCE,
                 reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
