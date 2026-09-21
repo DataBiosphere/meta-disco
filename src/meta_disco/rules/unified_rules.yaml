@@ -22,7 +22,7 @@
 #
 # 3. TIERED EXECUTION: Rules execute in tier order (1 → 2 → 3):
 #    - Tier 1: Extension-only rules (fastest, always available)
-#    - Tier 2: Filename pattern and file size rules
+#    - Tier 2: Filename pattern rules
 #    - Tier 3: Header-based rules (requires reading file headers)
 #
 # 4. CONDITION EVALUATION: All conditions in 'when' must match (AND logic).
@@ -60,7 +60,7 @@
 #  meta_disco.file_name in #252, so it is no longer a document here.)
 # 1. rules: The classification rules (main content)
 # 2. validators: Python validator configurations for complex logic
-# 3. assay_type_rules: Rules for inferring WGS/WES/RNA-seq from signals
+# 3. assay_type_rules: Rules for inferring WGS/RNA-seq from platform and modality
 # 4. illumina_instruments: Instrument ID prefix to model mapping
 # 5. reference_contig_lengths: Chromosome sizes for reference detection
 #
@@ -669,15 +669,6 @@ rules:
       data_type: quantification
       assay_type: RNA-seq
     rationale: "Salmon/Sailfish transcript-level quantification (quant.sf)"
-
-  # ===========================================================================
-  # TIER 2.5: FILE SIZE HEURISTICS
-  # ===========================================================================
-
-
-  # NOTE: Platform-dependent assay_type size rules live in assay_type_rules
-  # (post-hoc inference), not here. Platform is set by tier 3 header rules,
-  # so tier 2 rules that check platform can never fire for BAM/CRAM files.
 
   # ===========================================================================
   # TIER 3: HEADER-BASED RULES (BAM/CRAM @RG, @PG, @SQ)
@@ -1724,61 +1715,11 @@ assay_type_rules:
       platform_in: [PACBIO, ONT]
     assay_type: WGS
 
-  - id: wgs_illumina_bam_large
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format_not: ".cram"
-      file_size_gb_gt: 50
-    assay_type: WGS
 
-  - id: wgs_illumina_bam_medium
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format_not: ".cram"
-      file_size_gb_gt: 20
-      file_size_gb_lt: 50
-    assay_type: WGS
 
-  - id: wes_illumina_bam_small
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format_not: ".cram"
-      file_size_gb_lt: 20
-    assay_type: WES
 
-  - id: wgs_illumina_cram_large
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format: ".cram"
-      file_size_gb_gt: 20
-    assay_type: WGS
 
-  - id: wgs_illumina_cram_medium
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format: ".cram"
-      file_size_gb_gt: 8
-      file_size_gb_lt: 20
-    assay_type: WGS
 
-  - id: wes_illumina_cram_small
-    priority: 50
-    conditions:
-      data_modality: genomic
-      platform: ILLUMINA
-      file_format: ".cram"
-      file_size_gb_lt: 8
-    assay_type: WES
 
 ---
 # =============================================================================

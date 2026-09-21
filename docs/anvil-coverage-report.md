@@ -253,5 +253,5 @@ Processed **708,088** files.
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 | `Bisulfite-seq` | 28 | 0.0% | .bed (28) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. Only BAM/CRAM (via `@PG` programs and file size heuristics) and filename patterns can determine assay. The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. Only BAM/CRAM (via `@PG` programs and long-read platform) and filename patterns can determine assay. The high not-classified rate is expected.
 

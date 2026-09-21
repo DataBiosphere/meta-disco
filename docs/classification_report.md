@@ -84,7 +84,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Inferred from platform, modality, and file size heuristics.
+The top-level assay/method class. Inferred from platform and modality.
 
 ```
 assay_type

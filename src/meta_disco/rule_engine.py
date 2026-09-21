@@ -108,8 +108,8 @@ class ExtendedFileInfo:
         """Size in decimal GB (not GiB), derived from ``file_size`` bytes.
 
         Kept as a read-only accessor rather than stored state so bytes are the
-        single source of truth; the assay-size rules author their thresholds in
-        GB and read this (#241)."""
+        single source of truth; the `file_size_*` rule conditions author their
+        thresholds in GB and read this (#241)."""
         return self.file_size / 1e9 if self.file_size is not None else None
 
     @classmethod
@@ -1226,11 +1226,12 @@ class RuleEngine:
                 continue
 
             # All conditions passed — record the inference as a claim, under the
-            # matched rule's own id. Nine assay rules used to emit one constant id
-            # with a reason naming only the value, so six WGS size rules with
-            # different thresholds collapsed into one line and "does
-            # wgs_illumina_cram_medium ever fire" was unanswerable from any run
-            # (#430). add_claim sets the field, drops the synthetic not_classified
+            # matched rule's own id. These rules used to emit one constant id
+            # with a reason naming only the value, so distinct rules collapsed
+            # into one line and whether a given one had ever fired was
+            # unanswerable from any run (#430) — which is how the file-size
+            # rules went unmeasured until then, and then went altogether.
+            # add_claim sets the field, drops the synthetic not_classified
             # placeholder, and enforces make_claim's invariants. tier 3: the inference derives from
             # already-resolved signals (the header-derived platform is typically
             # tier 3), so it carries a tier rather than the tier-0 default #228

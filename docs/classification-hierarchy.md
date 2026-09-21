@@ -22,12 +22,11 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs), file size heuristics
+- `genomic` ← filename (HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs)
 - `transcriptomic.bulk` ← filename (IsoSeq, STAR), header @PG PN (STAR, HISAT2, TopHat, Salmon, Kallisto, IsoSeq)
 
 **assay_type**:
-- `WGS` ← filename (HiFi), file size (Illumina BAM >20GB, CRAM >8GB), PacBio HiFi header, CCS program
-- `WES` ← file size (Illumina BAM <20GB, CRAM <8GB)
+- `WGS` ← filename (HiFi), long-read platform with genomic modality (`wgs_longread`), PacBio HiFi header, CCS program
 - `RNA-seq` ← STAR/HISAT2/TopHat/Salmon/Kallisto in @PG, IsoSeq
 
 **platform**:
