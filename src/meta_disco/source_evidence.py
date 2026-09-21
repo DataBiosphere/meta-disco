@@ -171,6 +171,11 @@ DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "s
 # envelope's `fetched_at` is when the source was fetched.
 GENERATION_FORMAT = "%Y%m%dT%H%M%SZ"
 _GENERATION = re.compile(r"\d{8}T\d{6}Z")
+# A generation being written sits beside its final name with this suffix and is renamed
+# into place only once every file is out, so a generation exists whole or not at all:
+# a kill part-way leaves a `<stamp>.partial` directory, which `discover` never reads and
+# `report_evidence_files` names as an unfinished import.
+PARTIAL_SUFFIX = ".partial"
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
@@ -806,6 +811,22 @@ def evidence_file_path(directory: Path, table: str) -> Path:
     return directory / f"{table}{EVIDENCE_FILE_SUFFIX}"
 
 
+def staging_dir(directory: Path) -> Path:
+    """Where a generation is written before it is renamed to ``directory``."""
+    return directory.with_name(directory.name + PARTIAL_SUFFIX)
+
+
+def unfinished_imports(root: Path) -> list[Path]:
+    """Every ``<stamp>.partial`` directory under ``root``: an import that was killed part-way.
+
+    Left for a person to remove; nothing reads what is inside, and the import that
+    made it did not finish. Empty when ``root`` is missing.
+    """
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.rglob(f"*{PARTIAL_SUFFIX}") if p.is_dir())
+
+
 def discover(root: Path) -> list[Path]:
     """Every current evidence file under ``root``, in a stable order; empty when there are none.
 
@@ -814,8 +835,9 @@ def discover(root: Path) -> list[Path]:
     ``root``), only those of the newest generation of each dataset — an older
     generation is history, kept on disk and never read by a run. A file anywhere else
     has no history to supersede it and is always current, a stamp-named directory at
-    another depth included. Newest is by stamp, which sorts as time because of the
-    format; the run does not consult mtimes.
+    another depth included. A file under a ``.partial`` directory — an import that was
+    killed before it finished — is never current. Newest is by stamp, which sorts as
+    time because of the format; the run does not consult mtimes.
 
     A missing ``root`` is not an error: no evidence files present is the ordinary state
     of a run today, and it means the run imports nothing — not that it is
@@ -823,7 +845,11 @@ def discover(root: Path) -> list[Path]:
     """
     if not root.is_dir():
         return []
-    found = sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
+    found = sorted(
+        p
+        for p in root.rglob(EVIDENCE_FILE_GLOB)
+        if p.is_file() and not any(part.endswith(PARTIAL_SUFFIX) for part in p.relative_to(root).parts)
+    )
     newest: dict[Path, str] = {}
     for path in found:
         if (generation := _generation_of(root, path)) is not None:
@@ -846,7 +872,8 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     """Report every current evidence file under ``root``, and return what each one's status is.
 
     *Current* as :func:`discover` defines it: a superseded generation is neither
-    reported nor read.
+    reported nor read. An unfinished import (:func:`unfinished_imports`) is named as
+    such and not read.
 
     Prints one line per file — source, table, version, the catalog it was built for
     if it names one, fetch date and age — so a run says which evidence files it found
@@ -870,6 +897,8 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     taken against the current time in the envelope's own timezone, so a naive and an
     aware ``fetched_at`` both work.
     """
+    for partial in unfinished_imports(root):
+        print(f"Unfinished import, not read (remove it by hand): {partial.relative_to(root)}")
     statuses = []
     for path in discover(root):
         try:

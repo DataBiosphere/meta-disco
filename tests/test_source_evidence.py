@@ -955,6 +955,14 @@ class TestTheRunReport:
     every file is named with its provenance and age, and nothing is refused.
     """
 
+    def test_an_unfinished_import_is_named_and_not_read(self, tmp_path, capsys):
+        partial = tmp_path / "anvil" / "anvil15" / "D" / "20260920T000000Z.partial"
+        partial.mkdir(parents=True)
+        (partial / "hifi.ndjson").write_text("not an envelope")
+        assert report_evidence_files(tmp_path) == []
+        out = capsys.readouterr().out.replace("\\", "/")
+        assert "Unfinished import, not read (remove it by hand): anvil/anvil15/D/20260920T000000Z.partial" in out
+
     def test_no_source_evidence_is_said_rather_than_passed_over(self, tmp_path, capsys):
         assert report_evidence_files(tmp_path / "source_evidence") == []
         assert "none under" in capsys.readouterr().out

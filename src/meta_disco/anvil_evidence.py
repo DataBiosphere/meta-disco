@@ -58,6 +58,7 @@ from .source_evidence import (
     evidence_file_path,
     generation_dir,
     new_generation,
+    staging_dir,
     write_evidence_file,
 )
 
@@ -221,13 +222,15 @@ def import_dataset(
     pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
 
     The generation directory must not exist: an import never writes over another. It
-    is a generation only once every table is written: a failure part-way — a bad row,
-    a full disk, an interrupt — removes the directory before the error propagates
-    (``ignore_errors``: a removal that itself fails is silent), so a failed import
-    normally leaves no generation for ``discover`` to take as the dataset's newest. A
-    hard kill leaves that residue to remove by hand. A mapped table that writes no row at all
-    is such a failure: a table the map names should reach files, and one that reaches
-    none is the map disagreeing with the catalog (contract 5.3), not an empty result.
+    is a generation only once every table is written: the files go to a staging
+    directory (``source_evidence.staging_dir``) that is renamed into place at the end,
+    so a generation exists whole or not at all. A failure part-way — a bad row, a full
+    disk, an interrupt — removes the staging directory before the error propagates; a
+    hard kill leaves it as ``<stamp>.partial``, which ``discover`` never reads, the run
+    reports as unfinished, and this refuses to write over. A mapped table that writes
+    no row at all is such a failure: a table the map names should reach files, and one
+    that reaches none is the map disagreeing with the catalog (contract 5.3), not an
+    empty result.
     The source directory under the evidence root and the target system are both
     ``REPOSITORY``, the repository the manifests came from.
     """
@@ -235,6 +238,9 @@ def import_dataset(
     directory = generation_dir(evidence_root, REPOSITORY, catalog, dataset, stamp)
     if directory.exists():
         raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
+    staging = staging_dir(directory)
+    if staging.exists():
+        raise FileExistsError(f"{staging}: an unfinished import; remove it by hand before importing again")
     path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
     # When the *source* was fetched — the manifest's request time, not the import's. A
     # sidecar that cannot say is refused: an evidence file must record it, and inventing
@@ -260,7 +266,7 @@ def import_dataset(
             )
             result = TableImport(table=table, path=evidence_file_path(directory, table))
             entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result)
-            result.written = write_evidence_file(result.path, envelope, entries)
+            result.written = write_evidence_file(evidence_file_path(staging, table), envelope, entries)
             if not result.written:
                 raise ValueError(
                     f"{dataset}/{table}: no evidence row written — every link was empty or outside the "
@@ -268,8 +274,9 @@ def import_dataset(
                 )
             tables.append(result)
     except BaseException:
-        shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(staging, ignore_errors=True)
         raise
+    staging.rename(directory)
     return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 

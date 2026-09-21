@@ -14,7 +14,7 @@ from meta_disco import anvil_evidence as ae
 from meta_disco.azul_manifest import FORMAT_VERBATIM, load_sidecar, manifest_dir, manifest_path, save_sidecar
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_REPOSITORY_METADATA
 from meta_disco.slot_map import load_slot_map
-from meta_disco.source_evidence import discover, is_generation, iter_evidence, read_envelope
+from meta_disco.source_evidence import discover, is_generation, iter_evidence, read_envelope, unfinished_imports
 
 CATALOG = "anvil15"
 FETCHED = "2026-09-03T21:45:47.517283"
@@ -407,6 +407,31 @@ class TestGenerations:
         assert calls == ["hifi.ndjson", "ont.ndjson"]
         assert not (tmp_path / "ev" / "anvil" / CATALOG / "D" / "20260921T000000Z").exists()
         assert discover(tmp_path / "ev") == [t.path for t in first.tables]
+
+    def test_a_generation_exists_whole_or_not_at_all(self, tmp_path, monkeypatch):
+        """The files are written to `<stamp>.partial` and renamed into place at the end; a
+        kill part-way leaves the staging directory, which nothing reads and a re-import refuses."""
+        write_dataset(tmp_path, "D", HIFI_ROWS)
+        m = slot_map(tmp_path, HIFI_MAP)
+        seen: list[bool] = []
+        real = ae.write_evidence_file
+
+        def observing(path, envelope, entries):
+            seen.append(path.parent.name.endswith(".partial"))
+            return real(path, envelope, entries)
+
+        monkeypatch.setattr(ae, "write_evidence_file", observing)
+        result = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        assert seen == [True], "written under the staging name"
+        assert result.tables[0].path.is_file() and result.tables[0].path.parent.name == "20260920T000000Z"
+        # A kill part-way: the staging directory is left behind.
+        killed = tmp_path / "ev" / "anvil" / CATALOG / "D" / "20260921T000000Z.partial"
+        killed.mkdir()
+        (killed / "hifi.ndjson").write_text("")
+        assert discover(tmp_path / "ev") == [result.tables[0].path], "the unfinished import is never current"
+        assert unfinished_imports(tmp_path / "ev") == [killed]
+        with pytest.raises(FileExistsError, match="unfinished import"):
+            ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260921T000000Z")
 
     def test_a_mapped_table_that_reaches_no_file_is_an_error_not_an_empty_file(self, tmp_path):
         """Contract 5.3: evidence matching no file is the map disagreeing with the catalog."""
