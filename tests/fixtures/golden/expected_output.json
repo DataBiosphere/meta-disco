@@ -6,7 +6,7 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Inferred RNA-seq from platform/modality/file size signals",
+                "reason": "Inferred RNA-seq by rnaseq_modality from the resolved modality",
                 "rule_id": "rnaseq_modality",
                 "source_type": "signal_inference",
                 "tier": 3,

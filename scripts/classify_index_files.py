@@ -303,10 +303,10 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     extension alone, and coverage counts ``not_applicable`` as classified, so a file
     was reported as determined precisely where it is not.
 
-    #437 removed that hazard at the source: the catch-all's rule became ``index_file``,
-    claiming only ``data_type: index`` and leaving the four a parent supplies open;
-    #430 then removed the rule itself, since no index file reaches the rule engine —
-    this producer takes them all. So the three
+    #437 removed that hazard at the source: the rule is now ``index_file`` and claims
+    only ``data_type: index``, leaving the four a parent supplies open. It is the
+    engine's backstop for an index this producer misses; it fires on nothing today
+    because this producer misses nothing, and that is why it stays (#430). So the three
     ways an index file can be classified — inherited from a matched parent, declined
     here, or reached by the rule — now agree on its kind and never deny a dimension
     that applies. The record is still written, because it carries what this producer

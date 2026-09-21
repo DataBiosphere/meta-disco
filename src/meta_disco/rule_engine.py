@@ -841,6 +841,33 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     return _resolved(NOT_CLASSIFIED, ResolutionReason.CONFLICT, competing=sorted(top_tier_decls))
 
 
+_CONDITION_WORDS = {
+    "matched_rules_any": "the aligner named in the header",
+    "data_modality_contains": "the resolved modality",
+    "data_modality": "the resolved modality",
+    "platform": "the resolved platform",
+    "platform_in": "the resolved platform",
+    "file_format": "the file format",
+    "file_format_not": "the file format",
+    "file_size_gb_gt": "the file size",
+    "file_size_gb_lt": "the file size",
+}
+
+
+def _describe_conditions(conditions: dict) -> str:
+    """The signals an assay rule actually reads, for its evidence reason.
+
+    Derived from the rule's condition keys rather than typed, so the reason cannot
+    say "file size" after the last size rule is gone — which the previous constant
+    did (#430)."""
+    words = []
+    for key in conditions:
+        w = _CONDITION_WORDS.get(key, key)
+        if w not in words:
+            words.append(w)
+    return " and ".join(words) if words else "no conditions"
+
+
 class RuleEngine:
     """Engine for classifying files using the unified rules format.
 
@@ -1245,7 +1272,7 @@ class RuleEngine:
                 rule_id=assay_rule.id,
                 tier=3,
                 source_type=SOURCE_SIGNAL_INFERENCE,
-                reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                reason=f"Inferred {assay_rule.assay_type} by {assay_rule.id} from {_describe_conditions(assay_rule.conditions)}",
                 value=assay_rule.assay_type,
             )
             return
