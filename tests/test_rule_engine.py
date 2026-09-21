@@ -809,6 +809,21 @@ class TestPeakNamedBedFallback:
     them, so a future edit to the fallback's lookahead cannot quietly restore the
     `genomic` default for `atac_peaks.bed`."""
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "atac_peaks.bed",
+            "H3K27ac_chip_peaks.bed",
+            "sample_summits.bed",
+            "H3K27ac.bed",
+            "sample.chip.bed",
+            # The assay spelled as one word, which a bare `atac`/`chip` token misses
+            "atacseq.bed",
+            "chipseq.bed",
+            "atac-seq.bed",
+            "histone_marks.bed",
+        ],
+    )
     def test_a_peak_indicator_declines_rather_than_asserting_genomic(self, engine, name):
         """A name carrying a peak indicator gets no answer, not a confident wrong one.
 
