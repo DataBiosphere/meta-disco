@@ -571,18 +571,22 @@ class ExtendedClassificationResult:
         rules. The content classifiers in ``header_classifier`` do contribute
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
         ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
-        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``, and the
-        engine's ``infer_assay_type``.
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
+        assay contributes the id of the assay rule that matched — ``wgs_longread``,
+        ``rnaseq_modality``, ``rnaseq_program`` — which live in the file's
+        ``assay_type_rules`` document, not its ``rules`` list; the one shared
+        ``infer_assay_type`` id those used to emit is gone (#430).
 
-        So a caller must not assume an ID here names a rule in unified_rules.yaml.
+        So a caller must not assume an ID here names a rule in the ``rules`` list of
+        unified_rules.yaml.
 
         **An imported claim now contributes one too.** It used to carry a ``source``
         and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
         cites the ``rule_id`` of the mapping that produced it, and only an
-        ``unmapped`` one still names nothing. ``infer_assay_type``'s
-        ``matched_rules_any`` conditions read this list and are written against our
-        own rule IDs, so a ``map_*`` id could satisfy — or fail to satisfy — one of
-        them. Nothing feeds an imported claim into ``field_evidence`` until the join
+        ``unmapped`` one still names nothing. The assay rules that
+        ``infer_assay_type`` evaluates read this list through their
+        ``matched_rules_any`` conditions, written against our own rule IDs, so a
+        ``map_*`` id could satisfy — or fail to satisfy — one of them. Nothing feeds an imported claim into ``field_evidence`` until the join
         lands, so whether these belong here is #402's to settle.
         """
         seen = set()
