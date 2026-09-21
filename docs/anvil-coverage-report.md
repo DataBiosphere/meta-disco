@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-20 19:16:44**
+Classification run: **2026-09-20 19:40:38**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -24,7 +24,7 @@ Processed **708,088** files.
 |---|---:|---:|
 | **Data Modality** | 636,066 (89.8%) | 72,022 (10.2%) |
 | **Data Type** | 683,602 (96.5%) | 24,486 (3.5%) |
-| **Reference Assembly** | 511,952 (72.3%) | 196,136 (27.7%) |
+| **Reference Assembly** | 511,950 (72.3%) | 196,138 (27.7%) |
 | **Platform** | 130,979 (18.5%) | 577,109 (81.5%) |
 | **Assay Type** | 81,551 (11.5%) | 626,537 (88.5%) |
 
@@ -108,14 +108,14 @@ Processed **708,088** files.
 | `genotypes` | 8,562 | 1.2% | .psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854) |
 | `log` | 3,637 | 0.5% | .log (3,637) |
 | `images` | 3,074 | 0.4% | .png (3,074) |
-| `assembly` | 961 | 0.1% | .fa (936)<br>.fasta (25) |
+| `assembly` | 960 | 0.1% | .fa (936)<br>.fasta (24) |
 | `expression_matrix` | 698 | 0.1% | .h5ad (350)<br>.txt (281)<br>(none) (64)<br>.csv (3) |
 | `quantification` | 634 | 0.1% | .sf (634) |
 | `pangenome` | 449 | 0.1% | .gfa (314)<br>(none) (135) |
 | `variants.structural` | 192 | 0.0% | .vcf (192) |
 | `array_signal` | 160 | 0.0% | .idat (160) |
 | `pangenome.reference` | 28 | 0.0% | .gfa (12)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
-| `sequence` | 17 | 0.0% | .fasta (13)<br>.fa (4) |
+| `sequence` | 18 | 0.0% | .fasta (14)<br>.fa (4) |
 | `signal` | 16 | 0.0% | .bw (16) |
 
 ---
@@ -124,8 +124,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 511,952 | 72.3% |
-| **Not classified** | 196,136 | 27.7% |
+| **Classified** | 511,950 | 72.3% |
+| **Not classified** | 196,138 | 27.7% |
 
 ### What's not classified?
 
@@ -150,15 +150,15 @@ Processed **708,088** files.
 | .bed | 37 | No rule determined a value for reference_assembly |
 | .vcf | 28 | no VCF header lines (no '#' lines) in the read head |
 | .csv | 21 | No rule determined a value for reference_assembly |
-| .fasta | 3 | No rule determined a value for reference_assembly |
-| .fai | 2 | Parent file had no value for reference_assembly |
+| .fasta | 4 | No rule determined a value for reference_assembly |
+| .fai | 3 | Parent file had no value for reference_assembly |
 | .xg | 2 | Filename contains GRCh38/hg38 reference indicator |
 
 | Reference Assembly | count | % | extensions |
 |---|---:|---:|---|
 | `CHM13` | 411,518 | 58.1% | .vcf (192,420)<br>.tbi (152,255)<br>.csi (39,500)<br>.bed (6,744)<br>.cram (6,718)<br>.crai (6,369)<br>.txt (5,170)<br>.bam (632)<br>.bai (632)<br>(none) (579)<br>.tsv (470)<br>.fasta (7)<br>.gfa (6)<br>.fai (6)<br>.fa (3)<br>.gbwt (3)<br>.xg (3)<br>.gbz (1) |
-| `not_classified` | 196,136 | 27.7% | (none) (137,202)<br>.txt (37,113)<br>.tbi (13,821)<br>.bw (2,536)<br>.crai (696)<br>.bam (688)<br>.bai (688)<br>.csi (676)<br>.sf (634)<br>.bigwig (462)<br>.tsv (443)<br>.h5ad (350)<br>.gfa (314)<br>.sam (192)<br>.idat (160)<br>.cram (68)<br>.bed (37)<br>.vcf (28)<br>.csv (21)<br>.fasta (3)<br>.fai (2)<br>.xg (2) |
-| `not_applicable` | 63,213 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.fai (465)<br>.fasta (25)<br>.pod5 (11)<br>.bai (11)<br>.pbi (7) |
+| `not_classified` | 196,138 | 27.7% | (none) (137,202)<br>.txt (37,113)<br>.tbi (13,821)<br>.bw (2,536)<br>.crai (696)<br>.bam (688)<br>.bai (688)<br>.csi (676)<br>.sf (634)<br>.bigwig (462)<br>.tsv (443)<br>.h5ad (350)<br>.gfa (314)<br>.sam (192)<br>.idat (160)<br>.cram (68)<br>.bed (37)<br>.vcf (28)<br>.csv (21)<br>.fasta (4)<br>.fai (3)<br>.xg (2) |
+| `not_applicable` | 63,211 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.fai (464)<br>.fasta (24)<br>.pod5 (11)<br>.bai (11)<br>.pbi (7) |
 | `GRCh38` | 37,207 | 5.3% | .vcf (9,209)<br>.cram (3,837)<br>.tbi (3,455)<br>.crai (3,252)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.bai (1,411)<br>.csi (1,010)<br>.bed (817)<br>(none) (582)<br>.txt (196)<br>.tsv (10)<br>.gfa (6)<br>.fai (4)<br>.fasta (3)<br>.xg (3)<br>.gbwt (3)<br>.fa (1)<br>.gbz (1) |
 | `GRCh37` | 14 | 0.0% | .vcf (11)<br>.bed (3) |
 
