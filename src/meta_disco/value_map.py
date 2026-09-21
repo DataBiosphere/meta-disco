@@ -594,7 +594,13 @@ def _yaml_scalar(text: str) -> str:
     YAML reads back to the same code point and UTF-8 can write.
     """
     quoted = json.dumps(text, ensure_ascii=False)
-    return "".join(c if c.isprintable() or c == " " else f"\\u{ord(c):04x}" for c in quoted)
+    return "".join(c if c.isprintable() or c == " " else _code_point_escape(c) for c in quoted)
+
+
+def _code_point_escape(c: str) -> str:
+    """``\\uXXXX`` up to U+FFFF and ``\\UXXXXXXXX`` above — YAML and the queue read both, and ``\\u`` takes
+    exactly four digits, so an astral code point in that form would be read back as another character."""
+    return f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}"
 
 
 def _yaml_value(value: str | list[str]) -> str:
@@ -701,7 +707,7 @@ def _visible_char(c: str) -> str:
         return _NAMED_ESCAPES[c]
     if c == " " or c.isprintable():
         return c
-    return f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}"
+    return _code_point_escape(c)
 
 
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:

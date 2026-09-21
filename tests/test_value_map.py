@@ -740,6 +740,16 @@ def test_a_lone_surrogate_can_be_seeded_even_where_its_slug_collides(empty_table
     assert seed(empty_table, evidence_root).rows_added == ()
 
 
+def test_an_astral_non_printable_round_trips_through_a_seeded_row(empty_table, evidence_root):
+    """U+E0001 is written as an eight-digit escape; a four-digit one would read back as U+E000 and a `1`."""
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "tag\U000e0001x")])
+    (added,) = seed(empty_table, evidence_root).rows_added
+    assert "\\U000e0001" in empty_table.read_text(encoding="utf-8")
+    table = load_value_map(empty_table)
+    assert table.select("platform", "tag\U000e0001x", "anvil", "AnVIL_HPRC_R2") is table.by_id(added)
+    assert seed(empty_table, evidence_root).rows_added == ()
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,
