@@ -50,11 +50,18 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     This fan-out is **structural**, per 1.3. A single value *implying* a term in a second slot is a
     different act, and belongs to 3.10.
 
-2.4 The slot map is a curated judgment about what a source's tables and columns actually speak to.
-    A signal judged misleading is **explicitly not mapped**, with its reason recorded in the map — never silently absent.
-    Choosing to map a column and choosing not to are the same act; only the recorded reason makes either reviewable.
+2.4 The slot map is a curated judgment about what a source's tables and columns actually speak to,
+    **authored from the source's own schema and from nothing a classification run concluded** (3.4). A
+    column, or a slot on a column, that the map does not name is **not mapped**, and that is the whole
+    statement: the map is authored against a named catalog with every column of it considered, so
+    absence means considered and not mapped rather than overlooked. Choosing to map a column and
+    choosing not to are the same act, and the reasoning behind either is recorded where it is read — the
+    pull request and the issue — not in the map, which carries no prose.
 
 2.5 Evidence **imported from a source** is fetched out of band, with network, and read offline and deterministically.
+    An import is a **generation**, written once and never over an earlier one; a reader takes the newest
+    generation of each dataset, so a mapping removed between two imports is absent from the next rather
+    than left on disk as valid-looking evidence.
     Inference fetches its own headers and content during the run, through the evidence cache, where a classifier
     needs them. Not every classifier does; a fetch failure the fetchers signal falls back to classifying
     without content, which yields `not_classified`; and an unwrapped error — a missing tool, say — propagates.
@@ -75,11 +82,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 2.8 A slot's value comes from a metadata value. A file link's name states a role, which belongs
     to the derivation graph.
-    Whether such a name is *also* usable as slot evidence is unsettled, and the contract does
-    not forbid it: measured on files inference can read, it added nothing (two slots, 656
-    files); where inference has a content ceiling — a FASTQ's modality — it may be the only
-    signal there is, and that case is untested. A source whose tables carry no metadata values
-    at all has nothing else to offer.
+    Such a name is *also* slot evidence, and the map declares which span of it speaks to which slot
+    (#369). Measured on files inference can read it is an agreeing input, which 4.4 records; where
+    inference has a content ceiling, or a source's tables carry no metadata values at all — the T2T
+    datasets, 85% of the corpus — it is the only signal there is. Two exclusions are structural, read
+    off the source's own naming and enforced by the map's loader: an **entity-shaped** token
+    (`interval`) describes a row, not its files, and a **derivative** column (`*_index`, `*_bai`,
+    `*_md5`) carries no `data_type` of its own payload while keeping the payload's `reference_assembly`.
     `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
     come in, why, and what each is worth.
 
@@ -212,6 +221,14 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     output**, which is where 5.1 lists it. So a file can be classified and contested at once without the record
     having to say two things in one field.
     A conflict no curator has answered leaves the record `conflict` with no value, as today.
+
+4.8 A source may disagree with itself, and that is a conflict like any other. One value may declare
+    several slots (3.10), and two cells or names of one row may reach one slot, so one source can hold
+    two declarations for a file and slot. They reconcile **per claim**, as 4.4 and 4.5 reconcile any
+    other declarations: agreeing ones classify, disagreeing ones conflict, and **nothing ranks them** —
+    a direct column does not beat an implied one, which would be a tier ladder only inference has (4.3).
+    A wrong implication is fixed by editing its row. Every claim records its column and raw value, not
+    only the rule that made it, so the two can be told apart in the record.
 
 ## 5. Review
 
@@ -373,7 +390,14 @@ No code reads this document, and the pipeline it describes does not exist — wi
 describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. Nothing yet checks a mapped value *against the slot's vocabulary* at runtime; that check is #414's, at the point the translation table loads. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in five places:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
-- **There is no slot map**, no rule scope for source evidence, and so no producer for any of section 2.
+- **The slot map and its importer exist for AnVIL only** (#369): `slot_map` loads
+  `sources/anvil_slot_map.yaml`, `anvil_evidence` writes generations of evidence files under
+  `data/source_evidence/anvil/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
+  absence-is-the-statement half, 2.5's generations and 2.8's two exclusions are enforced for that one
+  source; that the map was authored from nothing a run concluded is not enforceable, and a test greps
+  the file for the strings that would say otherwise. No other source has a map, there is no
+  rule scope for source evidence, and nothing consumes what is written: section 2 is produced and not
+  yet read.
 - **There is no mapping row, and nothing to hold one.** 3.9-3.12 describe a record nothing constructs and
   no loader validates; #414 builds it. Until then the required reason, the `(source, dataset)` scope,
   3.5's bound on normalization and 3.11's seeded/authored split are unenforced, and 3.10's multi-slot
@@ -392,12 +416,13 @@ A line leaves this section when the assertion above it is enforced, not when it 
 
 - **A claim file becomes an evidence file.** *Done in #421.* #401's envelope, NDJSON discipline, and both-sides-of-the-join naming survived; the per-line record stopped being a claim and became an observation carrying `raw_value` and no mapped value. `source_type` moved to the envelope, where it is constant for the file.
 - **"The importer owns the mapping" is reversed.** Rules own it. The importer owns the slot map.
-- **`declined` moves to the slot map.** A table name or column judged not to speak to a slot is explicitly not mapped, with its reason recorded there. It is not a claim, not a rule, and never reaches resolution — the files `alignments_v2.location` names receive no `data_type` evidence, rather than a wrong claim for something else to cancel. The decline is scoped to the column, as the schema's own `declined` definition already scopes it.
+- **`declined` moves to the slot map.** A table name or column judged not to speak to a slot is not mapped, and its absence is the statement (2.4); the reason is recorded on the issue and the pull request, not in the map. It is not a claim, not a rule, and never reaches resolution. The decline is scoped to the column, as the schema's own `declined` definition already scopes it.
+- **A conflict is not a reason to decline** (4.8, #369). A name that disagrees with inference is a source saying something the resolver records under 4.5; dropping it at import would author one input from another, which 3.4 forbids.
 - **#408 dissolves.** There are no imported claims, so there is no no-tier-on-an-imported-claim rule to place.
 - **#396 folds into the engine.** Cross-source comparison is resolution stage two, not a separate step.
 - **#369 shrinks** to the AnVIL slot map plus a reader. No vocabulary in it.
 - **`output/anvil/<run>/*_classifications.json` stops being the answer.** It becomes inference output, kept as provenance. The reconciled artifact is the answer.
-- **`manifest_survey.NAME_TOKENS` splits** — the name→slot half to the slot map, the token→term half to rules.
+- **`manifest_survey.NAME_TOKENS` splits** — the name→slot half to the slot map, the token→term half to rules. *The name→slot half is in the AnVIL map (#369), which declares each span under its slot and is tested against the survey's list; the token→term half is #414's.*
 
 ## Open
 

@@ -121,7 +121,7 @@ import os
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, fields
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
 from uuid import uuid4
@@ -147,7 +147,8 @@ ENVELOPE_KEY = "evidence_file"
 
 # What `discover` treats as an evidence file. NDJSON is the format, so the suffix is the
 # membership test — a README or a scratch .json beside them is not picked up.
-EVIDENCE_FILE_GLOB = "*.ndjson"
+EVIDENCE_FILE_SUFFIX = ".ndjson"
+EVIDENCE_FILE_GLOB = f"*{EVIDENCE_FILE_SUFFIX}"
 
 # Where an importer leaves the evidence files a run reads. One directory per source
 # under it (`data/source_evidence/hprc/`, `.../anvil/`): an evidence file is the same
@@ -157,6 +158,24 @@ EVIDENCE_FILE_GLOB = "*.ndjson"
 # a shared name would have read as one. This module is
 # <root>/src/meta_disco/source_evidence.py, so the repo root is three levels up.
 DEFAULT_SOURCE_EVIDENCE_ROOT = Path(__file__).resolve().parents[2] / "data" / "source_evidence"
+
+# An import is a generation (#369). An importer writes
+# `<root>/<source>/<version>/<dataset>/<generation>/<table>.ndjson` and never overwrites
+# (`anvil_evidence.import_dataset` refuses an existing generation directory; nothing here does):
+# a mapping removed between two imports is absent from the next generation rather than
+# left on disk as a valid-looking file. `discover` returns the newest generation of each
+# dataset and only that one; the ones behind it are kept as history. The generation sits
+# under the dataset, not above it, because a dataset is imported whole while a run may
+# import one or all. Three "when"s stay distinct: `version` is the source's own (a
+# catalog such as anvil15), the generation is ours (when we imported), and the
+# envelope's `fetched_at` is when the source was fetched.
+GENERATION_FORMAT = "%Y%m%dT%H%M%SZ"
+_GENERATION = re.compile(r"\d{8}T\d{6}Z")
+# A generation being written sits beside its final name with this suffix and is renamed
+# into place only once every file is out, so a generation exists whole or not at all:
+# a kill part-way leaves a `<stamp>.partial` directory, which `discover` never reads and
+# `report_evidence_files` names as an unfinished import.
+PARTIAL_SUFFIX = ".partial"
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
@@ -653,7 +672,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     no-op with a success return, which is the one failure mode an import must not
     have (#401 review).
     """
-    if path.suffix != EVIDENCE_FILE_GLOB.lstrip("*"):
+    if path.suffix != EVIDENCE_FILE_SUFFIX:
         raise ValueError(
             f"{path.name}: an evidence file must be named {EVIDENCE_FILE_GLOB} — "
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
@@ -758,8 +777,67 @@ def _decode(raw: bytes, where: str) -> str:
         raise ValueError(f"{where}: not valid UTF-8: {exc}") from None
 
 
+def new_generation(now: datetime | None = None) -> str:
+    """A generation stamp for an import starting now, in UTC: ``20260920T031500Z``.
+
+    Second resolution: two imports of one dataset within a second is not a case worth
+    a longer name, and `anvil_evidence.import_dataset` refuses to write over one that
+    exists. ``now`` fixes the clock for tests.
+    """
+    moment = now if now is not None else datetime.now(timezone.utc)
+    return moment.astimezone(timezone.utc).strftime(GENERATION_FORMAT)
+
+
+def is_generation(name: str) -> bool:
+    """Whether a directory name is a generation stamp as :func:`new_generation` writes one."""
+    return _GENERATION.fullmatch(name) is not None
+
+
+def generation_dir(root: Path, source: str, version: str, dataset: str, generation: str) -> Path:
+    """Where one import of one dataset writes its files: the generation layout (contract
+    2.5), spelled once.
+
+    ``generation`` must be a stamp :func:`is_generation` accepts, because that is what
+    :func:`discover` keys on: a directory named otherwise would be read as history-less
+    flat files and never superseded.
+    """
+    if not is_generation(generation):
+        raise ValueError(f"{generation!r} is not a generation stamp ({GENERATION_FORMAT}); see new_generation")
+    return root / source / version / dataset / generation
+
+
+def evidence_file_path(directory: Path, table: str) -> Path:
+    """The file one table's rows go to inside a generation directory: ``<table>.ndjson``."""
+    return directory / f"{table}{EVIDENCE_FILE_SUFFIX}"
+
+
+def staging_dir(directory: Path) -> Path:
+    """Where a generation is written before it is renamed to ``directory``."""
+    return directory.with_name(directory.name + PARTIAL_SUFFIX)
+
+
+def unfinished_imports(root: Path) -> list[Path]:
+    """Every ``<stamp>.partial`` directory under ``root``: an import that was killed part-way.
+
+    Left for a person to remove; nothing reads what is inside, and the import that
+    made it did not finish. Empty when ``root`` is missing.
+    """
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.rglob(f"*{PARTIAL_SUFFIX}") if p.is_dir())
+
+
 def discover(root: Path) -> list[Path]:
-    """Every evidence file under ``root``, in a stable order; empty when there are none.
+    """Every current evidence file under ``root``, in a stable order; empty when there are none.
+
+    *Current* means: of the files written in the generation layout
+    (:func:`generation_dir` — a stamp-named directory exactly four levels under
+    ``root``), only those of the newest generation of each dataset — an older
+    generation is history, kept on disk and never read by a run. A file anywhere else
+    has no history to supersede it and is always current, a stamp-named directory at
+    another depth included. A file under a ``.partial`` directory — an import that was
+    killed before it finished — is never current. Newest is by stamp, which sorts as
+    time because of the format; the run does not consult mtimes.
 
     A missing ``root`` is not an error: no evidence files present is the ordinary state
     of a run today, and it means the run imports nothing — not that it is
@@ -767,11 +845,35 @@ def discover(root: Path) -> list[Path]:
     """
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob(EVIDENCE_FILE_GLOB) if p.is_file())
+    found = sorted(
+        p
+        for p in root.rglob(EVIDENCE_FILE_GLOB)
+        if p.is_file() and not any(part.endswith(PARTIAL_SUFFIX) for part in p.relative_to(root).parts)
+    )
+    newest: dict[Path, str] = {}
+    for path in found:
+        if (generation := _generation_of(root, path)) is not None:
+            newest[path.parent.parent] = max(newest.get(path.parent.parent, ""), generation)
+    return [p for p in found if (g := _generation_of(root, p)) is None or g == newest[p.parent.parent]]
+
+
+def _generation_of(root: Path, path: Path) -> str | None:
+    """The generation stamp a file sits under in the generation layout, or None where it does not.
+
+    The layout is ``<root>/<source>/<version>/<dataset>/<generation>/<file>``, so the
+    stamp is the fourth segment under ``root`` and nothing else: a version or dataset
+    that happened to be spelled like a stamp would otherwise read as one.
+    """
+    parts = path.relative_to(root).parts
+    return parts[3] if len(parts) == 5 and is_generation(parts[3]) else None
 
 
 def report_evidence_files(root: Path, now: datetime | None = None) -> list[EvidenceFileStatus]:
-    """Report every evidence file under ``root``, and return what each one's status is.
+    """Report every current evidence file under ``root``, and return what each one's status is.
+
+    *Current* as :func:`discover` defines it: a superseded generation is neither
+    reported nor read. An unfinished import (:func:`unfinished_imports`) is named as
+    such and not read.
 
     Prints one line per file — source, table, version, the catalog it was built for
     if it names one, fetch date and age — so a run says which evidence files it found
@@ -795,6 +897,8 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     taken against the current time in the envelope's own timezone, so a naive and an
     aware ``fetched_at`` both work.
     """
+    for partial in unfinished_imports(root):
+        print(f"Unfinished import, not read (remove it by hand): {partial.relative_to(root)}")
     statuses = []
     for path in discover(root):
         try:

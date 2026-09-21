@@ -1,0 +1,517 @@
+# The AnVIL slot map (#369). Shape and rules: src/meta_disco/slot_map.py. Candidate
+# names: manifest_survey.NAME_TOKENS; candidate cells: manifest_survey.FIELD_TOKENS.
+# A dataset, table or column with nothing to map is absent.
+catalog: anvil15
+datasets:
+  ANVIL_1000G_high_coverage_2019:
+    participant:
+      gvcf: &g1000_participant
+        platform:
+          - {cell: instrument_model}
+          - {cell: instrument_platform}
+      gvcf_tbi: *g1000_participant
+    sample:
+      cram: &g1000_sample
+        platform:
+          - {cell: instrument_model}
+        assay_type:
+          - {cell: library_strategy}
+        data_modality:
+          - {cell: library_source}
+      gvcf: *g1000_sample
+      gvcf_tbi: *g1000_sample
+  ANVIL_1000G_PRIMED_data_model:
+    plink_file_wide:
+      pgen: &primed_plink
+        data_type:
+          - {table_name: plink}
+      psam: *primed_plink
+      pvar: *primed_plink
+  ANVIL_HPRC:
+    assembly_annotation:
+      all_flagger: &hprc_annotation
+        data_type:
+          - {table_name: annotation}
+      mat_asat: *hprc_annotation
+      mat_dna_brnn: *hprc_annotation
+      mat_hsat: *hprc_annotation
+      mat_seg_dups: *hprc_annotation
+      mat_trf: *hprc_annotation
+      pat_asat: *hprc_annotation
+      pat_dna_brnn: *hprc_annotation
+      pat_hsat: *hprc_annotation
+      pat_seg_dups: *hprc_annotation
+      pat_trf: *hprc_annotation
+      unreliable_only_flagger: *hprc_annotation
+      unreliable_only_no_mt_flagger: *hprc_annotation
+      mat_chm13_cat_genes: &hprc_annotation_chm13
+        data_type:
+          - {table_name: annotation}
+        reference_assembly:
+          - {column_name: chm13}
+      pat_chm13_cat_genes: *hprc_annotation_chm13
+      mat_hg38_cat_genes: &hprc_annotation_hg38
+        data_type:
+          - {table_name: annotation}
+        reference_assembly:
+          - {column_name: hg38}
+      pat_hg38_cat_genes: *hprc_annotation_hg38
+      mat_repeat_masker: &hprc_annotation_repeat_masker
+        data_type:
+          - {table_name: annotation}
+          - {column_name: repeat_masker}
+      pat_repeat_masker: *hprc_annotation_repeat_masker
+    assembly_sample:
+      mat_chm13_aln_bam: &hprc_sample_chm13
+        reference_assembly:
+          - {column_name: chm13}
+      mat_chm13_aln_bai: *hprc_sample_chm13
+      pat_chm13_aln_bam: *hprc_sample_chm13
+      pat_chm13_aln_bai: *hprc_sample_chm13
+      mat_grch38_aln_bam: &hprc_sample_grch38
+        reference_assembly:
+          - {column_name: grch38}
+      mat_grch38_aln_bai: *hprc_sample_grch38
+      pat_grch38_aln_bam: *hprc_sample_grch38
+      pat_grch38_aln_bai: *hprc_sample_grch38
+    minigraph_cactus:
+      grch38_vcf: &hprc_mc_grch38
+        reference_assembly:
+          - {column_name: grch38}
+      grch38_vcf_index: *hprc_mc_grch38
+      grch38_xg: *hprc_mc_grch38
+    sample:
+      hifi:
+        platform:
+          - {column_name: hifi}
+      hic:
+        assay_type:
+          - {column_name: hic}
+      nanopore:
+        platform:
+          - {column_name: nanopore}
+  ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
+    sequencing:
+      sequencing_id_fileref:
+        reference_assembly:
+          - {cell: reference_genome_build}
+        platform:
+          - {cell: sequencing_platform}
+        assay_type:
+          - {cell: sequencing_assay}
+          - {cell: sequencing_strategy}
+  ANVIL_T2T:
+    chromosome:
+      chm13_pass_vcf_gz: &t2t_chromosome_chm13
+        reference_assembly:
+          - {column_name: chm13}
+      chm13_raw_vcf_gz: *t2t_chromosome_chm13
+      chm13_recalibrated_vcf_gz: *t2t_chromosome_chm13
+      grch38_pass_vcf_gz: &t2t_chromosome_grch38
+        reference_assembly:
+          - {column_name: grch38}
+      grch38_recalibrated_vcf_gz: *t2t_chromosome_grch38
+  ANVIL_T2T_CHRY:
+    1KGP_CHM13v2_chromosome:
+      chm13v2_pass_index: &t2t_chry_1kgp_chm13v2_chromosome
+        reference_assembly:
+          - {table_name: CHM13v2}
+      chm13v2_pass_stats: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_pass_unrelated_index: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_pass_unrelated_stats: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_pass_unrelated_vcf_gz: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_pass_vcf_gz: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_raw_index: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_raw_vcf_gz: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_recalibrated_index: *t2t_chry_1kgp_chm13v2_chromosome
+      chm13v2_recalibrated_vcf_gz: *t2t_chry_1kgp_chm13v2_chromosome
+    1KGP_CHM13v2_sample:
+      chr10_hcvcf_gz: &t2t_chry_1kgp_chm13v2_sample
+        reference_assembly:
+          - {table_name: CHM13v2}
+      chr10_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr11_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr11_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr12_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr12_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr13_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr13_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr14_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr14_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr15_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr15_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr16_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr16_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr17_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr17_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr18_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr18_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr19_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr19_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr1_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr1_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr20_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr20_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr21_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr21_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr22_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr22_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr2_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr2_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr3_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr3_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr4_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr4_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr5_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr5_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr6_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr6_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr7_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr7_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr8_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr8_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chr9_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      chr9_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      chrx_samtools_stats: *t2t_chry_1kgp_chm13v2_sample
+      chry_samtools_stats: *t2t_chry_1kgp_chm13v2_sample
+      cram: *t2t_chry_1kgp_chm13v2_sample
+      cram_index: *t2t_chry_1kgp_chm13v2_sample
+      full_samtools_stats: *t2t_chry_1kgp_chm13v2_sample
+      mosdepth_global_dist: *t2t_chry_1kgp_chm13v2_sample
+      mosdepth_regions_bed: *t2t_chry_1kgp_chm13v2_sample
+      mosdepth_regions_dist: *t2t_chry_1kgp_chm13v2_sample
+      mosdepth_regions_index: *t2t_chry_1kgp_chm13v2_sample
+      mosdepth_summary: *t2t_chry_1kgp_chm13v2_sample
+      xx_x_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      xx_x_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      xy_x_nonpar_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      xy_x_nonpar_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      xy_x_par_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      xy_x_par_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+      xy_y_nonpar_hcvcf_gz: *t2t_chry_1kgp_chm13v2_sample
+      xy_y_nonpar_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
+    PAR_interval_CHM13v2:
+      sgdp_genomics_db_tar: &t2t_chry_par_interval_chm13v2
+        reference_assembly:
+          - {table_name: CHM13v2}
+      t_1kgp_genomics_db_tar: *t2t_chry_par_interval_chm13v2
+    PAR_interval_GRCh38:
+      sgdp_genomics_db_tar: &t2t_chry_par_interval_grch38
+        reference_assembly:
+          - {table_name: GRCh38}
+    SGDP_CHM13v2_chromosome:
+      chm13v2_pass_index: &t2t_chry_sgdp_chm13v2_chromosome
+        reference_assembly:
+          - {table_name: CHM13v2}
+      chm13v2_pass_stats: *t2t_chry_sgdp_chm13v2_chromosome
+      chm13v2_pass_vcf_gz: *t2t_chry_sgdp_chm13v2_chromosome
+      chm13v2_raw_index: *t2t_chry_sgdp_chm13v2_chromosome
+      chm13v2_raw_vcf_gz: *t2t_chry_sgdp_chm13v2_chromosome
+      chm13v2_recalibrated_index: *t2t_chry_sgdp_chm13v2_chromosome
+      chm13v2_recalibrated_vcf_gz: *t2t_chry_sgdp_chm13v2_chromosome
+    SGDP_CHM13v2_sample:
+      chr10_hcvcf_gz: &t2t_chry_sgdp_chm13v2_sample
+        reference_assembly:
+          - {table_name: CHM13v2}
+      chr10_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr11_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr11_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr12_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr12_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr13_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr13_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr14_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr14_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr15_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr15_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr16_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr16_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr17_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr17_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr18_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr18_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr19_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr19_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr1_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr1_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr20_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr20_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr21_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr21_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr22_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr22_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr2_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr2_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr3_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr3_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr4_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr4_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr5_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr5_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr6_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr6_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr7_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr7_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr8_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr8_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      chr9_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      chr9_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      cram: *t2t_chry_sgdp_chm13v2_sample
+      cram_index: *t2t_chry_sgdp_chm13v2_sample
+      full_samtools_stats: *t2t_chry_sgdp_chm13v2_sample
+      mosdepth_global_dist: *t2t_chry_sgdp_chm13v2_sample
+      mosdepth_regions_bed: *t2t_chry_sgdp_chm13v2_sample
+      mosdepth_regions_dist: *t2t_chry_sgdp_chm13v2_sample
+      mosdepth_regions_index: *t2t_chry_sgdp_chm13v2_sample
+      mosdepth_summary: *t2t_chry_sgdp_chm13v2_sample
+      read_1_fastq: *t2t_chry_sgdp_chm13v2_sample
+      read_2_fastq: *t2t_chry_sgdp_chm13v2_sample
+      xx_x_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      xx_x_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      xy_x_nonpar_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      xy_x_nonpar_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      xy_x_par_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      xy_x_par_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      xy_y_nonpar_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
+      xy_y_nonpar_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+    SGDP_GRCh38_chromosome:
+      grch38_pass_index: &t2t_chry_sgdp_grch38_chromosome
+        reference_assembly:
+          - {table_name: GRCh38}
+      grch38_pass_stats: *t2t_chry_sgdp_grch38_chromosome
+      grch38_pass_vcf_gz: *t2t_chry_sgdp_grch38_chromosome
+      grch38_raw_index: *t2t_chry_sgdp_grch38_chromosome
+      grch38_raw_vcf_gz: *t2t_chry_sgdp_grch38_chromosome
+      grch38_recalibrated_index: *t2t_chry_sgdp_grch38_chromosome
+      grch38_recalibrated_vcf_gz: *t2t_chry_sgdp_grch38_chromosome
+    SGDP_GRCh38_sample:
+      chr10_hcvcf_gz: &t2t_chry_sgdp_grch38_sample
+        reference_assembly:
+          - {table_name: GRCh38}
+      chr10_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr11_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr11_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr12_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr12_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr13_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr13_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr14_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr14_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr15_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr15_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr16_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr16_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr17_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr17_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr18_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr18_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr19_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr19_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr1_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr1_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr20_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr20_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr21_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr21_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr22_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr22_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr2_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr2_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr3_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr3_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr4_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr4_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr5_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr5_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr6_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr6_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr7_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr7_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr8_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr8_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      chr9_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      chr9_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      cram: *t2t_chry_sgdp_grch38_sample
+      cram_index: *t2t_chry_sgdp_grch38_sample
+      full_samtools_stats: *t2t_chry_sgdp_grch38_sample
+      mosdepth_global_dist: *t2t_chry_sgdp_grch38_sample
+      mosdepth_regions_bed: *t2t_chry_sgdp_grch38_sample
+      mosdepth_regions_dist: *t2t_chry_sgdp_grch38_sample
+      mosdepth_regions_index: *t2t_chry_sgdp_grch38_sample
+      mosdepth_summary: *t2t_chry_sgdp_grch38_sample
+      read_1_fastq: *t2t_chry_sgdp_grch38_sample
+      read_2_fastq: *t2t_chry_sgdp_grch38_sample
+      xx_x_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      xx_x_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      xy_x_nonpar_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      xy_x_nonpar_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      xy_x_par_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      xy_x_par_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      xy_y_nonpar_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
+      xy_y_nonpar_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+  AnVIL_ENCORE_293T:
+    file:
+      file_ref:
+        reference_assembly:
+          - {cell: reference_assembly}
+  AnVIL_ENCORE_RS293:
+    file:
+      file_ref:
+        reference_assembly:
+          - {cell: reference_assembly}
+  AnVIL_HPRC_R2:
+    alignments_v2:
+      location:
+        data_type:
+          - {table_name: alignments}
+        reference_assembly:
+          - {cell: reference_coordinates}
+    alignments_winnowmap:
+      location:
+        data_type:
+          - {table_name: alignments}
+    assembly:
+      assembly:
+        data_type:
+          - {table_name: assembly}
+    censat:
+      location:
+        data_type:
+          - {table_name: censat}
+    censat_centromeres:
+      location:
+        data_type:
+          - {table_name: censat_centromeres}
+    chains_to_chm13_mc:
+      location:
+        data_type:
+          - {table_name: chains}
+        reference_assembly:
+          - {table_name: chm13}
+    chains_to_grch38_mc:
+      location:
+        data_type:
+          - {table_name: chains}
+        reference_assembly:
+          - {table_name: grch38}
+    deepconsensus:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+          - {table_name: deepconsensus}
+        assay_type:
+          - {cell: library_strategy}
+        data_modality:
+          - {cell: library_source}
+        data_type:
+          - {cell: data_type}
+    gaps:
+      location:
+        data_type:
+          - {table_name: gaps}
+    hic:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+        assay_type:
+          - {cell: library_strategy}
+          - {table_name: hic}
+        data_modality:
+          - {cell: library_source}
+        data_type:
+          - {cell: data_type}
+        reference_assembly:
+          - {cell: assembly}
+    hifi:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+          - {table_name: hifi}
+        assay_type:
+          - {cell: library_strategy}
+        data_modality:
+          - {cell: library_source}
+        data_type:
+          - {cell: data_type}
+    illumina:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+          - {table_name: illumina}
+        assay_type:
+          - {cell: library_strategy}
+    kinnex:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+          - {table_name: kinnex}
+        assay_type:
+          - {cell: library_strategy}
+        data_modality:
+          - {cell: library_source}
+        data_type:
+          - {cell: data_type}
+    liftoff_genes:
+      location:
+        data_type:
+          - {table_name: liftoff}
+    ont:
+      path:
+        platform:
+          - {cell: platform}
+          - {cell: instrument_model}
+          - {table_name: ont}
+        assay_type:
+          - {cell: library_strategy}
+        data_modality:
+          - {cell: library_source}
+        data_type:
+          - {cell: data_type}
+    ont_methylation:
+      location:
+        platform:
+          - {table_name: ont}
+        data_modality:
+          - {table_name: methylation}
+    repeat_masker_bed:
+      location:
+        data_type:
+          - {table_name: repeat_masker}
+    repeat_masker_out:
+      location:
+        data_type:
+          - {table_name: repeat_masker}
+    segdups:
+      location:
+        data_type:
+          - {table_name: segdups}
+    t2t_sequences:
+      location:
+        data_type:
+          - {table_name: sequences}
+    to_ref_chm13_winnowmap:
+      location:
+        reference_assembly:
+          - {table_name: chm13}
+    to_ref_grch38_winnowmap:
+      location:
+        reference_assembly:
+          - {table_name: grch38}
+    to_ref_grch38_winnowmap_bai:
+      location:
+        reference_assembly:
+          - {table_name: grch38}
+  AnVIL_IGVF_Mouse_R1:
+    file:
+      file_path:
+        assay_type:
+          - {cell: assay_titles}
+        platform:
+          - {cell: sequencing_platform}
+        reference_assembly:
+          - {cell: reference_assembly}

@@ -4,7 +4,7 @@ rebuild-from-disk behaviour with the same fake injected."""
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -342,6 +342,90 @@ class TestLayout:
         assert run("anvil15", tmp_path, session) == 1
         assert "Refusing dataset title from the catalog" in capsys.readouterr().err
         assert not (tmp_path / "manifest").exists() or not list((tmp_path / "manifest").rglob("*.tsv"))
+
+
+class TestVerbatimReader:
+    """The shared verbatim reader, and the two definitions the importer (#369) reads through it."""
+
+    def _write(self, tmp_path, lines):
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+        return path
+
+    def test_types_narrows_the_stream_and_the_gate_is_not_the_decision(self, tmp_path):
+        """A cell holding the word `hifi` costs a parse, not a wrong row: the parsed type selects."""
+        path = self._write(
+            tmp_path,
+            [
+                {"value": {"hifi_id": "a"}, "type": "hifi"},
+                {"value": {"notes": "see the hifi run"}, "type": "sample"},
+                {"value": {"ont_id": "b"}, "type": "ont"},
+                {"value": {"file_id": "f"}, "type": "anvil_file"},
+            ],
+        )
+        assert [t for t, _ in am.iter_verbatim_entities(path, {"hifi", "ont"})] == ["hifi", "ont"]
+        assert [t for t, _ in am.iter_verbatim_entities(path)] == ["hifi", "sample", "ont", "anvil_file"]
+
+    def test_a_malformed_line_is_named_when_it_is_parsed(self, tmp_path):
+        """A narrowed pass validates the lines it parses; the full pass validates every line."""
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "hifi"\n{"type": "ont"\n')
+        with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
+            list(am.iter_verbatim_entities(path, {"hifi"}))
+        with pytest.raises(ValueError, match="line 2: not a verbatim entity"):
+            list(am.iter_verbatim_entities(path))
+        # The bad `ont` line never passes an `hifi` gate, so a pass wanting `hifi` alone does not see it.
+        path.write_text('{"value": {}, "type": "hifi"}\n{"type": "ont"\n')
+        assert [t for t, _ in am.iter_verbatim_entities(path, {"hifi"})] == ["hifi"]
+
+    def test_an_empty_type_set_reads_nothing(self, tmp_path):
+        path = tmp_path / "D.verbatim.jsonl"
+        path.write_text('{"value": {}, "type": "hifi"}\nnot json at all\n')
+        assert list(am.iter_verbatim_entities(path, set())) == []
+
+    def test_a_sidecar_request_time_is_read_or_named_when_malformed(self, tmp_path):
+        am.save_sidecar(
+            tmp_path,
+            "anvil15",
+            {
+                "catalog": "anvil15",
+                "datasets": {
+                    "D": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47"}},
+                    "E": {"file_count": 1, "verbatim.jsonl": {"requested_at": "last tuesday"}},
+                    "F": {"file_count": 1},
+                    "G": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47Z"}},
+                },
+            },
+        )
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "D", "verbatim.jsonl") == datetime(2026, 9, 3, 21, 45, 47)
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "F", "verbatim.jsonl") is None
+        # A trailing Z is read as UTC on every interpreter, as the envelope's own parser reads it.
+        assert am.sidecar_requested_at(tmp_path, "anvil15", "G", "verbatim.jsonl") == datetime(
+            2026, 9, 3, 21, 45, 47, tzinfo=timezone.utc
+        )
+        with pytest.raises(ValueError, match=r"anvil15 sidecar, E \(verbatim.jsonl\): requested_at 'last tuesday'"):
+            am.sidecar_requested_at(tmp_path, "anvil15", "E", "verbatim.jsonl")
+
+    def test_submitter_tables_are_everything_not_harmonized(self):
+        assert am.is_submitter_table("hifi") and am.is_submitter_table("1KGP_CHM13v2_sample")
+        assert not am.is_submitter_table(am.VERBATIM_FILE) and not am.is_submitter_table("anvil_activity")
+
+    @pytest.mark.parametrize(
+        "cell, handles",
+        [
+            (None, None),
+            ("", None),
+            ([], None),
+            ("drs://drs.anv0:v2_a", ["drs://drs.anv0:v2_a"]),
+            (["drs://drs.anv0:v2_a", "drs://drs.anv0:v2_b"], ["drs://drs.anv0:v2_a", "drs://drs.anv0:v2_b"]),
+            ("HG002", []),
+            (["drs://drs.anv0:v2_a", "HG002"], []),
+            (7, []),
+        ],
+    )
+    def test_link_handles_is_contract_2_7s_file_link_test(self, cell, handles):
+        """No link reads as None; a value that is not a pointer reads as an empty list."""
+        assert am.link_handles(cell) == handles
 
 
 class TestRecordMapping:
