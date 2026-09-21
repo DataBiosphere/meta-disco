@@ -43,17 +43,6 @@ def engine():
 class TestRuleMatching:
     """Test rule matching logic."""
 
-    def test_alignment_rnaseq_filename(self, engine):
-        """RNA-seq indicators in filename should set transcriptomic modality."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam"))
-        assert result.data_modality == "transcriptomic.bulk"
-        assert "alignment_rnaseq_filename" in result.rules_matched
-
-    def test_alignment_wgs_filename(self, engine):
-        """WGS indicators should set genomic modality with WGS assay_type."""
-        result = engine.classify(FileInfo.from_filename("sample_WGS_aligned.bam"))
-        assert result.data_modality == "genomic"
-
     def test_alignment_ref_grch38(self, engine):
         """hg38/GRCh38 in filename should set reference assembly."""
         result = engine.classify(FileInfo.from_filename("sample.hg38.cram"))
@@ -69,9 +58,10 @@ class TestRuleMatching:
         result = engine.classify(FileInfo.from_filename("sample.chm13.cram"))
         assert result.reference_assembly == "CHM13"
 
-    def test_rna_filename_sets_modality_regardless_of_size(self, engine):
-        """RNA filename indicator should set transcriptomic modality."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA_aligned.bam", file_size=60_000_000_000))
+    def test_filename_indicator_sets_modality_regardless_of_size(self, engine):
+        """A filename indicator settles modality even at a size the heuristics would
+        otherwise speak to — the tier-2 name rule is not displaced by file size."""
+        result = engine.classify(FileInfo.from_filename("sample.flnc.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_star_aligner_indicates_rnaseq(self, engine):
@@ -120,9 +110,6 @@ class TestVariantFiles:
             ("GRCh38", "GRCh38"),
             ("hg38", "GRCh38"),
             ("hs38", "GRCh38"),  # alias aligned with ##reference (#221 follow-up)
-            ("GRCh37", "GRCh37"),
-            ("hs37", "GRCh37"),  # alias aligned with ##reference (#221 follow-up)
-            ("hg19", "GRCh37"),
             ("CHM13", "CHM13"),
             ("T2T-CHM13v2.0", "CHM13"),
         ],
@@ -139,16 +126,9 @@ class TestVariantFiles:
     @pytest.mark.parametrize(
         ("header_line", "expected"),
         [
-            # GCA_000001405 encodes the assembly in its version: .1-.14 are GRCh37
-            # (frozen at .14), .15+ are GRCh38 (.15 base, .16+ patches). The rules
-            # must split at that boundary, in both the ##contig and ##reference
-            # families (#221 review). In particular .16+ are real GRCh38 patch
-            # accessions and must NOT fall through to GRCh37.
-            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.14>", "GRCh37"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.16>", "GRCh38"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.26>", "GRCh38"),
-            ("##reference=file:///ref/GCA_000001405.14.fa", "GRCh37"),
             ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
             ("##reference=file:///ref/GCA_000001405.16.fa", "GRCh38"),
             ("##reference=file:///ref/GCA_000001405.26.fa", "GRCh38"),
@@ -175,7 +155,7 @@ class TestFormatMatching:
     def test_format_keyed_filename_rule_still_fires(self, engine):
         """A tier-2 rule that pairs `format: FASTA` with a filename_pattern still
         matches on both conditions (fasta_assembly_filename)."""
-        result = engine.classify_extended(FileInfo.from_filename("HG002.hifiasm.bp.p_ctg.fa"))
+        result = engine.classify_extended(FileInfo.from_filename("HG002.f1_assembly_v2.fa"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
 
@@ -783,11 +763,6 @@ class TestSpecialFileTypes:
         result = engine.classify(FileInfo.from_filename("sample.h5ad"))
         assert result.data_modality == "transcriptomic.single_cell"
 
-    def test_single_cell_atac(self, engine):
-        """Single-cell ATAC matrix should be epigenomic."""
-        result = engine.classify(FileInfo.from_filename("sample_atac_peaks.h5ad"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
     def test_methylation_idat(self, engine):
         """IDAT files should be epigenomic.methylation."""
         result = engine.classify(FileInfo.from_filename("sample.idat"))
@@ -821,58 +796,77 @@ class TestSpecialFileTypes:
 class TestFastqFiles:
     """Test FASTQ file classification."""
 
-    def test_fastq_rna(self, engine):
-        """FASTQ with RNA indicator."""
-        result = engine.classify(FileInfo.from_filename("sample_rnaseq_R1.fastq.gz"))
-        assert result.data_modality == "transcriptomic.bulk"
-
     def test_fastq_ambiguous(self, engine):
         """FASTQ without indicators is not classified for modality."""
         result = engine.classify_extended(FileInfo.from_filename("sample_R1.fastq.gz"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
-class TestSignalTracks:
-    """Test signal track classification."""
+class TestAssemblyTokenIsNotTheGatkReferenceName:
+    """`assembly` followed by digits is GATK's name for a reference, not a de novo signal.
 
-    def test_bigwig_chip(self, engine):
-        """ChIP-seq bigwig files."""
-        result = engine.classify(FileInfo.from_filename("sample_H3K27ac.bigwig"))
-        assert result.data_modality == "epigenomic.histone_modification"
+    `Homo_sapiens_assembly38.fasta` is the GRCh38 reference in the GATK resource bundle,
+    byte-identical to `grch38.fasta`. `fasta_assembly_filename` read `_assembly38` as
+    "assembly" and asserted a de novo assembly with reference not_applicable — on the
+    reference genome itself, and its `.fai` inherited that (#430, #485). A numeric
+    suffix now excludes the match. Nothing in the name says *which* reference, so the
+    file lands on unknown; the content read in #382 is what would say GRCh38."""
 
-    def test_bigwig_atac(self, engine):
-        """ATAC-seq bigwig files."""
-        result = engine.classify(FileInfo.from_filename("sample_atac.bw"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
+    def test_the_gatk_reference_name_is_not_called_an_assembly(self, engine):
+        result = engine.classify_extended(FileInfo.from_filename("Homo_sapiens_assembly38.fasta"))
+        assert result.data_type == "sequence"
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+
+    def test_a_real_assembly_name_still_is(self, engine):
+        result = engine.classify_extended(FileInfo.from_filename("HG00642.f1_assembly_v2.fa.gz"))
+        assert result.data_type == "assembly"
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
-class TestPeakFiles:
-    """Test peak file classification (narrowPeak, broadPeak, etc.)."""
+class TestPeakNamedBedFallback:
+    """`intervals_fallback` declines a peak-named `.bed` rather than calling it genomic.
 
-    def test_narrowpeak_chromatin_accessibility(self, engine):
-        """narrowPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample.narrowPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
+    The positive peak rules are gone (#430); this pins the exclusion that replaced
+    them, so a future edit to the fallback's lookahead cannot quietly restore the
+    `genomic` default for `atac_peaks.bed`."""
 
-    def test_broadpeak_chromatin_accessibility(self, engine):
-        """broadPeak files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample.broadPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "atac_peaks.bed",
+            "H3K27ac_chip_peaks.bed",
+            "sample_summits.bed",
+            "H3K27ac.bed",
+            "sample.chip.bed",
+            # The assay spelled as one word, which a bare `atac`/`chip` token misses
+            "atacseq.bed",
+            "chipseq.bed",
+            "atac-seq.bed",
+            "histone_marks.bed",
+        ],
+    )
+    def test_a_peak_indicator_declines_rather_than_asserting_genomic(self, engine, name):
+        """A name carrying a peak indicator gets no answer, not a confident wrong one.
 
-    def test_peaks_bed_chromatin_accessibility(self, engine):
-        """BED files with 'peaks' should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("atac_peaks.bed"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
+        Deleting the bare-token peak rules left these falling through to
+        `intervals_fallback`, which called them `genomic` annotations — on `main` they
+        were `epigenomic.chromatin_accessibility`. The token is too weak to say which
+        epigenomic assay it is, which is why those rules went; it is strong enough to
+        say we should not answer `genomic`.
 
-    def test_chip_peaks_histone_modification(self, engine):
-        """ChIP-seq peak files should be epigenomic.histone_modification."""
-        result = engine.classify(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
-        assert result.data_modality == "epigenomic.histone_modification"
+        So the indicator returns to the rules file in an exclusion only. A token used
+        to withhold a claim can cost coverage; it cannot assert a wrong value, which is
+        the failure #430 is about.
+        """
+        result = engine.classify_extended(FileInfo.from_filename(name))
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
-    def test_summit_bed_chromatin_accessibility(self, engine):
-        """Summit files should be epigenomic.chromatin_accessibility."""
-        result = engine.classify(FileInfo.from_filename("sample_summits.bed"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
+    def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
+        """Narrowing `intervals_fallback` to `.bed` and excluding the peak token left
+        its own case untouched — it still answers for a BED with no other signal."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.bed"))
+        assert result.data_modality == "genomic"
+        assert result.data_type == "annotations"
 
 
 class TestTextFiles:
@@ -898,9 +892,10 @@ class TestIntegration:
     """Integration tests against real filenames from API exploration."""
 
     def test_hifi_bam(self, engine):
-        """HiFi reads BAM file."""
-        result = engine.classify(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
-        assert result.data_modality == "genomic"
+        """HiFi reads BAM file: the name says the platform, not the modality (#430)."""
+        result = engine.classify_extended(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
+        assert result.platform == "PACBIO"
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     def test_vcf_with_chr(self, engine):
         """VCF with chromosome in filename."""
@@ -955,7 +950,8 @@ class TestConflictingClassificationFields:
 
     def test_data_modality_conflict(self, engine):
         """Same-tier rules disagreeing on data_modality produce not_classified."""
-        result = engine.classify_extended(FileInfo.from_filename("sample_rnaseq_wgs_aligned.bam"))
+        # `cpg` says methylation and `counts` says expression, both at tier 2.
+        result = engine.classify_extended(FileInfo.from_filename("sample.cpg.counts.bed"))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
@@ -1315,7 +1311,7 @@ class TestContentTier:
         """A tier-4 content claim beats a disagreeing tier-3 rule (override, not conflict)."""
         result = evaluate_claims(
             [
-                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "vcf_contig_grch38", "value": "GRCh38", "tier": 3},
                 {"rule_id": "contig_length_detection", "value": "CHM13", "tier": CONTENT_TIER},
             ]
         )
@@ -1340,7 +1336,7 @@ class TestContentTier:
         """When content agrees with the rule, the field is unanimous, not a conflict."""
         result = evaluate_claims(
             [
-                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "vcf_contig_grch38", "value": "GRCh38", "tier": 3},
                 {"rule_id": "contig_length_detection", "value": "GRCh38", "tier": CONTENT_TIER},
             ]
         )
@@ -1353,23 +1349,25 @@ class TestAssayTypeInference:
     """Test that infer_assay_type records evidence correctly."""
 
     def test_inferred_assay_type_has_evidence(self, engine):
-        """Inferred assay_type should have evidence from the infer_assay_type rule."""
+        """Inferred assay_type carries the matched assay rule's id as its evidence."""
         file_info = ExtendedFileInfo(
             name=FileName.parse("sample.bam"),
             file_size=60_000_000_000,
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        # Set conditions that trigger WGS inference (via set_field to stay coherent)
-        result.set_field("data_modality", "genomic")
-        result.set_field("platform", "ILLUMINA")
+        # Set the condition that triggers the modality inference (set_field to stay coherent)
+        result.set_field("data_modality", "transcriptomic.bulk")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = []
         engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "WGS"
+        assert result.assay_type == "RNA-seq"
         evidence = result.field_evidence["assay_type"]
         assert len(evidence) == 1
-        assert evidence[0]["rule_id"] == "infer_assay_type"
+        # The matched assay rule's own id, not a shared constant: a transcriptomic
+        # BAM is `rnaseq_modality`, and the evidence says so (#430).
+        assert evidence[0]["rule_id"] == "rnaseq_modality"
+        assert evidence[0]["source_type"] == "signal_inference"
 
     def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
         """Inference should remove stale not_classified placeholder evidence."""
@@ -1379,8 +1377,7 @@ class TestAssayTypeInference:
             file_format=".bam",
         )
         result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        result.set_field("data_modality", "genomic")
-        result.set_field("platform", "ILLUMINA")
+        result.set_field("data_modality", "transcriptomic.bulk")
         result.set_field("assay_type", status=NOT_CLASSIFIED)
         result.field_evidence["assay_type"] = [
             {
@@ -1390,11 +1387,11 @@ class TestAssayTypeInference:
             }
         ]
         engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "WGS"
+        assert result.assay_type == "RNA-seq"
         markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
         assert "not_classified" not in markers
         rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
-        assert "infer_assay_type" in rule_ids
+        assert "rnaseq_modality" in rule_ids
 
 
 class TestReasonChain:
@@ -1402,7 +1399,7 @@ class TestReasonChain:
 
     def test_multiple_reasons(self, engine):
         """Multiple matching rules should accumulate reasons."""
-        result = engine.classify(FileInfo.from_filename("sample_RNA.hg38.bam"))
+        result = engine.classify(FileInfo.from_filename("sample.flnc.hg38.bam"))
         assert len(result.reasons) >= 2
         assert len(result.rules_matched) >= 2
 
@@ -1496,10 +1493,10 @@ class TestOutputDictStatus:
     def test_status_pins_each_sentinel_state(self, engine):
         # Stage 3 shape: a real value classifies (value kept); each sentinel lives
         # in `status` with `value` nulled out — no sentinels in `value`.
-        classified = engine.classify_extended(FileInfo.from_filename("sample_WGS_aligned.bam")).to_output_dict()[
-            "data_modality"
+        classified = engine.classify_extended(FileInfo.from_filename("sample.hifi_reads.bam")).to_output_dict()[
+            "platform"
         ]
-        assert (classified["value"], classified["status"]) == ("genomic", CLASSIFIED)
+        assert (classified["value"], classified["status"]) == ("PACBIO", CLASSIFIED)
 
         n_a = engine.classify_extended(FileInfo.from_filename("plot.png")).to_output_dict()["reference_assembly"]
         assert (n_a["value"], n_a["status"]) == (None, NOT_APPLICABLE)

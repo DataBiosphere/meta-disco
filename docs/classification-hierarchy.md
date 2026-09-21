@@ -22,49 +22,46 @@ file_format (extension)
 **data_type**: `alignments`
 
 **data_modality**:
-- `genomic` ← filename (WGS, WES, HiFi), header @RG PL (PacBio, ONT), header @PG PN (bwa, minimap2, bowtie2, ccs), file size heuristics
-- `transcriptomic.bulk` ← filename (RNA, transcriptome, STAR), header @PG PN (STAR, HISAT2, TopHat, Salmon, Kallisto, IsoSeq)
-- `transcriptomic.single_cell` ← filename (scRNA, 10x, chromium)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
-- `epigenomic.histone_modification` ← filename (ChIP)
+- `genomic` ← header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
+- `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
-- `WGS` ← filename, file size (Illumina BAM >20GB, CRAM >8GB), PacBio HiFi header, CCS program
-- `WES` ← filename (exome), file size (Illumina BAM <20GB, CRAM <8GB)
-- `RNA-seq` ← STAR/HISAT2/TopHat/Salmon/Kallisto in @PG, IsoSeq
-- `ATAC-seq` ← filename
-- `ChIP-seq` ← filename
+- `RNA-seq` ← STAR in @PG (`program_star` declares it), or any transcriptomic modality (`rnaseq_modality`)
+- `WGS` is no longer inferred: `hifi` names a chemistry, which says neither assay nor modality, and a long-read platform is not an assay (#430)
 
 **platform**:
 - `ILLUMINA` ← header @RG PL:ILLUMINA
-- `PACBIO` ← header @RG PL:PACBIO, filename (HiFi, PacBio), @PG PN:ccs/lima/isoseq
-- `ONT` ← header @RG PL:ONT/NANOPORE
+- `PACBIO` ← header @RG PL:PACBIO, filename (HiFi), @PG PN:ccs
+- `ONT` ← header @RG PL:ONT
 
 **reference_assembly**:
-- `GRCh38` ← filename (hg38, grch38), header @SQ SN/AS pattern, contig lengths (definitive)
-- `GRCh37` ← filename (hg19, grch37, b37), header @SQ SN/AS pattern, contig lengths (definitive)
-- `CHM13` ← filename (chm13, t2t, hs1), header @SQ SN/AS pattern, contig lengths (definitive)
+- `GRCh38` ← filename (hg38, grch38), contig lengths (definitive)
+- `GRCh37` ← filename (hg19, grch37, b37), contig lengths (definitive)
+- `CHM13` ← filename (chm13, t2t, hs1), contig lengths (definitive)
 - `not_applicable` ← no @SQ lines (unaligned)
 
-**Coverage**: Best covered format. All 5 dimensions determinable from headers.
+**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the aligner is STAR or the modality is transcriptomic. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
 
 ---
 
 ## Variants (.vcf, .vcf.gz, .g.vcf.gz, .gvcf.gz, .bcf)
 
-**data_type**: `variants`, `variants.germline`, `variants.somatic`, `variants.structural`, `variants.cnv`
+**data_type**: `variants`, `variants.germline`, `variants.structural`
+
+`variants.somatic` and `variants.cnv` are in the vocabulary but no rule emits them: every somatic and CNV caller rule fired on nothing across 204,149 VCFs and was removed (#430). Caller detection survives for GATK HaplotypeCaller, sniffles and svim, which is what the catalogs actually hold.
 
 **data_modality**:
-- `genomic` ← extension default + caller-specific rules
+- `genomic` ← extension default; the three surviving caller rules assert it too
 
 **assay_type**: _(not determined — VCF doesn't encode assay)_
 
 **platform**: _(not determined — VCF doesn't encode platform)_
 
 **reference_assembly**:
-- `GRCh38/GRCh37/CHM13` ← ##reference line, ##contig assembly= tag, contig lengths (definitive), filename
+- `GRCh38/CHM13` ← ##reference line, ##contig assembly= tag, contig lengths (definitive), filename
+- `GRCh37` ← contig lengths (definitive), filename — its header-pattern rules fired on nothing and were removed (#430)
 
-**Coverage**: Good for reference and variant subtype. No modality diversity (always genomic). No platform/assay info.
+**Coverage**: Good for reference; variant subtype only where the caller is one of the three seen. No modality diversity (always genomic). No platform/assay info.
 
 ---
 
@@ -73,26 +70,18 @@ file_format (extension)
 **data_type**: `reads`
 
 **data_modality**:
-- `genomic` ← filename (WGS), PacBio/ONT read names (but see issue #37)
-- `transcriptomic.bulk` ← filename (RNA, transcriptome)
-- `transcriptomic.single_cell` ← filename (scRNA, 10x)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
-- `not_classified` ← **default when no signal** (issue #35, merged)
+- `not_classified` ← always: a read name says the platform, not what was sequenced (issue #35; the PacBio/ONT rules set `platform` only)
 
-**assay_type**:
-- `WGS` ← filename, PacBio CCS read names
-- `ATAC-seq` ← filename
+**assay_type**: _(not determined — a read name does not say what was sequenced)_
 
 **platform**:
 - `ILLUMINA` ← read name pattern (@instrument:run:flowcell:lane:tile:x:y)
 - `PACBIO` ← read name pattern (@movie/zmw/ccs or /start_end)
 - `ONT` ← read name UUID pattern
-- `MGI` ← read name pattern
-- `ELEMENT`, `ULTIMA` ← read name patterns
 
 **reference_assembly**: `not_applicable` (raw reads, not aligned)
 
-**Coverage**: Platform detection is strong. Modality is a known gap — FASTQ format has no assay metadata. Illumina FASTQs without filename keywords get `not_classified` for modality. PacBio/ONT FASTQs get `genomic` from platform rules (but see issue #37).
+**Coverage**: Platform detection is strong. Modality is a known gap — FASTQ format has no assay metadata, so every FASTQ is `not_classified` for modality (the PacBio/ONT rules set `platform` only; #430).
 
 ---
 
@@ -141,20 +130,36 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 ## Intervals/Peaks (.bed, .bed.gz, .narrowPeak, .broadPeak)
 
-**data_type**: `annotations`, `peaks`
+**data_type**: `annotations`
+
+`.narrowPeak` and `.broadPeak` resolve to the `intervals` category by extension but
+no rule claims them: neither catalog holds one, and the rule set is the minimum the
+data can verify (#430). They report nothing. If one arrives, a rule keyed on the
+extension can claim `data_type: peaks` — the format is used for ATAC and ChIP alike,
+so the extension cannot say which, and `data_modality` would stay unset.
+
+A `.bed` whose name carries a peak indicator (`atac`, `chip`, `h3k*`, `peak`,
+`summit`) is excluded from `intervals_fallback` and so reports nothing, rather than
+being called `genomic` annotations by default. The indicator is too weak to say which
+epigenomic assay produced the file — which is why the rules that claimed one were
+deleted — and strong enough to say the genomic default is wrong. It appears in the
+rules only as an exclusion: a token that withholds a claim can cost coverage, but
+cannot assert a wrong value.
+
+Four rules used to claim `peaks` from a filename instead — `bed_peaks_generic`,
+`bed_atac_peaks`, `bed_chip_peaks` and `intervals_chip_peaks` — and all four fired on no
+file in either corpus, so #430 deleted them. Two matched a bare `peak`/`atac` token; the
+other two were delimiter-carrying (`\.chip\.|chip[-_]?seq|…`) and went for being dead,
+not for being unanchored.
 
 **data_modality**:
 - `genomic` ← regions.bed pattern, fallback default
-- `transcriptomic.bulk` ← filename (expression, TPM, leafcutter, TSS)
-- `epigenomic.methylation` ← filename (CpG, methylation, bisulfite, modbam2bed)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC), peak patterns
-- `epigenomic.histone_modification` ← filename (ChIP, histone, H3K)
+- `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
+- `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
 
 **assay_type**:
-- `ATAC-seq` ← filename
-- `ChIP-seq` ← filename (ChIP, histone)
-- `Bisulfite-seq` ← filename (methylation, bisulfite)
+- _(none)_ — `bed_methylation` used to assert `Bisulfite-seq` for every file it matched, including modbam2bed output, which is nanopore modified-base calling and not bisulfite. No file in either catalog supports a CpG name meaning bisulfite either, so the assay is left open (#430). `Bisulfite-seq` stays in the vocabulary for a rule that can claim it on evidence.
 - `RNA-seq` ← filename (expression)
 
 **reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename, BED coordinate detection
@@ -168,11 +173,10 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 **data_type**: `signal`
 
 **data_modality**:
-- `epigenomic.histone_modification` ← filename (ChIP, histone, H3K)
-- `epigenomic.chromatin_accessibility` ← filename (ATAC)
-- `transcriptomic.bulk` ← filename (RNA, coverage)
+- `transcriptomic.bulk` ← filename (RNA, transcriptome, coverage)
 
-**Coverage**: Filename-dependent only. No header inspection available.
+**Coverage**: Filename-dependent only. No header inspection available. The surviving
+RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
 
 ---
 
@@ -182,9 +186,8 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_modality**:
 - `transcriptomic.single_cell` ← extension default
-- `epigenomic.chromatin_accessibility` ← filename (ATAC, peaks)
 
-**Coverage**: Good defaults from extension. ATAC variant detected from filename.
+**Coverage**: Good defaults from extension.
 
 ---
 
@@ -192,9 +195,7 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **data_type**: `raw_signal`
 
-**data_modality**:
-- `genomic` ← extension default (but see issue #37)
-- `transcriptomic.bulk` ← filename (RNA, direct RNA)
+**data_modality**: _(not classified — the container says the platform, not what was sequenced; issue #37)_
 
 **platform**: `ONT` (always)
 
@@ -221,7 +222,7 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 | Gap | Impact | Issue |
 |-----|--------|-------|
 | FASTQ modality defaults to not_classified | ~21K Illumina FASTQ files with unknown modality | #35 (merged) |
-| PacBio/ONT assume genomic modality | Incorrect for IsoSeq/direct RNA | #37 |
+| PacBio/ONT no longer assume a genomic modality (#430); nothing supplies one for raw reads or signal | Iso-Seq/direct RNA are not miscalled, but genomes are not called either | #37 |
 | Mouse genome (GRCm39) not supported | 220 IGVF files unclassified | #15 |
 | No dataset-level context for FASTQ | snRNA-seq indistinguishable from WGS | #34 |
 | FASTA range request gets 1 contig for large files | Some references classified as sequence | — |

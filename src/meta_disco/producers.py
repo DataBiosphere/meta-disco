@@ -29,7 +29,8 @@ INDEX_TO_PARENT = {
     ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
-    # `.fai` and `.idx` are in the `index_file` rule's extension list and were missing
+    # `.fai` and `.idx` are in the `index_file` rule's extension list — the engine's
+    # backstop for an index this producer misses — and were missing
     # here, so those files never reached this producer at all. Declaring them lets the
     # four dimensions a parent supplies be inherited rather than left to the catch-all,
     # which sees only the extension.

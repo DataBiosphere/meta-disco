@@ -1,6 +1,6 @@
 # Published values compared with inferred
 
-Repository: `anvil/anvil15` · run `20260918_142651` · 708,088 files
+Repository: `anvil/anvil15` · run `20260921_011601` · 708,088 files
 
 **11,231 files have a published value**, across 11,451 file/dimension rows. For every other file the
 repository publishes nothing for these dimensions.
@@ -20,8 +20,8 @@ of it, and no inferred value is altered by this report.
 
 | dimension | add | keep | review | none |
 | --- | --- | --- | --- | --- |
-| data_modality | 635,650 | 6,338 | 417 | 65,683 |
-| reference_assembly | 511,318 | 4,062 | 634 | 192,074 |
+| data_modality | 634,410 | 6,339 | 416 | 66,923 |
+| reference_assembly | 511,316 | 4,062 | 634 | 192,076 |
 
 ## By dataset
 
@@ -31,7 +31,7 @@ Datasets for which the repository publishes nothing are omitted.
 | --- | --- | --- | --- | --- | --- |
 | AnVIL_ENCORE_293T | reference_assembly | 448 | 1,320 | 224 | 0 |
 | AnVIL_ENCORE_RS293 | reference_assembly | 820 | 2,522 | 410 | 0 |
-| AnVIL_IGVF_Mouse_R1 | data_modality | 0 | 6,338 | 417 | 31 |
+| AnVIL_IGVF_Mouse_R1 | data_modality | 0 | 6,339 | 416 | 31 |
 | AnVIL_IGVF_Mouse_R1 | reference_assembly | 3,970 | 220 | 0 | 2,596 |
 
 ## Vocabulary coverage
@@ -60,7 +60,7 @@ unmapped string rather than a disagreement about meaning.
 | dimension | published | inferred | files |
 | --- | --- | --- | --- |
 | reference_assembly | `GRCh38 + Gencode40` | `GRCh38` | 634 |
-| data_modality | `single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 413 |
+| data_modality | `single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 412 |
 | data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `genomic` | 2 |
 | data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 2 |
 

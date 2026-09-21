@@ -132,23 +132,23 @@ class TestMethylationPattern:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_methylation"
 
-    def test_bisulfite_matches(self):
-        """Bisulfite files should match methylation rule."""
-        filename = "sample_bisulfite_regions.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_methylation"
+
+class TestMethylationAssay:
+    """A methylation BED gets its modality from the name, and no assay from it (#430).
+
+    `bed_methylation` used to assert `Bisulfite-seq` for everything it matched. Its
+    only matches in either catalog are modbam2bed output — nanopore modified-base
+    calls, the opposite of bisulfite — and nothing supports a CpG name meaning
+    bisulfite. The name says methylation; it does not say how it was measured."""
+
+    def test_modbam2bed_output_gets_no_assay(self):
+        result = classify_bed("modbam2bed_cpg_1.bed.gz")
+        assert _get_val(result, "data_modality") == "epigenomic.methylation"
+        assert _get_val(result, "assay_type") is None
 
 
 class TestExpressionPattern:
     """Test expression/transcriptomic pattern matching."""
-
-    def test_tpm_matches(self):
-        """TPM files should match expression rule."""
-        filename = "genes_TPM.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_expression"
-        result = classify_bed(filename)
-        assert result["data_modality"] == "transcriptomic.bulk"
 
     def test_leafcutter_matches(self):
         """Leafcutter files should match expression rule."""
@@ -161,30 +161,6 @@ class TestExpressionPattern:
         filename = "sample.TSS.bed"
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_expression"
-
-
-class TestPeakPattern:
-    """Test peak/chromatin accessibility pattern matching."""
-
-    def test_narrowpeak_matches(self):
-        """narrowPeak files should match peaks rule."""
-        filename = "sample.narrowPeak.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
-        result = classify_bed(filename)
-        assert result["data_modality"] == "epigenomic.chromatin_accessibility"
-
-    def test_broadpeak_matches(self):
-        """broadPeak files should match peaks rule."""
-        filename = "sample.broadPeak.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
-
-    def test_summit_matches(self):
-        """Summit files should match peaks rule."""
-        filename = "sample_summit.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_peaks_generic"
 
 
 class TestRegionsPattern:
@@ -256,13 +232,6 @@ class TestPatternEdgeCases:
         rule_id = get_matched_rule_id(filename)
         # Should NOT match assembly_qc because pattern requires .maternal. with dots
         assert rule_id != "bed_assembly_qc"
-
-    def test_chip_peak_beats_generic_peak(self):
-        """ChIP-seq specific rule (tier 2) overrides generic peaks rule (tier 1)."""
-        filename = "chipseq_peak_calls.bed"
-        result = classify_bed(filename)
-        # bed_chip_peaks (tier 2) wins over bed_peaks_generic (tier 1) due to "chipseq" in filename
-        assert _get_val(result, "data_modality") == "epigenomic.histone_modification"
 
 
 def _get_val(result: dict, field: str):

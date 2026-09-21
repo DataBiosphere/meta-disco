@@ -229,10 +229,20 @@ the "conflict" becomes structured provenance instead of an error.
 
 ### 5a. Representation — one pointer, not copied values
 
-A classification record is keyed by `md5sum`. The BAM:
+A classification record is identified by its `file_id`, the catalog identity that
+survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). `md5sum` is not an identity:
+two differently-named files can hold the same bytes and classify differently (#430).
+A catalog that carries no `file_id` at all — HPRC — is joined on
+`(dataset_title, md5sum, file_name)` instead, scoped to a dataset because a
+`dataset_pattern` rule can classify the same bytes differently in two of them. The
+emitted `derived_from` edge still grounds on the parent's md5 and name — those are what
+the catalog spells — while the *lookup* that fills the index's inherited fields is by
+`file_id` where the catalog has one. The BAM:
 
 ```json
 {
+  "file_id": "f1a2b3c4-…",
+  "dataset_title": "ANVIL_EXAMPLE",
   "md5sum": "aaa111",
   "file_name": "NA12878.bam",
   "classifications": {
@@ -247,6 +257,8 @@ points at the parent:
 
 ```json
 {
+  "file_id": "d4e5f6a7-…",
+  "dataset_title": "ANVIL_EXAMPLE",
   "md5sum": "bbb222",
   "file_name": "NA12878.bam.bai",
   "classifications": {
@@ -334,7 +346,9 @@ distinction.
 > inside this repo** — meta-disco produces classification JSON; the actual
 > filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers are the
 > batch **report generators**, and they already load every classification into a
-> dict keyed by `md5sum` (see `classify_index_files.py:load_classifications`), so
+> dict keyed by `parent_key` — `file_id` where the catalog carries one, and
+> `(dataset_title, md5sum, file_name)` where it does not, as the HPRC catalog does not
+> (see `classify_index_files.py`) — so
 > "follow the link" is a trivial dict lookup they can already do — no new
 > infrastructure needed to compute an inherited view for the reports.
 >

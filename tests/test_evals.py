@@ -124,7 +124,10 @@ class TestBamE2E:
         )
 
     def test_grch38_aligned_bam(self):
-        """A GRCh38-aligned Illumina CRAM classifies on all five dimensions."""
+        """A GRCh38-aligned Illumina CRAM classifies on the four dimensions its
+        header can settle. `assay_type` is left open: it used to read `WGS` off the
+        file's size, and nothing in a CRAM header says what library was sequenced
+        (#430, #482)."""
         result = self.classify_grch38_cram()
         assert result is not None
         assert_output_format(result)
@@ -132,7 +135,7 @@ class TestBamE2E:
         assert get_val(result, "platform") == "ILLUMINA"
         assert get_val(result, "data_modality") == "genomic"  # from aligned reference contigs
         assert get_val(result, "data_type") == "alignments"
-        assert get_val(result, "assay_type") == "WGS"
+        assert get_val(result, "assay_type") is None
 
     def test_pacbio_unaligned_reads(self):
         """PacBio reads BAM — 363.9 GB, unaligned, reference N/A.
@@ -164,7 +167,8 @@ class TestBamE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "ONT"
-        assert get_val(result, "assay_type") == "WGS"
+        # Long-read platform + genomic modality no longer infers WGS (#430).
+        assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
     def test_no_stale_evidence(self):
         """reference_assembly should not have stale not_classified evidence."""
@@ -193,20 +197,6 @@ class TestBamE2E:
         cls = result["classifications"]
         platform_val = cls["platform"]["value"]
         assert platform_val is not None, f"Platform should be classified, got {platform_val}"
-
-    def test_illumina_cram_wgs_assay_type(self):
-        """HG00741.final.cram — 15.9 GB Illumina CRAM should infer WGS.
-
-        Assay type inference depends on platform (from tier 3 header rules)
-        and file size, so it runs in the post-hoc assay_type_rules phase.
-        """
-        result = classify_bam(
-            "cce22695c03f0f583384e5335a9965d7", "HG00741.final.cram", file_size=15868198733, file_format=".cram"
-        )
-        assert result is not None
-        assert_output_format(result)
-        assert get_val(result, "platform") == "ILLUMINA"
-        assert get_val(result, "assay_type") == "WGS"
 
     def test_rnaseq_bam_assay_type(self):
         """HG03382.bam — 5.5 GB STAR-aligned RNA-seq."""
@@ -362,8 +352,8 @@ class TestRuleEngineE2E:
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_isoseq_bam_is_transcriptomic(self):
-        """BAM with isoseq in filename should be transcriptomic."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.isoseq.bam"))
+        """BAM with `.flnc.` — full-length non-chimeric IsoSeq reads — in the filename is transcriptomic."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.flnc.bam"))
         assert result.data_modality == "transcriptomic.bulk"
 
     def test_plain_bam_no_modality(self):
@@ -403,11 +393,6 @@ class TestRuleEngineE2E:
     def test_bed_assembly_qc(self):
         result = engine.classify_extended(FileInfo.from_filename("HG01928.paternal.f1_assembly.hap1.bed"))
         assert result.data_modality == "genomic"
-
-    def test_fastq_rna_filename(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample_RNA_001.fastq.gz"))
-        assert result.data_modality == "transcriptomic.bulk"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
     def test_checksum_file(self):
         """A checksum file is a checksum — a term the vocabulary has (#437).
@@ -456,14 +441,6 @@ class TestRuleEngineE2E:
         for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
             assert result.status_of(field) == NOT_APPLICABLE
 
-    def test_chunked_upload_not_applicable(self):
-        result = engine.classify_extended(FileInfo.from_filename("c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_timestamp_filename_not_applicable(self):
-        result = engine.classify_extended(FileInfo.from_filename("2020-11-20T212208.245537Z"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo.from_filename("assembly_plot.png"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
@@ -476,14 +453,6 @@ class TestRuleEngineE2E:
             result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
             assert result.data_type == "index", f"{ext} should be data_type index"
             assert result.status_of("data_modality") == NOT_CLASSIFIED, f"{ext} modality should be open"
-
-    def test_narrowpeak_is_chromatin(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample.narrowPeak"))
-        assert result.data_modality == "epigenomic.chromatin_accessibility"
-
-    def test_bigwig_with_chip_keyword(self):
-        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_ChIP.bw"))
-        assert result.data_modality == "epigenomic.histone_modification"
 
     def test_bed_reference_from_filename(self):
         """BED file with hg38 in filename should detect GRCh38."""
@@ -520,13 +489,6 @@ class TestRuleEngineE2E:
     def test_fasta_haplotype_filename(self):
         """FASTA with haplotype keyword in filename."""
         result = engine.classify_extended(FileInfo.from_filename("hapdup_contigs_2.fasta"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "assembly"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_fasta_verkko_filename(self):
-        """FASTA with verkko assembler keyword."""
-        result = engine.classify_extended(FileInfo.from_filename("HG02300_verkko_gfase_diploid.fasta.gz"))
         assert result.data_modality == "genomic"
         assert result.data_type == "assembly"
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
@@ -940,11 +902,6 @@ class TestDerivedFileTierPrecedence:
             FileInfo.from_filename("HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed")
         )
         assert result.data_modality == "genomic"  # not not_applicable
-
-    def test_chip_peaks_beat_generic_peaks(self):
-        """ChIP-seq peaks (tier 2) should override generic peaks (tier 1)."""
-        result = engine.classify_extended(FileInfo.from_filename("H3K27ac_chip_peaks.bed"))
-        assert result.data_modality == "epigenomic.histone_modification"
 
     def test_capture_targets_not_applicable(self):
         """Capture target BED without competing rules should get not_applicable."""

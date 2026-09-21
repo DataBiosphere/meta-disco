@@ -108,8 +108,8 @@ class ExtendedFileInfo:
         """Size in decimal GB (not GiB), derived from ``file_size`` bytes.
 
         Kept as a read-only accessor rather than stored state so bytes are the
-        single source of truth; the assay-size rules author their thresholds in
-        GB and read this (#241)."""
+        single source of truth; the `file_size_*` rule conditions author their
+        thresholds in GB and read this (#241)."""
         return self.file_size / 1e9 if self.file_size is not None else None
 
     @classmethod
@@ -571,18 +571,22 @@ class ExtendedClassificationResult:
         rules. The content classifiers in ``header_classifier`` do contribute
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
         ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
-        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``, and the
-        engine's ``infer_assay_type``.
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
+        assay contributes the id of the assay rule that matched — ``rnaseq_modality``
+        — which lives in the file's ``assay_type_rules`` document, not its ``rules``
+        list; the one shared
+        ``infer_assay_type`` id those used to emit is gone (#430).
 
-        So a caller must not assume an ID here names a rule in unified_rules.yaml.
+        So a caller must not assume an ID here names a rule in the ``rules`` list of
+        unified_rules.yaml.
 
         **An imported claim now contributes one too.** It used to carry a ``source``
         and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
         cites the ``rule_id`` of the mapping that produced it, and only an
-        ``unmapped`` one still names nothing. ``infer_assay_type``'s
-        ``matched_rules_any`` conditions read this list and are written against our
-        own rule IDs, so a ``map_*`` id could satisfy — or fail to satisfy — one of
-        them. Nothing feeds an imported claim into ``field_evidence`` until the join
+        ``unmapped`` one still names nothing. The assay rules that
+        ``infer_assay_type`` evaluates read this list through their
+        ``matched_rules_any`` conditions, written against our own rule IDs, so a
+        ``map_*`` id could satisfy — or fail to satisfy — one of them. Nothing feeds an imported claim into ``field_evidence`` until the join
         lands, so whether these belong here is #402's to settle.
         """
         seen = set()
@@ -839,6 +843,33 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
 
     # Same tier, different values — conflict
     return _resolved(NOT_CLASSIFIED, ResolutionReason.CONFLICT, competing=sorted(top_tier_decls))
+
+
+_CONDITION_WORDS = {
+    "matched_rules_any": "the aligner named in the header",
+    "data_modality_contains": "the resolved modality",
+    "data_modality": "the resolved modality",
+    "platform": "the resolved platform",
+    "platform_in": "the resolved platform",
+    "file_format": "the file format",
+    "file_format_not": "the file format",
+    "file_size_gb_gt": "the file size",
+    "file_size_gb_lt": "the file size",
+}
+
+
+def _describe_conditions(conditions: dict) -> str:
+    """The signals an assay rule actually reads, for its evidence reason.
+
+    Derived from the rule's condition keys rather than typed, so the reason cannot
+    say "file size" after the last size rule is gone — which the previous constant
+    did (#430)."""
+    words = []
+    for key in conditions:
+        w = _CONDITION_WORDS.get(key, key)
+        if w not in words:
+            words.append(w)
+    return " and ".join(words) if words else "no conditions"
 
 
 class RuleEngine:
@@ -1225,9 +1256,14 @@ class RuleEngine:
             ):
                 continue
 
-            # All conditions passed — record the inference as a claim. add_claim
-            # sets the field, drops the synthetic not_classified placeholder, and
-            # enforces make_claim's invariants. tier 3: the inference derives from
+            # All conditions passed — record the inference as a claim, under the
+            # matched rule's own id. These rules used to emit one constant id
+            # with a reason naming only the value, so distinct rules collapsed
+            # into one line and whether a given one had ever fired was
+            # unanswerable from any run (#430) — which is how the file-size
+            # rules went unmeasured until then, and then went altogether.
+            # add_claim sets the field, drops the synthetic not_classified
+            # placeholder, and enforces make_claim's invariants. tier 3: the inference derives from
             # already-resolved signals (the header-derived platform is typically
             # tier 3), so it carries a tier rather than the tier-0 default #228
             # will forbid; it never competes (the is_declared guard above means it
@@ -1237,10 +1273,10 @@ class RuleEngine:
             # values, plus the file's format and size — not a header (#392).
             result.add_claim(
                 "assay_type",
-                rule_id="infer_assay_type",
+                rule_id=assay_rule.id,
                 tier=3,
                 source_type=SOURCE_SIGNAL_INFERENCE,
-                reason=f"Inferred {assay_rule.assay_type} from platform/modality/file size signals",
+                reason=f"Inferred {assay_rule.assay_type} by {assay_rule.id} from {_describe_conditions(assay_rule.conditions)}",
                 value=assay_rule.assay_type,
             )
             return

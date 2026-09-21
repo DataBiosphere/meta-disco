@@ -160,9 +160,10 @@ def classify_from_header(
 
     Args:
         header_text: Raw SAM/BAM header text (lines starting with @)
-        name: Optional parsed :class:`FileName`; its tokens (hifi_reads / rnaseq /
-            assembly) drive the tier-2 filename rules
-        file_size: Optional file size in bytes (used for WGS/WES inference)
+        name: Optional parsed :class:`FileName`; its tokens (`hifi`, `.flnc.`,
+            STAR output names, reference names) drive the tier-2 filename rules
+        file_size: Optional file size in bytes, for `file_size_*` rule
+            conditions; no rule declares one (#430)
         file_format: Optional file format string (e.g., ".bam", ".cram");
             accepted for call uniformity but not consulted — the extension is
             hardcoded ".bam" below

@@ -140,7 +140,7 @@ GOLDEN_INPUTS = {
     "bam": [
         _golden_record(
             "b",
-            file_name="sample.rnaseq.bam",
+            file_name="sample.flnc.bam",
             file_size=12345678,
             file_format=".bam",
             entry_id="g-bam-1",
@@ -183,7 +183,7 @@ GOLDEN_INPUTS = {
 
 # The index producer's inputs. Its two record paths both have to reach the schema gate,
 # because `DerivationEdge` models them as one class: a required verb with nullable
-# grounding. `sample.rnaseq.bam` is the golden's own bam input, so the matched `.bai`
+# grounding. `sample.flnc.bam` is the golden's own bam input, so the matched `.bai`
 # inherits from a row a real producer wrote rather than a hand-built stand-in — and the
 # `inherited_evidence` it inherits through is built outside `make_claim` (#413), so no
 # constructor's invariants cover its shape. `orphan.bai` names a parent the snapshot does
@@ -191,7 +191,7 @@ GOLDEN_INPUTS = {
 # `parent_file` and `parent_md5sum` are null.
 INDEX_INPUTS = [
     GOLDEN_INPUTS["bam"][0],
-    _golden_record("1", file_name="sample.rnaseq.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
+    _golden_record("1", file_name="sample.flnc.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
     _golden_record("2", file_name="orphan.bai", file_size=9001, file_format=".bai", entry_id="g-bai-2"),
 ]
 

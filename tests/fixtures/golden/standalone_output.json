@@ -231,7 +231,7 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Inherited from parent file: sample.rnaseq.bam",
+                "reason": "Inherited from parent file: sample.flnc.bam",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
                 "value": "RNA-seq"
@@ -243,7 +243,7 @@
           "data_modality": {
             "evidence": [
               {
-                "reason": "Inherited from parent file: sample.rnaseq.bam",
+                "reason": "Inherited from parent file: sample.flnc.bam",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
                 "value": "transcriptomic.bulk"
@@ -267,7 +267,7 @@
           "platform": {
             "evidence": [
               {
-                "reason": "Parent file sample.rnaseq.bam had no value for platform",
+                "reason": "Parent file sample.flnc.bam had no value for platform",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
                 "status": "not_classified"
@@ -279,7 +279,7 @@
           "reference_assembly": {
             "evidence": [
               {
-                "reason": "Parent file sample.rnaseq.bam marks reference_assembly not applicable",
+                "reason": "Parent file sample.flnc.bam marks reference_assembly not applicable",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
                 "status": "not_applicable"
@@ -291,7 +291,7 @@
         },
         "dataset_title": "GOLDEN_FIXTURE",
         "derived_from": {
-          "parent_file": "sample.rnaseq.bam",
+          "parent_file": "sample.flnc.bam",
           "parent_kind": "alignment",
           "parent_md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "relation": "index_of"
@@ -300,7 +300,7 @@
         "entry_id": "g-bai-1",
         "file_format": ".bai",
         "file_id": "g-file-1",
-        "file_name": "sample.rnaseq.bam.bai",
+        "file_name": "sample.flnc.bam.bai",
         "file_size": 9000,
         "md5sum": "11111111111111111111111111111111",
         "published": null

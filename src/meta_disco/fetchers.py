@@ -159,9 +159,8 @@ def fetch_content_length(url: str, timeout: int = 60) -> int:
     redirects).
 
     The HPRC adapter (#276) uses this because its sequencing catalog carries no file
-    size, yet ``file_size`` is required by the input contract and feeds the WGS/WES
-    assay heuristic — so the real size is read from the object (a HEAD's
-    ``Content-Length``) rather than guessed. Raises ``FetchError`` when the HEAD is
+    size, yet ``file_size`` is required by the input contract — so the real size is
+    read from the object (a HEAD's ``Content-Length``) rather than guessed. Raises ``FetchError`` when the HEAD is
     non-2xx or omits ``Content-Length``, so the caller records the file as unclassifiable
     rather than inventing a size. (The S3 objects this is pointed at answer HEAD with
     ``Content-Length``; the raise is the backstop for when a response does not, and a
