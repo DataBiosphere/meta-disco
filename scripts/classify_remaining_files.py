@@ -25,7 +25,7 @@ from meta_disco.metadata_schema import (
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, record_key
+from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, record_key, repeated_key_values
 from meta_disco.producers import PRODUCERS
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
@@ -58,16 +58,15 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             value = r.get(field)
-            # Raise rather than skip. The catalog identity is deliberately *not*
-            # classifier-relevant (`records.ClassifierRecord`), so a drifted one still
-            # reaches the valid stream and is echoed into a producer's output untouched —
-            # unlike `file_name`, the key this replaced, which the contract guarantees
-            # non-empty. Skipping such a row would drop it from this set and hand the
-            # file a *second* classification record, inflating coverage and making
-            # `corpus_diff` report a phantom gain. `make validate-metadata` rejects a
-            # null `file_id` before `make classify`, and the shared load excludes an HPRC
-            # record with no URL hash (#376), so reaching here means a producer wrote a
-            # row neither gate would have let through.
+            # Raise rather than skip. Skipping such a row would drop it from this set and
+            # hand the file a *second* classification record, inflating coverage and
+            # making `corpus_diff` report a phantom gain. How a null gets here differs by
+            # key. AnVIL's `file_id` is deliberately *not* classifier-relevant
+            # (`records.ClassifierRecord`), so a drifted one reaches the valid stream and
+            # is echoed into a producer's row untouched; `make validate-metadata` rejects
+            # it before `make classify`, so seeing one means that gate was bypassed.
+            # HPRC's key is the checksum, which the shared load excludes when unusable
+            # (#376), so a row without one means the producer omitted the field.
             if not isinstance(value, str) or not value:
                 raise ValueError(
                     f"{path}: classification row for {r.get('file_name')!r} has {field} "
@@ -93,6 +92,20 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
     source, files = snapshot.source, snapshot.records
     print(f"Loaded {len(files):,} files from metadata")
+
+    # A key two input records share would let one hide behind the other: the earlier
+    # producer writes one, this loop skips both as already classified, and the post-run
+    # scan sees one row and passes. `make validate-metadata` reports this before
+    # `make classify`; a run started any other way is refused here, before a row is
+    # written, rather than dropping a file and reporting success.
+    repeated = repeated_key_values(files, key)
+    if repeated:
+        examples = ", ".join(f"{value} (x{n})" for value, n in sorted(repeated.items())[:10])
+        raise ValueError(
+            f"{metadata_path}: {len(repeated):,} value(s) of {key.input_field} are carried by more "
+            f"than one input record, but this producer keys on it as unique per file and would "
+            f"skip a file another producer had not written: {examples}"
+        )
 
     already = load_already_classified(classification_paths, key)
     print(f"Already classified by other scripts: {len(already):,}")

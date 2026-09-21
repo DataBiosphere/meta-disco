@@ -137,6 +137,33 @@ class TestSkipKey:
             classify_remaining(metadata_file, tmp_path / "out.json", [])
 
 
+class TestARepeatedInputKeyIsRefused:
+    """Two input records with one key would let one hide behind the other (#446).
+
+    The earlier producer writes one; this producer skips both as already classified; the
+    post-run scan sees one row and passes. `make validate-metadata` reports it first for
+    `make classify`; a run started any other way is refused here, before a row is written.
+    """
+
+    def test_the_hidden_file_is_not_silently_skipped(self, tmp_path):
+        metadata_file = tmp_path / "metadata.json"
+        write_metadata(
+            metadata_file,
+            [
+                _record("written.bam", "f1", "1" * 32, "ds1"),
+                _record("hidden.weird", "f1", "2" * 32, "ds1"),
+            ],
+        )
+        other = tmp_path / "bam_classifications.json"
+        other.write_text(json.dumps({"classifications": [{"file_id": "f1", "file_name": "written.bam"}]}))
+
+        with pytest.raises(
+            ValueError, match=r"1 value\(s\) of file_id are carried by more than one input record.*f1 \(x2\)"
+        ):
+            classify_remaining(metadata_file, tmp_path / "out.json", [other])
+        assert not (tmp_path / "out.json").exists(), "refused before a row was written"
+
+
 class TestTheKeyIsTheSources:
     """An HPRC record has no `file_id`, `entry_id` or `drs_uri` — the catalogs issue none
     and none is minted (#446). Its identity is the URL hash the source writes as the
