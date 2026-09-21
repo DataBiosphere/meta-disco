@@ -712,6 +712,16 @@ def test_a_quote_stays_a_quote_and_an_all_space_value_is_not_padded(tmp_path, ev
     assert "| `  ` |" in rendered
 
 
+def test_every_non_printable_character_is_escaped_and_the_queue_stays_writable(tmp_path, evidence_root):
+    """A C1 control, a zero-width joiner and a lone surrogate all arrive through the NDJSON reader; the
+    rendered queue spells each out and can be written as UTF-8."""
+    table = load(tmp_path, "rows:\n")
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "a\u0085b\u200dc\ud800d é")])
+    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
+    assert "`a\\u0085b\\u200dc\\ud800d é`" in rendered
+    (tmp_path / "queue.md").write_text(rendered, encoding="utf-8")
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,

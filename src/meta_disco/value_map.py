@@ -660,7 +660,7 @@ def _code(raw_value: str) -> str:
     """A raw value as a markdown code span, every control character spelled out and any backtick run contained.
 
     Evidence keeps a raw value verbatim, so it may hold a line break, a NUL or a backtick.
-    Control characters and backslashes are spelled as escapes (``\\n``, ``\\u0000``), which
+    Non-printable characters and backslashes are spelled as escapes (``\\n``, ``\\u0085``), which
     keeps two values differing only in one distinct to the eye, while a quote stays a quote; the span's delimiter is one backtick
     longer than the longest run inside, padded where the value begins or ends with a
     backtick or a space — CommonMark strips one space from each end of a span, so the
@@ -679,11 +679,17 @@ _NAMED_ESCAPES = {"\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 
 
 def _visible_char(c: str) -> str:
+    """One character as the span shows it: itself if printable, else a named or ``\\uXXXX`` escape.
+
+    ``str.isprintable`` is the test, so C1 controls, format and separator characters and
+    lone surrogates (which the NDJSON reader can round-trip and UTF-8 cannot write) are
+    all spelled out, not only the ASCII controls.
+    """
     if c in _NAMED_ESCAPES:
         return _NAMED_ESCAPES[c]
-    if ord(c) < 0x20 or ord(c) == 0x7F:
-        return f"\\u{ord(c):04x}"
-    return c
+    if c == " " or c.isprintable():
+        return c
+    return f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}"
 
 
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
