@@ -341,9 +341,17 @@ def _scope(node: yaml.Node, at: str) -> Scope:
         raise ValueError(f"{at}: scope has unknown keys {sorted(unknown)}; it is a source, or a source and dataset")
     if "source" not in entries:
         raise ValueError(f"{at}: scope names a dataset with no source — a dataset belongs to a source (contract 3.12)")
-    source = _scalar(entries["source"], at)
-    dataset = _scalar(entries["dataset"], at) if "dataset" in entries else None
+    source = _identifier(entries["source"], f"{at} scope source")
+    dataset = _identifier(entries["dataset"], f"{at} scope dataset") if "dataset" in entries else None
     return Scope(source, dataset)
+
+
+def _identifier(node: yaml.Node, at: str) -> str:
+    """A scope member: a non-empty, single-line string, as ``ClaimSource`` requires of the provenance it must equal."""
+    text = _scalar(node, at)
+    if not text.strip() or "\n" in text:
+        raise ValueError(f"{at}: {text!r} is not an identifier — a scope names a source or dataset evidence can carry")
+    return text
 
 
 def _reason(node: yaml.Node, at: str) -> str:

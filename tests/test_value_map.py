@@ -225,6 +225,21 @@ rows:
     assert [r.declares for r in table.rows] == [{"data_modality": "genomic"}] * 2
 
 
+def test_a_scope_member_is_a_non_empty_single_line_identifier(tmp_path):
+    for bad in ('""', '"  "', '"an\\nvil"'):
+        refuses(
+            tmp_path,
+            f"""
+rows:
+  - id: platform.revio
+    match: {{slot: platform, value: Revio}}
+    scope: {{source: {bad}}}
+""",
+            "'platform.revio'",
+            "not an identifier",
+        )
+
+
 def test_ac7_a_scope_of_a_dataset_alone_fails_and_the_two_nesting_forms_load(tmp_path):
     refuses(
         tmp_path,
@@ -731,7 +746,10 @@ def test_row_ids_and_rule_ids_are_disjoint_by_shape(tmp_path):
     ids = {rule.id for rule in rules.rules} | {rule.id for rule in rules.assay_type_rules}
     for path in [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]:
         if path.name != "value_map.py":
+            # Both spellings a producer writes one in: `rule_id="x"` to `make_claim`, `"rule_id": "x"` in a dict.
             ids.update(re.findall(r"rule_id=\"([^\"]+)\"", path.read_text()))
+            ids.update(re.findall(r"\"rule_id\":\s*\"([^\"\s]+)\"", path.read_text()))
+    assert "inherited_from_parent" in ids and "index_by_extension" in ids, "the dictionary-entry spelling is collected"
     assert ids, "no rule ids found — the search is broken, not the namespace"
     assert sorted(i for i in ids if "." in i) == []
     refuses(
