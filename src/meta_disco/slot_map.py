@@ -3,7 +3,7 @@
 A slot map is the importer's half of reading a source (claims contract 1.3, 2.2): it
 says *where* a raw value for a slot comes from and nothing about what the value means.
 It holds no vocabulary (1.5). `anvil_evidence` reads the AnVIL map to turn the verbatim
-manifests into evidence files; a translation table (#414, not built) is where raw
+manifests into evidence files; the translation table (`value_map`, #414) is where raw
 values become terms.
 
 **One entry shape.** An entry is keyed by the **file-link column** — the column whose

@@ -286,7 +286,7 @@ def make_claim(
         # coincidence of spelling rather than an agreement about meaning. The one
         # state with no rule is `unmapped`, which means exactly "no entry exists for
         # this raw value" — which is what makes the review queue derivable rather
-        # than asserted (#401). The mapping table itself is #395/#399.
+        # than asserted (#401). The mapping table is `value_map` (#414).
         if state == UNMAPPED:
             if rule_id is not None:
                 raise ValueError(

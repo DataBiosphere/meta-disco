@@ -14,8 +14,9 @@ so there is one.
 
 The dicts themselves were the only AnVIL value translations in the repo. They were
 script-local, carried no row ids, and were validated against no vocabulary, so they
-are not the translation table #414 specifies — but they are its seed, and #414 should
-start from them rather than rediscover them:
+are not the translation table #414 specifies. That table now exists (`value_map.yaml`) with
+rows for the two HPRC datasets only; these five are its seed for the AnVIL-published values
+and have no row yet:
 
     single-nucleus RNA sequencing assay -> transcriptomic.single_cell
     single-nucleus ATAC-seq            -> epigenomic.chromatin_accessibility

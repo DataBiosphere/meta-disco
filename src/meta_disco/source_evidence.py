@@ -13,7 +13,8 @@ transcribes what a source wrote about a slot and stops; only the rule engine tur
 that raw value into one of our terms. #401 shipped the other arrangement — a line
 carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
-(#414), applied by reconcile, which is also where that vocabulary check now is.
+(``value_map``, #414), applied by reconcile; the table checks a declared term against
+its slot's vocabulary when it loads.
 
 This module is the artefact and everything about it: the envelope record and its
 parts, the layout on disk, the line format, the streaming writer and reader, and the
@@ -1055,8 +1056,8 @@ def _entry_from_line(
     process could not reach ``evaluate_claims`` as an unvalidated dict. A row is not a
     claim and declares nothing, so there is no claim to rebuild and nothing here can
     reach resolution: the rule engine makes the claim later, from this raw value and
-    the translation table (#414), and that is where ``make_claim``'s invariants and
-    the vocabulary check now apply.
+    the translation table (``value_map``, #414); ``make_claim``'s invariants apply
+    there, and the vocabulary check when the table loads.
 
     What replaces it is smaller and is all the shape a row has: the line's members are
     exactly ``_LINE_KEYS``, ``field`` is a known slot, ``raw_value`` is a string, and

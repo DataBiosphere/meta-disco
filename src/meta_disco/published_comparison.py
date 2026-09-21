@@ -20,8 +20,8 @@ vocabulary — only in the `source` a run records.
 **Four recommendations, and why there are not five.** `add`, `keep` and `none` are
 decidable from which side has a value. Whether two values *agree* is not: `GRCh38 +
 Gencode40` and `GRCh38` are the same assembly and different strings, so splitting
-`review` into agrees/disagrees needs the value mappings (#414), which do not exist
-yet. Rather than guess at equality, `review` names the pair and the report lists every
+`review` into agrees/disagrees needs the value mappings, which `value_map` now holds
+(#414) and this report does not yet read. Rather than guess at equality, `review` names the pair and the report lists every
 one — 1,055 files across five distinct pairs, small enough to read and exactly the row
 set #414 is owed.
 
@@ -87,8 +87,8 @@ ADD = "add"
 # The repository publishes a value; this run inferred none. The published value should
 # stand — a recommendation about a value we do not publish, not a change to one we do.
 KEEP = "keep"
-# Both have a value. Whether they agree is undecidable without #414's value mappings,
-# so the pair is named rather than judged.
+# Both have a value. Whether they agree is not decided here — this report does not read
+# the value map (#414) — so the pair is named rather than judged.
 REVIEW = "review"
 # Neither has a value. The residual backlog.
 NONE = "none"
@@ -460,8 +460,8 @@ def render_report(report: ComparisonReport) -> str:
         "",
         "## Rows needing review",
         "",
-        "Both sides have a value. Whether they agree cannot be decided until the value mappings exist",
-        "(#414), so each pair is named rather than judged.",
+        "Both sides have a value. Whether they agree is not decided here: this report does not read the",
+        "value map (#414), so each pair is named rather than judged.",
         "",
         # Derived, not asserted. Every other number in this report is computed from the
         # run; this sentence used to claim outright that no published value is in

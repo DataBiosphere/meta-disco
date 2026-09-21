@@ -96,10 +96,10 @@ evidence}` entry — plus the controlled vocabulary:
   reconcile, and what the pipeline's stages are. Cite it by assertion number (`3.4`,
   `6.9`) rather than restating it — restating is the drift it exists to stop.
   **Read its "What is not true yet" section before building against it.** Much of it
-  describes a target state: the slot map, the translation table, the read-sources and
-  reconcile stages do not exist yet. The evidence file does (#401, amended by
-  #421) and nothing reads one. Its Open section lists what is still undecided.
-  Epic #391 tracks the work; #414 comes first.
+  describes a target state: the read-sources and reconcile stages do not exist yet.
+  The evidence file (#401, amended by #421), the slot map (#369) and the translation
+  table (#414) do, and no classification run reads the evidence or the table. Its Open
+  section lists what is still undecided. Epic #391 tracks the work.
 
 - **What the code does today, which the contract does not replace:**
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
@@ -134,8 +134,20 @@ evidence}` entry — plus the controlled vocabulary:
     is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
     `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and
     `raw_value` is transcribed verbatim and checked only for being a string. The
-    vocabulary check on a *mapped* value belongs to the translation table (#414),
-    which validates at load. Do not reintroduce one here.
+    vocabulary check on a *mapped* value belongs to the translation table (`value_map`,
+    #414), which checks an authored row's terms when it loads. Do not reintroduce one here.
+  - **The value translation table** is `rules/value_map.yaml`, loaded and applied by
+    `value_map.py` (#414, contract 3.9-3.12). A row is keyed on `(slot, normalized
+    raw_value)` with explicit alternates, optionally scoped to a source or a source and
+    dataset, and **authored iff it carries a `reason`**: only an authored row may
+    `declares`, and only its terms are checked against the slot's vocabulary at load.
+    Normalization is casefold and strip, nothing more; a list cell matches as a whole
+    set. No row carries a table or column name — the loader refuses the keys. Row ids
+    share one namespace with `unified_rules.yaml` and the loader refuses a collision.
+    `make seed-value-map` **appends** seeded rows and never rewrites one, so `rows` stays
+    the file's last key; `make review-queue` lists every evidence value whose selected
+    row is not authored (5.2). `claims_from` builds the claims a line makes, through
+    `make_claim`, for reconcile (#432) — nothing in a run calls it.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;
