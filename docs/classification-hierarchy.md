@@ -161,7 +161,7 @@ not for being unanchored.
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
 
 **assay_type**:
-- `Bisulfite-seq` ← filename (modbam2bed, or CpG as a delimited token — asserted by `bed_methylation` for both, though modbam2bed is a nanopore modified-base caller, not bisulfite)
+- _(none)_ — `bed_methylation` used to assert `Bisulfite-seq` for every file it matched, including modbam2bed output, which is nanopore modified-base calling and not bisulfite. No file in either catalog supports a CpG name meaning bisulfite either, so the assay is left open (#430). `Bisulfite-seq` stays in the vocabulary for a rule that can claim it on evidence.
 - `RNA-seq` ← filename (expression)
 
 **reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename, BED coordinate detection

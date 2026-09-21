@@ -566,8 +566,7 @@ rules:
     then:
       data_modality: epigenomic.methylation
       data_type: annotations
-      assay_type: Bisulfite-seq
-    rationale: "BED file is modbam2bed output or names CpG methylation calls"
+    rationale: "BED file is modbam2bed output or names CpG methylation calls; which assay produced them is not in the name"
 
   - id: bed_expression
     tier: 2

@@ -133,6 +133,20 @@ class TestMethylationPattern:
         assert rule_id == "bed_methylation"
 
 
+class TestMethylationAssay:
+    """A methylation BED gets its modality from the name, and no assay from it (#430).
+
+    `bed_methylation` used to assert `Bisulfite-seq` for everything it matched. Its
+    only matches in either catalog are modbam2bed output — nanopore modified-base
+    calls, the opposite of bisulfite — and nothing supports a CpG name meaning
+    bisulfite. The name says methylation; it does not say how it was measured."""
+
+    def test_modbam2bed_output_gets_no_assay(self):
+        result = classify_bed("modbam2bed_cpg_1.bed.gz")
+        assert _get_val(result, "data_modality") == "epigenomic.methylation"
+        assert _get_val(result, "assay_type") is None
+
+
 class TestExpressionPattern:
     """Test expression/transcriptomic pattern matching."""
 
