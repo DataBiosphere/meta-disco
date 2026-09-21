@@ -28,6 +28,7 @@ extras it no longer stores.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -40,6 +41,30 @@ def get_evidence_path(evidence_dir: Path, md5sum: str) -> Path:
     Uses first 2 chars of MD5 as subdirectory to avoid too many files in one dir.
     """
     return evidence_dir / md5sum[:2] / f"{md5sum}.json"
+
+
+def cached_md5sums(evidence_dir: Path) -> set[str]:
+    """The stem of every ``<shard>/*.json`` under ``evidence_dir`` — the cached md5s,
+    from one walk of the shard directories.
+
+    The inverse of :func:`get_evidence_path`, kept beside it so the layout lives in
+    one place. A producer asking which of its files are cached used to ``stat``
+    each path; listing the 256 shards answers the same question (#488). A missing
+    cache root, or a shard removed mid-walk, is an empty one.
+    """
+    cached: set[str] = set()
+    try:
+        shards = [shard.path for shard in os.scandir(evidence_dir) if shard.is_dir()]
+    except FileNotFoundError:
+        return cached
+    for shard in shards:
+        # `data/` is shared by every clone; a shard cleared by another run between
+        # the two listings is an empty shard here, as its files were uncached before.
+        try:
+            cached.update(entry.name[:-5] for entry in os.scandir(shard) if entry.name.endswith(".json"))
+        except FileNotFoundError:
+            continue
+    return cached
 
 
 def _timestamp() -> str:

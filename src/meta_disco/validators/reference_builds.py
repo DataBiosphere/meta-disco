@@ -119,7 +119,15 @@ from pathlib import PurePosixPath
 # The key contigs and the row layout live beside ``ReferenceBuild`` in the
 # loader, which validates ``absent`` against them at load (#351).
 from ..rule_loader import FIELD_CONTIG, KEY_CONTIGS, ReferenceBuild, get_unified_rules
-from .header_extractors import is_lifted, parse_sam_header, parse_vcf_header, sam_command_lines, vcf_command_lines
+from .header_extractors import (
+    SAMHeader,
+    VCFHeader,
+    is_lifted,
+    parse_sam_header,
+    parse_vcf_header,
+    sam_command_lines,
+    vcf_command_lines,
+)
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
 # is whatever sat between two tabs — so a value that is not a checksum is dropped
@@ -249,11 +257,17 @@ class ReferenceIdentity:
 
 
 def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredReference | None]:
-    """Contig signatures and the declared reference name from a SAM/BAM header.
+    """Contig signatures and the declared reference name from SAM/BAM header text."""
+    return observe_sam_header(parse_sam_header(header_text))
 
-    Reads the ``@SQ`` dictionary through ``parse_sam_header`` rather than
-    re-tokenizing it, so tag order and optional tags behave here exactly as they
-    do everywhere else in the project.
+
+def observe_sam_header(header: SAMHeader) -> tuple[list[ContigSignature], DeclaredReference | None]:
+    """Contig signatures and the declared reference name from a parsed SAM/BAM header.
+
+    Takes the parse rather than the text so the BAM classifier, which parses once
+    and shares the parse with the rule engine, does not parse again here (#488).
+    The ``@SQ`` dictionary is read as ``parse_sam_header`` tokenized it, so tag
+    order and optional tags behave here exactly as they do everywhere else.
 
     The name comes from ``@SQ UR`` when any record carries one, and otherwise
     from the ``@PG`` command lines (#354) under the guards in
@@ -265,7 +279,6 @@ def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredRefere
     therefore record the aligner's pre-liftover reference as its name; the
     contig signatures still decide the build, and a name never overrides them.
     """
-    header = parse_sam_header(header_text)
     sq_records = header.sq or []
     signatures = [
         ContigSignature(
@@ -285,7 +298,15 @@ def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredRefere
 
 
 def observe_vcf(header_text: str) -> tuple[list[ContigSignature], DeclaredReference | None]:
-    """Contig signatures and the declared reference name from a VCF header.
+    """Contig signatures and the declared reference name from VCF header text."""
+    return observe_vcf_header(parse_vcf_header(header_text))
+
+
+def observe_vcf_header(header: VCFHeader) -> tuple[list[ContigSignature], DeclaredReference | None]:
+    """Contig signatures and the declared reference name from a parsed VCF header.
+
+    Takes the parse rather than the text so the VCF classifier, which parses once
+    and shares the parse with the rule engine, does not parse again here (#488).
 
     ``##contig`` attributes are unordered, which is why this reads the parsed
     fields rather than matching a positional pattern.
@@ -296,7 +317,6 @@ def observe_vcf(header_text: str) -> tuple[list[ContigSignature], DeclaredRefere
     INFO fields, in which case the command lines describe the file before it
     was lifted and are not consulted.
     """
-    header = parse_vcf_header(header_text)
     signatures = []
     for contig in header.contigs or []:
         contig_id = contig.fields.get("ID")

@@ -186,16 +186,16 @@ def classify_from_header(
         bam_header=header_text,
     )
 
+    # One parse per file (#488): file_info owns it, the engine's tier-3 matchers
+    # read the same one, and the contig-length detector and the build resolver
+    # share one observation of its @SQ dictionary.
+    from .validators.contig_lengths import detect_reference_from_contigs
+    from .validators.reference_builds import observe_sam_header, resolve_identity
+
+    signatures, declared = observe_sam_header(file_info.parsed_bam_header)
+
     # Detect reference from contig lengths first — definitive signal
-    lines = header_text.strip().split("\n") if header_text else []
-    sq_lines = [line for line in lines if line.startswith("@SQ")]
-
-    from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
-
-    contig_ref = None
-    contig_matches = 0
-    if sq_lines:
-        contig_ref, contig_matches = detect_from_contigs(sq_lines)
+    contig_ref, contig_matches = detect_reference_from_contigs((s.name, s.length) for s in signatures)
 
     # Run classification with tier 3 (header rules)
     engine = _get_engine()
@@ -233,9 +233,7 @@ def classify_from_header(
     # header names. Runs whatever the contig detection above concluded, including
     # when it concluded nothing — an unresolvable file still keeps its observed
     # checksums so a later table row can resolve it without re-fetching.
-    from .validators.reference_builds import identity_from_sam
-
-    _record_reference_build(result, identity_from_sam(header_text))
+    _record_reference_build(result, resolve_identity(signatures, declared))
 
     # Infer assay type
     engine.infer_assay_type(result, file_info)
@@ -283,15 +281,17 @@ def classify_from_vcf_header(
         vcf_header=header_text,
     )
 
-    # Detect reference from contig lengths — definitive signal, no guessing.
-    from .validators.contig_lengths import detect_reference_from_contig_lengths as detect_from_contigs
+    # One parse per file (#488): file_info owns it, the engine's tier-3 matcher
+    # reads the same one, the contig-length detector takes the observed contigs
+    # rather than re-splitting the raw text, and the build resolver takes the same
+    # observation instead of parsing a third time.
+    from .validators.contig_lengths import detect_reference_from_contigs
+    from .validators.reference_builds import observe_vcf_header, resolve_identity
 
-    contig_ref = None
-    contig_matches = 0
-    if header_text:
-        contig_lines = [line for line in header_text.split("\n") if line.startswith("##contig")]
-        if contig_lines:
-            contig_ref, contig_matches = detect_from_contigs(contig_lines)
+    signatures, declared = observe_vcf_header(file_info.parsed_vcf_header)
+
+    # Detect reference from contig lengths — definitive signal, no guessing.
+    contig_ref, contig_matches = detect_reference_from_contigs((s.name, s.length) for s in signatures)
 
     # Run classification with tier 3 (header rules)
     engine = _get_engine()
@@ -315,9 +315,7 @@ def classify_from_vcf_header(
     # the resolver less to work with than BAM does: ##contig carries no checksum,
     # so builds that differ only in sequence stay ambiguous here and resolve to a
     # null version rather than a guess.
-    from .validators.reference_builds import identity_from_vcf
-
-    _record_reference_build(result, identity_from_vcf(header_text))
+    _record_reference_build(result, resolve_identity(signatures, declared))
 
     return result.to_output_dict()
 
@@ -509,7 +507,7 @@ def classify_from_gfa_segment_tags(
     segments carry no such tags and stay at the tier-1 `pangenome` base.
 
     This does not set reference_assembly, for two reasons. `parse_gfa_segment_tags`
-    extracts no sequence lengths, so `detect_reference_from_contig_lengths` — the
+    extracts no sequence lengths, so `detect_reference_from_contigs` — the
     definitive signal used for BAM/VCF — cannot run here at all. And the stable
     names that are extracted do not identify an assembly: the fetched head of the
     HPRC minigraph graphs exposes only `chr1`, a name GRCh38 and CHM13 share.

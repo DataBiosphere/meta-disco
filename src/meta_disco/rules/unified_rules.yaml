@@ -1053,7 +1053,7 @@ validators:
   contig_length_detector:
     description: "Detect reference assembly from chromosome lengths in @SQ or ##contig lines"
     module: "meta_disco.validators.contig_lengths"
-    function: "detect_reference_from_contig_lengths"
+    function: "detect_reference_from_contigs"
     applies_to: ["header", "vcf_header"]
 
   max_position_detector:

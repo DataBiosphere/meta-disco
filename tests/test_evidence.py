@@ -278,3 +278,24 @@ class TestSegmentTag:
 
     def test_from_json_missing_keys_become_none(self):
         assert SegmentTag.from_json({}) == SegmentTag(sn=None, sr=None)
+
+
+class TestCachedMd5sums:
+    """One walk of the shard directories names every cached md5 (#488)."""
+
+    def test_lists_every_shard_and_ignores_strays(self, tmp_path):
+        from meta_disco.evidence import cached_md5sums, get_evidence_path
+
+        a, b = "ab" + "0" * 30, "cd" + "1" * 30
+        for md5 in (a, b):
+            path = get_evidence_path(tmp_path, md5)
+            path.parent.mkdir(parents=True)
+            path.write_text("{}")
+        (tmp_path / "ab" / "notes.txt").write_text("")  # not evidence
+        (tmp_path / "README").write_text("")  # not a shard
+        assert cached_md5sums(tmp_path) == {a, b}
+
+    def test_a_missing_cache_is_empty(self, tmp_path):
+        from meta_disco.evidence import cached_md5sums
+
+        assert cached_md5sums(tmp_path / "absent") == set()

@@ -25,7 +25,7 @@ CHM13 is not covered here, because Ensembl's REST API does not serve it. NCBI
 does publish it, and a check against NCBI would have to account for something
 this one does not: our CHM13 row holds **v1.0** lengths, which differ from v1.1
 and v2.0 on chr1, chr2 and chr3. That is deliberate, not drift —
-``detect_reference_from_contig_lengths`` matches within ±1000 bp precisely so one
+``detect_reference_from_contigs`` matches within ±1000 bp precisely so one
 row spans the releases (its docstring says so), and the exact-match table in
 ``rule_loader.reference_builds`` carries v1.0 and v1.1/v2.0 as separate rows with
 the right ``chr1_length`` on each. A real v2.0 header resolves CHM13 on all 24

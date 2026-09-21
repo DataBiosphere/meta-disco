@@ -735,7 +735,7 @@ class TestBamCramClassification:
 class TestContigLengthDetection:
     """Test reference assembly detection from contig lengths.
 
-    BAM reference detection uses detect_reference_from_contig_lengths()
+    BAM reference detection uses detect_reference_from_contigs()
     which matches @SQ SN/LN against known chromosome sizes.
     VCF reference detection uses rule-based pattern matching on
     ##contig assembly= and ##reference= fields.
@@ -1051,3 +1051,34 @@ class TestFastaContigClassification:
         content_rules = {"fasta_reference_contigs", "fasta_assembler_contigs", "fasta_transcript_contigs"}
         matched = val(result, "matched_rules")
         assert matched is not None and content_rules.isdisjoint(matched)
+
+
+class TestAVcfHeaderIsParsedOnce:
+    """The VCF classifier parses the header once, on file_info, and the rule engine,
+    the contig-length detector and the build resolver all read that parse (#488).
+    Before, the engine and the resolver each parsed and the detector re-split the
+    raw text: three passes over every header in the corpus."""
+
+    def test_one_parse_per_classification(self, monkeypatch):
+        from meta_disco.validators import header_extractors, reference_builds
+
+        real = header_extractors.parse_vcf_header
+        calls = []
+
+        def counting(text):
+            calls.append(text)
+            return real(text)
+
+        # Patched at every site that bound the name: the engine imports it at call
+        # time, but reference_builds bound it at import, so a resolver that parsed
+        # again would be invisible to a patch on header_extractors alone.
+        monkeypatch.setattr(header_extractors, "parse_vcf_header", counting)
+        monkeypatch.setattr(reference_builds, "parse_vcf_header", counting)
+        header = (
+            "##fileformat=VCFv4.2\n##source=HaplotypeCaller\n##reference=file:///ref/hg38.fa\n"
+            '##contig=<ID=chr1,length=248956422>\n##INFO=<ID=DP,Number=1,Type=Integer,Description="depth">\n'
+        )
+        result = classify_from_vcf_header(header, name=FileName.parse("sample.vcf.gz"))
+        assert result["reference_assembly"]["value"] == "GRCh38"
+        assert result["data_type"]["value"] == "variants.germline"
+        assert len(calls) == 1
