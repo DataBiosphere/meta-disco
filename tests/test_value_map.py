@@ -704,6 +704,14 @@ def test_a_raw_value_with_boundary_spaces_keeps_them_in_its_code_span(tmp_path, 
     assert "`  A  `" in rendered and "| `A` |" in rendered
 
 
+def test_a_quote_stays_a_quote_and_an_all_space_value_is_not_padded(tmp_path, evidence_root):
+    table = load(tmp_path, "rows:\n")
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", 'a"b\\c'), entry("platform", "  ")])
+    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
+    assert '`a"b\\\\c`' in rendered
+    assert "| `  ` |" in rendered
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,
@@ -847,8 +855,18 @@ rows:
     match: {slot: platform, value: Revio}
 """,
         "'revio'",
-        "must start with 'platform.'",
+        "must be 'platform.<slug>'",
     )
+    for bad in ('"platform."', '"platform. "', '"platform.re\\nvio"'):
+        refuses(
+            tmp_path,
+            f"""
+rows:
+  - id: {bad}
+    match: {{slot: platform, value: Revio}}
+""",
+            "non-blank slug",
+        )
 
 
 def test_an_authored_row_must_say_what_it_declares(tmp_path):
@@ -868,12 +886,23 @@ rows:
 
 def test_every_empty_spelling_of_rows_can_be_seeded(tmp_path, evidence_root):
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
-    for spelling in ("rows:\n", "rows: []\n", "rows: null\n", "rows: ~\n", "rows: []  # awaiting evidence\n"):
+    spellings = (
+        "rows:\n",
+        "rows: []\n",
+        "rows: null\n",
+        "rows: ~\n",
+        "rows: []  # awaiting evidence\n",
+        "rows: [\n]\n",
+    )
+    for spelling in spellings:
         table_path = tmp_path / "map.yaml"
         table_path.write_text(spelling)
         assert seed(table_path, evidence_root).rows_added == ("platform.revio",), spelling
         assert len(load_value_map(table_path).rows) == 1
-    assert "# awaiting evidence" in table_path.read_text(), "the comment survives the rewrite"
+        if "#" in spelling:
+            assert table_path.read_text().startswith("rows:  # awaiting evidence\n"), "the comment survives the rewrite"
+        else:
+            assert table_path.read_text().startswith("rows:\n"), spelling
 
 
 def test_the_text_of_an_empty_array_is_a_scalar_not_a_list_cell():

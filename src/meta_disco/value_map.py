@@ -96,9 +96,6 @@ _WHERE = "value map"
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
 _ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
-# Every spelling of an empty `rows` the loader accepts — an empty flow list or a YAML
-# null — with any trailing comment kept.
-_EMPTY_ROWS = re.compile(r"^rows:[ \t]*(?:\[[ \t]*\]|~|null|Null|NULL)?[ \t]*(?P<comment>#.*)?$", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -314,9 +311,11 @@ def _row(node: yaml.Node, n: int) -> Row:
     if "match" not in entries:
         raise ValueError(f"{at}: missing match")
     slot, value, alternates = _match(entries["match"], at)
-    if not id.startswith(f"{slot}."):
+    prefix = f"{slot}."
+    if not id.startswith(prefix) or not id[len(prefix) :].strip() or "\n" in id or "\r" in id:
         raise ValueError(
-            f"{at}: id must start with {slot + '.'!r} — ids are `<slot>.<slug>`, which keeps them apart from rule ids"
+            f"{at}: id must be {prefix + '<slug>'!r} on one line, with a non-blank slug — "
+            "the slot prefix is what keeps row ids apart from rule ids"
         )
     scope = _scope(entries["scope"], at) if "scope" in entries else None
     reason = _reason(entries["reason"], at) if "reason" in entries else None
@@ -501,9 +500,12 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         return SeedResult(len(paths), lines_scanned, ())
     ids = {row.id for row in table.rows}
     if not table.rows:
-        # `rows: []` and `rows: null` load as an empty table, but a block item cannot
-        # follow either, so the empty value is spelled as the bare key before appending.
-        text = _EMPTY_ROWS.sub(lambda m: "rows:" + (f"  {m['comment']}" if m["comment"] else ""), text)
+        # `rows: []`, `rows: null` and their multi-line spellings load as an empty table,
+        # but a block item cannot follow any of them, so the empty value is cut out by
+        # its source marks, leaving the bare key (and any comment after the value).
+        start, end = _empty_rows_span(text)
+        after = text[end:].lstrip(" \t")
+        text = text[:start].rstrip(" \t") + ("  " if after.startswith("#") else "") + after
     indent = _row_indent(text)
     added: list[str] = []
     block = []
@@ -536,6 +538,13 @@ def _generation_name(root: Path, path: Path) -> str:
         return path.parent.relative_to(root).as_posix()
     except ValueError:
         return path.parent.as_posix()
+
+
+def _empty_rows_span(text: str) -> tuple[int, int]:
+    """The character span of the empty ``rows`` value in ``text``, whatever spelling it took (``[]``, ``null``, ``[\n]``)."""
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    rows_node = _mapping(root, _WHERE)["rows"]
+    return rows_node.start_mark.index, rows_node.end_mark.index
 
 
 def _row_indent(text: str) -> str:
@@ -651,17 +660,30 @@ def _code(raw_value: str) -> str:
     """A raw value as a markdown code span, every control character spelled out and any backtick run contained.
 
     Evidence keeps a raw value verbatim, so it may hold a line break, a NUL or a backtick.
-    The JSON escape spells every control character (``\\n``, ``\\u0000``), which keeps two
-    values differing only in one distinct to the eye; the span's delimiter is one backtick
+    Control characters and backslashes are spelled as escapes (``\\n``, ``\\u0000``), which
+    keeps two values differing only in one distinct to the eye, while a quote stays a quote; the span's delimiter is one backtick
     longer than the longest run inside, padded where the value begins or ends with a
     backtick or a space — CommonMark strips one space from each end of a span, so the
     padding is what it strips and the value's own boundary spaces survive.
     """
-    text = json.dumps(raw_value, ensure_ascii=False)[1:-1]
+    text = "".join(_visible_char(c) for c in raw_value)
     fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
-    if text[:1] in ("`", " ") or text[-1:] in ("`", " "):
+    # CommonMark strips one space from each end only when both ends are spaces and the
+    # content is not all spaces, so an all-space value needs no padding and gets none.
+    if text[:1] == "`" or text[-1:] == "`" or (text[:1] == " " and text[-1:] == " " and text.strip()):
         text = f" {text} "
     return f"{fence}{text}{fence}"
+
+
+_NAMED_ESCAPES = {"\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _visible_char(c: str) -> str:
+    if c in _NAMED_ESCAPES:
+        return _NAMED_ESCAPES[c]
+    if ord(c) < 0x20 or ord(c) == 0x7F:
+        return f"\\u{ord(c):04x}"
+    return c
 
 
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
