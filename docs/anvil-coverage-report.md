@@ -252,5 +252,5 @@ Processed **708,088** files.
 | `WGS` | 2,540 | 0.4% | .bam (2,540) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. Only BAM/CRAM (via `@PG` programs and file size heuristics) and filename patterns can determine assay. The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. Only BAM/CRAM (via `@PG` programs and, for long-read platforms, the resolved modality) and filename patterns can determine assay; no rule reads file size (#430). The high not-classified rate is expected.
 

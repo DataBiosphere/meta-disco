@@ -912,28 +912,23 @@ The [HPRC Data Explorer catalog](https://github.com/human-pangenomics/hprc-data-
 
 ## Appendix A: Rule Statistics
 
-All rules are defined in `src/meta_disco/rules/unified_rules.yaml`.
+All rules are defined in `src/meta_disco/rules/unified_rules.yaml`. The counts below are
+by the rule's `scope` — the kind of evidence it reads — as the loader reports them, so
+they describe the file as it is rather than as it was last summarised. #430 cut the set
+from 129 rules to 59, deleting every rule that fired on no file in either
+catalog; every rule left fires on something in the data.
 
-| Category                 | Rule Count |
-| ------------------------ | ---------- |
-| Alignment (BAM/CRAM)     | 18         |
-| VCF variant callers      | 25         |
-| FASTQ platform detection | 15         |
-| Header/program rules     | 15         |
-| Reference detection      | 12         |
-| BED patterns             | 7          |
-| Image files              | 5          |
-| File size heuristics     | 8          |
-| Index/skip rules         | 5          |
-| Single-cell formats      | 4          |
-| Signal tracks (BigWig)   | 4          |
-| Dataset context          | 4          |
-| Intervals (targets)      | 3          |
-| Auxiliary (PLINK/IDAT)   | 4          |
-| Text/log/checksum        | 4          |
-| Archive files            | 2          |
-| Other                    | 12         |
-| **Total**                | **147**    |
+| Scope                        | Rule Count |
+| ---------------------------- | ---------- |
+| extension (tier 1–2)         |         14 |
+| filename pattern (tier 2)    |         20 |
+| BAM/CRAM header (tier 3)     |          9 |
+| VCF header (tier 3)          |          8 |
+| FASTQ read name (tier 3)     |          8 |
+| **Total**                    | **59** |
+
+Beside the rules: 3 post-hoc assay rules (`rnaseq_program`, `rnaseq_modality`, `wgs_longread`) and
+6 Python validators the header rules call into. No rule or assay rule reads file size.
 
 ---
 

@@ -38,9 +38,10 @@ DIMENSIONS = [
         "assay_type",
         "Assay Type",
         "**Note**: Like platform, assay type is inherently unknowable for most "
-        "derived formats. Only BAM/CRAM (via `@PG` programs and file size "
-        "heuristics) and filename patterns can determine assay. The high "
-        "not-classified rate is expected.",
+        "derived formats. Only BAM/CRAM (via `@PG` programs and, for long-read "
+        "platforms, the resolved modality) and filename patterns can determine "
+        "assay; no rule reads file size (#430). The high not-classified rate is "
+        "expected.",
     ),
 ]
 
