@@ -521,6 +521,34 @@ class TestLoadClassifications:
         with pytest.raises(ValueError, match=r"file_id 'fid-dup' is carried by more than one.*'two\.bam'"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
+    def test_a_matched_parent_with_no_row_says_so_in_the_evidence(self, tmp_path):
+        """A parent with no classification row is told apart from one that said nothing.
+
+        A `.txt.gz` under a `.tbi` is written by the catch-all, after this producer, so
+        it has no row here. The index still inherits nothing, but its evidence names
+        the absent row rather than claiming the parent had no value.
+        """
+        txt = _file("notes.txt.gz", ".txt.gz", "c" * 32, "e3")
+        index = _file("notes.txt.gz.tbi", ".tbi", "b" * 32, "e2")
+        output = run_index_producer(tmp_path, [txt, index])
+        [row] = [r for r in output["classifications"] if r["file_name"] == "notes.txt.gz.tbi"]
+        assert row["derived_from"]["parent_file"] == "notes.txt.gz"
+        for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
+            entry = row["classifications"][fld]
+            assert field_status(row["classifications"], fld) == NOT_CLASSIFIED
+            assert entry["evidence"][0]["reason"] == "No classification row for parent file notes.txt.gz"
+
+    def test_a_parent_row_lacking_a_value_still_says_had_no_value(self, tmp_path):
+        parent = _file("sample.bam", ".bam", "a" * 32, "e1")
+        index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
+        cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
+        cls["classifications"]["platform"] = build_field_entry(NOT_CLASSIFIED)
+        output = run_index_producer(tmp_path, [parent, index], [cls])
+        [row] = [r for r in output["classifications"] if r["file_name"] == "sample.bam.bai"]
+        assert row["classifications"]["platform"]["evidence"][0]["reason"] == (
+            "Parent file sample.bam had no value for platform"
+        )
+
     def test_a_key_two_input_records_carry_is_refused(self, tmp_path):
         """A repeated input key is refused before any parent is joined.
 
@@ -898,7 +926,8 @@ class TestLoadClassifications:
         propagate_to_index_files(metadata_file, [empty_cls], output_file)
         with output_file.open() as f:
             output = json.load(f)
-        # Parent filename matched but md5 not in classifications → not_classified
+        # Parent filename matched but its key is in no classification file → not_classified,
+        # and the evidence says the row was absent, not that the parent had no value.
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         # `data_type` does not depend on the parent being classified — the extension
@@ -907,7 +936,7 @@ class TestLoadClassifications:
         assert field_value(cls, "data_type") == "index"
         for fld in ["data_modality", "platform", "reference_assembly", "assay_type"]:
             assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
-        assert cls["data_modality"]["evidence"][0]["reason"].startswith("Parent file")
+        assert cls["data_modality"]["evidence"][0]["reason"] == "No classification row for parent file sample.bam"
 
     def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
         """Two files sharing the name an index points at: no parent is chosen (#438)."""

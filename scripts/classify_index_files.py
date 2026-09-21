@@ -471,7 +471,15 @@ def propagate_to_index_files(
     # extension says what they are, even when nothing says what they are of (#438).
     declined: list[tuple[dict, str, str]] = []
     stats = defaultdict(
-        lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0, "with_modality": 0, "with_ref": 0}
+        lambda: {
+            "total": 0,
+            "matched": 0,
+            "no_parent_row": 0,
+            "unmatched": 0,
+            "ambiguous": 0,
+            "with_modality": 0,
+            "with_ref": 0,
+        }
     )
     nc = NOT_CLASSIFIED
     # Labels field_label() returns for a field that is *not* classified. They are
@@ -553,7 +561,15 @@ def propagate_to_index_files(
             # AnVIL a checksum is not an identity (see `load_classifications`). A
             # drifted key on the parent would match nothing and the index would inherit
             # nothing, silently, so `input_key_value` raises on one.
-            parent_class = classifications.get(input_key_value(parent, key, "find the parent's classification"), {})
+            parent_row = classifications.get(input_key_value(parent, key, "find the parent's classification"))
+            # A matched parent with no row is not a parent that said nothing: a parent
+            # only the catch-all writes (a `.txt.gz` under a `.tbi`) has no Phase 1 row
+            # when this runs. The evidence names that, and the tally counts it, so the
+            # two cannot be read as one.
+            parent_row_found = parent_row is not None
+            parent_class: dict[str, Any] = parent_row if parent_row is not None else {}
+            if not parent_row_found:
+                stats[index_ext]["no_parent_row"] += 1
 
             result = {
                 # The raw input record this row is about; the output is built from it.
@@ -566,6 +582,7 @@ def propagate_to_index_files(
                 "index_extension": index_ext,
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
+                "parent_row_found": parent_row_found,
                 "data_modality": parent_class.get("data_modality") or nc,
                 "assay_type": parent_class.get("assay_type") or nc,
                 "platform": parent_class.get("platform") or nc,
@@ -603,6 +620,7 @@ def propagate_to_index_files(
             print(f"\n{ext}:")
             print(f"  Total:              {s['total']:>7,}")
             print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
+            print(f"    parent has no row: {s['no_parent_row']:>6,}")
             print(f"  Unmatched:          {s['unmatched']:>7,} ({unmatch_pct:.1f}%)")
             print(f"  Ambiguous parent:   {s['ambiguous']:>7,} ({amb_pct:.1f}%)")
             print(f"  With data_modality: {s['with_modality']:>7,} ({mod_pct:.1f}%)")
@@ -659,8 +677,12 @@ def propagate_to_index_files(
 
     # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
 
-    def inherited_evidence(field_name, field_val, parent):
+    def inherited_evidence(field_name, field_val, parent, parent_row_found=True):
         """Build evidence entry for an inherited classification field.
+
+        ``parent_row_found`` is False when the matched parent has no classification
+        row in the files this producer read — a parent a later phase writes — and the
+        not_classified reason then says so, rather than that the parent had no value.
 
         Hand-built rather than routed through ``make_claim``, for two reasons.
         These entries carry no tier — an index file has exactly one per dimension
@@ -688,6 +710,8 @@ def propagate_to_index_files(
             reason = f"Parent file {parent} marks {field_name} not applicable"
         elif status == CONFLICT:
             reason = f"Parent file {parent} had conflicting evidence for {field_name}"
+        elif not parent_row_found:
+            reason = f"No classification row for parent file {parent}"
         else:
             reason = f"Parent file {parent} had no value for {field_name}"
         return [
@@ -718,7 +742,7 @@ def propagate_to_index_files(
                 classifications[fld] = index_data_type_entry(r["index_extension"])
                 continue
             label = r.get(fld)
-            evidence = inherited_evidence(fld, label, parent)
+            evidence = inherited_evidence(fld, label, parent, r["parent_row_found"])
             status = _inherited_status(label)
             classifications[fld] = build_field_entry(
                 None if status == CONFLICT else label, status=status, evidence=evidence, detail=r["detail"].get(fld)
