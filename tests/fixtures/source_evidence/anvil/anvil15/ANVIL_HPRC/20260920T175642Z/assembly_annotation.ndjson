@@ -1,8 +1,0 @@
-{"evidence_file":{"source":{"repository":"anvil","dataset":"ANVIL_HPRC","table":"assembly_annotation","url":"https://service.explore.anvilproject.org"},"source_type":"repository_metadata","source_version":"anvil15","source_key":"drs_uri","target":{"system":"anvil","dataset":"ANVIL_HPRC","version":"anvil15"},"target_key":"drs_uri","fetched_at":"2026-09-03T21:45:12.469780"}}
-{"field":"data_type","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/0","raw_value":"annotation"}
-{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/1","raw_value":"chm13","column":"mat_chm13_cat_genes"}
-{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/2","raw_value":"chm13","column":"pat_chm13_cat_genes"}
-{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/3","raw_value":"hg38","column":"mat_hg38_cat_genes"}
-{"field":"reference_assembly","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/4","raw_value":"hg38","column":"pat_hg38_cat_genes"}
-{"field":"data_type","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/5","raw_value":"repeat_masker","column":"mat_repeat_masker"}
-{"field":"data_type","target_key_value":"drs://fixture/ANVIL_HPRC/assembly_annotation/6","raw_value":"repeat_masker","column":"pat_repeat_masker"}

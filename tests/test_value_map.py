@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -45,7 +46,7 @@ from meta_disco.value_map import (
 from tests.test_source_evidence import evidence_file_envelope
 
 REAL_EVIDENCE_ROOT = Path("data/source_evidence")
-FIXTURE_EVIDENCE_ROOT = Path("tests/fixtures/source_evidence")
+HPRC_VALUES = Path("tests/fixtures/hprc_evidence_values.yaml")
 HPRC_DATASETS = ["AnVIL_HPRC_R2", "ANVIL_HPRC"]
 STAMP = "20260920T175642Z"
 HPRC_GENERATIONS = [generation_dir(REAL_EVIDENCE_ROOT, "anvil", "anvil15", d, STAMP) for d in HPRC_DATASETS]
@@ -103,6 +104,19 @@ def write_generation(root: Path, dataset: str, table: str, entries: list[Evidenc
 @pytest.fixture
 def evidence_root(tmp_path: Path) -> Path:
     return tmp_path / "evidence"
+
+
+@pytest.fixture
+def hprc_fixture_root(tmp_path: Path) -> Path:
+    """The HPRC evidence rebuilt from the committed value list: one file per table, lines in the listed order."""
+    root = tmp_path / "hprc_evidence"
+    by_table: dict[tuple[str, str], list[EvidenceEntry]] = {}
+    for n, v in enumerate(yaml.safe_load(HPRC_VALUES.read_text())):
+        cell = entry(v["slot"], v["raw_value"], f"drs://fixture/{n}", v["dataset"], v["table"], v["column"])
+        by_table.setdefault((v["dataset"], v["table"]), []).append(cell)
+    for (dataset, table), cells in by_table.items():
+        write_generation(root, dataset, table, cells)
+    return root
 
 
 @pytest.fixture
@@ -535,8 +549,8 @@ def assert_hprc_seed(empty_table: Path, evidence_root: Path) -> None:
     """43 distinct raw strings on that run; 41 keys, because ``Revio``/``REVIO`` and ``ILLUMINA``/``illumina``
     normalize alike and are one row each with the other spelling as an alternate — two rows would fail AC 5
     (amended on the issue). The seeded rows are a function of the distinct values, not of how often each
-    occurs, so the committed fixture — one line per distinct value per table, in file order — mints the
-    same rows as the real generation."""
+    occurs, so the committed value list — one entry per distinct value per table, in file order, written
+    back out as evidence files by the ``hprc_fixture_root`` fixture — mints the same rows as the real generation."""
     result = seed(empty_table, evidence_root, datasets=HPRC_DATASETS)
     assert len(result.rows_added) == 41
     table = load_value_map(empty_table)
@@ -547,8 +561,8 @@ def assert_hprc_seed(empty_table: Path, evidence_root: Path) -> None:
     assert {row.id for row in table.rows} >= {"platform.revio", "platform.illumina", "reference_assembly.unaligned"}
 
 
-def test_ac21_seeding_an_empty_table_from_the_hprc_evidence_fixture(empty_table):
-    assert_hprc_seed(empty_table, FIXTURE_EVIDENCE_ROOT)
+def test_ac21_seeding_an_empty_table_from_the_hprc_evidence_fixture(empty_table, hprc_fixture_root):
+    assert_hprc_seed(empty_table, hprc_fixture_root)
 
 
 @pytest.mark.skipif(
@@ -963,10 +977,10 @@ SEEDED_IN_BUNDLED_TABLE = [
 ]
 
 
-def test_the_bundled_table_covers_every_hprc_fixture_value():
-    """Every fixture line selects a row of the bundled table, and the ones it leaves queued are exactly the
+def test_the_bundled_table_covers_every_hprc_fixture_value(hprc_fixture_root):
+    """Every fixture value selects a row of the bundled table, and the ones it leaves queued are exactly the
     seven seeded values — so a deleted or misspelled authored row would surface here as a new queue entry."""
-    queued = review_queue(FIXTURE_EVIDENCE_ROOT, load_value_map(), datasets=HPRC_DATASETS)
+    queued = review_queue(hprc_fixture_root, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
     assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE
     assert len(queued) == 16
