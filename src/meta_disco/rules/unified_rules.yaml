@@ -533,7 +533,7 @@ rules:
     scope: filename
     when:
       format: FASTA
-      filename_pattern: "(?i)(^|[._-])(assembly|hap[12])|[._](pat|mat)(ernal)?[._]"
+      filename_pattern: "(?i)(^|[._-])(assembly(?!\\d)|hap[12])|[._](pat|mat)(ernal)?[._]"
     then:
       data_modality: genomic
       data_type: assembly

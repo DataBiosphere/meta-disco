@@ -802,6 +802,27 @@ class TestFastqFiles:
         assert result.status_of("data_modality") == NOT_CLASSIFIED
 
 
+class TestAssemblyTokenIsNotTheGatkReferenceName:
+    """`assembly` followed by digits is GATK's name for a reference, not a de novo signal.
+
+    `Homo_sapiens_assembly38.fasta` is the GRCh38 reference in the GATK resource bundle,
+    byte-identical to `grch38.fasta`. `fasta_assembly_filename` read `_assembly38` as
+    "assembly" and asserted a de novo assembly with reference not_applicable — on the
+    reference genome itself, and its `.fai` inherited that (#430, #485). A numeric
+    suffix now excludes the match. Nothing in the name says *which* reference, so the
+    file lands on unknown; the content read in #382 is what would say GRCh38."""
+
+    def test_the_gatk_reference_name_is_not_called_an_assembly(self, engine):
+        result = engine.classify_extended(FileInfo.from_filename("Homo_sapiens_assembly38.fasta"))
+        assert result.data_type == "sequence"
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+
+    def test_a_real_assembly_name_still_is(self, engine):
+        result = engine.classify_extended(FileInfo.from_filename("HG00642.f1_assembly_v2.fa.gz"))
+        assert result.data_type == "assembly"
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+
+
 class TestPeakNamedBedFallback:
     """`intervals_fallback` declines a peak-named `.bed` rather than calling it genomic.
 
