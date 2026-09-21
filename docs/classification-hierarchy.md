@@ -26,7 +26,7 @@ file_format (extension)
 - `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
-- `RNA-seq` ← STAR in @PG (`rnaseq_program`), or any transcriptomic modality (`rnaseq_modality`)
+- `RNA-seq` ← STAR in @PG (`program_star` declares it), or any transcriptomic modality (`rnaseq_modality`)
 - `WGS` is no longer inferred: `hifi` names a chemistry, which says neither assay nor modality, and a long-read platform is not an assay (#430)
 
 **platform**:
@@ -70,8 +70,7 @@ file_format (extension)
 **data_type**: `reads`
 
 **data_modality**:
-- `genomic` ← PacBio/ONT read names (but see issue #37)
-- `not_classified` ← **default when no signal** (issue #35, merged)
+- `not_classified` ← always: a read name says the platform, not what was sequenced (issue #35; the PacBio/ONT rules set `platform` only)
 
 **assay_type**: _(not determined — a read name does not say what was sequenced)_
 
@@ -82,7 +81,7 @@ file_format (extension)
 
 **reference_assembly**: `not_applicable` (raw reads, not aligned)
 
-**Coverage**: Platform detection is strong. Modality is a known gap — FASTQ format has no assay metadata. Illumina FASTQs without filename keywords get `not_classified` for modality. PacBio/ONT FASTQs get `genomic` from platform rules (but see issue #37).
+**Coverage**: Platform detection is strong. Modality is a known gap — FASTQ format has no assay metadata, so every FASTQ is `not_classified` for modality (the PacBio/ONT rules set `platform` only; #430).
 
 ---
 
@@ -155,7 +154,7 @@ not for being unanchored.
 
 **data_modality**:
 - `genomic` ← regions.bed pattern, fallback default
-- `transcriptomic.bulk` ← filename (expression, TPM, leafcutter, TSS)
+- `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
 - `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
 
@@ -196,8 +195,7 @@ RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
 
 **data_type**: `raw_signal`
 
-**data_modality**:
-- `genomic` ← extension default (but see issue #37)
+**data_modality**: _(not classified — the container says the platform, not what was sequenced; issue #37)_
 
 **platform**: `ONT` (always)
 
@@ -224,7 +222,7 @@ RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
 | Gap | Impact | Issue |
 |-----|--------|-------|
 | FASTQ modality defaults to not_classified | ~21K Illumina FASTQ files with unknown modality | #35 (merged) |
-| PacBio/ONT assume genomic modality | Incorrect for IsoSeq/direct RNA | #37 |
+| PacBio/ONT no longer assume a genomic modality (#430); nothing supplies one for raw reads or signal | Iso-Seq/direct RNA are not miscalled, but genomes are not called either | #37 |
 | Mouse genome (GRCm39) not supported | 220 IGVF files unclassified | #15 |
 | No dataset-level context for FASTQ | snRNA-seq indistinguishable from WGS | #34 |
 | FASTA range request gets 1 contig for large files | Some references classified as sequence | — |

@@ -616,9 +616,9 @@ def _assay_condition_violations(rules):
 def test_assay_rules_name_only_rules_that_exist():
     """A `matched_rules_any` entry must name a rule the file still declares (#430).
 
-    Deleting five program rules left `rnaseq_program` listing all five; each entry was
-    a branch that could never be satisfied, and nothing said so. The rule ids are the
-    join between the two documents, and this is the drift check for it.
+    Deleting five program rules left the then `rnaseq_program` listing all five; each
+    entry was a branch that could never be satisfied, and nothing said so. The rule ids
+    are the join between the two documents, and this is the drift check for it.
     """
     rules = get_unified_rules()
     ids = {rule.id for rule in rules.rules}

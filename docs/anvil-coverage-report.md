@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-20 22:55:35**
+Classification run: **2026-09-21 01:16:01**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -22,7 +22,7 @@ Processed **708,088** files.
 
 | Dimension | Classified | Not Classified |
 |---|---:|---:|
-| **Data Modality** | 636,066 (89.8%) | 72,022 (10.2%) |
+| **Data Modality** | 634,826 (89.7%) | 73,262 (10.3%) |
 | **Data Type** | 683,602 (96.5%) | 24,486 (3.5%) |
 | **Reference Assembly** | 511,950 (72.3%) | 196,138 (27.7%) |
 | **Platform** | 130,979 (18.5%) | 577,109 (81.5%) |
@@ -34,8 +34,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 636,066 | 89.8% |
-| **Not classified** | 72,022 | 10.2% |
+| **Classified** | 634,826 | 89.7% |
+| **Not classified** | 73,262 | 10.3% |
 
 ### What's not classified?
 
@@ -47,11 +47,11 @@ Processed **708,088** files.
 | .fast5 | 12,509 | No rule determined a value for data_modality |
 | .txt | 4,650 | No rule determined a value for data_modality |
 | .bw | 2,520 | No rule determined a value for data_modality |
+| .bam | 1,585 | No rule determined a value for data_modality |
 | .tsv | 923 | No rule determined a value for data_modality |
 | .crai | 696 | No parent to inherit data_modality from: more than one file in this dataset carries that parent name, matched case-insensitively |
 | .csi | 676 | No parent to inherit data_modality from: more than one file in this dataset carries that parent name, matched case-insensitively |
 | .bigwig | 462 | No rule determined a value for data_modality |
-| .bam | 345 | No rule determined a value for data_modality |
 | .sam | 192 | No rule determined a value for data_modality |
 | .cram | 68 | No rule determined a value for data_modality |
 | .vcf | 23 | no VCF header lines (no '#' lines) in the read head |
@@ -62,8 +62,8 @@ Processed **708,088** files.
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
-| `genomic` | 572,220 | 80.8% | .vcf (201,645)<br>.tbi (155,707)<br>(none) (124,472)<br>.csi (40,510)<br>.bed (11,483)<br>.cram (10,555)<br>.crai (9,621)<br>.bam (4,100)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bai (1,264)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
-| `not_classified` | 72,022 | 10.2% | .fastq (21,270)<br>(none) (13,827)<br>.tbi (13,812)<br>.fast5 (12,509)<br>.txt (4,650)<br>.bw (2,520)<br>.tsv (923)<br>.crai (696)<br>.csi (676)<br>.bigwig (462)<br>.bam (345)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.bai (13)<br>.pod5 (11)<br>.pbi (7) |
+| `genomic` | 570,980 | 80.6% | .vcf (201,645)<br>.tbi (155,707)<br>(none) (124,472)<br>.csi (40,510)<br>.bed (11,483)<br>.cram (10,555)<br>.crai (9,621)<br>.bam (2,860)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bai (1,264)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `not_classified` | 73,262 | 10.3% | .fastq (21,270)<br>(none) (13,827)<br>.tbi (13,812)<br>.fast5 (12,509)<br>.txt (4,650)<br>.bw (2,520)<br>.bam (1,585)<br>.tsv (923)<br>.crai (696)<br>.csi (676)<br>.bigwig (462)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.bai (13)<br>.pod5 (11)<br>.pbi (7) |
 | `not_applicable` | 58,492 | 8.3% | .txt (37,548)<br>.md5 (14,233)<br>.log (3,637)<br>.png (3,074) |
 | `transcriptomic.bulk` | 4,752 | 0.7% | .bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.txt (281)<br>.bw (16)<br>.bed (12)<br>.tbi (12)<br>.csv (3) |
 | `transcriptomic.single_cell` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |

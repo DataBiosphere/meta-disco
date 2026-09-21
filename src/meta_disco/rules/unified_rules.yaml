@@ -1093,13 +1093,6 @@ validators:
 # Priority-ordered rules for inferring assay type from other signals
 
 assay_type_rules:
-  - id: rnaseq_program
-    priority: 100
-    conditions:
-      matched_rules_any:
-        - program_star
-    assay_type: RNA-seq
-
   - id: rnaseq_modality
     priority: 95
     conditions:

@@ -572,9 +572,9 @@ class ExtendedClassificationResult:
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
         ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
         ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
-        assay contributes the id of the assay rule that matched — ``rnaseq_modality``,
-        ``rnaseq_program`` — which live in the file's
-        ``assay_type_rules`` document, not its ``rules`` list; the one shared
+        assay contributes the id of the assay rule that matched — ``rnaseq_modality``
+        — which lives in the file's ``assay_type_rules`` document, not its ``rules``
+        list; the one shared
         ``infer_assay_type`` id those used to emit is gone (#430).
 
         So a caller must not assume an ID here names a rule in the ``rules`` list of

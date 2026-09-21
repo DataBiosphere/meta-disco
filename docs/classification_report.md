@@ -84,7 +84,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_star_aligner`, `salmon_quant`, `idat_methylation`); where none did, inferred post hoc from a STAR `@PG` match or a transcriptomic modality (`rnaseq_program`, `rnaseq_modality`). Nothing infers `WGS` or `WES` (#430).
+The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_star_aligner`, `salmon_quant`, `idat_methylation`); where none did, inferred post hoc from a transcriptomic modality (`rnaseq_modality`). Nothing infers `WGS` or `WES` (#430).
 
 ```
 assay_type
@@ -352,7 +352,7 @@ Rules are evaluated in order of confidence, with higher-confidence rules taking 
 
 1. **Definitive signals** (95-98%): Explicit tags like `PL:PACBIO`, contig lengths, `##source=HaplotypeCaller`
 2. **Strong indicators** (85-90%): Aligner programs like STAR (RNA-seq), BWA (DNA)
-3. **Pattern matches** (70-85%): Filename patterns like `_RNA_`, `_WGS_`, `.hg38.`
+3. **Pattern matches** (70-85%): Filename patterns like `.flnc.`, `Aligned.sortedByCoord`, `.hg38.`
 4. **Fallback defaults** (50%): Extension-based defaults when no other signal
 
 ---
@@ -908,7 +908,7 @@ every image extension has a rule.
 | FASTQ read name (tier 3)     |          8 |
 | **Total**                    | **59** |
 
-Beside the rules: 2 post-hoc assay rules (`rnaseq_program`, `rnaseq_modality`) and
+Beside the rules: 1 post-hoc assay rule (`rnaseq_modality`) and
 6 Python validators the header rules call into. No rule or assay rule reads file size.
 
 ---
