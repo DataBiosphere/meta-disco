@@ -696,6 +696,14 @@ def test_a_raw_value_with_backticks_or_a_nul_renders_as_one_code_span(tmp_path, 
     assert "\x00" not in rendered
 
 
+def test_a_raw_value_with_boundary_spaces_keeps_them_in_its_code_span(tmp_path, evidence_root):
+    """CommonMark strips one space from each end of a span, so a padded span is what shows ` A ` as itself."""
+    table = load(tmp_path, "rows:\n")
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", " A "), entry("platform", "A")])
+    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
+    assert "`  A  `" in rendered and "| `A` |" in rendered
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,

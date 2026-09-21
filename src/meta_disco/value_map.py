@@ -653,12 +653,13 @@ def _code(raw_value: str) -> str:
     Evidence keeps a raw value verbatim, so it may hold a line break, a NUL or a backtick.
     The JSON escape spells every control character (``\\n``, ``\\u0000``), which keeps two
     values differing only in one distinct to the eye; the span's delimiter is one backtick
-    longer than the longest run inside, padded where the value begins or ends with one,
-    which is how CommonMark lets a code span carry backticks.
+    longer than the longest run inside, padded where the value begins or ends with a
+    backtick or a space — CommonMark strips one space from each end of a span, so the
+    padding is what it strips and the value's own boundary spaces survive.
     """
     text = json.dumps(raw_value, ensure_ascii=False)[1:-1]
     fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
-    if text.startswith("`") or text.endswith("`"):
+    if text[:1] in ("`", " ") or text[-1:] in ("`", " "):
         text = f" {text} "
     return f"{fence}{text}{fence}"
 
