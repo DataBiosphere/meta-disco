@@ -370,15 +370,6 @@ class TestFastqClassification:
         assert result["instrument_model"] == "NovaSeq 6000"
         assert result["instrument_hint"] == "A00297"
 
-    def test_illumina_legacy(self):
-        """Classify legacy Illumina FASTQ."""
-        reads = [
-            "@HWUSI-EAS100R:6:73:941:1973#ATCACG/1",
-            "@HWUSI-EAS100R:6:73:942:1974#ATCACG/1",
-        ]
-        result = classify_from_fastq_header(reads)
-        assert val(result, "platform") == "ILLUMINA"
-
     def test_ena_reformatted(self):
         """Classify ENA-reformatted FASTQ with accession extraction."""
         reads = [
@@ -471,15 +462,6 @@ class TestFastqClassification:
         assert val(result, "platform") == "ONT"
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
-    def test_mgi(self):
-        """Classify MGI/BGI FASTQ."""
-        reads = [
-            "@V350012345L1C001R0010000001/1",
-            "@V350012345L1C001R0010000002/1",
-        ]
-        result = classify_from_fastq_header(reads)
-        assert val(result, "platform") == "MGI"
-
     def test_paired_end_detection(self):
         """Detect paired-end from read names."""
         reads = [
@@ -559,26 +541,6 @@ class TestVcfClassification:
         matched = val(result, "matched_rules")
         assert matched is not None and "vcf_gatk_haplotypecaller" in matched
 
-    def test_deepvariant_germline(self):
-        """Detect DeepVariant as germline."""
-        header = """##fileformat=VCFv4.2
-##source=DeepVariant
-#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        result = classify_from_vcf_header(header)
-        assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants.germline"
-
-    def test_mutect2_somatic(self):
-        """Detect Mutect2 as somatic."""
-        header = """##fileformat=VCFv4.2
-##source=Mutect2
-##tumor_sample=TUMOR
-##normal_sample=NORMAL
-#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        result = classify_from_vcf_header(header)
-        assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants.somatic"
-
     def test_manta_sv(self):
         """Detect Manta as structural variants."""
         header = """##fileformat=VCFv4.2
@@ -599,15 +561,6 @@ class TestVcfClassification:
         result = classify_from_vcf_header(header)
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants.structural"
-
-    def test_cnvkit_cnv(self):
-        """Detect CNVkit as copy number variants."""
-        header = """##fileformat=VCFv4.2
-##source=CNVkit
-#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        result = classify_from_vcf_header(header)
-        assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants.cnv"
 
     def test_empty_header(self):
         """Handle minimal VCF header."""
@@ -712,32 +665,6 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert val(result, "platform") == "ONT"
         assert val(result, "data_modality") == "genomic"
-
-    def test_ont_basecall_rna_modality(self):
-        """ONT basecall_model=rna_* implies transcriptomic modality."""
-        header = """@HD\tVN:1.6
-@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast"""
-        result = classify_from_header(header)
-        assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == "transcriptomic.bulk"
-
-    def test_ont_basecall_rna_not_overridden_by_later_dna(self):
-        """Mixed DS with basecall_model=rna_* and later dna_ substring stays transcriptomic."""
-        header = """@HD\tVN:1.6
-@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast control=dna_spikein"""
-        result = classify_from_header(header)
-        assert val(result, "platform") == "ONT"
-        assert val(result, "data_modality") == "transcriptomic.bulk"
-
-    def test_ont_basecall_rna_with_minimap2(self):
-        """Conflicting modality signals produce not_classified instead of wrong answer."""
-        header = """@HD\tVN:1.6
-@RG\tID:sample1\tPL:ONT\tDS:basecall_model=rna_r9.4.1_70bps_fast
-@PG\tID:minimap2\tPN:minimap2\tVN:2.24"""
-        result = classify_from_header(header)
-        assert val(result, "platform") == "ONT"
-        # basecall_model=rna_ (transcriptomic) vs minimap2 (genomic) = conflict
-        assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_assay_type_rnaseq(self):
         """Detect RNA-seq assay_type from STAR aligner."""

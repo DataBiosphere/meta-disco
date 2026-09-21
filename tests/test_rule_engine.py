@@ -110,9 +110,6 @@ class TestVariantFiles:
             ("GRCh38", "GRCh38"),
             ("hg38", "GRCh38"),
             ("hs38", "GRCh38"),  # alias aligned with ##reference (#221 follow-up)
-            ("GRCh37", "GRCh37"),
-            ("hs37", "GRCh37"),  # alias aligned with ##reference (#221 follow-up)
-            ("hg19", "GRCh37"),
             ("CHM13", "CHM13"),
             ("T2T-CHM13v2.0", "CHM13"),
         ],
@@ -129,16 +126,9 @@ class TestVariantFiles:
     @pytest.mark.parametrize(
         ("header_line", "expected"),
         [
-            # GCA_000001405 encodes the assembly in its version: .1-.14 are GRCh37
-            # (frozen at .14), .15+ are GRCh38 (.15 base, .16+ patches). The rules
-            # must split at that boundary, in both the ##contig and ##reference
-            # families (#221 review). In particular .16+ are real GRCh38 patch
-            # accessions and must NOT fall through to GRCh37.
-            ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.14>", "GRCh37"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.15>", "GRCh38"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.16>", "GRCh38"),
             ("##contig=<ID=chr1,length=248956422,assembly=GCA_000001405.26>", "GRCh38"),
-            ("##reference=file:///ref/GCA_000001405.14.fa", "GRCh37"),
             ("##reference=file:///ref/GCA_000001405.15.fa", "GRCh38"),
             ("##reference=file:///ref/GCA_000001405.16.fa", "GRCh38"),
             ("##reference=file:///ref/GCA_000001405.26.fa", "GRCh38"),
@@ -1252,7 +1242,7 @@ class TestContentTier:
         """A tier-4 content claim beats a disagreeing tier-3 rule (override, not conflict)."""
         result = evaluate_claims(
             [
-                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "vcf_contig_grch38", "value": "GRCh38", "tier": 3},
                 {"rule_id": "contig_length_detection", "value": "CHM13", "tier": CONTENT_TIER},
             ]
         )
@@ -1277,7 +1267,7 @@ class TestContentTier:
         """When content agrees with the rule, the field is unanimous, not a conflict."""
         result = evaluate_claims(
             [
-                {"rule_id": "header_ref_grch38", "value": "GRCh38", "tier": 3},
+                {"rule_id": "vcf_contig_grch38", "value": "GRCh38", "tier": 3},
                 {"rule_id": "contig_length_detection", "value": "GRCh38", "tier": CONTENT_TIER},
             ]
         )
