@@ -49,7 +49,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import os
 import re
 import sys
@@ -563,7 +562,7 @@ def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
     """
     if candidate not in taken:
         return candidate
-    digest = hashlib.sha1("\0".join(sorted(key)).encode("utf-8", "surrogatepass")).hexdigest()
+    digest = hashlib.sha1(repr(sorted(key)).encode()).hexdigest()
     for n in range(6, len(digest) + 1):
         if (id := f"{candidate}_{digest[:n]}") not in taken:
             return id
@@ -573,40 +572,15 @@ def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
 
 
 def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
-    inner = indent + "  "
-    match = f"slot: {slot}, value: {_yaml_value(found.value)}"
+    """One seeded row as YAML, emitted by PyYAML so every escape is the library's, indented under the others."""
+    match: dict = {"slot": slot, "value": found.value}
     if found.alternates:
-        match += f", alternates: [{', '.join(_yaml_value(a) for a in found.alternates)}]"
-    lines = [
-        f"{indent}- id: {_yaml_scalar(id)}",
-        f"{inner}match: {{{match}}}",
-        f"{inner}seeded_from: [{', '.join(_yaml_scalar(s) for s in found.seeded_from)}]",
-    ]
-    return "\n".join(lines) + "\n"
-
-
-def _yaml_scalar(text: str) -> str:
-    """``text`` as a YAML double-quoted scalar, readable where it can be and an escape where it cannot.
-
-    JSON's escapes are a subset of YAML's, so ``json.dumps`` does the quoting; what it leaves
-    verbatim (``ensure_ascii=False``) is then swept for anything non-printable — a lone
-    surrogate the NDJSON reader round-trips, a C1 control — and spelled ``\\uXXXX``, which
-    YAML reads back to the same code point and UTF-8 can write.
-    """
-    quoted = json.dumps(text, ensure_ascii=False)
-    return "".join(c if c.isprintable() or c == " " else _code_point_escape(c) for c in quoted)
-
-
-def _code_point_escape(c: str) -> str:
-    """``\\uXXXX`` up to U+FFFF and ``\\UXXXXXXXX`` above — YAML and the queue read both, and ``\\u`` takes
-    exactly four digits, so an astral code point in that form would be read back as another character."""
-    return f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}"
-
-
-def _yaml_value(value: str | list[str]) -> str:
-    if isinstance(value, list):
-        return "[" + ", ".join(_yaml_scalar(e) for e in value) + "]"
-    return _yaml_scalar(value)
+        match["alternates"] = found.alternates
+    row = {"id": id, "match": match, "seeded_from": found.seeded_from}
+    # ASCII-only output: PyYAML then escapes every non-ASCII and non-printable character
+    # itself, and what it writes reads back to the same string.
+    text = yaml.safe_dump([row], sort_keys=False, allow_unicode=False, default_flow_style=None, width=10**6)
+    return "".join(f"{indent}{line}\n" for line in text.splitlines())
 
 
 @dataclass(frozen=True)
@@ -670,48 +644,10 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
     return entries
 
 
-def _code(raw_value: str) -> str:
-    """A raw value as a markdown code span, every control character spelled out and any backtick run contained.
-
-    Evidence keeps a raw value verbatim, so it may hold a line break, a NUL or a backtick.
-    Non-printable characters and backslashes are spelled as escapes (``\\n``, ``\\u0085``), which
-    keeps two values differing only in one distinct to the eye, while a quote stays a quote; the span's delimiter is one backtick
-    longer than the longest run inside, padded where the value begins or ends with a
-    backtick or a space — CommonMark strips one space from each end of a span, so the
-    padding is what it strips and the value's own boundary spaces survive.
-    """
-    if raw_value == "":
-        # Two bare backticks are not an empty code span to CommonMark; the empty string is
-        # shown as the quoted empty scalar instead.
-        return '`""`'
-    text = "".join(_visible_char(c) for c in raw_value)
-    fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
-    # CommonMark strips one space from each end only when both ends are spaces and the
-    # content is not all spaces, so an all-space value needs no padding and gets none.
-    if text[:1] == "`" or text[-1:] == "`" or (text[:1] == " " and text[-1:] == " " and text.strip()):
-        text = f" {text} "
-    return f"{fence}{text}{fence}"
-
-
-_NAMED_ESCAPES = {"\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
-
-
-def _visible_char(c: str) -> str:
-    """One character as the span shows it: itself if printable, else a named or ``\\uXXXX`` escape.
-
-    ``str.isprintable`` is the test, so C1 controls, format and separator characters and
-    lone surrogates (which the NDJSON reader can round-trip and UTF-8 cannot write) are
-    all spelled out, not only the ASCII controls.
-    """
-    if c in _NAMED_ESCAPES:
-        return _NAMED_ESCAPES[c]
-    if c == " " or c.isprintable():
-        return c
-    return _code_point_escape(c)
-
-
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
-    """The queue as a markdown table; a raw value is a code span with its control characters spelled out."""
+    """The queue as a markdown table. A raw value is shown as its Python ``repr``: quoted, with every
+    non-printable character and backslash spelled out by the standard library, so an empty string, a value
+    with boundary spaces and one differing only in a control character each read as what they are."""
     lines = [
         "# Review queue: values whose selected row is not authored",
         "",
@@ -725,7 +661,7 @@ def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
                 [
                     f"{e.files:,}",
                     e.slot,
-                    _code(e.raw_value),
+                    repr(e.raw_value),
                     e.source,
                     e.dataset or "",
                     e.table or "",

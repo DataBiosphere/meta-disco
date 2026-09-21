@@ -673,64 +673,26 @@ rows:
     assert (listed.slot, listed.raw_value, listed.files, listed.row_id) == ("assay_type", "Hi-C", 3, "assay_type.hi_c")
 
 
-def test_a_raw_value_with_a_line_ending_stays_in_one_queue_row(tmp_path, evidence_root):
-    """Evidence keeps a raw value verbatim, line endings included; the queue shows them escaped and in one row."""
+def test_a_raw_value_is_shown_as_its_repr_whatever_it_holds(tmp_path, evidence_root):
+    """Evidence keeps a raw value verbatim — line endings, pipes, backticks, controls, an empty string — and the
+    queue shows each as Python spells it, one row each, with no raw line ending or control left in the file."""
     table = load(tmp_path, "rows:\n")
+    values = ["Sequel\r\nII", "a|b", "a`b", "x\x00y", " A ", "", "a\u0085b\ud800c \u00e9"]
     write_generation(
-        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Sequel\r\nII"), entry("platform", "a|b")]
+        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", v, f"drs://{n}") for n, v in enumerate(values)]
     )
     rendered = render_queue(review_queue(evidence_root, table), evidence_root)
     rows = [line for line in rendered.splitlines() if line.startswith("| 1 ")]
-    assert len(rows) == 2
-    assert "\r" not in rendered and "`Sequel\\r\\nII`" in rendered and "a\\|b" in rendered
-
-
-def test_a_raw_value_with_backticks_or_a_nul_renders_as_one_code_span(tmp_path, evidence_root):
-    table = load(tmp_path, "rows:\n")
-    write_generation(
-        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "a`b``c"), entry("platform", "x\x00y`")]
-    )
-    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
-    assert "```a`b``c```" in rendered
-    assert "`` x\\u0000y` ``" in rendered
-    assert "\x00" not in rendered
-
-
-def test_a_raw_value_with_boundary_spaces_keeps_them_in_its_code_span(tmp_path, evidence_root):
-    """CommonMark strips one space from each end of a span, so a padded span is what shows ` A ` as itself."""
-    table = load(tmp_path, "rows:\n")
-    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", " A "), entry("platform", "A")])
-    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
-    assert "`  A  `" in rendered and "| `A` |" in rendered
-
-
-def test_a_quote_stays_a_quote_and_an_all_space_value_is_not_padded(tmp_path, evidence_root):
-    table = load(tmp_path, "rows:\n")
-    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", 'a"b\\c'), entry("platform", "  ")])
-    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
-    assert '`a"b\\\\c`' in rendered
-    assert "| `  ` |" in rendered
-
-
-def test_every_non_printable_character_is_escaped_and_the_queue_stays_writable(tmp_path, evidence_root):
-    """A C1 control, a zero-width joiner and a lone surrogate all arrive through the NDJSON reader; the
-    rendered queue spells each out and can be written as UTF-8."""
-    table = load(tmp_path, "rows:\n")
-    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "a\u0085b\u200dc\ud800d é")])
-    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
-    assert "`a\\u0085b\\u200dc\\ud800d é`" in rendered
+    assert len(rows) == len(values)
+    for v in values:
+        assert repr(v).replace("|", "\\|") in rendered, repr(v)
+    assert "\r" not in rendered and "\x00" not in rendered and "\u0085" not in rendered
     (tmp_path / "queue.md").write_text(rendered, encoding="utf-8")
 
 
-def test_an_empty_raw_value_renders_as_the_quoted_empty_scalar(tmp_path, evidence_root):
-    table = load(tmp_path, "rows:\n")
-    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "")])
-    assert '| `""` |' in render_queue(review_queue(evidence_root, table), evidence_root)
-
-
 def test_a_lone_surrogate_can_be_seeded_even_where_its_slug_collides(empty_table, evidence_root):
-    """The digest and the YAML scalar both spell a surrogate rather than encoding it strictly, so the row
-    is minted, written as UTF-8, and read back to the same key."""
+    """The digest hashes a repr and PyYAML escapes the surrogate, so the row is minted, written as UTF-8,
+    and read back to the same key."""
     cells = [entry("platform", "a b", "drs://a"), entry("platform", "a\ud800b", "drs://b")]
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", cells)
     added = seed(empty_table, evidence_root).rows_added
@@ -741,10 +703,10 @@ def test_a_lone_surrogate_can_be_seeded_even_where_its_slug_collides(empty_table
 
 
 def test_an_astral_non_printable_round_trips_through_a_seeded_row(empty_table, evidence_root):
-    """U+E0001 is written as an eight-digit escape; a four-digit one would read back as U+E000 and a `1`."""
+    """PyYAML writes U+E0001 as an eight-digit escape and reads it back; the row keeps matching its evidence."""
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "tag\U000e0001x")])
     (added,) = seed(empty_table, evidence_root).rows_added
-    assert "\\U000e0001" in empty_table.read_text(encoding="utf-8")
+    assert empty_table.read_text(encoding="utf-8").isascii(), "PyYAML spells every non-ASCII character as an escape"
     table = load_value_map(empty_table)
     assert table.select("platform", "tag\U000e0001x", "anvil", "AnVIL_HPRC_R2") is table.by_id(added)
     assert seed(empty_table, evidence_root).rows_added == ()
