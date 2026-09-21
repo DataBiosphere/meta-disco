@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
 
+from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
@@ -103,66 +104,95 @@ class RecordKey(NamedTuple):
     """The field a source guarantees unique per file, in both spellings a run uses.
 
     ``input_field`` is its name on an input record; ``output_field`` its name on the
-    output row a producer writes. They differ only where the record shape renames a
-    field on the way out (``file_md5sum`` becomes ``md5sum``, ``records.OutputRecord``).
+    output row a producer writes. They differ only where ``records.OutputRecord``
+    renames a field on the way out (``file_md5sum`` becomes ``md5sum``).
     """
 
     input_field: str
     output_field: str
 
 
-# The repository names an input envelope may carry, and the key each guarantees unique.
-ANVIL_REPOSITORY = "anvil"
 HPRC_REPOSITORY = "hprc"
 
 # One declaration per source of the identity that names a file exactly once in that
-# source's snapshot (#446). It serves the two places a run needs one: the catch-all
-# producer's skip set — which rows the earlier producers already wrote — and the
-# post-run check that no file has two rows (#445). Both read it through
-# :func:`record_key`, never a hard-coded field, because the field that is unique
-# differs by source:
+# source's snapshot, keyed by the ``repository`` its input envelope carries (#446). It
+# serves the two places a run needs one — the catch-all producer's skip set (which rows
+# the earlier producers already wrote) and the post-run one-row-per-file check (#445) —
+# and both read it through :func:`record_key`, never a hard-coded field, because the
+# unique field differs by source:
 #
 # - AnVIL: ``file_id``, the repository's own durable identifier — unique on every
-#   record of the corpus and unchanged by a catalog re-index (#433), which is why the
-#   duplicate check chose it. Not ``entry_id``, which is equally unique but regenerated
-#   per index; one key serves both readers only if it is the durable one. Not
-#   ``file_name``, which identifies a file only about 60% of the time there.
-# - HPRC: ``file_md5sum``. The HPRC catalogs issue no file identifier, and none is
-#   minted here — ``entry_id``, ``file_id`` and ``drs_uri`` are Azul's catalog
-#   identity and stay null on an HPRC record. What the source *does* guarantee unique
-#   is the file's URL, and ``scripts/classify_hprc_files.py`` writes its hash into
-#   ``file_md5sum`` (``path_key``). So this key is a hash of the full URL, not a
-#   content checksum: two HPRC files with identical bytes at different paths have
-#   different keys, and the value cannot be compared with a real md5.
-RECORD_KEYS: dict[str, RecordKey] = {
+#   record and unchanged by a catalog re-index (#433), which is why the duplicate check
+#   chose it. Not ``entry_id``, equally unique but regenerated per index: one key serves
+#   both readers only if it is the durable one. Not ``file_name``, which identifies a
+#   file only about 60% of the time there.
+# - HPRC: ``file_md5sum``. The HPRC catalogs issue no file identifier and none is
+#   minted — ``entry_id``, ``file_id`` and ``drs_uri`` are Azul's catalog identity and
+#   stay null on an HPRC record. What the source does guarantee unique is the file's
+#   URL, and ``scripts/classify_hprc_files.py`` writes its hash into ``file_md5sum``.
+#   So this key is a hash of the full URL, not a content checksum: identical bytes at
+#   two paths are two keys, and the value cannot be compared with a real md5.
+SOURCE_RECORD_KEYS: dict[str, RecordKey] = {
     ANVIL_REPOSITORY: RecordKey(JOIN_KEY_FILE_ID, JOIN_KEY_FILE_ID),
     HPRC_REPOSITORY: RecordKey(JOIN_KEY_FILE_MD5SUM, "md5sum"),
 }
 
 
 def record_key(metadata: dict, input_path: Path) -> RecordKey:
-    """The :data:`RECORD_KEYS` entry for the repository an input envelope names.
+    """The :data:`SOURCE_RECORD_KEYS` entry for the repository an input envelope names.
 
     Raises ``ValueError`` naming ``input_path`` when the envelope names no repository —
     an ``.ndjson`` input, or a JSON snapshot written before #424 added the field — or
-    names one this table does not declare. Unlike :func:`published_source`, this is
-    not allowed to be ``None``: a reader that needs the key cannot do its job without
-    one, and guessing a field is how a file gets a second row.
+    one the table does not declare. Unlike :func:`published_source`, this cannot be
+    ``None``: a reader that needs the key cannot do its job without one, and guessing
+    a field is how a file gets a second row.
     """
     repository = metadata.get("repository")
-    if not (isinstance(repository, str) and repository):
-        raise ValueError(
-            f"{input_path}: the input envelope names no repository, so the field that identifies "
-            f"a file uniquely is unknown. A run needs one to know which files are already "
-            f"classified and to check that no file has two rows. Declare "
-            f'`"metadata": {{"repository": ...}}` — one of {sorted(RECORD_KEYS)}.'
-        )
-    if repository not in RECORD_KEYS:
+    key = SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
+    if key is None:
         raise ValueError(
             f"{input_path}: the input envelope names repository {repository!r}, which declares no "
-            f"record key. Known repositories: {sorted(RECORD_KEYS)} (pipeline.RECORD_KEYS)."
+            f"record key — the field that identifies a file uniquely, which a run needs to know "
+            f"which files are already classified and to check that no file has two rows. Declare "
+            f'`"metadata": {{"repository": ...}}` as one of {sorted(SOURCE_RECORD_KEYS)} '
+            f"(pipeline.SOURCE_RECORD_KEYS)."
         )
-    return RECORD_KEYS[repository]
+    return key
+
+
+# How much of an input file to read for its envelope: the metadata block of the AnVIL
+# snapshot is a few kilobytes and the HPRC one a few bytes, so this is generous.
+_ENVELOPE_HEAD = 1 << 20
+
+
+def load_envelope(input_path: Path) -> dict:
+    """An input file's ``metadata`` block without parsing its records.
+
+    Both writers put the block first — ``azul_manifest.write_input_files`` emits the
+    literal ``{"metadata": `` before it, and the HPRC builder's ``json.dump`` keeps that
+    insertion order — so it decodes off the file's head alone. That is a writer detail,
+    not a contract, so a file laid out any other way falls back to :func:`load_snapshot`
+    and gives the same answer at the cost of the full parse. Worth having because the
+    one caller is the run's preflight, whose process lives for the whole run: a full
+    parse there leaves the corpus's heap resident beside the producers for its
+    duration, for two keys' worth of information.
+
+    ``{}`` for an ``.ndjson`` input, which carries no envelope, decided by suffix rather
+    than by parsing every line to find that out.
+    """
+    if input_path.suffix == ".ndjson":
+        return {}
+    prefix = '{"metadata": '
+    with input_path.open() as f:
+        head = f.read(_ENVELOPE_HEAD)
+    if head.startswith(prefix):
+        try:
+            block, _ = json.JSONDecoder().raw_decode(head, len(prefix))
+        except json.JSONDecodeError:
+            block = None
+        if isinstance(block, dict):
+            return block
+    return load_snapshot(input_path)[0]
 
 
 def refuse_bad_published_shape(records: list[dict], input_path: Path, max_examples: int = 5) -> None:
@@ -247,11 +277,10 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
 class ClassifiableSnapshot(NamedTuple):
     """What :func:`load_classifiable_snapshot` resolves off an input file.
 
-    ``source`` is :func:`published_source`'s answer; ``records`` the classifiable
-    records; ``metadata`` the envelope they came in, kept so a reader that needs a
-    second envelope fact can resolve it without a second parse (:func:`record_key`,
-    which raises where the envelope cannot answer, so it is not resolved here for
-    the producers that never ask).
+    ``source`` is :func:`published_source`'s answer and ``records`` the classifiable
+    records. ``metadata`` is the envelope they came in, carried for :func:`record_key`,
+    which is resolved on demand because it raises where no repository is named and
+    most producers never ask.
     """
 
     source: str | None
@@ -267,9 +296,8 @@ def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) ->
     envelope — and because returning the envelope alone made naming the repository a
     *second* line each producer had to remember, which is precisely the omission
     contract 7.7 exists to catch. Resolved here, a producer cannot forget it. The
-    envelope rides along for the one further fact a reader may need from it, the
-    source's record key, which is resolved on demand because resolving it is a refusal
-    where the envelope names no repository, and most producers never need it.
+    envelope rides along for :func:`record_key`, resolved on demand because it raises
+    where no repository is named and most producers never ask.
 
     Same single parse, same exclusion, same ``excluded_files.json`` write, and the same
     guarantee that every returned element is a ``dict``.

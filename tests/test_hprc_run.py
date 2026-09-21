@@ -4,8 +4,8 @@ HPRC is a source like AnVIL: ``scripts/classify_hprc_files.py`` maps its catalog
 the one record shape and calls the one run. Its records carry no ``entry_id``,
 ``file_id`` or ``drs_uri`` — the catalogs issue none, and none is minted — so a run
 that keyed Phase 3 on ``entry_id`` refused every one of them. The key is now the
-source's own (``pipeline.RECORD_KEYS``): for HPRC, the URL hash the builder writes as
-the checksum.
+source's own (``pipeline.SOURCE_RECORD_KEYS``): for HPRC, the URL hash the builder
+writes as the checksum.
 """
 
 import json
@@ -16,12 +16,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from classify_hprc_files import build_metadata_records, one_record_per_url, path_key
+from classify_hprc_files import build_metadata_records, path_key
 
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.exclusions import read_excluded
 from meta_disco.output_utils import CLASSIFICATION_FILES, iter_records_with_source
-from meta_disco.pipeline import HPRC_REPOSITORY, RECORD_KEYS, record_key
+from meta_disco.pipeline import HPRC_REPOSITORY
+from tests.metadata_fixtures import write_metadata
 
 # Catalog rows in the shape the assemblies catalog has (`awsFasta` is its location
 # field, `fileSize` present so no S3 HEAD is made). Names chosen so each lands with a
@@ -38,24 +39,29 @@ _NO_LOCATION = {"filename": "orphan.readme", "fileSize": 1}
 
 def _hprc_input(tmp_path, catalog):
     records = build_metadata_records(catalog, "awsFasta", workers=1)
-    metadata = tmp_path / "hprc_files_metadata.json"
-    # The envelope the builder's `main` writes.
-    metadata.write_text(json.dumps({"metadata": {"repository": HPRC_REPOSITORY}, "files": records}))
-    return metadata, records
+    return write_metadata(tmp_path / "hprc_files_metadata.json", records, repository=HPRC_REPOSITORY), records
 
 
 def test_the_builders_records_carry_no_catalog_identity():
-    """What the shape is, pinned: the source-neutral fields and nothing Azul issues."""
+    """What the shape is, pinned: the source-neutral fields and nothing Azul issues, with
+    a key that is a hash of the URL — so identical bytes at two paths are two keys."""
     [record] = build_metadata_records(_CATALOG[:1], "awsFasta", workers=1)
     assert set(record) == {"file_name", "file_format", "file_md5sum", "url", "file_size"}
     assert record["file_md5sum"] == path_key("https://s3-us-west-2.amazonaws.com/bucket/HG002.png")
 
+    same_bytes = [
+        {"filename": "HG002.readme", "awsFasta": f"s3://bucket/{d}/HG002.readme", "fileSize": 1} for d in "ab"
+    ]
+    assert len({r["file_md5sum"] for r in build_metadata_records(same_bytes, "awsFasta", workers=1)}) == 2
+
 
 def test_hprc_shaped_records_complete_every_phase(tmp_path, capsys):
-    """The reproduction from the issue, as the regression test: every phase runs, every
-    producer writes, the run exits well, and the duplicate check keyed on the source's
-    field reports what it checked rather than "not checked"."""
-    metadata, _records = _hprc_input(tmp_path, [*_CATALOG, _NO_LOCATION])
+    """The reproduction from the issue, as the regression test: every phase runs, the run
+    exits well, the duplicate check keyed on the source's field reports what it checked
+    rather than "not checked", and the record with no key is excluded and named (#376)
+    rather than reaching any phase."""
+    metadata, records = _hprc_input(tmp_path, [*_CATALOG, _NO_LOCATION])
+    assert [r["file_name"] for r in records if r["file_md5sum"] is None] == ["orphan.readme"]
     output_base = tmp_path / "output"
 
     assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True
@@ -67,46 +73,25 @@ def test_hprc_shaped_records_complete_every_phase(tmp_path, capsys):
     assert written == {f"{name}_classifications.json" for name in ("image", "auxiliary", "index", "remaining")}
     assert written <= set(CLASSIFICATION_FILES)
     rows = list(iter_records_with_source(run_dir))
-    by_name = {row["file_name"]: (fname, row) for fname, row in rows}
-    assert set(by_name) == {"HG002.png", "HG002.pvar", "HG002.bam.bai", "HG002.readme"}
-    assert by_name["HG002.readme"][0] == "remaining_classifications.json", "Phase 3 wrote its row"
+    by_name = {row["file_name"]: fname for fname, row in rows}
+    assert by_name == {
+        "HG002.png": "image_classifications.json",
+        "HG002.pvar": "auxiliary_classifications.json",
+        "HG002.bam.bai": "index_classifications.json",
+        "HG002.readme": "remaining_classifications.json",
+    }
     for _fname, row in rows:
         # The identity is the URL hash, spelled `md5sum` on the way out; nothing is minted.
         assert row["md5sum"] == path_key(f"https://s3-us-west-2.amazonaws.com/bucket/{row['file_name']}")
         assert row["entry_id"] is None and row["file_id"] is None and row["drs_uri"] is None
 
-    out = capsys.readouterr().out
-    assert "One row per file: 4 rows, no repeated md5sum." in out
-    assert "not checked" not in out
-
-
-def test_a_record_with_no_key_is_excluded_and_named_before_any_phase(tmp_path):
-    """A catalog entry with no location gets no URL hash, so no key. It is excluded at
-    the shared load (#376) and listed in the run's `excluded_files.json` — the same act
-    that excludes a null-md5 AnVIL record — so no null key ever reaches Phase 3."""
-    metadata, records = _hprc_input(tmp_path, [*_CATALOG, _NO_LOCATION])
-    assert [r["file_name"] for r in records if r["file_md5sum"] is None] == ["orphan.readme"]
-
-    assert run_all_classifications(metadata, tmp_path / "output", tmp_path / "evidence") is True
-
-    [run_dir] = (tmp_path / "output").iterdir()
     excluded = read_excluded(run_dir)
     assert [f.file_name for f in excluded.files] == ["orphan.readme"]
     assert excluded.total_input == 5
-    assert "orphan.readme" not in {row["file_name"] for _f, row in iter_records_with_source(run_dir)}
 
-
-def test_the_hprc_key_is_the_url_hash_not_a_content_checksum(tmp_path):
-    """Two identical files at different paths are two files under this key: the
-    declaration says a hash of the URL, and that is what the builder writes."""
-    same_bytes = [
-        {"filename": "HG002.readme", "awsFasta": "s3://bucket/a/HG002.readme", "fileSize": 1},
-        {"filename": "HG002.readme", "awsFasta": "s3://bucket/b/HG002.readme", "fileSize": 1},
-    ]
-    metadata, records = _hprc_input(tmp_path, same_bytes)
-    key = record_key({"repository": HPRC_REPOSITORY}, metadata)
-    assert key == RECORD_KEYS["hprc"]
-    assert len({r[key.input_field] for r in records}) == 2
+    out = capsys.readouterr().out
+    assert "One row per file: 4 rows, no repeated md5sum." in out
+    assert "not checked" not in out
 
 
 def test_an_input_naming_no_repository_stops_the_run_before_it_writes_anything(tmp_path):
@@ -116,35 +101,6 @@ def test_an_input_naming_no_repository_stops_the_run_before_it_writes_anything(t
     metadata = tmp_path / "hprc_files_metadata.json"
     metadata.write_text(json.dumps({"files": records}))
 
-    with pytest.raises(ValueError, match="names no repository"):
+    with pytest.raises(ValueError, match="repository None, which declares no record key"):
         run_all_classifications(metadata, tmp_path / "output", tmp_path / "evidence")
     assert not (tmp_path / "output").exists()
-
-
-class TestOneRecordPerUrl:
-    """The alignments catalog lists a file more than once; the input carries it once."""
-
-    def test_the_same_location_in_two_spellings_is_one_record(self):
-        """The shape the catalog actually has: `https://` and `s3://` forms of one key."""
-        rows = [
-            {"filename": "x.vcf.gz", "loc": "https://s3-us-west-2.amazonaws.com/bucket/x.vcf.gz", "fileSize": 1},
-            {"filename": "x.vcf.gz", "loc": "s3://bucket/x.vcf.gz", "fileSize": 1},
-            {"filename": "y.vcf.gz", "loc": "s3://bucket/y.vcf.gz", "fileSize": 1},
-        ]
-        records = build_metadata_records(rows, "loc", workers=1)
-        assert records[0]["file_md5sum"] == records[1]["file_md5sum"], "one URL, one key"
-
-        kept, collapsed = one_record_per_url(records)
-        assert collapsed == 1
-        assert [r["file_name"] for r in kept] == ["x.vcf.gz", "y.vcf.gz"]
-        assert kept[0] == records[0], "the first row's record is the one kept, and it equals the second's"
-        assert records[0] == records[1]
-
-    def test_records_with_no_url_are_not_collapsed_together(self):
-        """Two files with no location are two files the run cannot read, not one."""
-        records = build_metadata_records(
-            [{"filename": "a.readme", "fileSize": 1}, {"filename": "b.readme", "fileSize": 1}], "loc", workers=1
-        )
-        assert [r["file_md5sum"] for r in records] == [None, None]
-        kept, collapsed = one_record_per_url(records)
-        assert collapsed == 0 and len(kept) == 2

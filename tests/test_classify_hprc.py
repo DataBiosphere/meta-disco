@@ -92,3 +92,44 @@ class TestBuildMetadataRecords:
         records = hprc.build_metadata_records(catalog, "path", workers=1)
         assert records[0]["url"] is None
         assert records[0]["file_size"] is None
+
+
+class TestOneRecordPerUrl:
+    """The alignments catalog lists a file more than once; the input carries it once."""
+
+    def test_the_same_location_in_two_spellings_is_one_record(self):
+        """The shape the catalog actually has: `https://` and `s3://` forms of one key."""
+        rows = [
+            {"filename": "x.vcf.gz", "loc": "https://s3-us-west-2.amazonaws.com/bucket/x.vcf.gz", "fileSize": 1},
+            {"filename": "x.vcf.gz", "loc": "s3://bucket/x.vcf.gz", "fileSize": 1},
+            {"filename": "y.vcf.gz", "loc": "s3://bucket/y.vcf.gz", "fileSize": 1},
+        ]
+        records = hprc.build_metadata_records(rows, "loc", workers=1)
+        assert records[0] == records[1], "one URL, one key, one record"
+
+        kept, collapsed = hprc.one_record_per_url(records)
+        assert collapsed == 1
+        assert [r["file_name"] for r in kept] == ["x.vcf.gz", "y.vcf.gz"]
+
+    def test_two_rows_that_differ_at_one_url_are_refused_not_halved(self):
+        """The collapse is argued from the records being identical, so it checks that: a
+        row that differs is a second fact about the file, and dropping it would lose it."""
+        records = hprc.build_metadata_records(
+            [
+                {"filename": "x.vcf.gz", "loc": "s3://bucket/x.vcf.gz", "fileSize": 1},
+                {"filename": "x.vcf.gz", "loc": "s3://bucket/x.vcf.gz", "fileSize": 2},
+            ],
+            "loc",
+            workers=1,
+        )
+        with pytest.raises(ValueError, match="different records"):
+            hprc.one_record_per_url(records)
+
+    def test_records_with_no_url_are_not_collapsed_together(self):
+        """Two files with no location are two files the run cannot read, not one."""
+        records = hprc.build_metadata_records(
+            [{"filename": "a.readme", "fileSize": 1}, {"filename": "b.readme", "fileSize": 1}], "loc", workers=1
+        )
+        assert [r["file_md5sum"] for r in records] == [None, None]
+        kept, collapsed = hprc.one_record_per_url(records)
+        assert collapsed == 0 and len(kept) == 2

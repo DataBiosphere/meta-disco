@@ -9,10 +9,11 @@ import json
 
 from meta_disco.classify_run import _check_one_row_per_file
 from meta_disco.output_utils import CLASSIFICATION_FILES, row_identities
-from meta_disco.pipeline import RECORD_KEYS
+from meta_disco.pipeline import SOURCE_RECORD_KEYS
 
-ANVIL_KEY = RECORD_KEYS["anvil"]
-HPRC_KEY = RECORD_KEYS["hprc"]
+ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
+HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
+FILE_ID = ANVIL_KEY.output_field
 
 
 def _write(run_dir, fname, rows):
@@ -29,7 +30,7 @@ class TestRowIdentities:
         _write(tmp_path, "tar_classifications.json", [_row("f1"), _row("f2")])
         _write(tmp_path, "auxiliary_classifications.json", [_row("f1")])
 
-        identities = row_identities(tmp_path)
+        identities = row_identities(tmp_path, FILE_ID)
         assert identities.total_rows == 3
         # Named in CLASSIFICATION_FILES order. Derived rather than spelled, so this pins
         # that property rather than where these two producers happen to sit.
@@ -39,13 +40,15 @@ class TestRowIdentities:
     def test_a_file_id_written_twice_by_one_producer_is_a_duplicate_too(self, tmp_path):
         _write(tmp_path, "bam_classifications.json", [_row("f1"), _row("f1")])
 
-        assert row_identities(tmp_path).duplicates == {"f1": ["bam_classifications.json", "bam_classifications.json"]}
+        assert row_identities(tmp_path, FILE_ID).duplicates == {
+            "f1": ["bam_classifications.json", "bam_classifications.json"]
+        }
 
     def test_distinct_file_ids_are_no_duplicates(self, tmp_path):
         _write(tmp_path, "bam_classifications.json", [_row("f1"), _row("f2")])
         _write(tmp_path, "vcf_classifications.json", [_row("f3")])
 
-        identities = row_identities(tmp_path)
+        identities = row_identities(tmp_path, FILE_ID)
         assert identities.total_rows == 3
         assert identities.duplicates == {}
         assert identities.without_key == 0
@@ -54,20 +57,17 @@ class TestRowIdentities:
         """Rows that carry no identity cannot be compared for uniqueness at all."""
         _write(tmp_path, "bam_classifications.json", [_row(None), _row(""), _row("f1")])
 
-        identities = row_identities(tmp_path)
+        identities = row_identities(tmp_path, FILE_ID)
         assert identities.without_key == 2
         assert identities.duplicates == {}
 
-    def test_the_key_is_the_sources_not_always_file_id(self, tmp_path):
+    def test_the_scan_keys_on_the_field_it_is_told(self, tmp_path):
         """An HPRC row carries no `file_id`; its identity is the URL hash written as
-        `md5sum` (#446), and the scan keys on whichever field it is told."""
+        `md5sum` (#446), and a repeat of that is a duplicate under that key."""
         hprc_row = {"file_name": "HG002.bam", "file_id": None, "entry_id": None, "md5sum": "a" * 32}
         _write(tmp_path, "bam_classifications.json", [hprc_row, dict(hprc_row, file_name="HG003.bam")])
 
-        by_file_id = row_identities(tmp_path, ANVIL_KEY.output_field)
-        assert by_file_id.without_key == 2 and by_file_id.duplicates == {}
         by_md5 = row_identities(tmp_path, HPRC_KEY.output_field)
-        assert by_md5.key == "md5sum"
         assert by_md5.without_key == 0
         assert by_md5.duplicates == {"a" * 32: ["bam_classifications.json", "bam_classifications.json"]}
 

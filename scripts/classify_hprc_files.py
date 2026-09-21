@@ -123,31 +123,33 @@ def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int)
 
 
 def one_record_per_url(records: list[dict]) -> tuple[list[dict], int]:
-    """Collapse records that name the same URL into one, keeping the first; return the count collapsed.
+    """Collapse records that name the same URL into one; return the count collapsed.
 
-    The alignments catalog lists a file more than once: the same location spelled once
-    as ``https://`` and once as ``s3://`` (four files), and one distance index listed
-    under two alignment names (``.dist.old``). Each is one file, and the record built
-    from either row is identical — the builder carries none of the fields the rows
-    differ on — so keeping both would give one file two rows, which the run's
-    one-row-per-file check refuses (#445) now that it keys an HPRC run on the URL hash
-    (#446). Collapsing here, on the key itself, is what makes that key unique per file
-    in the input as the declaration says it is.
-
-    A record with no URL has no key and is not collapsed with another: two such records
-    are two files the run cannot read, each excluded and named at load (#376).
+    The alignments catalog lists some files twice: the same location as ``https://``
+    and as ``s3://``, and one index under two alignment names. The record built from
+    either row is identical, so the first is kept — and that is checked, because a
+    catalog row that differed would be a second fact about the file, not a repeat, and
+    halving it silently would lose it. Without the collapse the one-row-per-file check
+    (#445) fails the run on the URL-hash key (#446). A record with no URL has no key
+    and is kept for the shared load to exclude (#376).
     """
     kept: list[dict] = []
-    seen: set[str] = set()
+    first: dict[str, dict] = {}
     collapsed = 0
     for record in records:
         key = record["file_md5sum"]
-        if key is not None:
-            if key in seen:
-                collapsed += 1
-                continue
-            seen.add(key)
-        kept.append(record)
+        if key is None:
+            kept.append(record)
+        elif key in first:
+            if record != first[key]:
+                raise ValueError(
+                    f"two catalog rows at {record['url']} map to different records: "
+                    f"{first[key]} vs {record}; the collapse keeps only identical repeats"
+                )
+            collapsed += 1
+        else:
+            first[key] = record
+            kept.append(record)
     return kept, collapsed
 
 
@@ -216,11 +218,9 @@ def main():
     with args.metadata_out.open("w") as f:
         # "files" is the canonical meta-disco metadata key (what the AnVIL source emits);
         # every classifier loads it, so the mapped HPRC input is shape-identical to AnVIL's.
-        # The envelope names the repository so the run can look up which field this
-        # source guarantees unique per file (`pipeline.RECORD_KEYS`: here `file_md5sum`,
-        # the URL hash above, because the catalogs issue no file identifier — #446). No
-        # `catalog` is named: the HPRC catalogs carry no generation, and no record here
-        # carries a published value for a `published.source` to attribute.
+        # The envelope names the repository so a run can read this source's record key
+        # (`pipeline.SOURCE_RECORD_KEYS`, #446). No `catalog`: the HPRC catalogs carry no
+        # generation, so `published.source` stays null.
         json.dump({"metadata": {"repository": HPRC_REPOSITORY}, "files": all_records}, f)
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 

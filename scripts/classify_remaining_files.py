@@ -34,15 +34,11 @@ from meta_disco.rule_engine import RuleEngine
 def load_already_classified(classification_paths: list[Path], key: RecordKey) -> set[str]:
     """The identities already carrying a classification record from another producer.
 
-    Keyed on the field the run's source guarantees unique per file
-    (``pipeline.RECORD_KEYS``, read from the input envelope by the caller) and never on
-    ``file_name``: in the AnVIL corpus a name identifies a file only about 60% of the
-    time — 708,088 records under 442,865 distinct names — so a name-keyed set skips a
-    file because a *different* file elsewhere shares its name, and that file then
-    appears in no ``classifications`` array at all. For AnVIL the key is ``file_id``,
-    unique across the corpus and durable across a re-index (#433); for HPRC it is the
-    URL hash the source writes as the checksum, because its catalogs issue no
-    identifier (#446).
+    Keyed on the source's record key (``pipeline.SOURCE_RECORD_KEYS``, which says which
+    field and why), never on ``file_name``: a name identifies a file only about 60% of
+    the time in the AnVIL corpus, so a name-keyed set skips a file because a *different*
+    file elsewhere shares its name, and that file then appears in no ``classifications``
+    array at all.
 
     The name-collision hazard is dormant and this guards it pre-emptively: measured over
     the stored run, no file is silently skipped today. #438's first draft would have
@@ -77,8 +73,8 @@ def load_already_classified(classification_paths: list[Path], key: RecordKey) ->
                     f"{path}: classification row for {r.get('file_name')!r} has {field} "
                     f"{value!r}; this producer keys on it and cannot skip a row without "
                     f"risking a duplicate record. Either the input carried a drifted "
-                    f"{key.input_field} — `make validate-metadata` rejects that — or the "
-                    f"producer that wrote this file omitted the field and needs re-running."
+                    f"{key.input_field} that no gate refused, or the producer that wrote "
+                    f"this file omitted the field and needs re-running."
                 )
             seen.add(value)
     return seen
@@ -94,8 +90,6 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     source, files = snapshot.source, snapshot.records
     print(f"Loaded {len(files):,} files from metadata")
 
-    # Which field identifies a file is the source's to say (pipeline.RECORD_KEYS); an
-    # envelope that names no repository is refused here, naming the file.
     key = record_key(snapshot.metadata, metadata_path)
     already = load_already_classified(classification_paths, key)
     print(f"Already classified by other scripts: {len(already):,}")

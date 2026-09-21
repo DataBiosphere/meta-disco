@@ -188,7 +188,7 @@ evidence}` entry — plus the controlled vocabulary:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type
     never run (#151).
-  - **A source's record key is declared once**, in `pipeline.RECORD_KEYS`, keyed by the
+  - **A source's record key is declared once**, in `pipeline.SOURCE_RECORD_KEYS`, keyed by the
     input envelope's `repository` and read through `pipeline.record_key` (#446). It is
     the field the source guarantees unique per file, in both spellings a run uses: AnVIL's
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's

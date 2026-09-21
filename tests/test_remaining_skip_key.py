@@ -6,7 +6,7 @@ records under 442,865 distinct names — so a name-keyed skip set drops a file b
 ``classifications`` array at all, which is the counted-and-dropped shape #376 exists to
 prevent.
 
-Which field is the identity is the source's to say (``pipeline.RECORD_KEYS``, #446):
+Which field is the identity is the source's to say (``pipeline.SOURCE_RECORD_KEYS``, #446):
 ``file_id`` for AnVIL, the URL hash written as the checksum for HPRC. The producer reads
 it off the input envelope and refuses an envelope that names no repository.
 """
@@ -19,14 +19,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
+from classify_hprc_files import build_metadata_records
 from classify_remaining_files import classify_remaining, load_already_classified
 
 from meta_disco.models import NOT_CLASSIFIED
-from meta_disco.pipeline import RECORD_KEYS
+from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from tests.metadata_fixtures import valid_record, write_metadata
 
-ANVIL_KEY = RECORD_KEYS["anvil"]
-HPRC_KEY = RECORD_KEYS["hprc"]
+ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
+HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
 
 
 def _record(name: str, file_id: str, md5: str, dataset_id: str) -> dict:
@@ -41,16 +42,10 @@ def _record(name: str, file_id: str, md5: str, dataset_id: str) -> dict:
     }
 
 
-def _hprc_record(name: str, md5: str) -> dict:
-    """The exact shape ``scripts/classify_hprc_files.build_metadata_records`` emits:
-    no catalog identity at all, and a checksum that is a hash of the file's URL."""
-    return {
-        "file_name": name,
-        "file_format": ".weird",
-        "file_md5sum": md5,
-        "url": f"https://s3-us-west-2.amazonaws.com/bucket/{name}",
-        "file_size": 1,
-    }
+def _hprc_records(*names: str) -> list[dict]:
+    """Records as the HPRC builder emits them: no catalog identity, a URL-hash checksum."""
+    rows = [{"filename": n, "loc": f"s3://bucket/{n}", "fileSize": 1} for n in names]
+    return build_metadata_records(rows, "loc", workers=1)
 
 
 def _rows(path: Path):
@@ -141,15 +136,6 @@ class TestSkipKey:
         with pytest.raises(ValueError, match="file_id"):
             classify_remaining(metadata_file, tmp_path / "out.json", [])
 
-    def test_entry_id_is_not_the_key(self, tmp_path):
-        """A row carrying only `entry_id` has no identity here: `entry_id` is regenerated
-        by a catalog re-index (#433), and one key serves both this set and the post-run
-        duplicate check only if it is the durable one."""
-        other = tmp_path / "other.json"
-        other.write_text(json.dumps({"classifications": [{"entry_id": "e1", "file_name": "x.weird"}]}))
-        with pytest.raises(ValueError, match="file_id"):
-            load_already_classified([other], ANVIL_KEY)
-
 
 class TestTheKeyIsTheSources:
     """An HPRC record has no `file_id`, `entry_id` or `drs_uri` — the catalogs issue none
@@ -157,25 +143,23 @@ class TestTheKeyIsTheSources:
     checksum, which the output row spells `md5sum`."""
 
     def test_an_hprc_run_keys_on_the_url_hash(self, tmp_path):
-        metadata_file = tmp_path / "metadata.json"
-        write_metadata(metadata_file, [_hprc_record("a.weird", "a" * 32), _hprc_record("b.weird", "b" * 32)], "hprc")
+        a, b = _hprc_records("a.weird", "b.weird")
+        metadata_file = write_metadata(tmp_path / "metadata.json", [a, b], "hprc")
         other = tmp_path / "other.json"
-        other.write_text(
-            json.dumps({"classifications": [{"file_name": "a.weird", "file_id": None, "md5sum": "a" * 32}]})
-        )
+        row = {"file_name": "a.weird", "file_id": None, "md5sum": a["file_md5sum"]}
+        other.write_text(json.dumps({"classifications": [row]}))
         output_file = tmp_path / "remaining.json"
 
         classify_remaining(metadata_file, output_file, [other])
 
-        [row] = _rows(output_file)
-        assert row["md5sum"] == "b" * 32, "the row another producer wrote is skipped on its hash"
-        assert row["file_id"] is None and row["entry_id"] is None and row["drs_uri"] is None
+        [written] = _rows(output_file)
+        assert written["md5sum"] == b["file_md5sum"], "the row another producer wrote is skipped on its hash"
+        assert written["file_id"] is None and written["entry_id"] is None and written["drs_uri"] is None
 
     def test_the_set_is_read_under_the_output_spelling(self, tmp_path):
         """Input says `file_md5sum`, an output row says `md5sum`; the key carries both."""
         other = tmp_path / "other.json"
         other.write_text(json.dumps({"classifications": [{"file_name": "a.weird", "md5sum": "a" * 32}]}))
-        assert HPRC_KEY.input_field == "file_md5sum"
         assert load_already_classified([other], HPRC_KEY) == {"a" * 32}
 
     def test_an_hprc_row_with_no_hash_is_refused(self, tmp_path):
@@ -190,7 +174,9 @@ class TestTheKeyIsTheSources:
         gets a second row. The refusal names the input and the repositories known."""
         metadata_file = tmp_path / "metadata.json"
         metadata_file.write_text(json.dumps({"files": [_record("x.weird", "f1", "1" * 32, "ds1")]}))
-        with pytest.raises(ValueError, match=r"metadata\.json.*names no repository.*'anvil', 'hprc'"):
+        with pytest.raises(
+            ValueError, match=r"metadata\.json.*repository None, which declares no record key.*'anvil', 'hprc'"
+        ):
             classify_remaining(metadata_file, tmp_path / "out.json", [])
 
     def test_an_unknown_repository_is_refused(self, tmp_path):

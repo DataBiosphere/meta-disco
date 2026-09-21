@@ -19,7 +19,7 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import RecordKey, load_snapshot, record_key
+from meta_disco.pipeline import RecordKey, load_envelope, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
 
@@ -115,13 +115,11 @@ _DUPLICATES_SHOWN = 10
 def _check_one_row_per_file(output_dir: Path, key: RecordKey) -> bool:
     """Print whether every value of the source's key in the run is unique; False if any repeats.
 
-    ``key`` is the field the run's source guarantees unique per file
-    (``pipeline.RECORD_KEYS``), read from the run's input envelope — ``file_id`` for
-    AnVIL, the URL hash an HPRC record carries as ``md5sum``. A repeated value means the
-    run holds more than one row for a file, so every count over the output double-counts
-    it and no identifier is a primary key. The files listed beside each value say which
-    producers wrote those rows — two that claimed the same file, or one that wrote it
-    twice.
+    ``key`` is the source's record key (``pipeline.SOURCE_RECORD_KEYS``), read from the
+    run's input envelope. A repeated value means the run holds more than one row for a
+    file, so every count over the output double-counts it and no identifier is a primary
+    key. The files listed beside each value say which producers wrote those rows — two
+    that claimed the same file, or one that wrote it twice.
 
     Rows carrying no value under the key are counted and not failed here. In a full
     run that count is zero on the path that reaches this check: Phase 3 refuses a row
@@ -178,9 +176,8 @@ def run_all_classifications(
     extensions (:func:`producers.validate_registry`) — a run that cannot say who owns a
     file must not start one — or if the input envelope names no repository with a
     declared record key (:func:`pipeline.record_key`), since Phase 3 would refuse the
-    same input after every earlier phase had run (#446). That preflight parses the
-    input once more than the producers do; on the AnVIL corpus that is seconds against
-    a run of minutes.
+    same input after every earlier phase had run (#446). That preflight reads the
+    envelope alone (:func:`pipeline.load_envelope`), not the records.
 
     Before any of that it reports the evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
@@ -203,7 +200,7 @@ def run_all_classifications(
     validate_registry()
     # Same reasoning for the record key: the catch-all raises without one, and the
     # duplicate check reads the same field, so an input that cannot name it fails here.
-    key = record_key(load_snapshot(metadata)[0], metadata)
+    key = record_key(load_envelope(metadata), metadata)
 
     report_evidence_files(source_evidence_root)
 

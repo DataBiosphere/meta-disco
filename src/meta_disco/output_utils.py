@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .models import JOIN_KEY_FILE_ID
 from .producers import classification_files
 
 # Every file a Phase 1/2/3 producer writes, derived from the producer registry so it
@@ -95,17 +94,16 @@ class RowIdentities:
     different fact from being unique.
     """
 
-    key: str
     total_rows: int
     without_key: int
     duplicates: dict[str, list[str]]
 
 
-def row_identities(run_dir: Path, key: str = JOIN_KEY_FILE_ID) -> RowIdentities:
+def row_identities(run_dir: Path, key: str) -> RowIdentities:
     """Report which values of ``key`` more than one of a run's rows carries.
 
-    ``key`` is the output-row spelling of the field the run's source guarantees unique
-    (``pipeline.RECORD_KEYS``); the default is AnVIL's.
+    ``key`` is the output-row spelling of the source's record key
+    (``pipeline.SOURCE_RECORD_KEYS``). No default: one source's field is not a fallback.
     """
     # Only the first source per key value is kept until a second row claims it: a
     # duplicate is the exception, so the list is paid for only where one occurs.
@@ -124,4 +122,4 @@ def row_identities(run_dir: Path, key: str = JOIN_KEY_FILE_ID) -> RowIdentities:
             duplicates[value] = [first_source[value], fname]
         else:
             first_source[value] = fname
-    return RowIdentities(key, total_rows, without_key, duplicates)
+    return RowIdentities(total_rows, without_key, duplicates)
