@@ -188,6 +188,15 @@ evidence}` entry — plus the controlled vocabulary:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type
     never run (#151).
+  - **A source's record key is declared once**, in `pipeline.SOURCE_RECORD_KEYS`, keyed by the
+    input envelope's `repository` and read through `pipeline.record_key` (#446). It is
+    the field the source guarantees unique per file, in both spellings a run uses: AnVIL's
+    is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
+    is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
+    because its catalogs issue no identifier — no catalog identity is minted for an HPRC
+    record. Two readers use it and neither may hard-code a field: the catch-all producer's
+    skip set (`scripts/classify_remaining_files.py`) and the post-run one-row-per-file
+    check (#445). An envelope naming no repository is refused before a run starts.
   - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
     owner because one function says so — the name decides and `file_format` is only a
     fallback, for reasons `route`'s docstring gives. Four hand-written predicates are

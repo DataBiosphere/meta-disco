@@ -238,7 +238,7 @@ class TestTheRunReportsItsEvidenceFiles:
         on it.
         """
         metadata = tmp_path / "anvil_files_metadata.json"
-        metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+        metadata.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": []}))
         output_base = tmp_path / "output"
 
         run_all_classifications(
@@ -251,7 +251,7 @@ class TestTheRunReportsItsEvidenceFiles:
 def _empty_run_input(tmp_path):
     """The metadata file a run needs to start, over an empty corpus."""
     metadata = tmp_path / "anvil_files_metadata.json"
-    metadata.write_text(json.dumps({"metadata": {"catalog": "anvil15"}, "files": []}))
+    metadata.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": []}))
     return metadata, tmp_path / "output"
 
 
@@ -264,7 +264,7 @@ class TestTheRunIsFailedByTheUniquenessCheck:
     """
 
     def test_a_duplicated_run_fails(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("meta_disco.classify_run._check_one_row_per_file", lambda _output_dir: False)
+        monkeypatch.setattr("meta_disco.classify_run._check_one_row_per_file", lambda _output_dir, _key: False)
         metadata, output_base = _empty_run_input(tmp_path)
 
         assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is False

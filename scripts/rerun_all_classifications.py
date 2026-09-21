@@ -26,7 +26,7 @@ def main():
         "-m",
         type=Path,
         default=Path("data/anvil/anvil_files_metadata.json"),
-        help="Source metadata file (JSON format)",
+        help="Source metadata file: the JSON envelope, whose metadata names the repository (an .ndjson file has none)",
     )
     parser.add_argument(
         "--evidence-base",

@@ -25,35 +25,31 @@ from meta_disco.metadata_schema import (
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.pipeline import RecordKey, load_classifiable_snapshot, load_envelope, record_key, repeated_key_values
 from meta_disco.producers import PRODUCERS
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
 
-def load_already_classified(classification_paths: list[Path]) -> set[str]:
-    """Entry ids already carrying a classification record from another producer.
+def load_already_classified(classification_paths: list[Path], key: RecordKey) -> set[str]:
+    """The identities already carrying a classification record from another producer.
 
-    Keyed on ``entry_id``, not on ``file_name``: a name identifies a file only about
-    60% of the time here — the corpus holds 708,088 records under 442,865 distinct
-    names — so a name-keyed set skips a file because a *different* file elsewhere
-    shares its name, and that file then appears in no ``classifications`` array at
-    all. ``entry_id`` is unique across the corpus with no collisions.
+    Keyed on the source's record key (``pipeline.SOURCE_RECORD_KEYS``, which says which
+    field and why), never on ``file_name``: a name identifies a file only about 60% of
+    the time in the AnVIL corpus, so a name-keyed set skips a file because a *different*
+    file elsewhere shares its name, and that file then appears in no ``classifications``
+    array at all.
 
-    The hazard is dormant and this fixes it pre-emptively: measured over the stored run,
-    no file is silently skipped today. #438's first draft would have woken it — declining
-    an ambiguous parent sent 15,006 index files here, 140 of whose names are also carried
-    by matched index records in other datasets — but that draft was replaced. Those files
-    now get a declined record from ``classify_index_files`` and never arrive, so the
-    switch has no measured effect on this corpus. It stays because the collision is real
-    and the next producer to send a colliding name here would hit it silently.
-
-    ``entry_id`` is Azul's ``files.document_id`` and does not survive a catalog
-    re-index — measured, zero of 705,949 records kept theirs from anvil14 to anvil15.
-    That does not matter here: this set and the records it is tested against come from
-    one run against one snapshot. It does matter for anything published for another
-    system to join against, where ``file_id`` is the stable id (#433).
+    The name-collision hazard is dormant and this guards it pre-emptively: measured over
+    the stored run, no file is silently skipped today. #438's first draft would have
+    woken it — declining an ambiguous parent sent 15,006 index files here, 140 of whose
+    names are also carried by matched index records in other datasets — but that draft
+    was replaced. Those files now get a declined record from ``classify_index_files``
+    and never arrive, so keying on identity has no measured effect on this corpus. It
+    stays because the collision is real and the next producer to send a colliding name
+    here would hit it silently.
     """
+    field = key.output_field
     seen = set()
     for path in classification_paths:
         if not path.is_file():
@@ -61,37 +57,57 @@ def load_already_classified(classification_paths: list[Path]) -> set[str]:
         with path.open() as f:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
-            entry_id = r.get("entry_id")
-            # Raise rather than skip. `entry_id` is deliberately *not* classifier-relevant
-            # (`records.ClassifierRecord`), so a drifted one still reaches the valid stream
-            # and is echoed into a producer's output untouched — unlike `file_name`, the
-            # key this replaced, which the contract guarantees non-empty. Skipping such a
-            # row would drop it from this set and hand the file a *second* classification
-            # record, inflating coverage and making `corpus_diff` report a phantom gain.
-            # `make validate-metadata` rejects a null `entry_id` before `make classify`,
-            # so reaching here means a producer wrote a row that gate would have refused.
-            if not isinstance(entry_id, str) or not entry_id:
+            value = r.get(field)
+            # Raise rather than skip. Skipping such a row would drop it from this set and
+            # hand the file a *second* classification record, inflating coverage and
+            # making `corpus_diff` report a phantom gain. How a null gets here differs by
+            # key. AnVIL's `file_id` is deliberately *not* classifier-relevant
+            # (`records.ClassifierRecord`), so a drifted one reaches the valid stream and
+            # is echoed into a producer's row untouched; `make validate-metadata` rejects
+            # it before `make classify`, so seeing one means that gate was bypassed.
+            # HPRC's key is the checksum, which the shared load excludes when unusable
+            # (#376), so a row without one means the producer omitted the field.
+            if not isinstance(value, str) or not value:
                 raise ValueError(
-                    f"{path}: classification row for {r.get('file_name')!r} has entry_id "
-                    f"{entry_id!r}; this producer keys on it and cannot skip a row without "
+                    f"{path}: classification row for {r.get('file_name')!r} has {field} "
+                    f"{value!r}; this producer keys on it and cannot skip a row without "
                     f"risking a duplicate record. Either the input carried a drifted "
-                    f"entry_id — `make validate-metadata` rejects that — or the producer "
-                    f"that wrote this file omitted the field and needs re-running."
+                    f"{key.input_field} that no gate refused, or the producer that wrote "
+                    f"this file omitted the field and needs re-running."
                 )
-            seen.add(entry_id)
+            seen.add(value)
     return seen
 
 
 def classify_remaining(metadata_path: Path, output_path: Path, classification_paths: list[Path]):
     """Classify files not handled by other classifiers."""
 
+    # Before the load: an envelope naming no repository is refused without parsing the
+    # corpus or writing anything into the run directory.
+    key = record_key(load_envelope(metadata_path), metadata_path)
+
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    source, files = load_classifiable_snapshot(metadata_path, output_path.parent)
+    snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
+    source, files = snapshot.source, snapshot.records
     print(f"Loaded {len(files):,} files from metadata")
 
-    already = load_already_classified(classification_paths)
+    # A key two input records share would let one hide behind the other: the earlier
+    # producer writes one, this loop skips both as already classified, and the post-run
+    # scan sees one row and passes. `make validate-metadata` reports this before
+    # `make classify`; a run started any other way is refused here, before a row is
+    # written, rather than dropping a file and reporting success.
+    repeated = repeated_key_values(files, key)
+    if repeated:
+        examples = ", ".join(f"{value} (x{n})" for value, n in sorted(repeated.items())[:10])
+        raise ValueError(
+            f"{metadata_path}: {len(repeated):,} value(s) of {key.input_field} are carried by more "
+            f"than one input record, but this producer keys on it as unique per file and would "
+            f"skip a file another producer had not written: {examples}"
+        )
+
+    already = load_already_classified(classification_paths, key)
     print(f"Already classified by other scripts: {len(already):,}")
 
     engine = RuleEngine()
@@ -101,18 +117,18 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
     for rec in files:
         name = rec.get("file_name", "")
-        entry_id = rec.get("entry_id")
+        identity = rec.get(key.input_field)
         # The same guard `load_already_classified` applies to the other side of this
-        # comparison. A drifted `entry_id` here would match nothing in `already`, so an
+        # comparison. A drifted key here would match nothing in `already`, so an
         # already-classified file would be classified a second time — the failure the
         # key change was made to prevent, entering by the input rather than the output.
-        if not isinstance(entry_id, str) or not entry_id:
+        if not isinstance(identity, str) or not identity:
             raise ValueError(
-                f"input record for {name!r} has entry_id {entry_id!r}; this producer "
+                f"input record for {name!r} has {key.input_field} {identity!r}; this producer "
                 f"keys on it to know what another producer already classified. "
                 f"`make validate-metadata` rejects this before `make classify` runs."
             )
-        if entry_id in already:
+        if identity in already:
             continue
         if not name:
             # A record with no file_name violates the input contract, and is written as

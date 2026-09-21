@@ -921,3 +921,30 @@ class TestUrlSeam:
             evidence_base=tmp_path / "ev",
         )
         assert captured["c" * 32] == "https://example.org/single"
+
+
+class TestLoadEnvelope:
+    """The run's preflight reads the envelope off the file's head, not the records (#446)."""
+
+    def test_reads_the_block_both_writers_put_first(self, tmp_path):
+        from meta_disco.pipeline import load_envelope
+
+        path = tmp_path / "in.json"
+        # `azul_manifest.write_input_files` writes exactly this prefix; the HPRC builder's
+        # `json.dump` of a dict with `metadata` first produces the same bytes.
+        path.write_text('{"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [{"file_name": "a"}]}')
+        assert load_envelope(path) == {"repository": "anvil", "catalog": "anvil15"}
+
+    def test_falls_back_to_the_full_parse_when_the_block_is_not_first(self, tmp_path):
+        from meta_disco.pipeline import load_envelope
+
+        path = tmp_path / "in.json"
+        path.write_text('{"files": [], "metadata": {"repository": "hprc"}}')
+        assert load_envelope(path) == {"repository": "hprc"}
+
+    def test_an_ndjson_input_has_no_envelope_and_is_not_parsed(self, tmp_path):
+        from meta_disco.pipeline import load_envelope
+
+        path = tmp_path / "in.ndjson"
+        path.write_text("this is not json\n")
+        assert load_envelope(path) == {}
