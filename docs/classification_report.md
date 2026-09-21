@@ -84,7 +84,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_hifi_filename`, `alignment_star_aligner`, `salmon_quant`); where none did, inferred post hoc from platform and modality.
+The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_star_aligner`, `salmon_quant`, `idat_methylation`); where none did, inferred post hoc from a STAR `@PG` match or a transcriptomic modality (`rnaseq_program`, `rnaseq_modality`). Nothing infers `WGS` or `WES` (#430).
 
 ```
 assay_type

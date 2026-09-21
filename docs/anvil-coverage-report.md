@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-20 19:40:38**
+Classification run: **2026-09-20 22:55:35**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -26,7 +26,7 @@ Processed **708,088** files.
 | **Data Type** | 683,602 (96.5%) | 24,486 (3.5%) |
 | **Reference Assembly** | 511,950 (72.3%) | 196,138 (27.7%) |
 | **Platform** | 130,979 (18.5%) | 577,109 (81.5%) |
-| **Assay Type** | 81,551 (11.5%) | 626,537 (88.5%) |
+| **Assay Type** | 79,011 (11.2%) | 629,077 (88.8%) |
 
 ---
 
@@ -213,8 +213,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 81,551 | 11.5% |
-| **Not classified** | 626,537 | 88.5% |
+| **Classified** | 79,011 | 11.2% |
+| **Not classified** | 629,077 | 88.8% |
 
 ### What's not classified?
 
@@ -229,13 +229,13 @@ Processed **708,088** files.
 | .cram | 10,623 | No rule determined a value for assay_type |
 | .crai | 10,317 | Parent file had no value for assay_type |
 | .txt | 4,650 | No rule determined a value for assay_type |
+| .bam | 4,445 | No rule determined a value for assay_type |
 | .bed | 4,420 | No rule determined a value for assay_type |
 | .psam | 2,854 | No rule determined a value for assay_type |
 | .pgen | 2,854 | No rule determined a value for assay_type |
 | .pvar | 2,854 | No rule determined a value for assay_type |
 | .bw | 2,520 | No rule determined a value for assay_type |
 | .g.vcf | 2,504 | No rule determined a value for assay_type |
-| .bam | 1,905 | No rule determined a value for assay_type |
 | .bai | 1,277 | Parent file had no value for assay_type |
 | .tsv | 923 | No rule determined a value for assay_type |
 | .bigwig | 462 | No rule determined a value for assay_type |
@@ -246,11 +246,10 @@ Processed **708,088** files.
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 626,537 | 88.5% | .vcf (201,668)<br>.tbi (169,519)<br>(none) (138,363)<br>.csi (34,817)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.cram (10,623)<br>.crai (10,317)<br>.txt (4,650)<br>.bed (4,420)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bw (2,520)<br>.g.vcf (2,504)<br>.bam (1,905)<br>.bai (1,277)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.csv (18)<br>.pod5 (11)<br>.pbi (7) |
+| `not_classified` | 629,077 | 88.8% | .vcf (201,668)<br>.tbi (169,519)<br>(none) (138,363)<br>.csi (34,817)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.cram (10,623)<br>.crai (10,317)<br>.txt (4,650)<br>.bam (4,445)<br>.bed (4,420)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.bw (2,520)<br>.g.vcf (2,504)<br>.bai (1,277)<br>.tsv (923)<br>.bigwig (462)<br>.sam (192)<br>.csv (18)<br>.pod5 (11)<br>.pbi (7) |
 | `not_applicable` | 73,749 | 10.4% | .txt (37,548)<br>.md5 (14,233)<br>.bed (7,091)<br>.csi (6,369)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `RNA-seq` | 5,102 | 0.7% | .bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.h5ad (350)<br>.txt (281)<br>.bw (16)<br>.bed (12)<br>.tbi (12)<br>.csv (3) |
-| `WGS` | 2,540 | 0.4% | .bam (2,540) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined by BAM/CRAM headers (`@PG` programs and, for long-read platforms, the resolved modality), by filename patterns, and by extension where the format implies it (`.idat` is a methylation array); no rule reads file size (#430). The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined by a STAR `@PG` line or a transcriptomic modality (RNA-seq), by filename patterns (STAR output), and by extension where the format implies it (`.idat` is a methylation array); no rule reads file size or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
 

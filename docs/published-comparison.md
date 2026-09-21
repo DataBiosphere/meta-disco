@@ -1,6 +1,6 @@
 # Published values compared with inferred
 
-Repository: `anvil/anvil15` · run `20260920_194038` · 708,088 files
+Repository: `anvil/anvil15` · run `20260920_225535` · 708,088 files
 
 **11,231 files have a published value**, across 11,451 file/dimension rows. For every other file the
 repository publishes nothing for these dimensions.
