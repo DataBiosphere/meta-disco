@@ -531,20 +531,33 @@ rows:
 # --- seeding and the queue (AC 21-25) ----------------------------------------------------
 
 
-@pytest.mark.skipif(
-    not hprc_generation_is_current(), reason="the pinned HPRC evidence generation is not the current one on disk"
-)
-def test_ac21_seeding_an_empty_table_from_the_hprc_evidence(empty_table):
+def assert_hprc_seed(empty_table: Path, evidence_root: Path) -> None:
     """43 distinct raw strings on that run; 41 keys, because ``Revio``/``REVIO`` and ``ILLUMINA``/``illumina``
-    normalize alike and are one row each with the other spelling as an alternate — two rows would fail AC 5."""
-    result = seed(empty_table, REAL_EVIDENCE_ROOT, datasets=HPRC_DATASETS)
-    assert result.lines_scanned == 50_344
+    normalize alike and are one row each with the other spelling as an alternate — two rows would fail AC 5
+    (amended on the issue). The seeded rows are a function of the distinct values, not of how often each
+    occurs, so the committed fixture — one line per distinct value per table, in file order — mints the
+    same rows as the real generation."""
+    result = seed(empty_table, evidence_root, datasets=HPRC_DATASETS)
     assert len(result.rows_added) == 41
     table = load_value_map(empty_table)
     assert len(table.rows) == 41
     assert all(row.id and not row.authored for row in table.rows)
     assert {a for row in table.rows for a in row.alternates} == {"REVIO", "illumina"}
     assert all("anvil/anvil15/" in s and f"/{STAMP}" in s for row in table.rows for s in row.seeded_from)
+    assert {row.id for row in table.rows} >= {"platform.revio", "platform.illumina", "reference_assembly.unaligned"}
+
+
+def test_ac21_seeding_an_empty_table_from_the_hprc_evidence_fixture(empty_table):
+    assert_hprc_seed(empty_table, FIXTURE_EVIDENCE_ROOT)
+
+
+@pytest.mark.skipif(
+    not hprc_generation_is_current(), reason="the pinned HPRC evidence generation is not the current one on disk"
+)
+def test_ac21_seeding_an_empty_table_from_the_real_hprc_evidence(empty_table):
+    """The same over the real generation where it is on disk, plus the line count the issue measured."""
+    assert_hprc_seed(empty_table, REAL_EVIDENCE_ROOT)
+    assert seed(empty_table, REAL_EVIDENCE_ROOT, datasets=HPRC_DATASETS).lines_scanned == 50_344
 
 
 def test_ac21_seeding_mints_one_row_per_key_with_id_no_reason_and_the_run_scanned(empty_table, evidence_root):
@@ -601,15 +614,16 @@ def test_a_row_scoped_to_one_dataset_does_not_cover_the_same_key_from_another(tm
     assert table.select("platform", "Revio", "anvil", "ANVIL_T2T") is table.by_id("platform.revio")
 
 
-def test_a_seed_that_would_not_reload_restores_the_file(empty_table, evidence_root, monkeypatch):
+def test_a_seed_that_would_not_reload_leaves_the_file_as_it_was(empty_table, evidence_root, monkeypatch):
     import meta_disco.value_map as vm
 
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
     before = empty_table.read_bytes()
     monkeypatch.setattr(vm, "_row_text", lambda *a, **k: "  - id: [not a\n")
-    with pytest.raises(ValueError, match="does not load; restored"):
+    with pytest.raises(ValueError, match="does not load; left unchanged"):
         seed(empty_table, evidence_root)
     assert empty_table.read_bytes() == before
+    assert list(empty_table.parent.glob("*.tmp")) == [], "no sibling is left behind"
 
 
 def test_two_keys_that_slug_alike_get_stable_distinct_ids(empty_table, evidence_root):
@@ -833,12 +847,13 @@ rows:
     )
 
 
-def test_an_empty_flow_list_of_rows_can_be_seeded(tmp_path, evidence_root):
+def test_every_empty_spelling_of_rows_can_be_seeded(tmp_path, evidence_root):
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
-    table_path = tmp_path / "map.yaml"
-    table_path.write_text("rows: []\n")
-    assert seed(table_path, evidence_root).rows_added == ("platform.revio",)
-    assert len(load_value_map(table_path).rows) == 1
+    for spelling in ("rows:\n", "rows: []\n", "rows: null\n", "rows: ~\n"):
+        table_path = tmp_path / "map.yaml"
+        table_path.write_text(spelling)
+        assert seed(table_path, evidence_root).rows_added == ("platform.revio",), spelling
+        assert len(load_value_map(table_path).rows) == 1
 
 
 def test_the_text_of_an_empty_array_is_a_scalar_not_a_list_cell():
