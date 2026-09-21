@@ -372,6 +372,12 @@ class TestLoadClassifications:
         with pytest.raises(ValueError, match="not a classification file"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
+    def test_a_legacy_results_envelope_is_read(self, tmp_path):
+        """The parent map reads the legacy `results` key too, as the catch-all does."""
+        cls_file = tmp_path / "bam_classifications.json"
+        cls_file.write_text(json.dumps({"results": [_classified_record("a" * 32, "GRCh38", "sample.bam")]}))
+        assert set(load_classifications(cls_file, key=ANVIL_KEY)) == {_fid("a" * 32)}
+
     def test_a_row_that_is_not_an_object_is_refused(self, tmp_path):
         cls_file = tmp_path / "bam_classifications.json"
         cls_file.write_text(json.dumps({"classifications": ["stray"]}))

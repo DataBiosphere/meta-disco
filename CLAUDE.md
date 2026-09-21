@@ -199,9 +199,10 @@ evidence}` entry — plus the controlled vocabulary:
     (`scripts/classify_remaining_files.py`), the index producer's parent join
     (`scripts/classify_index_files.py`, #486) and the post-run one-row-per-file check
     (#445). The two producers read another producer's rows through `pipeline.keyed_rows`
-    and their own input records through `pipeline.input_key_value`; both raise on a
-    missing key rather than skip. An envelope naming no repository is refused before a
-    run starts.
+    and the input record each compares against those rows — every record for the
+    catch-all, the matched parent for the index producer — through
+    `pipeline.input_key_value`; both raise on a missing key rather than skip. An
+    envelope naming no repository is refused before a run starts.
   - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
     owner because one function says so — the name decides and `file_format` is only a
     fallback, for reasons `route`'s docstring gives. Four hand-written predicates are

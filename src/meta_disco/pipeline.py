@@ -136,7 +136,7 @@ HPRC_REPOSITORY = "hprc"
 # - AnVIL: ``file_id``, the repository's own durable identifier — unique on every
 #   record and unchanged by a catalog re-index (#433), which is why the duplicate check
 #   chose it. Not ``entry_id``, equally unique but regenerated per index: one key serves
-#   both readers only if it is the durable one. Not ``file_name``, which identifies a
+#   every reader only if it is the durable one. Not ``file_name``, which identifies a
 #   file only about 60% of the time there.
 # - HPRC: ``file_md5sum``. The HPRC catalogs issue no file identifier and none is
 #   minted — ``entry_id``, ``file_id`` and ``drs_uri`` are Azul's catalog identity and
