@@ -5,7 +5,7 @@ A thin entry point for ``meta_disco.value_map.main``, which says what each comma
 
     uv run python scripts/value_map.py --dataset AnVIL_HPRC_R2 --dataset ANVIL_HPRC seed
     uv run python scripts/value_map.py queue
-    uv run python scripts/value_map.py queue --output output/review_queue.md
+    uv run python scripts/value_map.py --output output/review_queue.md queue
 """
 
 import sys

@@ -724,8 +724,10 @@ def list_cell(raw_value: str) -> list[str] | None:
     The inverse of how ``anvil_evidence._transcribe`` writes a list cell: a string is
     written verbatim and anything else as its JSON, so a list arrives as a JSON array
     of strings. Only that shape is a list here; a scalar that happens to start with
-    ``[`` and is not one stays a scalar. Kept beside the line format so the encoding
-    and its decoding are one fact in one module.
+    ``[`` and is not one stays a scalar, and so does the text ``[]`` — the importer
+    writes no line for an empty list, so one that arrives is a string the source
+    wrote. Kept beside the line format so the encoding and its decoding are one fact
+    in one module.
     """
     if not raw_value.lstrip().startswith("["):
         return None
@@ -733,7 +735,7 @@ def list_cell(raw_value: str) -> list[str] | None:
         parsed = json.loads(raw_value)
     except ValueError:
         return None
-    if isinstance(parsed, list) and all(isinstance(e, str) for e in parsed):
+    if parsed and isinstance(parsed, list) and all(isinstance(e, str) for e in parsed):
         return parsed
     return None
 

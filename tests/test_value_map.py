@@ -7,6 +7,7 @@ generation layout, so the seeder and queue read them the way they read a real ge
 """
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -18,8 +19,10 @@ from meta_disco.source_evidence import (
     EvidenceEntry,
     EvidenceFileSource,
     EvidenceTarget,
+    discover,
     evidence_file_path,
     generation_dir,
+    list_cell,
     write_evidence_file,
 )
 from meta_disco.value_map import (
@@ -39,6 +42,15 @@ REAL_EVIDENCE_ROOT = Path("data/source_evidence")
 HPRC_DATASETS = ["AnVIL_HPRC_R2", "ANVIL_HPRC"]
 STAMP = "20260920T175642Z"
 HPRC_GENERATIONS = [generation_dir(REAL_EVIDENCE_ROOT, "anvil", "anvil15", d, STAMP) for d in HPRC_DATASETS]
+
+
+def hprc_generation_is_current() -> bool:
+    """The pinned generation is on disk *and* is what `discover` reads — a newer import would change the counts."""
+    if not all(p.is_dir() for p in HPRC_GENERATIONS):
+        return False
+    current = {p.parent for p in discover(REAL_EVIDENCE_ROOT) if p.parent.parent.name in HPRC_DATASETS}
+    return current == set(HPRC_GENERATIONS)
+
 
 # --- helpers -------------------------------------------------------------------------
 
@@ -497,7 +509,9 @@ rows:
 # --- seeding and the queue (AC 21-25) ----------------------------------------------------
 
 
-@pytest.mark.skipif(not all(p.is_dir() for p in HPRC_GENERATIONS), reason="the HPRC evidence generation is not on disk")
+@pytest.mark.skipif(
+    not hprc_generation_is_current(), reason="the pinned HPRC evidence generation is not the current one on disk"
+)
 def test_ac21_seeding_an_empty_table_from_the_hprc_evidence(empty_table):
     """43 distinct raw strings on that run; 41 keys, because ``Revio``/``REVIO`` and ``ILLUMINA``/``illumina``
     normalize alike and are one row each with the other spelling as an alternate — two rows would fail AC 5."""
@@ -656,6 +670,14 @@ def imported_segments(path: Path) -> set[str]:
     return {segment for name in names for segment in name.split(".")}
 
 
+def test_two_rows_keyed_alike_are_refused_by_the_table_itself(tmp_path):
+    """The invariant is `ValueMap`'s, not only the loader's, so a table built directly cannot shadow a row."""
+    (a,) = load(tmp_path, "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n").rows
+    (b,) = load(tmp_path, "rows:\n  - id: platform.again\n    match: {slot: platform, value: REVIO}\n").rows
+    with pytest.raises(ValueError, match="both match"):
+        ValueMap(rows=(a, b))
+
+
 def test_ac26_nothing_in_a_run_imports_the_table():
     """Classification output is unchanged because no run code reaches the module: the argument the
     issue allows in place of a corpus diff, made checkable over every module and script but the table's own."""
@@ -703,8 +725,15 @@ def test_row_ids_are_slot_dot_slug_with_set_elements_joined():
 
 def test_row_ids_and_rule_ids_are_disjoint_by_shape(tmp_path):
     """A row id starts with its slot and a dot; no rule id contains a dot; so a claim's ``rule_id`` names one or
-    the other and neither loader has to read the other's file."""
-    assert all("." not in rule.id for rule in get_unified_rules().rules)
+    the other and neither loader has to read the other's file. Rule ids live in three places: the rule set, its
+    assay rules, and the ``rule_id="..."`` literals of the content classifiers and standalone producers."""
+    rules = get_unified_rules()
+    ids = {rule.id for rule in rules.rules} | {rule.id for rule in rules.assay_type_rules}
+    for path in [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]:
+        if path.name != "value_map.py":
+            ids.update(re.findall(r"rule_id=\"([^\"]+)\"", path.read_text()))
+    assert ids, "no rule ids found — the search is broken, not the namespace"
+    assert sorted(i for i in ids if "." in i) == []
     refuses(
         tmp_path,
         """
@@ -715,6 +744,36 @@ rows:
         "'revio'",
         "must start with 'platform.'",
     )
+
+
+def test_an_authored_row_must_say_what_it_declares(tmp_path):
+    """A reason with no `declares` is a slip, not a no-op: the deliberate no-op is spelled `declares: {}`."""
+    refuses(
+        tmp_path,
+        """
+rows:
+  - id: platform.revio
+    match: {slot: platform, value: Revio}
+    reason: forgot the declaration
+""",
+        "'platform.revio'",
+        "no `declares`",
+    )
+
+
+def test_an_empty_flow_list_of_rows_can_be_seeded(tmp_path, evidence_root):
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
+    table_path = tmp_path / "map.yaml"
+    table_path.write_text("rows: []\n")
+    assert seed(table_path, evidence_root).rows_added == ("platform.revio",)
+    assert len(load_value_map(table_path).rows) == 1
+
+
+def test_the_text_of_an_empty_array_is_a_scalar_not_a_list_cell():
+    """The importer writes no line for an empty list, so `[]` arriving is a string the source wrote."""
+    assert list_cell("[]") is None
+    assert match_key("[]") == frozenset({"[]"})
+    assert list_cell('["A"]') == ["A"]
 
 
 def test_a_seeded_row_may_not_declare(tmp_path):

@@ -19,11 +19,12 @@ seeded against authored is 3.11; scope and selection are 3.12; the queue is 5.2.
 
 A row is **authored** when it carries a ``reason`` and **seeded** otherwise. Only an
 authored row may carry ``declares``, which names at most one term or status per slot
-and may name slots other than the match slot; ``declares: {}`` with a reason is a
-ruling that the value means nothing here. ``value`` is a string or, for a list cell, a
+and may name slots other than the match slot; an authored row must carry it, and
+``declares: {}`` is the deliberate ruling that the value means nothing here. ``value`` is a string or, for a list cell, a
 list of strings; ``alternates`` are further spellings. An id is ``<slot>.<slug>``,
 which is what keeps row ids apart from rule ids without either loader reading the
-other: no rule id contains a dot, and ``test_value_map`` checks that.
+other: no rule id in the rule set, its assay rules, or the ``rule_id=`` literals of
+the content classifiers contains a dot, and ``test_value_map`` checks all three.
 
 **Matching** casefolds and strips, nothing more; ``test_value_map`` checks that this
 cannot merge two terms of any slot's vocabulary. A list cell (a JSON array of strings,
@@ -92,6 +93,7 @@ _WHERE = "value map"
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
 _ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
+_EMPTY_ROWS = re.compile(r"^rows:[ \t]*\[[ \t]*\][ \t]*$", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -169,9 +171,17 @@ class ValueMap:
     )
 
     def __post_init__(self) -> None:
+        """Build the index, refusing two rows keyed alike on one slot at one scope (contract 3.12)."""
         for row in self.rows:
             for key in row.keys:
-                self._index[(row.slot, key, row.scope)] = row
+                at = (row.slot, key, row.scope)
+                if at in self._index:
+                    scope = "(unscoped)" if row.scope is None else f"{row.scope.source}/{row.scope.dataset or ''}"
+                    raise ValueError(
+                        f"{_WHERE}: rows {self._index[at].id!r} and {row.id!r} both match {sorted(key)} on {row.slot} "
+                        f"at scope {scope} — one row per key at a scope, alternates included"
+                    )
+                self._index[at] = row
 
     def select(self, slot: str, raw_value: str, source: str | None, dataset: str | None) -> Row | None:
         """The narrowest row matching this evidence, or None. Its declaration is taken whole (3.12).
@@ -214,7 +224,8 @@ def load_value_map(path: Path | None = None) -> ValueMap:
     cannot do: it sees the line before any row exists. Contract 3.5's bound on the
     normalizer is a property of :func:`normalize`, checked by ``test_value_map``.
     """
-    text = path.read_text(encoding="utf-8") if path is not None else default_value_map_resource().read_text()
+    resource = path if path is not None else default_value_map_resource()
+    text = resource.read_text(encoding="utf-8")
     return ValueMap(rows=tuple(_rows(_parse(text))))
 
 
@@ -266,22 +277,13 @@ def _kind(node: yaml.Node) -> str:
 
 
 def _rows(nodes: list[yaml.Node]) -> Iterator[Row]:
+    """Each row checked on its own; the cross-row key check is ``ValueMap``'s, id uniqueness is here."""
     seen_ids: dict[str, int] = {}
-    seen_keys: dict[tuple[str, Key, Scope | None], str] = {}
     for n, node in enumerate(nodes, start=1):
         row = _row(node, n)
         if row.id in seen_ids:
             raise ValueError(f"{_WHERE}: row {n} repeats id {row.id!r} (first at row {seen_ids[row.id]})")
         seen_ids[row.id] = n
-        for key in row.keys:
-            at = (row.slot, key, row.scope)
-            if at in seen_keys:
-                scope = "(unscoped)" if row.scope is None else f"{row.scope.source}/{row.scope.dataset or ''}"
-                raise ValueError(
-                    f"{_WHERE}: rows {seen_keys[at]!r} and {row.id!r} both match {sorted(key)} on {row.slot} "
-                    f"at scope {scope} — one row per key at a scope, alternates included"
-                )
-            seen_keys[at] = row.id
         yield row
 
 
@@ -353,6 +355,11 @@ def _reason(node: yaml.Node, at: str) -> str:
 
 def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, str]:
     if node is None:
+        if authored:
+            raise ValueError(
+                f"{at}: has a reason but no `declares` — an authored row says what it declares; "
+                "`declares: {}` is the deliberate no-op"
+            )
         return {}
     if not authored:
         raise ValueError(f"{at}: declares something but has no reason — a seeded row declares nothing (contract 3.11)")
@@ -470,6 +477,10 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     if not seen:
         return SeedResult(len(paths), lines_scanned, ())
     ids = {row.id for row in table.rows}
+    if not table.rows:
+        # `rows: []` loads as an empty table but a block item cannot follow a flow
+        # sequence, so the empty list is spelled as the bare key before appending.
+        text = _EMPTY_ROWS.sub("rows:", text)
     indent = _row_indent(text)
     added: list[str] = []
     block = []
@@ -638,10 +649,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--table", type=Path, default=None, help="Table file (default: the bundled value_map.yaml)")
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
     parser.add_argument("--dataset", action="append", help="Only this dataset's evidence (repeatable)")
+    parser.add_argument("--output", type=Path, default=None, help="queue: write the markdown here instead of stdout")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("seed", help="Append a seeded row for every value no row matches")
-    queue = sub.add_parser("queue", help="List every value whose selected row is not authored")
-    queue.add_argument("--output", type=Path, default=None, help="Write the markdown here instead of stdout")
+    sub.add_parser("queue", help="List every value whose selected row is not authored")
     args = parser.parse_args(argv)
 
     table_path = args.table if args.table is not None else Path(str(default_value_map_resource()))
