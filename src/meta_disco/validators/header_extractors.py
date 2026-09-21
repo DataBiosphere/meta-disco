@@ -110,7 +110,7 @@ def parse_sam_header(header_text: str) -> SAMHeader:
     pg_list = []
     co_list = []
 
-    for line in header_text.strip().split("\n"):
+    for line in header_text.splitlines():
         if not line.startswith("@"):
             continue
 
@@ -219,6 +219,15 @@ def has_sam_section(header: SAMHeader, section: str) -> bool:
     return False
 
 
+# Compiled once: the line parser runs on every ``##`` line of every VCF header in
+# the corpus, and module-level ``re.match`` on a string pays a cache lookup per
+# call (#488).
+_VCF_STRUCTURED_LINE_RE = re.compile(r"^##(\w+)=<(.*)>$")
+_VCF_SIMPLE_LINE_RE = re.compile(r"^##(\w+)=(.*)$")
+# key=value or key="value with spaces"
+_VCF_FIELD_RE = re.compile(r'(\w+)=("[^"]*"|[^,]*)')
+
+
 def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
     """
     Parse a VCF header line into a typed simple or structured record.
@@ -231,10 +240,10 @@ def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
         ``##key=value`` lines, or None if not parseable.
     """
     # Match ##TYPE=<...> format
-    match = re.match(r"^##(\w+)=<(.*)>$", line)
+    match = _VCF_STRUCTURED_LINE_RE.match(line)
     if not match:
         # Handle simple key=value format like ##fileformat=VCFv4.2
-        simple_match = re.match(r"^##(\w+)=(.*)$", line)
+        simple_match = _VCF_SIMPLE_LINE_RE.match(line)
         if simple_match:
             return VcfSimpleMeta(type=simple_match.group(1), value=simple_match.group(2))
         return None
@@ -244,10 +253,7 @@ def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
 
     # Parse key=value pairs (handling quoted values)
     fields: dict[str, str] = {}
-
-    # Pattern for key=value or key="value with spaces"
-    pattern = r'(\w+)=("[^"]*"|[^,]*)'
-    for key, value in re.findall(pattern, content):
+    for key, value in _VCF_FIELD_RE.findall(content):
         # Remove quotes if present
         if value.startswith('"') and value.endswith('"'):
             value = value[1:-1]
@@ -274,7 +280,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     other_meta = []
     unkeyed_meta = []
 
-    for line in header_text.strip().split("\n"):
+    for line in header_text.splitlines():
         if not line.startswith("##"):
             continue
 

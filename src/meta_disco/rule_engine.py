@@ -3,6 +3,7 @@
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -95,13 +96,26 @@ class ExtendedFileInfo:
     # Derived/cached fields
     platform: str | None = None
 
-    # Lazily-parsed header caches, memoized on first use by the tier-3 matchers
-    # (_match_bam_header/_match_vcf_header). init=False with no default preserves
-    # the hasattr()-guarded lazy init — the attribute stays absent until the
-    # first parse — while declaring the type for the checker. repr/compare are
-    # excluded so an unset cache never trips repr()/==.
-    _parsed_bam_header: "SAMHeader" = field(init=False, repr=False, compare=False)
-    _parsed_vcf_header: "VCFHeader" = field(init=False, repr=False, compare=False)
+    # The parse of each header, made once on first use and shared by everything
+    # that reads it: the tier-3 matchers, the header-absent check, and the
+    # classifiers' contig-length and build steps (#488). Owning the parse here,
+    # on the object that holds the text, is what makes "parsed once per file" a
+    # property of the object rather than a convention between modules. A missing
+    # header parses as empty text, so a reader never has to guard None twice.
+    # cached_property is not a dataclass field, so repr()/== ignore it — and it
+    # is the parse of the text as first read: the header fields are set at
+    # construction and not reassigned, which no production path does.
+    @cached_property
+    def parsed_bam_header(self) -> "SAMHeader":
+        from .validators.header_extractors import parse_sam_header
+
+        return parse_sam_header(self.bam_header or "")
+
+    @cached_property
+    def parsed_vcf_header(self) -> "VCFHeader":
+        from .validators.header_extractors import parse_vcf_header
+
+        return parse_vcf_header(self.vcf_header or "")
 
     @property
     def file_size_gb(self) -> float | None:
@@ -1109,12 +1123,9 @@ class RuleEngine:
         if not section:
             return False
 
-        # Parse BAM header once and cache on the file_info object
-        from .validators.header_extractors import match_sam_header_pattern, parse_sam_header
+        from .validators.header_extractors import match_sam_header_pattern
 
-        if not hasattr(file_info, "_parsed_bam_header"):
-            file_info._parsed_bam_header = parse_sam_header(file_info.bam_header)
-        return match_sam_header_pattern(file_info._parsed_bam_header, section, field_name, pattern)
+        return match_sam_header_pattern(file_info.parsed_bam_header, section, field_name, pattern)
 
     def _match_vcf_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against VCF header content."""
@@ -1127,12 +1138,9 @@ class RuleEngine:
         if not header_type or not pattern:
             return False
 
-        # Parse VCF header once and cache on the file_info object
-        from .validators.header_extractors import match_vcf_header_pattern, parse_vcf_header
+        from .validators.header_extractors import match_vcf_header_pattern
 
-        if not hasattr(file_info, "_parsed_vcf_header"):
-            file_info._parsed_vcf_header = parse_vcf_header(file_info.vcf_header)
-        return match_vcf_header_pattern(file_info._parsed_vcf_header, header_type, pattern)
+        return match_vcf_header_pattern(file_info.parsed_vcf_header, header_type, pattern)
 
     def _match_fastq_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against FASTQ read name."""
@@ -1151,10 +1159,9 @@ class RuleEngine:
 
         if section == "@SQ" and file_info.bam_header is not None:
             # Check if @SQ section is missing
-            from .validators.header_extractors import has_sam_section, parse_sam_header
+            from .validators.header_extractors import has_sam_section
 
-            header = parse_sam_header(file_info.bam_header)
-            return not has_sam_section(header, section)
+            return not has_sam_section(file_info.parsed_bam_header, section)
 
         return False
 

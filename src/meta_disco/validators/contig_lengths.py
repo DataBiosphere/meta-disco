@@ -13,7 +13,7 @@ Data loaded from the bundled unified_rules.yaml (package data of meta_disco.rule
 single source of truth).
 """
 
-import re
+from collections.abc import Iterable
 
 from ..rule_loader import get_unified_rules
 
@@ -39,14 +39,17 @@ def _load_contig_lengths() -> dict[str, dict[str, int]]:
 # Every chromosome has a unique length per assembly (min diff 41Kbp).
 REFERENCE_CONTIG_LENGTHS: dict[str, dict[str, int]] = _load_contig_lengths()
 
-# Build reverse lookup: (normalized_contig, length) -> assembly
-_CONTIG_LENGTH_TO_ASSEMBLY: dict[tuple[str, int], str] = {}
+# The candidates a normalized contig name can match: each assembly's length for that
+# name, in the table's assembly order so a tie still goes to the first one. The scan
+# this replaced ran for every contig the exact `(name, length)` lookup missed, and
+# compared it against every spelling of every assembly (`chr1` and `1` share one
+# length) — on a GATK header, that is every one of its thousands of unplaced
+# contigs, most of the VCF producer's work (#488). A name the table does not hold
+# — every decoy, alt and unplaced contig — has no entry here.
+_CANDIDATES_BY_NAME: dict[str, dict[str, int]] = {}
 for _assembly, _contigs in REFERENCE_CONTIG_LENGTHS.items():
     for _contig, _length in _contigs.items():
-        # Normalize contig name (remove chr prefix)
-        _normalized = _contig.removeprefix("chr")
-        _key = (_normalized, _length)
-        _CONTIG_LENGTH_TO_ASSEMBLY[_key] = _assembly
+        _CANDIDATES_BY_NAME.setdefault(_contig.removeprefix("chr"), {})[_assembly] = _length
 
 
 # Maximum chromosome lengths for position-based exclusion
@@ -62,16 +65,23 @@ CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
 }
 
 
-def detect_reference_from_contig_lengths(contig_lines: list[str], tolerance: int = 1000) -> tuple[str | None, int]:
+def detect_reference_from_contigs(
+    contigs: Iterable[tuple[str, int | None]], tolerance: int = 1000
+) -> tuple[str | None, int]:
     """
-    Detect reference assembly from contig lengths in VCF ##contig lines or BAM @SQ lines.
+    Detect reference assembly from ``(contig name, length)`` pairs.
 
     This is a definitive signal - chromosome lengths are unique to each assembly.
     Uses fuzzy matching with tolerance to handle minor version differences
     (e.g., CHM13 v1.0 vs v2.0 differ by < 1000bp per chromosome).
 
+    Each contig is one dictionary lookup: the closest of its name's candidates —
+    at most one per assembly — within ``tolerance`` votes, an exact length being
+    the closest, a tie going to the first assembly in table order; a name the
+    table does not hold, or a pair with no length, votes for nothing.
+
     Args:
-        contig_lines: List of ##contig=<...> lines from VCF header or @SQ lines from BAM
+        contigs: ``(name, length)`` pairs, the name with or without a ``chr`` prefix
         tolerance: Max difference in bp to consider a match (default 1000)
 
     Returns:
@@ -81,56 +91,18 @@ def detect_reference_from_contig_lengths(contig_lines: list[str], tolerance: int
     """
     votes: dict[str, int] = {}
 
-    # VCF contig fields can appear in any order: ##contig=<ID=chr1,length=248387497>
-    # or ##contig=<ID=chr1,assembly=GRCh38,length=248387497>
-    vcf_id_pattern = r"ID=([^,>]+)"
-    vcf_len_pattern = r"length=(\d+)"
-    # BAM @SQ tags can appear in any order, so match SN and LN independently
-    bam_sn_pattern = r"SN:([^\t]+)"
-    bam_ln_pattern = r"LN:(\d+)"
-
-    for line in contig_lines:
-        contig = None
-        length = None
-
-        # Try VCF format first (ID and length fields matched independently)
-        if line.startswith("##contig"):
-            id_match = re.search(vcf_id_pattern, line)
-            len_match = re.search(vcf_len_pattern, line)
-            if id_match and len_match:
-                contig = id_match.group(1).removeprefix("chr")
-                length = int(len_match.group(1))
-        else:
-            # Try BAM format (SN and LN tags can appear in any order)
-            sn_match = re.search(bam_sn_pattern, line)
-            ln_match = re.search(bam_ln_pattern, line)
-            if sn_match and ln_match:
-                contig = sn_match.group(1).removeprefix("chr")
-                length = int(ln_match.group(1))
-
-        if contig is None or length is None:
+    for name, length in contigs:
+        if length is None:
             continue
-
-        # Try exact match first
-        key = (contig, length)
-        if key in _CONTIG_LENGTH_TO_ASSEMBLY:
-            assembly = _CONTIG_LENGTH_TO_ASSEMBLY[key]
-            votes[assembly] = votes.get(assembly, 0) + 1
-        else:
-            # Fuzzy match: find closest assembly within tolerance
-            best_match = None
-            best_diff = tolerance + 1
-            for ref_assembly, ref_contigs in REFERENCE_CONTIG_LENGTHS.items():
-                # Check both chr-prefixed and non-prefixed versions
-                for ref_contig, ref_length in ref_contigs.items():
-                    ref_norm = ref_contig.removeprefix("chr")
-                    if ref_norm == contig:
-                        diff = abs(ref_length - length)
-                        if diff <= tolerance and diff < best_diff:
-                            best_match = ref_assembly
-                            best_diff = diff
-            if best_match:
-                votes[best_match] = votes.get(best_match, 0) + 1
+        best_match = None
+        best_diff = tolerance + 1
+        for ref_assembly, ref_length in _CANDIDATES_BY_NAME.get(name.removeprefix("chr"), {}).items():
+            diff = abs(ref_length - length)
+            if diff <= tolerance and diff < best_diff:
+                best_match = ref_assembly
+                best_diff = diff
+        if best_match:
+            votes[best_match] = votes.get(best_match, 0) + 1
 
     if votes:
         # Return assembly with most votes

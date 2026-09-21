@@ -566,11 +566,12 @@ class ClassifyPipeline:
         # Best-effort fast-fail on a missing environment dependency (e.g. samtools
         # for BAM) before the pool starts, so it aborts once with a clear message
         # instead of every record failing to read and vanishing. Skipped when every
-        # record is already cached (`_is_cached` = evidence file present), since a
-        # warm resume run serves from disk without the tool. This is keyed on file
-        # existence, not evidence validity: a corrupt/partial evidence file passes
-        # `_is_cached` yet the fetcher re-fetches — for that case the per-record
-        # passthrough (bam's `FileNotFoundError`) is the backstop, not this guard.
+        # record is already cached (its evidence file was listed by
+        # `cached_md5sums`), since a warm resume run serves from disk without the
+        # tool. This is keyed on file existence, not evidence validity: a
+        # corrupt/partial evidence file is listed yet the fetcher re-fetches — for
+        # that case the per-record passthrough (bam's `FileNotFoundError`) is the
+        # backstop, not this guard.
         will_fetch = any(
             not (self.resume and w.file_md5sum in cached_md5s) for w in work if isinstance(w, ClassifierRecord)
         )
@@ -746,10 +747,14 @@ class ClassifyPipeline:
         "Remaining to fetch". Every counted md5 is a ``ClassifierRecord``'s, a valid
         md5 by construction.
         """
+        from .evidence import cached_md5sums
+
         name = self.config.name.upper()
         classifiable = [w for w in work if isinstance(w, ClassifierRecord)]
         print(f"Found {len(classifiable)} {name} files with MD5 for header inspection")
-        cached_md5s = {w.file_md5sum for w in classifiable if self._is_cached(w.file_md5sum)}
+        # One walk of the cache, not one stat per file: this runs on the main thread
+        # before the pool starts, so every second here is wall time (#488).
+        cached_md5s = {w.file_md5sum for w in classifiable} & cached_md5sums(self.evidence_dir)
         print(f"  Already cached: {len(cached_md5s)}")
         print(f"  Remaining to fetch: {len(classifiable) - len(cached_md5s)}")
         return cached_md5s
