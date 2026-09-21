@@ -306,6 +306,10 @@ def _sample_matches(pattern, cap=64):
                 out = bounded([s + b for s in out for branch in av[1] for b in walk(branch)])
             elif name.endswith("SUBPATTERN"):
                 out = bounded([s + b for s in out for b in walk(av[3])])
+            elif name.endswith("ASSERT"):
+                # A positive lookahead consumes nothing but requires its text ahead;
+                # `(?=.*hic)` samples as `xhic` so the token still gets a probe.
+                out = bounded([s + b for s in out for b in walk(av[1])])
             elif name.endswith(("MAX_REPEAT", "MIN_REPEAT")):
                 # Repeated `least` times, not once: `\d{4}` needs four digits or the
                 # sample its own pattern cannot match, which probes nothing.
@@ -393,6 +397,42 @@ def _accession_internal_matches(rules, filenames, exempt=KNOWN_UNANCHORED):
     return hits
 
 
+# The probe frame with nothing injected. A rule that fires on a probe but not on this
+# fired because of the injected token — whatever its match span looks like.
+_PROBE_CONTROL = "IGVFFI7K2.fastq.gz"
+
+
+def _probe_triggered(rules, probes, exempt=KNOWN_UNANCHORED):
+    """Rules that fire on a probe and not on the empty frame.
+
+    The span check in `_accession_internal_matches` misses two shapes: a pattern
+    wrapped in wildcards (`.*hic.*`) matches the whole name, so its span is never
+    inside the token, and a pure lookahead (`(?=.*hic)`) matches zero characters and
+    is skipped as zero-width. Both fire in the engine, which only asks `re.search`.
+    Asking the same question of the probe and of the frame it was built on catches
+    both, because the token is the only difference between the two names.
+    """
+    hits = []
+    for rule in rules.rules:
+        pattern = (rule.when or {}).get("filename_pattern")
+        if not pattern or rule.id in exempt:
+            continue
+        compiled = re.compile(pattern, re.IGNORECASE)
+        if compiled.search(_PROBE_CONTROL):
+            continue  # fires with or without a token: not an accession match
+        hits.extend((rule.id, probe, "fires on the injected token") for probe in probes if compiled.search(probe))
+    return hits
+
+
+def accession_hits(rules, exempt=KNOWN_UNANCHORED):
+    """Every way a rule can be shown to match inside an accession: a match span inside a
+    real or generated accession token, or firing on a probe and not on its frame."""
+    probes = accession_probes(rules, exempt)
+    return _accession_internal_matches(rules, ACCESSION_FILENAMES + probes, exempt) + _probe_triggered(
+        rules, probes, exempt
+    )
+
+
 def test_no_pattern_matches_inside_an_accession():
     """No `filename_pattern` fires on characters buried in an opaque identifier (#430).
 
@@ -402,13 +442,15 @@ def test_no_pattern_matches_inside_an_accession():
     hold for the next rule someone authors with a bare token.
 
     Scope: one probe per alternative, built by `_sample_matches` — a character
-    class by one member (`hap[12]` → `hap1`), a repeat at its minimum — so a new
-    bare token cannot slip past for want of a hand-written example. Not probed:
-    a class's other members, and rules in `KNOWN_UNANCHORED`. The general form
-    is #475, which moves the boundary into the engine.
+    class by one member (`hap[12]` → `hap1`), a repeat at its minimum, a lookahead
+    by its text — so a new bare token cannot slip past for want of a hand-written
+    example; and a rule is caught by its match span or by firing on the probe and
+    not on the frame (`accession_hits`). Not probed: a class's other members, and
+    rules in `KNOWN_UNANCHORED`. The general form is #475, which moves the boundary
+    into the engine.
     """
     rules = get_unified_rules()
-    hits = _accession_internal_matches(rules, ACCESSION_FILENAMES + accession_probes(rules))
+    hits = accession_hits(rules)
     assert not hits, (
         "Rule patterns match inside an opaque accession — anchor the short token on "
         "its left with `(^|[._-])`:\n  "
@@ -505,13 +547,7 @@ def test_known_unanchored_entries_still_exist():
     def alone(rule_id):
         return SimpleNamespace(rules=[by_id[rule_id]])
 
-    idle = sorted(
-        rule_id
-        for rule_id in KNOWN_UNANCHORED
-        if not _accession_internal_matches(
-            alone(rule_id), accession_probes(alone(rule_id), exempt=frozenset()), exempt=frozenset()
-        )
-    )
+    idle = sorted(rule_id for rule_id in KNOWN_UNANCHORED if not accession_hits(alone(rule_id), exempt=frozenset()))
     assert not idle, (
         "KNOWN_UNANCHORED exempts rules that no longer match inside an accession — drop the entry:\n  "
         + "\n  ".join(idle)
@@ -538,6 +574,13 @@ def test_accession_check_catches_an_unanchored_token(tmp_path):
     # one — written after the assertion above has read it.
     anchored = _write_rules_file(tmp_path, probe("(?i)(^|[._-])10x"))
     assert not _accession_internal_matches(RuleLoader(anchored).load(), names)
+
+    # Two shapes the span check cannot see: a wildcard-wrapped token, whose match is
+    # the whole name, and a lookahead, whose match is empty. Both fire in the engine.
+    for pattern in ("(?i).*hic.*", "(?i)(?=.*hic)"):
+        loaded = RuleLoader(_write_rules_file(tmp_path, probe(pattern))).load()
+        assert not _accession_internal_matches(loaded, accession_probes(loaded, exempt=frozenset()), exempt=frozenset())
+        assert accession_hits(loaded, exempt=frozenset()), pattern
 
 
 def test_when_value_check_rejects_bogus_platform(tmp_path):
