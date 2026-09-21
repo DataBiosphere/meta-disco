@@ -97,9 +97,13 @@
 #     which classified one FASTQ single-cell on three characters of an identifier
 #     (#430). Anchor such a token on its left with `(^|[._-])`; that stops the
 #     accession match while keeping `scRNAseq_R1` and `10xGenomics`, which a
-#     trailing `([._-]|$)` would reject. Leave long or word-forming alternatives
-#     bare — `counts` has to keep matching inside `pseudocounts`.
-#     `test_no_pattern_matches_inside_an_accession` enforces this.
+#     trailing `([._-]|$)` would reject. A token of nine or more characters may
+#     stay bare: it cannot fit the eight-character variable part of an IGVF
+#     accession, and `WORD_FORMING` in test_rule_vocabulary lists each one with
+#     its reason. An alternative that matches no file in either catalog is
+#     deleted rather than anchored — the rule set is the minimum the data can
+#     verify, grown explicitly for a new case or dataset.
+#     `test_no_pattern_matches_inside_an_accession` enforces the anchoring.
 # - dataset_pattern: regex pattern for dataset title
 # - file_format: required format (.bam, .cram, etc)
 #
@@ -607,7 +611,7 @@ rules:
       data_modality: epigenomic.methylation
       data_type: annotations
       assay_type: Bisulfite-seq
-    rationale: "BED file contains CpG methylation calls or bisulfite sequencing regions"
+    rationale: "BED file is modbam2bed output or names CpG methylation calls"
 
   - id: bed_expression
     tier: 2

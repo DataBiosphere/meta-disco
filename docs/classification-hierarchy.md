@@ -160,11 +160,11 @@ not for being unanchored.
 **data_modality**:
 - `genomic` ← regions.bed pattern, fallback default
 - `transcriptomic.bulk` ← filename (expression, TPM, leafcutter, TSS)
-- `epigenomic.methylation` ← filename (CpG as a delimited token, methylation, bisulfite, modbam2bed)
+- `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
 
 **assay_type**:
-- `Bisulfite-seq` ← filename (methylation, bisulfite)
+- `Bisulfite-seq` ← filename (modbam2bed, or CpG as a delimited token — asserted by `bed_methylation` for both, though modbam2bed is a nanopore modified-base caller, not bisulfite)
 - `RNA-seq` ← filename (expression)
 
 **reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename, BED coordinate detection
