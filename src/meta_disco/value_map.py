@@ -265,7 +265,17 @@ def _scalar(node: yaml.Node, at: str) -> str:
 
 
 def _string_or_list(node: yaml.Node, at: str) -> str | tuple[str, ...]:
+    """A match value: one string, or a list of strings for a list cell — never an empty list.
+
+    The importer writes no line for an empty list (``anvil_evidence._transcribe``), so no
+    evidence could select a row keyed on one; the text ``[]`` is a scalar and is written
+    quoted, ``"[]"``.
+    """
     if isinstance(node, yaml.SequenceNode):
+        if not node.value:
+            raise ValueError(
+                f'{at}: an empty list matches nothing — no evidence line carries one; quote "[]" for that text'
+            )
         return tuple(_scalar(item, at) for item in node.value)
     return _scalar(node, at)
 
@@ -636,17 +646,24 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
     return entries
 
 
-def _visible(raw_value: str) -> str:
-    """A raw value with its control characters spelled out, so two values differing only in one stay distinct.
+def _code(raw_value: str) -> str:
+    """A raw value as a markdown code span, every control character spelled out and any backtick run contained.
 
-    Evidence keeps a raw value verbatim, line breaks included; the shared escaper folds a
-    line break to a space, which would make ``a\\nb`` and ``a b`` one row to the eye.
+    Evidence keeps a raw value verbatim, so it may hold a line break, a NUL or a backtick.
+    The JSON escape spells every control character (``\\n``, ``\\u0000``), which keeps two
+    values differing only in one distinct to the eye; the span's delimiter is one backtick
+    longer than the longest run inside, padded where the value begins or ends with one,
+    which is how CommonMark lets a code span carry backticks.
     """
-    return raw_value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+    text = json.dumps(raw_value, ensure_ascii=False)[1:-1]
+    fence = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
+    if text.startswith("`") or text.endswith("`"):
+        text = f" {text} "
+    return f"{fence}{text}{fence}"
 
 
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
-    """The queue as a markdown table; a raw value's control characters are shown escaped."""
+    """The queue as a markdown table; a raw value is a code span with its control characters spelled out."""
     lines = [
         "# Review queue: values whose selected row is not authored",
         "",
@@ -660,7 +677,7 @@ def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
                 [
                     f"{e.files:,}",
                     e.slot,
-                    f"`{_visible(e.raw_value)}`",
+                    _code(e.raw_value),
                     e.source,
                     e.dataset or "",
                     e.table or "",

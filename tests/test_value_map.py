@@ -685,6 +685,17 @@ def test_a_raw_value_with_a_line_ending_stays_in_one_queue_row(tmp_path, evidenc
     assert "\r" not in rendered and "`Sequel\\r\\nII`" in rendered and "a\\|b" in rendered
 
 
+def test_a_raw_value_with_backticks_or_a_nul_renders_as_one_code_span(tmp_path, evidence_root):
+    table = load(tmp_path, "rows:\n")
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "a`b``c"), entry("platform", "x\x00y`")]
+    )
+    rendered = render_queue(review_queue(evidence_root, table), evidence_root)
+    assert "```a`b``c```" in rendered
+    assert "`` x\\u0000y` ``" in rendered
+    assert "\x00" not in rendered
+
+
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
     table = load(
         tmp_path,
@@ -875,6 +886,20 @@ rows:
         "'platform.revio'",
         "no reason",
     )
+
+
+def test_an_empty_list_is_not_a_match_value(tmp_path):
+    for where in ("value: []", "value: A, alternates: [[]]"):
+        refuses(
+            tmp_path,
+            f"""
+rows:
+  - id: assay_type.x
+    match: {{slot: assay_type, {where}}}
+""",
+            "'assay_type.x'",
+            "empty list matches nothing",
+        )
 
 
 def test_a_row_value_must_be_a_string(tmp_path):
