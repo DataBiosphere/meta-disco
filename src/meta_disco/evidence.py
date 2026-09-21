@@ -47,8 +47,9 @@ def cached_md5sums(evidence_dir: Path) -> set[str]:
     """The stem of every ``<shard>/<shard>*.json`` under ``evidence_dir`` — the cached
     md5s, from one walk of the shard directories.
 
-    An entry counts only in the shard :func:`get_evidence_path` would put it in, so a
-    file misplaced under another shard is not reported cached and then never read.
+    An entry counts only in the shard :func:`get_evidence_path` would put it in — the
+    directory named by the stem's first two characters — so a file misplaced under
+    any other directory is not reported cached and then never read.
 
     The inverse of :func:`get_evidence_path`, kept beside it so the layout lives in
     one place. A producer asking which of its files are cached used to ``stat``
@@ -65,9 +66,7 @@ def cached_md5sums(evidence_dir: Path) -> set[str]:
         # the two listings is an empty shard here, as its files were uncached before.
         try:
             cached.update(
-                entry.name[:-5]
-                for entry in os.scandir(path)
-                if entry.name.endswith(".json") and entry.name.startswith(name)
+                entry.name[:-5] for entry in os.scandir(path) if entry.name.endswith(".json") and entry.name[:2] == name
             )
         except FileNotFoundError:
             continue

@@ -297,6 +297,8 @@ class TestCachedMd5sums:
         # is not cached either — reporting it would skip the record as done.
         misplaced = "ef" + "2" * 30
         (tmp_path / "ab" / f"{misplaced}.json").write_text("{}")
+        (tmp_path / "a").mkdir()  # a one-character prefix is not the shard either
+        (tmp_path / "a" / f"{a}.json").write_text("{}")
         assert cached_md5sums(tmp_path) == {a, b}
 
     def test_a_missing_cache_is_empty(self, tmp_path):

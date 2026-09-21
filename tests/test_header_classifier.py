@@ -735,10 +735,10 @@ class TestBamCramClassification:
 class TestContigLengthDetection:
     """Test reference assembly detection from contig lengths.
 
-    BAM reference detection uses detect_reference_from_contigs()
-    which matches @SQ SN/LN against known chromosome sizes.
-    VCF reference detection uses rule-based pattern matching on
-    ##contig assembly= and ##reference= fields.
+    Both classifiers pass their parsed contigs — @SQ SN/LN for BAM, ##contig
+    ID/length for VCF — to detect_reference_from_contigs(), which matches them
+    against known chromosome sizes. VCF additionally has rule-based pattern
+    matching on ##contig assembly= and ##reference= fields.
     """
 
     def test_bam_sq_standard_order(self):
