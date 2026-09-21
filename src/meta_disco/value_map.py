@@ -628,8 +628,17 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
     return entries
 
 
+def _visible(raw_value: str) -> str:
+    """A raw value with its control characters spelled out, so two values differing only in one stay distinct.
+
+    Evidence keeps a raw value verbatim, line breaks included; the shared escaper folds a
+    line break to a space, which would make ``a\\nb`` and ``a b`` one row to the eye.
+    """
+    return raw_value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+
+
 def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
-    """The queue as a markdown table."""
+    """The queue as a markdown table; a raw value's control characters are shown escaped."""
     lines = [
         "# Review queue: values whose selected row is not authored",
         "",
@@ -643,7 +652,7 @@ def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
                 [
                     f"{e.files:,}",
                     e.slot,
-                    f"`{e.raw_value}`",
+                    f"`{_visible(e.raw_value)}`",
                     e.source,
                     e.dataset or "",
                     e.table or "",

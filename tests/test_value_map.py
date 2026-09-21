@@ -659,7 +659,7 @@ rows:
 
 
 def test_a_raw_value_with_a_line_ending_stays_in_one_queue_row(tmp_path, evidence_root):
-    """Evidence keeps a raw value verbatim, line endings included; the rendered queue must not split on them."""
+    """Evidence keeps a raw value verbatim, line endings included; the queue shows them escaped and in one row."""
     table = load(tmp_path, "rows:\n")
     write_generation(
         evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Sequel\r\nII"), entry("platform", "a|b")]
@@ -667,7 +667,7 @@ def test_a_raw_value_with_a_line_ending_stays_in_one_queue_row(tmp_path, evidenc
     rendered = render_queue(review_queue(evidence_root, table), evidence_root)
     rows = [line for line in rendered.splitlines() if line.startswith("| 1 ")]
     assert len(rows) == 2
-    assert "\r" not in rendered and "`Sequel II`" in rendered and "a\\|b" in rendered
+    assert "\r" not in rendered and "`Sequel\\r\\nII`" in rendered and "a\\|b" in rendered
 
 
 def test_ac24_a_seeded_scoped_row_over_an_authored_default_keeps_the_value_queued(tmp_path, evidence_root):
