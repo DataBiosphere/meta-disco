@@ -17,8 +17,9 @@ Steps (issue #276):
      sequencing-data catalog does; assemblies/alignments/annotations carry ``fileSize``.
   3. Map every record into the meta-disco shape (``file_name``, ``file_format``,
      ``file_md5sum``, ``url``, ``file_size``) and write one metadata file, in an
-     envelope naming the repository. A record with no URL has no ``file_md5sum`` and
-     is excluded at the shared load, named in the run's ``excluded_files.json`` (#376).
+     envelope naming the repository, one record per URL (``one_record_per_url``). A
+     record with no URL has no ``file_md5sum`` and is excluded at the shared load,
+     named in the run's ``excluded_files.json`` (#376).
   4. Run the shared classifier over it, exactly as AnVIL does.
 """
 
@@ -121,6 +122,35 @@ def build_metadata_records(catalog: list[dict], url_field: str, *, workers: int)
     return records
 
 
+def one_record_per_url(records: list[dict]) -> tuple[list[dict], int]:
+    """Collapse records that name the same URL into one, keeping the first; return the count collapsed.
+
+    The alignments catalog lists a file more than once: the same location spelled once
+    as ``https://`` and once as ``s3://`` (four files), and one distance index listed
+    under two alignment names (``.dist.old``). Each is one file, and the record built
+    from either row is identical — the builder carries none of the fields the rows
+    differ on — so keeping both would give one file two rows, which the run's
+    one-row-per-file check refuses (#445) now that it keys an HPRC run on the URL hash
+    (#446). Collapsing here, on the key itself, is what makes that key unique per file
+    in the input as the declaration says it is.
+
+    A record with no URL has no key and is not collapsed with another: two such records
+    are two files the run cannot read, each excluded and named at load (#376).
+    """
+    kept: list[dict] = []
+    seen: set[str] = set()
+    collapsed = 0
+    for record in records:
+        key = record["file_md5sum"]
+        if key is not None:
+            if key in seen:
+                collapsed += 1
+                continue
+            seen.add(key)
+        kept.append(record)
+    return kept, collapsed
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Map the HPRC catalogs into the meta-disco shape and run the shared classifier",
@@ -177,6 +207,10 @@ def main():
             catalog = catalog[: args.limit]
         print(f"Mapping {len(catalog)} {catalog_name} records into the meta-disco shape...")
         all_records += build_metadata_records(catalog, url_field, workers=args.workers)
+
+    all_records, collapsed = one_record_per_url(all_records)
+    if collapsed:
+        print(f"Collapsed {collapsed} catalog row(s) listing a file already listed at the same URL")
 
     args.metadata_out.parent.mkdir(parents=True, exist_ok=True)
     with args.metadata_out.open("w") as f:
