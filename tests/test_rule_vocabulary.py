@@ -515,25 +515,6 @@ def test_accession_check_catches_an_unanchored_token(tmp_path):
     assert not _accession_internal_matches(RuleLoader(anchored).load(), names)
 
 
-def test_anchored_patterns_still_match_delimited_tokens():
-    """Anchoring stops the accession match without costing the real spellings (#430).
-
-    `scRNAseq` and `10xGenomics` are the cases a both-sided anchor
-    (`([._-]|$)`) would have rejected, which is why the fix anchors on the left only.
-    """
-    rules = {rule.id: rule for rule in get_unified_rules().rules}
-    pattern = re.compile(rules["reads_scrna_filename"].when["filename_pattern"], re.IGNORECASE)
-    for filename in (
-        "sample_10x_R1.fastq.gz",
-        "SCRNA-seq.fastq",
-        "single_cell.fq",
-        "scRNAseq_R1.fastq.gz",
-        "run.10xGenomics.fastq.gz",
-    ):
-        assert pattern.search(filename), filename
-    assert not pattern.search("IGVFFI1310XKZG.fastq.gz")
-
-
 def test_when_value_check_rejects_bogus_platform(tmp_path):
     """The when-value drift check catches a typo'd enum-backed value (issue #113).
 

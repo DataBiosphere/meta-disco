@@ -248,40 +248,6 @@ rules:
     rationale: "Log file — a log, and no data of its own"
 
   # ---------------------------------------------------------------------------
-  # Chunked upload artifacts - not applicable
-  # ---------------------------------------------------------------------------
-  - id: chunked_upload_not_applicable
-    tier: 2
-    scope: filename
-    when:
-      filename_pattern: "gs-chunked-io-part\\.\\d+"
-    then:
-      status:
-        data_modality: not_applicable
-        data_type: not_applicable
-        reference_assembly: not_applicable
-        assay_type: not_applicable
-        platform: not_applicable
-    rationale: "Incomplete chunked upload artifact — not usable data"
-
-  # ---------------------------------------------------------------------------
-  # Bare timestamp filenames - not applicable
-  # ---------------------------------------------------------------------------
-  - id: timestamp_not_applicable
-    tier: 2
-    scope: filename
-    when:
-      filename_pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{6}\\.\\d+Z$"
-    then:
-      status:
-        data_modality: not_applicable
-        data_type: not_applicable
-        reference_assembly: not_applicable
-        assay_type: not_applicable
-        platform: not_applicable
-    rationale: "Bare ISO timestamp filename — metadata artifact, not data"
-
-  # ---------------------------------------------------------------------------
   # VCF files - genomic by default
   # ---------------------------------------------------------------------------
   - id: variant_default_genomic
@@ -554,20 +520,6 @@ rules:
     then:
       reference_assembly: GRCh38
     rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
-
-  # ---------------------------------------------------------------------------
-  # FASTQ reads - modality from filename
-  # ---------------------------------------------------------------------------
-  - id: reads_scrna_filename
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".fastq", ".fq"]
-      filename_pattern: "(?i)(^|[._-])(scrna|single.?cell|10x)"
-    then:
-      data_modality: transcriptomic.single_cell
-      data_type: reads
-    rationale: "Filename contains single-cell indicator"
 
   # ---------------------------------------------------------------------------
   # FASTA assembly indicators
@@ -1683,37 +1635,6 @@ rules:
   # ===========================================================================
   # FALLBACK RULES
   # ===========================================================================
-
-  # A `.narrowPeak`/`.broadPeak` extension states the content: these are called
-  # peaks, whatever called them. That is extension evidence, not a filename guess,
-  # which is why #430's deletion of the bare-token peak rules should not have taken
-  # it with them — it left these files falling through to `intervals_fallback` and
-  # being asserted `genomic` annotations.
-  #
-  # `data_modality` is deliberately left for no rule to set, so it reports
-  # not_classified: the format is used for ATAC (accessibility) and for ChIP
-  # (histone/TF) alike, and the extension cannot tell them apart. Naming one would
-  # be the same guess this issue removed. They are excluded from `intervals_fallback`
-  # below rather than declaring a status here, because `modality_not_set` counts a
-  # not_classified declaration as unset — the fallback would still fire and assert
-  # `genomic` over it.
-  - id: intervals_called_peaks
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".narrowpeak", ".broadpeak"]
-    then:
-      data_type: peaks
-
-  - id: intervals_called_peaks_compound
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed"]
-      filename_pattern: "(?i)(^|[._-])(narrow|broad)peak[._-]"
-    then:
-      data_type: peaks
-    rationale: "A .narrowPeak/.broadPeak file holds called peaks — the extension states it"
 
   - id: intervals_fallback
     tier: 2

@@ -451,14 +451,6 @@ class TestRuleEngineE2E:
         for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
             assert result.status_of(field) == NOT_APPLICABLE
 
-    def test_chunked_upload_not_applicable(self):
-        result = engine.classify_extended(FileInfo.from_filename("c5ff4e67-1db9-4fd1.gs-chunked-io-part.000013"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_timestamp_filename_not_applicable(self):
-        result = engine.classify_extended(FileInfo.from_filename("2020-11-20T212208.245537Z"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
     def test_png_derived(self):
         result = engine.classify_extended(FileInfo.from_filename("assembly_plot.png"))
         assert result.status_of("data_modality") == NOT_APPLICABLE

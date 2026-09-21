@@ -69,7 +69,6 @@ file_format (extension)
 
 **data_modality**:
 - `genomic` ← PacBio/ONT read names (but see issue #37)
-- `transcriptomic.single_cell` ← filename (scRNA, single-cell, 10x — as a delimited token, #430)
 - `not_classified` ← **default when no signal** (issue #35, merged)
 
 **assay_type**:
@@ -133,15 +132,13 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 ## Intervals/Peaks (.bed, .bed.gz, .narrowPeak, .broadPeak)
 
-**data_type**: `annotations` (`.bed`), `peaks` (`.narrowPeak`, `.broadPeak`)
+**data_type**: `annotations`
 
-`peaks` comes from the extension, via `intervals_called_peaks`: a `.narrowPeak` or
-`.broadPeak` file says what it holds. `intervals_called_peaks_compound` covers the
-spelling where that name sits mid-filename and the parsed extension is `.bed`
-(`sample.narrowPeak.bed`), which the extension-keyed rule cannot see — the one place a
-filename token is still read for peaks, and it is a ten-character one on a delimiter.
-Either way `data_modality` is deliberately left unset: the format serves ATAC
-(accessibility) and ChIP (histone/TF) alike, so the extension cannot tell them apart.
+`.narrowPeak` and `.broadPeak` resolve to the `intervals` category by extension but
+no rule claims them: neither catalog holds one, and the rule set is the minimum the
+data can verify (#430). They report nothing. If one arrives, a rule keyed on the
+extension can claim `data_type: peaks` — the format is used for ATAC and ChIP alike,
+so the extension cannot say which, and `data_modality` would stay unset.
 
 A `.bed` whose name carries a peak indicator (`atac`, `chip`, `h3k*`, `peak`,
 `summit`) is excluded from `intervals_fallback` and so reports nothing, rather than
