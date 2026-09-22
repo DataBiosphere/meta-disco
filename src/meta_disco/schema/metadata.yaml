@@ -4,7 +4,9 @@ title: Meta-Disco AnVIL Input Metadata Model
 description: >-
   The contract for a raw AnVIL file metadata record — one entry in the `files`
   array of `data/anvil/anvil_files_metadata.json`, as derived by
-  `scripts/download_anvil_manifest.py` from the compact Azul manifest (#368).
+  `scripts/download_anvil_manifest.py` from the compact Azul manifest (#368) or by
+  `snapshot_input.derive_records` from a TDR snapshot's tables (#499). An envelope
+  `azul_manifest.metadata_block` wrote says which in `input_source`.
 
   This is the *input* to classification, distinct from `classification.yaml`
   which models the classified *output*.
@@ -54,11 +56,11 @@ classes:
   AnvilFileMetadataRecord:
     tree_root: true
     description: >-
-      One raw AnVIL file metadata record, before classification. Every slot is
-      required; the string slots are additionally non-empty (`file_size` allows 0
-      and `is_supplementary` is a plain required boolean). AnVIL's own published
-      `data_modality` / `reference_assembly` are not slots here — see the schema
-      description for why (#424).
+      One raw AnVIL file metadata record, before classification. Every slot but
+      `entry_id` is required; the string slots are additionally non-empty
+      (`file_size` allows 0 and `is_supplementary` is a plain required boolean).
+      AnVIL's own published `data_modality` / `reference_assembly` are not slots
+      here — see the schema description for why (#424).
     slots:
       - entry_id
       - file_id
@@ -76,8 +78,15 @@ classes:
 # =============================================================================
 slots:
   entry_id:
-    description: The AnVIL Explorer catalog entry identifier.
-    required: true
+    description: >-
+      The AnVIL Explorer catalog entry identifier: Azul's document id for the file in
+      one index, regenerated when the catalog is re-indexed. Only the compact-manifest
+      path emits it (`files.document_id`); a record derived from a TDR snapshot's
+      tables — read in place or through the verbatim manifest (#499) — has none,
+      because the snapshot predates the index. Nothing in a run keys on it since the
+      record key became `file_id` (#446), so no source is required to carry it. Where
+      present it is non-empty.
+    required: false
     pattern: "^.+$"
   file_id:
     description: >-

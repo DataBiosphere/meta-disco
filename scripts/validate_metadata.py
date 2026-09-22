@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 from meta_disco.metadata_schema import validate_records
-from meta_disco.pipeline import load_snapshot, record_key, repeated_key_values
+from meta_disco.pipeline import key_field, load_snapshot, record_key, repeated_key_values
 
 DEFAULT_INPUT = Path("data/anvil/anvil_files_metadata.json")
 
@@ -58,7 +58,10 @@ def main(argv=None) -> int:
         print(f"No records found in {args.input} — likely an empty or failed download.")
         return 1
 
-    report = validate_records(records)
+    # The samples name a record by the source's record key, resolved off the envelope
+    # the way the run resolves it; an envelope naming none leaves them unnamed, and is
+    # refused below, after the record contract has had its say.
+    report = validate_records(records, key_field(metadata))
     print(report.summary())
     ok = report.ok
 

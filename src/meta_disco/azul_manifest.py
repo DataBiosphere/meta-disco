@@ -95,6 +95,20 @@ ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", "file_ref")
 # What a file pointer in a submitter cell starts with.
 DRS_PREFIX = "drs://"
 
+# How an input was derived, written as ``input_source`` into every envelope
+# ``metadata_block`` builds (#499) so a reader of ``anvil_files_metadata.json`` need not
+# infer it from the other fields. Not every envelope: the HPRC builder writes its own
+# (``scripts/classify_hprc_files.py``) and carries no such field. Three kinds: today's
+# compact join (this module, ``record_from_compact_manifest_row``);
+# the verbatim manifest read through ``snapshot_input.AzulVerbatim``; and a snapshot read
+# in place from BigQuery through ``snapshot_input.TdrDirect``. Nothing reads the field
+# yet — choosing a reader is #500's — so it is provenance, not a switch. Named here
+# because this module writes the envelope, not because every kind is Azul's.
+INPUT_SOURCE_AZUL_COMPACT = "azul-compact"
+INPUT_SOURCE_AZUL_VERBATIM = "azul-verbatim"
+INPUT_SOURCE_TDR_DIRECT = "tdr-direct"
+INPUT_SOURCES = frozenset({INPUT_SOURCE_AZUL_COMPACT, INPUT_SOURCE_AZUL_VERBATIM, INPUT_SOURCE_TDR_DIRECT})
+
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 # How a compact cell spells a boolean (all 708,088 anvil15 rows use one of these).
@@ -451,7 +465,30 @@ def _published(cell: str) -> list[str] | None:
     """
     if not cell:
         return None
-    return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
+    return published_list(cell.split(_MULTI_VALUE_SEP))
+
+
+def published_list(values: list[Any] | None) -> list[str] | None:
+    """A published multi-value as the record carries it: the non-empty values, or None.
+
+    The list half of :func:`_published`, shared with the readers that get the value as
+    a list rather than a joined cell — an ``anvil_file`` row's ``data_modality`` is an
+    array in TDR and in the verbatim manifest (``snapshot_input``). Same rule, so a
+    record derived either way carries the same ``published`` block: an empty element is
+    dropped, and an empty or absent list reads as ``None`` — no published value — rather
+    than as ``[]``, which ``records.build_published`` refuses. A value that is neither
+    a list nor ``None`` is refused: a string would otherwise be split into its
+    characters, each a non-empty ``str`` that every later shape check accepts. So is
+    a list holding anything but strings: only an empty *string* is dropped, since a
+    ``0`` or a ``None`` element is schema drift and would otherwise read as no value.
+    """
+    if values is None:
+        return None
+    if not isinstance(values, list):
+        raise ValueError(f"a published value is a list of strings or null, not {type(values).__name__}: {values!r}")
+    if not all(isinstance(value, str) for value in values):
+        raise ValueError(f"a published value holds a non-string element: {values!r}")
+    return [value for value in values if value] or None
 
 
 SOURCE_ID_COLUMN = "sources.source_id"
@@ -696,31 +733,88 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
     if wanted is not None and not wanted:
         return
     gate = None if wanted is None else re.compile("|".join(re.escape(f'"{t}"') for t in sorted(wanted)))
+    for n, line in iter_verbatim_lines(path):
+        if gate is not None and gate.search(line) is None:
+            continue
+        entity_type, value = parse_verbatim_line(path, n, line)
+        if wanted is None or entity_type in wanted:
+            yield entity_type, value
+
+
+def iter_verbatim_lines(path: Path) -> Iterator[tuple[int, str]]:
+    """Every non-blank line of a verbatim manifest with its line number, unparsed.
+
+    What a line *is* — UTF-8, numbered from 1, a blank one carrying no entity and passed
+    over — decided once, so :func:`iter_verbatim_entities` and the listing scan in
+    ``snapshot_input.AzulVerbatim`` agree on line numbers in their messages.
+    """
     with path.open(encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            if gate is not None and gate.search(line) is None:
-                continue
-            try:
-                entity = json.loads(line)
-                entity_type, value = entity["type"], entity["value"]
-            except (json.JSONDecodeError, KeyError, TypeError) as exc:
-                raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
-            if not isinstance(entity_type, str):
-                raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
-            if not isinstance(value, dict):
-                raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
-            if wanted is None or entity_type in wanted:
-                yield entity_type, value
+            if line.strip():
+                yield n, line
 
 
-def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime) -> dict[str, Any]:
+def parse_verbatim_line(path: Path, n: int, line: str) -> tuple[str, dict[str, Any]]:
+    """One verbatim line as its ``(type, value)`` pair, or ``ValueError`` naming the line.
+
+    The one statement of what a verbatim line is: JSON, an object with a string
+    ``type`` and an object ``value``. :func:`iter_verbatim_entities` applies it to every
+    line it parses and :func:`verbatim_line_type` to any line its shortcut cannot read,
+    so the shape and its messages cannot drift between the two.
+    """
+    try:
+        entity = json.loads(line)
+        entity_type, value = entity["type"], entity["value"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
+    if not isinstance(entity_type, str):
+        raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
+    if not isinstance(value, dict):
+        raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
+    return entity_type, value
+
+
+# A verbatim line's entity type read off its tail: every line the downloader stores is
+# ``{"value": {...}, "type": "<type>"}``, so the type is the last key. A line this does
+# not match is parsed in full instead (see `verbatim_line_type`), so the shortcut
+# decides nothing — it only makes listing a 500 MB manifest's types a scan rather than
+# a parse, the same trade `count_rows`'s substring gate makes.
+_TYPE_AT_END = re.compile(r'"type":\s*"([^"]*)"\s*\}\s*$')
+
+
+def verbatim_line_type(path: Path, n: int, line: str) -> str:
+    """The entity type of one verbatim line, without parsing it where the tail shows it.
+
+    Reads only the type: a line the shortcut matches is not validated beyond that, so a
+    listing built from this can name a type whose line :func:`parse_verbatim_line`
+    would then refuse — the full pass is what validates the file, as
+    :func:`iter_verbatim_entities` says of its own gate.
+    """
+    match = _TYPE_AT_END.search(line)
+    if match is not None:
+        return match.group(1)
+    return parse_verbatim_line(path, n, line)[0]
+
+
+def metadata_block(
+    catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime, input_source: str
+) -> dict[str, Any]:
     """The ``metadata`` envelope written beside ``files`` in ``anvil_files_metadata.json``.
 
     Records the catalog generation the files came from (issue #335: the July
     2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
     they came through the manifest path, and what each dataset contributed.
+
+    ``input_source`` names how the records were derived, one of :data:`INPUT_SOURCES`
+    (#499); any other value is refused. Every writer states it explicitly — the
+    downloader passes :data:`INPUT_SOURCE_AZUL_COMPACT` — so a reader never has to
+    take an absent field as meaning the compact path. An envelope written before the
+    field existed lacks it; nothing reads it yet, so such a file loads as before.
+    The two fields that describe the Azul manifest path, ``api_url`` and ``source``,
+    are written only for an input that came through it (either manifest kind) and are
+    null for a snapshot read in place, which touched no manifest; ``catalog`` is
+    written as given, because :func:`pipeline.published_source` reads it and what a
+    direct read should say there is #500's to decide.
 
     ``repository`` names who published these files, so nothing downstream has to infer
     it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
@@ -742,13 +836,17 @@ def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded
     ``classify_single`` path. Contrast #433, whose fact genuinely varies per file and
     therefore belongs on the record.
     """
+    if input_source not in INPUT_SOURCES:
+        raise ValueError(f"input_source {input_source!r} is not one of {sorted(INPUT_SOURCES)}")
+    via_manifest = input_source != INPUT_SOURCE_TDR_DIRECT
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(int(entry["file_count"]) for entry in datasets.values()),
-        "api_url": MANIFEST_URL,
+        "api_url": MANIFEST_URL if via_manifest else None,
         "repository": REPOSITORY,
         "catalog": catalog,
-        "source": "manifest",
+        "source": "manifest" if via_manifest else None,
+        "input_source": input_source,
         "datasets": {title: datasets[title] for title in sorted(datasets)},
     }
 

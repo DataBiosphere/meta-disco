@@ -318,11 +318,11 @@ Measured on the AnVIL corpus, 708,088 records. The keys differ enormously in how
     """
     file_id = "file_id"
     """
-    The target's own file identifier. Present on every record and unique on every record — with `entry_id` and `drs_uri`, one of the three keys that need no scope.
+    The target's own file identifier. Present on every AnVIL record and unique on every record — with `drs_uri`, a key that needs no scope, and the durable one across a re-index (#433).
     """
     entry_id = "entry_id"
     """
-    The target's entry identifier. Present and unique on every record. The scope that makes a weaker key usable: `(file_md5sum, entry_id)` and `(file_name, entry_id)` are each unique corpus-wide.
+    The target's entry identifier, Azul's per-index document id. Present and unique on every record of the compact-derived corpus, where `(file_md5sum, entry_id)` and `(file_name, entry_id)` are each unique corpus-wide — but absent from a corpus derived from a TDR snapshot's tables (#499), where a target keyed on it joins nothing.
     """
     drs_uri = "drs_uri"
     """
@@ -372,7 +372,7 @@ class ClassificationRecord(ConfiguredBaseModel):
     file_name: Optional[str] = Field(default=None, description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     file_format: Optional[str] = Field(default=None, description="""File extension / compound extension (e.g. .bam, .vcf.gz).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     file_size: Optional[int] = Field(default=None, description="""File size in bytes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    entry_id: Optional[str] = Field(default=None, description="""Source catalog entry identifier the record was classified from. Unique within a run; regenerated when the catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    entry_id: Optional[str] = Field(default=None, description="""Source catalog entry identifier the record was classified from: Azul's per-index document id. Where present it is unique within a run and regenerated when the catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh (#433). Null on a record whose input came from a TDR snapshot's tables rather than the compact manifest (#499), and on every HPRC record. An AnVIL record's durable identity is `file_id`; an HPRC record's is the URL hash it carries in `md5sum` (`pipeline.SOURCE_RECORD_KEYS`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     file_id: Optional[str] = Field(default=None, description="""The repository's own file identifier, and the durable one: it survives a catalog re-index, which `entry_id` does not (#433). It is the join key, not the handle a resolver takes — that is `drs_uri`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })

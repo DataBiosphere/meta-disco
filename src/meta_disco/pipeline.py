@@ -162,6 +162,26 @@ PUBLISHED_TABLES: dict[str, str] = {
 }
 
 
+def _declared_key(metadata: dict) -> RecordKey | None:
+    """The :data:`SOURCE_RECORD_KEYS` entry for the repository the envelope names, or
+    ``None`` where it names no declared one. The one lookup behind :func:`key_field`,
+    which tolerates ``None``, and :func:`record_key`, which refuses it."""
+    repository = metadata.get("repository")
+    return SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
+
+
+def key_field(metadata: dict) -> str | None:
+    """The input-record field the envelope's repository declares as its record key, or
+    ``None`` where the envelope names no declared repository (an ``.ndjson`` input, a
+    pre-#424 snapshot). For a diagnostic that names a record: the durable identity
+    differs by source (AnVIL's ``file_id``, HPRC's ``file_md5sum``, per
+    :data:`SOURCE_RECORD_KEYS`), so no diagnostic may hard-code one. Unlike
+    :func:`record_key` this does not refuse — a report over a file with no usable
+    envelope still wants to run, and labels its records as unidentified."""
+    key = _declared_key(metadata)
+    return None if key is None else key.input_field
+
+
 def record_key(metadata: dict, input_path: Path) -> RecordKey:
     """The :data:`SOURCE_RECORD_KEYS` entry for the repository an input envelope names.
 
@@ -171,9 +191,9 @@ def record_key(metadata: dict, input_path: Path) -> RecordKey:
     ``None``: a reader that needs the key cannot do its job without one, and guessing
     a field is how a file gets a second row.
     """
-    repository = metadata.get("repository")
-    key = SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
+    key = _declared_key(metadata)
     if key is None:
+        repository = metadata.get("repository")
         raise ValueError(
             f"{input_path}: the input envelope names repository {repository!r}, which declares no "
             f"record key — the field that identifies a file uniquely, which a run needs to know "
@@ -312,7 +332,9 @@ def load_envelope(input_path: Path) -> dict:
     return load_snapshot(input_path)[0]
 
 
-def refuse_bad_published_shape(records: list[dict], input_path: Path, max_examples: int = 5) -> None:
+def refuse_bad_published_shape(
+    records: list[dict], input_path: Path, record_key_field: str | None, max_examples: int = 5
+) -> None:
     """Raise if any record's published values are not a list of strings, naming the offenders.
 
     The published dimensions are outside the input contract (#424 — they are not input),
@@ -347,34 +369,38 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
     """
     bad: list[tuple[int, object, str, object, str]] = []
     for position, record in enumerate(records):
+        # Named by the source's record key (`record_key_field`, from `key_field`), which
+        # differs by source, or left unnamed where the envelope declares none; the id is
+        # for the message only.
+        label = record.get(record_key_field) if record_key_field else None
         for field in PUBLISHED_FIELDS:
             value = record.get(field)
             if value is None:
                 continue
             if not isinstance(value, list):
-                bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
+                bad.append((position, label, field, value, f"is {type(value).__name__}, not a list"))
             elif not all(isinstance(element, str) for element in value):
-                bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
+                bad.append((position, label, field, value, "holds a non-string value"))
             elif not value:
                 # `all([])` is True, so the emptiness test below is blind to this.
-                bad.append((position, record.get("entry_id"), field, value, "is an empty list; absent is null"))
+                bad.append((position, label, field, value, "is an empty list; absent is null"))
             elif not all(value):
                 # `build_published` refuses this too, so letting it through here would
                 # raise in a worker and lose the row — the failure this function exists
                 # to close. The manifest reader never produces it: it drops empty
                 # elements, so such a cell arrives as no published value at all.
-                bad.append((position, record.get("entry_id"), field, value, "holds an empty value"))
+                bad.append((position, label, field, value, "holds an empty value"))
     if not bad:
         return
     # Records, not entries: one record can be wrong on both fields, and calling that two
     # records would misreport how much of the snapshot is bad. Counted by position in the
-    # list, not by ``entry_id`` — the input contract requires that to be non-empty but
-    # not unique, so deduplicating on it would merge two distinct bad records (and merge
-    # every record missing one, which all read as None).
+    # list, not by the key: only the gate checks a key unique, which a file loaded here
+    # need not have passed, so deduplicating on it could merge two distinct bad records,
+    # and would merge every record missing one, which all read as None.
     offenders = len({position for position, _, _, _, _ in bad})
     examples = "; ".join(
-        f"record {position} ({entry_id}): {field}={value!r} ({why})"
-        for position, entry_id, field, value, why in bad[:max_examples]
+        f"record {position} ({label}): {field}={value!r} ({why})"
+        for position, label, field, value, why in bad[:max_examples]
     )
     more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
     # The pre-#424 hint belongs only to the scalar case, which is the shape a snapshot of
@@ -420,7 +446,7 @@ def load_classifiable_snapshot(input_path: Path, run_dir: Path | None = None) ->
     """
     metadata, raw = load_snapshot(input_path)
     records, excluded = partition_records(raw)
-    refuse_bad_published_shape(records, input_path)
+    refuse_bad_published_shape(records, input_path, key_field(metadata))
     if run_dir is not None:
         write_excluded(run_dir, excluded, total_input=len(records) + len(excluded))
     if excluded:

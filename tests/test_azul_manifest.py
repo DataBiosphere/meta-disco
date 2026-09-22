@@ -490,7 +490,7 @@ class TestRecordMapping:
         assert record["phenotypic_sex"] == "Female"
 
     def test_a_failed_write_leaves_the_previous_input_files(self, tmp_path):
-        block = am.metadata_block("anvil15", {"ds": _entry(1)}, datetime(2026, 9, 4))
+        block = am.metadata_block("anvil15", {"ds": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
         assert am.write_input_files(tmp_path, block, [valid_record()]) == 1
         before = (tmp_path / "anvil_files_metadata.json").read_bytes()
 
@@ -505,7 +505,8 @@ class TestRecordMapping:
         assert not list(tmp_path.glob("*.tmp"))
 
     def test_the_metadata_block_names_the_repository_the_catalog_and_the_source(self):
-        block = am.metadata_block("anvil15", {"b": _entry(1, "b"), "a": _entry(2, "a")}, datetime(2026, 9, 4))
+        datasets = {"b": _entry(1, "b"), "a": _entry(2, "a")}
+        block = am.metadata_block("anvil15", datasets, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
         assert block == {
             "downloaded_at": "2026-09-04T00:00:00",
             "total_files": 3,
@@ -513,11 +514,27 @@ class TestRecordMapping:
             "repository": "anvil",
             "catalog": "anvil15",
             "source": "manifest",
+            # How the records were derived (#499): stated by every writer, never inferred.
+            "input_source": "azul-compact",
             # Title -> object, the shape the sidecar already uses for this key, and
             # carrying the TDR snapshot each dataset came from (#434). Sorted by title.
             "datasets": {"a": _entry(2, "a"), "b": _entry(1, "b")},
         }
         assert list(block["datasets"]) == ["a", "b"]
+
+    def test_a_direct_read_names_no_manifest(self):
+        # A snapshot read in place touched no manifest, so the two fields that describe
+        # the manifest path are null rather than claiming one; the compact and verbatim
+        # kinds both came through one and keep them.
+        when = datetime(2026, 9, 22)
+        direct = am.metadata_block("anvil", {"a": _entry(1)}, when, am.INPUT_SOURCE_TDR_DIRECT)
+        assert (direct["api_url"], direct["source"], direct["input_source"]) == (None, None, "tdr-direct")
+        verbatim = am.metadata_block("anvil15", {"a": _entry(1)}, when, am.INPUT_SOURCE_AZUL_VERBATIM)
+        assert (verbatim["api_url"], verbatim["source"]) == (am.MANIFEST_URL, "manifest")
+
+    def test_an_input_source_that_is_not_one_of_the_three_is_refused(self):
+        with pytest.raises(ValueError, match="input_source 'manifest' is not one of"):
+            am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4), "manifest")
 
     def test_the_snapshot_names_its_publisher_so_a_reader_need_not_infer_one(self):
         # `pipeline.published_source` reads `repository` with `catalog` (#424). It used
@@ -525,7 +542,7 @@ class TestRecordMapping:
         # snapshot loaded through the same shared path.
         from meta_disco.pipeline import published_source
 
-        block = am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4))
+        block = am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
         assert published_source(block) == "anvil/anvil15"
 
 

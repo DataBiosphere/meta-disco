@@ -60,7 +60,8 @@ cd meta-disco
 uv sync
 
 # Optional: read a TDR snapshot in place from BigQuery (identity: see
-# src/meta_disco/tdr.py)
+# src/meta_disco/tdr.py). The readers that derive the input from a snapshot's
+# tables, direct or through the Azul verbatim manifest, are src/meta_disco/snapshot_input.py.
 uv sync --extra tdr
 
 # Schema tooling (schema/): LinkML generation and validation — kept separate so
