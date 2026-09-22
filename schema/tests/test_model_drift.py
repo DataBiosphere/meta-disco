@@ -30,9 +30,7 @@ _PAIRS = [
 # The gen-pydantic console script from the same venv as the test interpreter (the
 # schema env, which has linkml) — hermetic, and exactly what the make targets run.
 # On Windows the console script is gen-pydantic.exe.
-_GEN_PYDANTIC = Path(sys.executable).parent / (
-    "gen-pydantic.exe" if os.name == "nt" else "gen-pydantic"
-)
+_GEN_PYDANTIC = Path(sys.executable).parent / ("gen-pydantic.exe" if os.name == "nt" else "gen-pydantic")
 
 
 @pytest.mark.parametrize("rel_schema, model_name, target", _PAIRS)
@@ -47,7 +45,9 @@ def test_committed_model_matches_schema(rel_schema, model_name, target):
     # byte-for-byte.
     result = subprocess.run(
         [_GEN_PYDANTIC, rel_schema],
-        cwd=_SCHEMA_ROOT, capture_output=True, text=True,
+        cwd=_SCHEMA_ROOT,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, result.stderr
     with (_MODELS_DIR / model_name).open() as f:

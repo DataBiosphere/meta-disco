@@ -622,7 +622,7 @@ classes:
           after inference has run.
       fetched_at:
         required: true
-        pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?|Z)?\\Z"
+        pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d|Z)?\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
           a date alone. A run reports the age of every evidence file it finds from
@@ -653,6 +653,12 @@ classes:
           `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays
           the authority on whether a well-shaped timestamp is a real instant
           (#401 review).
+
+          The offset is `±HH:MM` or `Z` and nothing more. An offset carrying
+          seconds, `+01:00:30`, is a shape `datetime.fromisoformat` happens to
+          take and RFC 3339 does not have; the reader parses with pydantic, which
+          refuses it, and no source emits one — so the pattern refuses it too
+          rather than admitting a file the reader will not read (#494 review).
 
   Evidence:
     description: >-

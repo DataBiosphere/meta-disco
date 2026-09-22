@@ -825,7 +825,8 @@ Restricted to the kinds an importer may write. A file declaring `filename_rule` 
     fetched_at: str = Field(default=..., description="""When the importer read the source, ISO 8601, with a time of day and not a date alone. A run reports the age of every evidence file it finds from this, so that a person can see an artefact going stale before it is wrong — and two imports on the same day, which is where that report matters most, are only distinguishable if the time is recorded. A date-only value is refused rather than read as midnight, which would be a precision the file never stated.
 Constrained by pattern rather than `range: datetime`, which was measured and does not do the job: LinkML coerces the value before matching, so a bare `2026-09-01` is accepted under a datetime range — and the pattern is then never applied. An evidence file would pass this schema and be reported unreadable by the reader, which is the mismatch this class's tests exist to prevent.
 The trade is deliberate: a consumer generating models from this schema gets a string rather than a datetime. The reader parses it either way, and the pattern says what the string must look like, so what is given up is a type hint and what is bought is that both sides refuse the same files.
-The pattern spells out the field ranges rather than accepting any non-newline text after the separator, because the loose form let `2026-09-01Tfoo` and `2026-13-45T99:99:99` through the gate for the reader to refuse. Measured across seventeen shapes, the two sides now agree on sixteen. The one that remains is a date no regex can rule out: `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays the authority on whether a well-shaped timestamp is a real instant (#401 review).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+The pattern spells out the field ranges rather than accepting any non-newline text after the separator, because the loose form let `2026-09-01Tfoo` and `2026-13-45T99:99:99` through the gate for the reader to refuse. Measured across seventeen shapes, the two sides now agree on sixteen. The one that remains is a date no regex can rule out: `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays the authority on whether a well-shaped timestamp is a real instant (#401 review).
+The offset is `±HH:MM` or `Z` and nothing more. An offset carrying seconds, `+01:00:30`, is a shape `datetime.fromisoformat` happens to take and RFC 3339 does not have; the reader parses with pydantic, which refuses it, and no source emits one — so the pattern refuses it too rather than admitting a file the reader will not read (#494 review).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
 
     @field_validator('source_version')
     def pattern_source_version(cls, v):
@@ -855,7 +856,7 @@ The pattern spells out the field ranges rather than accepting any non-newline te
 
     @field_validator('fetched_at')
     def pattern_fetched_at(cls, v):
-        pattern=re.compile(r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?|Z)?\Z")
+        pattern=re.compile(r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d|Z)?\Z")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):

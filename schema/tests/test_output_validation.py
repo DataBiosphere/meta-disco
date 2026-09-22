@@ -615,13 +615,22 @@ def test_evidence_file_envelope_refuses_a_source_naming_a_column(envelope_valida
 
 
 @pytest.mark.parametrize(
-    "bad", ["2026-09-01Tfoo", "2026-13-45T99:99:99", "2026-09-01T09:14:03+0100", "20260901T091403"]
+    "bad",
+    [
+        "2026-09-01Tfoo",
+        "2026-13-45T99:99:99",
+        "2026-09-01T09:14:03+0100",
+        "20260901T091403",
+        "2026-09-01T09:14:03+01:00:30",
+    ],
 )
 def test_evidence_file_envelope_refuses_a_misshapen_fetched_at(envelope_validator, bad):
     # The reader refuses each of these through this same pattern, so the gate must
     # too, or a producer clears the schema and publishes a file the only reader will not read.
     # The offset without a colon is the subtle one: `fromisoformat` wants `+HH:MM` on
-    # 3.10, and a looser pattern let `+0100` through (#401 review).
+    # 3.10, and a looser pattern let `+0100` through (#401 review). The offset with
+    # seconds is the other way round: `fromisoformat` takes it and pydantic, which the
+    # reader parses with, does not, so the schema refuses it too (#494 review).
     report = envelope_validator.validate(_envelope(fetched_at=bad), target_class="EvidenceFileEnvelope")
     assert report.results, f"a fetched_at of {bad!r} should have failed"
 

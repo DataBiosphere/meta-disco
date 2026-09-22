@@ -1199,9 +1199,11 @@ def test_the_row_shape_is_one_set_in_three_places(schema):
     tests exist to prevent, and the one drift the PR that added `EvidenceRow` left
     unguarded (#421 review).
 
-    The envelope needs no equivalent: its reader is the model generated from the
-    schema, held to it by `schema/tests/test_model_drift.py`, so the two cannot
-    disagree by construction (#494).
+    The envelope needs no equivalent for its members and their patterns: its reader
+    is the model generated from the schema, held to it by
+    `schema/tests/test_model_drift.py`. What the reader checks beyond the schema —
+    the scope rule and the calendar behind a well-shaped `fetched_at` — is pinned by
+    its own tests above (#494).
 
     `source` maps to `column` across the boundary — the record carries whole
     provenance, the line carries only the member that varies within a file — so that
