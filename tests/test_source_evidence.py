@@ -774,6 +774,23 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match=r"c\.ndjson line 1"):
             read_envelope(path)
 
+    def test_a_refused_member_carrying_a_line_break_is_reported_on_one_line(self, tmp_path):
+        """The report prints one file per line, and a refusal is that file's line.
+
+        The generated pattern validators embed the offending value in their message,
+        and the one way to fail the no-line-break pattern is a line break — so the
+        refusal would carry the forged second line into the report unescaped (#494
+        security review). Escaped, as the removed reader's `!r` escaped it.
+        """
+        path = tmp_path / "c.ndjson"
+        block = {**envelope_block(), "source_version": "1\nforged line"}
+        path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
+
+        with pytest.raises(ValueError) as caught:
+            read_envelope(path)
+        assert "\n" not in str(caught.value)
+        assert "source_version" in str(caught.value)
+
     def test_a_utc_z_suffix_reads_back_on_every_supported_interpreter(self, tmp_path):
         """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
 

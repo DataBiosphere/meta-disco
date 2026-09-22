@@ -319,7 +319,11 @@ def _envelope_from_block(block: object, where: str) -> EvidenceFileEnvelope:
             if error["type"] == "extra_forbidden":
                 unknown.append(location)
             else:
-                faults.append(f"{location}: {error['msg']}")
+                # The pattern validators embed the offending value, and the one way to
+                # fail `^[^\r\n]+\Z` is a line break — escaped, because the report
+                # prints one file per line and this message is that line.
+                message = error["msg"].replace("\r", "\\r").replace("\n", "\\n")
+                faults.append(f"{location}: {message}")
         if unknown:
             faults.insert(0, f"has unknown member(s) {sorted(unknown)}")
         raise ValueError(f"{where}: envelope {'; '.join(faults)}") from None
