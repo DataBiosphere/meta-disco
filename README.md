@@ -59,6 +59,10 @@ cd meta-disco
 # Classification runtime (root): rule engine, pipeline, tests
 uv sync
 
+# Optional: read a TDR snapshot in place from BigQuery (identity: see
+# src/meta_disco/tdr.py)
+uv sync --extra tdr
+
 # Schema tooling (schema/): LinkML generation and validation — kept separate so
 # linkml stays out of the runtime's environment
 cd schema && uv sync
