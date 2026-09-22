@@ -98,8 +98,11 @@ class SnapshotTables(Protocol):
     """A snapshot's tables: their names, and one table's rows streamed.
 
     ``rows`` yields each row as a dict keyed by TDR's column names, one at a time,
-    holding the reader's own value types — never the table whole. Both readers here
-    satisfy it; so can a test double.
+    holding the reader's own value types. No reader holds a table whole; the one
+    bounded exception is :class:`AzulVerbatim`, which keeps up to :data:`HELD_ROWS`
+    rows of a table it was told to hold (by default the one-row ``anvil_dataset``)
+    from its listing scan, and streams that table from the file if it has more. Both
+    readers here satisfy the protocol; so can a test double.
     """
 
     def tables(self) -> list[str]: ...
