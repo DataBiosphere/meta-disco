@@ -14,6 +14,8 @@ demonstrated by tests rather than by a pipeline run, and no producer exists yet 
 the AnVIL manifest importer is #369 and the HPRC catalog importer is #394.
 """
 
+from dataclasses import fields
+
 import pytest
 
 from meta_disco.models import (
@@ -28,6 +30,7 @@ from meta_disco.models import (
     ClaimSource,
 )
 from meta_disco.rule_engine import CONTENT_TIER, make_claim
+from meta_disco.schema import classification_model
 
 # The three producers the spike compared. Inference has no ClaimSource: it is not
 # an external source, and its producer handle is the rule_id it already carried.
@@ -43,6 +46,15 @@ HPRC_CATALOG = ClaimSource(
     table="assemblies",
     column="annotationType",
 )
+
+
+def test_the_claim_source_dataclass_has_the_generated_models_members():
+    """`ClaimSource` stays a dataclass (its serializer runs per imported claim, #494)
+    while the schema's `ClaimSource` generates a pydantic class beside it. The two are
+    one record stated twice, so their member sets are pinned equal here — the shape
+    check `test_the_row_shape_is_one_set_in_three_places` gives the row — and a member
+    added to one and not the other fails here rather than at an output gate."""
+    assert {f.name for f in fields(ClaimSource)} == set(classification_model.ClaimSource.model_fields)
 
 
 class TestInferenceClaim:

@@ -435,13 +435,14 @@ classes:
       by name, so a producer written against #401's format is told what to write
       instead rather than having the member silently dropped.
 
-      **Where this gate is weaker than the reader**, which is the same divergence
-      `EvidenceFileEnvelope` documents and for the same cause. `column` is
-      optional, LinkML models an optional slot as nullable (`gen-json-schema`
-      emits `type: [string, null]`), so `{"column": null}` is valid here by
-      construction — and `_entry_from_line` refuses it through
-      `member_optional_str`, because the writer omits a member it does not have
-      and a written-out null is a line this writer could not have produced.
+      **Where this gate is weaker than the reader.** `column` is optional, LinkML
+      models an optional slot as nullable (`gen-json-schema` emits
+      `type: [string, null]`), so `{"column": null}` is valid here by construction
+      — and `_entry_from_line` refuses it, because the writer omits a member it
+      does not have and a written-out null is a line this writer could not have
+      produced. The envelope, read through the model generated from this schema,
+      accepts such a null as the absent member it means (#494); a row is read by
+      hand, on the hot path, and keeps the stricter rule.
 
       The reader is deliberately the stricter of the two, which is the safe
       direction: a producer that validates here and writes explicit nulls is
@@ -514,17 +515,14 @@ classes:
       `target_key_value`; about that row's `field`, the source wrote its
       `raw_value`."
 
-      **Where this gate is weaker than the reader.** Measured over 70 malformed
-      envelopes — every member empty, newlined, numeric, null or absent — the two
-      agree on 65. The five that differ are one class: an explicit null on an
-      optional member, such as `source: {repository: HPRC, table: null}`. LinkML
-      models an optional slot as nullable (`gen-json-schema` emits
-      `type: [string, null]`), so a null is valid here by construction, while
-      `_flat_from_dict` refuses it — `to_dict` omits a member it does not have, so a
-      written-out null is a record this writer could not have produced. The reader
-      is deliberately the stricter of the two; a producer that validates here and
-      writes explicit nulls will be refused at read. The other known divergence is
-      a calendar-invalid `fetched_at` (see that slot).
+      **The reader is this class.** `source_evidence` reads line 1 through the
+      pydantic model gen-pydantic emits from this schema (#494), so what this gate
+      refuses and what the reader refuses are one definition rather than two kept in
+      step. An explicit null on an optional member, such as
+      `source: {repository: HPRC, table: null}`, is valid here — LinkML models an
+      optional slot as nullable — and the reader accepts it as the absent member it
+      means, though the writer never emits one. The one known divergence is a
+      calendar-invalid `fetched_at` (see that slot).
 
       The key *names* are here rather than on each line because they do not change
       within a file — every claim an importer writes is keyed the same way — so
@@ -550,8 +548,9 @@ classes:
           is non-unique on 69.4% of the AnVIL corpus's 708,088 rows and on 20% even
           scoped by dataset title, against 2 rows in 16,271 within
           `AnVIL_HPRC_R2` — so an unscoped filename claim attaches to rows a join
-          cannot choose between. `EvidenceFileEnvelope.__post_init__` refuses the same
-          envelope; this rule is what stops a producer validating against the schema
+          cannot choose between. `source_evidence.require_scoped_target` refuses the
+          same envelope at write and at read, because gen-pydantic does not emit class
+          rules; this rule is what stops a producer validating against the schema
           alone and publishing a file the reader will not read (#401 review).
         preconditions:
           slot_conditions:
@@ -623,7 +622,7 @@ classes:
           after inference has run.
       fetched_at:
         required: true
-        pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?|Z)?\\Z"
+        pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d|Z)?\\Z"
         description: >-
           When the importer read the source, ISO 8601, with a time of day and not
           a date alone. A run reports the age of every evidence file it finds from
@@ -654,6 +653,12 @@ classes:
           `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays
           the authority on whether a well-shaped timestamp is a real instant
           (#401 review).
+
+          The offset is `±HH:MM` or `Z` and nothing more. An offset carrying
+          seconds, `+01:00:30`, is a shape `datetime.fromisoformat` happens to
+          take and RFC 3339 does not have; the reader parses with pydantic, which
+          refuses it, and no source emits one — so the pattern refuses it too
+          rather than admitting a file the reader will not read (#494 review).
 
   Evidence:
     description: >-

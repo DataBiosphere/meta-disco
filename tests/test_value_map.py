@@ -21,6 +21,7 @@ from meta_disco.source_evidence import (
     EvidenceEntry,
     EvidenceFileSource,
     EvidenceTarget,
+    claim_source_for,
     discover,
     evidence_file_path,
     generation_dir,
@@ -78,7 +79,7 @@ def file_source(dataset="AnVIL_HPRC_R2", table="hifi") -> EvidenceFileSource:
 
 def entry(field, raw_value, file="drs://f1", dataset="AnVIL_HPRC_R2", table="hifi", column="instrument_model"):
     """One evidence line; its ``ClaimSource`` is derived from the file source the way the reader derives it."""
-    source = file_source(dataset, table).as_claim_source(column)
+    source = claim_source_for(file_source(dataset, table), column)
     return EvidenceEntry(field=field, target_key_value=file, raw_value=raw_value, source=source)
 
 
