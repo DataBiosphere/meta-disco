@@ -127,20 +127,16 @@ evidence}` entry — plus the controlled vocabulary:
     submitter tables' `sources/anvil_slot_map.yaml` (`make check-slot-map` /
     `make import-anvil-evidence`, under `anvil/`) and the published columns'
     `sources/anvil_published_slot_map.yaml` (`make check-published-map` /
-    `make import-anvil-published`, under `anvil_published/`, #497). One importer,
-    two maps: a map's top-level `source_type` is the label its evidence carries and
-    decides the directory its generations go to (`anvil_evidence.EVIDENCE_DIRS`), so
-    neither map's generations supersede the other's. Line 1 is the envelope, naming
-    both sides of the join and the source's kind (`source_type`, one of
-    `IMPORTER_SOURCE_TYPES`, constant for the file — the three kinds an importer may
-    write, described in `source_type_enum`. `wrangler_annotation` is deliberately not
-    among them: a curator enters as rules, not as evidence, per contract 1.6/1.7).
-  - **A repository has one published source** (contract 7.12), declared in
-    `pipeline.PUBLISHED_TABLES`; `anvil_evidence.check` ties both maps to it and the
-    run's preflight refuses evidence that contradicts it
-    (`source_evidence.require_one_published_source`). The verbatim manifest stands in
-    for the TDR tables until the TDR reader (#478) exists; 7.12 says why the compact
-    manifest never does.
+    `make import-anvil-published`, under `anvil_published/`, #497). A map's top-level
+    `source_type` is the label its evidence carries and decides its directory
+    (`anvil_evidence.EVIDENCE_DIRS`). Line 1 is the envelope, naming both sides of the
+    join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant
+    for the file. `wrangler_annotation` is deliberately not among them: a curator
+    enters as rules, not as evidence, per contract 1.6/1.7).
+  - **A repository has at most one published source** (contract 7.12), declared in
+    `source_evidence.PUBLISHED_TABLES`; `anvil_evidence.check` holds both maps to it
+    and the run's preflight refuses evidence that contradicts it
+    (`source_evidence.require_one_published_source`).
   - **A line is an observation, not a claim** (#421, contract 1.1): `EvidenceEntry`
     is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
     `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and

@@ -26,13 +26,9 @@ over an earlier one, and read by ``discover`` as the newest per dataset. Within-
 contradictions pass through — a file reached by two tables of one dataset that spell
 different assemblies receives both spans, and which is right is the resolver's (4.8).
 
-**One importer, two maps** (#497). What kind of source a map describes is the map's
-own ``source_type``, which every envelope written from it carries, and which decides
-the directory its generations go to (:data:`EVIDENCE_DIRS`): the submitter map writes
-under ``anvil/``, the published map under ``anvil_published/``, from the same verbatim
-manifest, so neither supersedes the other's generations. ``check`` ties the published
-map to the table ``pipeline.PUBLISHED_TABLES`` declares for AnVIL and keeps the
-submitter map off it (contract 7.12).
+**One importer, two maps** (#497). A map's ``source_type`` is every envelope's
+``source_type`` and picks the directory (:data:`EVIDENCE_DIRS`); :func:`_check_kind`
+holds each map to ``PUBLISHED_TABLES`` (contract 7.12), at ``check`` and at import.
 """
 
 from __future__ import annotations
@@ -47,6 +43,7 @@ from pathlib import Path
 from .azul_manifest import (
     ANVIL_FILE_HANDLE_COLUMNS,
     API_URL,
+    FORMAT_COMPACT,
     FORMAT_VERBATIM,
     REPOSITORY,
     VERBATIM_FILE,
@@ -57,9 +54,9 @@ from .azul_manifest import (
     sidecar_requested_at,
 )
 from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
-from .pipeline import PUBLISHED_TABLES
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
+    PUBLISHED_TABLES,
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
@@ -83,8 +80,13 @@ def evidence_dir(slot_map: SlotMap) -> str:
     """The directory under the evidence root a map's generations go to (:data:`EVIDENCE_DIRS`)."""
     directory = EVIDENCE_DIRS.get(slot_map.source_type)
     if directory is None:
-        raise ValueError(f"a {slot_map.source_type} map has no evidence directory here: {sorted(EVIDENCE_DIRS)}")
+        raise ValueError(f"map kind {slot_map.source_type!r} has no evidence directory here: {sorted(EVIDENCE_DIRS)}")
     return directory
+
+
+def _chosen_datasets(slot_map: SlotMap, datasets: list[str] | None) -> list[str]:
+    """The map's datasets, or ``datasets`` each once in order — not checked against the map."""
+    return slot_map.datasets() if datasets is None else list(dict.fromkeys(datasets))
 
 
 @dataclass
@@ -132,12 +134,10 @@ class DatasetImport:
 def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[str] | None = None) -> list[str]:
     """How the map disagrees with the manifests on disk, one line per problem; empty when none.
 
-    First the map's kind (:func:`_check_kind`): it has an evidence directory here, and
-    over the chosen datasets it holds to the published-table declaration (contract 7.12)
-    — a ``published_value`` map maps exactly ``PUBLISHED_TABLES[REPOSITORY]`` and a
-    ``repository_metadata`` map does not map it, two sources kept apart at the map.
-    Per mapped dataset (or those in ``datasets``, which must be in the map): the sidecar
-    names it and its verbatim manifest is on disk. Per mapped table: at least one row of that type exists. Per
+    First :func:`_check_kind` (contract 7.12), then per mapped dataset (or those in
+    ``datasets``, which must be in the map): the sidecar names it and its verbatim
+    manifest is on disk — a compact manifest alone is named as not a source this
+    importer reads. Per mapped table: at least one row of that type exists. Per
     file-link column: it appears on some row, and every non-empty value it holds is a
     DRS URI or a list of them. Per cell: the column appears on some row of its table
     and is not itself a file-link column — a column is one kind, never two (contract
@@ -148,7 +148,7 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     """
     named = sidecar_datasets(manifest_root, catalog)
     known = slot_map.datasets()
-    chosen = known if datasets is None else list(dict.fromkeys(datasets))
+    chosen = _chosen_datasets(slot_map, datasets)
     problems = _check_kind(slot_map, set(chosen))
     for dataset in chosen:
         if dataset not in known:
@@ -159,9 +159,12 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
             continue
         path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
         if not path.is_file():
+            compact = manifest_path(manifest_root, catalog, dataset, FORMAT_COMPACT)
             problems.append(
-                f"{dataset}: no verbatim manifest at {path} — the importer reads the verbatim manifest only, "
-                "never the compact one"
+                f"{dataset}: only the compact manifest is on disk ({compact}), which is Azul's join and not a "
+                "source this importer reads; no verbatim manifest at {path}"
+                if compact.is_file()
+                else f"{dataset}: no verbatim manifest at {path}"
             )
             continue
         problems += _check_dataset(slot_map, dataset, path)
@@ -171,13 +174,15 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
 def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
     """The map's kind against this importer, over ``datasets``' entries only.
 
-    The published table is declared per repository whose files the evidence is about
-    (``EvidenceTarget.system``), and this importer writes about ``REPOSITORY``'s, so
-    that is the key read here and the one ``require_one_published_source`` reads at
-    the run.
+    It has an evidence directory here, and it holds to the published-table declaration:
+    a ``published_value`` map maps exactly the table declared for ``REPOSITORY`` — the
+    repository this importer's evidence is about, which is the key the run reads too —
+    and a ``repository_metadata`` map does not map it.
     """
-    if slot_map.source_type not in EVIDENCE_DIRS:
-        return [f"a {slot_map.source_type} map has no evidence directory here: {sorted(EVIDENCE_DIRS)}"]
+    try:
+        evidence_dir(slot_map)
+    except ValueError as exc:
+        return [str(exc)]
     published = PUBLISHED_TABLES[REPOSITORY]
     tables = {(e.dataset, e.table) for e in slot_map.entries if e.dataset in datasets}
     if slot_map.source_type == SOURCE_PUBLISHED_VALUE:
@@ -255,7 +260,7 @@ def import_all(
     times it is named. Raises before writing anything if a named dataset is not in the map.
     """
     known = slot_map.datasets()
-    chosen = known if datasets is None else list(dict.fromkeys(datasets))
+    chosen = _chosen_datasets(slot_map, datasets)
     unknown = [d for d in chosen if d not in known]
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
@@ -291,8 +296,13 @@ def import_dataset(
     empty result.
     The target system and the envelope's source repository are both ``REPOSITORY``, the
     repository the manifests came from; the envelope's ``source_type`` is the map's, and
-    so is the directory under the evidence root (:func:`evidence_dir`).
+    so is the directory under the evidence root (:func:`evidence_dir`). The map's kind
+    is held to :func:`_check_kind` here as well as at ``check``, so this cannot write a
+    file the run would refuse.
     """
+    problems = _check_kind(slot_map, {dataset})
+    if problems:
+        raise ValueError("; ".join(problems))
     stamp = generation if generation is not None else new_generation()
     directory = generation_dir(evidence_root, evidence_dir(slot_map), catalog, dataset, stamp)
     if directory.exists():

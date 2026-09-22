@@ -19,10 +19,11 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import PUBLISHED_TABLES, RecordKey, load_envelope, record_key
+from meta_disco.pipeline import RecordKey, load_envelope, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
+    PUBLISHED_TABLES,
     report_evidence_files,
     require_one_published_source,
 )
@@ -186,12 +187,9 @@ def run_all_classifications(
     After those two refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
-    it is — so a run those two refuse reports none. The one judgement passed on them
-    is the third refusal, which comes after the report has named every file: a
-    ``published_value`` file from any table but the repository's declared one, from a
-    repository other than the one it is about, or a second current one for a dataset
-    (:func:`source_evidence.require_one_published_source`, #497), raises ``ValueError``
-    before the run directory exists.
+    it is — so a run those two refuse reports none. Then, with every file named, it
+    refuses the run (``ValueError``, before the run directory exists) if
+    :func:`source_evidence.require_one_published_source` does (#497).
     Reporting there, ahead of the run directory, puts what the run found at the top of
     its log rather than behind the phases. *Found*
     and not *consumed*: the rows go no further than that report, because matching

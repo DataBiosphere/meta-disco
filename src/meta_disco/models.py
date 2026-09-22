@@ -52,10 +52,8 @@ SOURCE_SIGNAL_INFERENCE = "signal_inference"
 SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
 SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
 SOURCE_REPOSITORY_METADATA = "repository_metadata"
-# What the repository's system of record publishes for the file (#497) — AnVIL's
-# harmonized `anvil_file` columns — as distinct from `repository_metadata`, a table
-# the submitter wrote. Two kinds so a reader of a conflict can tell the repository's
-# official value from a submitter's opinion (#472's open question, answered).
+# What the repository's system of record publishes for the file, as distinct from a
+# submitter's table (`repository_metadata`); contract 4.1 kind 2, 7.12 (#497).
 SOURCE_PUBLISHED_VALUE = "published_value"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
 # The kinds that name a source outside this repository. A claim with one of these

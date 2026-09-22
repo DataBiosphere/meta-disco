@@ -40,11 +40,9 @@ are read, not in a data file.
 **A map says what kind of source it describes.** The top-level ``source_type`` is one
 of ``IMPORTER_SOURCE_TYPES`` and becomes the envelope's ``source_type`` on every
 evidence file the importer writes from the map; it defaults to ``repository_metadata``,
-a submitter's own table. The published map (``anvil_published_slot_map.yaml``, #497)
-declares ``published_value`` and maps the harmonized ``anvil_file`` table, which is what
-the repository itself publishes: the same importer reads it, and the label is what lets
-reconcile tell the repository's value from a submitter's. One map is one kind of source
-— a map that mixed the two would have no place to say which table is which.
+a submitter's own table, and the published map (#497) declares ``published_value``. One
+map is one kind of source — a map that mixed the two would have no place to say which
+table is which.
 
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
 concluded; ``test_slot_map`` checks the file for the strings that would. The only

@@ -278,8 +278,8 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
     is one name token with a term in that row's slot (``CHM13v2``, ``grch38``, ``hifi``,
     and a cell value such as ``ILLUMINA``); every raw value is counted by slot either
     way, so the translation table's authors see everything that arrives — the published
-    map's files (#497) included. Those are counted and never compared: every published
-    cell is a list, written as its JSON array, which is not one name token.
+    map's files (#497) included, which are counted and never compared (a list cell, as
+    anvil15's published cells are, is not one name token).
     """
     forecast = EvidenceForecast()
     for path in discover(evidence_root):

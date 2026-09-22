@@ -15,7 +15,6 @@ from meta_disco.models import (
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
 )
-from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import (
     ENTITY_TOKENS,
@@ -27,6 +26,7 @@ from meta_disco.slot_map import (
     load_slot_map,
     published_slot_map_resource,
 )
+from meta_disco.source_evidence import PUBLISHED_TABLES
 
 MINIMAL = """
 catalog: anvil15

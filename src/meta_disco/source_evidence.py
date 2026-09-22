@@ -128,6 +128,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from uuid import uuid4
 
+from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
+from .azul_manifest import VERBATIM_FILE
 from .models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_NAME,
@@ -142,6 +144,14 @@ from .models import (
     require_join_key,
     required_str,
 )
+
+# One declaration per repository of the table that is its published source (#497,
+# contract 7.12 — why one, and why not the compact manifest, is there), keyed by the
+# repository whose files the evidence is about (`EvidenceTarget.system`). Read by
+# `require_one_published_source` here, which must judge files no map wrote, and by
+# `anvil_evidence.check`, which holds both slot maps to it. A repository absent here —
+# HPRC today — has no published source.
+PUBLISHED_TABLES: dict[str, str] = {ANVIL_REPOSITORY: VERBATIM_FILE}
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from an
 # evidence row rather than distinguishable by position alone, so a truncated or
@@ -946,31 +956,27 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
 def require_one_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
     """Refuse the current evidence unless each repository's published source is the one declared (#497).
 
-    A repository has exactly one published source (contract 7.12), declared in
-    ``published_tables`` as the source table that may carry ``published_value`` for
-    files of that repository (``pipeline.PUBLISHED_TABLES``: AnVIL to ``anvil_file``).
-    Over the current files a run found (:func:`report_evidence_files`), four things
-    are refused, with ``ValueError``: a ``published_value`` file whose source repository
-    is not the repository its rows are about (a published source is that repository's
-    own, by definition); one whose source table is not the declared one; one whose
-    target repository declares none; and a second current one for the same repository,
-    catalog version and dataset, naming both. The
-    version is part of the key because *current* is per version (:func:`discover`):
-    an anvil15 and an anvil16 generation of one dataset are both current, and which
-    describes the run's catalog is not decided here (see the module docstring on
-    currency). A file whose envelope could not be read is not judged here, it is
-    already named in the report.
+    ``published_tables`` is :data:`PUBLISHED_TABLES` or a test's stand-in. Over the
+    current files a run found (:func:`report_evidence_files`), a ``published_value``
+    file is refused with ``ValueError`` when its source repository is not the one its
+    rows are about (a published source is that repository's own); when its source table
+    is not the one declared for that repository, none included; and when a second
+    current one exists for the same target — repository, catalog version and dataset —
+    naming both. The version is part of the key because *current* is per version
+    (:func:`discover`): an anvil15 and an anvil16 generation are both current, and
+    which describes the run's catalog is not decided here (module docstring, currency).
+    A file whose envelope could not be read is already named in the report.
 
-    The importer refuses a map that would write the wrong label at ``check``
-    (``anvil_evidence``), so what this catches at discovery is a file placed by hand or
-    written by another tool.
+    The importer refuses a map that would write the wrong label (``anvil_evidence``),
+    so what this catches is a file placed by hand or written by another tool.
     """
-    current: dict[tuple[str, str | None, str | None], Path] = {}
+    current: dict[EvidenceTarget, Path] = {}
     for status in statuses:
         envelope = status.envelope
         if envelope is None or envelope.source_type != SOURCE_PUBLISHED_VALUE:
             continue
-        repository, version, dataset = envelope.target.system, envelope.target.version, envelope.target.dataset
+        target = envelope.target
+        repository = target.system
         if envelope.source.repository != repository:
             raise ValueError(
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from repository {envelope.source.repository!r} "
@@ -985,16 +991,15 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
             )
             raise ValueError(
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
-                f"{expected} — a repository has exactly one published source (contract 7.12)"
+                f"{expected} — a repository has at most one published source (contract 7.12)"
             )
-        key = (repository, version, dataset)
-        if key in current:
+        if target in current:
             raise ValueError(
-                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{dataset} @{version}: "
-                f"{current[key]} and {status.path} — a repository has exactly one published source "
-                "(contract 7.12), so one of them is not it"
+                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{target.dataset} "
+                f"@{target.version}: {current[target]} and {status.path} — a repository has at most one "
+                "published source (contract 7.12), so one of them is not it"
             )
-        current[key] = status.path
+        current[target] = status.path
 
 
 def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> str:

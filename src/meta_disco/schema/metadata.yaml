@@ -13,8 +13,9 @@ description: >-
   `data_modality` / `reference_assembly` are therefore deliberately **not** slots
   here (#424): they are the published output — the answer AnVIL publishes today,
   which this project diffs its own answer against — and the published importer
-  writes them as evidence (claims contract 4.1 kind 2, #497) from the TDR
-  `anvil_file` table, which no run reads yet (#432), never from this record. They
+  writes them as evidence (claims contract 4.1 kind 2, #497) from the `anvil_file`
+  table (today via the verbatim manifest, 7.12), which no run reads yet (#432),
+  never from this record. They
   were modeled here until #424 and dropped one step before
   classification, which is the bug that issue describes; modeling them as input
   slots is what invited it. They still arrive on every record, as unmodeled extra

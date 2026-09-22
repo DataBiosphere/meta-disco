@@ -1031,9 +1031,10 @@ enums:
       published_value:
         description: >-
           The value the repository's own system of record publishes for the file
-          (#497) — AnVIL's harmonized `anvil_file` columns, read from the TDR
-          tables. Distinct from `repository_metadata` so a reader of a conflict can
-          tell the repository's official value from a submitter's opinion.
+          (#497) — AnVIL's harmonized `anvil_file` columns, today read as the
+          verbatim manifest copies that TDR table (claims contract 7.12). Distinct
+          from `repository_metadata` so a reader of a conflict can tell the
+          repository's official value from a submitter's opinion.
       wrangler_annotation:
         description: >-
           A human curator's decision, recorded deliberately rather than inferred.

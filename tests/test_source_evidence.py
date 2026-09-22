@@ -42,6 +42,7 @@ from meta_disco import models, source_evidence
 from meta_disco.azul_manifest import API_URL, REPOSITORY, VERBATIM_FILE
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
     SOURCE_CONTENT_READ,
@@ -51,12 +52,12 @@ from meta_disco.models import (
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
-from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.schema_vocab import default_schema_path
 from meta_disco.source_evidence import (
     _MAX_ENVELOPE_BYTES,
     DEFAULT_SOURCE_EVIDENCE_ROOT,
     ENVELOPE_KEY,
+    PUBLISHED_TABLES,
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
@@ -112,16 +113,19 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
 def published_envelope(
     dataset: str = "AnVIL_IGVF_Mouse_R1",
     table: str = VERBATIM_FILE,
-    system: str = REPOSITORY,
     version: str = "anvil15",
     repository: str = REPOSITORY,
 ) -> EvidenceFileEnvelope:
     """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
-    labelled ``published_value``, about that same dataset's files."""
+    labelled ``published_value``, keyed by DRS URI on both sides and versioned by the
+    catalog, about that same dataset's files."""
     return evidence_file_envelope(
         source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=API_URL),
         source_type=SOURCE_PUBLISHED_VALUE,
-        target=EvidenceTarget(system=system, dataset=dataset, version=version),
+        source_version=version,
+        source_key=JOIN_KEY_DRS_URI,
+        target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=version),
+        target_key=JOIN_KEY_DRS_URI,
     )
 
 
@@ -1206,7 +1210,7 @@ def test_the_source_evidence_root_the_run_uses_is_under_data():
 
 
 class TestOnePublishedSourcePerRepository:
-    """A repository has exactly one published source (#497, contract 7.12): the table
+    """A repository has at most one published source (#497, contract 7.12): the table
     declared for it, and one current file of it per dataset. The run refuses the rest
     at preflight, over the statuses its evidence report already gathered."""
 
@@ -1246,7 +1250,7 @@ class TestOnePublishedSourcePerRepository:
         with pytest.raises(ValueError) as exc:
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
         assert str(first) in str(exc.value) and str(second) in str(exc.value)
-        assert "exactly one published source" in str(exc.value)
+        assert "at most one published source" in str(exc.value)
 
     def test_two_catalog_versions_of_one_dataset_are_both_current_and_both_allowed(self, tmp_path):
         """`discover` keeps the newest generation per version, so an anvil15 and an anvil16

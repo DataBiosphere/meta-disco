@@ -195,12 +195,11 @@ import-anvil-evidence:
 # The AnVIL published map (#497): the harmonized anvil_file columns — what AnVIL
 # itself publishes — through the same importer, as generations under
 # data/source_evidence/anvil_published/. Offline; reads the verbatim manifest.
-PUBLISHED_MAP = src/meta_disco/sources/anvil_published_slot_map.yaml
 check-published-map:
-	uv run python scripts/import_anvil_evidence.py --check --slot-map $(PUBLISHED_MAP)
+	uv run python scripts/import_anvil_evidence.py --check --published
 
 import-anvil-published:
-	uv run python scripts/import_anvil_evidence.py --slot-map $(PUBLISHED_MAP) $(ARGS)
+	uv run python scripts/import_anvil_evidence.py --published $(ARGS)
 
 # What a submitter table or column *name* would claim, measured against a stored
 # run (#369): agreement, disagreement, and where inference is silent. A decision

@@ -11,7 +11,14 @@ from typing import Any
 import pytest
 
 from meta_disco import anvil_evidence as ae
-from meta_disco.azul_manifest import FORMAT_VERBATIM, load_sidecar, manifest_dir, manifest_path, save_sidecar
+from meta_disco.azul_manifest import (
+    FORMAT_COMPACT,
+    FORMAT_VERBATIM,
+    load_sidecar,
+    manifest_dir,
+    manifest_path,
+    save_sidecar,
+)
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
@@ -196,14 +203,17 @@ datasets:
         ]
 
     def test_a_named_dataset_whose_manifest_is_not_on_disk(self, tmp_path):
-        """The importer reads the verbatim manifest only — the TDR tables as rows. The
-        compact manifest, Azul's join, is not a shape it reads, published map included
-        (#497), and the problem says so rather than leaving a reader to try it."""
+        """The importer reads the verbatim manifest only — the TDR tables as rows. When
+        only the compact manifest is there, Azul's join, the problem names it as not a
+        source this importer reads (#497, criterion 2) rather than leaving a reader to try it."""
         write_dataset(tmp_path, "D", HIFI_ROWS)
         manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM).unlink()
         (problem,) = ae.check(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG)
         assert problem.startswith("D: no verbatim manifest at ")
-        assert problem.endswith("never the compact one")
+        manifest_path(tmp_path, CATALOG, "D", FORMAT_COMPACT).write_text("")
+        (problem,) = ae.check(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG)
+        assert problem.startswith("D: only the compact manifest is on disk (")
+        assert "not a source this importer reads" in problem
 
     def test_a_cell_that_is_itself_a_file_link_column_is_a_problem(self, tmp_path):
         """A column is one kind, never two (contract 2.7): `cram` holds pointers, not a value."""
@@ -248,7 +258,7 @@ datasets:
         write_dataset(tmp_path, "D", HIFI_ROWS)
         text = HIFI_MAP.replace("catalog: anvil15", "catalog: anvil15\nsource_type: external_ground_truth")
         assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == [
-            "a external_ground_truth map has no evidence directory here: ['published_value', 'repository_metadata']"
+            "map kind 'external_ground_truth' has no evidence directory here: ['published_value', 'repository_metadata']"
         ]
 
     def test_a_list_of_drs_uris_is_a_file_link(self, tmp_path):
@@ -540,9 +550,10 @@ def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
 
 class TestThePublishedMap:
     def test_the_evidence_carries_the_maps_kind_under_its_own_directory(self, tmp_path):
-        """Acceptance criterion 1: one file per dataset from the `anvil_file` table, its
-        envelope carrying `published_value` and the DRS URI on both sides, each non-empty
-        cell verbatim and a list cell as a list."""
+        """Acceptance criterion 1, with the key the issue's comments amended: the DRS URI
+        on both sides, not `file_id`. One file per dataset from the `anvil_file` table,
+        its envelope carrying `published_value`, each non-empty cell verbatim and a list
+        cell as a list."""
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         (table,) = published_import(tmp_path).tables
         assert (
@@ -564,7 +575,7 @@ class TestThePublishedMap:
 
     def test_a_file_the_repository_publishes_nothing_for_is_skipped_and_counted(self, tmp_path):
         """Nulls are not written per file: an empty or null cell is skipped and counted,
-        exactly as a submitter table's is (maintainer, 2026-09-22)."""
+        exactly as a submitter table's is."""
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         result = published_import(tmp_path)
         (table,) = result.tables
@@ -585,6 +596,15 @@ class TestThePublishedMap:
         assert submitter.tables[0].path in current and published.tables[0].path in current
         assert {read_envelope(p).source_type for p in current} == {SOURCE_REPOSITORY_METADATA, SOURCE_PUBLISHED_VALUE}
 
+    def test_import_dataset_holds_the_map_to_the_published_table_rule_too(self, tmp_path):
+        """The table rule is not only `check`'s: entered as a library function, the importer
+        refuses to write a published_value file from any other table, before it writes."""
+        write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
+        text = PUBLISHED_MAP + "    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
+        with pytest.raises(ValueError, match="D/hifi: a published_value map maps only"):
+            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        assert discover(tmp_path / "ev") == []
+
     def test_import_all_derives_the_directory_from_the_map(self, tmp_path):
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         (result,) = ae.import_all(
@@ -595,7 +615,7 @@ class TestThePublishedMap:
     def test_a_map_of_a_kind_with_no_directory_here_is_refused_before_it_writes(self, tmp_path):
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         text = PUBLISHED_MAP.replace(SOURCE_PUBLISHED_VALUE, "external_ground_truth")
-        with pytest.raises(ValueError, match="external_ground_truth map has no evidence directory"):
+        with pytest.raises(ValueError, match="map kind 'external_ground_truth' has no evidence directory"):
             ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
         assert discover(tmp_path / "ev") == []
 
@@ -610,10 +630,8 @@ def test_the_bundled_map_agrees_with_the_anvil15_manifests():
 
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
 def test_the_published_map_yields_what_anvil_publishes(tmp_path):
-    """Acceptance criterion 4 (#497), the counts #472 measured on the compact manifest,
-    reproduced from the `anvil_file` rows of the verbatim one: 6,755 files with a
-    `data_modality` cell, 4,696 with a `reference_assembly` cell, 12 two-valued cells
-    written as two-element lists."""
+    """Acceptance criterion 4 (#497): #472's counts, measured on the compact manifest,
+    reproduced from the `anvil_file` rows of the verbatim one."""
     published = load_slot_map(published_slot_map_resource())
     assert ae.check(published, Path("data/anvil"), CATALOG) == []
     imports = ae.import_all(published, Path("data/anvil"), CATALOG, tmp_path / "ev", generation="20260920T000000Z")

@@ -13,7 +13,6 @@ from threading import Lock
 from typing import NamedTuple, TypeGuard
 
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
-from .azul_manifest import VERBATIM_FILE
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
@@ -149,15 +148,9 @@ SOURCE_RECORD_KEYS: dict[str, RecordKey] = {
     ANVIL_REPOSITORY: RecordKey(JOIN_KEY_FILE_ID, JOIN_KEY_FILE_ID),
     HPRC_REPOSITORY: RecordKey(JOIN_KEY_FILE_MD5SUM, OUTPUT_MD5SUM_FIELD),
 }
-
-# One declaration per repository of the table that is its published source (#497,
-# contract 7.12 — why it is one, and why not the compact manifest, is there). Read by
-# `anvil_evidence.check`, which ties the two slot maps to it, and by the run's
-# preflight (`source_evidence.require_one_published_source`), which must judge files no
-# map wrote. A repository absent here — HPRC today — has no published source.
-PUBLISHED_TABLES: dict[str, str] = {
-    ANVIL_REPOSITORY: VERBATIM_FILE,
-}
+# The other per-repository declaration, the published table, is
+# `source_evidence.PUBLISHED_TABLES` (#497): it lives with the run check that enforces
+# it, so the offline importer that reads it need not import this module.
 
 
 def record_key(metadata: dict, input_path: Path) -> RecordKey:

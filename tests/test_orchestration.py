@@ -258,7 +258,7 @@ class TestTheRunReportsItsEvidenceFiles:
             [],
         )
         metadata, output_base = _empty_run_input(tmp_path)
-        with pytest.raises(ValueError, match="exactly one published source"):
+        with pytest.raises(ValueError, match="at most one published source"):
             run_all_classifications(
                 metadata, output_base, tmp_path / "evidence", source_evidence_root=tmp_path / "source_evidence"
             )
