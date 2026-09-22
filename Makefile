@@ -197,10 +197,10 @@ import-anvil-evidence:
 # data/source_evidence/anvil_published/. Offline; reads the verbatim manifest.
 PUBLISHED_MAP = src/meta_disco/sources/anvil_published_slot_map.yaml
 check-published-map:
-	uv run python scripts/import_anvil_evidence.py --check --slot-map $(PUBLISHED_MAP) --source-dir anvil_published
+	uv run python scripts/import_anvil_evidence.py --check --slot-map $(PUBLISHED_MAP)
 
 import-anvil-published:
-	uv run python scripts/import_anvil_evidence.py --slot-map $(PUBLISHED_MAP) --source-dir anvil_published $(ARGS)
+	uv run python scripts/import_anvil_evidence.py --slot-map $(PUBLISHED_MAP) $(ARGS)
 
 # What a submitter table or column *name* would claim, measured against a stored
 # run (#369): agreement, disagreement, and where inference is silent. A decision

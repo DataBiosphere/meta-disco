@@ -4,19 +4,19 @@
 Checks the map against the manifests on disk first and refuses to write if anything
 disagrees — every problem ``check`` finds is listed, not only the first (a missing
 manifest or an empty table masks what is beneath it). Then writes one generation per
-dataset under ``data/source_evidence/<source-dir>/<catalog>/<dataset>/<generation>/``,
-one file per mapped table, and prints what each table produced. Offline: it reads what
+dataset under ``data/source_evidence/<dir>/<catalog>/<dataset>/<generation>/`` — the
+directory the map's ``source_type`` decides (``anvil_evidence.EVIDENCE_DIRS``) — one
+file per mapped table, and prints what each table produced. Offline: it reads what
 ``make download`` left on disk. The logic lives in ``meta_disco.anvil_evidence``.
 
-The map is the bundled submitter map by default, written under ``anvil/``. The
-published map (``--slot-map`` naming ``anvil_published_slot_map.yaml``, ``--source-dir
-anvil_published``; ``make import-anvil-published``) reads the harmonized ``anvil_file``
-columns through the same importer, and its files carry the map's own ``source_type``.
+The map is the bundled submitter map by default. The published map (``--slot-map``
+naming ``anvil_published_slot_map.yaml``; ``make import-anvil-published``) reads the
+harmonized ``anvil_file`` columns through the same importer.
 
     uv run python scripts/import_anvil_evidence.py --check
     uv run python scripts/import_anvil_evidence.py
     uv run python scripts/import_anvil_evidence.py --dataset AnVIL_HPRC_R2
-    uv run python scripts/import_anvil_evidence.py --slot-map src/meta_disco/sources/anvil_published_slot_map.yaml --source-dir anvil_published
+    uv run python scripts/import_anvil_evidence.py --slot-map src/meta_disco/sources/anvil_published_slot_map.yaml
 
 A classification run lists these files (``report_evidence_files``) and consumes none,
 so its output is unchanged by them; ``make name-signals ARGS=--evidence`` is what reads
@@ -28,7 +28,6 @@ import sys
 from pathlib import Path
 
 from meta_disco.anvil_evidence import check, describe, import_all
-from meta_disco.azul_manifest import REPOSITORY
 from meta_disco.slot_map import load_slot_map
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
 
@@ -43,9 +42,6 @@ def main() -> int:
     parser.add_argument("--dataset", action="append", help="Import only this dataset (repeatable)")
     parser.add_argument("--check", action="store_true", help="Check the map against the manifests and write nothing")
     parser.add_argument("--slot-map", type=Path, default=None, help="A slot map to read instead of the bundled one")
-    parser.add_argument(
-        "--source-dir", default=REPOSITORY, help="Directory under the evidence root the generations go to"
-    )
     args = parser.parse_args()
 
     slot_map = load_slot_map(args.slot_map)
@@ -65,7 +61,7 @@ def main() -> int:
     if args.check:
         return 0
 
-    imports = import_all(slot_map, args.data_dir, catalog, args.evidence_root, args.dataset, source=args.source_dir)
+    imports = import_all(slot_map, args.data_dir, catalog, args.evidence_root, args.dataset)
     for line in describe(imports):
         print(line)
     print(

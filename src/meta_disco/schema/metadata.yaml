@@ -12,10 +12,10 @@ description: >-
   It models what classification consumes, and nothing else. AnVIL's own published
   `data_modality` / `reference_assembly` are therefore deliberately **not** slots
   here (#424): they are the published output — the answer AnVIL publishes today,
-  which this project diffs its own answer against — and they enter as an input
-  (claims contract 4.1 kind 2, #472/#497) through the published importer, which
-  reads them from the TDR `anvil_file` table into evidence files, not through this
-  record. They were modeled here until #424 and dropped one step before
+  which this project diffs its own answer against — and the published importer
+  writes them as evidence (claims contract 4.1 kind 2, #497) from the TDR
+  `anvil_file` table, which no run reads yet (#432), never from this record. They
+  were modeled here until #424 and dropped one step before
   classification, which is the bug that issue describes; modeling them as input
   slots is what invited it. They still arrive on every record, as unmodeled extra
   keys, and the output model is where they are modeled — `classification.yaml`'s

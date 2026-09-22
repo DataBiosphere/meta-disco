@@ -398,7 +398,7 @@ depends on that, and a second repository needs no change to these assertions.
      its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
      conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
      carries the label from any other table, or a second one for a dataset, is refused before a run
-     starts (`source_evidence.refuse_second_published_source`). A repository that declares none — HPRC
+     starts (`source_evidence.require_one_published_source`). A repository that declares none — HPRC
      today — has no published source, and no file may claim one for it. The compact Azul manifest is
      not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
      Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one

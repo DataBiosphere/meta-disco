@@ -631,7 +631,8 @@ class EvidenceFileStatus:
     failure, held rather than raised so that one unreadable file does not hide the
     provenance of the ones behind it in the report.
 
-    A run does not judge an evidence file beyond this. Whether the rows still describe
+    A run does not judge an evidence file beyond this and the published-source check
+    (:func:`require_one_published_source`, #497). Whether the rows still describe
     the catalog being classified is left to the importer, which compares its own
     file's ``target.version`` against the configured catalog when deciding to re-fetch,
     and to the boundary where an enhancement is offered back to a catalog — which
@@ -906,7 +907,7 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     until the join lands (#402), and this report is the whole of what a run does with
     one today. Returns the statuses in the order printed.
 
-    The report does not judge, and the run does not stop. Whether an evidence file has
+    The report does not judge currency, and nothing here stops the run. Whether an evidence file has
     outlived what it describes is not answerable from the file: the sources have no
     common version to compare (HPRC has a major release and may drift from it), and
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
@@ -942,21 +943,21 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     return statuses
 
 
-def refuse_second_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
-    """Refuse the current evidence when more than one file claims to be a repository's published source (#497).
+def require_one_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
+    """Refuse the current evidence unless each repository's published source is the one declared (#497).
 
     A repository has exactly one published source (contract 7.12), declared in
     ``published_tables`` as the source table that may carry ``published_value`` for
     files of that repository (``pipeline.PUBLISHED_TABLES``: AnVIL to ``anvil_file``).
-    Over the current files a run found (:func:`report_evidence_files`), a file carrying
-    ``published_value`` is refused when its source table is not the declared one — or
-    the target repository declares none — and when a second current file carries it for
-    the same repository and dataset, naming both. Raises ``ValueError``; a file whose
-    envelope could not be read is not judged here, it is already named in the report.
+    Over the current files a run found (:func:`report_evidence_files`), three things
+    are refused, with ``ValueError``: a ``published_value`` file whose source table is
+    not the declared one; one whose target repository declares none; and a second
+    current one for the same repository and dataset, naming both. A file whose envelope
+    could not be read is not judged here, it is already named in the report.
 
-    Enforced at discovery rather than at import because the importer only ever writes
-    the label its map declares: the case this catches is a file placed by hand, or a
-    second map authored against the same table.
+    The importer refuses a map that would write the wrong label at ``check``
+    (``anvil_evidence``), so what this catches at discovery is a file placed by hand or
+    written by another tool.
     """
     current: dict[tuple[str, str | None], Path] = {}
     for status in statuses:
@@ -966,14 +967,14 @@ def refuse_second_published_source(statuses: list[EvidenceFileStatus], published
         repository, dataset = envelope.target.system, envelope.target.dataset
         declared = published_tables.get(repository)
         if envelope.source.table != declared:
+            expected = (
+                f"{repository}'s published source is {declared!r}"
+                if declared is not None
+                else f"{repository} declares no published source"
+            )
             raise ValueError(
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
-                + (
-                    f"{repository}'s published source is {declared!r}"
-                    if declared is not None
-                    else f"{repository} declares no published source"
-                )
-                + " — a repository has exactly one published source (contract 7.12)"
+                f"{expected} — a repository has exactly one published source (contract 7.12)"
             )
         if (repository, dataset) in current:
             raise ValueError(

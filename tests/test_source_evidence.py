@@ -31,16 +31,15 @@ spike's two external sources.
 import ast
 import json
 import threading
-from collections.abc import Mapping
 from dataclasses import fields, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import MappingProxyType
 
 import pytest
 import yaml
 
 from meta_disco import models, source_evidence
+from meta_disco.azul_manifest import API_URL, REPOSITORY, VERBATIM_FILE
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_MD5SUM,
@@ -52,6 +51,7 @@ from meta_disco.models import (
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
+from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.schema_vocab import default_schema_path
 from meta_disco.source_evidence import (
     _MAX_ENVELOPE_BYTES,
@@ -67,8 +67,8 @@ from meta_disco.source_evidence import (
     iter_evidence,
     new_generation,
     read_envelope,
-    refuse_second_published_source,
     report_evidence_files,
+    require_one_published_source,
     write_evidence_file,
 )
 
@@ -106,6 +106,18 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
             fetched_at=FETCHED_AT,
         ),
         **overrides,
+    )
+
+
+def published_envelope(
+    dataset: str = "AnVIL_IGVF_Mouse_R1", table: str = VERBATIM_FILE, system: str = REPOSITORY
+) -> EvidenceFileEnvelope:
+    """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
+    labelled ``published_value``, about that same dataset's files."""
+    return evidence_file_envelope(
+        source=EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL),
+        source_type=SOURCE_PUBLISHED_VALUE,
+        target=EvidenceTarget(system=system, dataset=dataset, version="anvil15"),
     )
 
 
@@ -1194,55 +1206,39 @@ class TestOnePublishedSourcePerRepository:
     declared for it, and one current file of it per dataset. The run refuses the rest
     at preflight, over the statuses its evidence report already gathered."""
 
-    DECLARED: Mapping[str, str] = MappingProxyType({"anvil": "anvil_file"})
-
-    def _published(self, tmp_path, name, table="anvil_file", dataset="AnVIL_IGVF_Mouse_R1", system="anvil"):
-        source = EvidenceFileSource(
-            repository="anvil", dataset=dataset, table=table, url="https://service.explore.anvilproject.org"
-        )
+    def _published(self, tmp_path, name, **envelope):
         path = tmp_path / name
-        write_evidence_file(
-            path,
-            evidence_file_envelope(
-                source=source,
-                source_type=SOURCE_PUBLISHED_VALUE,
-                target=EvidenceTarget(system=system, dataset=dataset, version="anvil15"),
-            ),
-            [],
-        )
+        write_evidence_file(path, published_envelope(**envelope), [])
         return path
 
-    def _statuses(self, tmp_path):
-        return report_evidence_files(tmp_path)
-
-    def test_one_published_file_per_dataset_from_the_declared_table_passes(self, tmp_path, capsys):
+    def test_one_published_file_per_dataset_from_the_declared_table_passes(self, tmp_path):
         self._published(tmp_path, "a/anvil_file.ndjson")
         self._published(tmp_path, "b/anvil_file.ndjson", dataset="AnVIL_ENCORE_293T")
         write_evidence_file(tmp_path / "c/hifi.ndjson", evidence_file_envelope(), [])
-        refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
-    def test_a_published_file_from_another_table_is_refused(self, tmp_path, capsys):
+    def test_a_published_file_from_another_table_is_refused(self, tmp_path):
         self._published(tmp_path, "a/file.ndjson", table="file")
         with pytest.raises(ValueError, match=r"file\.ndjson.*from table 'file'.*published source is 'anvil_file'"):
-            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
-    def test_a_repository_that_declares_no_published_source_may_have_none(self, tmp_path, capsys):
-        self._published(tmp_path, "a/anvil_file.ndjson", system="hprc")
-        with pytest.raises(ValueError, match="hprc declares no published source"):
-            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+    def test_a_repository_that_declares_no_published_source_may_have_none(self, tmp_path):
+        self._published(tmp_path, "a/anvil_file.ndjson")
+        with pytest.raises(ValueError, match="anvil declares no published source"):
+            require_one_published_source(report_evidence_files(tmp_path), {})
 
-    def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path, capsys):
+    def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path):
         """Acceptance criterion 3: two files, both the declared table, one dataset."""
         first = self._published(tmp_path, "a/anvil_file.ndjson")
         second = self._published(tmp_path, "b/anvil_file.ndjson")
         with pytest.raises(ValueError) as exc:
-            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
         assert str(first) in str(exc.value) and str(second) in str(exc.value)
         assert "exactly one published source" in str(exc.value)
 
-    def test_submitter_files_and_unreadable_ones_are_not_judged(self, tmp_path, capsys):
+    def test_submitter_files_and_unreadable_ones_are_not_judged(self, tmp_path):
         write_evidence_file(tmp_path / "a/hifi.ndjson", evidence_file_envelope(), [])
         write_evidence_file(tmp_path / "b/hifi.ndjson", evidence_file_envelope(), [])
         (tmp_path / "c").mkdir()
         (tmp_path / "c" / "broken.ndjson").write_text("{not json\n")
-        refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)

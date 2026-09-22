@@ -277,7 +277,8 @@ def evidence_forecast(evidence_root: Path, run: dict[str, RunRecord]) -> Evidenc
     counted as files that never join. A raw value is compared only when, lowercased, it
     is one name token with a term in that row's slot (``CHM13v2``, ``grch38``, ``hifi``,
     and a cell value such as ``ILLUMINA``); every raw value is counted by slot either
-    way, so the translation table's authors see everything that arrives.
+    way, so the translation table's authors see everything that arrives — the published
+    map's files (#497) included, counted like any other and not set apart.
     """
     forecast = EvidenceForecast()
     for path in discover(evidence_root):

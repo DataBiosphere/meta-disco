@@ -59,11 +59,10 @@ classes:
       output (#424), the answer its users see today. Not this project's answer, and
       not an input to inference — nothing in classification reads this block, no
       claim is built from it, and a file's `value` is whatever inference concluded
-      whether this block is present or not. The published values do enter as an
-      input (claims contract 4.1 kind 2, #497), but as evidence the published
-      importer writes for reconcile, not through this block. It is here so the two
-      can be compared per file, which is what
-      `scripts/generate_published_comparison.py` does.
+      whether this block is present or not. The published values are also written
+      as evidence (claims contract 4.1 kind 2, #497) that no run reads yet (#432),
+      never through this block. It is here so the two can be compared per file,
+      which is what `scripts/generate_published_comparison.py` does.
 
       Repository-neutral by design: AnVIL is the only publisher today, but only the
       `source` names one, so a second repository needs no schema change.

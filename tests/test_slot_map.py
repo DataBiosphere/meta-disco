@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco.azul_manifest import VERBATIM_FILE
+from meta_disco.azul_manifest import REPOSITORY
 from meta_disco.manifest_survey import NAME_TOKENS, name_tokens
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -15,6 +15,7 @@ from meta_disco.models import (
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
 )
+from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import (
     ENTITY_TOKENS,
@@ -121,7 +122,7 @@ def test_a_map_declares_the_kind_of_source_it_describes(tmp_path):
     assert load(tmp_path, MINIMAL).source_type == SOURCE_REPOSITORY_METADATA
     published = MINIMAL.replace("catalog: anvil15", f"catalog: anvil15\nsource_type: {SOURCE_PUBLISHED_VALUE}")
     assert load(tmp_path, published).source_type == SOURCE_PUBLISHED_VALUE
-    for bad in (SOURCE_WRANGLER_ANNOTATION, SOURCE_CONTENT_READ, "", None):
+    for bad in (SOURCE_WRANGLER_ANNOTATION, SOURCE_CONTENT_READ, "''", "null"):
         refuses(tmp_path, MINIMAL.replace("catalog: anvil15", f"catalog: anvil15\nsource_type: {bad}"), "source_type")
 
 
@@ -278,9 +279,10 @@ class TestTheBundledMap:
                             f"{NAME_TOKENS[token][0]} token, declared under {slot}"
                         )
 
-    def test_the_map_cites_no_classification_run(self):
-        """Sources stay pure (R1, contract 3.4): nothing in the file names a run or a result."""
-        text = default_slot_map_resource().read_text(encoding="utf-8")
+    @pytest.mark.parametrize("resource", [default_slot_map_resource, published_slot_map_resource])
+    def test_the_map_cites_no_classification_run(self, resource):
+        """Sources stay pure (R1, contract 3.4): nothing in either file names a run or a result."""
+        text = resource().read_text(encoding="utf-8")
         for forbidden in ("output/", "classifications", "notes:", "agree", "inference"):
             assert forbidden not in text, forbidden
 
@@ -308,21 +310,18 @@ class TestTheBundledPublishedMap:
         assert slot_map.source_type == SOURCE_PUBLISHED_VALUE
         assert slot_map.entries
 
-    def test_it_maps_only_the_anvil_file_table_and_only_its_published_columns(self):
-        """One table, its TDR link column, and each published slot read from the cell
-        of the same name — nothing a submitter wrote and no name span."""
+    def test_it_maps_only_the_declared_published_table_and_only_its_published_columns(self):
+        """One table — the one `PUBLISHED_TABLES` declares for AnVIL — its TDR link
+        column, and each published slot read from the cell of the same name: nothing a
+        submitter wrote and no name span."""
         for entry in load_slot_map(published_slot_map_resource()).entries:
-            assert (entry.table, entry.column) == (VERBATIM_FILE, "file_ref"), entry
+            assert (entry.table, entry.column) == (PUBLISHED_TABLES[REPOSITORY], "file_ref"), entry
             assert set(entry.slots) == set(PUBLISHED_FIELDS), entry
             for slot, sources in entry.slots.items():
                 assert [(source.form, source.value) for source in sources] == [(SOURCE_CELL, slot)], entry
 
-    def test_the_submitter_map_never_reads_the_published_columns_from_anvil_file(self):
+    def test_the_submitter_map_never_reads_the_published_table(self):
         """The two maps are two sources: a submitter's table is one, what the repository
-        publishes is the other, and the submitter map does not reach into `anvil_file`."""
-        assert not [e for e in load_slot_map().entries if e.table == VERBATIM_FILE]
-
-    def test_the_map_cites_no_classification_run(self):
-        text = published_slot_map_resource().read_text(encoding="utf-8")
-        for forbidden in ("output/", "classifications", "notes:", "agree", "inference"):
-            assert forbidden not in text, forbidden
+        publishes is the other, and the submitter map does not reach into it. Pinned by
+        `anvil_evidence.check` too; this is the bundled map holding to it."""
+        assert not [e for e in load_slot_map().entries if e.table == PUBLISHED_TABLES[REPOSITORY]]

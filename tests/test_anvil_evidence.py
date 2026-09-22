@@ -115,6 +115,42 @@ def rows_of(path: Path) -> list[tuple[str, str, str, str | None]]:
     return [(e.field, e.target_key_value, e.raw_value, e.source.column) for e in iter_evidence(path)]
 
 
+# --- the published map: the same importer, the map's own kind (#497) ----------------
+
+
+PUBLISHED_MAP = f"""
+catalog: anvil15
+source_type: {SOURCE_PUBLISHED_VALUE}
+datasets:
+  D:
+    anvil_file:
+      file_ref:
+        data_modality:
+          - {{cell: data_modality}}
+        reference_assembly:
+          - {{cell: reference_assembly}}
+"""
+
+PAIR = ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
+
+
+def published_file(n: int, modality, assembly) -> tuple[str, dict]:
+    """An `anvil_file` row as the verbatim manifest carries it: TDR's columns plus Azul's `drs_uri` copy."""
+    _, row = anvil_file(n)
+    return "anvil_file", {**row, "data_modality": modality, "reference_assembly": assembly}
+
+
+PUBLISHED_ROWS = [
+    published_file(1, ["single-nucleus RNA sequencing assay"], ["GRCm39"]),
+    published_file(2, PAIR, []),
+    published_file(3, [], None),
+]
+
+
+def published_import(tmp_path: Path, stamp: str = "20260920T000000Z") -> ae.DatasetImport:
+    return ae.import_dataset(slot_map(tmp_path, PUBLISHED_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", stamp)
+
+
 # --- check ---------------------------------------------------------------------
 
 
@@ -184,6 +220,21 @@ datasets:
         assert ae.check(m, tmp_path, CATALOG) == ["E: not a dataset the anvil15 sidecar names"]
         assert ae.check(m, tmp_path, CATALOG, datasets=["D"]) == []
         assert ae.check(m, tmp_path, CATALOG, datasets=["Z"]) == ["Z: not in the slot map"]
+
+    def test_a_published_map_maps_only_the_declared_table_and_a_submitter_map_never_does(self, tmp_path):
+        """Contract 7.12 at the map: the label a map declares fixes which table it may name."""
+        write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
+        mixed = PUBLISHED_MAP + "    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
+        assert ae.check(slot_map(tmp_path, mixed), tmp_path, CATALOG) == [
+            "D/hifi: a published_value map maps only anvil's published table, 'anvil_file'"
+        ]
+        submitter = (
+            HIFI_MAP
+            + "    anvil_file:\n      file_ref:\n        reference_assembly:\n          - {cell: reference_assembly}\n"
+        )
+        assert ae.check(slot_map(tmp_path, submitter), tmp_path, CATALOG) == [
+            "D/anvil_file: anvil's published table is the published_value map's, not a repository_metadata map's"
+        ]
 
     def test_a_list_of_drs_uris_is_a_file_link(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"hifi": [drs(1), drs(2)]})])
@@ -472,56 +523,15 @@ def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
     assert "    library_source: null on 1 rows" in lines
 
 
-# --- the published map: the same importer, the map's own kind (#497) ----------------
-
-
-PUBLISHED_MAP = f"""
-catalog: anvil15
-source_type: {SOURCE_PUBLISHED_VALUE}
-datasets:
-  D:
-    anvil_file:
-      file_ref:
-        data_modality:
-          - {{cell: data_modality}}
-        reference_assembly:
-          - {{cell: reference_assembly}}
-"""
-
-PAIR = ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
-
-
-def published_file(n: int, modality, assembly) -> tuple[str, dict]:
-    """An `anvil_file` row as the verbatim manifest carries it: TDR's columns plus Azul's `drs_uri` copy."""
-    _, row = anvil_file(n)
-    return "anvil_file", {**row, "data_modality": modality, "reference_assembly": assembly}
-
-
-PUBLISHED_ROWS = [
-    published_file(1, ["single-nucleus RNA sequencing assay"], ["GRCm39"]),
-    published_file(2, PAIR, []),
-    published_file(3, [], None),
-]
-
-
 class TestThePublishedMap:
     def test_the_evidence_carries_the_maps_kind_under_its_own_directory(self, tmp_path):
         """Acceptance criterion 1: one file per dataset from the `anvil_file` table, its
         envelope carrying `published_value` and the DRS URI on both sides, each non-empty
         cell verbatim and a list cell as a list."""
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
-        result = ae.import_dataset(
-            slot_map(tmp_path, PUBLISHED_MAP),
-            tmp_path,
-            CATALOG,
-            "D",
-            tmp_path / "ev",
-            "20260920T000000Z",
-            "anvil_published",
-        )
-        (table,) = result.tables
+        (table,) = published_import(tmp_path).tables
         assert (
-            table.path == tmp_path / "ev" / "anvil_published" / CATALOG / "D" / "20260920T000000Z" / "anvil_file.ndjson"
+            table.path == tmp_path / "ev" / ae.PUBLISHED_DIR / CATALOG / "D" / "20260920T000000Z" / "anvil_file.ndjson"
         )
         envelope = read_envelope(table.path)
         assert envelope.source_type == SOURCE_PUBLISHED_VALUE
@@ -541,51 +551,38 @@ class TestThePublishedMap:
         """Nulls are not written per file: an empty or null cell is skipped and counted,
         exactly as a submitter table's is (maintainer, 2026-09-22)."""
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
-        result = ae.import_dataset(
-            slot_map(tmp_path, PUBLISHED_MAP),
-            tmp_path,
-            CATALOG,
-            "D",
-            tmp_path / "ev",
-            "20260920T000000Z",
-            "anvil_published",
-        )
+        result = published_import(tmp_path)
         (table,) = result.tables
         assert table.rows == 3 and result.files == 2
         assert not [r for r in rows_of(table.path) if r[1] == drs(3)]
         assert table.null_cells == {"data_modality": 1, "reference_assembly": 2}
 
     def test_the_two_maps_generations_never_supersede_each_other(self, tmp_path):
-        """The submitter map writes under `anvil/` and the published map under its own
-        directory, so a run finds the newest generation of each: two sources, both current."""
+        """The map's kind decides its directory (`EVIDENCE_DIRS`): the submitter map writes
+        under `anvil/`, the published map under its own, so a run finds the newest
+        generation of each — two sources, both current."""
         write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
         submitter = ae.import_dataset(
             slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
         )
-        published = ae.import_dataset(
-            slot_map(tmp_path, PUBLISHED_MAP),
-            tmp_path,
-            CATALOG,
-            "D",
-            tmp_path / "ev",
-            "20260921T000000Z",
-            "anvil_published",
-        )
+        published = published_import(tmp_path, "20260921T000000Z")
         current = discover(tmp_path / "ev")
         assert submitter.tables[0].path in current and published.tables[0].path in current
         assert {read_envelope(p).source_type for p in current} == {SOURCE_REPOSITORY_METADATA, SOURCE_PUBLISHED_VALUE}
 
-    def test_import_all_passes_the_directory_through(self, tmp_path):
+    def test_import_all_derives_the_directory_from_the_map(self, tmp_path):
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         (result,) = ae.import_all(
-            slot_map(tmp_path, PUBLISHED_MAP),
-            tmp_path,
-            CATALOG,
-            tmp_path / "ev",
-            generation="20260920T000000Z",
-            source="anvil_published",
+            slot_map(tmp_path, PUBLISHED_MAP), tmp_path, CATALOG, tmp_path / "ev", generation="20260920T000000Z"
         )
-        assert result.directory.parts[-4] == "anvil_published"
+        assert result.directory.parts[-4] == ae.PUBLISHED_DIR
+
+    def test_a_map_of_a_kind_with_no_directory_here_is_refused_before_it_writes(self, tmp_path):
+        write_dataset(tmp_path, "D", PUBLISHED_ROWS)
+        text = PUBLISHED_MAP.replace(SOURCE_PUBLISHED_VALUE, "external_ground_truth")
+        with pytest.raises(ValueError, match="external_ground_truth map has no evidence directory"):
+            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        assert discover(tmp_path / "ev") == []
 
 
 # --- the bundled maps against the real manifests -----------------------------------
@@ -604,9 +601,7 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     written as two-element lists."""
     published = load_slot_map(published_slot_map_resource())
     assert ae.check(published, Path("data/anvil"), CATALOG) == []
-    imports = ae.import_all(
-        published, Path("data/anvil"), CATALOG, tmp_path / "ev", generation="20260920T000000Z", source="anvil_published"
-    )
+    imports = ae.import_all(published, Path("data/anvil"), CATALOG, tmp_path / "ev", generation="20260920T000000Z")
     files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
     two_valued = 0
     for run in imports:

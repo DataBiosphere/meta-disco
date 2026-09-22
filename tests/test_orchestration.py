@@ -22,11 +22,10 @@ from meta_disco.classify_run import (
 )
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.models import SOURCE_PUBLISHED_VALUE
 from meta_disco.output_utils import CLASSIFICATION_FILES
 from meta_disco.producers import PRODUCERS, Producer, producers_in_phase
-from meta_disco.source_evidence import EvidenceFileSource, EvidenceTarget, write_evidence_file
-from tests.test_source_evidence import evidence_file_envelope
+from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
+from tests.test_source_evidence import evidence_file_envelope, published_envelope
 
 METADATA = Path("data/anvil/anvil_files_metadata.json")
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
@@ -209,7 +208,7 @@ def test_exclusions_file_is_not_read_as_a_classification():
 
 class TestTheRunReportsItsEvidenceFiles:
     """A run reads its evidence files and is stopped by none of them (#401) — but one:
-    a second published source for a repository (#497), pinned below.
+    evidence contradicting the repository's declared published source (#497), pinned below.
 
     What the report *says* is pinned in ``test_source_evidence.py``; what is pinned here
     is the wiring — that ``run_all_classifications`` takes an evidence root, reports it,
@@ -249,17 +248,13 @@ class TestTheRunReportsItsEvidenceFiles:
         assert output_base.exists(), "the run must start regardless of an evidence file's catalog"
         assert "anvil/manifest.ndjson" in capsys.readouterr().out.replace("\\", "/")
 
-    def test_a_second_published_source_stops_the_run_before_it_writes_anything(self, tmp_path):
-        """The wiring for `refuse_second_published_source` (its cases are in
+    def test_a_published_file_from_an_undeclared_table_stops_the_run_before_it_writes_anything(self, tmp_path):
+        """The wiring for `require_one_published_source` (its cases are in
         test_source_evidence.py): a file claiming `published_value` from a table that is
         not AnVIL's declared one refuses the run at preflight, so no run directory exists."""
         write_evidence_file(
             tmp_path / "source_evidence" / "anvil" / "file.ndjson",
-            evidence_file_envelope(
-                source=EvidenceFileSource(repository="anvil", dataset="AnVIL_ENCORE_293T", table="file"),
-                source_type=SOURCE_PUBLISHED_VALUE,
-                target=EvidenceTarget(system="anvil", dataset="AnVIL_ENCORE_293T", version="anvil15"),
-            ),
+            published_envelope(dataset="AnVIL_ENCORE_293T", table="file"),
             [],
         )
         metadata, output_base = _empty_run_input(tmp_path)
