@@ -1252,6 +1252,28 @@ class TestOnePublishedSourcePerRepository:
         with pytest.raises(ValueError, match="anvil's published source is not declared"):
             require_one_published_source(report_evidence_files(tmp_path), {})
 
+    def test_an_undeclared_repository_has_no_table_for_a_tableless_file_to_match(self, tmp_path):
+        """A source's `table` is optional and an undeclared repository's table is None; the
+        two are never taken as equal. A tableless submitter file for such a repository
+        passes, and a tableless `published_value` file for it is still refused."""
+        write_evidence_file(
+            tmp_path / "a/hprc.ndjson",
+            evidence_file_envelope(source=EvidenceFileSource(repository="hprc", dataset="R2")),
+            [],
+        )
+        require_one_published_source(report_evidence_files(tmp_path), {})
+        write_evidence_file(
+            tmp_path / "b/hprc.ndjson",
+            evidence_file_envelope(
+                source=EvidenceFileSource(repository="hprc", dataset="R2"),
+                source_type=SOURCE_PUBLISHED_VALUE,
+                target=EvidenceTarget(system="hprc", dataset="R2"),
+            ),
+            [],
+        )
+        with pytest.raises(ValueError, match="hprc's published source is not declared"):
+            require_one_published_source(report_evidence_files(tmp_path), {})
+
     def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path):
         """Acceptance criterion 3: two files, both the declared table, one dataset."""
         first = self._published(tmp_path, "a/anvil_file.ndjson")

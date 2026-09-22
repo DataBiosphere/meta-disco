@@ -973,8 +973,12 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
             continue
         target = envelope.target
         repository = target.system
+        # `declared` is None for a repository with no declaration, and a source's `table`
+        # may be None too, so the two are never compared as equal: an undeclared
+        # repository has no published table for a file to be from.
+        declared = published_tables.get(repository)
         if envelope.source_type != SOURCE_PUBLISHED_VALUE:
-            if envelope.source.repository == repository and envelope.source.table == published_tables.get(repository):
+            if declared is not None and envelope.source.repository == repository and envelope.source.table == declared:
                 raise ValueError(
                     f"{status.path}: carries {envelope.source_type} from {repository}'s published table "
                     f"{envelope.source.table!r}, which carries {SOURCE_PUBLISHED_VALUE} and nothing else "
@@ -986,8 +990,7 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from repository {envelope.source.repository!r} "
                 f"about {repository}'s files — a published source is the repository's own (contract 7.12)"
             )
-        declared = published_tables.get(repository)
-        if envelope.source.table != declared:
+        if declared is None or envelope.source.table != declared:
             expected = (
                 f"{repository}'s published source is {declared!r}"
                 if declared is not None
