@@ -103,6 +103,8 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
     Overrides go through the constructor rather than a copy, so a case overriding one
     member with a bad value is refused the way an importer building one would be.
     """
+    # Typed `Any` so the merged dict splats past the generated model's enum-typed
+    # members; without it pyright infers the union of the values and refuses every one.
     members: dict[str, Any] = {
         "source": HPRC_CATALOG,
         "source_type": SOURCE_REPOSITORY_METADATA,
@@ -113,6 +115,20 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
         "fetched_at": ISO_NOW,
     }
     return EvidenceFileEnvelope(**{**members, **overrides})
+
+
+def envelope_block(**overrides) -> dict:
+    """The envelope as line 1 carries it — the writer's serialization, stated once.
+
+    For the cases that write a file by hand to put a malformed line or member in
+    front of the reader.
+    """
+    return evidence_file_envelope(**overrides).model_dump(exclude_none=True)
+
+
+def evidence_lines(*lines: object) -> str:
+    """A hand-written evidence file's text: the envelope on line 1, then ``lines``."""
+    return "".join(json.dumps(line) + "\n" for line in ({ENVELOPE_KEY: envelope_block()}, *lines))
 
 
 def published_envelope(
@@ -401,7 +417,7 @@ class TestMalformedFiles:
         rather than the line-numbered ValueError this module promises. The file is
         opened as bytes and decoded where the line number is known."""
         path = tmp_path / "c.ndjson"
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)}).encode() + b"\n"
+        envelope = json.dumps({ENVELOPE_KEY: envelope_block()}).encode() + b"\n"
         path.write_bytes(envelope + b'{"field":"platform","target_key_value":"\xff\xfe","raw_value":"x"}\n')
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 2: not valid UTF-8"):
@@ -416,7 +432,7 @@ class TestMalformedFiles:
         the opposite of the report naming every file it found (#401 review).
         """
         deep = "[" * 2000 + "]" * 2000
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
+        envelope = json.dumps({ENVELOPE_KEY: envelope_block()})
         first = '{"evidence_file":' + deep + "}" if line == 1 else envelope
         second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + deep + "}"
         path = tmp_path / "evidence.ndjson"
@@ -434,7 +450,7 @@ class TestMalformedFiles:
         and line every other malformed line carries.
         """
         big = "1" * 5000
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
+        envelope = json.dumps({ENVELOPE_KEY: envelope_block()})
         first = '{"evidence_file":{"n":' + big + "}}" if line == 1 else envelope
         second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + big + "}"
         path = tmp_path / "evidence.ndjson"
@@ -485,38 +501,38 @@ class TestMalformedFiles:
     @pytest.mark.parametrize(
         "envelope,expected",
         [
-            ({"source": {"url": "u"}}, "source repository"),
-            ({"source": {"repository": ""}}, "source repository"),
-            ({"source": {"repository": None}}, "source repository"),
-            ({"source": {"repository": "HPRC", "table": 7}}, "source table"),
-            ({"fetched_at": None}, "fetched_at"),
-            ({"fetched_at": "yesterday"}, "fetched_at"),
-            ({"fetched_at": "2026-09-01"}, "fetched_at"),
+            ({"source": {"url": "u"}}, "source repository: Field required"),
+            ({"source": {"repository": ""}}, "source repository: .*Invalid repository format"),
+            ({"source": {"repository": None}}, "source repository: Input should be a valid string"),
+            ({"source": {"repository": "HPRC", "table": 7}}, "source table: Input should be a valid string"),
+            ({"fetched_at": None}, "fetched_at: Input should be a valid string"),
+            ({"fetched_at": "yesterday"}, "fetched_at: .*Invalid fetched_at format"),
+            ({"fetched_at": "2026-09-01"}, "fetched_at: .*Invalid fetched_at format"),
             # A date can be longer than ten characters without carrying a time:
             # `fromisoformat` read all three of these as midnight, and the first two
             # come straight off an API that stamps a UTC designator on a date (#401
             # review). The third is a real separator's worth of characters in the
             # right place and still not a `T`. The schema's pattern refuses each.
-            ({"fetched_at": "2026-09-01Z"}, "fetched_at"),
-            ({"fetched_at": "2026-09-01+00:00"}, "fetched_at"),
-            ({"fetched_at": "2026-09-01X09:14:03"}, "fetched_at"),
+            ({"fetched_at": "2026-09-01Z"}, "fetched_at: .*Invalid fetched_at format"),
+            ({"fetched_at": "2026-09-01+00:00"}, "fetched_at: .*Invalid fetched_at format"),
+            ({"fetched_at": "2026-09-01X09:14:03"}, "fetched_at: .*Invalid fetched_at format"),
             # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts.
             # The pattern refuses it before any parser sees it, so the file reads the
             # same on every interpreter.
-            ({"fetched_at": "20260901T091403"}, "fetched_at"),
+            ({"fetched_at": "20260901T091403"}, "fetched_at: .*Invalid fetched_at format"),
             # Well-shaped and not a day: the pattern passes it and the parse refuses
             # it, which is the one check no regex can make (#401 review).
-            ({"fetched_at": "2026-02-30T09:14:03"}, "fetched_at.*not an ISO 8601"),
-            ({"source_version": ""}, "source_version"),
-            ({"source_key": None}, "source_key"),
+            ({"fetched_at": "2026-02-30T09:14:03"}, "fetched_at '2026-02-30T09:14:03' is not an ISO 8601"),
+            ({"source_version": ""}, "source_version: .*Invalid source_version format"),
+            ({"source_key": None}, "source_key: Input should be a valid string"),
             # An evidence file is written by an importer reading something we do not
             # own, so its source_type is one of IMPORTER_SOURCE_TYPES. `content_read`
             # is the reachable mistake: a real source_type, and our own inference's.
-            ({"source_type": SOURCE_CONTENT_READ}, "source_type"),
-            ({"source_type": None}, "source_type"),
-            ({"target": {"system": ""}}, "target system"),
-            ({"target": {"system": "anvil", "dataset": 7}}, "target dataset"),
-            ({"target_key": "sample_id"}, "target_key"),
+            ({"source_type": SOURCE_CONTENT_READ}, "source_type: Input should be 'external_ground_truth'"),
+            ({"source_type": None}, "source_type: Input should be 'external_ground_truth'"),
+            ({"target": {"system": ""}}, "target system: .*Invalid system format"),
+            ({"target": {"system": "anvil", "dataset": 7}}, "target dataset: Input should be a valid string"),
+            ({"target_key": "sample_id"}, "target_key: Input should be 'file_id'"),
         ],
     )
     def test_an_envelope_missing_a_fact_is_refused(self, tmp_path, envelope, expected):
@@ -527,12 +543,11 @@ class TestMalformedFiles:
         what it asserts is the member named and not an unrelated one that happened to
         be missing too. The checks are the generated model's (#494); what this pins is
         that the refusal reaches the reader's caller as a ``ValueError`` naming the
-        member.
+        member and the fault, so a match on the member alone — which every message
+        for a block carrying it would satisfy — is not enough.
         """
         path = tmp_path / "evidence.ndjson"
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().model_dump(exclude_none=True), **envelope}}) + "\n"
-        )
+        path.write_text(json.dumps({ENVELOPE_KEY: {**envelope_block(), **envelope}}) + "\n")
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
@@ -727,7 +742,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         came from (#494).
         """
         path = tmp_path / "c.ndjson"
-        envelope = {**evidence_file_envelope().model_dump(exclude_none=True), **block}
+        envelope = {**envelope_block(), **block}
         path.write_text(json.dumps({ENVELOPE_KEY: envelope}) + "\n")
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*unknown member"):
@@ -747,7 +762,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         Otherwise the same malformed provenance is discarded rather than reported
         depending only on which side of one brace it sat.
         """
-        envelope = evidence_file_envelope().model_dump(exclude_none=True)
+        envelope = envelope_block()
         payload = (
             [envelope if v == "ENVELOPE" else v for v in wrapper]
             if isinstance(wrapper, list)
@@ -768,7 +783,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         every interpreter (#494).
         """
         path = tmp_path / "c.ndjson"
-        block = {**evidence_file_envelope().model_dump(exclude_none=True), "fetched_at": "2026-09-01T09:14:03Z"}
+        block = {**envelope_block(), "fetched_at": "2026-09-01T09:14:03Z"}
         path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
 
         envelope = read_envelope(path)
@@ -792,12 +807,7 @@ class TestALineIsAnObservationNotAClaim:
         """An evidence file whose one line carries ``members`` verbatim, bypassing the writer."""
         path = tmp_path / "c.ndjson"
         line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio", **members}
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
-            + "\n"
-            + json.dumps(line)
-            + "\n",
-        )
+        path.write_text(evidence_lines(line))
         return path
 
     # Over the map itself, not a hand-copied list: a key added there and not here
@@ -856,12 +866,7 @@ class TestALineIsAnObservationNotAClaim:
             "target_key_value": "HG002.bam",
             "claim": {"rule_id": "map_hprc_platform_v1", "value": "PACBIO", "raw_value": "Revio"},
         }
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
-            + "\n"
-            + json.dumps(line)
-            + "\n"
-        )
+        path.write_text(evidence_lines(line))
 
         with pytest.raises(ValueError, match="'claim' is not a member of an evidence row"):
             list(iter_evidence(path))
@@ -872,12 +877,7 @@ class TestALineIsAnObservationNotAClaim:
         line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio"}
         del line[missing]
         path = tmp_path / "c.ndjson"
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
-            + "\n"
-            + json.dumps(line)
-            + "\n"
-        )
+        path.write_text(evidence_lines(line))
 
         with pytest.raises(ValueError, match=f"evidence row has no {missing!r}"):
             list(iter_evidence(path))
@@ -885,9 +885,7 @@ class TestALineIsAnObservationNotAClaim:
     def test_a_line_that_is_not_an_object_is_refused(self, tmp_path):
         """A bare list or string parses as JSON and is not a row."""
         path = tmp_path / "c.ndjson"
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)}) + "\n" + '["platform"]\n'
-        )
+        path.write_text(evidence_lines(["platform"]))
 
         with pytest.raises(ValueError, match="not an evidence row"):
             list(iter_evidence(path))
@@ -913,12 +911,9 @@ class TestALineIsAnObservationNotAClaim:
         the member — so the only file this reaches is one written by hand, and reading
         the null as the absent member it means is what the schema says it means.
         """
-        source = {**evidence_file_envelope().source.model_dump(exclude_none=True), member: None}
+        source = {**envelope_block()["source"], member: None}
         path = tmp_path / "evidence.ndjson"
-        path.write_text(
-            json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().model_dump(exclude_none=True), "source": source}})
-            + "\n"
-        )
+        path.write_text(json.dumps({ENVELOPE_KEY: {**envelope_block(), "source": source}}) + "\n")
 
         assert getattr(read_envelope(path).source, member) is None
 

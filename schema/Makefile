@@ -21,7 +21,7 @@ GEN_DIR = generated
 
 # Regenerate JSON Schema + Pydantic from the canonical LinkML schema. The JSON
 # Schema is gitignored; the Pydantic model is committed (#494), and
-# tests/test_metadata_model_drift.py fails when it lags the schema.
+# tests/test_model_drift.py fails when it lags the schema.
 gen:
 	mkdir -p $(GEN_DIR)
 	uv run gen-json-schema $(SCHEMA) > $(GEN_DIR)/classification.schema.json.tmp && mv $(GEN_DIR)/classification.schema.json.tmp $(GEN_DIR)/classification.schema.json

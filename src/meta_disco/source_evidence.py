@@ -135,13 +135,11 @@ from .models import (
     JOIN_KEY_FILE_NAME,
     SOURCE_PUBLISHED_VALUE,
     ClaimSource,
-    _reject_unknown,
-    member_optional_str,
+    optional_str,
     parse_iso_datetime,
 )
-from .schema.classification_model import EvidenceFileEnvelope, EvidenceFileSource, EvidenceTarget
-
-__all__ = ["EvidenceFileEnvelope", "EvidenceFileSource", "EvidenceTarget"]
+from .schema.classification_model import EvidenceFileEnvelope, EvidenceFileSource
+from .schema.classification_model import EvidenceTarget as EvidenceTarget  # re-exported for the importers
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from an
 # evidence row rather than distinguishable by position alone, so a truncated or
@@ -308,19 +306,22 @@ def _envelope_from_block(block: object, where: str) -> EvidenceFileEnvelope:
     ``ValidationError`` names the model and lists each fault by location, which is
     right for a caller holding the object and wrong for a person reading a run's
     report, who needs the file and the line in front of it and one message per fault
-    behind. An unknown member is named as such rather than as pydantic's "extra
-    inputs are not permitted", because it is the mistake a producer makes.
+    behind. Unknown members are named together, in the words ``_reject_unknown``
+    uses for a row's, rather than as pydantic's "extra inputs are not permitted":
+    it is the mistake a producer makes, and one module refuses it in one voice.
     """
     try:
         envelope = EvidenceFileEnvelope.model_validate(block)
     except ValidationError as exc:
-        faults = []
+        faults, unknown = [], []
         for error in exc.errors():
             location = " ".join(str(part) for part in error["loc"])
             if error["type"] == "extra_forbidden":
-                faults.append(f"unknown member {location!r}")
+                unknown.append(location)
             else:
                 faults.append(f"{location}: {error['msg']}")
+        if unknown:
+            faults.insert(0, f"has unknown member(s) {sorted(unknown)}")
         raise ValueError(f"{where}: envelope {'; '.join(faults)}") from None
     require_scoped_target(envelope, where)
     parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", where)
@@ -370,9 +371,10 @@ class EvidenceEntry:
 class EvidenceFileStatus:
     """One evidence file as a run sees it: its provenance, or why it could not be read.
 
-    Exactly one of the two is set. ``error`` is the envelope's own parse or IO
-    failure, held rather than raised so that one unreadable file does not hide the
-    provenance of the ones behind it in the report.
+    Exactly one of ``envelope`` and ``error`` is set, and ``fetched_at`` is set with
+    the envelope. ``error`` is the envelope's own parse or IO failure, held rather
+    than raised so that one unreadable file does not hide the provenance of the ones
+    behind it in the report.
 
     A run does not judge an evidence file beyond this and the published-source check
     (:func:`require_one_published_source`, #497). Whether the rows still describe
@@ -386,6 +388,9 @@ class EvidenceFileStatus:
     path: Path
     envelope: EvidenceFileEnvelope | None
     error: str | None = None
+    # The envelope's `fetched_at` as an instant, for the age line. The envelope keeps
+    # the string the schema declares; this is the one place a run wants it parsed.
+    fetched_at: datetime | None = None
 
 
 def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Iterable[EvidenceEntry]) -> int:
@@ -406,8 +411,9 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     names, raises rather than being written and discovered by a reader later. The
     envelope's four source facts are flattened once, here, and compared against per
     row — they are constant for the file. The envelope was checked when it was built
-    (:func:`require_scoped_target`; the generated model checked the rest when the
-    envelope was built).
+    The generated model checked the envelope's members when it was built; the one
+    rule it cannot carry is checked here (:func:`require_scoped_target`), before
+    anything touches the filesystem.
 
     A *retired* member — a mapped ``value``, a ``tier``, a ``join_key`` — is not
     refused here because it cannot get this far: ``EvidenceEntry`` has four members
@@ -425,6 +431,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
             f"{path.name}: an evidence file must be named {EVIDENCE_FILE_GLOB} — "
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
+    require_scoped_target(envelope, "evidence file envelope")
     path.parent.mkdir(parents=True, exist_ok=True)
     # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
     # shared that name: both wrote, one renamed, the other's rename hit a file that
@@ -448,7 +455,6 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     # writer's notion of "the same source" stays the reader's own.
     expected = claim_source_for(envelope.source, None)
     expected_facts = (expected.name, expected.url, expected.dataset, expected.table)
-    require_scoped_target(envelope, "evidence file envelope")
 
     written = 0
     try:
@@ -676,10 +682,11 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     for path in discover(root):
         try:
             envelope = read_envelope(path)
+            fetched_at = parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", path.name)
         except (OSError, ValueError) as exc:
             statuses.append(EvidenceFileStatus(path, None, f"envelope could not be read: {exc}"))
             continue
-        statuses.append(EvidenceFileStatus(path, envelope))
+        statuses.append(EvidenceFileStatus(path, envelope, fetched_at=fetched_at))
 
     if not statuses:
         print(f"Evidence files: none under {root} — this run imports nothing.")
@@ -768,20 +775,17 @@ def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> s
     where it was fetched from.
     """
     name = status.path.relative_to(root)
-    if status.envelope is None:
+    if status.envelope is None or status.fetched_at is None:
         return f"UNREADABLE {name} — {status.error}"
     envelope = status.envelope
     target = envelope.target
-    # Every status a run builds holds an envelope read through `_envelope_from_block`,
-    # which parsed this already, so for those this cannot raise.
-    fetched_at = parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", str(name))
     scope = f"{target.system}/{target.dataset}" if target.dataset else target.system
     generation = f" @{target.version}" if target.version else ""
     return (
         f"{name} — {_join_side(envelope.source.model_dump(), envelope.source_key)}"
         f" v{envelope.source_version}"
         f" -> {scope}[{envelope.target_key}]{generation},"
-        f" fetched {envelope.fetched_at} ({_age_phrase(fetched_at, now)})"
+        f" fetched {envelope.fetched_at} ({_age_phrase(status.fetched_at, now)})"
     )
 
 
@@ -956,10 +960,49 @@ def _entry_from_line(
     # The column is checked here rather than trusted: `"column": 7` would otherwise
     # ride through as a source member. `claim_source_for` then supplies the four facts
     # the envelope holds.
-    column = member_optional_str(entry, "column", "source column", where)
+    column = _member_optional_str(entry, "column", "source column", where)
     if (source := by_column.get(column)) is None:
         source = by_column[column] = claim_source_for(envelope_source, column)
     return EvidenceEntry(field=field, target_key_value=target_key_value, raw_value=raw_value, source=source)
+
+
+# Missing-key sentinel for `_member_optional_str`. `None` cannot serve: the writer
+# omits a null member, so an absent key and an explicit `"column": null` both read as
+# None through `dict.get`, and the second is a line we did not write.
+_ABSENT = object()
+
+
+def _member_optional_str(block: dict, key: str, label: str, where: str) -> str | None:
+    """Read one optional member of an evidence line, refusing an explicit null.
+
+    The absent-versus-null rule for a line's ``column`` — the one source member a
+    line carries rather than the envelope. ``dict.get`` with a default cannot tell an
+    absent key from a present null, and collapsing the two would accept a line the
+    writer could not have produced while every other member refuses it (#401 review).
+    The envelope draws no such distinction: it is read through the model generated
+    from the schema, and the schema admits a null on an optional member (#494).
+
+    Read rather than removed: copying the parsed line per read only to pop one key
+    from the copy would be a dict allocation per row for nothing.
+    """
+    value = block.get(key, _ABSENT)
+    if value is None:
+        raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
+    return optional_str(None if value is _ABSENT else value, label, where)
+
+
+def _reject_unknown(block: dict, known: frozenset, expected: tuple, where: str, label: str) -> None:
+    """Refuse a member the row does not have, rather than ignoring it.
+
+    The schema validates an evidence row ``closed=True``, so a reader that quietly
+    dropped an unknown key would accept documents the schema rejects — the two must
+    refuse the same files (#401 review). Called by :func:`_entry_from_line` for a line
+    carrying a member outside the row's four; the envelope gets the same refusal from
+    the generated model's ``extra="forbid"``, re-worded by :func:`_envelope_from_block`
+    in these words (#494).
+    """
+    if extra := sorted(set(block) - known):
+        raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {list(expected)})")
 
 
 def _where(name: str, unit: str, n: int) -> str:

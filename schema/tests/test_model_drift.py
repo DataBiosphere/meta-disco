@@ -1,4 +1,4 @@
-# tests/test_metadata_model_drift.py
+# tests/test_model_drift.py
 #
 # The runtime imports two generated Pydantic models and both are committed: the
 # input-record model src/meta_disco/schema/metadata_model.py, generated from

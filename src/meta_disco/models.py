@@ -439,11 +439,6 @@ def optional_str(value: object, label: str, where: str) -> str | None:
     return None if value is None else required_str(value, label, where)
 
 
-# Missing-key sentinel for `member_optional_str`. `None` cannot serve: the evidence
-# writer omits a null member, so an absent key and an explicit `"column": null` both
-# read as None through `dict.get`, and the second is a line we did not write.
-_ABSENT = object()
-
 _DATETIME = TypeAdapter(datetime)
 
 
@@ -510,44 +505,6 @@ def parse_iso_datetime(value: object, label: str, where: str) -> datetime:
         return _DATETIME.validate_python(value)
     except ValidationError:
         raise ValueError(f"{where}: {label} {value!r} is not an ISO 8601 datetime") from None
-
-
-def member_optional_str(block: dict, key: str, label: str, where: str, checker=optional_str) -> str | None:
-    """Read one member of ``block`` through ``checker``, refusing an explicit null.
-
-    The absent-versus-null rule for an evidence line's ``column`` — the one source
-    member a line carries rather than the envelope (``source_evidence._entry_from_line``,
-    its only caller since #494). ``dict.get`` with a default cannot tell an absent key
-    from a present null, and collapsing the two would accept a line the writer could
-    not have produced while every other member refuses it (#401 review). The envelope
-    itself no longer draws this distinction: it is read through the model generated
-    from the schema, and the schema admits a null on an optional member.
-
-    ``checker`` is what a present value must satisfy; it defaults to
-    :func:`optional_str`.
-
-    Read rather than removed: while a line held a claim, the members left after this
-    one became ``make_claim``'s keyword arguments, so taking it out was the point. A
-    row has no such remainder (#421), and copying the parsed line per read only to pop
-    one key from the copy would be a dict allocation per row for nothing.
-    """
-    value = block.get(key, _ABSENT)
-    if value is None:
-        raise ValueError(f"{where}: {label} is an explicit null — an absent member is omitted, not nulled")
-    return checker(None if value is _ABSENT else value, label, where)
-
-
-def _reject_unknown(block: dict, known: frozenset, expected: tuple, where: str, label: str) -> None:
-    """Refuse a member the record does not have, rather than ignoring it.
-
-    The schema validates an evidence row ``closed=True``, so a reader that quietly
-    dropped an unknown key would accept documents the schema rejects — the two must
-    refuse the same files (#401 review). Called by ``source_evidence._entry_from_line``
-    for a line carrying a member outside the row's four; the envelope gets the same
-    refusal from the generated model's ``extra="forbid"`` (#494).
-    """
-    if extra := sorted(set(block) - known):
-        raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {list(expected)})")
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -324,23 +324,27 @@ def import_dataset(
             f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at to write as fetched_at"
         )
     handles = _file_handles(path)
+    # What every table's envelope shares. The generated model types the two vocabulary
+    # members as its enums and stores their values (`use_enum_values`), so the runtime
+    # constants are wrapped for the type checker and read back as the plain strings
+    # they are; the timestamp is carried as the schema declares it, an ISO 8601 string,
+    # and the sidecar's `+00:00`/naive form round-trips unchanged.
+    source_type = ImporterSourceTypeEnum(slot_map.source_type)
+    target = EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog)
+    target_key = JoinKeyEnum(JOIN_KEY_DRS_URI)
+    fetched = fetched_at.isoformat()
     tables = []
     try:
         for table in slot_map.tables(dataset):
             file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
-            # The generated model types the two vocabulary members as its enums and
-            # stores their values (`use_enum_values`), so the runtime constants are
-            # wrapped for the type checker and read back as the plain strings they are.
             envelope = EvidenceFileEnvelope(
                 source=file_source,
-                source_type=ImporterSourceTypeEnum(slot_map.source_type),
+                source_type=source_type,
                 source_version=catalog,
                 source_key=JOIN_KEY_DRS_URI,
-                target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
-                target_key=JoinKeyEnum(JOIN_KEY_DRS_URI),
-                # The envelope carries the timestamp as the schema does, as an ISO 8601
-                # string; the sidecar's `+00:00`/naive form round-trips unchanged.
-                fetched_at=fetched_at.isoformat(),
+                target=target,
+                target_key=target_key,
+                fetched_at=fetched,
             )
             result = TableImport(table=table, path=evidence_file_path(directory, table))
             entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, file_source, result)
