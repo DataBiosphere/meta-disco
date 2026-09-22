@@ -27,6 +27,7 @@ from meta_disco.rule_engine import (
     evaluate_claims,
     make_claim,
 )
+from tests.engine_fixtures import assert_dimensions
 
 # A stand-in external source for the claim-record tests. One definition rather
 # than an inline ClaimSource at each site, so the tests read as "some external
@@ -43,20 +44,21 @@ def engine():
 class TestRuleMatching:
     """Test rule matching logic."""
 
-    def test_alignment_ref_grch38(self, engine):
-        """hg38/GRCh38 in filename should set reference assembly."""
-        result = engine.classify(FileInfo.from_filename("sample.hg38.cram"))
-        assert result.reference_assembly == "GRCh38"
-
-    def test_alignment_ref_grch37(self, engine):
-        """hg19/GRCh37 in filename should set reference assembly."""
-        result = engine.classify(FileInfo.from_filename("sample.hg19.bam"))
-        assert result.reference_assembly == "GRCh37"
-
-    def test_alignment_ref_chm13(self, engine):
-        """CHM13/T2T in filename should set reference assembly."""
-        result = engine.classify(FileInfo.from_filename("sample.chm13.cram"))
-        assert result.reference_assembly == "CHM13"
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            pytest.param("sample.hg38.cram", {"reference_assembly": "GRCh38"}, id="hg38 in the name sets GRCh38"),
+            pytest.param("sample.hg19.bam", {"reference_assembly": "GRCh37"}, id="hg19 in the name sets GRCh37"),
+            pytest.param("sample.chm13.cram", {"reference_assembly": "CHM13"}, id="chm13 in the name sets CHM13"),
+            pytest.param(
+                "sample.Aligned.sortedByCoord.out.bam",
+                {"data_modality": "transcriptomic.bulk"},
+                id="STAR aligner output pattern indicates RNA-seq",
+            ),
+        ],
+    )
+    def test_a_filename_token_sets_the_dimension(self, engine, filename, expected):
+        assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
     def test_filename_indicator_sets_modality_regardless_of_size(self, engine):
         """A filename indicator settles modality even at a size the heuristics would
@@ -64,30 +66,24 @@ class TestRuleMatching:
         result = engine.classify(FileInfo.from_filename("sample.flnc.bam", file_size=60_000_000_000))
         assert result.data_modality == "transcriptomic.bulk"
 
-    def test_star_aligner_indicates_rnaseq(self, engine):
-        """STAR aligner output pattern should indicate RNA-seq."""
-        result = engine.classify(FileInfo.from_filename("sample.Aligned.sortedByCoord.out.bam"))
-        assert result.data_modality == "transcriptomic.bulk"
-
 
 class TestVariantFiles:
     """Test variant file classification."""
 
-    def test_vcf_default_genomic(self, engine):
-        """VCF files should default to genomic."""
-        result = engine.classify(FileInfo.from_filename("sample.vcf"))
-        assert result.data_modality == "genomic"
-
-    def test_vcf_gz_default_genomic(self, engine):
-        """Compressed VCF files should default to genomic."""
-        result = engine.classify(FileInfo.from_filename("sample.vcf.gz"))
-        assert result.data_modality == "genomic"
-
-    def test_vcf_with_ref_grch38(self, engine):
-        """VCF with reference in filename."""
-        result = engine.classify(FileInfo.from_filename("NA19189.chr2.hg38.vcf.gz"))
-        assert result.data_modality == "genomic"
-        assert result.reference_assembly == "GRCh38"
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            pytest.param("sample.vcf", {"data_modality": "genomic"}, id="VCF defaults to genomic"),
+            pytest.param("sample.vcf.gz", {"data_modality": "genomic"}, id="compressed VCF defaults to genomic"),
+            pytest.param(
+                "NA19189.chr2.hg38.vcf.gz",
+                {"data_modality": "genomic", "reference_assembly": "GRCh38"},
+                id="reference in the name",
+            ),
+        ],
+    )
+    def test_a_variant_filename_classifies(self, engine, filename, expected):
+        assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
     def test_vcf_contig_assembly_subfield_sets_reference(self, engine):
         """A ##contig assembly= subfield sets reference_assembly end-to-end (#221).
@@ -752,26 +748,19 @@ class TestDerivativeFiles:
 class TestSpecialFileTypes:
     """Test special file type classifications."""
 
-    def test_plink_genomic(self, engine):
-        """PLINK files should be genomic."""
-        for ext in [".pgen", ".pvar", ".psam"]:
-            result = engine.classify(FileInfo.from_filename(f"sample{ext}"))
-            assert result.data_modality == "genomic"
-
-    def test_single_cell_matrix(self, engine):
-        """Single-cell matrix files should be transcriptomic.single_cell."""
-        result = engine.classify(FileInfo.from_filename("sample.h5ad"))
-        assert result.data_modality == "transcriptomic.single_cell"
-
-    def test_methylation_idat(self, engine):
-        """IDAT files should be epigenomic.methylation."""
-        result = engine.classify(FileInfo.from_filename("sample.idat"))
-        assert result.data_modality == "epigenomic.methylation"
-
-    def test_histology_svs(self, engine):
-        """SVS files should be imaging.histology."""
-        result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
-        assert result.data_modality == "imaging.histology"
+    @pytest.mark.parametrize(
+        ("filename", "modality"),
+        [
+            pytest.param("sample.pgen", "genomic", id="PLINK .pgen is genomic"),
+            pytest.param("sample.pvar", "genomic", id="PLINK .pvar is genomic"),
+            pytest.param("sample.psam", "genomic", id="PLINK .psam is genomic"),
+            pytest.param("sample.h5ad", "transcriptomic.single_cell", id="single-cell matrix"),
+            pytest.param("sample.idat", "epigenomic.methylation", id="IDAT is methylation"),
+            pytest.param("GTEX-18A6Q-1126.svs", "imaging.histology", id="SVS is histology"),
+        ],
+    )
+    def test_a_special_extension_sets_the_modality(self, engine, filename, modality):
+        assert engine.classify(FileInfo.from_filename(filename)).data_modality == modality
 
     @pytest.mark.parametrize(
         "extension",
@@ -872,50 +861,40 @@ class TestPeakNamedBedFallback:
 class TestTextFiles:
     """Test text/tabular file classification."""
 
-    def test_stats_file(self, engine):
-        """QC stats files should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.stats.txt"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_count_matrix(self, engine):
-        """Count matrix files should be transcriptomic."""
-        result = engine.classify(FileInfo.from_filename("gene_counts.txt"))
-        assert result.data_modality == "transcriptomic.bulk"
-
-    def test_ambiguous_txt(self, engine):
-        """Ambiguous text files are not classified for modality."""
-        result = engine.classify_extended(FileInfo.from_filename("data.txt"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            pytest.param("sample.stats.txt", {"data_modality": NOT_APPLICABLE}, id="QC stats file is not_applicable"),
+            pytest.param(
+                "gene_counts.txt", {"data_modality": "transcriptomic.bulk"}, id="count matrix is transcriptomic"
+            ),
+            pytest.param("data.txt", {"data_modality": NOT_CLASSIFIED}, id="ambiguous text is not classified"),
+        ],
+    )
+    def test_a_text_filename_classifies(self, engine, filename, expected):
+        assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
 
 class TestIntegration:
     """Integration tests against real filenames from API exploration."""
 
-    def test_hifi_bam(self, engine):
-        """HiFi reads BAM file: the name says the platform, not the modality (#430)."""
-        result = engine.classify_extended(FileInfo.from_filename("m64043_210211_005516.hifi_reads.bam"))
-        assert result.platform == "PACBIO"
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-    def test_vcf_with_chr(self, engine):
-        """VCF with chromosome in filename."""
-        result = engine.classify(FileInfo.from_filename("NA19189.chr2.hc.vcf.gz"))
-        assert result.data_modality == "genomic"
-
-    def test_gtex_histology(self, engine):
-        """GTEx histology image."""
-        result = engine.classify(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
-        assert result.data_modality == "imaging.histology"
-
-    def test_cram_md5(self, engine):
-        """CRAM MD5 checksum should be not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("HG02558.final.cram.md5"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-
-    def test_unknown_extension(self, engine):
-        """Unknown extensions are not classified."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.xyz"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            # HiFi reads BAM: the name says the platform, not the modality (#430).
+            pytest.param(
+                "m64043_210211_005516.hifi_reads.bam",
+                {"platform": "PACBIO", "data_modality": NOT_CLASSIFIED},
+                id="hifi BAM names the platform only",
+            ),
+            pytest.param("NA19189.chr2.hc.vcf.gz", {"data_modality": "genomic"}, id="VCF with chromosome in the name"),
+            pytest.param("GTEX-18A6Q-1126.svs", {"data_modality": "imaging.histology"}, id="GTEx histology image"),
+            pytest.param("HG02558.final.cram.md5", {"data_modality": NOT_APPLICABLE}, id="CRAM MD5 is not_applicable"),
+            pytest.param("sample.xyz", {"data_modality": NOT_CLASSIFIED}, id="unknown extension is not classified"),
+        ],
+    )
+    def test_a_real_filename_classifies(self, engine, filename, expected):
+        assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
 
 class TestConflictingReferenceRules:

@@ -124,85 +124,43 @@ def _classified_record(
     }
 
 
-class TestParentCandidateGeneration:
-    """Test parent filename candidate generation."""
-
-    def test_vcf_gz_tbi(self):
-        """VCF.gz.tbi should find VCF.gz parent."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert "sample.vcf.gz" in candidates
-        assert len(candidates) == 1  # No junk candidates
-
-    def test_bed_gz_tbi(self):
-        """BED.gz.tbi should find BED.gz parent."""
-        candidates = get_parent_candidates("sample.bed.gz.tbi", ".tbi")
-        assert "sample.bed.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_txt_gz_tbi(self):
-        """TXT.gz.tbi (tabix-indexed TSV) should find TXT.gz parent."""
-        candidates = get_parent_candidates("sample.txt.gz.tbi", ".tbi")
-        assert "sample.txt.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_bam_bai(self):
-        """BAM.bai should find BAM parent."""
-        candidates = get_parent_candidates("sample.bam.bai", ".bai")
-        assert "sample.bam" in candidates
-        assert len(candidates) == 1
-
-    def test_cram_crai(self):
-        """CRAM.crai should find CRAM parent."""
-        candidates = get_parent_candidates("sample.cram.crai", ".crai")
-        assert "sample.cram" in candidates
-        assert len(candidates) == 1
-
-    def test_pbi_index(self):
-        """PBI (PacBio index) should find BAM parent."""
-        candidates = get_parent_candidates("movie.subreads.bam.pbi", ".pbi")
-        assert "movie.subreads.bam" in candidates
-
-    def test_csi_bed_gz(self):
-        """CSI index for BED.gz should find BED.gz parent."""
-        candidates = get_parent_candidates("HG03652.regions.bed.gz.csi", ".csi")
-        assert "HG03652.regions.bed.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_pattern2_replacement(self):
-        """Pattern 2: index extension replaces parent (rare case)."""
-        # sample.bai -> sample.bam (no .bam in original name)
-        candidates = get_parent_candidates("sample.bai", ".bai")
-        assert "sample.bam" in candidates
-
-    def test_complex_filename(self):
-        """Complex filename with dots should work."""
-        candidates = get_parent_candidates("HG01874.chr17.hc.vcf.gz.tbi", ".tbi")
-        assert "HG01874.chr17.hc.vcf.gz" in candidates
+@pytest.mark.parametrize(
+    ("index_name", "extension", "parent", "only_candidate"),
+    [
+        pytest.param("sample.vcf.gz.tbi", ".tbi", "sample.vcf.gz", True, id="vcf.gz.tbi finds vcf.gz"),
+        pytest.param("sample.bed.gz.tbi", ".tbi", "sample.bed.gz", True, id="bed.gz.tbi finds bed.gz"),
+        pytest.param("sample.txt.gz.tbi", ".tbi", "sample.txt.gz", True, id="txt.gz.tbi (tabix TSV) finds txt.gz"),
+        pytest.param("sample.bam.bai", ".bai", "sample.bam", True, id="bam.bai finds bam"),
+        pytest.param("sample.cram.crai", ".crai", "sample.cram", True, id="cram.crai finds cram"),
+        pytest.param("movie.subreads.bam.pbi", ".pbi", "movie.subreads.bam", False, id="pbi (PacBio index) finds bam"),
+        pytest.param("HG03652.regions.bed.gz.csi", ".csi", "HG03652.regions.bed.gz", True, id="csi finds bed.gz"),
+        # Pattern 2: the index extension replaces the parent's (rare); no .bam in the name.
+        pytest.param("sample.bai", ".bai", "sample.bam", False, id="pattern 2 replaces the extension"),
+        pytest.param(
+            "HG01874.chr17.hc.vcf.gz.tbi", ".tbi", "HG01874.chr17.hc.vcf.gz", True, id="dotted name still works"
+        ),
+    ],
+)
+def test_parent_candidate_generation(index_name, extension, parent, only_candidate):
+    """The parent name an index name yields; ``only_candidate`` pins that it is the sole one."""
+    candidates = get_parent_candidates(index_name, extension)
+    assert parent in candidates
+    if only_candidate:
         assert len(candidates) == 1
 
 
-class TestNoJunkCandidates:
-    """Regression tests to ensure no junk candidates are generated."""
-
-    def test_no_double_gz(self):
-        """Should not generate .gz.gz candidates."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert not any(".gz.gz" in c for c in candidates)
-
-    def test_no_double_vcf_gz(self):
-        """Should not generate .vcf.gz.vcf.gz candidates."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert not any(".vcf.gz.vcf.gz" in c for c in candidates)
-
-    def test_no_double_bam(self):
-        """Should not generate .bam.bam candidates."""
-        candidates = get_parent_candidates("sample.bam.bai", ".bai")
-        assert not any(".bam.bam" in c for c in candidates)
-
-    def test_no_double_cram(self):
-        """Should not generate .cram.cram candidates."""
-        candidates = get_parent_candidates("sample.cram.crai", ".crai")
-        assert not any(".cram.cram" in c for c in candidates)
+@pytest.mark.parametrize(
+    ("index_name", "extension", "junk"),
+    [
+        pytest.param("sample.vcf.gz.tbi", ".tbi", ".gz.gz", id="no .gz.gz"),
+        pytest.param("sample.vcf.gz.tbi", ".tbi", ".vcf.gz.vcf.gz", id="no .vcf.gz.vcf.gz"),
+        pytest.param("sample.bam.bai", ".bai", ".bam.bam", id="no .bam.bam"),
+        pytest.param("sample.cram.crai", ".crai", ".cram.cram", id="no .cram.cram"),
+    ],
+)
+def test_no_junk_candidates(index_name, extension, junk):
+    """Regression: candidate generation never doubles an extension."""
+    assert not any(junk in c for c in get_parent_candidates(index_name, extension))
 
 
 def test_a_gvcf_parent_is_variants_not_unknown():
