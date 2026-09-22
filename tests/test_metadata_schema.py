@@ -13,6 +13,9 @@ from meta_disco.metadata_schema import (
 from meta_disco.models import CLASSIFICATION_FIELDS, NOT_CLASSIFIED
 from tests.metadata_fixtures import valid_record as _valid
 
+# The source's record key, as the gate resolves it off an AnVIL envelope.
+KEY = "file_id"
+
 
 class TestValidRecords:
     def test_a_complete_record_passes(self):
@@ -122,7 +125,7 @@ class TestFieldConstraints:
 
 class TestValidationReport:
     def test_clean_corpus_reports_ok(self):
-        report = validate_records([_valid(), _valid(entry_id="e2")])
+        report = validate_records([_valid(), _valid(entry_id="e2")], KEY)
         assert report.ok
         assert report.total == 2
         assert report.invalid == 0
@@ -132,22 +135,22 @@ class TestValidationReport:
         # 100 records, each a *different* bad md5, must collapse to ONE kind — else a
         # single drift would explode the report into thousands of one-off entries.
         records = [_valid(entry_id=f"e{i}", file_md5sum=f"bad{i}") for i in range(100)]
-        report = validate_records(records)
+        report = validate_records(records, KEY)
         assert not report.ok
         assert report.invalid == 100
         assert len(report.kinds) == 1
         (kind,) = report.kinds.values()
         assert kind.count == 100
 
-    def test_sample_is_bounded_and_names_file_ids(self):
+    def test_sample_is_bounded_and_names_the_records_by_the_source_key(self):
         records = [_valid(file_id=f"f{i}", file_size="x") for i in range(50)]
-        report = validate_records(records)
+        report = validate_records(records, KEY)
         (kind,) = report.kinds.values()
         assert kind.count == 50
-        assert len(kind.sample_file_ids) == 5  # bounded
-        assert kind.sample_file_ids[0] == "f0"
-        assert "sample file_ids: f0, f1, f2, f3, f4" in report.summary()
+        assert len(kind.sample_keys) == 5  # bounded
+        assert kind.sample_keys[0] == "f0"
         summary = report.summary()
+        assert "sample file_ids: f0, f1, f2, f3, f4" in summary
         assert "50 record(s)" in summary
         assert "+45 more" in summary
 
@@ -157,7 +160,8 @@ class TestValidationReport:
                 _valid(file_size="x"),
                 _valid(file_md5sum="bad"),
                 _valid(drs_uri="nope"),
-            ]
+            ],
+            KEY,
         )
         assert report.invalid == 3
         assert len(report.kinds) == 3
@@ -165,16 +169,24 @@ class TestValidationReport:
     def test_missing_file_id_sampled_as_unknown(self):
         rec = _valid(file_size="x")
         del rec["file_id"]
-        report = validate_records([rec])
-        samples = {s for k in report.kinds.values() for s in k.sample_file_ids}
+        report = validate_records([rec], KEY)
+        samples = {s for k in report.kinds.values() for s in k.sample_keys}
         assert "<unknown>" in samples
+
+    def test_no_key_field_samples_every_record_as_unknown(self):
+        # An input whose envelope declares no source (an .ndjson file) has no record
+        # key to quote; the gate still reports, and refuses on the envelope separately.
+        report = validate_records([_valid(file_size="x")], None)
+        samples = {s for k in report.kinds.values() for s in k.sample_keys}
+        assert samples == {"<unknown>"}
+        assert "sample records: <unknown>" in report.summary()
 
     @pytest.mark.parametrize("empty", ["", None])
     def test_present_but_empty_file_id_sampled_as_empty_not_unknown(self, empty):
         # A present-but-empty file_id is a distinct violation from a missing key;
         # the sample must not conflate the two into "<unknown>".
-        report = validate_records([_valid(file_id=empty, file_size="x")])
-        samples = {s for k in report.kinds.values() for s in k.sample_file_ids}
+        report = validate_records([_valid(file_id=empty, file_size="x")], KEY)
+        samples = {s for k in report.kinds.values() for s in k.sample_keys}
         assert "<empty>" in samples
         assert "<unknown>" not in samples
 

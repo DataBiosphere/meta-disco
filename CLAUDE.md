@@ -199,9 +199,10 @@ evidence}` entry — plus the controlled vocabulary:
     stripped; needs nothing, and is the stand-in and parity oracle, not the target).
     `derive_records` is AnVIL's: it reads `anvil_file` and `anvil_dataset` and refuses a
     snapshot lacking either before yielding a record. The compact path
-    (`record_from_compact_manifest_row`) stands beside it unchanged, and every input
-    envelope names how its records were derived in `input_source`
-    (`azul_manifest.INPUT_SOURCES`), stated by the writer and never inferred; nothing
+    (`record_from_compact_manifest_row`) stands beside it unchanged, and every envelope
+    `metadata_block` writes names how its records were derived in `input_source`
+    (`azul_manifest.INPUT_SOURCES`), stated by the writer and never inferred — the HPRC
+    builder writes its own envelope and prod's file on disk predates the field; nothing
     reads it until a run can choose its reader (#500). Neither reader is wired to
     `make download` or `make classify` — also #500.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through

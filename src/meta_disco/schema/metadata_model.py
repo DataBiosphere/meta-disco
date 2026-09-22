@@ -73,8 +73,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     '`data/anvil/anvil_files_metadata.json`, as derived by '
                     '`scripts/download_anvil_manifest.py` from the compact Azul '
                     'manifest (#368) or by `snapshot_input.derive_records` from a '
-                    "TDR snapshot's tables (#499). The envelope's `input_source` "
-                    'says which.\n'
+                    "TDR snapshot's tables (#499). An envelope "
+                    '`azul_manifest.metadata_block` wrote says which in '
+                    '`input_source`.\n'
                     'This is the *input* to classification, distinct from '
                     '`classification.yaml` which models the classified *output*.\n'
                     'It models what classification consumes, and nothing else. '

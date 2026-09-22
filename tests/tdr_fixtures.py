@@ -6,6 +6,12 @@ was pulled before the first row reached the caller.
 """
 
 
+def table_of(query: str) -> str:
+    """The table a query names, undoing `tdr.Snapshot.table_ref`'s quoting — the fake's
+    one notion of which table a query is about."""
+    return query.rsplit(".", 1)[1].rstrip("`")
+
+
 class FakeTableItem:
     def __init__(self, table_id: str):
         self.table_id = table_id
@@ -41,7 +47,7 @@ class FakeClient:
     def query_and_wait(self, query: str, page_size=None):
         self.queries.append(query)
         self.page_sizes.append(page_size)
-        rows = self._tables[query.rsplit(".", 1)[1].rstrip("`")]
+        rows = self._tables[table_of(query)]
         result = FakeResult([{"n": len(rows)}] if query.startswith("SELECT COUNT(*)") else rows)
         self.results.append(result)
         return result
@@ -58,6 +64,6 @@ class DisagreeingClient(FakeClient):
 
     def query_and_wait(self, query, page_size=None):
         result = super().query_and_wait(query, page_size)
-        if query.startswith("SELECT COUNT(*)") and self.table in (None, query.rsplit(".", 1)[1].rstrip("`")):
+        if query.startswith("SELECT COUNT(*)") and self.table in (None, table_of(query)):
             result._rows = [{"n": self.count}]
         return result

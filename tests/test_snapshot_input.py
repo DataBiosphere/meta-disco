@@ -27,16 +27,18 @@ from meta_disco.azul_manifest import (
     INPUT_SOURCE_AZUL_COMPACT,
     INPUT_SOURCE_TDR_DIRECT,
     iter_compact_records,
+    manifest_dir,
     manifest_path,
     metadata_block,
     write_input_files,
 )
-from tests.metadata_fixtures import valid_record
-from tests.tdr_fixtures import DisagreeingClient, FakeClient
+from tests.metadata_fixtures import valid_record, write_metadata
+from tests.tdr_fixtures import DisagreeingClient, FakeClient, table_of
 
 SNAPSHOT = tdr.Snapshot(project="datarepo-ce3811eb", name="ANVIL_1000G_2019_Dev")
-REAL_MANIFESTS = Path("data/anvil/manifest/anvil15")
 CATALOG = "anvil15"
+ROOT = Path("data/anvil")
+REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
 # The six per-file fields the issue's parity criteria compare: what the compact join
 # and the snapshot's `anvil_file` row both carry for a file, under the record's names.
@@ -154,7 +156,7 @@ class TestDirectRead:
     def test_every_streamed_table_is_checked_against_its_count(self, client):
         list(si.derive_records(si.TdrDirect(client, SNAPSHOT)))
         counts = [q for q in client.queries if q.startswith("SELECT COUNT(*)")]
-        assert [q.rsplit(".", 1)[1].rstrip("`") for q in counts] == ["anvil_dataset", "anvil_file"]
+        assert [table_of(q) for q in counts] == ["anvil_dataset", "anvil_file"]
 
 
 class TestTheGate:
@@ -175,9 +177,7 @@ class TestTheGate:
         # source. It is Azul's per-index id, and nothing keys on it (#446).
         record = valid_record()
         del record["entry_id"]
-        envelope = {"repository": "anvil", "input_source": INPUT_SOURCE_AZUL_COMPACT}
-        path = tmp_path / "m.json"
-        path.write_text(json.dumps({"metadata": envelope, "files": [record]}))
+        path = write_metadata(tmp_path / "m.json", [record], input_source=INPUT_SOURCE_AZUL_COMPACT)
         assert validate_metadata.main(["-i", str(path)]) == 0
         assert "OK — no problems." in capsys.readouterr().out
 
@@ -210,6 +210,8 @@ class TestVerbatimAdapter:
         assert adapter.tables() == ["anvil_dataset", "x"]
         path.unlink()
         assert adapter.tables() == ["anvil_dataset", "x"]  # kept, not re-scanned
+        # The held table was parsed on that same scan, so its rows come from memory too.
+        assert list(adapter.rows("anvil_dataset")) == [DATASET_ROW]
 
     def test_a_line_that_is_not_an_entity_is_refused_naming_the_line(self, tmp_path):
         path = tmp_path / "bad.verbatim.jsonl"
@@ -235,9 +237,12 @@ class TestDerivationRefusals:
             si.derive_records(si.TdrDirect(client, SNAPSHOT))
         assert not any(q.startswith("SELECT * FROM") and q.endswith("anvil_file`") for q in client.queries)
 
-    def test_a_row_lacking_a_column_the_record_needs_is_refused_naming_it(self):
-        row = {k: v for k, v in file_row(1).items() if k != "file_ref"}
-        with pytest.raises(ValueError, match="cannot map an anvil_file row to a record: no 'file_ref' column"):
+    @pytest.mark.parametrize("column", ["file_ref", "data_modality"])
+    def test_a_row_lacking_a_column_the_record_needs_is_refused_naming_it(self, column):
+        # The published columns included: an `anvil_file` without them is schema
+        # drift, not a snapshot that publishes nothing.
+        row = {k: v for k, v in file_row(1).items() if k != column}
+        with pytest.raises(ValueError, match=f"cannot map an anvil_file row to a record: no '{column}' column"):
             si.record_from_file_row(row, DATASET_ROW)
 
     def test_a_null_value_is_transcribed_not_refused(self):
@@ -247,34 +252,37 @@ class TestDerivationRefusals:
         assert record["file_md5sum"] is None
 
 
-def _compact_side(datasets: list[str]) -> dict[str, tuple]:
-    side = {}
-    for dataset in datasets:
-        for record in iter_compact_records(
-            manifest_path(REAL_MANIFESTS.parent.parent, CATALOG, dataset, FORMAT_COMPACT)
-        ):
-            side[record["file_id"]] = tuple(record[f] for f in COMPARED_FIELDS)
-    return side
+def _compared(record: dict) -> tuple:
+    return tuple(record[f] for f in COMPARED_FIELDS)
 
 
-def _adapted_side(datasets: list[str]) -> dict[str, tuple]:
-    side = {}
+def _derived_records_agree_with_compact(datasets: list[str]) -> int:
+    """Derive each dataset through the adapter and check every record against the compact
+    path's for the same `file_id`, streaming: the compact side is held, the adapted side
+    is popped out of it record by record, so what remains is what the adapter did not
+    derive, and a record derived twice is caught as a second pop. Returns the count."""
+    compact = {}
     for dataset in datasets:
-        path = manifest_path(REAL_MANIFESTS.parent.parent, CATALOG, dataset, FORMAT_VERBATIM)
-        for record in si.derive_records(si.AzulVerbatim(path)):
-            assert record["file_id"] not in side, f"{dataset}: {record['file_id']} derived twice"
-            side[record["file_id"]] = tuple(record[f] for f in COMPARED_FIELDS)
-    return side
+        for record in iter_compact_records(manifest_path(ROOT, CATALOG, dataset, FORMAT_COMPACT)):
+            compact[record["file_id"]] = _compared(record)
+    derived = 0
+    for dataset in datasets:
+        for record in si.derive_records(si.AzulVerbatim(manifest_path(ROOT, CATALOG, dataset, FORMAT_VERBATIM))):
+            expected = compact.pop(record["file_id"], None)
+            assert expected is not None, (
+                f"{dataset}: {record['file_id']} not in the compact derivation, or derived twice"
+            )
+            assert _compared(record) == expected, f"{dataset}: {record['file_id']} differs"
+            derived += 1
+    assert not compact, f"{len(compact):,} compact record(s) the adapter did not derive"
+    return derived
 
 
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
 class TestParityWithTheCompactPath:
     def test_prod_1000g_derives_the_same_26016_records(self):
         # AC 8: one dataset, every compared field equal on every file.
-        dataset = "ANVIL_1000G_high_coverage_2019"
-        adapted, compact = _adapted_side([dataset]), _compact_side([dataset])
-        assert len(adapted) == 26_016
-        assert adapted == compact
+        assert _derived_records_agree_with_compact(["ANVIL_1000G_high_coverage_2019"]) == 26_016
 
     def test_all_twelve_prod_manifests_derive_todays_input(self):
         # AC 9: 708,088 records, the same `file_id`s, no compared field differing.
@@ -282,8 +290,4 @@ class TestParityWithTheCompactPath:
         # here is a regression.
         datasets = sorted(p.name.removesuffix(".compact.tsv") for p in REAL_MANIFESTS.glob("*.compact.tsv"))
         assert len(datasets) == 12
-        adapted, compact = _adapted_side(datasets), _compact_side(datasets)
-        assert len(adapted) == 708_088
-        assert set(adapted) == set(compact)
-        differing = [file_id for file_id, fields in adapted.items() if compact[file_id] != fields]
-        assert differing == []
+        assert _derived_records_agree_with_compact(datasets) == 708_088

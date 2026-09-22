@@ -142,6 +142,14 @@ def iter_rows(
     return rows()
 
 
+def checked_rows(client: BigQueryClient, snapshot: Snapshot, table: str) -> Iterator[dict[str, Any]]:
+    """:func:`iter_rows` with ``expect`` set from :func:`count_rows` — the table
+    streamed and checked against its own ``COUNT(*)`` in one call, so a reader that
+    wants every streamed table checked (``snapshot_input.TdrDirect``, #499) has one
+    thing to call and cannot stream unchecked by leaving ``expect`` off."""
+    return iter_rows(client, snapshot, table, expect=count_rows(client, snapshot, table))
+
+
 def default_client(billing_project: str | None = None) -> BigQueryClient:
     """A live BigQuery client whose identity is the environment's Application
     Default Credentials (the module docstring says how); no credential is taken.

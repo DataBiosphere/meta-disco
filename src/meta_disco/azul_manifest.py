@@ -732,17 +732,51 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
                 continue
             if gate is not None and gate.search(line) is None:
                 continue
-            try:
-                entity = json.loads(line)
-                entity_type, value = entity["type"], entity["value"]
-            except (json.JSONDecodeError, KeyError, TypeError) as exc:
-                raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
-            if not isinstance(entity_type, str):
-                raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
-            if not isinstance(value, dict):
-                raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
+            entity_type, value = parse_verbatim_line(path, n, line)
             if wanted is None or entity_type in wanted:
                 yield entity_type, value
+
+
+def parse_verbatim_line(path: Path, n: int, line: str) -> tuple[str, dict[str, Any]]:
+    """One verbatim line as its ``(type, value)`` pair, or ``ValueError`` naming the line.
+
+    The one statement of what a verbatim line is: JSON, an object with a string
+    ``type`` and an object ``value``. :func:`iter_verbatim_entities` applies it to every
+    line it parses and :func:`verbatim_line_type` to any line its shortcut cannot read,
+    so the shape and its messages cannot drift between the two.
+    """
+    try:
+        entity = json.loads(line)
+        entity_type, value = entity["type"], entity["value"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
+    if not isinstance(entity_type, str):
+        raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
+    if not isinstance(value, dict):
+        raise ValueError(f"{path.name} line {n}: entity value is {type(value).__name__}, not an object")
+    return entity_type, value
+
+
+# A verbatim line's entity type read off its tail: every line the downloader stores is
+# ``{"value": {...}, "type": "<type>"}``, so the type is the last key. A line this does
+# not match is parsed in full instead (see `verbatim_line_type`), so the shortcut
+# decides nothing — it only makes listing a 500 MB manifest's types a scan rather than
+# a parse, the same trade `count_rows`'s substring gate makes.
+_TYPE_AT_END = re.compile(r'"type":\s*"([^"]*)"\s*\}\s*$')
+
+
+def verbatim_line_type(path: Path, n: int, line: str) -> str:
+    """The entity type of one verbatim line, without parsing it where the tail shows it.
+
+    Reads only the type: a line the shortcut matches is not validated beyond that, so a
+    listing built from this can name a type whose line :func:`parse_verbatim_line`
+    would then refuse — the full pass is what validates the file, as
+    :func:`iter_verbatim_entities` says of its own gate.
+    """
+    match = _TYPE_AT_END.search(line)
+    if match is not None:
+        return match.group(1)
+    return parse_verbatim_line(path, n, line)[0]
 
 
 def metadata_block(

@@ -52,21 +52,25 @@ contract (``schema/metadata.yaml``) no longer requires it of any source.
 
 from __future__ import annotations
 
-import json
-import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Protocol
 
 from . import tdr
-from .azul_manifest import VERBATIM_FILE, iter_verbatim_entities, published_list
+from .azul_manifest import (
+    VERBATIM_FILE,
+    iter_verbatim_entities,
+    parse_verbatim_line,
+    published_list,
+    verbatim_line_type,
+)
 
-#: The two tables the derivation reads. ``anvil_file`` is one row per file and is
-#: the whole of the per-file record; ``anvil_dataset`` is the snapshot's one dataset
-#: row, from which every record takes its ``dataset_id`` and ``dataset_title``.
-TABLE_FILE = VERBATIM_FILE
+#: The two tables the derivation reads. ``anvil_file`` (``azul_manifest.VERBATIM_FILE``,
+#: the same name in TDR and in the manifest) is one row per file and is the whole of
+#: the per-file record; ``anvil_dataset`` is the snapshot's one dataset row, from which
+#: every record takes its ``dataset_id`` and ``dataset_title``.
 TABLE_DATASET = "anvil_dataset"
-REQUIRED_TABLES = (TABLE_DATASET, TABLE_FILE)
+REQUIRED_TABLES = (TABLE_DATASET, VERBATIM_FILE)
 
 # What Azul adds to a snapshot's tables on the way into its verbatim manifest,
 # measured on #477 against three prod snapshots (1000G, nhp_dGTEx_V1, ENCORE_293T:
@@ -78,13 +82,6 @@ REQUIRED_TABLES = (TABLE_DATASET, TABLE_FILE)
 AZUL_ADDED_COLUMNS = frozenset({"version"})
 AZUL_ADDED_FILE_COLUMNS = frozenset({"drs_uri"})
 AZUL_ADDED_TABLES = frozenset({"duos_dataset_registration"})
-
-# A verbatim line's entity type, read off its tail without parsing the line: every
-# line the downloader stores is ``{"value": {...}, "type": "<type>"}``, so the type is
-# the last key. A line this does not match is parsed instead (see ``_entity_type``),
-# so the shortcut decides nothing — it only makes listing a 500 MB manifest's tables a
-# scan rather than a parse.
-_TYPE_AT_END = re.compile(r'"type":\s*"([^"]*)"\s*\}\s*$')
 
 
 class SnapshotTables(Protocol):
@@ -102,10 +99,10 @@ class SnapshotTables(Protocol):
 class TdrDirect:
     """A snapshot read in place from BigQuery, through :mod:`meta_disco.tdr`.
 
-    ``tables`` is the dataset's table listing. ``rows`` counts the table with
-    ``COUNT(*)`` and then streams it, page by page, with that count as the stream's
-    expectation — so a stream that ends short or long raises after its last row rather
-    than yielding a partial table as a whole one.
+    ``tables`` is the dataset's table listing. ``rows`` is :func:`tdr.checked_rows`:
+    the table counted with ``COUNT(*)`` and then streamed, page by page, with that
+    count as the stream's expectation — so a stream that ends short or long raises
+    after its last row rather than yielding a partial table as a whole one.
     """
 
     def __init__(self, client: tdr.BigQueryClient, snapshot: tdr.Snapshot):
@@ -116,60 +113,67 @@ class TdrDirect:
         return tdr.list_tables(self.client, self.snapshot)
 
     def rows(self, table: str) -> Iterator[dict[str, Any]]:
-        expect = tdr.count_rows(self.client, self.snapshot, table)
-        return tdr.iter_rows(self.client, self.snapshot, table, expect=expect)
+        return tdr.checked_rows(self.client, self.snapshot, table)
 
 
 class AzulVerbatim:
     """A snapshot's tables as Azul's verbatim manifest holds them, in TDR's shape.
 
     ``tables`` lists the entity types the manifest carries, in first-seen order, less
-    :data:`AZUL_ADDED_TABLES`; the listing is one scan of the file, done once and
-    kept. A table with no rows has no line, so the listing cannot name it — the one
-    way this differs from :class:`TdrDirect`, whose listing names an empty table
-    too. ``rows`` streams one entity type through
+    :data:`AZUL_ADDED_TABLES`. A table with no rows has no line, so the listing cannot
+    name it — the one way this differs from :class:`TdrDirect`, whose listing names
+    an empty table too. ``rows`` streams one entity type through
     :func:`azul_manifest.iter_verbatim_entities`, whose type gate parses only the
     lines that can match, and removes :data:`AZUL_ADDED_COLUMNS` from every row and
     :data:`AZUL_ADDED_FILE_COLUMNS` from an ``anvil_file`` row. Asking for a table
     Azul added is refused: it is not a table of the snapshot.
+
+    The listing is one scan of the file, reading each line's type off its tail
+    (:func:`azul_manifest.verbatim_line_type`), done once and kept. That scan also
+    parses and keeps every row of the ``held`` tables — by default the one-row
+    ``anvil_dataset`` — so ``rows`` on one of those answers from memory and
+    :func:`derive_records` reads the file twice rather than three times. Two is the
+    floor: the dataset row sits after most of the file rows, and the derivation needs
+    it before its first record. Hold nothing that is not small.
     """
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, held: frozenset[str] = frozenset({TABLE_DATASET})):
         self.path = path
+        self.held = held
         self._tables: list[str] | None = None
+        self._held_rows: dict[str, list[dict[str, Any]]] = {}
 
-    def tables(self) -> list[str]:
+    def _scan(self) -> list[str]:
         if self._tables is None:
             seen: dict[str, None] = {}
+            held: dict[str, list[dict[str, Any]]] = {table: [] for table in self.held}
             with self.path.open(encoding="utf-8") as f:
                 for n, line in enumerate(f, start=1):
-                    if line.strip():
-                        seen.setdefault(_entity_type(self.path, n, line), None)
+                    if not line.strip():
+                        continue
+                    entity_type = verbatim_line_type(self.path, n, line)
+                    seen.setdefault(entity_type, None)
+                    if entity_type in held:
+                        held[entity_type].append(self._strip(entity_type, parse_verbatim_line(self.path, n, line)[1]))
             self._tables = [t for t in seen if t not in AZUL_ADDED_TABLES]
-        return list(self._tables)
+            self._held_rows = held
+        return self._tables
+
+    def tables(self) -> list[str]:
+        return list(self._scan())
 
     def rows(self, table: str) -> Iterator[dict[str, Any]]:
         if table in AZUL_ADDED_TABLES:
             raise ValueError(f"{table!r} is an entity Azul adds to its manifest, not a table of the snapshot")
-        return self._rows(table)
+        if table in self.held:
+            self._scan()
+            return iter(self._held_rows[table])
+        return (self._strip(table, value) for _, value in iter_verbatim_entities(self.path, {table}))
 
-    def _rows(self, table: str) -> Iterator[dict[str, Any]]:
-        dropped = AZUL_ADDED_COLUMNS | (AZUL_ADDED_FILE_COLUMNS if table == TABLE_FILE else frozenset())
-        for _, value in iter_verbatim_entities(self.path, {table}):
-            yield {column: cell for column, cell in value.items() if column not in dropped}
-
-
-def _entity_type(path: Path, n: int, line: str) -> str:
-    match = _TYPE_AT_END.search(line)
-    if match is not None:
-        return match.group(1)
-    try:
-        entity_type = json.loads(line)["type"]
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ValueError(f"{path.name} line {n}: not a verbatim entity: {exc!r}") from None
-    if not isinstance(entity_type, str):
-        raise ValueError(f"{path.name} line {n}: entity type is {type(entity_type).__name__}, not a string")
-    return entity_type
+    @staticmethod
+    def _strip(table: str, value: dict[str, Any]) -> dict[str, Any]:
+        dropped = AZUL_ADDED_COLUMNS | (AZUL_ADDED_FILE_COLUMNS if table == VERBATIM_FILE else frozenset())
+        return {column: cell for column, cell in value.items() if column not in dropped}
 
 
 def derive_records(tables: SnapshotTables) -> Iterator[dict[str, Any]]:
@@ -189,12 +193,7 @@ def derive_records(tables: SnapshotTables) -> Iterator[dict[str, Any]]:
     datasets = list(tables.rows(TABLE_DATASET))
     if len(datasets) != 1:
         raise ValueError(f"{TABLE_DATASET} holds {len(datasets)} rows; a snapshot is one dataset")
-    return _derive(tables, datasets[0])
-
-
-def _derive(tables: SnapshotTables, dataset: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    for row in tables.rows(TABLE_FILE):
-        yield record_from_file_row(row, dataset)
+    return (record_from_file_row(row, datasets[0]) for row in tables.rows(VERBATIM_FILE))
 
 
 def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[str, Any]:
@@ -211,8 +210,10 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     null ``file_md5sum`` stays null and is excluded at load (#376), exactly as the
     compact path's empty cell is. The published lists go through
     :func:`azul_manifest.published_list` so a record derived here carries the same
-    ``published`` block as one derived from the compact join. A row lacking a column
-    the record needs raises naming it.
+    ``published`` block as one derived from the compact join. A row lacking any column
+    the record reads — the two published ones included, since a snapshot whose
+    ``anvil_file`` lacks them is schema drift, not a snapshot that publishes nothing —
+    raises naming it; only ``file_path`` is optional.
     """
     try:
         record = {
@@ -221,15 +222,15 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
             "file_format": row["file_format"],
             "file_size": row["file_size"],
             "file_md5sum": row["file_md5sum"],
-            "data_modality": published_list(row.get("data_modality")),
-            "reference_assembly": published_list(row.get("reference_assembly")),
+            "data_modality": published_list(row["data_modality"]),
+            "reference_assembly": published_list(row["reference_assembly"]),
             "is_supplementary": row["is_supplementary"],
             "drs_uri": row["file_ref"],
             "dataset_id": dataset["dataset_id"],
             "dataset_title": dataset["title"],
         }
     except KeyError as exc:
-        raise ValueError(f"cannot map an {TABLE_FILE} row to a record: no {exc.args[0]!r} column") from None
+        raise ValueError(f"cannot map an {VERBATIM_FILE} row to a record: no {exc.args[0]!r} column") from None
     if "file_path" in row:
         record["file_path"] = row["file_path"]
     return record

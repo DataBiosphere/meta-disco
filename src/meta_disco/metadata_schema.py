@@ -28,7 +28,7 @@ from .schema.metadata_model import AnvilFileMetadataRecord
 # rule_id stamped on the evidence of a record that failed input validation.
 VALIDATION_RULE_ID = "input_validation"
 
-# Offending file_ids kept per problem kind, so a report over 758k records stays
+# Offending record keys kept per problem kind, so a report over 758k records stays
 # bounded while still pointing at concrete records to inspect.
 _MAX_SAMPLE = 5
 
@@ -179,7 +179,7 @@ class _ProblemKind:
 
     reason: str
     count: int = 0
-    sample_file_ids: list = field(default_factory=list)
+    sample_keys: list = field(default_factory=list)
 
 
 @dataclass
@@ -193,19 +193,20 @@ class ValidationReport:
     total: int = 0
     invalid: int = 0
     kinds: dict = field(default_factory=dict)  # reason -> _ProblemKind
+    key_field: str | None = None  # what the samples are: the source's record key, or unnamed
 
     @property
     def ok(self) -> bool:
         return self.invalid == 0
 
-    def _record_problem(self, reason: str, file_id) -> None:
+    def _record_problem(self, reason: str, key) -> None:
         kind = self.kinds.get(reason)
         if kind is None:
             kind = _ProblemKind(reason=reason)
             self.kinds[reason] = kind
         kind.count += 1
-        if len(kind.sample_file_ids) < _MAX_SAMPLE:
-            kind.sample_file_ids.append(file_id)
+        if len(kind.sample_keys) < _MAX_SAMPLE:
+            kind.sample_keys.append(key)
 
     def summary(self) -> str:
         """A human-readable summary: one block per problem kind, biggest first."""
@@ -216,34 +217,39 @@ class ValidationReport:
         lines.append(f"FAIL — {len(self.kinds)} problem kind(s), {self.invalid:,} record(s) affected:")
         for kind in sorted(self.kinds.values(), key=lambda k: (-k.count, k.reason)):
             lines.append(f"  {kind.reason}    {kind.count:,} record(s)")
-            sample = ", ".join(str(e) for e in kind.sample_file_ids)
-            more = kind.count - len(kind.sample_file_ids)
+            sample = ", ".join(str(e) for e in kind.sample_keys)
+            more = kind.count - len(kind.sample_keys)
             suffix = f" … (+{more:,} more)" if more > 0 else ""
-            lines.append(f"    sample file_ids: {sample}{suffix}")
+            lines.append(f"    sample {self.key_field or 'record'}s: {sample}{suffix}")
         return "\n".join(lines)
 
 
-def validate_records(records) -> ValidationReport:
-    """Validate every record, grouping violations by kind into a ValidationReport."""
-    report = ValidationReport()
+def validate_records(records, key_field: str | None) -> ValidationReport:
+    """Validate every record, grouping violations by kind into a ValidationReport.
+
+    ``key_field`` names the field the samples quote — the source's record key
+    (``pipeline.key_field``), which differs by source — or ``None`` where the input's
+    envelope declares no source, in which case every sample reads ``<unknown>``.
+    """
+    report = ValidationReport(key_field=key_field)
     for record in records:
         report.total += 1
         reasons = validate_record(record)
         if reasons:
             report.invalid += 1
-            sample = _sample_label(record)
+            sample = _sample_label(record, key_field)
             for reason in reasons:
                 report._record_problem(reason, sample)
     return report
 
 
-def _sample_label(record) -> str:
-    """A record's file_id for the report sample — the durable identity every source
-    carries (#446; `entry_id` used to serve, and no longer exists on a record derived
-    from a snapshot, #499) — distinguishing the states that a truthy-or default would
-    conflate: a missing key vs a present-but-empty/null file_id (itself a contract
-    violation worth seeing in drift diagnosis)."""
-    if not isinstance(record, dict) or "file_id" not in record:
+def _sample_label(record, key_field: str | None) -> str:
+    """A record's key value for the report sample (`entry_id` used to serve, and no
+    longer exists on a record derived from a snapshot, #499), distinguishing the states
+    that a truthy-or default would conflate: no key field, or a missing key, vs a
+    present-but-empty/null one (itself a contract violation worth seeing in drift
+    diagnosis)."""
+    if key_field is None or not isinstance(record, dict) or key_field not in record:
         return "<unknown>"
-    file_id = record["file_id"]
-    return file_id if file_id not in (None, "") else "<empty>"
+    value = record[key_field]
+    return value if value not in (None, "") else "<empty>"
