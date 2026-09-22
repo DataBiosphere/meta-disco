@@ -502,7 +502,7 @@ class ExtendedClassificationResult:
         whose only claim is an imported one therefore stays ``not_classified``, with
         the import visible beside the placeholder saying no rule determined a value —
         which is true of it, and is what #396 will compare against. A same-tier
-        disagreement therefore resolves to ``not_classified`` here, rather than the
+        disagreement therefore resolves to ``conflict`` here (#88), rather than the
         last writer silently winning. A ``state`` claim declares nothing, so
         appending one records the source's answer without changing the field —
         and a field carrying only such claims keeps its synthetic
@@ -535,6 +535,26 @@ class ExtendedClassificationResult:
         evaluation = evaluate_claims(self.field_evidence[fld])
         self.set_field(fld, evaluation.value, evaluation.status)
         self._sync_markers(fld, evaluation)
+
+    def merge_claims(self, other: "ExtendedClassificationResult") -> None:
+        """Add ``other``'s claims to this result and re-resolve every field.
+
+        For a second read of the same file's content (the FASTQ read name behind an
+        archive prefix): its claims join this result's and compete by tier like any
+        others, so neither pass overrides the other outside resolution (#88). A claim
+        already present — same rule, same declaration — is not added twice, and
+        ``other``'s synthetic markers are dropped, since ``_sync_markers`` writes the
+        ones the merged resolution warrants.
+        """
+        for fld in self.field_status:
+            present = {(c.get("rule_id"), _claim_declaration(c)) for c in self.field_evidence[fld]}
+            for claim in other.field_evidence.get(fld, []):
+                if _is_synthetic_marker(claim) or (claim.get("rule_id"), _claim_declaration(claim)) in present:
+                    continue
+                self.field_evidence[fld].append(claim)
+            evaluation = evaluate_claims(self.field_evidence[fld])
+            self.set_field(fld, evaluation.value, evaluation.status)
+            self._sync_markers(fld, evaluation)
 
     def _sync_markers(self, fld: str, evaluation: "ClaimResolution") -> None:
         """Rewrite a field's synthetic markers to match its current resolution.
@@ -591,7 +611,7 @@ class ExtendedClassificationResult:
         conflict markers) carry no ``rule_id`` and are skipped — they are not
         rules. The content classifiers in ``header_classifier`` do contribute
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
-        ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
+        ``vcf_contig_length``, the ``fasta_*`` and
         ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
         assay contributes the id of the assay rule that matched — ``rnaseq_modality``
         — which lives in the file's ``assay_type_rules`` document, not its ``rules``
@@ -784,7 +804,7 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     - All claims agree → use that declaration
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
-    - Claims disagree, same max tier → conflict (not_classified)
+    - Claims disagree, same max tier → conflict (status ``conflict``, no value, #88)
 
     Tier ladder: tiers 1-3 are the rule tiers (extension / filename / header,
     declared in ``unified_rules.yaml``); ``CONTENT_TIER`` (4) is reserved for
@@ -1074,37 +1094,9 @@ class RuleEngine:
         ):
             return False
 
-        # Check platform constraint — check claims since fields aren't set until evaluation
-        if platform := when.get("platform"):
-            platform_claims = [c.get("value") for c in current.field_evidence.get("platform", [])]
-            if platform not in platform_claims and file_info.platform != platform:
-                return False
-
         # Check file format constraint
         if (file_format := when.get("file_format")) and file_info.file_format != file_format:
             return False
-
-        # Check modality_not_set — true unless data_modality already has a
-        # definitive declaration (a real value or an explicit not_applicable; a
-        # not_classified declaration does not count as "set").
-        if when.get("modality_not_set"):
-            declared = [
-                c
-                for c in current.field_evidence.get("data_modality", [])
-                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
-            ]
-            if declared:
-                return False
-
-        # Check reference_not_set — same "definitive declaration" test as above.
-        if when.get("reference_not_set"):
-            declared = [
-                c
-                for c in current.field_evidence.get("reference_assembly", [])
-                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
-            ]
-            if declared:
-                return False
 
         # Check header section (tier 3) — skip if checking for absence
         if (

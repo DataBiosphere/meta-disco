@@ -495,7 +495,7 @@ def render_coverage_section(diffs: dict[str, DimensionDiff], old_total: int, new
         "",
         f"Files classified out of {old_total:,} (old) and {new_total:,} (new).",
         "`classified` counts a real value; `n/a` counts `not_applicable`, which the",
-        "coverage report folds into its own Classified row along with any other status.",
+        "coverage report folds into its own Classified row; it counts `conflict` on a row of its own.",
         "",
         "| dimension | old | new | old % | new % | delta | old n/a | new n/a |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",

@@ -31,29 +31,12 @@ except ImportError:  # pragma: no cover - 3.10
 _sre_parse = _sre_mod.parse
 
 
-def _when_value_violations(rules):
-    """Enum-backed `when` condition values not in the schema vocabulary.
-
-    The single detection path for the antecedent-value check — exercised by both
-    the suite-wide test and the negative test, so the latter load-bears on the
-    real logic rather than re-deriving the membership assertion.
-    """
-    violations = []
-    for rule in rules.rules:
-        for key, dimension in schema_vocab.ENUM_BACKED_WHEN_KEYS.items():
-            value = (rule.when or {}).get(key)
-            if value is not None and not schema_vocab.value_in_vocabulary(dimension, value):
-                violations.append(f"{rule.id}: when.{key}={value!r}")
-    return violations
-
-
 def _when_format_violations(rules):
     """`when.format` values that are not real Format members.
 
-    The format counterpart to _when_value_violations. Format is an in-code enum
-    rather than a LinkML schema dimension, so it is checked directly against the
-    enum instead of through schema_vocab (#243) — but it is the same antecedent-
-    value drift check, in the same test layer (the loader validates when *keys*,
+    Format is an in-code enum rather than a LinkML schema dimension, so it is
+    checked directly against the enum instead of through schema_vocab (#243) — an
+    antecedent-value drift check, in the same test layer (the loader validates when *keys*,
     values are checked here). Shared by the suite-wide and negative tests.
 
     A present `format` must be a string in the Format vocabulary; anything else
@@ -116,27 +99,12 @@ def test_rule_then_status_values_are_schema_statuses():
     )
 
 
-def test_rule_when_values_in_vocabulary():
-    """Enum-backed `when` condition values must also be in the schema vocabulary.
-
-    Mirrors the `then`-value check for the antecedent side (issue #113). Only
-    `when` keys in ENUM_BACKED_WHEN_KEYS are dimension-enum-backed; the rest
-    (regexes, header codes, numeric bounds, booleans) are not checkable this way.
-    """
-    violations = _when_value_violations(get_unified_rules())
-    assert not violations, (
-        "Rules use `when` condition values not in the LinkML schema vocabulary.\n"
-        "Add them to classification.yaml or fix the rule:\n  " + "\n  ".join(violations)
-    )
-
-
 def test_rule_when_format_values_valid():
     """Every `when.format` value must be a real Format member (#243).
 
-    The in-code counterpart to test_rule_when_values_in_vocabulary: `format` is
-    backed by the Format enum, not the schema, so it is drift-checked directly
-    against the enum. Catches a typo'd format (which would silently never match)
-    the same way the platform check catches a typo'd platform.
+    `format` is backed by the Format enum, not the schema, so it is drift-checked
+    directly against the enum. Catches a typo'd format, which would otherwise
+    silently never match.
     """
     violations = _when_format_violations(get_unified_rules())
     assert not violations, (
@@ -578,25 +546,24 @@ def test_accession_check_catches_an_unanchored_token(tmp_path):
         assert accession_hits(loaded, exempt=frozenset()), pattern
 
 
-def test_when_value_check_rejects_bogus_platform(tmp_path):
-    """The when-value drift check catches a typo'd enum-backed value (issue #113).
+def test_loader_refuses_a_state_condition(tmp_path):
+    """A rule may not condition on what another rule said (#88).
 
-    Runs the real scan (_when_value_violations) over a rule whose when.platform is
-    bogus. The loader accepts the *key* (`platform` is a valid when key); this is
-    the *value* gap #113 closes.
+    `platform`, `modality_not_set` and `reference_not_set` made a rule fire only on
+    another rule's answer or its absence — the fallback shape. They are gone from
+    the loader's `when` keys, so a rule file that uses one fails to load rather than
+    having the condition silently ignored.
     """
-    path = _write_rules_file(
-        tmp_path,
-        {
-            "id": "bogus_when_platform",
+    for key, value in (("platform", "ILLUMINA"), ("modality_not_set", True), ("reference_not_set", True)):
+        rule = {
+            "id": "state_rule",
             "tier": 2,
             "scope": "filename",
-            "when": {"platform": "ILUMINA"},  # typo: should be ILLUMINA
+            "when": {key: value},
             "then": {"data_modality": "genomic"},
-        },
-    )
-    violations = _when_value_violations(RuleLoader(path).load())
-    assert violations == ["bogus_when_platform: when.platform='ILUMINA'"]
+        }
+        with pytest.raises(ValueError, match="unknown 'when' condition key"):
+            RuleLoader(_write_rules_file(tmp_path, rule)).load()
 
 
 def test_assay_type_inference_values_in_vocabulary():
@@ -634,8 +601,8 @@ def test_reference_build_families_in_vocabulary():
 def _assay_condition_violations(rules):
     """Enum-backed assay_type_rules *condition* values not in the vocabulary.
 
-    The antecedent side of the assay-inference block — the same class as
-    _when_value_violations, for the conditions matched in infer_assay_type.
+    The antecedent side of the assay-inference block: the conditions matched in
+    infer_assay_type, checked against the schema enums.
     """
     violations = []
     for rule in rules.assay_type_rules:
@@ -923,8 +890,7 @@ def test_loader_rejects_unknown_when_key(tmp_path):
 def test_format_value_check_rejects_bogus_format(tmp_path):
     """The format drift check catches a typo'd Format value (#243).
 
-    The format analogue of test_when_value_check_rejects_bogus_platform. The
-    loader accepts the `format` *key* (it is a valid when key); the *value* gap
+    The loader accepts the `format` *key* (it is a valid when key); the *value* gap
     is closed by the _when_format_violations scan, so this exercises that scan
     over a rule whose when.format is bogus.
     """

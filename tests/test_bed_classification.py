@@ -215,11 +215,10 @@ class TestRulePrecedence:
         result = classify_bed(filename)
         assert _get_val(result, "data_modality") == "genomic"
 
-    def test_no_specific_pattern_gets_default(self):
-        """Files that don't match any specific pattern should get default classification."""
+    def test_no_specific_pattern_gets_no_default(self):
+        """A BED no specific pattern matches gets no modality: there is no default (#88)."""
         result = classify_bed("generic_file.bed")
-        # Should still have a modality from extension-based classification
-        assert result["data_modality"] is not None or result["data_type"] is not None
+        assert result["data_modality"] is None
 
 
 class TestPatternEdgeCases:

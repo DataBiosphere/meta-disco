@@ -195,7 +195,7 @@ class ClassificationStatusEnum(str, Enum):
     """
     conflict = "conflict"
     """
-    Rules at the same tier disagreed and no curator rule has answered it (#88; claims contract 4.5, 4.7). The value is null; the competing claims stay in the evidence beside a `conflict` marker naming them.
+    Rules at the same tier disagreed and no curator rule has answered it (#88; claims contract 4.3, 4.7). The value is null; the competing claims stay in the evidence beside a `conflict` marker naming them.
     """
 
 

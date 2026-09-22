@@ -111,10 +111,9 @@
 # - file_size_min_gb: minimum file size in GB
 # - file_size_max_gb: maximum file size in GB
 #
-# State conditions (for rule ordering):
-# - modality_not_set: true if data_modality must be unset
-# - reference_not_set: true if reference_assembly must be unset
-# - platform: required platform value (ILLUMINA, PACBIO, ONT)
+# There are no state conditions: a rule has an opinion or not, and never reads
+# what another rule said. Disagreement is settled only by tier, or by a curator
+# (#88).
 #
 # Header conditions (tier 3):
 # - header_section: BAM header section (@HD, @RG, @PG, @SQ)
@@ -142,7 +141,7 @@
 # 1. Check rule order matters within a tier - first match wins for terminal rules
 # 2. More specific patterns should come before general patterns
 # 3. Use terminal=true for definitive classifications to avoid override
-# 4. Use modality_not_set/reference_not_set for fallback rules
+# 4. No fallback rules: a rule never fills a field only because others left it empty
 # 5. Confidence should reflect certainty: 0.95 for definitive, 0.60-0.80 for heuristics
 # 6. Always provide a rationale explaining the classification logic
 # 7. Test regex patterns - they're case-insensitive by default
@@ -1020,27 +1019,11 @@ rules:
     scope: fastq_header
     when:
       extensions: [".fastq", ".fq"]
-      modality_not_set: true
     then:
       status:
         data_modality: not_classified
     rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
 
-  # ===========================================================================
-  # FALLBACK RULES
-  # ===========================================================================
-
-  - id: intervals_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed"]
-      filename_pattern: "(?i)^(?!(?:.*[._-])?(?:(?:narrow|broad)peak|h3k\\w*|histone|(?:atac|chip)(?:[-_]?seq)?|peaks?|summits?)[._-])"
-      modality_not_set: true
-    then:
-      data_modality: genomic
-      data_type: annotations
-    rationale: "BED file with no specific pattern - defaulting to genomic intervals"
 
 
 ---

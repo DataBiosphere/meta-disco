@@ -14,7 +14,7 @@ CLASSIFIED = "classified"
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
 # Top-tier claims disagreed and no curator rule has answered it (issue #88; claims
-# contract 4.5/4.7). The rule engine resolves such a field to this status with a
+# contract 4.3's tier stage, 4.7). The rule engine resolves such a field to this status with a
 # null value, and the index producer re-emits a parent's conflict as it.
 CONFLICT = "conflict"
 
@@ -205,13 +205,17 @@ def status_for_value(value) -> str:
 
     The one place that maps a sentinel-carrying ``value`` to a status string:
     ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
-    NOT_CLASSIFIED, any real value → CLASSIFIED. Used by the read side
+    NOT_CLASSIFIED, ``conflict`` → CONFLICT (#88), any real value → CLASSIFIED.
+    So every label ``field_label`` can emit maps back to its own status, and a
+    ``conflict`` label can never be read as a classified value. Used by the read side
     (``_entry_status``) and by ``build_field_entry`` when a producer carries the
     sentinel in ``value`` and no explicit status is given, so reader and producers
     stay in lockstep as epic #116 moves sentinels out of ``value``.
     """
     if value == NOT_APPLICABLE:
         return NOT_APPLICABLE
+    if value == CONFLICT:
+        return CONFLICT
     if value is None or value == NOT_CLASSIFIED:
         return NOT_CLASSIFIED
     return CLASSIFIED

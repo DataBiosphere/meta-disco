@@ -974,7 +974,7 @@ enums:
       conflict:
         description: >-
           Rules at the same tier disagreed and no curator rule has answered it
-          (#88; claims contract 4.5, 4.7). The value is null; the competing
+          (#88; claims contract 4.3, 4.7). The value is null; the competing
           claims stay in the evidence beside a `conflict` marker naming them.
 
   relation_enum:

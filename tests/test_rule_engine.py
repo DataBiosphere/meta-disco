@@ -644,7 +644,7 @@ class TestAddClaim:
         )
         result.add_claim(
             "data_modality",
-            rule_id="aligned_to_reference",
+            rule_id="content_modality",
             reason="aligned",
             tier=4,
             source_type=SOURCE_CONTIG_DETECTION,
@@ -652,7 +652,7 @@ class TestAddClaim:
         )
         assert result.data_modality == "genomic"
         rule_ids = [e["rule_id"] for e in result.field_evidence["data_modality"]]
-        assert rule_ids == ["fastq_modality_unknown", "aligned_to_reference"], rule_ids
+        assert rule_ids == ["fastq_modality_unknown", "content_modality"], rule_ids
 
     def test_drops_synthetic_placeholder_even_on_non_assertive_add(self):
         # Adding any claim makes the synthetic "no rule determined a value"
@@ -814,50 +814,58 @@ class TestAssemblyTokenIsNotTheGatkReferenceName:
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
-class TestPeakNamedBedFallback:
-    """`intervals_fallback` declines a peak-named `.bed` rather than calling it genomic.
+class TestMergeClaims:
+    """A second read of the same content joins the first by tier, never over it (#88)."""
 
-    The positive peak rules are gone (#430); this pins the exclusion that replaced
-    them, so a future edit to the fallback's lookahead cannot quietly restore the
-    `genomic` default for `atac_peaks.bed`."""
+    @staticmethod
+    def _result(*claims):
+        result = ExtendedClassificationResult()
+        for rule_id, value in claims:
+            result.add_claim(
+                "platform", rule_id=rule_id, reason="r", tier=3, source_type=SOURCE_FILENAME_RULE, value=value
+            )
+        return result
+
+    def test_a_merged_claim_that_disagrees_at_the_same_tier_is_a_conflict(self):
+        first = self._result(("archive_form", "ILLUMINA"))
+        first.merge_claims(self._result(("original_form", "PACBIO")))
+        assert first.status_of("platform") == CONFLICT
+        assert first.field_evidence["platform"][-1]["marker"] == "conflict"
+
+    def test_a_conflict_is_not_overwritten_by_a_merged_agreeing_claim(self):
+        first = self._result(("a", "ILLUMINA"), ("b", "PACBIO"))
+        first.merge_claims(self._result(("c", "ILLUMINA")))
+        assert first.status_of("platform") == CONFLICT
+
+    def test_a_claim_both_passes_made_is_kept_once(self):
+        first = self._result(("same_rule", "ONT"))
+        first.merge_claims(self._result(("same_rule", "ONT")))
+        assert first.platform == "ONT"
+        assert [e["rule_id"] for e in first.field_evidence["platform"]] == ["same_rule"]
+
+
+class TestNoBedFallback:
+    """No rule answers for a BED only because no other rule did (#88).
+
+    `intervals_fallback` called any BED with no other signal `genomic` annotations,
+    excluding peak-named ones; it is deleted, because a rule has an opinion of its
+    own or none and never fills a field others left empty. Every name here — peak
+    indicator or not — now gets no modality rather than a default."""
 
     @pytest.mark.parametrize(
         "name",
         [
+            "sample.bed",
+            "chr_sizes.bed",
             "atac_peaks.bed",
             "H3K27ac_chip_peaks.bed",
             "sample_summits.bed",
-            "H3K27ac.bed",
-            "sample.chip.bed",
-            # The assay spelled as one word, which a bare `atac`/`chip` token misses
             "atacseq.bed",
-            "chipseq.bed",
-            "atac-seq.bed",
-            "histone_marks.bed",
         ],
     )
-    def test_a_peak_indicator_declines_rather_than_asserting_genomic(self, engine, name):
-        """A name carrying a peak indicator gets no answer, not a confident wrong one.
-
-        Deleting the bare-token peak rules left these falling through to
-        `intervals_fallback`, which called them `genomic` annotations — on `main` they
-        were `epigenomic.chromatin_accessibility`. The token is too weak to say which
-        epigenomic assay it is, which is why those rules went; it is strong enough to
-        say we should not answer `genomic`.
-
-        So the indicator returns to the rules file in an exclusion only. A token used
-        to withhold a claim can cost coverage; it cannot assert a wrong value, which is
-        the failure #430 is about.
-        """
+    def test_a_bed_with_no_signal_of_its_own_is_not_classified(self, engine, name):
         result = engine.classify_extended(FileInfo.from_filename(name))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-    def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
-        """Narrowing `intervals_fallback` to `.bed` and excluding the peak token left
-        its own case untouched — it still answers for a BED with no other signal."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.bed"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "annotations"
 
 
 class TestTextFiles:
@@ -900,7 +908,7 @@ class TestIntegration:
 
 
 class TestConflictingReferenceRules:
-    """Test that conflicting reference_assembly rules produce not_classified."""
+    """Test that conflicting reference_assembly rules produce a conflict (#88)."""
 
     def test_ambiguous_filename_two_refs(self, engine):
         """Filename with both CHM13 and hg38 is a conflict, with no value (#88)."""

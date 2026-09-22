@@ -703,7 +703,7 @@ def propagate_to_index_files(
                     "source_type": SOURCE_DERIVATION_INHERITANCE,
                 }
             ]
-        status = _inherited_status(field_val)
+        status = status_for_value(field_val)
         # An explicit not_applicable parent isn't "no value" — the field is
         # determined (not applicable). Keep "had no value" for the not_classified /
         # missing case. (generate_coverage_report normalizes both reason forms.)
@@ -724,12 +724,6 @@ def propagate_to_index_files(
             }
         ]
 
-    def _inherited_status(field_val):
-        """Status for an inherited label. ``status_for_value`` knows the two
-        sentinels a value can carry; ``conflict`` is a status a label can carry
-        that a value never does, so it is mapped here."""
-        return CONFLICT if field_val == CONFLICT else status_for_value(field_val)
-
     standard_results = []
     for r in results:
         parent = r["parent_file"]
@@ -744,10 +738,7 @@ def propagate_to_index_files(
                 continue
             label = r.get(fld)
             evidence = inherited_evidence(fld, label, parent, r["parent_row_found"])
-            status = _inherited_status(label)
-            classifications[fld] = build_field_entry(
-                None if status == CONFLICT else label, status=status, evidence=evidence, detail=r["detail"].get(fld)
-            )
+            classifications[fld] = build_field_entry(label, evidence=evidence, detail=r["detail"].get(fld))
         # The index file's own identity, not the parent's (#433): this row resolves to
         # this file's bytes. The parent is the edge's grounding, and nothing else.
         standard_results.append(

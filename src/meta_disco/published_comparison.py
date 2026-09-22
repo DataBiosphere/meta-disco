@@ -41,7 +41,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import NOT_CLASSIFIED, field_label
+from .models import CONFLICT, NOT_CLASSIFIED, field_label
 from .output_utils import iter_records
 from .records import PUBLISHED_FIELDS
 from .summaries import md_table
@@ -84,7 +84,8 @@ def _code(value: str) -> str:
     return f"{fence}{pad}{value}{pad}{fence}"
 
 
-# The repository publishes nothing; this run inferred a value. Nothing is owed.
+# The repository publishes nothing; this run inferred a value (a real value or
+# not_applicable — never a conflict, which offers nothing to add). Nothing is owed.
 ADD = "add"
 # The repository publishes a value; this run inferred none. The published value should
 # stand — a recommendation about a value we do not publish, not a change to one we do.
@@ -102,7 +103,7 @@ RECOMMENDATIONS = (ADD, KEEP, REVIEW, NONE)
 # A `review` pair listed file by file rather than only counted. Above this a pair is
 # bulk (the two 400+ and 600+ cohorts, one value pair each) and the count is the fact;
 # below it the individual files are, and that is where the eight interesting rows live
-# — four .bai/.tbi, two intervals_fallback BEDs, two .h5ad.
+# — four .bai/.tbi, two BEDs, two .h5ad.
 MAX_NAMED_PER_PAIR = 20
 
 
@@ -120,12 +121,17 @@ def spoke(label: str | None) -> bool:
 
 
 def recommendation(published_values: list[str] | None, label: str | None) -> str:
-    """The recommendation for one file and one dimension. See the module docstring."""
+    """The recommendation for one file and one dimension. See the module docstring.
+
+    A ``conflict`` beside a published value is ``review``, because our rules
+    disagreeing is worth a look against what is published; with nothing published it
+    is ``none``, because a conflict carries no value to add (#88).
+    """
     if published_values and spoke(label):
         return REVIEW
     if published_values:
         return KEEP
-    return ADD if spoke(label) else NONE
+    return ADD if spoke(label) and label != CONFLICT else NONE
 
 
 @dataclass(frozen=True)

@@ -44,22 +44,11 @@ JOIN_KEY_ENUM = "join_key_enum"
 RELATION_ENUM = "relation_enum"
 PARENT_KIND_ENUM = "parent_kind_enum"
 
-# ``when`` condition keys whose value must be a member of a dimension enum,
-# mapped to that dimension. The rule engine compares these against enum values at
-# match time, so a typo'd value silently never matches rather than erroring — the
-# same class of bug the ``then``-value check guards against. Only ``platform``
-# qualifies today; the other ``when`` keys carry regexes, header field codes,
-# numeric bounds, or booleans, none of which are dimension-enum-backed.
-# ``when.file_format`` is checked against extension_map keys, not a dimension enum
-# (see issue #114). ``when.format`` is backed by the in-code ``Format`` enum
-# rather than a schema dimension, so its value drift is checked directly against
-# that enum in test_rule_vocabulary (not through this registry) — #243. Keep in
-# sync with rule_engine.RuleEngine._rule_matches().
-ENUM_BACKED_WHEN_KEYS = {"platform": "platform"}
-
 # assay_type_rules ``conditions`` keys whose value(s) must be dimension-enum
-# members, mapped to (dimension, is_list). The same antecedent-value class as
-# ENUM_BACKED_WHEN_KEYS, but in the separate assay-inference block. Excluded
+# members, mapped to (dimension, is_list): a typo'd value silently never matches
+# rather than erroring, the class of bug the ``then``-value check guards against.
+# No rule ``when`` key is enum-backed since #88 removed the ``platform`` state
+# condition — a rule never reads another rule's answer. Excluded
 # (intentionally): data_modality_contains (substring match, not full-enum
 # membership), file_format / file_format_not (extension_map, not a dimension
 # enum — see #114), matched_rules_any (rule ids), and numeric size bounds.
