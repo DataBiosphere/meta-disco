@@ -41,9 +41,10 @@ from typing import Any, Protocol
 #: yields row by row, so this bounds what is in memory, not what is read.
 PAGE_SIZE = 10_000
 
-#: What :meth:`Snapshot.table_ref` will splice into SQL. The three names are
-#: whitelisted, not quoted around: a table reference cannot be a query parameter,
-#: so this is the one guard between a caller's string and the query text.
+#: What :meth:`Snapshot.table_ref` will splice into SQL. A table reference
+#: cannot be a query parameter, so the three names are wrapped in backticks and
+#: whitelisted to this pattern first. The whitelist is the guard, not the
+#: backticks: it admits no backtick, so a name cannot close the reference.
 _IDENTIFIER = re.compile(r"[A-Za-z0-9_-]+")
 
 
@@ -78,8 +79,9 @@ class Snapshot:
 
     def table_ref(self, table: str) -> str:
         """The backtick-quoted table reference for SQL, ``\\`project.snapshot.table\\```.
-        The one place a name enters query text: each of the three is checked
-        against :data:`_IDENTIFIER` first and refused with ``ValueError`` if it fails."""
+        The one place a name enters query text: each of the three must match
+        :data:`_IDENTIFIER` in full, or is refused with ``ValueError``; only then is
+        it wrapped in backticks."""
         for kind, value in (("project", self.project), ("snapshot", self.name), ("table", table)):
             if not _IDENTIFIER.fullmatch(value):
                 raise ValueError(f"not a {kind} name this module will put in SQL: {value!r}")
