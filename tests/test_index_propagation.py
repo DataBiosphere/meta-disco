@@ -25,7 +25,7 @@ from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
 from tests.producer_sweep import run_index_producer
-from tests.run_fixtures import output_record
+from tests.run_fixtures import OUTPUT_FILE, output_record, write_run
 
 ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
 HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
@@ -100,11 +100,9 @@ def _classified_record(
     output shape rather than restating it. What this adds is the parent's identity
     and the defaults in ``_PARENT_VALUES``.
 
-    Any other dimension may be overridden by keyword: a real value, a sentinel
-    (``NOT_CLASSIFIED``, ``NOT_APPLICABLE`` — the builder turns it into a status with a
-    null value), or a ``(value, status)`` pair for a status the builder cannot derive,
-    such as ``(None, CONFLICT)``. ``build`` is the resolved build detail (#340) carried
-    beside the reference_assembly value.
+    Any other dimension may be overridden by keyword, as for
+    :func:`run_fixtures.classifications`. ``build`` is the resolved build detail (#340)
+    carried beside the reference_assembly value.
 
     ``file_id`` is what the index producer joins a parent on, so a fixture without
     one would be joined by nothing.
@@ -223,79 +221,27 @@ class TestLoadClassifications:
 
     def test_loads_from_single_file(self, tmp_path):
         """Load classifications from one JSON file."""
-        cls_file = tmp_path / "bam.json"
-        cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "abc123",
-                            "file_id": "fid-abc123",
-                            "file_name": "sample.bam",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "ILLUMINA", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "WGS", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
-        )
+        cls_file = write_run(tmp_path, [_classified_record("abc123", "GRCh38")]) / OUTPUT_FILE
         result = load_classifications(cls_file, key=ANVIL_KEY)
-        assert "fid-abc123" in result
-        assert result["fid-abc123"]["data_modality"] == "genomic"
-        assert result["fid-abc123"]["platform"] == "ILLUMINA"
+        assert _fid("abc123") in result
+        assert result[_fid("abc123")]["data_modality"] == "genomic"
+        assert result[_fid("abc123")]["platform"] == "ILLUMINA"
 
     def test_loads_from_multiple_files(self, tmp_path):
         """Load classifications from BAM + BED files."""
-        bam_file = tmp_path / "bam.json"
-        bam_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "bam_md5",
-                            "file_id": "fid-bam_md5",
-                            "file_name": "sample.bam",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "ILLUMINA", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "WGS", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
+        bam_file = write_run(tmp_path, [_classified_record("bam_md5", "GRCh38")], fname="bam.json") / "bam.json"
+        bed = _classified_record(
+            "bed_md5",
+            "GRCh38",
+            "sample.regions.bed.gz",
+            data_type="annotations",
+            platform=NOT_CLASSIFIED,
+            assay_type=NOT_CLASSIFIED,
         )
-        bed_file = tmp_path / "bed.json"
-        bed_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "bed_md5",
-                            "file_id": "fid-bed_md5",
-                            "file_name": "sample.regions.bed.gz",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "annotations", "evidence": []},
-                                "platform": {"value": "not_classified", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "not_classified", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
-        )
+        bed_file = write_run(tmp_path, [bed], fname="bed.json") / "bed.json"
         result = load_classifications(bam_file, bed_file, key=ANVIL_KEY)
-        bed_key = "fid-bed_md5"
-        assert "fid-bam_md5" in result
+        bed_key = _fid("bed_md5")
+        assert _fid("bam_md5") in result
         assert bed_key in result
         assert result[bed_key]["data_modality"] == "genomic"
         # The map holds only what an index inherits. `data_type` is not inherited
@@ -338,8 +284,7 @@ class TestLoadClassifications:
         assert set(load_classifications(cls_file, key=ANVIL_KEY)) == {_fid("a" * 32)}
 
     def test_a_row_that_is_not_an_object_is_refused(self, tmp_path):
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": ["stray"]}))
+        cls_file = write_run(tmp_path, ["stray"]) / OUTPUT_FILE
         with pytest.raises(ValueError, match="row is not an object"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
@@ -399,8 +344,7 @@ class TestLoadClassifications:
 
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         del cls["file_id"]
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        cls_file = write_run(tmp_path, [cls]) / OUTPUT_FILE
 
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [cls_file], output_file)
@@ -416,12 +360,11 @@ class TestLoadClassifications:
         """
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         cls["file_id"] = None
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        cls_file = write_run(tmp_path, [cls]) / OUTPUT_FILE
         with pytest.raises(ValueError, match="file_id"):
             load_classifications(cls_file, key=ANVIL_KEY)
         del cls["md5sum"]
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        write_run(tmp_path, [cls])
         with pytest.raises(ValueError, match="md5sum"):
             load_classifications(cls_file, key=HPRC_KEY)
 
@@ -436,8 +379,7 @@ class TestLoadClassifications:
             _classified_record("a" * 32, "GRCh38", "one.bam", file_id="fid-dup"),
             _classified_record("b" * 32, "CHM13", "two.bam", file_id="fid-dup"),
         ]
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": rows}))
+        cls_file = write_run(tmp_path, rows) / OUTPUT_FILE
         with pytest.raises(ValueError, match=r"file_id 'fid-dup' is carried by more than one.*'two\.bam'"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
@@ -461,8 +403,7 @@ class TestLoadClassifications:
     def test_a_parent_row_lacking_a_value_still_says_had_no_value(self, tmp_path):
         parent = _file("sample.bam", ".bam", "a" * 32, "e1")
         index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
-        cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
-        cls["classifications"]["platform"] = build_field_entry(NOT_CLASSIFIED)
+        cls = _classified_record("a" * 32, "GRCh38", "sample.bam", platform=NOT_CLASSIFIED)
         output = run_index_producer(tmp_path, [parent, index], [cls])
         [row] = [r for r in output["classifications"] if r["file_name"] == "sample.bam.bai"]
         assert row["classifications"]["platform"]["evidence"][0]["reason"] == (
@@ -498,8 +439,7 @@ class TestLoadClassifications:
         parent["file_id"] = None
         index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
         metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index])
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [_classified_record("a" * 32, "GRCh38", "sample.bam")]}))
+        cls_file = write_run(tmp_path, [_classified_record("a" * 32, "GRCh38", "sample.bam")]) / OUTPUT_FILE
         with pytest.raises(ValueError, match=r"'sample\.bam' has file_id None"):
             propagate_to_index_files(metadata_file, [cls_file], tmp_path / "out.json")
 
@@ -551,10 +491,10 @@ class TestLoadClassifications:
         """End-to-end: a .tbi index inherits from its .vcf.gz parent.
 
         The parent row is deliberately in the pre-#116 shape — a sentinel or value in
-        ``value`` and no ``status`` key. This is the one test that pins the reader's
-        derived-status path (``models._entry_status`` through ``status_for_value``)
-        against a row a real producer wrote before the split; every other parent fixture
-        here goes through ``build_field_entry`` and so carries a ``status``.
+        ``value`` and no ``status`` key — so the reader's derived-status path
+        (``models._entry_status`` through ``status_for_value``) is exercised against a
+        row a producer wrote before the split. The other parent rows in this file come
+        from ``_classified_record`` and carry a ``status``.
         """
         legacy_parent = {
             "md5sum": "7" * 32,

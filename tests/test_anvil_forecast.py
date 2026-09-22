@@ -8,44 +8,30 @@ import pytest
 
 from meta_disco import anvil_forecast as af
 from meta_disco.anvil_evidence import import_dataset
-from meta_disco.models import CLASSIFIED, JOIN_KEY_FILE_MD5SUM, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
+from meta_disco.models import CLASSIFIED, JOIN_KEY_FILE_MD5SUM, NOT_APPLICABLE, NOT_CLASSIFIED
 from meta_disco.slot_map import load_slot_map
 from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
-from tests.run_fixtures import write_run
+from tests.run_fixtures import classifications, write_run
 from tests.test_anvil_evidence import CATALOG, anvil_file, drs, write_dataset
 from tests.test_source_evidence import evidence_file_envelope
 
 DATASET = "SGDP_CHM13v2_sample"
 
 
-def classification(slot_values: dict[str, tuple[str, str | None]]) -> dict:
-    return {slot: build_field_entry(value, status) for slot, (status, value) in slot_values.items()}
-
-
 def write_forecast_run(root: Path) -> Path:
     """Three records: a CRAM on CHM13, a FASTQ with no assembly, and a BED with no value."""
     run = root / "20260101_000000"
     bam = [
-        {
-            "drs_uri": drs(1),
-            "classifications": classification(
-                {"reference_assembly": (CLASSIFIED, "CHM13"), "data_type": (CLASSIFIED, "alignments")}
-            ),
-        },
-        {
-            "drs_uri": drs(4),
-            "classifications": classification({"reference_assembly": (CLASSIFIED, "GRCh38")}),
-        },
+        {"drs_uri": drs(1), "classifications": classifications(reference_assembly="CHM13", data_type="alignments")},
+        {"drs_uri": drs(4), "classifications": classifications(reference_assembly="GRCh38")},
     ]
     fastq = [
         {
             "drs_uri": drs(2),
-            "classifications": classification(
-                {"reference_assembly": (NOT_APPLICABLE, None), "data_modality": (NOT_CLASSIFIED, None)}
-            ),
+            "classifications": classifications(reference_assembly=NOT_APPLICABLE, data_modality=NOT_CLASSIFIED),
         }
     ]
-    bed = [{"drs_uri": drs(3), "classifications": classification({"reference_assembly": (NOT_CLASSIFIED, None)})}]
+    bed = [{"drs_uri": drs(3), "classifications": classifications(reference_assembly=NOT_CLASSIFIED)}]
     for name, records in (("bam", bam), ("fastq", fastq), ("bed", bed)):
         write_run(run, records, fname=f"{name}_classifications.json")
     return run

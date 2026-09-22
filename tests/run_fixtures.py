@@ -2,8 +2,10 @@
 
 `metadata_fixtures` builds *input* records; this builds what a run *writes* — the
 `{"metadata", "classifications"}` file a producer publishes and one row of it — so the
-report tests (`test_corpus_diff`, `test_unprocessable`, `test_published_comparison`,
-`test_anvil_forecast`) share one spelling of that shape.
+report tests (`test_corpus_diff`, `test_unprocessable`, `test_published_comparison`)
+share one spelling of that shape. `test_anvil_forecast` shares the writer and the
+`classifications` block but keys its rows by `drs_uri`, which its report joins on, so
+it assembles the row itself.
 
 Two builders stay local on purpose, and say so in their docstrings:
 `test_consistency._rec` writes entries with no `evidence` and whatever `status` a case

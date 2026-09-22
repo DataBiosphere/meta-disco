@@ -6,9 +6,9 @@ record's key set across all of them. What still needs running a producer is what
 structure cannot settle — whose identity a record carries where a producer has two in
 hand, and the values it wrote.
 
-It lives apart from `metadata_fixtures` deliberately: importing the producers means
-putting `scripts/` on the path, and only the modules here and the tests over them
-need that.
+It lives apart from `metadata_fixtures`, which builds input records and imports no
+producer; this module imports the four standalone producers from `scripts/`, which
+pytest puts on the path (`pythonpath` in pyproject).
 """
 
 import functools
@@ -19,6 +19,8 @@ from classify_auxiliary_genomic import classify_auxiliary_genomic
 from classify_images import classify_images
 from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
+
+from tests.run_fixtures import OUTPUT_FILE, write_run
 
 # The three producers that take `(metadata_path, output_path)` and write one row per
 # input record, with a file name and format each one routes on. The index producer takes
@@ -73,8 +75,7 @@ def run_index_producer(tmp_path, records, parent_classifications=()):
     The envelope rather than the rows, because this producer writes a second key —
     ``unmatched_files`` — that a sweep may want to read.
     """
-    parents = tmp_path / "bam_classifications.json"
-    parents.write_text(json.dumps({"classifications": list(parent_classifications)}))
+    parents = write_run(tmp_path, parent_classifications) / OUTPUT_FILE
     output = tmp_path / "index_classifications.json"
     propagate_to_index_files(write_snapshot(tmp_path, records), [parents], output)
     return json.loads(output.read_text())

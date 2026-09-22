@@ -207,10 +207,9 @@ class TestGather:
 
     def test_a_file_written_twice_is_counted_once(self, tmp_path):
         run = tmp_path / "run"
-        run.mkdir()
         record = _record("t.tar", modality="genomic")
         for name in ("tar_classifications.json", "auxiliary_classifications.json"):
-            (run / name).write_text(json.dumps({"metadata": {}, "classifications": [record]}))
+            write_run(run, [record], fname=name)
         report = gather(run)
         assert report.files == 1
         assert report.duplicate_records == 1

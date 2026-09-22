@@ -1,5 +1,6 @@
 """Tests for the two-generation corpus comparison (#335)."""
 
+import functools
 import json
 from collections import Counter
 
@@ -91,9 +92,8 @@ def test_read_snapshot_tolerates_a_non_numeric_total(tmp_path):
     assert read_snapshot(path)[0].total_files is None
 
 
-def _run_record(name, md5, dataset="DS1", **labels) -> dict:
-    """An output row of this file's default dataset; each dim kwarg is a value, else not_classified."""
-    return output_record(name, md5, dataset, **labels)
+# An output row in this file's default dataset, the one `_snapshot_record` uses too.
+_run_record = functools.partial(output_record, dataset="DS1")
 
 
 def test_run_labels_reads_identity_and_labels(tmp_path):
