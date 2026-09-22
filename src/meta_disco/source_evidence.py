@@ -150,7 +150,7 @@ from .models import (
 # repository whose files the evidence is about (`EvidenceTarget.system`). Read by
 # `require_one_published_source` here, which must judge files no map wrote, and by
 # `anvil_evidence.check`, which holds both slot maps to it. A repository absent here —
-# HPRC today — has no published source.
+# HPRC today — has not declared its published source yet, and no file may claim to be it.
 PUBLISHED_TABLES: dict[str, str] = {ANVIL_REPOSITORY: VERBATIM_FILE}
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from an
@@ -960,7 +960,7 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
     current files a run found (:func:`report_evidence_files`), a ``published_value``
     file is refused with ``ValueError`` when its source repository is not the one its
     rows are about (a published source is that repository's own); when its source table
-    is not the one declared for that repository, none included; and when a second
+    is not the one declared for that repository, undeclared included; and when a second
     current one exists for the same target — repository, catalog version and dataset —
     naming both. The version is part of the key because *current* is per version
     (:func:`discover`): an anvil15 and an anvil16 generation are both current, and
@@ -987,16 +987,16 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
             expected = (
                 f"{repository}'s published source is {declared!r}"
                 if declared is not None
-                else f"{repository} declares no published source"
+                else f"{repository}'s published source is not declared"
             )
             raise ValueError(
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
-                f"{expected} — a repository has at most one published source (contract 7.12)"
+                f"{expected} — a repository has exactly one published source (contract 7.12)"
             )
         if target in current:
             raise ValueError(
                 f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{target.dataset} "
-                f"@{target.version}: {current[target]} and {status.path} — a repository has at most one "
+                f"@{target.version}: {current[target]} and {status.path} — a repository has exactly one "
                 "published source (contract 7.12), so one of them is not it"
             )
         current[target] = status.path

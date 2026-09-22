@@ -1210,7 +1210,7 @@ def test_the_source_evidence_root_the_run_uses_is_under_data():
 
 
 class TestOnePublishedSourcePerRepository:
-    """A repository has at most one published source (#497, contract 7.12): the table
+    """Every repository has exactly one published source (#497, contract 7.12): the table
     declared for it, and one current file of it per dataset. The run refuses the rest
     at preflight, over the statuses its evidence report already gathered."""
 
@@ -1238,9 +1238,9 @@ class TestOnePublishedSourcePerRepository:
         with pytest.raises(ValueError, match="from repository 'HPRC Data Explorer' about anvil's files"):
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
-    def test_a_repository_that_declares_no_published_source_may_have_none(self, tmp_path):
+    def test_a_repository_whose_published_source_is_undeclared_can_have_no_file_claim_it(self, tmp_path):
         self._published(tmp_path, "a/anvil_file.ndjson")
-        with pytest.raises(ValueError, match="anvil declares no published source"):
+        with pytest.raises(ValueError, match="anvil's published source is not declared"):
             require_one_published_source(report_evidence_files(tmp_path), {})
 
     def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path):
@@ -1250,7 +1250,7 @@ class TestOnePublishedSourcePerRepository:
         with pytest.raises(ValueError) as exc:
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
         assert str(first) in str(exc.value) and str(second) in str(exc.value)
-        assert "at most one published source" in str(exc.value)
+        assert "exactly one published source" in str(exc.value)
 
     def test_two_catalog_versions_of_one_dataset_are_both_current_and_both_allowed(self, tmp_path):
         """`discover` keeps the newest generation per version, so an anvil15 and an anvil16

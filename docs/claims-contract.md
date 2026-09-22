@@ -394,14 +394,15 @@ depends on that, and a second repository needs no change to these assertions.
      names a publisher. Only `source` does — and once the block is built from the published importer's
      evidence, `source` is that importer's envelope: its repository and version, not a name a run guessed.
 
-7.12 **A repository has at most one published source**, and where it has one, exactly one importer
-     reads it. Which table it is, is declared once (`source_evidence.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
+7.12 **Every repository has exactly one published source**, and exactly one importer reads it. Which
+     table it is, is declared once (`source_evidence.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
      its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
      conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
      carries the label from any other table or from a repository other than the one its rows are
      about, or a second one for a dataset of one catalog version, is refused before a run starts
-     (`source_evidence.require_one_published_source`). A repository that declares none — HPRC
-     today — has no published source, and no file may claim one for it. The compact Azul manifest is
+     (`source_evidence.require_one_published_source`). A repository whose published source is not yet
+     declared — HPRC today, see "What is not true yet" — can have no file claim one until it is. The
+     compact Azul manifest is
      not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
      Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one
      row per line in TDR's column names — stands in for the tables, and the published importer is the
@@ -420,8 +421,8 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and
   `.../anvil_published/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
   absence-is-the-statement half, 2.5's generations and 2.8's two exclusions are enforced for that one
-  repository, and 7.12 at the map for AnVIL and at the run for every repository, a repository that
-  declares no published source included; that a map was authored from nothing a run concluded is
+  repository, and 7.12 at the map for AnVIL and at the run for every repository; that a map was
+  authored from nothing a run concluded is
   not enforceable, and a test greps each file for the strings that would say otherwise. No other source
   has a map, there is no rule scope for source evidence, and no classification run consumes what is
   written — the value map's seeder and review queue read it, the pipeline does not: section 2 is
@@ -431,6 +432,9 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
   5.2's queue; `claims_from` builds a line's claims through `make_claim`. Which values have a row is
   `make review-queue`'s to say, not this document's. No stage calls it, so 3.7's queue is a listing a person runs, not a place a run sends a
   value to, and no claim it can make reaches a record until reconcile (#432).
+- **HPRC's published source is not declared** (7.12). `PUBLISHED_TABLES` names AnVIL only; which HPRC
+  catalog is the system of record for what HPRC publishes is undecided, so the HPRC run has no published
+  evidence and a file claiming to be it is refused until the declaration exists.
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
 - **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is. **Until then that block is still built from the input snapshot** — the two columns the downloader copies off the compact manifest — and its `source` from the input envelope, not from the published importer's evidence (7.11's second sentence). The evidence exists on disk (7.12) and nothing in a run reads it; #432 builds the block from it.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.

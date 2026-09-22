@@ -133,7 +133,7 @@ evidence}` entry — plus the controlled vocabulary:
     join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant
     for the file. `wrangler_annotation` is deliberately not among them: a curator
     enters as rules, not as evidence, per contract 1.6/1.7).
-  - **A repository has at most one published source** (contract 7.12), declared in
+  - **Every repository has exactly one published source** (contract 7.12), declared in
     `source_evidence.PUBLISHED_TABLES`; `anvil_evidence.check` holds both maps to it
     and the run's preflight refuses evidence that contradicts it
     (`source_evidence.require_one_published_source`).
