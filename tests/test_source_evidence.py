@@ -31,9 +31,11 @@ spike's two external sources.
 import ast
 import json
 import threading
+from collections.abc import Mapping
 from dataclasses import fields, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 import yaml
@@ -45,6 +47,7 @@ from meta_disco.models import (
     JOIN_KEY_FILE_NAME,
     SOURCE_CONTENT_READ,
     SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
@@ -64,6 +67,7 @@ from meta_disco.source_evidence import (
     iter_evidence,
     new_generation,
     read_envelope,
+    refuse_second_published_source,
     report_evidence_files,
     write_evidence_file,
 )
@@ -1183,3 +1187,62 @@ def test_the_source_evidence_root_the_run_uses_is_under_data():
     """The default root is `data/source_evidence`, one directory per source under it."""
     assert DEFAULT_SOURCE_EVIDENCE_ROOT.parts[-2:] == ("data", "source_evidence")
     assert DEFAULT_SOURCE_EVIDENCE_ROOT.parent == Path(__file__).resolve().parents[1] / "data"
+
+
+class TestOnePublishedSourcePerRepository:
+    """A repository has exactly one published source (#497, contract 7.12): the table
+    declared for it, and one current file of it per dataset. The run refuses the rest
+    at preflight, over the statuses its evidence report already gathered."""
+
+    DECLARED: Mapping[str, str] = MappingProxyType({"anvil": "anvil_file"})
+
+    def _published(self, tmp_path, name, table="anvil_file", dataset="AnVIL_IGVF_Mouse_R1", system="anvil"):
+        source = EvidenceFileSource(
+            repository="anvil", dataset=dataset, table=table, url="https://service.explore.anvilproject.org"
+        )
+        path = tmp_path / name
+        write_evidence_file(
+            path,
+            evidence_file_envelope(
+                source=source,
+                source_type=SOURCE_PUBLISHED_VALUE,
+                target=EvidenceTarget(system=system, dataset=dataset, version="anvil15"),
+            ),
+            [],
+        )
+        return path
+
+    def _statuses(self, tmp_path):
+        return report_evidence_files(tmp_path)
+
+    def test_one_published_file_per_dataset_from_the_declared_table_passes(self, tmp_path, capsys):
+        self._published(tmp_path, "a/anvil_file.ndjson")
+        self._published(tmp_path, "b/anvil_file.ndjson", dataset="AnVIL_ENCORE_293T")
+        write_evidence_file(tmp_path / "c/hifi.ndjson", evidence_file_envelope(), [])
+        refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+
+    def test_a_published_file_from_another_table_is_refused(self, tmp_path, capsys):
+        self._published(tmp_path, "a/file.ndjson", table="file")
+        with pytest.raises(ValueError, match=r"file\.ndjson.*from table 'file'.*published source is 'anvil_file'"):
+            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+
+    def test_a_repository_that_declares_no_published_source_may_have_none(self, tmp_path, capsys):
+        self._published(tmp_path, "a/anvil_file.ndjson", system="hprc")
+        with pytest.raises(ValueError, match="hprc declares no published source"):
+            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+
+    def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path, capsys):
+        """Acceptance criterion 3: two files, both the declared table, one dataset."""
+        first = self._published(tmp_path, "a/anvil_file.ndjson")
+        second = self._published(tmp_path, "b/anvil_file.ndjson")
+        with pytest.raises(ValueError) as exc:
+            refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)
+        assert str(first) in str(exc.value) and str(second) in str(exc.value)
+        assert "exactly one published source" in str(exc.value)
+
+    def test_submitter_files_and_unreadable_ones_are_not_judged(self, tmp_path, capsys):
+        write_evidence_file(tmp_path / "a/hifi.ndjson", evidence_file_envelope(), [])
+        write_evidence_file(tmp_path / "b/hifi.ndjson", evidence_file_envelope(), [])
+        (tmp_path / "c").mkdir()
+        (tmp_path / "c" / "broken.ndjson").write_text("{not json\n")
+        refuse_second_published_source(self._statuses(tmp_path), self.DECLARED)

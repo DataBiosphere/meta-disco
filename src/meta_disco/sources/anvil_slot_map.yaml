@@ -1,7 +1,9 @@
 # The AnVIL slot map (#369). Shape and rules: src/meta_disco/slot_map.py. Candidate
 # names: manifest_survey.NAME_TOKENS; candidate cells: manifest_survey.FIELD_TOKENS.
-# A dataset, table or column with nothing to map is absent.
+# A dataset, table or column with nothing to map is absent. This map reads the
+# submitter tables; the published anvil_file columns are anvil_published_slot_map.yaml.
 catalog: anvil15
+source_type: repository_metadata
 datasets:
   ANVIL_1000G_high_coverage_2019:
     participant:

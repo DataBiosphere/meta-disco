@@ -13,6 +13,7 @@ from threading import Lock
 from typing import NamedTuple, TypeGuard
 
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
+from .azul_manifest import VERBATIM_FILE
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
@@ -147,6 +148,21 @@ HPRC_REPOSITORY = "hprc"
 SOURCE_RECORD_KEYS: dict[str, RecordKey] = {
     ANVIL_REPOSITORY: RecordKey(JOIN_KEY_FILE_ID, JOIN_KEY_FILE_ID),
     HPRC_REPOSITORY: RecordKey(JOIN_KEY_FILE_MD5SUM, OUTPUT_MD5SUM_FIELD),
+}
+
+# One declaration per repository of the table that is its **published source** — the
+# system of record for what the repository itself publishes about a file (#497,
+# contract 7.12). AnVIL's is the harmonized ``anvil_file`` table of its TDR snapshot,
+# read from the verbatim manifest by the published slot map
+# (``sources/anvil_published_slot_map.yaml``). Exactly one per repository: an
+# evidence file carrying ``published_value`` whose source table is not the declared
+# one, or a second current one for a dataset, fails a run at preflight
+# (``source_evidence.refuse_second_published_source``). A repository absent here has
+# no published source — HPRC today — and no file may claim one for it. Not the compact
+# manifest: that is Azul's join, which may hand a run's own output back once it is
+# imported (#432's decisions).
+PUBLISHED_TABLES: dict[str, str] = {
+    ANVIL_REPOSITORY: VERBATIM_FILE,
 }
 
 

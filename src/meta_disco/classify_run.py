@@ -19,9 +19,13 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import RecordKey, load_envelope, record_key
+from meta_disco.pipeline import PUBLISHED_TABLES, RecordKey, load_envelope, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
-from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, report_evidence_files
+from meta_disco.source_evidence import (
+    DEFAULT_SOURCE_EVIDENCE_ROOT,
+    refuse_second_published_source,
+    report_evidence_files,
+)
 
 # This module is <root>/src/meta_disco/classify_run.py; the classifier scripts it shells
 # out to live at <root>/scripts/, so the subprocess cwd is the repo root three levels up.
@@ -182,7 +186,10 @@ def run_all_classifications(
     After those two refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
-    it is and refuses none of them — so a run refused at preflight reports none.
+    it is — so a run refused at preflight reports none. The one judgement passed on
+    them is the third refusal: more than one current file claiming to be a repository's
+    published source (:func:`source_evidence.refuse_second_published_source`, #497)
+    raises ``ValueError`` before the run directory exists.
     Reporting there, ahead of the run directory, puts what the run found at the top of
     its log rather than behind the phases. *Found*
     and not *consumed*: the rows go no further than that report, because matching
@@ -204,7 +211,7 @@ def run_all_classifications(
     # duplicate check reads the same field, so an input that cannot name it fails here.
     key = record_key(load_envelope(metadata), metadata)
 
-    report_evidence_files(source_evidence_root)
+    refuse_second_published_source(report_evidence_files(source_evidence_root), PUBLISHED_TABLES)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = output_dir_base / timestamp

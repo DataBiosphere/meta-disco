@@ -12,9 +12,17 @@ import pytest
 
 from meta_disco import anvil_evidence as ae
 from meta_disco.azul_manifest import FORMAT_VERBATIM, load_sidecar, manifest_dir, manifest_path, save_sidecar
-from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_REPOSITORY_METADATA
-from meta_disco.slot_map import load_slot_map
-from meta_disco.source_evidence import discover, is_generation, iter_evidence, read_envelope, unfinished_imports
+from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
+from meta_disco.records import PUBLISHED_FIELDS
+from meta_disco.slot_map import load_slot_map, published_slot_map_resource
+from meta_disco.source_evidence import (
+    discover,
+    is_generation,
+    iter_evidence,
+    list_cell,
+    read_envelope,
+    unfinished_imports,
+)
 
 CATALOG = "anvil15"
 FETCHED = "2026-09-03T21:45:47.517283"
@@ -152,10 +160,14 @@ datasets:
         ]
 
     def test_a_named_dataset_whose_manifest_is_not_on_disk(self, tmp_path):
+        """The importer reads the verbatim manifest only — the TDR tables as rows. The
+        compact manifest, Azul's join, is not a shape it reads, published map included
+        (#497), and the problem says so rather than leaving a reader to try it."""
         write_dataset(tmp_path, "D", HIFI_ROWS)
         manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM).unlink()
         (problem,) = ae.check(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG)
         assert problem.startswith("D: no verbatim manifest at ")
+        assert problem.endswith("never the compact one")
 
     def test_a_cell_that_is_itself_a_file_link_column_is_a_problem(self, tmp_path):
         """A column is one kind, never two (contract 2.7): `cram` holds pointers, not a value."""
@@ -460,9 +472,153 @@ def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
     assert "    library_source: null on 1 rows" in lines
 
 
-# --- the bundled map against the real manifests -----------------------------------
+# --- the published map: the same importer, the map's own kind (#497) ----------------
+
+
+PUBLISHED_MAP = f"""
+catalog: anvil15
+source_type: {SOURCE_PUBLISHED_VALUE}
+datasets:
+  D:
+    anvil_file:
+      file_ref:
+        data_modality:
+          - {{cell: data_modality}}
+        reference_assembly:
+          - {{cell: reference_assembly}}
+"""
+
+PAIR = ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]
+
+
+def published_file(n: int, modality, assembly) -> tuple[str, dict]:
+    """An `anvil_file` row as the verbatim manifest carries it: TDR's columns plus Azul's `drs_uri` copy."""
+    _, row = anvil_file(n)
+    return "anvil_file", {**row, "data_modality": modality, "reference_assembly": assembly}
+
+
+PUBLISHED_ROWS = [
+    published_file(1, ["single-nucleus RNA sequencing assay"], ["GRCm39"]),
+    published_file(2, PAIR, []),
+    published_file(3, [], None),
+]
+
+
+class TestThePublishedMap:
+    def test_the_evidence_carries_the_maps_kind_under_its_own_directory(self, tmp_path):
+        """Acceptance criterion 1: one file per dataset from the `anvil_file` table, its
+        envelope carrying `published_value` and the DRS URI on both sides, each non-empty
+        cell verbatim and a list cell as a list."""
+        write_dataset(tmp_path, "D", PUBLISHED_ROWS)
+        result = ae.import_dataset(
+            slot_map(tmp_path, PUBLISHED_MAP),
+            tmp_path,
+            CATALOG,
+            "D",
+            tmp_path / "ev",
+            "20260920T000000Z",
+            "anvil_published",
+        )
+        (table,) = result.tables
+        assert (
+            table.path == tmp_path / "ev" / "anvil_published" / CATALOG / "D" / "20260920T000000Z" / "anvil_file.ndjson"
+        )
+        envelope = read_envelope(table.path)
+        assert envelope.source_type == SOURCE_PUBLISHED_VALUE
+        assert (envelope.source.repository, envelope.source.table, envelope.target.system) == (
+            "anvil",
+            "anvil_file",
+            "anvil",
+        )
+        assert (envelope.source_key, envelope.target_key) == (JOIN_KEY_DRS_URI, JOIN_KEY_DRS_URI)
+        rows = rows_of(table.path)
+        assert ("data_modality", drs(1), json.dumps(["single-nucleus RNA sequencing assay"]), "data_modality") in rows
+        assert ("reference_assembly", drs(1), json.dumps(["GRCm39"]), "reference_assembly") in rows
+        (pair,) = [r for r in rows if r[1] == drs(2)]
+        assert list_cell(pair[2]) == PAIR, "a two-valued cell is written as a two-element list"
+
+    def test_a_file_the_repository_publishes_nothing_for_is_skipped_and_counted(self, tmp_path):
+        """Nulls are not written per file: an empty or null cell is skipped and counted,
+        exactly as a submitter table's is (maintainer, 2026-09-22)."""
+        write_dataset(tmp_path, "D", PUBLISHED_ROWS)
+        result = ae.import_dataset(
+            slot_map(tmp_path, PUBLISHED_MAP),
+            tmp_path,
+            CATALOG,
+            "D",
+            tmp_path / "ev",
+            "20260920T000000Z",
+            "anvil_published",
+        )
+        (table,) = result.tables
+        assert table.rows == 3 and result.files == 2
+        assert not [r for r in rows_of(table.path) if r[1] == drs(3)]
+        assert table.null_cells == {"data_modality": 1, "reference_assembly": 2}
+
+    def test_the_two_maps_generations_never_supersede_each_other(self, tmp_path):
+        """The submitter map writes under `anvil/` and the published map under its own
+        directory, so a run finds the newest generation of each: two sources, both current."""
+        write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
+        submitter = ae.import_dataset(
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+        )
+        published = ae.import_dataset(
+            slot_map(tmp_path, PUBLISHED_MAP),
+            tmp_path,
+            CATALOG,
+            "D",
+            tmp_path / "ev",
+            "20260921T000000Z",
+            "anvil_published",
+        )
+        current = discover(tmp_path / "ev")
+        assert submitter.tables[0].path in current and published.tables[0].path in current
+        assert {read_envelope(p).source_type for p in current} == {SOURCE_REPOSITORY_METADATA, SOURCE_PUBLISHED_VALUE}
+
+    def test_import_all_passes_the_directory_through(self, tmp_path):
+        write_dataset(tmp_path, "D", PUBLISHED_ROWS)
+        (result,) = ae.import_all(
+            slot_map(tmp_path, PUBLISHED_MAP),
+            tmp_path,
+            CATALOG,
+            tmp_path / "ev",
+            generation="20260920T000000Z",
+            source="anvil_published",
+        )
+        assert result.directory.parts[-4] == "anvil_published"
+
+
+# --- the bundled maps against the real manifests -----------------------------------
 
 
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
 def test_the_bundled_map_agrees_with_the_anvil15_manifests():
     assert ae.check(load_slot_map(), Path("data/anvil"), CATALOG) == []
+
+
+@pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
+def test_the_published_map_yields_what_anvil_publishes(tmp_path):
+    """Acceptance criterion 4 (#497), the counts #472 measured on the compact manifest,
+    reproduced from the `anvil_file` rows of the verbatim one: 6,755 files with a
+    `data_modality` cell, 4,696 with a `reference_assembly` cell, 12 two-valued cells
+    written as two-element lists."""
+    published = load_slot_map(published_slot_map_resource())
+    assert ae.check(published, Path("data/anvil"), CATALOG) == []
+    imports = ae.import_all(
+        published, Path("data/anvil"), CATALOG, tmp_path / "ev", generation="20260920T000000Z", source="anvil_published"
+    )
+    files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
+    two_valued = 0
+    for run in imports:
+        (table,) = run.tables
+        assert read_envelope(table.path).source_type == SOURCE_PUBLISHED_VALUE
+        for entry in iter_evidence(table.path):
+            files[entry.field].add(entry.target_key_value)
+            cell = list_cell(entry.raw_value)
+            assert cell, entry
+            two_valued += len(cell) == 2
+    assert {field: len(handles) for field, handles in files.items()} == {
+        "data_modality": 6755,
+        "reference_assembly": 4696,
+    }
+    assert two_valued == 12

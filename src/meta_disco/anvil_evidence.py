@@ -25,6 +25,13 @@ a link an importer cannot resolve is counted per column and not written.
 over an earlier one, and read by ``discover`` as the newest per dataset. Within-source
 contradictions pass through — a file reached by two tables of one dataset that spell
 different assemblies receives both spans, and which is right is the resolver's (4.8).
+
+**One importer, several maps** (#497). What kind of source a map describes is the
+map's own ``source_type``, which every envelope written from it carries; which
+directory under the evidence root its generations go to is the caller's ``source``.
+The bundled submitter map writes ``repository_metadata`` under ``anvil/``; the
+published map writes ``published_value`` under ``anvil_published/``, from the same
+verbatim manifest, so the two never supersede each other's generations.
 """
 
 from __future__ import annotations
@@ -48,7 +55,7 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
-from .models import JOIN_KEY_DRS_URI, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .models import JOIN_KEY_DRS_URI, ClaimSource
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
     EvidenceEntry,
@@ -130,7 +137,10 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
             continue
         path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
         if not path.is_file():
-            problems.append(f"{dataset}: no verbatim manifest at {path}")
+            problems.append(
+                f"{dataset}: no verbatim manifest at {path} — the importer reads the verbatim manifest only, "
+                "never the compact one"
+            )
             continue
         problems += _check_dataset(slot_map, dataset, path)
     return problems
@@ -189,12 +199,14 @@ def import_all(
     evidence_root: Path,
     datasets: list[str] | None = None,
     generation: str | None = None,
+    source: str = REPOSITORY,
 ) -> list[DatasetImport]:
     """Import every dataset the map names (or ``datasets``), each as one new generation.
 
     The stamp is shared across the datasets of one run so the run is one generation on
     disk; each dataset is still imported whole and independently, and once however many
     times it is named. Raises before writing anything if a named dataset is not in the map.
+    ``source`` is the directory under ``evidence_root`` the generations go to.
     """
     known = slot_map.datasets()
     chosen = known if datasets is None else list(dict.fromkeys(datasets))
@@ -202,7 +214,9 @@ def import_all(
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
     stamp = generation if generation is not None else new_generation()
-    return [import_dataset(slot_map, manifest_root, catalog, dataset, evidence_root, stamp) for dataset in chosen]
+    return [
+        import_dataset(slot_map, manifest_root, catalog, dataset, evidence_root, stamp, source) for dataset in chosen
+    ]
 
 
 def import_dataset(
@@ -212,6 +226,7 @@ def import_dataset(
     dataset: str,
     evidence_root: Path,
     generation: str | None = None,
+    source: str = REPOSITORY,
 ) -> DatasetImport:
     """Write one generation of evidence files for one dataset.
 
@@ -231,11 +246,14 @@ def import_dataset(
     no row at all is such a failure: a table the map names should reach files, and one
     that reaches none is the map disagreeing with the catalog (contract 5.3), not an
     empty result.
-    The source directory under the evidence root and the target system are both
-    ``REPOSITORY``, the repository the manifests came from.
+    The target system and the envelope's source repository are both ``REPOSITORY``, the
+    repository the manifests came from; ``source`` is the directory under the evidence
+    root the generation goes to, ``REPOSITORY`` for the submitter map and a directory
+    of its own for the published map (#497), so one map's generation never supersedes
+    another's. The envelope's ``source_type`` is the map's.
     """
     stamp = generation if generation is not None else new_generation()
-    directory = generation_dir(evidence_root, REPOSITORY, catalog, dataset, stamp)
+    directory = generation_dir(evidence_root, source, catalog, dataset, stamp)
     if directory.exists():
         raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
     staging = staging_dir(directory)
@@ -254,10 +272,10 @@ def import_dataset(
     tables = []
     try:
         for table in slot_map.tables(dataset):
-            source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
+            file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
             envelope = EvidenceFileEnvelope(
-                source=source,
-                source_type=SOURCE_REPOSITORY_METADATA,
+                source=file_source,
+                source_type=slot_map.source_type,
                 source_version=catalog,
                 source_key=JOIN_KEY_DRS_URI,
                 target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
@@ -265,7 +283,7 @@ def import_dataset(
                 fetched_at=fetched_at,
             )
             result = TableImport(table=table, path=evidence_file_path(directory, table))
-            entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, source, result)
+            entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, file_source, result)
             result.written = write_evidence_file(evidence_file_path(staging, table), envelope, entries)
             if not result.written:
                 raise ValueError(

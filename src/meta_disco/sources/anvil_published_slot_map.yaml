@@ -1,0 +1,24 @@
+# The AnVIL published map (#497): the harmonized anvil_file columns, which are what
+# AnVIL itself publishes for a file. Shape and rules: src/meta_disco/slot_map.py; the
+# same importer reads it (make import-anvil-published), and source_type is the label
+# every evidence file written from it carries. The input is the verbatim manifest,
+# which is the TDR tables synced down as a file, one row per line in TDR's column
+# names; it stands in for the TDR tables until a TDR reader exists (#478). file_ref
+# is TDR's own name for the file's DRS URI. A dataset whose two columns hold no
+# value is absent.
+catalog: anvil15
+source_type: published_value
+datasets:
+  AnVIL_ENCORE_293T:
+    anvil_file:
+      file_ref: &anvil_file
+        data_modality:
+          - {cell: data_modality}
+        reference_assembly:
+          - {cell: reference_assembly}
+  AnVIL_ENCORE_RS293:
+    anvil_file:
+      file_ref: *anvil_file
+  AnVIL_IGVF_Mouse_R1:
+    anvil_file:
+      file_ref: *anvil_file

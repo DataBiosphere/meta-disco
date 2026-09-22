@@ -121,7 +121,7 @@ decision no one can review (#421).
 import json
 import os
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,6 +131,7 @@ from uuid import uuid4
 from .models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_NAME,
+    SOURCE_PUBLISHED_VALUE,
     ClaimSource,
     _flat_from_dict,
     _flat_plan,
@@ -939,6 +940,48 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     for status in statuses:
         print(f"  {_describe(status, root, now)}")
     return statuses
+
+
+def refuse_second_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
+    """Refuse the current evidence when more than one file claims to be a repository's published source (#497).
+
+    A repository has exactly one published source (contract 7.12), declared in
+    ``published_tables`` as the source table that may carry ``published_value`` for
+    files of that repository (``pipeline.PUBLISHED_TABLES``: AnVIL to ``anvil_file``).
+    Over the current files a run found (:func:`report_evidence_files`), a file carrying
+    ``published_value`` is refused when its source table is not the declared one — or
+    the target repository declares none — and when a second current file carries it for
+    the same repository and dataset, naming both. Raises ``ValueError``; a file whose
+    envelope could not be read is not judged here, it is already named in the report.
+
+    Enforced at discovery rather than at import because the importer only ever writes
+    the label its map declares: the case this catches is a file placed by hand, or a
+    second map authored against the same table.
+    """
+    current: dict[tuple[str, str | None], Path] = {}
+    for status in statuses:
+        envelope = status.envelope
+        if envelope is None or envelope.source_type != SOURCE_PUBLISHED_VALUE:
+            continue
+        repository, dataset = envelope.target.system, envelope.target.dataset
+        declared = published_tables.get(repository)
+        if envelope.source.table != declared:
+            raise ValueError(
+                f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
+                + (
+                    f"{repository}'s published source is {declared!r}"
+                    if declared is not None
+                    else f"{repository} declares no published source"
+                )
+                + " — a repository has exactly one published source (contract 7.12)"
+            )
+        if (repository, dataset) in current:
+            raise ValueError(
+                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{dataset}: "
+                f"{current[(repository, dataset)]} and {status.path} — a repository has exactly one published "
+                "source (contract 7.12), so one of them is not it"
+            )
+        current[(repository, dataset)] = status.path
 
 
 def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> str:

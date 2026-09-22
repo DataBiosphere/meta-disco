@@ -173,29 +173,34 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 4. Sources and resolution
 
-4.1 There are four input kinds. The numbering runs to five because kind 2 was retired and its
-    number is kept, so citations elsewhere stay valid:
+4.1 There are five input kinds:
     1. inference (filename, extension, header, content, file size, and signals already resolved)
-    2. ~~canonical repository metadata (AnVIL harmonized fields)~~ — **retired, see below**
-    3. non-canonical repository metadata (submitter tables)
+    2. published repository metadata — what the repository itself publishes for a file, read from its
+       system of record by its one published importer (7.12; `published_value`)
+    3. non-canonical repository metadata (submitter tables; `repository_metadata`)
     4. external repository (HPRC Data Explorer, ENA, IGSR)
     5. curator
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
 
-    **Why kind 2 is retired (#424).** A repository's own harmonized fields are not a source with an
-    opinion about our files — they are its published output, the answer its users see today, which ours is
-    compared against. A target's current state is not an input to producing it. Section 7 is what replaced
-    it; the Open section carries the full reasoning.
+    **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a
+    target's current state is not an input to producing it. It is an input once the circularity it
+    feared cannot happen: our output goes to a separate table set (#444) and the repository's own tables
+    are never written by us — but that holds only while the published value is read from the
+    **system of record**. AnVIL's is its TDR snapshot tables, not the Azul manifest, which is a product
+    of an index that may already carry our last output back to us (#432's decisions). So kind 2 is
+    read from the `anvil_file` table of the TDR snapshot, and the compact manifest is not a source.
+    Kinds 2 and 3 are different sources with different labels: a submitter's table and what the
+    repository publishes may disagree, and reconcile is where that is seen.
 
     A source is an input kind only if it says something about **our files**. A table that describes the world —
     an assembly's contig lengths, an ontology — is a lookup inference uses, not an input with an opinion.
     That is why the reference validator is input kind 1: it reads our bytes and looks the answer up.
 
-4.2 Inputs 1, 3 and 4 are equal. Being ours confers no rank; being external confers no rank.
-    (Kind 2 is retired; kind 5 is deliberately outside this list, because a curator does not compete
-    with the others — 4.7 has a curator *answer* a conflict rather than produce one, and 4.5 keeps
-    conflict production to these three.)
+4.2 Inputs 1, 2, 3 and 4 are equal. Being ours confers no rank; being external confers no rank; being
+    what the repository publishes confers no rank. (Kind 5 is deliberately outside this list, because
+    a curator does not compete with the others — 4.7 has a curator *answer* a conflict rather than
+    produce one, and 4.5 keeps conflict production to these four.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -205,8 +210,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A slot on which only one input speaks takes that input's declaration — a value classifies it, a status is
     preserved as that status. Filling a gap is not a disagreement.
 
-4.5 Inputs 1, 3 and 4 that disagree produce a **conflict**. No value is asserted from them, and every competing
-    declaration is recorded with the rule behind it.
+4.5 Inputs 1, 2, 3 and 4 that disagree produce a **conflict**. No value is asserted from them, and every
+    competing declaration is recorded with the rule behind it.
 
 4.6 Statuses reconcile on their own axis, and the two behave differently.
     `not_classified` never conflicts: it declares no answer, so another input having one fills a gap (4.4).
@@ -311,19 +316,24 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 7. Published values
 
-Unlike sections 2, 4 and 6, this section describes what the code does today. #424 built it — with
-the exception of 7.4's second half, which names where the block goes once a reconciled record exists.
+#424 built the `published` block and the comparison (7.3–7.11); #497 made the published values an
+input (7.1, 7.2, 7.12). 7.4's second half names where the block goes once a reconciled record exists,
+and "What is not true yet" says which parts the code does today.
 
 Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
 depends on that, and a second repository needs no change to these assertions.
 
 7.1 The values a repository publishes for a dimension this project infers are its **published output**,
-    not an input. They are the answer its users see today, and a target's current state is not an input
-    to producing it. This is why 4.1's kind 2 is retired.
+    the answer its users see today — and they are an input, kind 2 of 4.1, read from the repository's
+    system of record by its published importer (7.12). Their mapping is a claim like any other: it goes
+    through the translation table (3.9), and an authored row claims what it declares. #424 retired
+    them as an input; 4.1 says why that reversed.
 
-7.2 Published values are **carried, never consumed**. They produce no claim, compete at no tier, and
-    change no value. A run with them present classifies identically to one without — the same guarantee
-    6.6 makes about a run with no sources.
+7.2 **Inference never reads them.** They produce no claim inside inference, compete at no tier, and
+    change no inferred value: the inference artifact (6.2) is the same with them present as without,
+    the guarantee 6.6 makes about a run with no sources. They enter at reconcile, as evidence with the
+    published importer's envelope as provenance, and are compared there with every other input (4.4,
+    4.5).
 
 7.3 They are carried **verbatim**: as the repository wrote them, a list wherever it published a list.
     Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
@@ -380,7 +390,20 @@ depends on that, and a second repository needs no change to these assertions.
 
 7.11 The vocabulary is **repository-neutral**, because the report is addressed to whichever repository's
      data team reads it. `add` / `keep` / `review` / `none` are what that team should do; no recommendation
-     names a publisher. Only `source` does.
+     names a publisher. Only `source` does — and once the block is built from the published importer's
+     evidence, `source` is that importer's envelope: its repository and version, not a name a run guessed.
+
+7.12 **Every repository has exactly one published source**, and exactly one importer reads it. Which
+     table it is, is declared once (`pipeline.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
+     its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
+     conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
+     carries the label from any other table, or a second one for a dataset, is refused before a run
+     starts (`source_evidence.refuse_second_published_source`). A repository that declares none — HPRC
+     today — has no published source, and no file may claim one for it. The compact Azul manifest is
+     not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
+     Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one
+     row per line in TDR's column names — stands in for the tables, and the published importer is the
+     submitter-table importer run over a second slot map (`anvil_published_slot_map.yaml`).
 
 ---
 
@@ -390,22 +413,23 @@ No code reads this document, and the pipeline it describes does not exist — wi
 describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
-- **The slot map and its importer exist for AnVIL only** (#369): `slot_map` loads
-  `sources/anvil_slot_map.yaml`, `anvil_evidence` writes generations of evidence files under
-  `data/source_evidence/anvil/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
-  absence-is-the-statement half, 2.5's generations and 2.8's two exclusions are enforced for that one
-  source; that the map was authored from nothing a run concluded is not enforceable, and a test greps
-  the file for the strings that would say otherwise. No other source has a map, there is no
-  rule scope for source evidence, and no classification run consumes what is written — the value
-  map's seeder and review queue read it, the pipeline does not: section 2 is produced and not yet
-  read by a run.
+- **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
+  `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
+  `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and
+  `.../anvil_published/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
+  absence-is-the-statement half, 2.5's generations, 2.8's two exclusions and 7.12's one-published-source
+  rule are enforced for that one repository; that a map was authored from nothing a run concluded is
+  not enforceable, and a test greps each file for the strings that would say otherwise. No other source
+  has a map, there is no rule scope for source evidence, and no classification run consumes what is
+  written — the value map's seeder and review queue read it, the pipeline does not: section 2 is
+  produced and not yet read by a run.
 - **The translation table exists and nothing in a run reads it** (#414). `value_map` holds 3.9's row,
   enforces 3.11's split, 3.12's scope and collision rules and 3.5's bound, seeds from evidence and lists
   5.2's queue; `claims_from` builds a line's claims through `make_claim`. Which values have a row is
   `make review-queue`'s to say, not this document's. No stage calls it, so 3.7's queue is a listing a person runs, not a place a run sends a
   value to, and no claim it can make reaches a record until reconcile (#432).
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
-- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is.
+- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is. **Until then that block is still built from the input snapshot** — the two columns the downloader copies off the compact manifest — and its `source` from the input envelope, not from the published importer's evidence (7.11's second sentence). The evidence exists on disk (7.12) and nothing in a run reads it; #432 builds the block from it.
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.
@@ -433,24 +457,14 @@ A line leaves this section when the assertion above it is enforced, not when it 
   that against the loaded rule set, so neither loader reads the other.
 - What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
 - The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
-- ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered by #424: it is not an
-  input kind.** It was read — the downloader parsed both fields onto every record — and then dropped at
-  `ClassifierRecord`, one step before classification, so the answer to the question as asked was "no". But
-  the reframing matters more than the answer. The AnVIL harmonized fields are not a *source with an opinion*
-  about our files; they are the **published output**, the answer the AnVIL Explorer shows today and the
-  thing our answer is measured against. A target's current state is not an input to producing it.
-
-  So 4.1 has four input kinds, not five — 1, 3, 4 and 5 — and 4.2 and 4.5 name them individually rather
-  than as a range, because the range no longer describes them. Both name 1, 3 and 4: the curator was
-  never inside the old `1–4` either, and retiring kind 2 did not change that. Nothing else in section 4 changes: with kind 2 removed there is exactly one source today, and
-  4.3-4.6 describe what happens when a second arrives. #424 does no reconciliation for that reason — one
-  source has nothing to reconcile with — and instead compares inference against the published values and recommends,
-  which is a stage that sits *after* reconciliation and is unaffected by how many sources feed it:
-  `sources -> reconcile -> inferred value -> compare against published`.
-
-  What #424 built is the carrying, not a claim: each record's `published` block holds those values verbatim,
-  produces no claim, and changes no value. Renumbering 4.1 is deliberately left alone — the kinds are cited
-  by number across the issues, and a silent renumber would break every citation.
+- ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered twice.** #424 said
+  it is not an input kind: the fields were read by the downloader and dropped one step before
+  classification, and the reframing was that a target's current state is not an input to producing it.
+  #472 and #497 reversed that, on the maintainer's decision (2026-09-21): the circularity cannot happen
+  while the value is read from the system of record and our output goes to its own table set, so kind 2
+  is an input again — read from the TDR `anvil_file` table, never from the compact manifest, by the one
+  published importer (7.12). 4.1 and 7.1 carry the reasoning; the number was never reused, so every
+  citation of "kind 2" across the issues still names the same thing.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
 - ~~How the review queue (3.7, 5.2) distinguishes *we have no word for this* from *no rule has ever seen
   this*.~~ **Answered by 3.11 (#435): neither is recorded, because authorship is.** The question assumed
