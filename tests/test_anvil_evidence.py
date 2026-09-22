@@ -214,6 +214,7 @@ datasets:
         (problem,) = ae.check(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG)
         assert problem.startswith("D: only the compact manifest is on disk (")
         assert "not a source this importer reads" in problem
+        assert problem.endswith(f"no verbatim manifest at {manifest_path(tmp_path, CATALOG, 'D', FORMAT_VERBATIM)}")
 
     def test_a_cell_that_is_itself_a_file_link_column_is_a_problem(self, tmp_path):
         """A column is one kind, never two (contract 2.7): `cram` holds pointers, not a value."""

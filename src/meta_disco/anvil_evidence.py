@@ -162,7 +162,7 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
             compact = manifest_path(manifest_root, catalog, dataset, FORMAT_COMPACT)
             problems.append(
                 f"{dataset}: only the compact manifest is on disk ({compact}), which is Azul's join and not a "
-                "source this importer reads; no verbatim manifest at {path}"
+                f"source this importer reads; no verbatim manifest at {path}"
                 if compact.is_file()
                 else f"{dataset}: no verbatim manifest at {path}"
             )
