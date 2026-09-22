@@ -13,6 +13,12 @@ dependencies = [
     "pydantic>=2.11",
 ]
 
+[project.optional-dependencies]
+# Reading a TDR snapshot in place from BigQuery (#498). Not a runtime dependency:
+# meta_disco.tdr imports it inside default_client() only, and its docstring is
+# where identity is explained. >=3.14 for Client.query_and_wait.
+tdr = ["google-cloud-bigquery>=3.14"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

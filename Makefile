@@ -1,4 +1,4 @@
-.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published name-signals seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published name-signals seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -14,6 +14,7 @@ help:
 	@echo "  make classify-and-report Run classify + regenerate all reports"
 	@echo "  make download           Pull AnVIL metadata as Azul manifests, per dataset (CATALOG=anvil15)"
 	@echo "  make validate-metadata  Check a downloaded metadata file's shape before classifying"
+	@echo "  make probe-tdr          Probe a TDR snapshot in BigQuery (PROJECT=... SNAPSHOT=... [TABLE=...] [BILLING_PROJECT=...])"
 	@echo ""
 	@echo "  make classify-bam       Classify BAM/CRAM files (network required)"
 	@echo "  make classify-vcf       Classify VCF files (network required)"
@@ -114,6 +115,15 @@ CATALOG ?= anvil15
 
 download:
 	uv run python scripts/download_anvil_manifest.py --catalog $(CATALOG)
+
+# Probe a TDR snapshot through the BigQuery layer (#498): list its tables, count
+# each, stream one (TABLE; the script's default is anvil_file) and time it.
+# `--extra tdr` syncs the client library in for this run, so a plain `uv sync`
+# in between cannot strand the target. BILLING_PROJECT is for a laptop whose
+# ADC has no default project; inside Terra it is the workspace's own. Identity:
+# see meta_disco.tdr.
+probe-tdr:
+	uv run --extra tdr python scripts/probe_tdr_snapshot.py --project $(PROJECT) --snapshot $(SNAPSHOT) $(if $(TABLE),--table $(TABLE)) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
 
 # Pre-run gate: validate a downloaded metadata file against the input contract
 # (issue #161). Non-zero exit on any shape violation. Run it directly after

@@ -61,6 +61,11 @@ make unprocessable-report
 # Tests and lint
 make test
 make lint
+
+# Probe a TDR snapshot in place in BigQuery (#498): list its tables, COUNT(*)
+# each, stream one and time it. Syncs the `tdr` extra in for the run; identity
+# is the environment's, see Environment below.
+make probe-tdr PROJECT=<tdr data project> SNAPSHOT=<snapshot name>
 ```
 
 ## Schema Details
@@ -272,4 +277,8 @@ these, and flag any that overclaim.
 ## Environment
 
 - Classification (root): Python 3.10+, `pyproject.toml`; runtime deps `pyyaml`, `requests`; dev `pytest`, `ruff`
+- The `tdr` extra (`uv sync --extra tdr`) adds `google-cloud-bigquery` for reading a TDR
+  snapshot in place (`meta_disco.tdr`, #498); the package imports and `make test` runs
+  without it. **Identity is the environment's, never meta-disco's**: the module docstring
+  of `meta_disco.tdr` is the authority on how, and is cited rather than restated.
 - Schema (`schema/`): a separate uv project (Python 3.10+) with linkml/linkml-validator; kept out of the runtime env
