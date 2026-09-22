@@ -2,10 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from datetime import datetime
 from typing import Any
-
-from pydantic import TypeAdapter, ValidationError
 
 from .file_name import FileName
 
@@ -439,16 +436,14 @@ def optional_str(value: object, label: str, where: str) -> str | None:
     return None if value is None else required_str(value, label, where)
 
 
-_DATETIME = TypeAdapter(datetime)
-
-
 def _require_one_of(value: object, vocabulary: frozenset[str], noun: str, label: str, where: str) -> str:
     """Return ``value`` as a member of ``vocabulary``, or raise naming it and ``where``.
 
-    One wording for "this member is not in that closed set", so the several
-    vocabularies an evidence file's envelope pins do not each grow a phrasing of the
-    same fault. ``noun`` completes the sentence: *is not a key of the target*, *is not
-    a kind of external source*.
+    One wording for "this member is not in that closed set", so the vocabularies a
+    slot map and a claim pin do not each grow a phrasing of the same fault. ``noun``
+    completes the sentence: *is not a key of the target*, *is not a kind of external
+    source*. The evidence envelope pins the same two vocabularies through the enums
+    of the generated model instead (#494).
     """
     if not isinstance(value, str) or value not in vocabulary:
         raise ValueError(f"{where}: {label} {value!r} is not {noun} (expected one of {sorted(vocabulary)})")
@@ -466,9 +461,12 @@ def require_importer_source_type(value: object, label: str, where: str) -> str:
     (contract 1.6, 1.7) — accepting one here would let #397 be built as an importer
     against a format that takes it and a reconcile stage that has nowhere to put it.
 
-    It sits on the envelope rather than on every row (#421): one repository, dataset
-    and table is one kind of source, so this runs once per file and reconcile reads it
-    from there when it stamps the claim it makes from a row.
+    Checked here for a slot map's declared kind (``slot_map``); the evidence envelope
+    that kind is written to holds it to the same vocabulary through the generated
+    model's ``ImporterSourceTypeEnum`` (#494). It sits on the envelope rather than on
+    every row (#421): one repository, dataset and table is one kind of source, so it
+    is checked once per file and reconcile reads it from there when it stamps the
+    claim it makes from a row.
     """
     return _require_one_of(value, IMPORTER_SOURCE_TYPES, "a kind of source an importer may write", label, where)
 
@@ -476,35 +474,13 @@ def require_importer_source_type(value: object, label: str, where: str) -> str:
 def require_join_key(value: object, label: str, where: str) -> str:
     """Return ``value`` as a key of the target, or raise naming ``label`` and ``where``.
 
-    One refusal for one vocabulary, used in both positions it appears in: an evidence
-    file's envelope declaring which key it is keyed by (``target_key``), and a claim
-    recording which one attached it (``join_key``) once the join has run. Stating it
-    twice would mean two wordings for the same fault and two places to update when
-    the vocabulary moves — ``archive_accession`` is the live example, a derived fact
-    rather than a record field.
+    Checked here for a claim recording which key attached it (``join_key``,
+    ``rule_engine.make_claim``); an evidence file's envelope declaring which key it is
+    keyed by (``target_key``) is held to the same vocabulary by the generated model's
+    ``JoinKeyEnum`` (#494). One vocabulary either way — ``archive_accession`` is the
+    live example of a member that moves, a derived fact rather than a record field.
     """
     return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
-
-
-def parse_iso_datetime(value: object, label: str, where: str) -> datetime:
-    """Parse an ISO 8601 timestamp the way pydantic does, or raise naming ``label`` and ``where``.
-
-    One parser for the two timestamps read off disk — an evidence file's ``fetched_at``
-    and a manifest sidecar's ``requested_at``. Not ``datetime.fromisoformat``: that
-    rejects a trailing ``Z`` on Python 3.10, this project's floor and what CI runs, and
-    accepts it from 3.11, so a file written on one interpreter read differently on the
-    other. pydantic's parser is the same on every interpreter and takes ``Z`` (#494).
-
-    A shape check is not this function's job. The evidence envelope's ``fetched_at``
-    is held to the schema's pattern by the generated model before it gets here — a
-    date with no time of day is refused there — and this parse then decides whether a
-    well-shaped timestamp is a real instant, which no pattern can (``2026-02-30`` is
-    well-formed and not a day).
-    """
-    try:
-        return _DATETIME.validate_python(value)
-    except ValidationError:
-        raise ValueError(f"{where}: {label} {value!r} is not an ISO 8601 datetime") from None
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -523,6 +523,8 @@ class TestMalformedFiles:
             # Well-shaped and not a day: the pattern passes it and the parse refuses
             # it, which is the one check no regex can make (#401 review).
             ({"fetched_at": "2026-02-30T09:14:03"}, "fetched_at '2026-02-30T09:14:03' is not an ISO 8601"),
+            # The block itself is not an object: no member to name.
+            ("not an object at all", "envelope is str, not an object"),
             ({"source_version": ""}, "source_version: .*Invalid source_version format"),
             ({"source_key": None}, "source_key: Input should be a valid string"),
             # An evidence file is written by an importer reading something we do not
@@ -547,7 +549,8 @@ class TestMalformedFiles:
         for a block carrying it would satisfy — is not enough.
         """
         path = tmp_path / "evidence.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: {**envelope_block(), **envelope}}) + "\n")
+        block = {**envelope_block(), **envelope} if isinstance(envelope, dict) else envelope
+        path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
@@ -805,7 +808,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
         envelope = read_envelope(path)
         assert envelope.fetched_at == "2026-09-01T09:14:03Z"
-        assert models.parse_iso_datetime(envelope.fetched_at, "fetched_at", "c.ndjson") == datetime(
+        assert source_evidence.parse_iso_datetime(envelope.fetched_at, "fetched_at", "c.ndjson") == datetime(
             2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc
         )
 
@@ -1184,8 +1187,9 @@ def test_the_row_shape_is_one_set_in_three_places(schema):
     tests exist to prevent, and the one drift the PR that added `EvidenceRow` left
     unguarded (#421 review).
 
-    The envelope needs no equivalent: `_flat_plan` derives its known keys from
-    `fields()`, so its record and its reader cannot disagree by construction.
+    The envelope needs no equivalent: its reader is the model generated from the
+    schema, held to it by `schema/tests/test_model_drift.py`, so the two cannot
+    disagree by construction (#494).
 
     `source` maps to `column` across the boundary — the record carries whole
     provenance, the line carries only the member that varies within a file — so that

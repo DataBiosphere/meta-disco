@@ -128,7 +128,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from uuid import uuid4
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -136,7 +136,6 @@ from .models import (
     SOURCE_PUBLISHED_VALUE,
     ClaimSource,
     optional_str,
-    parse_iso_datetime,
 )
 from .schema.classification_model import EvidenceFileEnvelope, EvidenceFileSource
 from .schema.classification_model import EvidenceTarget as EvidenceTarget  # re-exported for the importers
@@ -258,6 +257,12 @@ _RETIRED_LINE_KEYS = {
 # drops. `ClaimSource` stays a dataclass in `models`: it names where a raw value came
 # from on a real claim in output evidence, which the rule engine builds and every
 # consumer reads, and its serializer runs once per imported claim.
+#
+# The generated classes are not frozen, where the dataclasses were. Nothing assigns
+# to an envelope after it is built — the importer shares one `EvidenceTarget` across
+# a dataset's tables and never touches it — so immutability is a convention here, not
+# a guarantee; `require_one_published_source` keys on the target's members rather
+# than the target for the same reason (a mutable model is not hashable).
 
 
 def claim_source_for(source: EvidenceFileSource, column: str | None) -> ClaimSource:
@@ -299,6 +304,44 @@ def require_scoped_target(envelope: EvidenceFileEnvelope, where: str) -> None:
         )
 
 
+# Built once: pydantic compiles a validator per adapter.
+_DATETIME = TypeAdapter(datetime)
+
+
+def parse_iso_datetime(value: object, label: str, where: str) -> datetime:
+    """Parse a timestamp shaped as the schema's ``fetched_at`` is, or raise naming ``label`` and ``where``.
+
+    One parser for the two timestamps read off disk — an evidence file's ``fetched_at``
+    and a manifest sidecar's ``requested_at`` (``azul_manifest.sidecar_requested_at``),
+    which the AnVIL importer writes into the envelope as ``fetched_at``. Two steps,
+    both needed:
+
+    The shape first, through the generated model's own ``fetched_at`` pattern
+    validator — the schema's pattern, one copy — because pydantic's parser is looser
+    than the schema: it reads a digit string such as ``20260901`` as a Unix epoch and
+    a bare date as midnight, and a sidecar value that slipped through either way
+    would be written out as a well-shaped envelope ``fetched_at`` saying something the
+    source never said (#494 review). A date with no time of day is refused here for
+    the reason the schema gives on that slot.
+
+    Then the instant, through pydantic's parser and not ``datetime.fromisoformat``:
+    that rejects a trailing ``Z`` on Python 3.10, this project's floor and what CI
+    runs, and accepts it from 3.11, so a file written on one interpreter read
+    differently on the other. pydantic's is the same on every interpreter, and it is
+    what decides whether a well-shaped timestamp is a real day, which no pattern can
+    (``2026-02-30T09:14:03`` is well-formed and not a day).
+    """
+    if not isinstance(value, str):
+        raise ValueError(f"{where}: {label} is {value!r}, not an ISO 8601 string")
+    try:
+        # The generated validator is a `field_validator`-wrapped classmethod; pydantic's
+        # descriptor binds `cls` at runtime, which pyright cannot see through.
+        EvidenceFileEnvelope.pattern_fetched_at(value)  # pyright: ignore[reportCallIssue]
+        return _DATETIME.validate_python(value)
+    except (ValueError, ValidationError):
+        raise ValueError(f"{where}: {label} {value!r} is not an ISO 8601 datetime with a time of day") from None
+
+
 def _envelope_from_block(block: object, where: str) -> EvidenceFileEnvelope:
     """Validate line 1's block as an envelope, or raise a ``ValueError`` naming ``where``.
 
@@ -316,7 +359,10 @@ def _envelope_from_block(block: object, where: str) -> EvidenceFileEnvelope:
         faults, unknown = [], []
         for error in exc.errors():
             location = " ".join(str(part) for part in error["loc"])
-            if error["type"] == "extra_forbidden":
+            if not error["loc"]:
+                # The block itself is not an object; there is no member to name.
+                faults.append(f"is {type(block).__name__}, not an object")
+            elif error["type"] == "extra_forbidden":
                 unknown.append(location)
             else:
                 # The pattern validators embed the offending value, and the one way to
@@ -414,7 +460,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     empty ``target_key_value``, or a row whose source is not the source the envelope
     names, raises rather than being written and discovered by a reader later. The
     envelope's four source facts are flattened once, here, and compared against per
-    row — they are constant for the file. The envelope was checked when it was built
+    row — they are constant for the file.
     The generated model checked the envelope's members when it was built; the one
     rule it cannot carry is checked here (:func:`require_scoped_target`), before
     anything touches the filesystem.
