@@ -3,7 +3,25 @@
 import pytest
 
 from meta_disco.file_name import FileName
+from meta_disco.header_classifier import (
+    # Result models
+    FastqReadMetadata,
+    # Classification functions
+    classify_from_fasta_header,
+    classify_from_fastq_header,
+    classify_from_header,
+    classify_from_tar_members,
+    classify_from_vcf_header,
+    detect_paired_end_indicators,
+    # Helper functions
+    extract_archive_accession,
+    infer_illumina_instrument_model,
+    parse_illumina_read_name,
+    parse_ont_read_name,
+    parse_pacbio_read_name,
+)
 from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 
 def val(result: dict, field: str):
@@ -26,262 +44,196 @@ def val(result: dict, field: str):
     return field_value(result, field)
 
 
-from meta_disco.header_classifier import (
-    # Result models
-    FastqReadMetadata,
-    # Classification functions
-    classify_from_fasta_header,
-    classify_from_fastq_header,
-    classify_from_header,
-    classify_from_tar_members,
-    classify_from_vcf_header,
-    detect_paired_end_indicators,
-    # Helper functions
-    extract_archive_accession,
-    infer_illumina_instrument_model,
-    parse_illumina_read_name,
-    parse_ont_read_name,
-    parse_pacbio_read_name,
-)
-from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
-
 # =============================================================================
 # HELPER FUNCTION TESTS
 # =============================================================================
 
 
-class TestExtractArchiveAccession:
-    """Test archive accession extraction from FASTQ read names."""
-
-    def test_ena_accession(self):
-        """Extract ENA (ERR) accession."""
-        accession, source, remainder = extract_archive_accession(
-            "@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839/1"
-        )
-        assert accession == "ERR3242571"
-        assert source == "ENA"
-        assert remainder == "A00297:44:HFKH3DSXX:2:1354:30508:28839/1"
-
-    def test_sra_accession(self):
-        """Extract SRA (SRR) accession."""
-        accession, source, remainder = extract_archive_accession("@SRR12345678.1 original_read_name")
-        assert accession == "SRR12345678"
-        assert source == "SRA"
-        assert remainder == "original_read_name"
-
-    def test_ddbj_accession(self):
-        """Extract DDBJ (DRR) accession."""
-        accession, source, _remainder = extract_archive_accession("@DRR000001.1 some_data")
-        assert accession == "DRR000001"
-        assert source == "DDBJ"
-
-    def test_no_accession(self):
-        """No accession in native read name."""
-        accession, source, remainder = extract_archive_accession("@A00297:44:HFKH3DSXX:2:1354:30508:28839")
-        assert accession is None
-        assert source is None
-        assert remainder == "A00297:44:HFKH3DSXX:2:1354:30508:28839"
-
-    def test_without_at_prefix(self):
-        """Handle read name without @ prefix."""
-        accession, source, _ = extract_archive_accession("ERR3242571.1 A00297:44:HFKH3DSXX:2:1354")
-        assert accession == "ERR3242571"
-        assert source == "ENA"
-
-    def test_accession_only(self):
-        """Handle accession without original read name."""
-        accession, source, remainder = extract_archive_accession("@SRR123.1")
-        assert accession == "SRR123"
-        assert source == "SRA"
-        assert remainder == ""
+@pytest.mark.parametrize(
+    ("read_name", "accession", "source", "remainder"),
+    [
+        pytest.param(
+            "@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839/1",
+            "ERR3242571",
+            "ENA",
+            "A00297:44:HFKH3DSXX:2:1354:30508:28839/1",
+            id="ENA (ERR) accession",
+        ),
+        pytest.param("@SRR12345678.1 original_read_name", "SRR12345678", "SRA", "original_read_name", id="SRA (SRR)"),
+        pytest.param("@DRR000001.1 some_data", "DRR000001", "DDBJ", "some_data", id="DDBJ (DRR)"),
+        pytest.param(
+            "@A00297:44:HFKH3DSXX:2:1354:30508:28839",
+            None,
+            None,
+            "A00297:44:HFKH3DSXX:2:1354:30508:28839",
+            id="no accession in a native read name",
+        ),
+        pytest.param(
+            "ERR3242571.1 A00297:44:HFKH3DSXX:2:1354",
+            "ERR3242571",
+            "ENA",
+            "A00297:44:HFKH3DSXX:2:1354",
+            id="read name without the @ prefix",
+        ),
+        pytest.param("@SRR123.1", "SRR123", "SRA", "", id="accession without an original read name"),
+    ],
+)
+def test_extract_archive_accession(read_name, accession, source, remainder):
+    """Archive accession extraction from FASTQ read names."""
+    assert extract_archive_accession(read_name) == (accession, source, remainder)
 
 
-class TestInferIlluminaInstrumentModel:
-    """Test Illumina instrument model inference from ID."""
-
-    def test_novaseq_6000(self):
-        """NovaSeq 6000 IDs start with A0."""
-        assert infer_illumina_instrument_model("A00297") == "NovaSeq 6000"
-        assert infer_illumina_instrument_model("A01234") == "NovaSeq 6000"
-
-    def test_novaseq_generic(self):
-        """Other A-prefix IDs are generic NovaSeq."""
-        assert infer_illumina_instrument_model("A23456") == "NovaSeq"
-
-    def test_miseq(self):
-        """MiSeq IDs start with M."""
-        assert infer_illumina_instrument_model("M00123") == "MiSeq"
-        assert infer_illumina_instrument_model("M70001") == "MiSeq"
-
-    def test_hiseq_2500(self):
-        """HiSeq 2500 IDs start with D."""
-        assert infer_illumina_instrument_model("D00123") == "HiSeq 2500"
-
-    def test_hiseq_x(self):
-        """HiSeq X IDs start with E."""
-        assert infer_illumina_instrument_model("E00123") == "HiSeq X"
-
-    def test_nextseq_500(self):
-        """NextSeq 500/550 IDs start with N."""
-        assert infer_illumina_instrument_model("N00123") == "NextSeq"
-
-    def test_nextseq_2000(self):
-        """NextSeq 2000 IDs start with VH."""
-        assert infer_illumina_instrument_model("VH00123") == "NextSeq 2000"
-
-    def test_hiseq_4000(self):
-        """HiSeq 4000 IDs start with K."""
-        assert infer_illumina_instrument_model("K00123") == "HiSeq 4000"
-
-    def test_unknown(self):
-        """Unknown prefix returns None."""
-        assert infer_illumina_instrument_model("X00123") is None
-        assert infer_illumina_instrument_model("") is None
-
-    def test_case_insensitive(self):
-        """Should handle lowercase input."""
-        assert infer_illumina_instrument_model("a00297") == "NovaSeq 6000"
+@pytest.mark.parametrize(
+    ("instrument_id", "model"),
+    [
+        pytest.param("A00297", "NovaSeq 6000", id="A0 prefix is NovaSeq 6000"),
+        pytest.param("A01234", "NovaSeq 6000", id="A0 prefix is NovaSeq 6000, second id"),
+        pytest.param("A23456", "NovaSeq", id="other A prefix is generic NovaSeq"),
+        pytest.param("M00123", "MiSeq", id="M prefix is MiSeq"),
+        pytest.param("M70001", "MiSeq", id="M prefix is MiSeq, second id"),
+        pytest.param("D00123", "HiSeq 2500", id="D prefix is HiSeq 2500"),
+        pytest.param("E00123", "HiSeq X", id="E prefix is HiSeq X"),
+        pytest.param("N00123", "NextSeq", id="N prefix is NextSeq 500/550"),
+        pytest.param("VH00123", "NextSeq 2000", id="VH prefix is NextSeq 2000"),
+        pytest.param("K00123", "HiSeq 4000", id="K prefix is HiSeq 4000"),
+        pytest.param("X00123", None, id="unknown prefix is None"),
+        pytest.param("", None, id="empty id is None"),
+        pytest.param("a00297", "NovaSeq 6000", id="lowercase input is handled"),
+    ],
+)
+def test_infer_illumina_instrument_model(instrument_id, model):
+    """Illumina instrument model inference from the instrument id."""
+    assert infer_illumina_instrument_model(instrument_id) == model
 
 
-class TestDetectPairedEndIndicators:
-    """Test paired-end indicator detection."""
-
-    def test_slash_suffix(self):
-        """Detect /1 and /2 suffixes."""
-        assert detect_paired_end_indicators("read_name/1") is True
-        assert detect_paired_end_indicators("read_name/2") is True
-
-    def test_underscore_r1_r2(self):
-        """Detect _R1_ and _R2_ patterns."""
-        assert detect_paired_end_indicators("sample_R1_001.fastq") is True
-        assert detect_paired_end_indicators("sample_R2_001.fastq") is True
-
-    def test_dot_r1_r2(self):
-        """Detect .R1. and .R2. patterns."""
-        assert detect_paired_end_indicators("sample.R1.fastq") is True
-
-    def test_lowercase(self):
-        """Detect lowercase _r1_ and _r2_."""
-        assert detect_paired_end_indicators("sample_r1_001.fastq") is True
-
-    def test_no_indicator(self):
-        """No paired-end indicator."""
-        assert detect_paired_end_indicators("sample.fastq") is False
-        assert detect_paired_end_indicators("single_read") is False
+@pytest.mark.parametrize(
+    ("read_name", "paired"),
+    [
+        pytest.param("read_name/1", True, id="/1 suffix"),
+        pytest.param("read_name/2", True, id="/2 suffix"),
+        pytest.param("sample_R1_001.fastq", True, id="_R1_ pattern"),
+        pytest.param("sample_R2_001.fastq", True, id="_R2_ pattern"),
+        pytest.param("sample.R1.fastq", True, id=".R1. pattern"),
+        pytest.param("sample_r1_001.fastq", True, id="lowercase _r1_"),
+        pytest.param("sample.fastq", False, id="no indicator"),
+        pytest.param("single_read", False, id="no indicator, no extension"),
+    ],
+)
+def test_detect_paired_end_indicators(read_name, paired):
+    """Paired-end indicator detection."""
+    assert detect_paired_end_indicators(read_name) is paired
 
 
-class TestParseIlluminaReadName:
-    """Test Illumina read name parsing."""
-
-    def test_modern_format_full(self):
-        """Parse modern Illumina format with all fields."""
-        result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG")
-        assert result is not None
-        assert result.format is IlluminaFormat.MODERN
-        assert result.instrument == "A00297"
-        assert result.run_number == 44
-        assert result.flowcell == "HFKH3DSXX"
-        assert result.lane == 2
-        assert result.tile == 1354
-        assert result.read == 1
-        assert result.filtered is False
-        assert result.index == "ATCACG"
-
-    def test_modern_format_minimal(self):
-        """Parse modern format without optional second part."""
-        result = parse_illumina_read_name("@A00297:44:HFKH3DSXX:2:1354:30508:28839")
-        assert result is not None
-        assert result.instrument == "A00297"
-        assert result.read is None
-
-    def test_legacy_format(self):
-        """Parse legacy Illumina format."""
-        result = parse_illumina_read_name("@HWUSI-EAS100R:6:73:941:1973#ATCACG/1")
-        assert result is not None
-        assert result.format is IlluminaFormat.LEGACY
-        assert result.instrument == "HWUSI-EAS100R"
-        assert result.lane == 6
-        assert result.index == "ATCACG"
-        assert result.read == 1
-
-    def test_archive_reformatted(self):
-        """Parse archive-reformatted Illumina read."""
-        result = parse_illumina_read_name("@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839")
-        assert result is not None
-        assert result.archive_accession == "ERR3242571"
-        assert result.archive_source == "ENA"
-        assert result.instrument == "A00297"
-
-    def test_non_illumina(self):
-        """Return None for non-Illumina format."""
-        assert parse_illumina_read_name("@m64011_190830/1/ccs") is None
-        assert parse_illumina_read_name("random_text") is None
+def _assert_parsed(result, expected):
+    """Assert the parse matches ``expected``: ``None`` means no parse; otherwise every field
+    named in ``expected`` holds the value given, and fields it does not name are not checked.
+    """
+    if expected is None:
+        assert result is None
+        return
+    assert result is not None
+    assert {field: getattr(result, field) for field in expected} == expected
 
 
-class TestParsePacbioReadName:
-    """Test PacBio read name parsing."""
+@pytest.mark.parametrize(
+    ("read_name", "expected"),
+    [
+        pytest.param(
+            "@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG",
+            {
+                "format": IlluminaFormat.MODERN,
+                "instrument": "A00297",
+                "run_number": 44,
+                "flowcell": "HFKH3DSXX",
+                "lane": 2,
+                "tile": 1354,
+                "read": 1,
+                "filtered": False,
+                "index": "ATCACG",
+            },
+            id="modern format with all fields",
+        ),
+        pytest.param(
+            "@A00297:44:HFKH3DSXX:2:1354:30508:28839",
+            {"instrument": "A00297", "read": None},
+            id="modern format without the optional second part",
+        ),
+        pytest.param(
+            "@HWUSI-EAS100R:6:73:941:1973#ATCACG/1",
+            {"format": IlluminaFormat.LEGACY, "instrument": "HWUSI-EAS100R", "lane": 6, "index": "ATCACG", "read": 1},
+            id="legacy format",
+        ),
+        pytest.param(
+            "@ERR3242571.1 A00297:44:HFKH3DSXX:2:1354:30508:28839",
+            {"archive_accession": "ERR3242571", "archive_source": "ENA", "instrument": "A00297"},
+            id="archive-reformatted read",
+        ),
+        pytest.param("@m64011_190830/1/ccs", None, id="a PacBio name is not Illumina"),
+        pytest.param("random_text", None, id="random text is not Illumina"),
+    ],
+)
+def test_parse_illumina_read_name(read_name, expected):
+    """Illumina read name parsing."""
+    _assert_parsed(parse_illumina_read_name(read_name), expected)
 
-    def test_ccs_format(self):
-        """Parse CCS/HiFi read name."""
-        result = parse_pacbio_read_name("@m64011_190830_220126/1/ccs")
-        assert result is not None
-        assert result.format is PacBioFormat.CCS
-        assert result.movie == "m64011_190830_220126"
-        assert result.zmw == 1
-        assert result.read_type == "CCS"
 
-    def test_clr_format(self):
-        """Parse CLR subread name."""
-        result = parse_pacbio_read_name("@m64011_190830_220126/1234/0_5000")
-        assert result is not None
-        assert result.format is PacBioFormat.CLR
-        assert result.movie == "m64011_190830_220126"
-        assert result.zmw == 1234
-        assert result.start == 0
-        assert result.end == 5000
-        assert result.read_type == "CLR"
-
-    def test_generic_format(self):
-        """Parse generic PacBio read name."""
-        result = parse_pacbio_read_name("@m64011_190830_220126/1234")
-        assert result is not None
-        assert result.format is PacBioFormat.GENERIC
-        assert result.zmw == 1234
-
-    def test_sequel_ii_movie(self):
-        """Parse Sequel II movie name (with 'e' suffix)."""
-        result = parse_pacbio_read_name("@m64011e_210101_120000/1/ccs")
-        assert result is not None
-        assert result.movie == "m64011e_210101_120000"
-
-    def test_non_pacbio(self):
-        """Return None for non-PacBio format."""
-        assert parse_pacbio_read_name("@A00297:44:HFKH3DSXX") is None
+@pytest.mark.parametrize(
+    ("read_name", "expected"),
+    [
+        pytest.param(
+            "@m64011_190830_220126/1/ccs",
+            {"format": PacBioFormat.CCS, "movie": "m64011_190830_220126", "zmw": 1, "read_type": "CCS"},
+            id="CCS/HiFi read name",
+        ),
+        pytest.param(
+            "@m64011_190830_220126/1234/0_5000",
+            {
+                "format": PacBioFormat.CLR,
+                "movie": "m64011_190830_220126",
+                "zmw": 1234,
+                "start": 0,
+                "end": 5000,
+                "read_type": "CLR",
+            },
+            id="CLR subread name",
+        ),
+        pytest.param(
+            "@m64011_190830_220126/1234", {"format": PacBioFormat.GENERIC, "zmw": 1234}, id="generic PacBio read name"
+        ),
+        pytest.param(
+            "@m64011e_210101_120000/1/ccs", {"movie": "m64011e_210101_120000"}, id="Sequel II movie name with e suffix"
+        ),
+        pytest.param("@A00297:44:HFKH3DSXX", None, id="an Illumina name is not PacBio"),
+    ],
+)
+def test_parse_pacbio_read_name(read_name, expected):
+    """PacBio read name parsing."""
+    _assert_parsed(parse_pacbio_read_name(read_name), expected)
 
 
-class TestParseOntReadName:
-    """Test Oxford Nanopore read name parsing."""
-
-    def test_uuid_format(self):
-        """Parse ONT UUID read name."""
-        result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890")
-        assert result is not None
-        assert result.format == "ont"
-        assert result.uuid == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-
-    def test_uuid_with_metadata(self):
-        """Parse ONT read name with key=value metadata."""
-        result = parse_ont_read_name("@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123 read=456 ch=789")
-        assert result is not None
-        assert result.uuid == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        assert result.metadata["runid"] == "abc123"
-        assert result.metadata["read"] == "456"
-        assert result.metadata["ch"] == "789"
-
-    def test_non_ont(self):
-        """Return None for non-ONT format."""
-        assert parse_ont_read_name("@A00297:44:HFKH3DSXX") is None
-        assert parse_ont_read_name("not-a-uuid") is None
+@pytest.mark.parametrize(
+    ("read_name", "expected"),
+    [
+        pytest.param(
+            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            {"format": "ont", "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+            id="UUID read name",
+        ),
+        pytest.param(
+            "@a1b2c3d4-e5f6-7890-abcd-ef1234567890 runid=abc123 read=456 ch=789",
+            {
+                "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "metadata": {"runid": "abc123", "read": "456", "ch": "789"},
+            },
+            id="UUID with key=value metadata",
+        ),
+        pytest.param("@A00297:44:HFKH3DSXX", None, id="an Illumina name is not ONT"),
+        pytest.param("not-a-uuid", None, id="a non-UUID is not ONT"),
+    ],
+)
+def test_parse_ont_read_name(read_name, expected):
+    """Oxford Nanopore read name parsing."""
+    _assert_parsed(parse_ont_read_name(read_name), expected)
 
 
 # =============================================================================

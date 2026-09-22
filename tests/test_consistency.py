@@ -30,7 +30,13 @@ class _Record(TypedDict):
 
 
 def _rec(md5="m", name="f.bam", **dims) -> _Record:
-    """Build a record; each dim kwarg is a (value, status) tuple, default not_classified."""
+    """Build a record; each dim kwarg is a (value, status) tuple, default not_classified.
+
+    Not `run_fixtures.output_record` on purpose: that builds every entry through
+    `build_field_entry`, which refuses an incoherent value/status pair, and the linter
+    under test must read exactly such rows — a ``classified`` status beside a null
+    value, or an ``evidence`` a case replaces with a non-list.
+    """
     classifications: dict[str, dict] = {}
     for dim in _DIMS:
         value, status = dims.get(dim, (None, "not_classified"))
@@ -174,6 +180,8 @@ def test_iter_records_skips_a_file_whose_records_are_not_a_list(tmp_path):
     """
     run = tmp_path / "run"
     run.mkdir()
+    # Written by hand, not through `run_fixtures.write_run`: these payloads are not
+    # record lists, which is the shape that writer exists to produce.
     for payload in ('{"metadata": {}, "classifications": null}', "5", '{"classifications": {"a": 1}}', "null"):
         (run / "bam_classifications.json").write_text(payload)
         assert list(iter_records(run)) == []
@@ -181,7 +189,8 @@ def test_iter_records_skips_a_file_whose_records_are_not_a_list(tmp_path):
 
 def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):
     # A 'results'-keyed envelope, plus a stray non-dict element, must not crash and
-    # must yield only the dict records.
+    # must yield only the dict records. Written by hand because `run_fixtures.write_run`
+    # writes the current `classifications` key, and the legacy key is the point.
     run = tmp_path
     good = _rec(md5="a", data_modality=_c("genomic"))
     (run / "bam_classifications.json").write_text(json.dumps({"results": [good, "stray"]}))

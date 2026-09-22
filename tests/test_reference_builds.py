@@ -11,18 +11,13 @@ whose chr1 differs by 169 bases. ``test_the_two_chm13_builds_separate`` is the
 one that fails if that regresses.
 """
 
-import sys
 from collections import Counter
 from importlib.resources import files
 from itertools import combinations
-from pathlib import Path
 from typing import ClassVar
 
 import pytest
 import yaml
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from generate_reference_builds import KNOWN_ABSENT, check_absences
 
 from meta_disco import schema_vocab

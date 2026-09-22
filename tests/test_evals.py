@@ -43,6 +43,7 @@ from meta_disco.models import (
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.rule_engine import CONTENT_TIER, RuleEngine, evaluate_claims
 from tests.corpus_fixtures import require_corpus_file
+from tests.engine_fixtures import assert_dimensions
 
 engine = RuleEngine()
 
@@ -326,58 +327,163 @@ class TestFastqE2E:
 class TestRuleEngineE2E:
     """Rule engine classification from filename/metadata only."""
 
-    def test_histology_svs(self):
-        result = engine.classify_extended(FileInfo.from_filename("GTEX-18A6Q-1126.svs"))
-        assert result.data_modality == "imaging.histology"
-        assert result.status_of("platform") == NOT_APPLICABLE
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_fast5_raw_signal(self):
-        result = engine.classify_extended(FileInfo.from_filename("PAK57726.fast5"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
-        assert result.data_type == "raw_signal"
-        assert result.platform == "ONT"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_pod5_raw_signal(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample_run.pod5"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
-        assert result.data_type == "raw_signal"
-        assert result.platform == "ONT"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_flnc_bam_is_transcriptomic(self):
-        """IsoSeq flnc BAM should be transcriptomic, not genomic."""
-        result = engine.classify_extended(FileInfo.from_filename("HG00097.lymph.m84203_240914_042802_s4.flnc.bam"))
-        assert result.data_modality == "transcriptomic.bulk"
-
-    def test_isoseq_bam_is_transcriptomic(self):
-        """BAM with `.flnc.` — full-length non-chimeric IsoSeq reads — in the filename is transcriptomic."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.flnc.bam"))
-        assert result.data_modality == "transcriptomic.bulk"
-
-    def test_plain_bam_no_modality(self):
-        """BAM without header or platform signals should not get genomic modality."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.reads.bam"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-    def test_salmon_quant_sf_is_transcriptomic_quantification(self):
-        """A Salmon quant.sf is a single-sample transcript abundance table (#157)."""
-        result = engine.classify_extended(FileInfo.from_filename("NUFIP1-BGRSLV04-28_quant.sf"))
-        assert result.data_modality == "transcriptomic.bulk"
-        assert result.data_type == "quantification"
-        assert result.assay_type == "RNA-seq"
-
-    def test_bare_sf_stays_not_classified(self):
-        """Only a token-boundary `quant.sf` is treated as Salmon output; any other
-        `.sf` name stays not_classified rather than being over-claimed.
-
-        So `something.sf` (not Salmon) and `frequant.sf` (a substring match, not a
-        token boundary) both stay not_classified.
-        """
-        for name in ("something.sf", "frequant.sf"):
-            result = engine.classify_extended(FileInfo.from_filename(name))
-            assert result.status_of("data_type") == NOT_CLASSIFIED, name
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            pytest.param(
+                "GTEX-18A6Q-1126.svs",
+                {
+                    "data_modality": "imaging.histology",
+                    "platform": NOT_APPLICABLE,
+                    "reference_assembly": NOT_APPLICABLE,
+                },
+                id="histology svs",
+            ),
+            pytest.param(
+                "PAK57726.fast5",
+                {
+                    "data_modality": NOT_CLASSIFIED,
+                    "data_type": "raw_signal",
+                    "platform": "ONT",
+                    "reference_assembly": NOT_APPLICABLE,
+                },
+                id="fast5 raw signal",
+            ),
+            pytest.param(
+                "sample_run.pod5",
+                {
+                    "data_modality": NOT_CLASSIFIED,
+                    "data_type": "raw_signal",
+                    "platform": "ONT",
+                    "reference_assembly": NOT_APPLICABLE,
+                },
+                id="pod5 raw signal",
+            ),
+            # IsoSeq flnc BAM should be transcriptomic, not genomic.
+            pytest.param(
+                "HG00097.lymph.m84203_240914_042802_s4.flnc.bam",
+                {"data_modality": "transcriptomic.bulk"},
+                id="flnc BAM is transcriptomic",
+            ),
+            # `.flnc.` — full-length non-chimeric IsoSeq reads — in the filename is transcriptomic.
+            pytest.param(
+                "sample.flnc.bam", {"data_modality": "transcriptomic.bulk"}, id="IsoSeq BAM is transcriptomic"
+            ),
+            # BAM without header or platform signals should not get genomic modality.
+            pytest.param("sample.reads.bam", {"data_modality": NOT_CLASSIFIED}, id="plain BAM has no modality"),
+            # A Salmon quant.sf is a single-sample transcript abundance table (#157).
+            pytest.param(
+                "NUFIP1-BGRSLV04-28_quant.sf",
+                {"data_modality": "transcriptomic.bulk", "data_type": "quantification", "assay_type": "RNA-seq"},
+                id="Salmon quant.sf is transcriptomic quantification",
+            ),
+            # Only a token-boundary `quant.sf` is treated as Salmon output; any other `.sf`
+            # name stays not_classified rather than being over-claimed: `something.sf` is
+            # not Salmon, `frequant.sf` is a substring match, not a token boundary.
+            pytest.param("something.sf", {"data_type": NOT_CLASSIFIED}, id="bare .sf stays not classified"),
+            pytest.param("frequant.sf", {"data_type": NOT_CLASSIFIED}, id="substring quant.sf stays not classified"),
+            pytest.param(
+                "sample.modbam2bed.cpg.bed", {"data_modality": "epigenomic.methylation"}, id="bed methylation"
+            ),
+            pytest.param("HG01928.paternal.f1_assembly.hap1.bed", {"data_modality": "genomic"}, id="bed assembly qc"),
+            # A checksum file is a checksum — a term the vocabulary has (#437). The rule used
+            # to stamp `data_type: not_applicable`, asserting the file has no kind while
+            # `data_type_enum` carried a word for its kind. The other four still do not
+            # apply: a checksum is about a file, not about any data of its own.
+            pytest.param(
+                "sample.md5",
+                {
+                    "data_type": "checksum",
+                    "data_modality": NOT_APPLICABLE,
+                    "reference_assembly": NOT_APPLICABLE,
+                    "assay_type": NOT_APPLICABLE,
+                    "platform": NOT_APPLICABLE,
+                },
+                id="checksum file is data_type checksum, the rest not_applicable",
+            ),
+            # An index extension claims the kind and stays silent on the rest (#437). The
+            # four a parent supplies do apply to an index file — the matched path in
+            # `classify_index_files` proves it by inheriting them — so a rule that cannot
+            # see the parent leaves them open rather than asserting they cannot apply.
+            pytest.param(
+                "sample.bam.bai",
+                {
+                    "data_type": "index",
+                    "data_modality": NOT_CLASSIFIED,
+                    "assay_type": NOT_CLASSIFIED,
+                    "platform": NOT_CLASSIFIED,
+                    "reference_assembly": NOT_CLASSIFIED,
+                },
+                id="index extension is data_type index and nothing else",
+            ),
+            # `classify_index_files` matches the extension literally and case-sensitively.
+            # `FileName.parse` lowercases and peels wrappers, so the rule engine recognises
+            # names the producer does not — which is the case this rule exists to answer.
+            # Before #437 these got `not_applicable`; dropping the claim rather than moving
+            # it would have left them with nothing.
+            pytest.param("SAMPLE.BAM.BAI", {"data_type": "index"}, id="upper-case index name is still index"),
+            pytest.param("ref.fa.fai.gz", {"data_type": "index"}, id="gz-wrapped index name is still index"),
+            # `log` is a term in `data_type_enum`; the rule used to deny the file a kind. Same
+            # correction as `.md5` (#437), and it is what makes the `auxiliary_inert`
+            # consistency rule fully live — its `when` covers `checksum` *and* `log`.
+            pytest.param(
+                "run.log",
+                {
+                    "data_type": "log",
+                    "data_modality": NOT_APPLICABLE,
+                    "reference_assembly": NOT_APPLICABLE,
+                    "assay_type": NOT_APPLICABLE,
+                    "platform": NOT_APPLICABLE,
+                },
+                id="log file is data_type log, the rest not_applicable",
+            ),
+            pytest.param(
+                "assembly_plot.png",
+                {"data_modality": NOT_APPLICABLE, "platform": NOT_APPLICABLE, "reference_assembly": NOT_APPLICABLE},
+                id="png derived",
+            ),
+            # All seven index extensions the rule declares, not the five this once covered (#437).
+            *[
+                pytest.param(
+                    f"sample{ext}",
+                    {"data_type": "index", "data_modality": NOT_CLASSIFIED},
+                    id=f"{ext} is index with modality open",
+                )
+                for ext in (".bai", ".crai", ".tbi", ".csi", ".pbi", ".fai", ".idx")
+            ],
+            pytest.param("sample.hg38.regions.bed", {"reference_assembly": "GRCh38"}, id="BED with hg38 in the name"),
+            pytest.param(
+                "200123456789_R01C01.idat", {"data_modality": "epigenomic.methylation"}, id="IDAT is methylation"
+            ),
+            # Unknown files don't crash and resolve to a not_classified status (the value
+            # stays None — the sentinel lives in status now).
+            *[
+                pytest.param(name, {"data_modality": NOT_CLASSIFIED}, id=f"no crash on unknown {name!r}")
+                for name in ("readme.xyz", "data.parquet", "model.h5", "")
+            ],
+            # FASTA files get the base rule classification.
+            *[
+                pytest.param(
+                    f"sample{ext}",
+                    {"data_type": "sequence", "platform": NOT_APPLICABLE, "assay_type": NOT_APPLICABLE},
+                    id=f"FASTA base rule for {ext}",
+                )
+                for ext in (".fa", ".fasta", ".fa.gz", ".fasta.gz")
+            ],
+            pytest.param(
+                "HG00673.paternal.f1_assembly_v1.fa.gz",
+                {"data_modality": "genomic", "data_type": "assembly", "reference_assembly": NOT_APPLICABLE},
+                id="FASTA with assembly keyword",
+            ),
+            pytest.param(
+                "hapdup_contigs_2.fasta",
+                {"data_modality": "genomic", "data_type": "assembly", "reference_assembly": NOT_APPLICABLE},
+                id="FASTA with haplotype keyword",
+            ),
+        ],
+    )
+    def test_a_filename_classifies(self, filename, expected):
+        assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
     def test_plink_1000g(self):
         result = engine.classify_extended(
@@ -385,113 +491,6 @@ class TestRuleEngineE2E:
         )
         assert result.data_modality == "genomic"
         assert result.reference_assembly == "GRCh38"
-
-    def test_bed_methylation(self):
-        result = engine.classify_extended(FileInfo.from_filename("sample.modbam2bed.cpg.bed"))
-        assert result.data_modality == "epigenomic.methylation"
-
-    def test_bed_assembly_qc(self):
-        result = engine.classify_extended(FileInfo.from_filename("HG01928.paternal.f1_assembly.hap1.bed"))
-        assert result.data_modality == "genomic"
-
-    def test_checksum_file(self):
-        """A checksum file is a checksum — a term the vocabulary has (#437).
-
-        The rule used to stamp `data_type: not_applicable`, asserting the file has no
-        kind while `data_type_enum` carried a word for its kind. The other four still do
-        not apply: a checksum is about a file, not about any data of its own.
-        """
-        result = engine.classify_extended(FileInfo.from_filename("sample.md5"))
-        assert result.data_type == "checksum"
-        for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
-            assert result.status_of(field) == NOT_APPLICABLE
-
-    def test_an_index_extension_is_data_type_index_and_nothing_else(self):
-        """The rule claims the kind and stays silent on the rest (#437).
-
-        The four a parent supplies do apply to an index file — the matched path in
-        `classify_index_files` proves it by inheriting them — so a rule that cannot see
-        the parent leaves them open rather than asserting they cannot apply.
-        """
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
-        assert result.data_type == "index"
-        for field in ("data_modality", "assay_type", "platform", "reference_assembly"):
-            assert result.status_of(field) == NOT_CLASSIFIED
-
-    def test_an_index_name_the_producer_would_miss_is_still_index(self):
-        """`classify_index_files` matches the extension literally and case-sensitively.
-
-        `FileName.parse` lowercases and peels wrappers, so the rule engine recognises
-        names the producer does not — which is the case this rule exists to answer.
-        Before #437 these got `not_applicable`; dropping the claim rather than moving it
-        would have left them with nothing.
-        """
-        for name in ("SAMPLE.BAM.BAI", "ref.fa.fai.gz"):
-            result = engine.classify_extended(FileInfo.from_filename(name))
-            assert result.data_type == "index", f"{name} should still be an index"
-
-    def test_a_log_file_is_data_type_log(self):
-        """`log` is a term in `data_type_enum`; the rule used to deny the file a kind.
-
-        Same correction as `.md5` (#437), and it is what makes the `auxiliary_inert`
-        consistency rule fully live — its `when` covers `checksum` *and* `log`.
-        """
-        result = engine.classify_extended(FileInfo.from_filename("run.log"))
-        assert result.data_type == "log"
-        for field in ("data_modality", "reference_assembly", "assay_type", "platform"):
-            assert result.status_of(field) == NOT_APPLICABLE
-
-    def test_png_derived(self):
-        result = engine.classify_extended(FileInfo.from_filename("assembly_plot.png"))
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-        assert result.status_of("platform") == NOT_APPLICABLE
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_every_index_extension_is_index(self):
-        """All seven the rule declares, not the five this once covered (#437)."""
-        for ext in [".bai", ".crai", ".tbi", ".csi", ".pbi", ".fai", ".idx"]:
-            result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
-            assert result.data_type == "index", f"{ext} should be data_type index"
-            assert result.status_of("data_modality") == NOT_CLASSIFIED, f"{ext} modality should be open"
-
-    def test_bed_reference_from_filename(self):
-        """BED file with hg38 in filename should detect GRCh38."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.hg38.regions.bed"))
-        assert result.reference_assembly == "GRCh38"
-
-    def test_idat_methylation(self):
-        """IDAT file should be epigenomic methylation."""
-        result = engine.classify_extended(FileInfo.from_filename("200123456789_R01C01.idat"))
-        assert result.data_modality == "epigenomic.methylation"
-
-    def test_no_crash_on_unknown(self):
-        for name in ["readme.xyz", "data.parquet", "model.h5", ""]:
-            result = engine.classify_extended(FileInfo.from_filename(name))
-            # Unknown files don't crash and resolve to a not_classified status
-            # (the value stays None — the sentinel lives in status now).
-            assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-    def test_fasta_base_rule(self):
-        """FASTA files should get base rule classification."""
-        for ext in [".fa", ".fasta", ".fa.gz", ".fasta.gz"]:
-            result = engine.classify_extended(FileInfo.from_filename(f"sample{ext}"))
-            assert result.data_type == "sequence", f"{ext} should be sequence"
-            assert result.status_of("platform") == NOT_APPLICABLE
-            assert result.status_of("assay_type") == NOT_APPLICABLE
-
-    def test_fasta_assembly_filename(self):
-        """FASTA with assembly keyword in filename."""
-        result = engine.classify_extended(FileInfo.from_filename("HG00673.paternal.f1_assembly_v1.fa.gz"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "assembly"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-
-    def test_fasta_haplotype_filename(self):
-        """FASTA with haplotype keyword in filename."""
-        result = engine.classify_extended(FileInfo.from_filename("hapdup_contigs_2.fasta"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "assembly"
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
 # =============================================================================

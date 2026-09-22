@@ -12,13 +12,9 @@ it off the input envelope and refuses an envelope that names no repository.
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from classify_hprc_files import build_metadata_records
 from classify_remaining_files import classify_remaining, load_already_classified
 

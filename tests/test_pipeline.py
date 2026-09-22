@@ -1,7 +1,6 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,21 +10,9 @@ from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
 from meta_disco.records import ClassifierRecord, InvalidRecord
 from tests.metadata_fixtures import RECORD_KEYS
 from tests.metadata_fixtures import valid_record as _valid_record
+from tests.pipeline_fixtures import make_config as _make_config
 
 # --- Test fixtures ---
-
-
-def _make_config(**overrides):
-    """Create a FileTypeConfig with test defaults."""
-    return replace(
-        FileTypeConfig(
-            name="test",
-            extensions=(".test",),
-            fetcher=lambda evidence_dir, md5, **kw: f"header_for_{md5}",
-            classifier=lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
-        ),
-        **overrides,
-    )
 
 
 @pytest.fixture

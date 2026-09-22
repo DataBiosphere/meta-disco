@@ -13,12 +13,6 @@ the four standalone scripts.
 
 import json
 import stat
-import sys
-from pathlib import Path
-
-import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from classify_auxiliary_genomic import classify_auxiliary_genomic
 from classify_images import classify_images
@@ -27,6 +21,7 @@ from classify_remaining_files import classify_remaining
 
 from meta_disco.exclusions import _FILE_MODE, EXCLUDED_FILE, read_excluded
 from tests.metadata_fixtures import valid_record, write_metadata
+from tests.run_fixtures import OUTPUT_FILE, output_record, write_run
 
 GOOD_MD5 = "a" * 32
 # One representative unusable value. The md5-shape axis (null, empty, uppercase, wrong
@@ -102,30 +97,12 @@ class TestStandaloneProducers:
                 _pair("t.bam.bai", ".bai", md5=BAD_MD5),
             ],
         )
-        parents = tmp_path / "bam_classifications.json"
-        parents.write_text(
-            json.dumps(
-                {
-                    "metadata": {},
-                    "classifications": [
-                        {
-                            "file_name": "s.bam",
-                            "md5sum": parent_md5,
-                            # The source's key, as `_pair` derives it for `s.bam` above;
-                            # a parent row without it is refused (#486).
-                            "file_id": "fid-s.bam",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "not_classified", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "not_classified", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
+        # `file_id` is the source's key, as `_pair` derives it for `s.bam` above; a
+        # parent row without it is refused (#486).
+        parent = output_record(
+            "s.bam", parent_md5, file_id="fid-s.bam", data_modality="genomic", data_type="alignments"
         )
+        parents = write_run(tmp_path, [parent]) / OUTPUT_FILE
         output = tmp_path / "index_classifications.json"
         propagate_to_index_files(metadata, [parents], output)
         assert _names(output) == ["s.bam.bai"]

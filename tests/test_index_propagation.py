@@ -1,13 +1,8 @@
 """Tests for index file metadata propagation."""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from classify_index_files import (
     AMBIGUOUS_PARENT,
     NO_MATCHING_PARENT,
@@ -18,7 +13,6 @@ from classify_index_files import (
 )
 
 from meta_disco.models import (
-    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
     NOT_APPLICABLE,
@@ -31,6 +25,7 @@ from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
 from tests.producer_sweep import run_index_producer
+from tests.run_fixtures import OUTPUT_FILE, output_record, write_run
 
 ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
 HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
@@ -94,107 +89,72 @@ _PARENT_VALUES = {
 }
 
 
-def _classified_record(md5: str, assembly: str, file_name: str = "sample.bam", file_id: str | None = None) -> dict:
+def _classified_record(
+    md5: str, assembly, file_name: str = "sample.bam", file_id: str | None = None, build: dict | None = None, **dims
+) -> dict:
     """A parent classification whose ``reference_assembly`` is ``assembly``.
 
-    Entries come from :func:`models.build_field_entry`, the single place that
-    assembles the ``{value, status, evidence}`` shape, so the fixture follows the
-    output shape rather than restating it — and the dimensions come from
-    ``CLASSIFICATION_FIELDS`` rather than a fourth hand-written copy of them.
+    The row and its entries come from :func:`run_fixtures.output_record`, which builds
+    every entry through :func:`models.build_field_entry` — the single place that
+    assembles the ``{value, status, evidence}`` shape — so the fixture follows the
+    output shape rather than restating it. What this adds is the parent's identity
+    and the defaults in ``_PARENT_VALUES``.
+
+    Any other dimension may be overridden by keyword, as for
+    :func:`run_fixtures.classifications`; ``reference_assembly`` is the positional
+    ``assembly`` and is refused as a keyword, so a row cannot name two. ``build`` is the
+    resolved build detail (#340) carried beside the reference_assembly value.
 
     ``file_id`` is what the index producer joins a parent on, so a fixture without
     one would be joined by nothing.
     """
-    values = {**_PARENT_VALUES, "reference_assembly": assembly}
-    return {
-        "md5sum": md5,
-        "file_name": file_name,
-        "file_id": file_id or _fid(md5),
-        # Producers write this on every row.
-        "dataset_title": "test",
-        "classifications": {fld: build_field_entry(values[fld]) for fld in CLASSIFICATION_FIELDS},
-    }
+    if "reference_assembly" in dims:
+        raise TypeError("pass the assembly positionally, not as reference_assembly=")
+    record = output_record(
+        file_name, md5, file_id=file_id or _fid(md5), **{**_PARENT_VALUES, "reference_assembly": assembly, **dims}
+    )
+    if build:
+        record["classifications"]["reference_assembly"] = build_field_entry(assembly, detail={"build": build})
+    return record
 
 
-class TestParentCandidateGeneration:
-    """Test parent filename candidate generation."""
-
-    def test_vcf_gz_tbi(self):
-        """VCF.gz.tbi should find VCF.gz parent."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert "sample.vcf.gz" in candidates
-        assert len(candidates) == 1  # No junk candidates
-
-    def test_bed_gz_tbi(self):
-        """BED.gz.tbi should find BED.gz parent."""
-        candidates = get_parent_candidates("sample.bed.gz.tbi", ".tbi")
-        assert "sample.bed.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_txt_gz_tbi(self):
-        """TXT.gz.tbi (tabix-indexed TSV) should find TXT.gz parent."""
-        candidates = get_parent_candidates("sample.txt.gz.tbi", ".tbi")
-        assert "sample.txt.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_bam_bai(self):
-        """BAM.bai should find BAM parent."""
-        candidates = get_parent_candidates("sample.bam.bai", ".bai")
-        assert "sample.bam" in candidates
-        assert len(candidates) == 1
-
-    def test_cram_crai(self):
-        """CRAM.crai should find CRAM parent."""
-        candidates = get_parent_candidates("sample.cram.crai", ".crai")
-        assert "sample.cram" in candidates
-        assert len(candidates) == 1
-
-    def test_pbi_index(self):
-        """PBI (PacBio index) should find BAM parent."""
-        candidates = get_parent_candidates("movie.subreads.bam.pbi", ".pbi")
-        assert "movie.subreads.bam" in candidates
-
-    def test_csi_bed_gz(self):
-        """CSI index for BED.gz should find BED.gz parent."""
-        candidates = get_parent_candidates("HG03652.regions.bed.gz.csi", ".csi")
-        assert "HG03652.regions.bed.gz" in candidates
-        assert len(candidates) == 1
-
-    def test_pattern2_replacement(self):
-        """Pattern 2: index extension replaces parent (rare case)."""
-        # sample.bai -> sample.bam (no .bam in original name)
-        candidates = get_parent_candidates("sample.bai", ".bai")
-        assert "sample.bam" in candidates
-
-    def test_complex_filename(self):
-        """Complex filename with dots should work."""
-        candidates = get_parent_candidates("HG01874.chr17.hc.vcf.gz.tbi", ".tbi")
-        assert "HG01874.chr17.hc.vcf.gz" in candidates
+@pytest.mark.parametrize(
+    ("index_name", "extension", "parent", "only_candidate"),
+    [
+        pytest.param("sample.vcf.gz.tbi", ".tbi", "sample.vcf.gz", True, id="vcf.gz.tbi finds vcf.gz"),
+        pytest.param("sample.bed.gz.tbi", ".tbi", "sample.bed.gz", True, id="bed.gz.tbi finds bed.gz"),
+        pytest.param("sample.txt.gz.tbi", ".tbi", "sample.txt.gz", True, id="txt.gz.tbi (tabix TSV) finds txt.gz"),
+        pytest.param("sample.bam.bai", ".bai", "sample.bam", True, id="bam.bai finds bam"),
+        pytest.param("sample.cram.crai", ".crai", "sample.cram", True, id="cram.crai finds cram"),
+        pytest.param("movie.subreads.bam.pbi", ".pbi", "movie.subreads.bam", False, id="pbi (PacBio index) finds bam"),
+        pytest.param("HG03652.regions.bed.gz.csi", ".csi", "HG03652.regions.bed.gz", True, id="csi finds bed.gz"),
+        # Pattern 2: the index extension replaces the parent's (rare); no .bam in the name.
+        pytest.param("sample.bai", ".bai", "sample.bam", False, id="pattern 2 replaces the extension"),
+        pytest.param(
+            "HG01874.chr17.hc.vcf.gz.tbi", ".tbi", "HG01874.chr17.hc.vcf.gz", True, id="dotted name still works"
+        ),
+    ],
+)
+def test_parent_candidate_generation(index_name, extension, parent, only_candidate):
+    """The parent name an index name yields; ``only_candidate`` pins that it is the sole one."""
+    candidates = get_parent_candidates(index_name, extension)
+    assert parent in candidates
+    if only_candidate:
         assert len(candidates) == 1
 
 
-class TestNoJunkCandidates:
-    """Regression tests to ensure no junk candidates are generated."""
-
-    def test_no_double_gz(self):
-        """Should not generate .gz.gz candidates."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert not any(".gz.gz" in c for c in candidates)
-
-    def test_no_double_vcf_gz(self):
-        """Should not generate .vcf.gz.vcf.gz candidates."""
-        candidates = get_parent_candidates("sample.vcf.gz.tbi", ".tbi")
-        assert not any(".vcf.gz.vcf.gz" in c for c in candidates)
-
-    def test_no_double_bam(self):
-        """Should not generate .bam.bam candidates."""
-        candidates = get_parent_candidates("sample.bam.bai", ".bai")
-        assert not any(".bam.bam" in c for c in candidates)
-
-    def test_no_double_cram(self):
-        """Should not generate .cram.cram candidates."""
-        candidates = get_parent_candidates("sample.cram.crai", ".crai")
-        assert not any(".cram.cram" in c for c in candidates)
+@pytest.mark.parametrize(
+    ("index_name", "extension", "junk"),
+    [
+        pytest.param("sample.vcf.gz.tbi", ".tbi", ".gz.gz", id="no .gz.gz"),
+        pytest.param("sample.vcf.gz.tbi", ".tbi", ".vcf.gz.vcf.gz", id="no .vcf.gz.vcf.gz"),
+        pytest.param("sample.bam.bai", ".bai", ".bam.bam", id="no .bam.bam"),
+        pytest.param("sample.cram.crai", ".crai", ".cram.cram", id="no .cram.cram"),
+    ],
+)
+def test_no_junk_candidates(index_name, extension, junk):
+    """Regression: candidate generation never doubles an extension."""
+    assert not any(junk in c for c in get_parent_candidates(index_name, extension))
 
 
 def test_a_gvcf_parent_is_variants_not_unknown():
@@ -264,79 +224,27 @@ class TestLoadClassifications:
 
     def test_loads_from_single_file(self, tmp_path):
         """Load classifications from one JSON file."""
-        cls_file = tmp_path / "bam.json"
-        cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "abc123",
-                            "file_id": "fid-abc123",
-                            "file_name": "sample.bam",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "ILLUMINA", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "WGS", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
-        )
+        cls_file = write_run(tmp_path, [_classified_record("abc123", "GRCh38")]) / OUTPUT_FILE
         result = load_classifications(cls_file, key=ANVIL_KEY)
-        assert "fid-abc123" in result
-        assert result["fid-abc123"]["data_modality"] == "genomic"
-        assert result["fid-abc123"]["platform"] == "ILLUMINA"
+        assert _fid("abc123") in result
+        assert result[_fid("abc123")]["data_modality"] == "genomic"
+        assert result[_fid("abc123")]["platform"] == "ILLUMINA"
 
     def test_loads_from_multiple_files(self, tmp_path):
         """Load classifications from BAM + BED files."""
-        bam_file = tmp_path / "bam.json"
-        bam_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "bam_md5",
-                            "file_id": "fid-bam_md5",
-                            "file_name": "sample.bam",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "ILLUMINA", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "WGS", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
+        bam_file = write_run(tmp_path, [_classified_record("bam_md5", "GRCh38")], fname="bam.json") / "bam.json"
+        bed = _classified_record(
+            "bed_md5",
+            "GRCh38",
+            "sample.regions.bed.gz",
+            data_type="annotations",
+            platform=NOT_CLASSIFIED,
+            assay_type=NOT_CLASSIFIED,
         )
-        bed_file = tmp_path / "bed.json"
-        bed_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "bed_md5",
-                            "file_id": "fid-bed_md5",
-                            "file_name": "sample.regions.bed.gz",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "annotations", "evidence": []},
-                                "platform": {"value": "not_classified", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "not_classified", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
-        )
+        bed_file = write_run(tmp_path, [bed], fname="bed.json") / "bed.json"
         result = load_classifications(bam_file, bed_file, key=ANVIL_KEY)
-        bed_key = "fid-bed_md5"
-        assert "fid-bam_md5" in result
+        bed_key = _fid("bed_md5")
+        assert _fid("bam_md5") in result
         assert bed_key in result
         assert result[bed_key]["data_modality"] == "genomic"
         # The map holds only what an index inherits. `data_type` is not inherited
@@ -379,8 +287,7 @@ class TestLoadClassifications:
         assert set(load_classifications(cls_file, key=ANVIL_KEY)) == {_fid("a" * 32)}
 
     def test_a_row_that_is_not_an_object_is_refused(self, tmp_path):
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": ["stray"]}))
+        cls_file = write_run(tmp_path, ["stray"]) / OUTPUT_FILE
         with pytest.raises(ValueError, match="row is not an object"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
@@ -389,62 +296,23 @@ class TestLoadClassifications:
 
         This is the regression that #41 fixes — previously BED classifications were
         not loaded, so .csi files for .bed.gz parents got None for all fields."""
-        # Create metadata with a BED parent and its CSI index in the same dataset
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        output = run_index_producer(
+            tmp_path,
             [
-                {
-                    "file_name": "HG03652.regions.bed.gz",
-                    "file_format": ".bed.gz",
-                    "file_md5sum": "33333333333333333333333333333333",
-                    "file_id": "fid-33333333",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test_dataset",
-                    "entry_id": "entry_bed",
-                },
-                {
-                    "file_name": "HG03652.regions.bed.gz.csi",
-                    "file_format": ".csi",
-                    "file_md5sum": "44444444444444444444444444444444",
-                    "file_id": "fid-44444444",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test_dataset",
-                    "entry_id": "entry_csi",
-                },
+                _file("HG03652.regions.bed.gz", ".bed.gz", "3" * 32, "entry_bed"),
+                _file("HG03652.regions.bed.gz.csi", ".csi", "4" * 32, "entry_csi"),
+            ],
+            [
+                _classified_record(
+                    "3" * 32,
+                    "CHM13",
+                    "HG03652.regions.bed.gz",
+                    data_type="annotations",
+                    platform=NOT_CLASSIFIED,
+                    assay_type=NOT_CLASSIFIED,
+                )
             ],
         )
-
-        # Create BED classification output
-        bed_cls_file = tmp_path / "bed_classifications.json"
-        bed_cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "33333333333333333333333333333333",
-                            "file_id": "fid-33333333",
-                            "file_name": "HG03652.regions.bed.gz",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "annotations", "evidence": []},
-                                "platform": {"value": "not_classified", "evidence": []},
-                                "reference_assembly": {"value": "CHM13", "evidence": []},
-                                "assay_type": {"value": "not_classified", "evidence": []},
-                            },
-                        }
-                    ],
-                }
-            )
-        )
-
-        # Run propagation with BED as a source
-        output_file = tmp_path / "index_output.json"
-        propagate_to_index_files(metadata_file, [bed_cls_file], output_file)
-
-        # Verify the CSI index inherited from the BED parent
-        with output_file.open() as f:
-            output = json.load(f)
         index_cls = output["classifications"]
         assert len(index_cls) == 1
         csi = index_cls[0]
@@ -479,8 +347,7 @@ class TestLoadClassifications:
 
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         del cls["file_id"]
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        cls_file = write_run(tmp_path, [cls]) / OUTPUT_FILE
 
         output_file = tmp_path / "out.json"
         propagate_to_index_files(metadata_file, [cls_file], output_file)
@@ -496,12 +363,11 @@ class TestLoadClassifications:
         """
         cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
         cls["file_id"] = None
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        cls_file = write_run(tmp_path, [cls]) / OUTPUT_FILE
         with pytest.raises(ValueError, match="file_id"):
             load_classifications(cls_file, key=ANVIL_KEY)
         del cls["md5sum"]
-        cls_file.write_text(json.dumps({"classifications": [cls]}))
+        write_run(tmp_path, [cls])
         with pytest.raises(ValueError, match="md5sum"):
             load_classifications(cls_file, key=HPRC_KEY)
 
@@ -516,8 +382,7 @@ class TestLoadClassifications:
             _classified_record("a" * 32, "GRCh38", "one.bam", file_id="fid-dup"),
             _classified_record("b" * 32, "CHM13", "two.bam", file_id="fid-dup"),
         ]
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": rows}))
+        cls_file = write_run(tmp_path, rows) / OUTPUT_FILE
         with pytest.raises(ValueError, match=r"file_id 'fid-dup' is carried by more than one.*'two\.bam'"):
             load_classifications(cls_file, key=ANVIL_KEY)
 
@@ -541,8 +406,7 @@ class TestLoadClassifications:
     def test_a_parent_row_lacking_a_value_still_says_had_no_value(self, tmp_path):
         parent = _file("sample.bam", ".bam", "a" * 32, "e1")
         index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
-        cls = _classified_record("a" * 32, "GRCh38", "sample.bam")
-        cls["classifications"]["platform"] = build_field_entry(NOT_CLASSIFIED)
+        cls = _classified_record("a" * 32, "GRCh38", "sample.bam", platform=NOT_CLASSIFIED)
         output = run_index_producer(tmp_path, [parent, index], [cls])
         [row] = [r for r in output["classifications"] if r["file_name"] == "sample.bam.bai"]
         assert row["classifications"]["platform"]["evidence"][0]["reason"] == (
@@ -578,8 +442,7 @@ class TestLoadClassifications:
         parent["file_id"] = None
         index = _file("sample.bam.bai", ".bai", "b" * 32, "e2")
         metadata_file = _write_metadata(tmp_path / "metadata.json", [parent, index])
-        cls_file = tmp_path / "bam_classifications.json"
-        cls_file.write_text(json.dumps({"classifications": [_classified_record("a" * 32, "GRCh38", "sample.bam")]}))
+        cls_file = write_run(tmp_path, [_classified_record("a" * 32, "GRCh38", "sample.bam")]) / OUTPUT_FILE
         with pytest.raises(ValueError, match=r"'sample\.bam' has file_id None"):
             propagate_to_index_files(metadata_file, [cls_file], tmp_path / "out.json")
 
@@ -604,42 +467,23 @@ class TestLoadClassifications:
         parent whose identity it names.
         """
         # One md5 for two files, so `_fid`'s md5-derived default would collapse them —
-        # these are the fixtures that pass their ids explicitly.
-        shared_md5 = "77777777777777777777777777777777"
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        # these are the fixtures that pass their ids explicitly. The assembly parent
+        # carries the sentinel, which the builder turns into a status with a null value.
+        shared_md5 = "7" * 32
+        output = run_index_producer(
+            tmp_path,
             [
                 _file("grch38.fasta", ".fasta", shared_md5, "entry_ref", file_id="fid-ref"),
                 _file("Homo_sapiens_assembly38.fasta", ".fasta", shared_md5, "entry_asm", file_id="fid-asm"),
                 _file("grch38.fasta.fai", ".fai", "8" * 32, "entry_ref_fai"),
                 _file("Homo_sapiens_assembly38.fasta.fai", ".fai", "9" * 32, "entry_asm_fai"),
             ],
+            [
+                _classified_record(shared_md5, "GRCh38", "grch38.fasta", file_id="fid-ref"),
+                _classified_record(shared_md5, NOT_APPLICABLE, "Homo_sapiens_assembly38.fasta", file_id="fid-asm"),
+            ],
         )
-
-        # Both parents through `_classified_record`, so the fixture follows the shape
-        # `build_field_entry` emits rather than restating it: the assembly one carries
-        # the sentinel, which that builder turns into a status with a null value.
-        fasta_cls_file = tmp_path / "fasta_classifications.json"
-        fasta_cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        _classified_record(shared_md5, "GRCh38", "grch38.fasta", file_id="fid-ref"),
-                        _classified_record(
-                            shared_md5, NOT_APPLICABLE, "Homo_sapiens_assembly38.fasta", file_id="fid-asm"
-                        ),
-                    ]
-                }
-            )
-        )
-
-        output_file = tmp_path / "index_output.json"
-        propagate_to_index_files(metadata_file, [fasta_cls_file], output_file)
-
-        with output_file.open() as f:
-            rows = {r["file_name"]: r for r in json.load(f)["classifications"]}
-
+        rows = {r["file_name"]: r for r in output["classifications"]}
         ref_fai = rows["grch38.fasta.fai"]["classifications"]
         asm_fai = rows["Homo_sapiens_assembly38.fasta.fai"]["classifications"]
         assert field_value(ref_fai, "reference_assembly") == "GRCh38"
@@ -647,56 +491,31 @@ class TestLoadClassifications:
         assert field_status(asm_fai, "reference_assembly") == NOT_APPLICABLE
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
-        """End-to-end: a .tbi index inherits from its .vcf.gz parent."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "sample.vcf.gz",
-                    "file_format": ".vcf.gz",
-                    "file_md5sum": "77777777777777777777777777777777",
-                    "file_id": "fid-77777777",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e1",
-                },
-                {
-                    "file_name": "sample.vcf.gz.tbi",
-                    "file_format": ".tbi",
-                    "file_md5sum": "66666666666666666666666666666666",
-                    "file_id": "fid-66666666",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e2",
-                },
-            ],
+        """End-to-end: a .tbi index inherits from its .vcf.gz parent.
+
+        The parent row is deliberately in the pre-#116 shape — a sentinel or value in
+        ``value`` and no ``status`` key — so the reader's derived-status path
+        (``models._entry_status`` through ``status_for_value``) is exercised against a
+        row a producer wrote before the split. The other parent rows in this file come
+        from ``_classified_record`` and carry a ``status``.
+        """
+        legacy_parent = {
+            "md5sum": "7" * 32,
+            "file_id": _fid("7" * 32),
+            "file_name": "sample.vcf.gz",
+            "classifications": {
+                "data_modality": {"value": "genomic", "evidence": []},
+                "data_type": {"value": "variants.germline", "evidence": []},
+                "platform": {"value": "not_classified", "evidence": []},
+                "reference_assembly": {"value": "GRCh38", "evidence": []},
+                "assay_type": {"value": "not_classified", "evidence": []},
+            },
+        }
+        output = run_index_producer(
+            tmp_path,
+            [_file("sample.vcf.gz", ".vcf.gz", "7" * 32, "e1"), _file("sample.vcf.gz.tbi", ".tbi", "6" * 32, "e2")],
+            [legacy_parent],
         )
-        vcf_cls = tmp_path / "vcf.json"
-        vcf_cls.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "77777777777777777777777777777777",
-                            "file_id": "fid-77777777",
-                            "file_name": "sample.vcf.gz",
-                            "classifications": {
-                                "data_modality": {"value": "genomic", "evidence": []},
-                                "data_type": {"value": "variants.germline", "evidence": []},
-                                "platform": {"value": "not_classified", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "not_classified", "evidence": []},
-                            },
-                        }
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [vcf_cls], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         assert field_value(cls, "data_modality") == "genomic"
@@ -705,55 +524,11 @@ class TestLoadClassifications:
 
     def test_bai_inherits_from_bam_parent(self, tmp_path):
         """End-to-end: a .bai index inherits from its .bam parent."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e1",
-                },
-                {
-                    "file_name": "sample.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e2",
-                },
-            ],
+        output = run_index_producer(
+            tmp_path,
+            [_file("sample.bam", ".bam", "2" * 32, "e1"), _file("sample.bam.bai", ".bai", "1" * 32, "e2")],
+            [_classified_record("2" * 32, "GRCh38", data_modality="transcriptomic.bulk", assay_type="RNA-seq")],
         )
-        bam_cls = tmp_path / "bam.json"
-        bam_cls.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "22222222222222222222222222222222",
-                            "file_id": "fid-22222222",
-                            "file_name": "sample.bam",
-                            "classifications": {
-                                "data_modality": {"value": "transcriptomic.bulk", "evidence": []},
-                                "data_type": {"value": "alignments", "evidence": []},
-                                "platform": {"value": "ILLUMINA", "evidence": []},
-                                "reference_assembly": {"value": "GRCh38", "evidence": []},
-                                "assay_type": {"value": "RNA-seq", "evidence": []},
-                            },
-                        }
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [bam_cls], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         assert field_value(cls, "data_modality") == "transcriptomic.bulk"
@@ -771,122 +546,36 @@ class TestLoadClassifications:
             "chry_m5": "dd7264df17e7e4a4dac5b0f1f19dcfe0",
             "name": "chm13v2.0.fasta",
         }
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "s.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds1",
-                },
-                {
-                    "file_name": "s.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                },
-            ],
+        parent = _classified_record("2" * 32, "CHM13", "s.bam", build=build)
+        # A row carrying only this one dimension: the parent map must read a missing
+        # entry as nothing to inherit rather than raise, so this parent is deliberately
+        # partial — the only one in the file that is.
+        parent["classifications"] = {"reference_assembly": parent["classifications"]["reference_assembly"]}
+        output = run_index_producer(
+            tmp_path,
+            [_file("s.bam", ".bam", "2" * 32, "e1"), _file("s.bam.bai", ".bai", "1" * 32, "e2")],
+            [parent],
         )
-        bam_cls = tmp_path / "bam.json"
-        bam_cls.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "22222222222222222222222222222222",
-                            "file_id": "fid-22222222",
-                            "file_name": "s.bam",
-                            "classifications": {
-                                "reference_assembly": {"value": "CHM13", "evidence": [], "build": build}
-                            },
-                        }
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [bam_cls], output_file)
-        with output_file.open() as f:
-            entry = json.load(f)["classifications"][0]["classifications"]["reference_assembly"]
+        entry = output["classifications"][0]["classifications"]["reference_assembly"]
         assert entry["value"] == "CHM13"
         assert entry["build"] == build
 
     def test_a_parent_in_conflict_propagates_the_status_not_a_value(self, tmp_path):
         """``field_label`` hands back ``conflict`` as a label; the index record must
         re-emit it as a status with a null value, never as a classified value."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "s.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds1",
-                },
-                {
-                    "file_name": "s.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                },
-            ],
+        output = run_index_producer(
+            tmp_path,
+            [_file("s.bam", ".bam", "2" * 32, "e1"), _file("s.bam.bai", ".bai", "1" * 32, "e2")],
+            [_classified_record("2" * 32, CONFLICT, "s.bam")],
         )
-        bam_cls = tmp_path / "bam.json"
-        bam_cls.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        {
-                            "md5sum": "22222222222222222222222222222222",
-                            "file_id": "fid-22222222",
-                            "file_name": "s.bam",
-                            "classifications": {
-                                "reference_assembly": {"value": None, "status": CONFLICT, "evidence": []}
-                            },
-                        }
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [bam_cls], output_file)
-        with output_file.open() as f:
-            cls = json.load(f)["classifications"][0]["classifications"]
+        cls = output["classifications"][0]["classifications"]
         assert field_status(cls, "reference_assembly") == CONFLICT
         assert field_value(cls, "reference_assembly") is None
         assert cls["reference_assembly"]["evidence"][0]["status"] == CONFLICT
 
     def test_no_matching_parent_goes_to_unmatched(self, tmp_path):
         """Index file with no parent in metadata goes to unmatched_files, not classifications."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "orphan.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "55555555555555555555555555555555",
-                    "file_id": "fid-55555555",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e1",
-                },
-            ],
-        )
-        # No classifications to load — empty file
-        empty_cls = tmp_path / "empty.json"
-        empty_cls.write_text(json.dumps({"classifications": []}))
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [empty_cls], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
+        output = run_index_producer(tmp_path, [_file("orphan.bam.bai", ".bai", "5" * 32, "e1")])
         _assert_declined(output, "orphan.bam.bai")
         assert len(output["unmatched_files"]) == 1
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
@@ -895,37 +584,11 @@ class TestLoadClassifications:
 
     def test_parent_found_but_not_classified(self, tmp_path):
         """Parent exists in metadata but has no classification — index gets not_classified."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
-            [
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e1",
-                },
-                {
-                    "file_name": "sample.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e2",
-                },
-            ],
+        # The parent is in the metadata but in no classification file.
+        output = run_index_producer(
+            tmp_path,
+            [_file("sample.bam", ".bam", "2" * 32, "e1"), _file("sample.bam.bai", ".bai", "1" * 32, "e2")],
         )
-        # Parent exists in metadata but not in classifications
-        empty_cls = tmp_path / "empty.json"
-        empty_cls.write_text(json.dumps({"classifications": []}))
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [empty_cls], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
         # Parent filename matched but its key is in no classification file → not_classified,
         # and the evidence says the row was absent, not that the parent had no value.
         assert len(output["classifications"]) == 1
@@ -940,59 +603,19 @@ class TestLoadClassifications:
 
     def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
         """Two files sharing the name an index points at: no parent is chosen (#438)."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        # Same name, different files — as ANVIL_T2T_CHRY calls one sample against both
+        # CHM13v2 and GRCh38 and stores the outputs under different paths. Both candidate
+        # parents are classified, and they disagree: whichever the old lookup kept, the
+        # index would have inherited a confident answer from it.
+        output = run_index_producer(
+            tmp_path,
             [
-                # Same name, different files — as ANVIL_T2T_CHRY calls one sample against
-                # both CHM13v2 and GRCh38 and stores the outputs under different paths.
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e1",
-                },
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e2",
-                },
-                {
-                    "file_name": "sample.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "33333333333333333333333333333333",
-                    "file_id": "fid-33333333",
-                    "dataset_id": "ds1",
-                    "dataset_title": "test",
-                    "entry_id": "e3",
-                },
+                _file("sample.bam", ".bam", "1" * 32, "e1"),
+                _file("sample.bam", ".bam", "2" * 32, "e2"),
+                _file("sample.bam.bai", ".bai", "3" * 32, "e3"),
             ],
+            [_classified_record("1" * 32, "GRCh38"), _classified_record("2" * 32, "CHM13")],
         )
-        # Both candidate parents are classified, and they disagree. Whichever the old
-        # lookup kept, the index would have inherited a confident answer from it.
-        cls_file = tmp_path / "cls.json"
-        cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        _classified_record("11111111111111111111111111111111", "GRCh38"),
-                        _classified_record("22222222222222222222222222222222", "CHM13"),
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [cls_file], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
-
         # Neither parent's answer reaches it — not GRCh38, not CHM13, not a coin flip.
         record = _assert_declined(output, "sample.bam.bai")
         assert record["classifications"]["reference_assembly"]["value"] is None
@@ -1007,52 +630,19 @@ class TestLoadClassifications:
 
     def test_same_name_in_another_dataset_is_not_ambiguous(self, tmp_path):
         """The lookup key is per dataset, so a name reused across datasets still matches."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        output = run_index_producer(
+            tmp_path,
             [
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "11111111111111111111111111111111",
-                    "file_id": "fid-11111111",
-                    "dataset_id": "ds1",
-                    "dataset_title": "one",
-                    "entry_id": "e1",
-                },
-                {
-                    "file_name": "sample.bam",
-                    "file_format": ".bam",
-                    "file_md5sum": "22222222222222222222222222222222",
-                    "file_id": "fid-22222222",
-                    "dataset_id": "ds2",
-                    "dataset_title": "two",
-                    "entry_id": "e2",
-                },
-                {
-                    "file_name": "sample.bam.bai",
-                    "file_format": ".bai",
-                    "file_md5sum": "33333333333333333333333333333333",
-                    "file_id": "fid-33333333",
-                    "dataset_id": "ds1",
-                    "dataset_title": "one",
-                    "entry_id": "e3",
-                },
+                _file("sample.bam", ".bam", "1" * 32, "e1"),
+                _file("sample.bam", ".bam", "2" * 32, "e2", dataset_id="ds2"),
+                _file("sample.bam.bai", ".bai", "3" * 32, "e3"),
             ],
+            [_classified_record("1" * 32, "GRCh38")],
         )
-        cls_file = tmp_path / "cls.json"
-        cls_file.write_text(
-            json.dumps({"classifications": [_classified_record("11111111111111111111111111111111", "GRCh38")]})
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [cls_file], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
-
         assert output["unmatched_files"] == []
         assert len(output["classifications"]) == 1
         record = output["classifications"][0]
-        assert record["derived_from"]["parent_md5sum"] == "11111111111111111111111111111111"
+        assert record["derived_from"]["parent_md5sum"] == "1" * 32
         assert record["classifications"]["reference_assembly"]["value"] == "GRCh38"
 
     def test_does_not_fall_through_to_a_later_candidate(self, tmp_path):
@@ -1064,35 +654,22 @@ class TestLoadClassifications:
         `.bed.gz` would resume guessing with a *worse* reading of the name, which is
         what this issue forbids, and this test is what fails if someone does.
         """
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        output = run_index_producer(
+            tmp_path,
             [
-                _file("sample.vcf.gz", ".vcf.gz", "11111111111111111111111111111111", "e1"),
-                _file("sample.vcf.gz", ".vcf.gz", "22222222222222222222222222222222", "e2"),
-                _file("sample.bed.gz", ".bed.gz", "33333333333333333333333333333333", "e3"),
-                _file("sample.tbi", ".tbi", "44444444444444444444444444444444", "e4"),
+                _file("sample.vcf.gz", ".vcf.gz", "1" * 32, "e1"),
+                _file("sample.vcf.gz", ".vcf.gz", "2" * 32, "e2"),
+                _file("sample.bed.gz", ".bed.gz", "3" * 32, "e3"),
+                _file("sample.tbi", ".tbi", "4" * 32, "e4"),
+            ],
+            [
+                _classified_record("1" * 32, "GRCh38", "sample.vcf.gz"),
+                _classified_record("2" * 32, "CHM13", "sample.vcf.gz"),
+                # The fall-through parent, deliberately a third assembly: if this
+                # value ever reaches the index file, the stopping rule is broken.
+                _classified_record("3" * 32, "GRCh37", "sample.bed.gz"),
             ],
         )
-        cls_file = tmp_path / "cls.json"
-        cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        _classified_record("11111111111111111111111111111111", "GRCh38", "sample.vcf.gz"),
-                        _classified_record("22222222222222222222222222222222", "CHM13", "sample.vcf.gz"),
-                        # The fall-through parent, deliberately a third assembly: if this
-                        # value ever reaches the index file, the stopping rule is broken.
-                        _classified_record("33333333333333333333333333333333", "GRCh37", "sample.bed.gz"),
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [cls_file], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
-
         # GRCh37 is the fall-through parent's answer; it must not appear anywhere.
         record = _assert_declined(output, "sample.tbi")
         assert record["classifications"]["reference_assembly"]["value"] is None
@@ -1103,32 +680,19 @@ class TestLoadClassifications:
 
     def test_ambiguity_is_judged_on_the_first_candidate_present(self, tmp_path):
         """The candidate that decides is the first one present, not the first one tried."""
-        metadata_file = tmp_path / "metadata.json"
-        _write_metadata(
-            metadata_file,
+        # No `sample.vcf.gz` at all, so the first *present* candidate is .bed.gz.
+        output = run_index_producer(
+            tmp_path,
             [
-                # No `sample.vcf.gz` at all, so the first *present* candidate is .bed.gz.
-                _file("sample.bed.gz", ".bed.gz", "11111111111111111111111111111111", "e1"),
-                _file("sample.bed.gz", ".bed.gz", "22222222222222222222222222222222", "e2"),
-                _file("sample.tbi", ".tbi", "33333333333333333333333333333333", "e3"),
+                _file("sample.bed.gz", ".bed.gz", "1" * 32, "e1"),
+                _file("sample.bed.gz", ".bed.gz", "2" * 32, "e2"),
+                _file("sample.tbi", ".tbi", "3" * 32, "e3"),
+            ],
+            [
+                _classified_record("1" * 32, "GRCh38", "sample.bed.gz"),
+                _classified_record("2" * 32, "CHM13", "sample.bed.gz"),
             ],
         )
-        cls_file = tmp_path / "cls.json"
-        cls_file.write_text(
-            json.dumps(
-                {
-                    "classifications": [
-                        _classified_record("11111111111111111111111111111111", "GRCh38", "sample.bed.gz"),
-                        _classified_record("22222222222222222222222222222222", "CHM13", "sample.bed.gz"),
-                    ]
-                }
-            )
-        )
-        output_file = tmp_path / "out.json"
-        propagate_to_index_files(metadata_file, [cls_file], output_file)
-        with output_file.open() as f:
-            output = json.load(f)
-
         _assert_declined(output, "sample.tbi")
         entry = output["unmatched_files"][0]
         assert entry["reason"] == AMBIGUOUS_PARENT

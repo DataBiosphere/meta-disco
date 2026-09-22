@@ -1,13 +1,8 @@
 """Tests for the standalone metadata-validation gate (scripts/validate_metadata.py)."""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 import validate_metadata
 
 from meta_disco.pipeline import load_records
