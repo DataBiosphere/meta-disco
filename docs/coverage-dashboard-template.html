@@ -85,6 +85,8 @@
     ];
     const NC_COLOR = '#d0d7de';
     const CONFLICT_COLOR = '#bf8700';
+    // A status label's bar colour; a real value takes the next palette colour.
+    const STATUS_COLORS = { not_classified: NC_COLOR, None: NC_COLOR, conflict: CONFLICT_COLOR };
 
     // Summary cards
     const cardsEl = document.getElementById('summary-cards');
@@ -139,7 +141,7 @@
       html += '<div class="chart-container"><div class="bar-chart">';
       dim.values.forEach((v, vi) => {
         const width = (v.count / maxCount * 100).toFixed(1);
-        const color = v.name === 'not_classified' || v.name === 'None' ? NC_COLOR : v.name === 'conflict' ? CONFLICT_COLOR : COLORS[vi % COLORS.length];
+        const color = STATUS_COLORS[v.name] ?? COLORS[vi % COLORS.length];
         const extRows = (v.extensions || [])
           .map(e => `<tr><td>${e.ext}</td><td>${e.count.toLocaleString()}</td></tr>`)
           .join('');

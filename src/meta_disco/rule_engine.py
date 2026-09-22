@@ -22,6 +22,7 @@ from .models import (
     SOURCE_HEADER_RULE,
     SOURCE_SIGNAL_INFERENCE,
     SOURCE_TYPES,
+    STATUS_LABELS,
     UNMAPPED,
     ClaimSource,
     ClassificationResult,
@@ -408,10 +409,11 @@ def _not_classified_marker(fld: str) -> dict:
     }
 
 
-def _conflict_marker(fld: str, competing: list[str]) -> dict:
+def conflict_marker(fld: str, competing: list[str]) -> dict:
     """The synthetic marker recording that top-tier claims disagreed. It carries the
     same ``conflict`` status the field resolves to (#88) and the competing values;
-    the claims themselves stay in the evidence beside it."""
+    the claims themselves stay in the evidence beside it. Public because the coverage
+    report reads the shape by key and its test builds the fixture through it."""
     return {
         "marker": CONFLICT_MARKER,
         "reason": f"Conflicting {fld}: {competing} — ambiguous",
@@ -454,9 +456,9 @@ class ExtendedClassificationResult:
         ``status_for_value(value)``. A CLASSIFIED status stores the value; any
         non-classified status stores None (the sentinel lives only in
         ``field_status``). ``fld`` must be a known classification field and
-        ``status`` one of classified / not_applicable / not_classified / conflict —
-        a typo raises rather than silently creating a stray attribute or emitting
-        an invalid status. The (value, status) pairing is checked against the single
+        ``status`` CLASSIFIED or one of ``models.STATUS_LABELS`` — a typo raises
+        rather than silently creating a stray attribute or emitting an invalid
+        status. The (value, status) pairing is checked against the single
         coherence definition (``models._assert_coherent``): a CLASSIFIED status
         without a real value, or a non-classified status carrying one, raises
         rather than silently mis-storing.
@@ -464,7 +466,7 @@ class ExtendedClassificationResult:
         self._require_field(fld)
         if status is None:
             status = status_for_value(value)
-        if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, CONFLICT):
+        if status != CLASSIFIED and status not in STATUS_LABELS:
             raise ValueError(f"unknown status {status!r} for field {fld}")
         _assert_coherent(value, status)  # single coherence definition (models)
         setattr(self, fld, value if status == CLASSIFIED else None)
@@ -550,7 +552,7 @@ class ExtendedClassificationResult:
         # competing_values is non-None iff the resolution is a conflict (ClaimResolution
         # invariant); testing it directly narrows the type without a separate assert.
         if evaluation.competing_values is not None:
-            self.field_evidence[fld].append(_conflict_marker(fld, evaluation.competing_values))
+            self.field_evidence[fld].append(conflict_marker(fld, evaluation.competing_values))
         elif evaluation.reason == ResolutionReason.NO_CLAIMS:
             self.field_evidence[fld].append(_not_classified_marker(fld))
 
@@ -722,14 +724,19 @@ class ResolutionReason(str, Enum):
 class ClaimResolution:
     """The resolved outcome of ``evaluate_claims`` for one classification field.
 
-    ``competing_values`` is non-None only for a conflict (``None`` otherwise);
-    ``is_conflict`` derives from it, so the two can never disagree.
+    ``competing_values`` is non-None exactly when ``status`` is CONFLICT (#88), which
+    ``__post_init__`` enforces; ``is_conflict`` derives from it, so the three can
+    never disagree.
     """
 
     value: str | None
     status: str
     reason: ResolutionReason
     competing_values: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        if (self.competing_values is not None) != (self.status == CONFLICT):
+            raise ValueError(f"competing_values and status {self.status!r} disagree about being a conflict")
 
     @property
     def is_conflict(self) -> bool:

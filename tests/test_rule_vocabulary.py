@@ -792,8 +792,13 @@ def test_dimension_values_unknown_field_raises_clear_error():
 
 def test_status_values_from_schema():
     # The permissible per-field `status` values, loaded from the schema enum —
-    # incl. `conflict` (#88), which is not yet produced but is a valid status.
+    # incl. `conflict`, which the rule engine produces since #88. The Python
+    # constants (CLASSIFIED plus models.STATUS_LABELS) are pinned to the enum so a
+    # status added to one and not the other cannot pass silently.
+    from meta_disco.models import CLASSIFIED, STATUS_LABELS
+
     assert schema_vocab.status_values() == frozenset({"classified", "not_applicable", "not_classified", "conflict"})
+    assert STATUS_LABELS | {CLASSIFIED} == schema_vocab.status_values()
 
 
 def test_marker_constants_match_schema_enum():

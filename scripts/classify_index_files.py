@@ -47,6 +47,7 @@ from meta_disco.models import (
     NOT_CLASSIFIED,
     SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
+    STATUS_LABELS,
     build_field_entry,
     field_detail,
     field_label,
@@ -485,7 +486,7 @@ def propagate_to_index_files(
     # Labels field_label() returns for a field that is *not* classified. They are
     # statuses, not values, and must be re-emitted as such — a parent in
     # conflict must not become an index file classified as "conflict".
-    _sentinels = {NOT_CLASSIFIED, NOT_APPLICABLE, CONFLICT}
+    _sentinels = STATUS_LABELS
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
