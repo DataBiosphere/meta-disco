@@ -123,13 +123,21 @@ evidence}` entry — plus the controlled vocabulary:
     with a whole-file `json.load` — the corpus is millions of records (#374). An
     import is a **generation** (#369): `<source>/<version>/<dataset>/<generation>/`,
     written once and never over an earlier one; `discover` returns the newest per
-    dataset. The AnVIL importer is `anvil_evidence`, driven by the slot map in
-    `sources/anvil_slot_map.yaml` (`slot_map` loads it; `make check-slot-map`
-    checks it against the manifests; `make import-anvil-evidence` writes). Line 1
-    is the envelope, naming both sides of the join and the source's kind
-    (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant for the file — the two
-    kinds an importer may write. `wrangler_annotation` is deliberately not among
-    them: a curator enters as rules, not as evidence, per contract 1.6/1.7).
+    dataset. The AnVIL importer is `anvil_evidence`, driven by a slot map: the
+    submitter tables' `sources/anvil_slot_map.yaml` (`make check-slot-map` /
+    `make import-anvil-evidence`, under `anvil/`) and the published columns'
+    `sources/anvil_published_slot_map.yaml` (`make check-published-map` /
+    `make import-anvil-published`, under `anvil_published/`, #497). A map's top-level
+    `source_type` is the label its evidence carries and decides its directory
+    (`anvil_evidence.EVIDENCE_DIRS`). Line 1 is the envelope, naming both sides of the
+    join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant
+    for the file. `wrangler_annotation` is deliberately not among them: a curator
+    enters as rules, not as evidence, per contract 1.6/1.7).
+  - **Every repository has exactly one published source** (contract 7.12), declared in
+    `pipeline.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
+    its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it
+    and the run's preflight refuses evidence that contradicts it
+    (`source_evidence.require_one_published_source`).
   - **A line is an observation, not a claim** (#421, contract 1.1): `EvidenceEntry`
     is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
     `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and
@@ -153,8 +161,10 @@ evidence}` entry — plus the controlled vocabulary:
     through `OutputRecord` either way: `from_work_item` off the pipeline's typed work
     item, `from_record` off a standalone producer's raw dict. Both drive the field list
     from `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
-    deliberately absent from the input contract (`schema/metadata.yaml`) — they are not
-    input. Contract 7.7 — every producer writes the block — is structural since #450,
+    not slots of the input contract (`schema/metadata.yaml`): they enter as evidence the
+    published importer writes (contract 4.1 kind 2, #497), which nothing reads until
+    reconcile (#432); this block is built off the record until then.
+    Contract 7.7 — every producer writes the block — is structural since #450,
     pinned for all eleven by `RECORD_KEYS`. What structure cannot pin is that a producer
     passed `source`, and 7.11 makes that the field that matters: no recommendation names
     a publisher, only `source` does. Omitting it writes `"source": null` with no error

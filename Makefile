@@ -1,4 +1,4 @@
-.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence name-signals seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published name-signals seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -28,6 +28,8 @@ help:
 	@echo "  make download-and-survey Pull manifests, then survey what they carry"
 	@echo "  make check-slot-map     Check the AnVIL slot map against the manifests on disk (offline)"
 	@echo "  make import-anvil-evidence Import AnVIL submitter tables as a generation of evidence files"
+	@echo "  make check-published-map Check the AnVIL published map against the manifests on disk (offline)"
+	@echo "  make import-anvil-published Import AnVIL's published anvil_file columns as a generation of evidence files"
 	@echo "  make name-signals       What submitter names would claim, measured against a stored run"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
 	@echo "  make review-queue       List every evidence value whose value-map row is not authored (offline)"
@@ -189,6 +191,15 @@ check-slot-map:
 
 import-anvil-evidence:
 	uv run python scripts/import_anvil_evidence.py $(ARGS)
+
+# The AnVIL published map (#497): the harmonized anvil_file columns — what AnVIL
+# itself publishes — through the same importer, as generations under
+# data/source_evidence/anvil_published/. Offline; reads the verbatim manifest.
+check-published-map:
+	uv run python scripts/import_anvil_evidence.py --check --published
+
+import-anvil-published:
+	uv run python scripts/import_anvil_evidence.py --published $(ARGS)
 
 # What a submitter table or column *name* would claim, measured against a stored
 # run (#369): agreement, disagreement, and where inference is silent. A decision

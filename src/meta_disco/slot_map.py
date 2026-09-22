@@ -37,6 +37,13 @@ rather than overlooked (2.4). There is no ``notes`` member and the loader refuse
 by name: findings and reasoning belong in the pull request and on the issue, where they
 are read, not in a data file.
 
+**A map says what kind of source it describes.** The top-level ``source_type`` is one
+of ``IMPORTER_SOURCE_TYPES`` and becomes the envelope's ``source_type`` on every
+evidence file the importer writes from the map; it defaults to ``repository_metadata``,
+a submitter's own table, and the published map (#497) declares ``published_value``. One
+map is one kind of source — a map that mixed the two would have no place to say which
+table is which.
+
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
 concluded; ``test_slot_map`` checks the file for the strings that would. The only
 exclusions are structural. Two are enforced by the loader:
@@ -73,7 +80,7 @@ from typing import Protocol
 import yaml
 
 from .manifest_survey import name_tokens
-from .models import CLASSIFICATION_FIELDS
+from .models import CLASSIFICATION_FIELDS, SOURCE_REPOSITORY_METADATA, require_importer_source_type
 
 # The three forms a source can take, by the key its mapping carries.
 SOURCE_CELL = "cell"
@@ -139,9 +146,11 @@ class ColumnEntry:
 
 @dataclass(frozen=True)
 class SlotMap:
-    """A loaded map: the catalog it was authored against and every column entry in it."""
+    """A loaded map: the catalog it was authored against, the kind of source it
+    describes (one of ``IMPORTER_SOURCE_TYPES``), and every column entry in it."""
 
     catalog: str
+    source_type: str
     entries: tuple[ColumnEntry, ...]
 
     def datasets(self) -> list[str]:
@@ -197,8 +206,13 @@ class Readable(Protocol):
 
 
 def default_slot_map_resource():
-    """The bundled AnVIL map, as a package-data resource (a `Readable`)."""
+    """The bundled AnVIL map of the submitter tables, as a package-data resource (a `Readable`)."""
     return files(f"{__package__}.sources") / "anvil_slot_map.yaml"
+
+
+def published_slot_map_resource():
+    """The bundled AnVIL map of the published ``anvil_file`` columns (#497), as a package-data resource."""
+    return files(f"{__package__}.sources") / "anvil_published_slot_map.yaml"
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -238,14 +252,20 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
     if not isinstance(document, dict):
         raise ValueError(f"{_WHERE}: the document is {type(document).__name__}, not a mapping")
     _refuse_notes(document, _WHERE)
-    if set(document) != {"catalog", "datasets"}:
-        raise ValueError(f"{_WHERE}: top-level keys are {sorted(document)}, expected exactly ['catalog', 'datasets']")
+    if not {"catalog", "datasets"} <= set(document) <= {"catalog", "datasets", "source_type"}:
+        raise ValueError(
+            f"{_WHERE}: top-level keys are {sorted(document)}, expected 'catalog' and 'datasets' "
+            "and optionally 'source_type'"
+        )
     catalog = document["catalog"]
     if not isinstance(catalog, str) or not catalog:
         raise ValueError(f"{_WHERE}: catalog is {catalog!r}, not the name of the catalog the map was authored against")
+    source_type = require_importer_source_type(
+        document.get("source_type", SOURCE_REPOSITORY_METADATA), "source_type", _WHERE
+    )
     datasets = document["datasets"]
     _expect_nonempty_mapping(datasets, _WHERE, "dataset")
-    return SlotMap(catalog=catalog, entries=tuple(_entries(datasets)))
+    return SlotMap(catalog=catalog, source_type=source_type, entries=tuple(_entries(datasets)))
 
 
 def _entries(datasets: dict) -> Iterator[ColumnEntry]:

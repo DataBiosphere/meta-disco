@@ -6,8 +6,16 @@ from pathlib import Path
 
 import pytest
 
+from meta_disco.azul_manifest import PUBLISHED_TABLE
 from meta_disco.manifest_survey import NAME_TOKENS, name_tokens
-from meta_disco.models import CLASSIFICATION_FIELDS
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    SOURCE_CONTENT_READ,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    SOURCE_WRANGLER_ANNOTATION,
+)
+from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import (
     ENTITY_TOKENS,
     SOURCE_CELL,
@@ -16,6 +24,7 @@ from meta_disco.slot_map import (
     default_slot_map_resource,
     is_derivative_column,
     load_slot_map,
+    published_slot_map_resource,
 )
 
 MINIMAL = """
@@ -96,11 +105,24 @@ def test_a_duplicate_key_fails_naming_it(tmp_path):
     refuses(tmp_path, text, "duplicate key 'path'", "line 8", "first at line 5")
 
 
-def test_the_top_level_is_exactly_catalog_and_datasets(tmp_path):
+def test_the_top_level_is_catalog_and_datasets_and_optionally_the_source_type(tmp_path):
     refuses(tmp_path, "datasets:\n  D:\n    t:\n      c:\n        platform: [{cell: p}]\n", "top-level keys")
+    refuses(tmp_path, "catalog: c\nversion: 2\n" + MINIMAL.split("\n", 2)[2], "top-level keys")
     refuses(
         tmp_path, "catalog: ''\ndatasets:\n  D:\n    t:\n      c:\n        platform: [{cell: p}]\n", "catalog is ''"
     )
+
+
+def test_a_map_declares_the_kind_of_source_it_describes(tmp_path):
+    """The top-level `source_type` is what every envelope written from the map carries
+    (#497). Absent, a map describes a submitter's own tables; the published map says
+    `published_value`. Only a kind an importer may write is accepted — a curator enters
+    as rules, and inference's own kinds name our engine as the publisher."""
+    assert load(tmp_path, MINIMAL).source_type == SOURCE_REPOSITORY_METADATA
+    published = MINIMAL.replace("catalog: anvil15", f"catalog: anvil15\nsource_type: {SOURCE_PUBLISHED_VALUE}")
+    assert load(tmp_path, published).source_type == SOURCE_PUBLISHED_VALUE
+    for bad in (SOURCE_WRANGLER_ANNOTATION, SOURCE_CONTENT_READ, "''", "null"):
+        refuses(tmp_path, MINIMAL.replace("catalog: anvil15", f"catalog: anvil15\nsource_type: {bad}"), "source_type")
 
 
 # --- notes --------------------------------------------------------------------
@@ -256,9 +278,10 @@ class TestTheBundledMap:
                             f"{NAME_TOKENS[token][0]} token, declared under {slot}"
                         )
 
-    def test_the_map_cites_no_classification_run(self):
-        """Sources stay pure (R1, contract 3.4): nothing in the file names a run or a result."""
-        text = default_slot_map_resource().read_text(encoding="utf-8")
+    @pytest.mark.parametrize("resource", [default_slot_map_resource, published_slot_map_resource])
+    def test_the_map_cites_no_classification_run(self, resource):
+        """Sources stay pure (R1, contract 3.4): nothing in either file names a run or a result."""
+        text = resource().read_text(encoding="utf-8")
         for forbidden in ("output/", "classifications", "notes:", "agree", "inference"):
             assert forbidden not in text, forbidden
 
@@ -273,3 +296,31 @@ class TestTheBundledMap:
     def test_every_slot_in_the_map_is_a_classification_field(self):
         for entry in load_slot_map().entries:
             assert set(entry.slots) <= set(CLASSIFICATION_FIELDS)
+
+
+class TestTheBundledPublishedMap:
+    """The published map (#497): the harmonized `anvil_file` columns, which are what
+    AnVIL itself publishes for a file, read through the same importer under its own
+    label so reconcile can tell the repository's value from a submitter's."""
+
+    def test_it_loads_against_the_same_catalog_and_declares_the_published_kind(self):
+        slot_map = load_slot_map(published_slot_map_resource())
+        assert slot_map.catalog == load_slot_map().catalog
+        assert slot_map.source_type == SOURCE_PUBLISHED_VALUE
+        assert slot_map.entries
+
+    def test_it_maps_only_the_declared_published_table_and_only_its_published_columns(self):
+        """One table — AnVIL's published table — its TDR link
+        column, and each published slot read from the cell of the same name: nothing a
+        submitter wrote and no name span."""
+        for entry in load_slot_map(published_slot_map_resource()).entries:
+            assert (entry.table, entry.column) == (PUBLISHED_TABLE, "file_ref"), entry
+            assert set(entry.slots) == set(PUBLISHED_FIELDS), entry
+            for slot, sources in entry.slots.items():
+                assert [(source.form, source.value) for source in sources] == [(SOURCE_CELL, slot)], entry
+
+    def test_the_submitter_map_never_reads_the_published_table(self):
+        """The two maps are two sources: a submitter's table is one, what the repository
+        publishes is the other, and the submitter map does not reach into it. Pinned by
+        `anvil_evidence.check` too; this is the bundled map holding to it."""
+        assert not [e for e in load_slot_map().entries if e.table == PUBLISHED_TABLE]

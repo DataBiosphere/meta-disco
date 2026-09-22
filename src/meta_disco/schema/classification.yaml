@@ -56,10 +56,12 @@ classes:
   Published:
     description: >-
       What the repository publishes for this file of its own accord: the published
-      output (#424), the answer its users see today. Not this project's answer and
-      not an input to it — nothing in classification reads this block, no claim is
-      built from it, and a file's `value` is whatever inference concluded whether
-      this block is present or not. It is here so the two can be compared per file,
+      output (#424), the answer its users see today. Not this project's answer, and
+      not an input to inference — nothing in classification reads this block, no
+      claim is built from it, and a file's `value` is whatever inference concluded
+      whether this block is present or not. The published values are also written
+      as evidence (claims contract 4.1 kind 2, #497) that no run reads yet (#432),
+      never through this block. It is here so the two can be compared per file,
       which is what `scripts/generate_published_comparison.py` does.
 
       Repository-neutral by design: AnVIL is the only publisher today, but only the
@@ -1024,8 +1026,15 @@ enums:
           Data Explorer.
       repository_metadata:
         description: >-
-          Metadata the repository publishes about the file, e.g. an AnVIL verbatim
-          manifest table.
+          A table the submitter wrote, carried by the repository — an AnVIL verbatim
+          manifest's submitter table.
+      published_value:
+        description: >-
+          The value the repository's own system of record publishes for the file
+          (#497) — AnVIL's harmonized `anvil_file` columns, today read as the
+          verbatim manifest copies that TDR table (claims contract 7.12). Distinct
+          from `repository_metadata` so a reader of a conflict can tell the
+          repository's official value from a submitter's opinion.
       wrangler_annotation:
         description: >-
           A human curator's decision, recorded deliberately rather than inferred.
@@ -1047,7 +1056,7 @@ enums:
       format that takes it and a resolution stage with nowhere to put it.
 
       Listed rather than derived because LinkML has no enum-subset construct that
-      `gen-json-schema` honours; `test_the_importer_source_types_are_a_subset`
+      `gen-json-schema` honours; `test_the_external_source_types_are_a_subset`
       pins the two so a value can be added to one and not lost from the other.
       The values carry no description of their own for the same reason the pin
       exists: `source_type_enum` defines these terms, and a second copy of that
@@ -1056,6 +1065,8 @@ enums:
       external_ground_truth:
         description: As in `source_type_enum`.
       repository_metadata:
+        description: As in `source_type_enum`.
+      published_value:
         description: As in `source_type_enum`.
 
   claim_state_enum:

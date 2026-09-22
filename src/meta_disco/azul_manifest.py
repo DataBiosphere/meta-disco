@@ -78,6 +78,10 @@ SIDECAR = "manifests.json"
 # every submitter table — but these three are the harmonized entities whose
 # shape is part of the format rather than of one submitter's workspace.
 VERBATIM_FILE = "anvil_file"
+# AnVIL's published source (#497, contract 7.12): the table whose harmonized columns
+# are what AnVIL itself publishes for a file. `pipeline.PUBLISHED_TABLES` declares it
+# per repository; `anvil_evidence` holds its slot maps to it.
+PUBLISHED_TABLE = VERBATIM_FILE
 VERBATIM_ACTIVITY = "anvil_activity"
 VERBATIM_BIOSAMPLE = "anvil_biosample"
 # An entity type starting with this is read as harmonized; any other type is read as a

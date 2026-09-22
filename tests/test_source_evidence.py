@@ -39,16 +39,20 @@ import pytest
 import yaml
 
 from meta_disco import models, source_evidence
+from meta_disco.azul_manifest import API_URL, REPOSITORY, VERBATIM_FILE
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
     SOURCE_CONTENT_READ,
     SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
+from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.schema_vocab import default_schema_path
 from meta_disco.source_evidence import (
     _MAX_ENVELOPE_BYTES,
@@ -65,6 +69,7 @@ from meta_disco.source_evidence import (
     new_generation,
     read_envelope,
     report_evidence_files,
+    require_one_published_source,
     write_evidence_file,
 )
 
@@ -102,6 +107,26 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
             fetched_at=FETCHED_AT,
         ),
         **overrides,
+    )
+
+
+def published_envelope(
+    dataset: str = "AnVIL_IGVF_Mouse_R1",
+    table: str = VERBATIM_FILE,
+    version: str = "anvil15",
+    repository: str = REPOSITORY,
+    source_type: str = SOURCE_PUBLISHED_VALUE,
+) -> EvidenceFileEnvelope:
+    """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
+    labelled ``published_value``, keyed by DRS URI on both sides and versioned by the
+    catalog, about that same dataset's files."""
+    return evidence_file_envelope(
+        source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=API_URL),
+        source_type=source_type,
+        source_version=version,
+        source_key=JOIN_KEY_DRS_URI,
+        target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=version),
+        target_key=JOIN_KEY_DRS_URI,
     )
 
 
@@ -602,7 +627,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
     @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
     def test_an_envelope_with_a_source_type_an_importer_cannot_write_is_refused_when_built(self, bad):
-        """An importer reads something we do not own, so the kind is one of two.
+        """An importer reads something we do not own, so the kind is one of ``IMPORTER_SOURCE_TYPES``.
 
         `content_read` is the reachable mistake and the reason this is checked rather
         than assumed: it is a real `source_type`, and it is inference's own — an
@@ -1183,3 +1208,91 @@ def test_the_source_evidence_root_the_run_uses_is_under_data():
     """The default root is `data/source_evidence`, one directory per source under it."""
     assert DEFAULT_SOURCE_EVIDENCE_ROOT.parts[-2:] == ("data", "source_evidence")
     assert DEFAULT_SOURCE_EVIDENCE_ROOT.parent == Path(__file__).resolve().parents[1] / "data"
+
+
+class TestOnePublishedSourcePerRepository:
+    """Every repository has exactly one published source (#497, contract 7.12): the table
+    declared for it, and one current file of it per dataset. The run refuses the rest
+    at preflight, over the statuses its evidence report already gathered."""
+
+    def _published(self, tmp_path, name, **envelope):
+        path = tmp_path / name
+        write_evidence_file(path, published_envelope(**envelope), [])
+        return path
+
+    def test_one_published_file_per_dataset_from_the_declared_table_passes(self, tmp_path):
+        self._published(tmp_path, "a/anvil_file.ndjson")
+        self._published(tmp_path, "b/anvil_file.ndjson", dataset="AnVIL_ENCORE_293T")
+        write_evidence_file(tmp_path / "c/hifi.ndjson", evidence_file_envelope(), [])
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_a_published_file_from_another_table_is_refused(self, tmp_path):
+        self._published(tmp_path, "a/file.ndjson", table="file")
+        with pytest.raises(ValueError, match=r"file\.ndjson.*from table 'file'.*published source is 'anvil_file'"):
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_a_published_file_from_another_repository_is_refused(self, tmp_path):
+        """A published source is the repository's own: a file labelled `published_value`
+        whose source repository is not the one its rows are about is refused before the
+        table is even consulted."""
+        self._published(tmp_path, "a/anvil_file.ndjson", repository="HPRC Data Explorer")
+        with pytest.raises(ValueError, match="from repository 'HPRC Data Explorer' about anvil's files"):
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_the_declared_table_under_any_other_label_is_refused(self, tmp_path):
+        """The other direction: AnVIL's own `anvil_file` rows labelled `repository_metadata`
+        would reach reconcile as a submitter's opinion. Refused as `_check_kind` refuses
+        the same mislabelling in a map."""
+        self._published(tmp_path, "a/anvil_file.ndjson", source_type=SOURCE_REPOSITORY_METADATA)
+        with pytest.raises(ValueError, match="carries repository_metadata from anvil's published table 'anvil_file'"):
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_a_repository_whose_published_source_is_undeclared_can_have_no_file_claim_it(self, tmp_path):
+        self._published(tmp_path, "a/anvil_file.ndjson")
+        with pytest.raises(ValueError, match="anvil's published source is not declared"):
+            require_one_published_source(report_evidence_files(tmp_path), {})
+
+    def test_an_undeclared_repository_has_no_table_for_a_tableless_file_to_match(self, tmp_path):
+        """A source's `table` is optional and an undeclared repository's table is None; the
+        two are never taken as equal. A tableless submitter file for such a repository
+        passes, and a tableless `published_value` file for it is still refused."""
+        write_evidence_file(
+            tmp_path / "a/hprc.ndjson",
+            evidence_file_envelope(source=EvidenceFileSource(repository="hprc", dataset="R2")),
+            [],
+        )
+        require_one_published_source(report_evidence_files(tmp_path), {})
+        write_evidence_file(
+            tmp_path / "b/hprc.ndjson",
+            evidence_file_envelope(
+                source=EvidenceFileSource(repository="hprc", dataset="R2"),
+                source_type=SOURCE_PUBLISHED_VALUE,
+                target=EvidenceTarget(system="hprc", dataset="R2"),
+            ),
+            [],
+        )
+        with pytest.raises(ValueError, match="hprc's published source is not declared"):
+            require_one_published_source(report_evidence_files(tmp_path), {})
+
+    def test_two_current_published_files_for_one_dataset_are_refused_naming_both(self, tmp_path):
+        """Acceptance criterion 3: two files, both the declared table, one dataset."""
+        first = self._published(tmp_path, "a/anvil_file.ndjson")
+        second = self._published(tmp_path, "b/anvil_file.ndjson")
+        with pytest.raises(ValueError) as exc:
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+        assert str(first) in str(exc.value) and str(second) in str(exc.value)
+        assert "exactly one published source" in str(exc.value)
+
+    def test_two_catalog_versions_of_one_dataset_are_both_current_and_both_allowed(self, tmp_path):
+        """`discover` keeps the newest generation per version, so an anvil15 and an anvil16
+        generation are both current; which one the run's catalog is, is not decided here."""
+        self._published(tmp_path, "anvil15/anvil_file.ndjson", version="anvil15")
+        self._published(tmp_path, "anvil16/anvil_file.ndjson", version="anvil16")
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_submitter_files_and_unreadable_ones_are_not_judged(self, tmp_path):
+        write_evidence_file(tmp_path / "a/hifi.ndjson", evidence_file_envelope(), [])
+        write_evidence_file(tmp_path / "b/hifi.ndjson", evidence_file_envelope(), [])
+        (tmp_path / "c").mkdir()
+        (tmp_path / "c" / "broken.ndjson").write_text("{not json\n")
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)

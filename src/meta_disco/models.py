@@ -52,6 +52,9 @@ SOURCE_SIGNAL_INFERENCE = "signal_inference"
 SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
 SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
 SOURCE_REPOSITORY_METADATA = "repository_metadata"
+# What the repository's system of record publishes for the file, as distinct from a
+# submitter's table (`repository_metadata`); contract 4.1 kind 2, 7.12 (#497).
+SOURCE_PUBLISHED_VALUE = "published_value"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
 # The kinds that name a source outside this repository. A claim with one of these
 # must carry a `ClaimSource`, and only such a claim may: it is what makes a claim an
@@ -64,6 +67,7 @@ EXTERNAL_SOURCE_TYPES = frozenset(
     {
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
+        SOURCE_PUBLISHED_VALUE,
         SOURCE_WRANGLER_ANNOTATION,
     }
 )
@@ -72,13 +76,14 @@ EXTERNAL_SOURCE_TYPES = frozenset(
 # reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
 # how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
 # file a rule whose selection matches one file. So the envelope's vocabulary is these
-# two, and the format cannot express the one input the contract routes elsewhere
+# three, and the format cannot express the one input the contract routes elsewhere
 # (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
 # there should not silently become writable to a file.
 IMPORTER_SOURCE_TYPES = frozenset(
     {
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
+        SOURCE_PUBLISHED_VALUE,
     }
 )
 SOURCE_TYPES = frozenset(
@@ -91,6 +96,7 @@ SOURCE_TYPES = frozenset(
         SOURCE_DERIVATION_INHERITANCE,
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
+        SOURCE_PUBLISHED_VALUE,
         SOURCE_WRANGLER_ANNOTATION,
     }
 )

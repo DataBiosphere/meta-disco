@@ -121,7 +121,7 @@ decision no one can review (#421).
 import json
 import os
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,6 +131,7 @@ from uuid import uuid4
 from .models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_NAME,
+    SOURCE_PUBLISHED_VALUE,
     ClaimSource,
     _flat_from_dict,
     _flat_plan,
@@ -630,7 +631,8 @@ class EvidenceFileStatus:
     failure, held rather than raised so that one unreadable file does not hide the
     provenance of the ones behind it in the report.
 
-    A run does not judge an evidence file beyond this. Whether the rows still describe
+    A run does not judge an evidence file beyond this and the published-source check
+    (:func:`require_one_published_source`, #497). Whether the rows still describe
     the catalog being classified is left to the importer, which compares its own
     file's ``target.version`` against the configured catalog when deciding to re-fetch,
     and to the boundary where an enhancement is offered back to a catalog — which
@@ -905,7 +907,7 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     until the join lands (#402), and this report is the whole of what a run does with
     one today. Returns the statuses in the order printed.
 
-    The report does not judge, and the run does not stop. Whether an evidence file has
+    The report does not judge currency, and nothing here stops the run. Whether an evidence file has
     outlived what it describes is not answerable from the file: the sources have no
     common version to compare (HPRC has a major release and may drift from it), and
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
@@ -939,6 +941,72 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     for status in statuses:
         print(f"  {_describe(status, root, now)}")
     return statuses
+
+
+def require_one_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
+    """Refuse the current evidence unless each repository's published source is the one declared (#497).
+
+    ``published_tables`` is ``pipeline.PUBLISHED_TABLES`` — the repository whose files
+    the evidence is about (``EvidenceTarget.system``) to its published table — or a
+    test's stand-in; taken as a parameter so this module stays free of the pipeline
+    and of any one repository's constants. Over the
+    current files a run found (:func:`report_evidence_files`), the declaration is held
+    in both directions, with ``ValueError``. A file from a repository's own declared
+    table that carries any label but ``published_value`` is refused, the mislabelling
+    ``anvil_evidence._check_kind`` refuses in a map. A ``published_value`` file is
+    refused when its source repository is not the one its rows are about (a published
+    source is that repository's own); when its source table is not the one declared for
+    that repository, undeclared included; and when a second current one exists for the
+    same target — repository, catalog version and dataset — naming both. The version is
+    part of the key because *current* is per version
+    (:func:`discover`): an anvil15 and an anvil16 generation are both current, and
+    which describes the run's catalog is not decided here (module docstring, currency).
+    A file whose envelope could not be read is already named in the report.
+
+    The importer refuses a map that would write the wrong label (``anvil_evidence``),
+    so what this catches is a file placed by hand or written by another tool.
+    """
+    current: dict[EvidenceTarget, Path] = {}
+    for status in statuses:
+        envelope = status.envelope
+        if envelope is None:
+            continue
+        target = envelope.target
+        repository = target.system
+        # `declared` is None for a repository with no declaration, and a source's `table`
+        # may be None too, so the two are never compared as equal: an undeclared
+        # repository has no published table for a file to be from.
+        declared = published_tables.get(repository)
+        if envelope.source_type != SOURCE_PUBLISHED_VALUE:
+            if declared is not None and envelope.source.repository == repository and envelope.source.table == declared:
+                raise ValueError(
+                    f"{status.path}: carries {envelope.source_type} from {repository}'s published table "
+                    f"{envelope.source.table!r}, which carries {SOURCE_PUBLISHED_VALUE} and nothing else "
+                    "(contract 7.12)"
+                )
+            continue
+        if envelope.source.repository != repository:
+            raise ValueError(
+                f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from repository {envelope.source.repository!r} "
+                f"about {repository}'s files — a published source is the repository's own (contract 7.12)"
+            )
+        if declared is None or envelope.source.table != declared:
+            expected = (
+                f"{repository}'s published source is {declared!r}"
+                if declared is not None
+                else f"{repository}'s published source is not declared"
+            )
+            raise ValueError(
+                f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
+                f"{expected} — a repository has exactly one published source (contract 7.12)"
+            )
+        if target in current:
+            raise ValueError(
+                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{target.dataset} "
+                f"@{target.version}: {current[target]} and {status.path} — a repository has exactly one "
+                "published source (contract 7.12), so one of them is not it"
+            )
+        current[target] = status.path
 
 
 def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> str:
