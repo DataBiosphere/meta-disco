@@ -1,0 +1,84 @@
+# One entry per distinct (slot, raw_value, column) per HPRC submitter table, in the order the evidence
+# reader walks the real generation (anvil15, 20260920T175642Z) — the seeder's result depends on the
+# distinct values and their first-seen order, not on how often each occurs. tests/test_value_map.py
+# writes these back out as evidence files, one per table, so the seeding criterion runs in CI.
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: null, slot: data_type, raw_value: annotation}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: mat_chm13_cat_genes, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: pat_chm13_cat_genes, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: mat_hg38_cat_genes, slot: reference_assembly, raw_value: hg38}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: pat_hg38_cat_genes, slot: reference_assembly, raw_value: hg38}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: mat_repeat_masker, slot: data_type, raw_value: repeat_masker}
+- {dataset: ANVIL_HPRC, table: assembly_annotation, column: pat_repeat_masker, slot: data_type, raw_value: repeat_masker}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: mat_chm13_aln_bam, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: mat_chm13_aln_bai, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: pat_chm13_aln_bam, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: pat_chm13_aln_bai, slot: reference_assembly, raw_value: chm13}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: mat_grch38_aln_bam, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: mat_grch38_aln_bai, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: pat_grch38_aln_bam, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: assembly_sample, column: pat_grch38_aln_bai, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: minigraph_cactus, column: grch38_xg, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: minigraph_cactus, column: grch38_vcf, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: minigraph_cactus, column: grch38_vcf_index, slot: reference_assembly, raw_value: grch38}
+- {dataset: ANVIL_HPRC, table: sample, column: hifi, slot: platform, raw_value: hifi}
+- {dataset: ANVIL_HPRC, table: sample, column: hic, slot: assay_type, raw_value: hic}
+- {dataset: ANVIL_HPRC, table: sample, column: nanopore, slot: platform, raw_value: nanopore}
+- {dataset: AnVIL_HPRC_R2, table: alignments_v2, column: null, slot: data_type, raw_value: alignments}
+- {dataset: AnVIL_HPRC_R2, table: alignments_v2, column: reference_coordinates, slot: reference_assembly, raw_value: grch38}
+- {dataset: AnVIL_HPRC_R2, table: alignments_v2, column: reference_coordinates, slot: reference_assembly, raw_value: chm13}
+- {dataset: AnVIL_HPRC_R2, table: alignments_winnowmap, column: null, slot: data_type, raw_value: alignments}
+- {dataset: AnVIL_HPRC_R2, table: assembly, column: null, slot: data_type, raw_value: assembly}
+- {dataset: AnVIL_HPRC_R2, table: censat, column: null, slot: data_type, raw_value: censat}
+- {dataset: AnVIL_HPRC_R2, table: censat_centromeres, column: null, slot: data_type, raw_value: censat_centromeres}
+- {dataset: AnVIL_HPRC_R2, table: chains_to_chm13_mc, column: null, slot: data_type, raw_value: chains}
+- {dataset: AnVIL_HPRC_R2, table: chains_to_grch38_mc, column: null, slot: data_type, raw_value: chains}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: platform, slot: platform, raw_value: PACBIO_SMRT}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: instrument_model, slot: platform, raw_value: Sequel II}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: null, slot: platform, raw_value: deepconsensus}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: library_strategy, slot: assay_type, raw_value: WGS}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: library_source, slot: data_modality, raw_value: GENOMIC}
+- {dataset: AnVIL_HPRC_R2, table: deepconsensus, column: data_type, slot: data_type, raw_value: unaligned reads}
+- {dataset: AnVIL_HPRC_R2, table: gaps, column: null, slot: data_type, raw_value: gaps}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: platform, slot: platform, raw_value: ILLUMINA}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: instrument_model, slot: platform, raw_value: Illumina NovaSeq 6000}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: library_strategy, slot: assay_type, raw_value: Hi-C}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: null, slot: assay_type, raw_value: hic}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: library_source, slot: data_modality, raw_value: GENOMIC}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: data_type, slot: data_type, raw_value: unaligned reads}
+- {dataset: AnVIL_HPRC_R2, table: hic, column: assembly, slot: reference_assembly, raw_value: unaligned}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: platform, slot: platform, raw_value: PACBIO_SMRT}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: instrument_model, slot: platform, raw_value: Revio}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: null, slot: platform, raw_value: hifi}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: library_strategy, slot: assay_type, raw_value: WGS}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: library_source, slot: data_modality, raw_value: GENOMIC}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: data_type, slot: data_type, raw_value: unaligned reads}
+- {dataset: AnVIL_HPRC_R2, table: hifi, column: instrument_model, slot: platform, raw_value: Sequel II}
+- {dataset: AnVIL_HPRC_R2, table: illumina, column: platform, slot: platform, raw_value: ILLUMINA}
+- {dataset: AnVIL_HPRC_R2, table: illumina, column: instrument_model, slot: platform, raw_value: Illumina NovaSeq 6000}
+- {dataset: AnVIL_HPRC_R2, table: illumina, column: null, slot: platform, raw_value: illumina}
+- {dataset: AnVIL_HPRC_R2, table: illumina, column: library_strategy, slot: assay_type, raw_value: WGS}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: platform, slot: platform, raw_value: PACBIO}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: instrument_model, slot: platform, raw_value: REVIO}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: null, slot: platform, raw_value: kinnex}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: library_strategy, slot: assay_type, raw_value: isoseq}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: library_source, slot: data_modality, raw_value: transcriptomic}
+- {dataset: AnVIL_HPRC_R2, table: kinnex, column: data_type, slot: data_type, raw_value: bam}
+- {dataset: AnVIL_HPRC_R2, table: liftoff_genes, column: null, slot: data_type, raw_value: liftoff}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: platform, slot: platform, raw_value: OXFORD_NANOPORE}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: instrument_model, slot: platform, raw_value: PromethION}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: null, slot: platform, raw_value: ont}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: library_strategy, slot: assay_type, raw_value: WGS}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: library_source, slot: data_modality, raw_value: GENOMIC}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: data_type, slot: data_type, raw_value: unaligned reads with 5mC mods}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: data_type, slot: data_type, raw_value: unaligned reads with 5mCG_5hmCG mods}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: instrument_model, slot: platform, raw_value: MinION}
+- {dataset: AnVIL_HPRC_R2, table: ont, column: instrument_model, slot: platform, raw_value: GridION}
+- {dataset: AnVIL_HPRC_R2, table: ont_methylation, column: null, slot: platform, raw_value: ont}
+- {dataset: AnVIL_HPRC_R2, table: ont_methylation, column: null, slot: data_modality, raw_value: methylation}
+- {dataset: AnVIL_HPRC_R2, table: repeat_masker_bed, column: null, slot: data_type, raw_value: repeat_masker}
+- {dataset: AnVIL_HPRC_R2, table: repeat_masker_out, column: null, slot: data_type, raw_value: repeat_masker}
+- {dataset: AnVIL_HPRC_R2, table: segdups, column: null, slot: data_type, raw_value: segdups}
+- {dataset: AnVIL_HPRC_R2, table: t2t_sequences, column: null, slot: data_type, raw_value: sequences}
+- {dataset: AnVIL_HPRC_R2, table: to_ref_chm13_winnowmap, column: null, slot: reference_assembly, raw_value: chm13}
+- {dataset: AnVIL_HPRC_R2, table: to_ref_grch38_winnowmap, column: null, slot: reference_assembly, raw_value: grch38}
+- {dataset: AnVIL_HPRC_R2, table: to_ref_grch38_winnowmap_bai, column: null, slot: reference_assembly, raw_value: grch38}

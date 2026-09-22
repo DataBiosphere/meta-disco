@@ -96,10 +96,10 @@ evidence}` entry — plus the controlled vocabulary:
   reconcile, and what the pipeline's stages are. Cite it by assertion number (`3.4`,
   `6.9`) rather than restating it — restating is the drift it exists to stop.
   **Read its "What is not true yet" section before building against it.** Much of it
-  describes a target state: the slot map, the translation table, the read-sources and
-  reconcile stages do not exist yet. The evidence file does (#401, amended by
-  #421) and nothing reads one. Its Open section lists what is still undecided.
-  Epic #391 tracks the work; #414 comes first.
+  describes a target state: the read-sources and reconcile stages do not exist yet.
+  The evidence file (#401, amended by #421), the slot map (#369) and the translation
+  table (#414) do, and no classification run reads the evidence or the table. Its Open
+  section lists what is still undecided. Epic #391 tracks the work.
 
 - **What the code does today, which the contract does not replace:**
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
@@ -134,8 +134,15 @@ evidence}` entry — plus the controlled vocabulary:
     is `(field, target_key_value, raw_value, source)`. An importer writes no `value`,
     `status`, `claim_state`, `rule_id` or `tier` — each is refused by name — and
     `raw_value` is transcribed verbatim and checked only for being a string. The
-    vocabulary check on a *mapped* value belongs to the translation table (#414),
-    which validates at load. Do not reintroduce one here.
+    vocabulary check on a *mapped* value belongs to the translation table (`value_map`,
+    #414), which checks an authored row's terms when it loads. Do not reintroduce one here.
+  - **The value translation table** is `rules/value_map.yaml`, loaded and applied by
+    `value_map.py` (#414; the row is contract 3.9, matching 3.5, seeded/authored 3.11,
+    scope 3.12, the queue 5.2). A row without a `reason` is seeded and declares nothing.
+    Row ids are `<slot>.<slug>`, and no rule id contains a dot, which is what keeps the
+    two apart. `make seed-value-map` appends seeded rows and never rewrites one;
+    `make review-queue` lists the unauthored values. `claims_from` builds a line's
+    claims through `make_claim` for reconcile (#432) — nothing in a run calls it.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;

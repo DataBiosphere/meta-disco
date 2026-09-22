@@ -1,4 +1,4 @@
-.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence name-signals corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence name-signals seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -29,6 +29,8 @@ help:
 	@echo "  make check-slot-map     Check the AnVIL slot map against the manifests on disk (offline)"
 	@echo "  make import-anvil-evidence Import AnVIL submitter tables as a generation of evidence files"
 	@echo "  make name-signals       What submitter names would claim, measured against a stored run"
+	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
+	@echo "  make review-queue       List every evidence value whose value-map row is not authored (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make published-comparison Compare a run against the values the repository publishes"
 	@echo "  make validation-report  Generate validation report against ground truth"
@@ -195,6 +197,15 @@ import-anvil-evidence:
 # written evidence instead of the names.
 name-signals:
 	uv run python scripts/name_signals.py $(ARGS)
+
+# The value translation table (#414; src/meta_disco/value_map.py). Seed it from the
+# current evidence, or list its review queue; `ARGS="--dataset X"` scans one dataset.
+# Both offline.
+seed-value-map:
+	uv run python scripts/value_map.py $(ARGS) seed
+
+review-queue:
+	uv run python scripts/value_map.py $(ARGS) queue
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
 # comparison to published-comparison). Its input, output/hprc/hprc_validation_results.json,

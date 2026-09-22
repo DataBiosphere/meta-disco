@@ -3,7 +3,7 @@
 A slot map is the importer's half of reading a source (claims contract 1.3, 2.2): it
 says *where* a raw value for a slot comes from and nothing about what the value means.
 It holds no vocabulary (1.5). `anvil_evidence` reads the AnVIL map to turn the verbatim
-manifests into evidence files; a translation table (#414, not built) is where raw
+manifests into evidence files; the translation table (`value_map`, #414) is where raw
 values become terms.
 
 **One entry shape.** An entry is keyed by the **file-link column** — the column whose
@@ -93,9 +93,10 @@ DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "f
 # entity-shaped too but no slot token maps them, so there is nothing to refuse.
 ENTITY_TOKENS = frozenset({"interval"})
 
-# The one member a map must not carry, and what the refusal says.
-_NOTES = "notes"
-_NO_NOTES = (
+# The one member a data file must not carry, and what the refusal says. Shared with
+# `value_map`, whose rows carry a `reason` and no prose either.
+NOTES = "notes"
+NO_NOTES = (
     "there is no notes member — findings and reasoning go in the pull request and on the issue, "
     "where they are read; a data file maps what maps and is otherwise silent"
 )
@@ -292,8 +293,8 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
     if not isinstance(item, dict) or len(item) != 1:
         raise ValueError(f"{at}: a source is one mapping with one key ({', '.join(SOURCE_FORMS)}), not {item!r}")
     ((form, value),) = item.items()
-    if form == _NOTES:
-        raise ValueError(f"{at}: {_NO_NOTES}")
+    if form == NOTES:
+        raise ValueError(f"{at}: {NO_NOTES}")
     if form not in SOURCE_FORMS:
         raise ValueError(f"{at}: {form!r} is not a source form (expected one of {SOURCE_FORMS})")
     if not isinstance(value, str) or not value:
@@ -339,8 +340,8 @@ def _span_of(span: str, name: str) -> bool:
 
 
 def _refuse_notes(mapping: dict, at: str) -> None:
-    if _NOTES in mapping:
-        raise ValueError(f"{at}: {_NO_NOTES}")
+    if NOTES in mapping:
+        raise ValueError(f"{at}: {NO_NOTES}")
 
 
 def _expect_nonempty_mapping(value: object, at: str, noun: str) -> None:

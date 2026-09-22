@@ -1,0 +1,197 @@
+# The value translation table (#414): raw source values to vocabulary terms.
+# Shape, matching, selection and the seeder: src/meta_disco/value_map.py.
+# A row with a `reason` is authored; without one it is seeded and declares nothing.
+rows:
+  # --- assay_type -----------------------------------------------------------------
+  - id: "assay_type.hi_c"
+    match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}
+    declares: {data_modality: genomic}
+    reason: >-
+      Hi-C is chromatin-conformation sequencing of genomic DNA, so the modality is genomic.
+      The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type.
+      `hic` is the table-name span of the same data.
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "assay_type.isoseq"
+    match: {slot: assay_type, value: "isoseq"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "assay_type.wgs"
+    match: {slot: assay_type, value: "WGS"}
+    declares: {assay_type: WGS, data_modality: genomic}
+    reason: Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  # --- data_modality --------------------------------------------------------------
+  - id: "data_modality.genomic"
+    match: {slot: data_modality, value: "GENOMIC"}
+    declares: {data_modality: genomic}
+    reason: >-
+      SRA's library_source value for genomic DNA, spelled as our term. Identity by ruling, not by
+      spelling; if a bisulfite or ATAC library ever arrives under it, narrow this row rather than rank it.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_modality.methylation"
+    match: {slot: data_modality, value: "methylation"}
+    declares: {data_modality: epigenomic.methylation}
+    reason: The `ont_methylation` table-name span; its files are bigwig methylation tracks.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_modality.transcriptomic"
+    match: {slot: data_modality, value: "transcriptomic"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  # --- data_type ------------------------------------------------------------------
+  - id: "data_type.alignments"
+    match: {slot: data_type, value: "alignments"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.annotation"
+    match: {slot: data_type, value: "annotation"}
+    declares: {data_type: annotations}
+    reason: The `assembly_annotation` table-name span; its files are feature annotations of an assembly.
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z"]
+  - id: "data_type.assembly"
+    match: {slot: data_type, value: "assembly"}
+    declares: {data_type: assembly}
+    reason: The `assembly` table-name span; its files are the de-novo assemblies (.fa.gz).
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.bam"
+    match: {slot: data_type, value: "bam"}
+    declares: {}
+    reason: >-
+      A file format, not a data type: the kinnex table's data_type column holds what its
+      filetype column should. Ruled to mean nothing here rather than left queued.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.censat"
+    match: {slot: data_type, value: "censat"}
+    declares: {data_type: annotations}
+    reason: Centromeric satellite annotation tracks (BED) of an assembly.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.censat_centromeres"
+    match: {slot: data_type, value: "censat_centromeres"}
+    declares: {data_type: annotations}
+    reason: Centromere annotation tracks (BED) of an assembly.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.chains"
+    match: {slot: data_type, value: "chains"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.gaps"
+    match: {slot: data_type, value: "gaps"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.liftoff"
+    match: {slot: data_type, value: "liftoff"}
+    declares: {data_type: annotations}
+    reason: Gene annotations lifted onto an assembly with Liftoff (GFF3).
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.repeat_masker"
+    match: {slot: data_type, value: "repeat_masker"}
+    declares: {data_type: annotations}
+    reason: RepeatMasker repeat annotations of an assembly (BED and .out).
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.segdups"
+    match: {slot: data_type, value: "segdups"}
+    declares: {data_type: annotations}
+    reason: Segmental duplication tracks (BED) of an assembly.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.sequences"
+    match: {slot: data_type, value: "sequences"}
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.unaligned_reads"
+    match: {slot: data_type, value: "unaligned reads"}
+    declares: {data_type: reads}
+    reason: Reads, as the source says; whether aligned is not the data type.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.unaligned_reads_with_5mc_mods"
+    match: {slot: data_type, value: "unaligned reads with 5mC mods"}
+    declares: {data_type: reads}
+    reason: Reads carrying base-modification calls; the modification tags do not change the data type.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_type.unaligned_reads_with_5mcg_5hmcg_mods"
+    match: {slot: data_type, value: "unaligned reads with 5mCG_5hmCG mods"}
+    declares: {data_type: reads}
+    reason: Reads carrying base-modification calls; the modification tags do not change the data type.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  # --- platform -------------------------------------------------------------------
+  - id: "platform.deepconsensus"
+    match: {slot: platform, value: "deepconsensus"}
+    declares: {platform: PACBIO}
+    reason: DeepConsensus is PacBio's HiFi read-polishing method; the span names PacBio data. Platform only.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.gridion"
+    match: {slot: platform, value: "GridION"}
+    declares: {platform: ONT}
+    reason: An Oxford Nanopore instrument.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.hifi"
+    match: {slot: platform, value: "hifi"}
+    declares: {platform: PACBIO}
+    reason: HiFi reads are PacBio's; the span says platform only and implies no assay (#430).
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.illumina"
+    match: {slot: platform, value: "ILLUMINA", alternates: ["illumina"]}
+    declares: {platform: ILLUMINA}
+    reason: Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.illumina_novaseq_6000"
+    match: {slot: platform, value: "Illumina NovaSeq 6000"}
+    declares: {platform: ILLUMINA}
+    reason: An Illumina instrument model; the model implies the platform.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.kinnex"
+    match: {slot: platform, value: "kinnex"}
+    declares: {platform: PACBIO}
+    reason: Kinnex is a PacBio library kit; the span names PacBio data. Platform only.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.minion"
+    match: {slot: platform, value: "MinION"}
+    declares: {platform: ONT}
+    reason: An Oxford Nanopore instrument.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.nanopore"
+    match: {slot: platform, value: "nanopore"}
+    declares: {platform: ONT}
+    reason: A column-name span naming Oxford Nanopore data.
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z"]
+  - id: "platform.ont"
+    match: {slot: platform, value: "ont"}
+    declares: {platform: ONT}
+    reason: Spelled as our term, as a table-name span. Identity by ruling.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.oxford_nanopore"
+    match: {slot: platform, value: "OXFORD_NANOPORE"}
+    declares: {platform: ONT}
+    reason: SRA's platform value for Oxford Nanopore.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.pacbio"
+    match: {slot: platform, value: "PACBIO"}
+    declares: {platform: PACBIO}
+    reason: Spelled as our term (the kinnex table's spelling). Identity by ruling.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.pacbio_smrt"
+    match: {slot: platform, value: "PACBIO_SMRT"}
+    declares: {platform: PACBIO}
+    reason: SRA's platform value for PacBio.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.promethion"
+    match: {slot: platform, value: "PromethION"}
+    declares: {platform: ONT}
+    reason: An Oxford Nanopore instrument.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.revio"
+    match: {slot: platform, value: "Revio", alternates: ["REVIO"]}
+    declares: {platform: PACBIO}
+    reason: A PacBio instrument; the kinnex table spells it in capitals.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.sequel_ii"
+    match: {slot: platform, value: "Sequel II"}
+    declares: {platform: PACBIO}
+    reason: A PacBio instrument.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  # --- reference_assembly ---------------------------------------------------------
+  - id: "reference_assembly.chm13"
+    match: {slot: reference_assembly, value: "chm13"}
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "reference_assembly.grch38"
+    match: {slot: reference_assembly, value: "grch38", alternates: ["hg38"]}
+    declares: {reference_assembly: GRCh38}
+    reason: Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly.
+    seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "reference_assembly.unaligned"
+    match: {slot: reference_assembly, value: "unaligned"}
+    declares: {reference_assembly: not_applicable}
+    reason: The source's word for a file with no reference; the slot does not apply.
+    seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]

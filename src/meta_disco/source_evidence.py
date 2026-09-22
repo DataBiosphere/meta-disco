@@ -13,7 +13,9 @@ transcribes what a source wrote about a slot and stops; only the rule engine tur
 that raw value into one of our terms. #401 shipped the other arrangement — a line
 carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
-(#414), applied by reconcile, which is also where that vocabulary check now is.
+(``value_map``, #414), whose ``claims_from`` is built for the reconcile stage (#432)
+and is called by nothing in a run until that stage exists; the table checks a declared
+term against its slot's vocabulary when it loads.
 
 This module is the artefact and everything about it: the envelope record and its
 parts, the layout on disk, the line format, the streaming writer and reader, and the
@@ -717,6 +719,28 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     return written
 
 
+def list_cell(raw_value: str) -> list[str] | None:
+    """The elements of a list-valued cell, or None where ``raw_value`` is one scalar.
+
+    The inverse of how ``anvil_evidence._transcribe`` writes a list cell: a string is
+    written verbatim and anything else as its JSON, so a list arrives as a JSON array
+    of strings. Only that shape is a list here; a scalar that happens to start with
+    ``[`` and is not one stays a scalar, and so does the text ``[]`` — the importer
+    writes no line for an empty list, so one that arrives is a string the source
+    wrote. Kept beside the line format so the encoding and its decoding are one fact
+    in one module.
+    """
+    if not raw_value.lstrip().startswith("["):
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except ValueError:
+        return None
+    if parsed and isinstance(parsed, list) and all(isinstance(e, str) for e in parsed):
+        return parsed
+    return None
+
+
 def read_envelope(path: Path) -> EvidenceFileEnvelope:
     """The evidence file's envelope, read from its first line alone.
 
@@ -1055,8 +1079,8 @@ def _entry_from_line(
     process could not reach ``evaluate_claims`` as an unvalidated dict. A row is not a
     claim and declares nothing, so there is no claim to rebuild and nothing here can
     reach resolution: the rule engine makes the claim later, from this raw value and
-    the translation table (#414), and that is where ``make_claim``'s invariants and
-    the vocabulary check now apply.
+    the translation table (``value_map``, #414); ``make_claim``'s invariants apply
+    there, and the vocabulary check when the table loads.
 
     What replaces it is smaller and is all the shape a row has: the line's members are
     exactly ``_LINE_KEYS``, ``field`` is a known slot, ``raw_value`` is a string, and
