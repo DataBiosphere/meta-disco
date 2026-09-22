@@ -125,7 +125,9 @@ def test_detect_paired_end_indicators(read_name, paired):
 
 
 def _assert_parsed(result, expected):
-    """``result`` is the parse ``expected`` names: None, or an object with those fields."""
+    """Assert the parse matches ``expected``: ``None`` means no parse; otherwise every field
+    named in ``expected`` holds the value given, and fields it does not name are not checked.
+    """
     if expected is None:
         assert result is None
         return
