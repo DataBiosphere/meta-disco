@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
+from meta_disco.deployments import PROD
 from meta_disco.file_name import FileName
 from meta_disco.models import CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
@@ -249,7 +250,7 @@ def main():
         run_time = run_dir.name
 
     # Load dataset stats from source metadata
-    metadata_path = Path("data/anvil/anvil_files_metadata.ndjson")
+    metadata_path = PROD.input_ndjson
     dataset_counts = Counter()
     if metadata_path.is_file():
         with metadata_path.open() as f:

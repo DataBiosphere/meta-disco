@@ -19,6 +19,7 @@ from meta_disco.azul_manifest import (
     manifest_path,
     save_sidecar,
 )
+from meta_disco.deployments import PROD
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
@@ -33,7 +34,7 @@ from meta_disco.source_evidence import (
 
 CATALOG = "anvil15"
 FETCHED = "2026-09-03T21:45:47.517283"
-REAL_MANIFESTS = Path("data/anvil/manifest") / CATALOG
+REAL_MANIFESTS = PROD.input_root / "manifest" / CATALOG
 
 
 def drs(n: int) -> str:
@@ -626,7 +627,7 @@ class TestThePublishedMap:
 
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
 def test_the_bundled_map_agrees_with_the_anvil15_manifests():
-    assert ae.check(load_slot_map(), Path("data/anvil"), CATALOG) == []
+    assert ae.check(load_slot_map(), PROD.input_root, CATALOG) == []
 
 
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="anvil15 manifests are not on disk (make download)")
@@ -634,8 +635,8 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     """Acceptance criterion 4 (#497): #472's counts, measured on the compact manifest,
     reproduced from the `anvil_file` rows of the verbatim one."""
     published = load_slot_map(published_slot_map_resource())
-    assert ae.check(published, Path("data/anvil"), CATALOG) == []
-    imports = ae.import_all(published, Path("data/anvil"), CATALOG, tmp_path / "ev", generation="20260920T000000Z")
+    assert ae.check(published, PROD.input_root, CATALOG) == []
+    imports = ae.import_all(published, PROD.input_root, CATALOG, tmp_path / "ev", generation="20260920T000000Z")
     files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
     two_valued = 0
     for run in imports:

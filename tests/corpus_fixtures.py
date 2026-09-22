@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from meta_disco.deployments import PROD
 from meta_disco.evidence import (
     BamEvidence,
     CachedEvidence,
@@ -34,7 +35,7 @@ from meta_disco.evidence import (
 # The corpus snapshot `make classify` runs against, and the evidence cache it writes.
 # Both are CWD-relative, mirroring the code's own defaults (Makefile, pipeline.py), so
 # the guard looks exactly where a real run would.
-SNAPSHOT = Path("data/anvil/anvil_files_metadata.json")
+SNAPSHOT = PROD.input_file
 EVIDENCE_BASE = Path("data/evidence/anvil")
 
 # The typed record each fetcher caches, keyed by FileTypeConfig.name. FileTypeConfig

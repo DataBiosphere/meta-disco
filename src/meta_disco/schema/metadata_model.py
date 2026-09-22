@@ -69,13 +69,13 @@ class LinkMLMeta(RootModel):
 linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'default_range': 'string',
      'description': 'The contract for a raw AnVIL file metadata record — one entry '
-                    'in the `files` array of '
-                    '`data/anvil/anvil_files_metadata.json`, as derived by '
-                    '`scripts/download_anvil_manifest.py` from the compact Azul '
-                    'manifest (#368) or by `snapshot_input.derive_records` from a '
-                    "TDR snapshot's tables (#499). An envelope "
-                    '`azul_manifest.metadata_block` wrote says which in '
-                    '`input_source`.\n'
+                    "in the `files` array of a deployment's "
+                    '`data/anvil/<deployment>/anvil_files_metadata.json`, as '
+                    'derived by `scripts/download_anvil_manifest.py` from the '
+                    'compact Azul manifest (#368) or by '
+                    "`snapshot_input.derive_records` from a TDR snapshot's tables "
+                    '(#499). An envelope `azul_manifest.metadata_block` wrote says '
+                    'which in `input_source`, and names its `deployment` (#500).\n'
                     'This is the *input* to classification, distinct from '
                     '`classification.yaml` which models the classified *output*.\n'
                     'It models what classification consumes, and nothing else. '

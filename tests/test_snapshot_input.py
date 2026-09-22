@@ -26,18 +26,20 @@ from meta_disco.azul_manifest import (
     FORMAT_VERBATIM,
     INPUT_SOURCE_AZUL_COMPACT,
     INPUT_SOURCE_TDR_DIRECT,
+    dataset_entry,
     iter_compact_records,
     manifest_dir,
     manifest_path,
     metadata_block,
     write_input_files,
 )
+from meta_disco.deployments import PROD
 from tests.metadata_fixtures import valid_record, write_metadata
 from tests.tdr_fixtures import DisagreeingClient, FakeClient, table_of
 
 SNAPSHOT = tdr.Snapshot(project="datarepo-ce3811eb", name="ANVIL_1000G_2019_Dev")
-CATALOG = "anvil15"
-ROOT = Path("data/anvil")
+CATALOG = PROD.catalog
+ROOT = PROD.input_root
 REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
 # The six per-file fields the issue's parity criteria compare — what the compact join
@@ -175,8 +177,8 @@ class TestDirectRead:
 class TestTheGate:
     def test_a_tdr_sourced_input_with_no_entry_id_passes(self, tmp_path, client, capsys):
         # AC 3, first half: the derived input on disk, through the gate as a run would.
-        entries = {DATASET_ROW["title"]: {"file_count": 3, "source_id": None, "source_spec": None}}
-        block = metadata_block("anvil", entries, datetime(2026, 9, 22), INPUT_SOURCE_TDR_DIRECT)
+        entries = {DATASET_ROW["title"]: dataset_entry(3, SNAPSHOT)}
+        block = metadata_block(PROD, entries, datetime(2026, 9, 22), INPUT_SOURCE_TDR_DIRECT)
         n = write_input_files(tmp_path, block, si.derive_records(si.TdrDirect(client, SNAPSHOT)))
         assert n == 3
         written = json.loads((tmp_path / "anvil_files_metadata.json").read_text())

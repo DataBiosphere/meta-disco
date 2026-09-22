@@ -12,7 +12,7 @@ the file here, where asking the predicate would drop it from the run entirely.
 
 Usage:
     python scripts/classify_remaining_files.py
-    python scripts/classify_remaining_files.py --metadata data/anvil/anvil_files_metadata.json
+    python scripts/classify_remaining_files.py --metadata data/anvil/prod/anvil_files_metadata.json
 """
 
 import argparse
@@ -20,6 +20,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from meta_disco.deployments import PROD
 from meta_disco.metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
@@ -175,7 +176,7 @@ def main():
         "--metadata",
         "-m",
         type=Path,
-        default=Path("data/anvil/anvil_files_metadata.json"),
+        default=PROD.input_file,
         help="Path to source metadata JSON",
     )
     parser.add_argument(

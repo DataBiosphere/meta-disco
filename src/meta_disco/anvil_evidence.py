@@ -43,7 +43,6 @@ from pathlib import Path
 
 from .azul_manifest import (
     ANVIL_FILE_HANDLE_COLUMNS,
-    API_URL,
     FORMAT_COMPACT,
     FORMAT_VERBATIM,
     PUBLISHED_TABLE,
@@ -55,6 +54,7 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
+from .deployments import PROD
 from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
@@ -336,7 +336,10 @@ def import_dataset(
     tables = []
     try:
         for table in slot_map.tables(dataset):
-            file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
+            # The manifests this importer reads are prod's (`scripts/import_anvil_evidence.py`
+            # defaults to prod's input root), so the URL is prod's service. Reading a
+            # deployment's evidence through either snapshot reader is #508's.
+            file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=PROD.service)
             envelope = EvidenceFileEnvelope(
                 source=file_source,
                 source_type=source_type,

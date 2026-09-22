@@ -27,10 +27,11 @@ import sys
 from pathlib import Path
 
 from meta_disco.anvil_evidence import _chosen_datasets, check, describe, import_all
+from meta_disco.deployments import PROD
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
 
-DEFAULT_DATA_DIR = Path("data/anvil")
+DEFAULT_DATA_DIR = PROD.input_root
 
 
 def main() -> int:

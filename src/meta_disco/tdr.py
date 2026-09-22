@@ -65,14 +65,33 @@ class Snapshot:
     snapshot is immutable. The same address reaches the repo in one other
     spelling, the Azul envelope's ``sources.source_spec``
     (``tdr:bigquery:gcp:<project>:<snapshot>``, see
-    :func:`meta_disco.azul_manifest.dataset_source`). No conversion between the
-    two exists yet — the direct reader (``snapshot_input.TdrDirect``, #499) takes
-    a built ``Snapshot`` — so the first caller that needs one (#500, which maps a
-    deployment's datasets to their snapshots) should add it here, as a constructor,
-    rather than split the string where it is read."""
+    :func:`meta_disco.azul_manifest.dataset_source`); :meth:`from_source_spec`
+    and :attr:`source_spec` convert between the two, here rather than where the
+    string is read (#500 compares a manifest's against a deployment's declared
+    snapshot, ``deployments.Deployment.snapshots``)."""
 
     project: str
     name: str
+
+    #: The fixed leading fields of a ``source_spec``: TDR's provider, engine and cloud.
+    SPEC_PREFIX = ("tdr", "bigquery", "gcp")
+
+    @classmethod
+    def from_source_spec(cls, spec: str) -> Snapshot:
+        """The snapshot a ``tdr:bigquery:gcp:<project>:<snapshot>`` spec addresses.
+
+        Refused with ``ValueError`` unless the spec has exactly five colon-separated
+        fields and the leading three are :attr:`SPEC_PREFIX`: the format is TDR's, and a
+        spec of another shape is not one this module knows how to query."""
+        parts = spec.split(":")
+        if len(parts) != 5 or tuple(parts[:3]) != cls.SPEC_PREFIX or not all(parts[3:]):
+            raise ValueError(f"not a TDR BigQuery source spec ('tdr:bigquery:gcp:<project>:<snapshot>'): {spec!r}")
+        return cls(project=parts[3], name=parts[4])
+
+    @property
+    def source_spec(self) -> str:
+        """This address in the ``source_spec`` spelling."""
+        return ":".join((*self.SPEC_PREFIX, self.project, self.name))
 
     @property
     def dataset(self) -> str:

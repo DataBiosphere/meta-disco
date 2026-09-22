@@ -11,9 +11,14 @@ with a declared record key (`pipeline.SOURCE_RECORD_KEYS`, #446), or if that key
 carried by more than one record — the two things a run needs of its input beyond the
 records themselves, checked here so they stop a run before it starts.
 
+`--deployment` (``prod`` by default) picks the input to check, its
+``anvil_files_metadata.json`` under the deployment's root (``meta_disco.deployments``,
+#500); `--input` names a file directly and wins over it.
+
 Usage:
     python scripts/validate_metadata.py
-    python scripts/validate_metadata.py --input data/anvil/anvil_files_metadata.json
+    python scripts/validate_metadata.py --deployment dev
+    python scripts/validate_metadata.py --input data/anvil/prod/anvil_files_metadata.json
 """
 
 import argparse
@@ -21,22 +26,29 @@ import json
 import sys
 from pathlib import Path
 
+from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from meta_disco.metadata_schema import validate_records
 from meta_disco.pipeline import key_field, load_snapshot, record_key, repeated_key_values
-
-DEFAULT_INPUT = Path("data/anvil/anvil_files_metadata.json")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--deployment",
+        default=DEFAULT_DEPLOYMENT,
+        choices=sorted(DEPLOYMENTS),
+        help=f"Validate this deployment's input (default: {DEFAULT_DEPLOYMENT})",
+    )
+    parser.add_argument(
         "--input",
         "-i",
         type=Path,
-        default=DEFAULT_INPUT,
-        help=f"Metadata file to validate (default: {DEFAULT_INPUT})",
+        default=None,
+        help="Metadata file to validate (default: the deployment's anvil_files_metadata.json)",
     )
     args = parser.parse_args(argv)
+    if args.input is None:
+        args.input = DEPLOYMENTS[args.deployment].input_file
 
     if not args.input.exists():
         print(f"Input not found: {args.input} (run `make download` first)")

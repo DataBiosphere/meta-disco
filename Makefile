@@ -12,8 +12,8 @@ help:
 	@echo "  make format-check       Check formatting without writing (CI)"
 	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
 	@echo "  make classify-and-report Run classify + regenerate all reports"
-	@echo "  make download           Pull AnVIL metadata as Azul manifests, per dataset (CATALOG=anvil15)"
-	@echo "  make validate-metadata  Check a downloaded metadata file's shape before classifying"
+	@echo "  make download           Derive a deployment's input (DEPLOYMENT=prod|dev, INPUT_SOURCE=azul-compact|azul-verbatim|tdr-direct)"
+	@echo "  make validate-metadata  Check a derived input's shape before classifying (DEPLOYMENT=prod|dev)"
 	@echo "  make probe-tdr          Probe a TDR snapshot in BigQuery (PROJECT=... SNAPSHOT=... [TABLE=...] [BILLING_PROJECT=...])"
 	@echo ""
 	@echo "  make classify-bam       Classify BAM/CRAM files (network required)"
@@ -50,7 +50,8 @@ test:
 
 # The network-marked checks, which `make test` deliberately skips: they call a
 # third-party API, so they are opt-in rather than part of the default gate.
-# Today that is the Ensembl cross-check on REFERENCE_CONTIG_LENGTHS (#466).
+# Today that is the Ensembl cross-check on REFERENCE_CONTIG_LENGTHS (#466) and the
+# dev deployment's verbatim pull (#500), which writes under a temporary root.
 test-network:
 	uv run pytest tests/ -v -m network
 
@@ -99,7 +100,12 @@ format-check:
 # before a trailing newline, while exclusions.MD5_RE anchors with `\Z`. A file_md5sum of
 # "<32 hex>\n" therefore passes this gate and is still excluded from classification. That
 # record is named in the run's excluded_files.json instead.
-classify: validate-metadata
+#
+# A classification run is not given a deployment yet (#480): it reads prod's input, so
+# its gate checks prod's input whatever DEPLOYMENT says, rather than depending on the
+# validate-metadata target, which follows DEPLOYMENT.
+classify:
+	uv run python scripts/validate_metadata.py --deployment prod
 	uv run python scripts/rerun_all_classifications.py
 
 classify-hprc:
@@ -107,13 +113,21 @@ classify-hprc:
 
 classify-and-report: classify classify-hprc all-reports
 
-# The Azul catalog generation to pull. Named explicitly (#335, #368): the
-# service default advances without notice, and a snapshot must record which
-# generation it captured.
-CATALOG ?= anvil15
+# Which deployment's input to derive, and how (#500). The deployment
+# (src/meta_disco/deployments.py) names the Azul service, the catalog, the root the
+# input is written under (data/anvil/<deployment>/) and each dataset's TDR snapshot;
+# the catalog is named there explicitly (#335, #368), because the service default
+# advances without notice. INPUT_SOURCE is how the records are derived: azul-compact
+# (the default; both manifests, the compact join), azul-verbatim (the verbatim manifest
+# only) or tdr-direct (the snapshots read in place from BigQuery, nothing downloaded).
+# An unknown value of either is refused before any request, query or write.
+# tdr-direct runs with `--extra tdr`, the way probe-tdr does, and takes its identity
+# from the environment: see meta_disco.tdr.
+DEPLOYMENT ?= prod
+INPUT_SOURCE ?= azul-compact
 
 download:
-	uv run python scripts/download_anvil_manifest.py --catalog $(CATALOG)
+	uv run $(if $(filter tdr-direct,$(INPUT_SOURCE)),--extra tdr) python scripts/download_anvil_manifest.py --deployment $(DEPLOYMENT) --input-source $(INPUT_SOURCE) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
 
 # Probe a TDR snapshot through the BigQuery layer (#498): list its tables, count
 # each, stream one (TABLE; the script's default is anvil_file) and time it.
@@ -130,7 +144,11 @@ probe-tdr:
 # `make download`; `make classify` also runs it as a prerequisite (#376), so a long
 # run cannot start on a corpus that violates the contract.
 validate-metadata:
-	uv run python scripts/validate_metadata.py
+	uv run python scripts/validate_metadata.py --deployment $(DEPLOYMENT)
+
+# The input a classification run reads: prod's, until a run is given a deployment
+# (#480). The same path is `deployments.PROD.input_file`.
+PROD_INPUT := data/anvil/prod/anvil_files_metadata.json
 
 # `make classify-headers` runs the six header types into ONE dated partials folder
 # (a shared RUN_DIR). A standalone `make classify-<type>` run instead lands in its
@@ -150,25 +168,25 @@ classify-headers:
 		RUN_DIR="output/anvil/partials/$$(date +%Y%m%d_%H%M%S)"
 
 classify-bam:
-	uv run python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 4
+	uv run python scripts/classify_headers.py --type bam -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 4
 
 classify-vcf:
-	uv run python scripts/classify_headers.py --type vcf -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type vcf -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 classify-fastq:
-	uv run python scripts/classify_headers.py --type fastq -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type fastq -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 classify-fasta:
-	uv run python scripts/classify_headers.py --type fasta -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type fasta -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 classify-gfa:
-	uv run python scripts/classify_headers.py --type gfa -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type gfa -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 classify-tar:
-	uv run python scripts/classify_headers.py --type tar -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type tar -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 classify-bed:
-	uv run python scripts/classify_headers.py --type bed -i data/anvil/anvil_files_metadata.json $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type bed -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
 
 consistency-report:
 	uv run python scripts/check_consistency.py

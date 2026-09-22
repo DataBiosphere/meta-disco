@@ -25,10 +25,11 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.corpus_diff import read_snapshot, render_report, run_labels, snapshot_parity
+from meta_disco.deployments import PROD
 from meta_disco.output_utils import find_latest_run
 
 DEFAULT_OLD_SNAPSHOT = Path("data/anvil/archive/anvil14_20260729/anvil_files_metadata.json")
-DEFAULT_NEW_SNAPSHOT = Path("data/anvil/anvil_files_metadata.json")
+DEFAULT_NEW_SNAPSHOT = PROD.input_file
 DEFAULT_OLD_RUN = Path("output/anvil/20260802_170826")
 DEFAULT_OUTPUT = Path("docs/corpus-comparison.md")
 

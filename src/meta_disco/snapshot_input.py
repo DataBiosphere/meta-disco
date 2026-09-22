@@ -34,8 +34,9 @@ each a dict keyed by TDR's column names. Two readers implement it:
   ``anvil_file.file_path``; a record derived through it therefore carries none.
 
 Which reader an input came through is recorded on the input's envelope as
-``input_source`` (``azul_manifest.INPUT_SOURCES``), so nothing downstream infers it;
-choosing the reader for a run is #500's.
+``input_source`` (``azul_manifest.INPUT_SOURCES``), so nothing downstream infers it.
+The downloader (``scripts/download_anvil_manifest.py``) chooses the reader from its
+``--input-source`` and the snapshots from the deployment (``deployments``, #500).
 
 The derivation is AnVIL's
 -------------------------

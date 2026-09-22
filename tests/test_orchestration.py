@@ -20,6 +20,7 @@ from meta_disco.classify_run import (
     build_parallel_jobs,
     run_all_classifications,
 )
+from meta_disco.deployments import PROD
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.output_utils import CLASSIFICATION_FILES
@@ -27,7 +28,7 @@ from meta_disco.producers import PRODUCERS, Producer, producers_in_phase
 from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
 from tests.test_source_evidence import evidence_file_envelope, published_envelope
 
-METADATA = Path("data/anvil/anvil_files_metadata.json")
+METADATA = PROD.input_file
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
 EVIDENCE_BASE = Path("data/evidence/anvil")
 

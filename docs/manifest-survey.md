@@ -1,6 +1,6 @@
 # What the AnVIL manifests carry
 
-Measured from the `anvil15` manifests on disk by `scripts/generate_manifest_survey.py` (issue #384). No network: every figure below comes from `data/anvil/manifest/`. Regenerate with `make manifest-survey`; the same numbers unrounded are in `docs/manifest-survey.json`.
+Measured from the `anvil15` manifests on disk by `scripts/generate_manifest_survey.py` (issue #384). No network: every figure below comes from `data/anvil/prod/manifest/`. Regenerate with `make manifest-survey`; the same numbers unrounded are in `docs/manifest-survey.json`.
 
 This document measures. It classifies nothing and proposes no mapping — that is #369, #336 and #361, which it exists to scope.
 

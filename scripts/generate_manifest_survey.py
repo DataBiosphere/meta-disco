@@ -23,6 +23,7 @@ import json
 import sys
 from pathlib import Path
 
+from meta_disco.deployments import PROD
 from meta_disco.manifest_survey import (
     missing_manifests,
     render_report,
@@ -31,8 +32,8 @@ from meta_disco.manifest_survey import (
     survey_data,
 )
 
-DEFAULT_CATALOG = "anvil15"
-DEFAULT_DATA_DIR = Path("data/anvil")
+DEFAULT_CATALOG = PROD.catalog
+DEFAULT_DATA_DIR = PROD.input_root
 
 
 def main() -> int:

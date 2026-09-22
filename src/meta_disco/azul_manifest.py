@@ -56,18 +56,27 @@ from typing import Any, Protocol
 
 import requests
 
+from .deployments import INPUT_FILE_NAME, INPUT_NDJSON_NAME, Deployment
 from .source_evidence import parse_iso_datetime
+from .tdr import Snapshot
 
-API_URL = "https://service.explore.anvilproject.org"
-FILES_URL = f"{API_URL}/index/files"
-MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
 # Who publishes the files this module downloads. Written into every snapshot's envelope
 # so a reader names the publisher rather than assuming one (#424).
 REPOSITORY = "anvil"
 
-# The catalog generation the tooling reads by default. The Makefile's `CATALOG ?=`
-# default is a second spelling of it for `make download`; nothing checks they agree.
-DEFAULT_CATALOG = "anvil15"
+
+# The Azul service is a property of the deployment (`deployments.Deployment.service`,
+# #500), not a constant here: prod's and dev's differ, and so do their catalogs. The
+# two endpoints this module calls are built from it.
+def files_url(service: str) -> str:
+    """The files index of the Azul service at ``service``."""
+    return f"{service}/index/files"
+
+
+def manifest_url(service: str) -> str:
+    """The manifest endpoint of the Azul service at ``service``."""
+    return f"{service}/fetch/manifest/files"
+
 
 FORMAT_COMPACT = "compact"
 FORMAT_VERBATIM = "verbatim.jsonl"
@@ -101,9 +110,10 @@ DRS_PREFIX = "drs://"
 # (``scripts/classify_hprc_files.py``) and carries no such field. Three kinds: today's
 # compact join (this module, ``record_from_compact_manifest_row``);
 # the verbatim manifest read through ``snapshot_input.AzulVerbatim``; and a snapshot read
-# in place from BigQuery through ``snapshot_input.TdrDirect``. Nothing reads the field
-# yet — choosing a reader is #500's — so it is provenance, not a switch. Named here
-# because this module writes the envelope, not because every kind is Azul's.
+# in place from BigQuery through ``snapshot_input.TdrDirect``. The downloader takes the
+# kind as its ``--input-source`` switch (#500) and writes the one it ran with; no
+# classification run reads the field, which is provenance there. Named here because
+# this module writes the envelope, not because every kind is Azul's.
 INPUT_SOURCE_AZUL_COMPACT = "azul-compact"
 INPUT_SOURCE_AZUL_VERBATIM = "azul-verbatim"
 INPUT_SOURCE_TDR_DIRECT = "tdr-direct"
@@ -211,13 +221,14 @@ class Dataset:
 
 
 def discover_datasets(
+    service: str,
     catalog: str,
     session: HttpSession | None = None,
     sleep: Sleep = time.sleep,
     max_wait: float = DEFAULT_MAX_WAIT,
     log: Log | None = None,
 ) -> list[Dataset]:
-    """The datasets with accessible files in ``catalog``, with their file counts.
+    """The datasets with accessible files in ``catalog`` at ``service``, with their file counts.
 
     Read from the ``datasets.title`` term facet of a one-hit ``/index/files``
     query. An unauthenticated caller sees only accessible files, so a dataset
@@ -225,7 +236,9 @@ def discover_datasets(
     Sorted by file count descending, then title, so a run's order is stable.
     """
     http: HttpSession = session if session is not None else requests.Session()
-    resp = _request(http, "get", FILES_URL, sleep, max_wait, log, params={"catalog": catalog, "size": 1}, timeout=60)
+    resp = _request(
+        http, "get", files_url(service), sleep, max_wait, log, params={"catalog": catalog, "size": 1}, timeout=60
+    )
     terms = resp.json()["termFacets"]["datasets.title"]["terms"]
     datasets = [Dataset(title=t["term"], file_count=int(t["count"])) for t in terms if t.get("term")]
     return sorted(datasets, key=lambda d: (-d.file_count, d.title))
@@ -237,6 +250,7 @@ def manifest_filters(dataset_title: str) -> str:
 
 
 def fetch_manifest(
+    service: str,
     catalog: str,
     fmt: str,
     dataset_title: str,
@@ -247,7 +261,8 @@ def fetch_manifest(
     max_wait: float = DEFAULT_MAX_WAIT,
     log: Log | None = None,
 ) -> int:
-    """Request one manifest, follow its job, and stream the payload to ``destination``.
+    """Request one manifest from the Azul service at ``service``, follow its job, and
+    stream the payload to ``destination``.
 
     Polls while the job reports ``Status`` 301, waiting ``Retry-After`` seconds
     (at least one) between polls, and downloads the 302 ``Location`` at once,
@@ -267,7 +282,7 @@ def fetch_manifest(
     call = partial(_request, http, sleep=sleep, max_wait=max_wait, log=log)
     resp = call(
         "put",
-        MANIFEST_URL,
+        manifest_url(service),
         params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_title)},
         timeout=120,
     )
@@ -305,7 +320,8 @@ def fetch_manifest(
 
 
 def manifest_dir(root: Path, catalog: str) -> Path:
-    """Where ``catalog``'s manifests and sidecar live under ``root`` (``data/anvil``)."""
+    """Where ``catalog``'s manifests and sidecar live under ``root`` — a deployment's
+    input root (``deployments.Deployment.input_root``, e.g. ``data/anvil/prod``)."""
     return root / "manifest" / catalog
 
 
@@ -412,16 +428,20 @@ def count_rows(fmt: str, path: Path) -> int:
         return sum(1 for line in f if needle in line and json.loads(line).get("type") == VERBATIM_FILE)
 
 
-def parity_problems(datasets: Iterable[Dataset], counts: dict[tuple[str, str], int]) -> list[str]:
+def parity_problems(
+    datasets: Iterable[Dataset], counts: dict[tuple[str, str], int], formats: tuple[str, ...] = FORMATS
+) -> list[str]:
     """One line per (dataset, format) whose row count disagrees with the dataset's file count.
 
     ``counts`` maps ``(dataset title, format)`` to the count :func:`count_rows`
-    measured. A format with no entry is reported as missing rather than passed
-    over: the input file must not be built from an incomplete set.
+    measured, and ``formats`` names the formats the pull was meant to fetch — both by
+    default, the verbatim manifest alone for an ``azul-verbatim`` input (#500). A
+    named format with no entry is reported as missing rather than passed over: the
+    input file must not be built from an incomplete set.
     """
     problems = []
     for dataset in datasets:
-        for fmt in FORMATS:
+        for fmt in formats:
             got = counts.get((dataset.title, fmt))
             if got is None:
                 problems.append(f"{dataset.title}: no {fmt} manifest on disk")
@@ -796,36 +816,59 @@ def verbatim_line_type(path: Path, n: int, line: str) -> str:
     return parse_verbatim_line(path, n, line)[0]
 
 
+def dataset_entry(file_count: int, snapshot: Snapshot, source_id: str | None = None) -> dict[str, Any]:
+    """One ``datasets`` entry of the envelope: the count, and the TDR snapshot the dataset
+    is materialised from, named both ways — ``tdr_project`` and ``snapshot`` split out
+    (#500, so a reader need not parse the spec) and ``source_spec`` as TDR spells the
+    address (#434). ``source_id`` is Azul's uuid for the source, known only to an input
+    that came through a compact manifest; null otherwise."""
+    return {
+        "file_count": file_count,
+        "source_id": source_id,
+        "source_spec": snapshot.source_spec,
+        "tdr_project": snapshot.project,
+        "snapshot": snapshot.name,
+    }
+
+
 def metadata_block(
-    catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime, input_source: str
+    deployment: Deployment, datasets: dict[str, dict[str, Any]], downloaded_at: datetime, input_source: str
 ) -> dict[str, Any]:
     """The ``metadata`` envelope written beside ``files`` in ``anvil_files_metadata.json``.
 
-    Records the catalog generation the files came from (issue #335: the July
-    2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
-    they came through the manifest path, and what each dataset contributed.
+    Records which deployment the input is of and the catalog generation the files came
+    from (issue #335: the July 2026 snapshot could not say it was anvil14 once anvil14
+    was deleted), how the records were derived, and what each dataset contributed.
+
+    ``deployment`` (#500) is the deployment's name, and its ``catalog`` is written for
+    every kind of input — for a snapshot read in place too, where it is the generation
+    the deployment's Azul serves over these snapshots rather than anything the read
+    touched; it is declared, not inferred, and :func:`pipeline.published_source` reads
+    it with ``repository`` to name the repository a run's ``published`` blocks came
+    from (decision of 2026-09-22 on #500, so that field is never null for want of a
+    manifest).
 
     ``input_source`` names how the records were derived, one of :data:`INPUT_SOURCES`
     (#499); any other value is refused. Every writer states it explicitly — the
-    downloader passes :data:`INPUT_SOURCE_AZUL_COMPACT` — so a reader never has to
-    take an absent field as meaning the compact path. An envelope written before the
-    field existed lacks it; nothing reads it yet, so such a file loads as before.
-    The two fields that describe the Azul manifest path, ``api_url`` and ``source``,
-    are written only for an input that came through it (either manifest kind) and are
-    null for a snapshot read in place, which touched no manifest; ``catalog`` is
-    written as given, because :func:`pipeline.published_source` reads it and what a
-    direct read should say there is #500's to decide.
+    downloader passes the kind it was run with — so a reader never has to take an
+    absent field as meaning the compact path. An envelope written before the field
+    existed lacks it; nothing reads it yet, so such a file loads as before. The two
+    fields that describe the Azul manifest path, ``api_url`` (the deployment's
+    manifest endpoint) and ``source``, are written only for an input that came through
+    it (either manifest kind) and are null for a snapshot read in place, which touched
+    no manifest.
 
     ``repository`` names who published these files, so nothing downstream has to infer
-    it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
-    repository a run's ``published`` blocks came from; it used to prefix a hard-coded
-    ``anvil`` there, which would have mislabelled any other repository's snapshot loaded
-    through the same shared path.
+    it (#424). ``pipeline.published_source`` used to prefix a hard-coded ``anvil``
+    there, which would have mislabelled any other repository's snapshot loaded through
+    the same shared path.
 
-    ``datasets`` maps a title to ``file_count`` plus the TDR snapshot it was
-    materialised from (#434, from :func:`dataset_source`). It used to map a title to
-    the bare count; the object form is the shape the sidecar already uses for the same
-    key, so the two now read alike.
+    ``datasets`` maps a title to a :func:`dataset_entry`: ``file_count`` plus the TDR
+    snapshot it was materialised from (#434) — for a compact-sourced input the one the
+    manifest names, checked against the deployment's declaration by the downloader;
+    for the other two kinds the declared one. It used to map a title to the bare
+    count; the object form is the shape the sidecar already uses for the same key, so
+    the two now read alike.
 
     **The snapshot is deliberately not on any record.** It is one value per dataset —
     12 across anvil15, measured — so a ~90-byte ``source_spec`` on each of 708,088
@@ -842,9 +885,10 @@ def metadata_block(
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(int(entry["file_count"]) for entry in datasets.values()),
-        "api_url": MANIFEST_URL if via_manifest else None,
+        "api_url": manifest_url(deployment.service) if via_manifest else None,
         "repository": REPOSITORY,
-        "catalog": catalog,
+        "deployment": deployment.name,
+        "catalog": deployment.catalog,
         "source": "manifest" if via_manifest else None,
         "input_source": input_source,
         "datasets": {title: datasets[title] for title in sorted(datasets)},
@@ -861,7 +905,7 @@ def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[
     record is out, so an exception mid-stream — a cell the mapping rejects —
     leaves the previous input files untouched. Returns the number written.
     """
-    json_path, nd_path = root / "anvil_files_metadata.json", root / "anvil_files_metadata.ndjson"
+    json_path, nd_path = root / INPUT_FILE_NAME, root / INPUT_NDJSON_NAME
     json_tmp, nd_tmp = json_path.with_suffix(".json.tmp"), nd_path.with_suffix(".ndjson.tmp")
     n = 0
     try:
