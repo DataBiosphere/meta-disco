@@ -1,20 +1,25 @@
-"""A run directory and the output rows in it, for the reports that read a run.
+"""A run directory and the output rows in it, for the tests that read a run.
 
-`metadata_fixtures` builds *input* records; this builds what a run *writes* — the
-`{"metadata", "classifications"}` file a producer publishes and one row of it — for
-the tests consolidated on it: the report tests (`test_corpus_diff`,
-`test_unprocessable`, `test_published_comparison`, `test_row_uniqueness`) and the
-index producer's parent rows (`producer_sweep.run_index_producer`,
-`test_index_propagation`, `test_producer_exclusions`), which join on the row's
-`file_id`. `test_anvil_forecast` shares the writer and the `classifications` block but
-keys its rows by `drs_uri`, which its report joins on, so it assembles the row itself.
+`metadata_fixtures` builds *input* records; this builds what a run *writes*: the
+`{"metadata", "classifications"}` file a producer publishes (`write_run`) and one row
+of it (`output_record`, its `classifications` block on its own). `write_run` is shared
+by every test that writes a run directory for a reader — the report tests
+`test_corpus_diff`, `test_unprocessable` and `test_published_comparison`, the
+post-run one-row-per-file gate in `test_row_uniqueness`, the forecast in
+`test_anvil_forecast`, and the index producer's parent file in
+`producer_sweep.run_index_producer`, `test_index_propagation` and
+`test_producer_exclusions`. `output_record` is shared by the tests whose rows are
+full output rows: `test_corpus_diff`, `test_unprocessable` and the three index-producer
+modules, which join on the row's `file_id`. `test_anvil_forecast` takes the
+`classifications` block and keys its rows by `drs_uri`, which its report joins on.
 
 What stays local, and why, is said in each place: `test_consistency._rec` writes
-entries with no `evidence` and whatever `status` a case names, because the linter must
-read malformed rows; `test_published_comparison._record` carries two dimensions and a
-`published` block, because that report reads only those; `test_remaining_skip_key`
-writes identity-only rows with no `classifications` block at all, because the
-catch-all's skip set reads nothing else.
+whatever `status` a case names beside the value, and a case may replace an entry's
+`evidence` with a non-list, because the linter must read malformed rows;
+`test_published_comparison._record` carries two dimensions and a `published` block,
+because that report reads only those; `test_remaining_skip_key` writes identity-only
+rows with no `classifications` block at all, because the catch-all's skip set reads
+nothing else.
 """
 
 import json
