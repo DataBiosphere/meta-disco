@@ -722,8 +722,9 @@ slots:
       document id. Where present it is unique within a run and regenerated when the
       catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh
       (#433). Null on a record whose input came from a TDR snapshot's tables rather
-      than the compact manifest (#499), and on every HPRC record; `file_id` is the
-      durable identity.
+      than the compact manifest (#499), and on every HPRC record. An AnVIL record's
+      durable identity is `file_id`; an HPRC record's is the URL hash it carries in
+      `md5sum` (`pipeline.SOURCE_RECORD_KEYS`).
   file_id:
     description: >-
       The repository's own file identifier, and the durable one: it survives a catalog

@@ -202,9 +202,11 @@ def identity_from(record: dict, *, coerce: bool = False) -> dict:
     does not touch a call site. #433 added two fields to seven hand-written copies of
     this set, which is what the tuple exists to prevent a third time.
 
-    Read with ``.get`` although all three are required slots of the input contract:
-    a producer may be handed a ``validation_failed`` record, and the standalone
-    producers read raw dicts rather than a typed work item.
+    Read with ``.get`` for two reasons. ``entry_id`` is an optional slot of the input
+    contract since #499 — absent from a record derived from a snapshot's tables — so
+    it may simply not be there. The other two are required, but a producer may be
+    handed a ``validation_failed`` record, and the standalone producers read raw dicts
+    rather than a typed work item.
 
     ``coerce`` renders each value through :func:`coerce_identity`, the null-to-``""``
     rule ``excluded_files.json`` echoes a drifted identity by. Only ``unmatched_files``

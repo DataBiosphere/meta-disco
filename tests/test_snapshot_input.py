@@ -214,6 +214,19 @@ class TestVerbatimAdapter:
         # The held table was parsed on that same scan, so its rows come from memory too.
         assert list(adapter.rows("anvil_dataset")) == [DATASET_ROW]
 
+    def test_a_held_table_over_the_bound_is_streamed_not_held(self, tmp_path):
+        # A drifted manifest with many dataset rows: the listing keeps at most HELD_ROWS
+        # of them, `rows` falls back to streaming the file and yields them all, and the
+        # derivation still refuses on the second.
+        many = [dict(DATASET_ROW, dataset_id=f"d{i}") for i in range(50)]
+        path = verbatim_manifest(tmp_path / "many.verbatim.jsonl", {"anvil_dataset": many, "anvil_file": FILE_ROWS})
+        adapter = si.AzulVerbatim(path)
+        assert adapter.tables() == ["anvil_dataset", "anvil_file"]
+        assert "anvil_dataset" not in adapter._held_rows, "over the bound, so not held"
+        assert [row["dataset_id"] for row in adapter.rows("anvil_dataset")] == [f"d{i}" for i in range(50)]
+        with pytest.raises(ValueError, match="anvil_dataset holds more than one row"):
+            si.derive_records(adapter)
+
     def test_a_line_that_is_not_an_entity_is_refused_naming_the_line(self, tmp_path):
         path = tmp_path / "bad.verbatim.jsonl"
         path.write_text(json.dumps({"value": {}, "type": "a"}) + "\n" + "{not json\n")

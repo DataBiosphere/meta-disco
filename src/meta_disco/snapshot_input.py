@@ -84,6 +84,12 @@ AZUL_ADDED_COLUMNS = frozenset({"version"})
 AZUL_ADDED_FILE_COLUMNS = frozenset({"drs_uri"})
 AZUL_ADDED_TABLES = frozenset({"duos_dataset_registration"})
 
+#: How many rows of a held table :class:`AzulVerbatim` keeps from its listing scan.
+#: Two, because :func:`derive_records` reads at most two rows of ``anvil_dataset`` —
+#: the one it needs and the one that would refuse the snapshot — so holding more
+#: would serve nothing and a drifted table with thousands would sit in memory.
+HELD_ROWS = 2
+
 
 class SnapshotTables(Protocol):
     """A snapshot's tables: their names, and one table's rows streamed.
@@ -131,17 +137,21 @@ class AzulVerbatim:
 
     The listing is one scan of the file, reading each line's type off its tail
     (:func:`azul_manifest.verbatim_line_type`), done once and kept. That scan also
-    parses and keeps every row of the ``held`` tables — by default the one-row
-    ``anvil_dataset`` — so ``rows`` on one of those answers from memory and
-    :func:`derive_records` reads the file twice rather than three times. Two is the
-    floor: the dataset row sits after most of the file rows, and the derivation needs
-    it before its first record. Hold nothing that is not small.
+    parses and keeps the rows of the ``held`` tables — by default the one-row
+    ``anvil_dataset`` — up to :data:`HELD_ROWS` of each, so ``rows`` on one of those
+    answers from memory and :func:`derive_records` reads the file twice rather than
+    three times. Two is the floor: the dataset row sits after most of the file rows,
+    and the derivation needs it before its first record. A held table that turns out
+    to have more rows than the bound is not held at all: ``rows`` streams it from the
+    file like any other table, so a drifted manifest with a large dataset table costs
+    a pass, never memory.
     """
 
     def __init__(self, path: Path, held: frozenset[str] = frozenset({TABLE_DATASET})):
         self.path = path
         self.held = held
         self._tables: list[str] | None = None
+        # Rows of a held table that fit the bound; a table that overflowed is absent.
         self._held_rows: dict[str, list[dict[str, Any]]] = {}
 
     def _scan(self) -> list[str]:
@@ -151,8 +161,13 @@ class AzulVerbatim:
             for n, line in iter_verbatim_lines(self.path):
                 entity_type = verbatim_line_type(self.path, n, line)
                 seen.setdefault(entity_type, None)
-                if entity_type in held:
-                    held[entity_type].append(self._strip(entity_type, parse_verbatim_line(self.path, n, line)[1]))
+                kept = held.get(entity_type)
+                if kept is None:
+                    continue
+                if len(kept) == HELD_ROWS:
+                    del held[entity_type]  # over the bound: not held, streamed on demand
+                    continue
+                kept.append(self._strip(entity_type, parse_verbatim_line(self.path, n, line)[1]))
             self._tables = [t for t in seen if t not in AZUL_ADDED_TABLES]
             self._held_rows = held
         return self._tables
@@ -165,7 +180,8 @@ class AzulVerbatim:
             raise ValueError(f"{table!r} is an entity Azul adds to its manifest, not a table of the snapshot")
         if table in self.held:
             self._scan()
-            return iter(self._held_rows[table])
+            if table in self._held_rows:
+                return iter(self._held_rows[table])
         return (self._strip(table, value) for _, value in iter_verbatim_entities(self.path, {table}))
 
     @staticmethod
