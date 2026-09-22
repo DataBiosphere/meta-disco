@@ -2,17 +2,19 @@
 
 `metadata_fixtures` builds *input* records; this builds what a run *writes* — the
 `{"metadata", "classifications"}` file a producer publishes and one row of it — for
-every test that reads or writes one: the report tests (`test_corpus_diff`,
+the tests consolidated on it: the report tests (`test_corpus_diff`,
 `test_unprocessable`, `test_published_comparison`, `test_row_uniqueness`) and the
 index producer's parent rows (`producer_sweep.run_index_producer`,
 `test_index_propagation`, `test_producer_exclusions`), which join on the row's
 `file_id`. `test_anvil_forecast` shares the writer and the `classifications` block but
 keys its rows by `drs_uri`, which its report joins on, so it assembles the row itself.
 
-Two builders stay local on purpose, and say so in their docstrings:
-`test_consistency._rec` writes entries with no `evidence` and whatever `status` a case
-names, because the linter must read malformed rows; `test_published_comparison._record`
-carries two dimensions and a `published` block, because that report reads only those.
+What stays local, and why, is said in each place: `test_consistency._rec` writes
+entries with no `evidence` and whatever `status` a case names, because the linter must
+read malformed rows; `test_published_comparison._record` carries two dimensions and a
+`published` block, because that report reads only those; `test_remaining_skip_key`
+writes identity-only rows with no `classifications` block at all, because the
+catch-all's skip set reads nothing else.
 """
 
 import json
@@ -38,7 +40,7 @@ def write_run(run_dir: Path, records, fname: str = OUTPUT_FILE) -> Path:
 def classifications(**dims) -> dict:
     """The five-dimension ``classifications`` block, each entry from ``build_field_entry``.
 
-    A dimension not named is ``not_classified``. A named one takes either a real value
+    A dimension not named, or named as ``None``, is ``not_classified``. Otherwise it takes a real value
     or a status label from ``models.STATUS_LABELS`` (``not_classified``,
     ``not_applicable``, ``conflict``), which becomes that status with a null value. A
     keyword that is not a dimension is refused rather than ignored, so a misspelled
