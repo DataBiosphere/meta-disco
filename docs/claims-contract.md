@@ -395,7 +395,7 @@ depends on that, and a second repository needs no change to these assertions.
      evidence, `source` is that importer's envelope: its repository and version, not a name a run guessed.
 
 7.12 **Every repository has exactly one published source**, and exactly one importer reads it. Which
-     table it is, is declared once (`source_evidence.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
+     table it is, is declared once (`pipeline.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
      its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
      conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
      carries the label from any other table or from a repository other than the one its rows are

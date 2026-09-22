@@ -19,11 +19,10 @@ from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import RecordKey, load_envelope, record_key
+from meta_disco.pipeline import PUBLISHED_TABLES, RecordKey, load_envelope, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
-    PUBLISHED_TABLES,
     report_evidence_files,
     require_one_published_source,
 )

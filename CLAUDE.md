@@ -134,7 +134,8 @@ evidence}` entry — plus the controlled vocabulary:
     for the file. `wrangler_annotation` is deliberately not among them: a curator
     enters as rules, not as evidence, per contract 1.6/1.7).
   - **Every repository has exactly one published source** (contract 7.12), declared in
-    `source_evidence.PUBLISHED_TABLES`; `anvil_evidence.check` holds both maps to it
+    `pipeline.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
+    its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it
     and the run's preflight refuses evidence that contradicts it
     (`source_evidence.require_one_published_source`).
   - **A line is an observation, not a claim** (#421, contract 1.1): `EvidenceEntry`

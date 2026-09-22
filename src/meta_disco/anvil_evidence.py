@@ -28,7 +28,8 @@ different assemblies receives both spans, and which is right is the resolver's (
 
 **One importer, two maps** (#497). A map's ``source_type`` is every envelope's
 ``source_type`` and picks the directory (:data:`EVIDENCE_DIRS`); :func:`_check_kind`
-holds each map to ``PUBLISHED_TABLES`` (contract 7.12), at ``check`` and at import.
+holds each map to AnVIL's published table (``PUBLISHED_TABLE``, contract 7.12), at
+``check`` and at import.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ from .azul_manifest import (
     API_URL,
     FORMAT_COMPACT,
     FORMAT_VERBATIM,
+    PUBLISHED_TABLE,
     REPOSITORY,
     VERBATIM_FILE,
     iter_verbatim_entities,
@@ -56,7 +58,6 @@ from .azul_manifest import (
 from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
-    PUBLISHED_TABLES,
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
@@ -175,15 +176,15 @@ def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
     """The map's kind against this importer, over ``datasets``' entries only.
 
     It has an evidence directory here, and it holds to the published-table declaration:
-    a ``published_value`` map maps exactly the table declared for ``REPOSITORY`` — the
-    repository this importer's evidence is about, which is the key the run reads too —
-    and a ``repository_metadata`` map does not map it.
+    a ``published_value`` map maps exactly ``REPOSITORY``'s published table — the entry
+    ``pipeline.PUBLISHED_TABLES`` carries for the repository this importer's evidence is
+    about — and a ``repository_metadata`` map does not map it.
     """
     try:
         evidence_dir(slot_map)
     except ValueError as exc:
         return [str(exc)]
-    published = PUBLISHED_TABLES[REPOSITORY]
+    published = PUBLISHED_TABLE
     tables = {(e.dataset, e.table) for e in slot_map.entries if e.dataset in datasets}
     if slot_map.source_type == SOURCE_PUBLISHED_VALUE:
         return [

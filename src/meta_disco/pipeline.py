@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Lock
 from typing import NamedTuple, TypeGuard
 
+from .azul_manifest import PUBLISHED_TABLE as ANVIL_PUBLISHED_TABLE
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
@@ -148,9 +149,17 @@ SOURCE_RECORD_KEYS: dict[str, RecordKey] = {
     ANVIL_REPOSITORY: RecordKey(JOIN_KEY_FILE_ID, JOIN_KEY_FILE_ID),
     HPRC_REPOSITORY: RecordKey(JOIN_KEY_FILE_MD5SUM, OUTPUT_MD5SUM_FIELD),
 }
-# The other per-repository declaration, the published table, is
-# `source_evidence.PUBLISHED_TABLES` (#497): it lives with the run check that enforces
-# it, so the offline importer that reads it need not import this module.
+
+# The other per-repository declaration: the table that is the repository's published
+# source (#497, contract 7.12 — why exactly one, and why not the compact manifest, is
+# there), keyed like the record keys by the repository whose files it is about. Read by
+# the run's preflight (`source_evidence.require_one_published_source`), which must judge
+# files no map wrote; an importer reads its own repository's entry from that
+# repository's module (`azul_manifest.PUBLISHED_TABLE`) rather than this dict, so it
+# need not import the classification stack. HPRC's is not declared yet.
+PUBLISHED_TABLES: dict[str, str] = {
+    ANVIL_REPOSITORY: ANVIL_PUBLISHED_TABLE,
+}
 
 
 def record_key(metadata: dict, input_path: Path) -> RecordKey:

@@ -128,8 +128,6 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from uuid import uuid4
 
-from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
-from .azul_manifest import VERBATIM_FILE
 from .models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_NAME,
@@ -144,14 +142,6 @@ from .models import (
     require_join_key,
     required_str,
 )
-
-# One declaration per repository of the table that is its published source (#497,
-# contract 7.12 — why one, and why not the compact manifest, is there), keyed by the
-# repository whose files the evidence is about (`EvidenceTarget.system`). Read by
-# `require_one_published_source` here, which must judge files no map wrote, and by
-# `anvil_evidence.check`, which holds both slot maps to it. A repository absent here —
-# HPRC today — has not declared its published source yet, and no file may claim to be it.
-PUBLISHED_TABLES: dict[str, str] = {ANVIL_REPOSITORY: VERBATIM_FILE}
 
 # The key line 1 is wrapped in. An envelope is structurally distinguishable from an
 # evidence row rather than distinguishable by position alone, so a truncated or
@@ -956,7 +946,10 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
 def require_one_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
     """Refuse the current evidence unless each repository's published source is the one declared (#497).
 
-    ``published_tables`` is :data:`PUBLISHED_TABLES` or a test's stand-in. Over the
+    ``published_tables`` is ``pipeline.PUBLISHED_TABLES`` — the repository whose files
+    the evidence is about (``EvidenceTarget.system``) to its published table — or a
+    test's stand-in; taken as a parameter so this module stays free of the pipeline
+    and of any one repository's constants. Over the
     current files a run found (:func:`report_evidence_files`), a ``published_value``
     file is refused with ``ValueError`` when its source repository is not the one its
     rows are about (a published source is that repository's own); when its source table

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco.azul_manifest import REPOSITORY
+from meta_disco.azul_manifest import PUBLISHED_TABLE
 from meta_disco.manifest_survey import NAME_TOKENS, name_tokens
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -26,7 +26,6 @@ from meta_disco.slot_map import (
     load_slot_map,
     published_slot_map_resource,
 )
-from meta_disco.source_evidence import PUBLISHED_TABLES
 
 MINIMAL = """
 catalog: anvil15
@@ -311,11 +310,11 @@ class TestTheBundledPublishedMap:
         assert slot_map.entries
 
     def test_it_maps_only_the_declared_published_table_and_only_its_published_columns(self):
-        """One table — the one `PUBLISHED_TABLES` declares for AnVIL — its TDR link
+        """One table — AnVIL's published table — its TDR link
         column, and each published slot read from the cell of the same name: nothing a
         submitter wrote and no name span."""
         for entry in load_slot_map(published_slot_map_resource()).entries:
-            assert (entry.table, entry.column) == (PUBLISHED_TABLES[REPOSITORY], "file_ref"), entry
+            assert (entry.table, entry.column) == (PUBLISHED_TABLE, "file_ref"), entry
             assert set(entry.slots) == set(PUBLISHED_FIELDS), entry
             for slot, sources in entry.slots.items():
                 assert [(source.form, source.value) for source in sources] == [(SOURCE_CELL, slot)], entry
@@ -324,4 +323,4 @@ class TestTheBundledPublishedMap:
         """The two maps are two sources: a submitter's table is one, what the repository
         publishes is the other, and the submitter map does not reach into it. Pinned by
         `anvil_evidence.check` too; this is the bundled map holding to it."""
-        assert not [e for e in load_slot_map().entries if e.table == PUBLISHED_TABLES[REPOSITORY]]
+        assert not [e for e in load_slot_map().entries if e.table == PUBLISHED_TABLE]
