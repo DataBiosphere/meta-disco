@@ -187,9 +187,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     target's current state is not an input to producing it. It is an input once the circularity it
     feared cannot happen: our output goes to a separate table set (#444) and the repository's own tables
     are never written by us — but that holds only while the published value is read from the
-    **system of record**. AnVIL's is its TDR snapshot tables, not the Azul manifest, which is a product
-    of an index that may already carry our last output back to us (#432's decisions). So kind 2 is
-    read from the `anvil_file` table of the TDR snapshot, and the compact manifest is not a source.
+    **system of record**. AnVIL's is its TDR snapshot tables, not the compact Azul manifest, which is a
+    product of an index that may already carry our last output back to us (#432's decisions). So kind 2
+    is read from the `anvil_file` table of the TDR snapshot — today as the verbatim manifest copies it
+    row for row (7.12) — and the compact manifest is not a source.
     Kinds 2 and 3 are different sources with different labels: a submitter's table and what the
     repository publishes may disagree, and reconcile is where that is seen.
 
@@ -397,8 +398,9 @@ depends on that, and a second repository needs no change to these assertions.
      table it is, is declared once (`pipeline.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
      its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
      conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
-     carries the label from any other table, or a second one for a dataset of one catalog version, is
-     refused before a run starts (`source_evidence.require_one_published_source`). A repository that declares none — HPRC
+     carries the label from any other table or from a repository other than the one its rows are
+     about, or a second one for a dataset of one catalog version, is refused before a run starts
+     (`source_evidence.require_one_published_source`). A repository that declares none — HPRC
      today — has no published source, and no file may claim one for it. The compact Azul manifest is
      not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
      Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one

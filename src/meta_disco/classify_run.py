@@ -186,9 +186,10 @@ def run_all_classifications(
     After those two refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
-    it is — so a run refused at preflight reports none. The one judgement passed on
-    them is the third refusal: a ``published_value`` file from any table but the
-    repository's declared one, or a second current one for a dataset
+    it is — so a run those two refuse reports none. The one judgement passed on them
+    is the third refusal, which comes after the report has named every file: a
+    ``published_value`` file from any table but the repository's declared one, from a
+    repository other than the one it is about, or a second current one for a dataset
     (:func:`source_evidence.require_one_published_source`, #497), raises ``ValueError``
     before the run directory exists.
     Reporting there, ahead of the run directory, puts what the run found at the top of

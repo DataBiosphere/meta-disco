@@ -949,10 +949,12 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
     A repository has exactly one published source (contract 7.12), declared in
     ``published_tables`` as the source table that may carry ``published_value`` for
     files of that repository (``pipeline.PUBLISHED_TABLES``: AnVIL to ``anvil_file``).
-    Over the current files a run found (:func:`report_evidence_files`), three things
-    are refused, with ``ValueError``: a ``published_value`` file whose source table is
-    not the declared one; one whose target repository declares none; and a second
-    current one for the same repository, catalog version and dataset, naming both. The
+    Over the current files a run found (:func:`report_evidence_files`), four things
+    are refused, with ``ValueError``: a ``published_value`` file whose source repository
+    is not the repository its rows are about (a published source is that repository's
+    own, by definition); one whose source table is not the declared one; one whose
+    target repository declares none; and a second current one for the same repository,
+    catalog version and dataset, naming both. The
     version is part of the key because *current* is per version (:func:`discover`):
     an anvil15 and an anvil16 generation of one dataset are both current, and which
     describes the run's catalog is not decided here (see the module docstring on
@@ -969,6 +971,11 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
         if envelope is None or envelope.source_type != SOURCE_PUBLISHED_VALUE:
             continue
         repository, version, dataset = envelope.target.system, envelope.target.version, envelope.target.dataset
+        if envelope.source.repository != repository:
+            raise ValueError(
+                f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from repository {envelope.source.repository!r} "
+                f"about {repository}'s files — a published source is the repository's own (contract 7.12)"
+            )
         declared = published_tables.get(repository)
         if envelope.source.table != declared:
             expected = (

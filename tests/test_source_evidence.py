@@ -110,12 +110,16 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
 
 
 def published_envelope(
-    dataset: str = "AnVIL_IGVF_Mouse_R1", table: str = VERBATIM_FILE, system: str = REPOSITORY, version: str = "anvil15"
+    dataset: str = "AnVIL_IGVF_Mouse_R1",
+    table: str = VERBATIM_FILE,
+    system: str = REPOSITORY,
+    version: str = "anvil15",
+    repository: str = REPOSITORY,
 ) -> EvidenceFileEnvelope:
     """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
     labelled ``published_value``, about that same dataset's files."""
     return evidence_file_envelope(
-        source=EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL),
+        source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=API_URL),
         source_type=SOURCE_PUBLISHED_VALUE,
         target=EvidenceTarget(system=system, dataset=dataset, version=version),
     )
@@ -1220,6 +1224,14 @@ class TestOnePublishedSourcePerRepository:
     def test_a_published_file_from_another_table_is_refused(self, tmp_path):
         self._published(tmp_path, "a/file.ndjson", table="file")
         with pytest.raises(ValueError, match=r"file\.ndjson.*from table 'file'.*published source is 'anvil_file'"):
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_a_published_file_from_another_repository_is_refused(self, tmp_path):
+        """A published source is the repository's own: a file labelled `published_value`
+        whose source repository is not the one its rows are about is refused before the
+        table is even consulted."""
+        self._published(tmp_path, "a/anvil_file.ndjson", repository="HPRC Data Explorer")
+        with pytest.raises(ValueError, match="from repository 'HPRC Data Explorer' about anvil's files"):
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
     def test_a_repository_that_declares_no_published_source_may_have_none(self, tmp_path):
