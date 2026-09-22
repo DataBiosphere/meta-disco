@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 
+import generate_manifest_survey as cli
 import pytest
 
 from meta_disco import manifest_survey as ms
@@ -21,10 +22,6 @@ from meta_disco.azul_manifest import (
 )
 from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.schema_vocab import dimension_values
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-import generate_manifest_survey as cli
 
 CATALOG = "anvil15"
 

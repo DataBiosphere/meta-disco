@@ -9,13 +9,8 @@ writes as the checksum.
 """
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from classify_hprc_files import build_metadata_records, path_key
 
 from meta_disco.classify_run import run_all_classifications

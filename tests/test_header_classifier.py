@@ -3,7 +3,25 @@
 import pytest
 
 from meta_disco.file_name import FileName
+from meta_disco.header_classifier import (
+    # Result models
+    FastqReadMetadata,
+    # Classification functions
+    classify_from_fasta_header,
+    classify_from_fastq_header,
+    classify_from_header,
+    classify_from_tar_members,
+    classify_from_vcf_header,
+    detect_paired_end_indicators,
+    # Helper functions
+    extract_archive_accession,
+    infer_illumina_instrument_model,
+    parse_illumina_read_name,
+    parse_ont_read_name,
+    parse_pacbio_read_name,
+)
 from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 
 def val(result: dict, field: str):
@@ -25,25 +43,6 @@ def val(result: dict, field: str):
         return rules
     return field_value(result, field)
 
-
-from meta_disco.header_classifier import (
-    # Result models
-    FastqReadMetadata,
-    # Classification functions
-    classify_from_fasta_header,
-    classify_from_fastq_header,
-    classify_from_header,
-    classify_from_tar_members,
-    classify_from_vcf_header,
-    detect_paired_end_indicators,
-    # Helper functions
-    extract_archive_accession,
-    infer_illumina_instrument_model,
-    parse_illumina_read_name,
-    parse_ont_read_name,
-    parse_pacbio_read_name,
-)
-from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 # =============================================================================
 # HELPER FUNCTION TESTS

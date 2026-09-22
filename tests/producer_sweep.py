@@ -13,13 +13,8 @@ need that.
 
 import functools
 import json
-import pathlib
-import sys
 
 import pytest
-
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
-
 from classify_auxiliary_genomic import classify_auxiliary_genomic
 from classify_images import classify_images
 from classify_index_files import propagate_to_index_files

@@ -13,12 +13,15 @@ Together they keep the rules and the schema from drifting apart.
 """
 
 import re
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import yaml
+from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
+
+from meta_disco import schema_vocab
+from meta_disco.file_name import Format
+from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 try:  # the regex parser moved in 3.11; both spellings expose `parse`
     from re import _parser as _sre_mod  # type: ignore[attr-defined]
@@ -26,14 +29,6 @@ except ImportError:  # pragma: no cover - 3.10
     import sre_parse as _sre_mod  # type: ignore[no-redef]
 
 _sre_parse = _sre_mod.parse
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
-
-from meta_disco import schema_vocab
-from meta_disco.file_name import Format
-from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
 
 def _when_value_violations(rules):

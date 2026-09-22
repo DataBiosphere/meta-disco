@@ -8,14 +8,10 @@ generation layout, so the seeder and queue read them the way they read a real ge
 
 import ast
 import re
-import sys
 from pathlib import Path
 
 import pytest
 import yaml
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from classify_index_files import AMBIGUOUS_PARENT, NO_MATCHING_PARENT
 
 from meta_disco.models import CLASSIFICATION_FIELDS, JOIN_KEY_DRS_URI, NOT_APPLICABLE, SOURCE_REPOSITORY_METADATA

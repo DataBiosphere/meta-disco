@@ -1,15 +1,11 @@
 """Tests for the ENA validator's join key and vocabulary mapping (#330)."""
 
-import sys
 from pathlib import Path
 
+import validate_ena_accessions as ena
 import yaml
 
 from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-import validate_ena_accessions as ena
 
 SCHEMA = Path(__file__).parent.parent / "src" / "meta_disco" / "schema" / "classification.yaml"
 

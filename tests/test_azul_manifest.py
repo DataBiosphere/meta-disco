@@ -3,10 +3,10 @@ record mapping, against a fake HTTP session; and the script's idempotence and
 rebuild-from-disk behaviour with the same fake injected."""
 
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import download_anvil_manifest as dl
 import pytest
 import requests
 
@@ -14,10 +14,6 @@ from meta_disco import azul_manifest as am
 from meta_disco.metadata_schema import validate_record
 from meta_disco.pipeline import load_records
 from tests.metadata_fixtures import valid_record
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-import download_anvil_manifest as dl
 
 
 def no_sleep(_seconds: float) -> None:

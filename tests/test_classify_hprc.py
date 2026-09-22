@@ -7,14 +7,9 @@ mapping in isolation, without touching the network (fetch_content_length is monk
 """
 
 import re
-import sys
-from pathlib import Path
-
-import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 import classify_hprc_files as hprc
+import pytest
 
 from meta_disco.metadata_schema import classification_blocking_reasons
 

@@ -29,6 +29,7 @@ from meta_disco.published_comparison import (
 )
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, build_published
 from tests.metadata_fixtures import valid_record
+from tests.pipeline_fixtures import make_config
 from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
 
 
@@ -489,12 +490,7 @@ def test_the_pipeline_carries_the_catalog_into_a_written_record(tmp_path):
     where the source is read, when it is set, or whether it reaches the envelope fails
     here rather than only in a corpus run.
     """
-    import sys
-
-    sys.path.insert(0, str(pathlib.Path(__file__).parent))
-    from test_pipeline import _make_config, _valid_record
-
-    record = _valid_record(
+    record = valid_record(
         file_md5sum="a" * 32,
         file_name="sample.test",
         file_format=".test",
@@ -507,7 +503,7 @@ def test_the_pipeline_carries_the_catalog_into_a_written_record(tmp_path):
     output_path = tmp_path / "out.json"
 
     pipeline = ClassifyPipeline(
-        _make_config(), input_path, output_path, evidence_base=tmp_path / "evidence", resume=False
+        make_config(), input_path, output_path, evidence_base=tmp_path / "evidence", resume=False
     )
     [written] = pipeline.run()
 
@@ -526,12 +522,7 @@ def test_the_pipeline_leaves_the_repository_unnamed_when_the_envelope_has_no_cat
     `None` rather than inventing a catalog, which is the whole point of
     `published_source` returning None (contract 7.1's `source`, and #335's drift rule).
     """
-    import sys
-
-    sys.path.insert(0, str(pathlib.Path(__file__).parent))
-    from test_pipeline import _make_config, _valid_record
-
-    record = _valid_record(
+    record = valid_record(
         file_md5sum="a" * 32,
         file_name="sample.test",
         file_format=".test",
@@ -542,7 +533,7 @@ def test_the_pipeline_leaves_the_repository_unnamed_when_the_envelope_has_no_cat
     input_path.write_text(json.dumps(record) + "\n")
 
     pipeline = ClassifyPipeline(
-        _make_config(), input_path, tmp_path / "out.json", evidence_base=tmp_path / "evidence", resume=False
+        make_config(), input_path, tmp_path / "out.json", evidence_base=tmp_path / "evidence", resume=False
     )
     [written] = pipeline.run()
 

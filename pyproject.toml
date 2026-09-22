@@ -71,7 +71,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["F401", "E402"]  # unused imports ok in tests; E402 for helper functions defined before imports
+"tests/*" = ["F401"]  # unused imports ok in tests
 
 # Ruff's black-compatible formatter is the single authority on layout (make
 # format / format-check). docstring-code-format reformats code examples inside
@@ -111,6 +111,10 @@ strictDictionaryInference = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The producers and report scripts live in scripts/ as plain modules, and the
+# tests import them by name; this is the one place that puts them on the path
+# (pyright reaches them through extraPaths below).
+pythonpath = ["scripts"]
 markers = [
     # End-to-end eval tests that read real fetched headers from the local
     # evidence cache (data/evidence/anvil/, gitignored). tests/conftest.py
