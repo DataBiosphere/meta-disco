@@ -18,8 +18,9 @@ from pathlib import Path
 from typing import TypedDict
 
 from meta_disco.file_name import FileName
-from meta_disco.models import field_label
+from meta_disco.models import CONFLICT, NOT_CLASSIFIED, field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.rule_engine import CONFLICT_MARKER
 from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = [
@@ -72,6 +73,11 @@ def load_records(run_dir: Path) -> list[dict]:
                     evidence = v.get("evidence", [])
                     if evidence:
                         rec[f"{field}_reason"] = evidence[0].get("reason", "")
+                    # A field in conflict carries a marker naming the disagreeing
+                    # values (#88); the conflict table groups on them.
+                    for e in evidence:
+                        if e.get("marker") == CONFLICT_MARKER:
+                            rec[f"{field}_competing"] = " vs ".join(sorted(e.get("competing_values", [])))
             rec["ext"] = get_extension(rec["file_name"])
             records.append(rec)
     return records
@@ -119,27 +125,61 @@ def get_nc_reasons(records: list[dict], field_name: str) -> dict[str, Counter]:
     return reasons_by_ext
 
 
-def build_section(records: list[dict], field_name: str, label: str, extra_notes: str = "") -> tuple[str, int, int]:
-    total = len(records)
-    by_ext = defaultdict(Counter)
-    totals = Counter()
-    for r in records:
-        val = r.get(field_name) or "None"
-        by_ext[val][r["ext"]] += 1
-        totals[val] += 1
+class Tally:
+    """One dimension's labels counted three ways: per label, per label and
+    extension, and split into the three buckets the report shows. ``classified``
+    is every label that is neither ``not_classified`` nor ``conflict`` — so it
+    includes ``not_applicable``, a determined answer — and ``conflict`` (#88) is
+    counted on its own rather than folded into either neighbour."""
 
-    classified = sum(c for v, c in totals.items() if v not in ("not_classified", "None"))
-    nc = totals.get("not_classified", 0) + totals.get("None", 0)
+    def __init__(self, records: list[dict], field_name: str):
+        self.by_ext: defaultdict[str, Counter] = defaultdict(Counter)
+        self.totals: Counter = Counter()
+        for r in records:
+            val = r.get(field_name) or "None"
+            self.by_ext[val][r["ext"]] += 1
+            self.totals[val] += 1
+        self.conflict = self.totals.get(CONFLICT, 0)
+        self.nc = self.totals.get(NOT_CLASSIFIED, 0) + self.totals.get("None", 0)
+        self.classified = sum(self.totals.values()) - self.nc - self.conflict
+
+    @property
+    def nc_exts(self) -> Counter:
+        return self.by_ext.get(NOT_CLASSIFIED, Counter()) + self.by_ext.get("None", Counter())
+
+
+# What the conflict table shows for a record in conflict whose evidence names no
+# competing values: an index file re-emitting its parent's conflict carries the
+# parent's status and no marker (classify_index_files), so the values are on the
+# parent's record, not this one.
+COMPETING_NOT_RECORDED = "(not recorded on this record)"
+
+
+def get_conflict_breakdown(records: list[dict], field_name: str) -> list["_ConflictRow"]:
+    """The dimension's conflicts grouped by extension and the disagreeing values,
+    most frequent first. Empty when nothing is in conflict."""
+    counts: Counter = Counter()
+    for r in records:
+        if r.get(field_name) == CONFLICT:
+            counts[(r["ext"], r.get(f"{field_name}_competing") or COMPETING_NOT_RECORDED)] += 1
+    return [{"ext": ext, "competing": competing, "count": n} for (ext, competing), n in counts.most_common()]
+
+
+def build_section(records: list[dict], field_name: str, label: str, extra_notes: str = "") -> tuple[str, Tally]:
+    total = len(records)
+    tally = Tally(records, field_name)
+    by_ext, totals = tally.by_ext, tally.totals
 
     lines = []
     lines.append(f"## {label}")
     lines.append("")
     lines.append("| | count | % |")
     lines.append("|---|---:|---:|")
-    lines.append(f"| **Classified** | {classified:,} | {100 * classified / total:.1f}% |")
-    lines.append(f"| **Not classified** | {nc:,} | {100 * nc / total:.1f}% |")
+    lines.append(f"| **Classified** | {tally.classified:,} | {100 * tally.classified / total:.1f}% |")
+    lines.append(f"| **Not classified** | {tally.nc:,} | {100 * tally.nc / total:.1f}% |")
+    lines.append(f"| **Conflict** | {tally.conflict:,} | {100 * tally.conflict / total:.1f}% |")
 
-    nc_exts = by_ext.get("not_classified", Counter()) + by_ext.get("None", Counter())
+    nc_exts = tally.nc_exts
     if nc_exts:
         reasons_by_ext = get_nc_reasons(records, field_name)
         lines.append("")
@@ -152,6 +192,18 @@ def build_section(records: list[dict], field_name: str, label: str, extra_notes:
             ext_reasons = reasons_by_ext.get(ext, Counter())
             top_reason = ext_reasons.most_common(1)[0][0] if ext_reasons else "No reason recorded"
             lines.append(f"| {ext} | {count:,} | {escape_md_cell(top_reason)} |")
+
+    conflicts = get_conflict_breakdown(records, field_name)
+    if conflicts:
+        lines.append("")
+        lines.append("### What's in conflict?")
+        lines.append("")
+        lines.append("Rules at the same tier disagreed and no curator rule has answered it; no value is asserted.")
+        lines.append("")
+        lines.append("| extension | competing values | count |")
+        lines.append("|---|---|---:|")
+        for row in conflicts:
+            lines.append(f"| {row['ext']} | {escape_md_cell(row['competing'])} | {row['count']:,} |")
 
     lines.append("")
     lines.append(f"| {label} | count | % | extensions |")
@@ -167,7 +219,7 @@ def build_section(records: list[dict], field_name: str, label: str, extra_notes:
         lines.append("")
         lines.append(extra_notes)
 
-    return "\n".join(lines), classified, nc
+    return "\n".join(lines), tally
 
 
 def main():
@@ -212,10 +264,12 @@ def main():
     summary_rows = []
 
     for field, label, notes in DIMENSIONS:
-        section, classified, nc = build_section(records, field, label, notes)
+        section, tally = build_section(records, field, label, notes)
         sections.append(section)
         summary_rows.append(
-            f"| **{label}** | {classified:,} ({100 * classified / total:.1f}%) | {nc:,} ({100 * nc / total:.1f}%) |"
+            f"| **{label}** | {tally.classified:,} ({100 * tally.classified / total:.1f}%) "
+            f"| {tally.nc:,} ({100 * tally.nc / total:.1f}%) "
+            f"| {tally.conflict:,} ({100 * tally.conflict / total:.1f}%) |"
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -251,9 +305,10 @@ def main():
 
         out.write("**Classified** includes all files with a determined value, including `not_applicable` ")
         out.write("(e.g., FASTQ files have no reference assembly). ")
-        out.write("**Not classified** means no rule or signal could determine a value.\n\n")
-        out.write("| Dimension | Classified | Not Classified |\n")
-        out.write("|---|---:|---:|\n")
+        out.write("**Not classified** means no rule or signal could determine a value. ")
+        out.write("**Conflict** means rules at the same tier disagreed and nothing has answered it (#88).\n\n")
+        out.write("| Dimension | Classified | Not Classified | Conflict |\n")
+        out.write("|---|---:|---:|---:|\n")
         for row in summary_rows:
             out.write(row + "\n")
         out.write("\n")
@@ -288,13 +343,19 @@ class _NotClassifiedRow(_ExtensionCount):
     why: str
 
 
+class _ConflictRow(_ExtensionCount):
+    competing: str
+
+
 class _DimensionPanel(TypedDict):
     field: str
     label: str
     classified: int
     not_classified: int
+    conflict: int
     values: list[_ValueBreakdown]
     not_classified_breakdown: list[_NotClassifiedRow]
+    conflict_breakdown: list[_ConflictRow]
     notes: str
 
 
@@ -326,25 +387,17 @@ def generate_html_dashboard(records: list[dict], run_time: str, dataset_counts: 
     }
 
     for field, label, notes in DIMENSIONS:
-        by_ext = defaultdict(Counter)
-        totals = Counter()
-        for r in records:
-            val = r.get(field) or "None"
-            by_ext[val][r["ext"]] += 1
-            totals[val] += 1
-
-        classified = sum(c for v, c in totals.items() if v not in ("not_classified", "None"))
-        nc = totals.get("not_classified", 0) + totals.get("None", 0)
+        tally = Tally(records, field)
+        by_ext, totals = tally.by_ext, tally.totals
 
         values: list[_ValueBreakdown] = [
             {"name": val, "count": count, "extensions": [{"ext": e, "count": c} for e, c in by_ext[val].most_common()]}
             for val, count in totals.most_common()
         ]
 
-        nc_exts = by_ext.get("not_classified", Counter()) + by_ext.get("None", Counter())
         reasons_by_ext = get_nc_reasons(records, field)
         nc_breakdown: list[_NotClassifiedRow] = []
-        for ext, count in nc_exts.most_common():
+        for ext, count in tally.nc_exts.most_common():
             ext_reasons = reasons_by_ext.get(ext, Counter())
             top_reason = ext_reasons.most_common(1)[0][0] if ext_reasons else "No reason recorded"
             nc_breakdown.append({"ext": ext, "count": count, "why": top_reason})
@@ -353,10 +406,12 @@ def generate_html_dashboard(records: list[dict], run_time: str, dataset_counts: 
             {
                 "field": field,
                 "label": label,
-                "classified": classified,
-                "not_classified": nc,
+                "classified": tally.classified,
+                "not_classified": tally.nc,
+                "conflict": tally.conflict,
                 "values": values,
                 "not_classified_breakdown": nc_breakdown,
+                "conflict_breakdown": get_conflict_breakdown(records, field),
                 "notes": notes,
             }
         )

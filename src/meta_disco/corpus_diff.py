@@ -485,11 +485,10 @@ def render_coverage_section(diffs: dict[str, DimensionDiff], old_total: int, new
 
     ``classified`` here means the field carries a real value.
     ``docs/anvil-coverage-report.md`` counts differently — its Classified row is
-    everything that is not ``not_classified``, so it folds every other status in —
-    hence the ``n/a`` columns. ``not_applicable`` is the only other status the
-    corpus carries today, so the two reconcile as ``classified`` plus ``n/a``; were
-    another status to surface (``conflict``, once #88 promotes it), that report
-    would count it too and the identity would no longer hold.
+    everything that is neither ``not_classified`` nor ``conflict``, so it folds
+    ``not_applicable`` in — hence the ``n/a`` columns. That report lists
+    ``conflict`` on a row of its own (#88), so the two reconcile as ``classified``
+    plus ``n/a`` there, with the conflict row beside them.
     """
     lines = [
         "## Coverage by dimension",

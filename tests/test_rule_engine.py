@@ -6,6 +6,7 @@ from meta_disco.file_name import EXTENSION_MAP, FileName, Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    CONFLICT,
     DECLINED,
     NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
@@ -588,7 +589,7 @@ class TestAddClaim:
 
     def test_second_claim_accumulates_and_re_resolves(self):
         # Two calls accumulate (append, not replace) and the field re-derives from
-        # the full list — here a same-tier disagreement resolves to not_classified,
+        # the full list — here a same-tier disagreement resolves to conflict (#88),
         # and _sync_markers records a conflict marker explaining why, so add_claim
         # stays consistent with _finalize_result. The resolution rule itself is
         # TestEvaluateClaims' job.
@@ -600,10 +601,11 @@ class TestAddClaim:
             "reference_assembly", rule_id="b", reason="y", tier=2, source_type=SOURCE_FILENAME_RULE, value="GRCh37"
         )
         assert result.reference_assembly is None
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
         evidence = result.field_evidence["reference_assembly"]
         assert [e.get("rule_id") for e in evidence[:2]] == ["a", "b"]
         assert evidence[-1]["marker"] == "conflict"
+        assert evidence[-1]["status"] == CONFLICT
         assert "rule_id" not in evidence[-1]
         assert set(evidence[-1]["competing_values"]) == {"GRCh38", "GRCh37"}
 
@@ -685,7 +687,7 @@ class TestAddClaim:
                 {
                     "marker": "conflict",
                     "reason": "Conflicting reference_assembly: ['GRCh37', 'GRCh38'] — ambiguous",
-                    "status": NOT_CLASSIFIED,
+                    "status": CONFLICT,
                     "competing_values": ["GRCh37", "GRCh38"],
                 },
             ]
@@ -901,14 +903,15 @@ class TestConflictingReferenceRules:
     """Test that conflicting reference_assembly rules produce not_classified."""
 
     def test_ambiguous_filename_two_refs(self, engine):
-        """Filename with both CHM13 and hg38 should be not_classified."""
+        """Filename with both CHM13 and hg38 is a conflict, with no value (#88)."""
         result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
+        assert result.reference_assembly is None
 
     def test_liftover_chain_two_refs(self, engine):
-        """Liftover chain with two references should be not_classified."""
+        """Liftover chain with two references is a conflict (#88)."""
         result = engine.classify_extended(FileInfo.from_filename("liftover.hg19.to.hg38.chain"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
 
     def test_single_ref_not_affected(self, engine):
         """Single reference in filename should still work."""
@@ -928,10 +931,10 @@ class TestConflictingClassificationFields:
     """Test that conflict detection works for all classification fields, not just reference_assembly."""
 
     def test_data_modality_conflict(self, engine):
-        """Same-tier rules disagreeing on data_modality produce not_classified."""
+        """Same-tier rules disagreeing on data_modality produce a conflict (#88)."""
         # `cpg` says methylation and `counts` says expression, both at tier 2.
         result = engine.classify_extended(FileInfo.from_filename("sample.cpg.counts.bed"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == CONFLICT
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
 
@@ -945,12 +948,12 @@ class TestConflictingClassificationFields:
         assert any(e.get("marker") == "conflict" for e in evidence)
 
     def test_conflict_evidence_has_status_and_competing_values(self, engine):
-        """Conflict evidence carries a not_classified status (in the status field,
-        not the value slot) and the structured competing_values field."""
+        """The conflict marker carries the field's own conflict status (in the
+        status field, not the value slot) and the structured competing_values."""
         result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
         conflict = next(e for e in evidence if e.get("marker") == "conflict")
-        assert conflict["status"] == NOT_CLASSIFIED
+        assert conflict["status"] == CONFLICT
         assert "value" not in conflict
         assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
 
@@ -1008,14 +1011,14 @@ class TestEvaluateClaims:
         assert result.is_conflict is False
 
     def test_disagree_same_tier(self):
-        """Same tier, different values → conflict (not_classified status, no value)."""
+        """Same tier, different values → conflict: status conflict, no value (#88)."""
         result = evaluate_claims(
             [
                 {"rule_id": "r1", "value": "GRCh38", "tier": 2},
                 {"rule_id": "r2", "value": "CHM13", "tier": 2},
             ]
         )
-        assert result.status == NOT_CLASSIFIED
+        assert result.status == CONFLICT
         assert result.value is None
         assert result.is_conflict is True
         assert result.reason == ResolutionReason.CONFLICT
@@ -1031,7 +1034,7 @@ class TestEvaluateClaims:
                 {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
             ]
         )
-        assert result.status == NOT_CLASSIFIED
+        assert result.status == CONFLICT
         assert result.value is None
         assert result.is_conflict is True
 

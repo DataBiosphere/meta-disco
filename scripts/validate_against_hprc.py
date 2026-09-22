@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-from meta_disco.models import field_label, field_value
+from meta_disco.models import STATUS_LABELS, field_label, field_value
 from meta_disco.output_utils import find_latest_run
 from meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
@@ -139,8 +139,9 @@ def validate_dimension(
     if not expected_value:
         return None  # HPRC has no ground truth for this dimension
 
-    _SENTINELS = {"not_classified", "not_applicable", ""}
-    if not our_value or our_value.lower() in _SENTINELS:
+    # A status label (models.STATUS_LABELS — conflict included, #88) is not an
+    # answer to score against the truth; "" is a status absent.
+    if not our_value or our_value.lower() in STATUS_LABELS:
         counters[f"{dim_name}_unknown"] += 1
         return None
 

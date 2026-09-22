@@ -13,9 +13,9 @@ from .file_name import FileName
 CLASSIFIED = "classified"
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
-# Top-tier claims disagreed (issue #88). Today the rule engine records this as an
-# evidence marker under NOT_CLASSIFIED; the constant exists so consumers that
-# re-emit a parent's status can carry it once it becomes a status of its own.
+# Top-tier claims disagreed and no curator rule has answered it (issue #88; claims
+# contract 4.5/4.7). The rule engine resolves such a field to this status with a
+# null value, and the index producer re-emits a parent's conflict as it.
 CONFLICT = "conflict"
 
 # What field_label emits in place of a value. It renders a classified field as its
@@ -341,11 +341,10 @@ def field_status(record: dict, field_name: str) -> str:
     """Status of a classification field.
 
     Returns an explicit non-None ``status`` from the field entry verbatim when
-    present (the shape the migration is moving toward — this may be values beyond
-    the three below, e.g. ``conflict`` in later stages). Otherwise derives the
-    status from the current sentinel-in-``value`` convention, yielding one of
-    CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None value reads as
-    NOT_CLASSIFIED.
+    present — any of the four statuses, ``conflict`` included, which no value can
+    carry. Otherwise derives the status from the sentinel-in-``value`` convention,
+    yielding one of CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None
+    value reads as NOT_CLASSIFIED.
     """
     return _entry_status(_field_entry(record, field_name))
 

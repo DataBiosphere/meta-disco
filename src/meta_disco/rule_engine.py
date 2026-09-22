@@ -13,6 +13,7 @@ from .models import (
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    CONFLICT,
     EXTERNAL_SOURCE_TYPES,
     NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
@@ -408,11 +409,13 @@ def _not_classified_marker(fld: str) -> dict:
 
 
 def _conflict_marker(fld: str, competing: list[str]) -> dict:
-    """The synthetic marker recording that top-tier claims disagreed."""
+    """The synthetic marker recording that top-tier claims disagreed. It carries the
+    same ``conflict`` status the field resolves to (#88) and the competing values;
+    the claims themselves stay in the evidence beside it."""
     return {
         "marker": CONFLICT_MARKER,
         "reason": f"Conflicting {fld}: {competing} — ambiguous",
-        "status": NOT_CLASSIFIED,
+        "status": CONFLICT,
         "competing_values": competing,
     }
 
@@ -451,9 +454,9 @@ class ExtendedClassificationResult:
         ``status_for_value(value)``. A CLASSIFIED status stores the value; any
         non-classified status stores None (the sentinel lives only in
         ``field_status``). ``fld`` must be a known classification field and
-        ``status`` one of classified / not_applicable / not_classified — a typo
-        raises rather than silently creating a stray attribute or emitting an
-        invalid status. The (value, status) pairing is checked against the single
+        ``status`` one of classified / not_applicable / not_classified / conflict —
+        a typo raises rather than silently creating a stray attribute or emitting
+        an invalid status. The (value, status) pairing is checked against the single
         coherence definition (``models._assert_coherent``): a CLASSIFIED status
         without a real value, or a non-classified status carrying one, raises
         rather than silently mis-storing.
@@ -461,7 +464,7 @@ class ExtendedClassificationResult:
         self._require_field(fld)
         if status is None:
             status = status_for_value(value)
-        if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED):
+        if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, CONFLICT):
             raise ValueError(f"unknown status {status!r} for field {fld}")
         _assert_coherent(value, status)  # single coherence definition (models)
         setattr(self, fld, value if status == CLASSIFIED else None)
@@ -559,7 +562,8 @@ class ExtendedClassificationResult:
             raise ValueError(f"unknown classification field {fld!r}")
 
     def status_of(self, fld: str) -> str:
-        """Resolved status of a dimension (classified / not_applicable / not_classified)."""
+        """Resolved status of a dimension (classified / not_applicable / not_classified /
+        conflict)."""
         self._require_field(fld)
         return self.field_status[fld]
 
@@ -732,19 +736,27 @@ class ClaimResolution:
         return self.competing_values is not None
 
 
-def _resolved(
-    declaration: str | None,
-    reason: ResolutionReason,
-    competing: list[str] | None = None,
-) -> ClaimResolution:
+def _resolved(declaration: str | None, reason: ResolutionReason) -> ClaimResolution:
     """Package a winning declaration as a ``ClaimResolution``: a real declaration
     becomes value with status CLASSIFIED; a status declaration becomes that status
-    with value None — so a sentinel never lands in ``value``."""
+    with value None — so a sentinel never lands in ``value``. A conflict has no
+    winning declaration and is built by ``_conflict`` instead."""
     status = status_for_value(declaration)
     return ClaimResolution(
         value=declaration if status == CLASSIFIED else None,
         status=status,
         reason=reason,
+    )
+
+
+def _conflict(competing: list[str]) -> ClaimResolution:
+    """Package a same-tier disagreement: status CONFLICT, no value, and the
+    competing declarations (#88). ``status_for_value`` cannot derive CONFLICT — no
+    value carries it — which is why this is not a ``_resolved`` call."""
+    return ClaimResolution(
+        value=None,
+        status=CONFLICT,
+        reason=ResolutionReason.CONFLICT,
         competing_values=competing,
     )
 
@@ -857,7 +869,7 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
         return _resolved(top_tier_decls.pop(), ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE)
 
     # Same tier, different values — conflict
-    return _resolved(NOT_CLASSIFIED, ResolutionReason.CONFLICT, competing=sorted(top_tier_decls))
+    return _conflict(sorted(top_tier_decls))
 
 
 _CONDITION_WORDS = {
@@ -1211,9 +1223,9 @@ class RuleEngine:
         """
         if result.is_declared("assay_type"):
             return
-        # Don't infer over conflicts
-        assay_evidence = result.field_evidence.get("assay_type", [])
-        if any(e.get("marker") == CONFLICT_MARKER for e in assay_evidence):
+        # Don't infer over a conflict: two assay rules already disagreed, and a
+        # signal-derived value would paper over that rather than answer it.
+        if result.status_of("assay_type") == CONFLICT:
             return
 
         for assay_rule in self.rules.assay_type_rules:
