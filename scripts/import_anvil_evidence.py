@@ -35,7 +35,7 @@ DEFAULT_DATA_DIR = Path("data/anvil")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import AnVIL submitter tables as evidence files")
+    parser = argparse.ArgumentParser(description="Import AnVIL's tables as evidence files, through a slot map")
     parser.add_argument("--catalog", default=None, help="Azul catalog (default: the one the map was authored against)")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, help="Directory holding manifest/<catalog>/")
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)

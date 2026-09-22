@@ -110,14 +110,14 @@ def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
 
 
 def published_envelope(
-    dataset: str = "AnVIL_IGVF_Mouse_R1", table: str = VERBATIM_FILE, system: str = REPOSITORY
+    dataset: str = "AnVIL_IGVF_Mouse_R1", table: str = VERBATIM_FILE, system: str = REPOSITORY, version: str = "anvil15"
 ) -> EvidenceFileEnvelope:
     """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
     labelled ``published_value``, about that same dataset's files."""
     return evidence_file_envelope(
         source=EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL),
         source_type=SOURCE_PUBLISHED_VALUE,
-        target=EvidenceTarget(system=system, dataset=dataset, version="anvil15"),
+        target=EvidenceTarget(system=system, dataset=dataset, version=version),
     )
 
 
@@ -1235,6 +1235,13 @@ class TestOnePublishedSourcePerRepository:
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
         assert str(first) in str(exc.value) and str(second) in str(exc.value)
         assert "exactly one published source" in str(exc.value)
+
+    def test_two_catalog_versions_of_one_dataset_are_both_current_and_both_allowed(self, tmp_path):
+        """`discover` keeps the newest generation per version, so an anvil15 and an anvil16
+        generation are both current; which one the run's catalog is, is not decided here."""
+        self._published(tmp_path, "anvil15/anvil_file.ndjson", version="anvil15")
+        self._published(tmp_path, "anvil16/anvil_file.ndjson", version="anvil16")
+        require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
     def test_submitter_files_and_unreadable_ones_are_not_judged(self, tmp_path):
         write_evidence_file(tmp_path / "a/hifi.ndjson", evidence_file_envelope(), [])

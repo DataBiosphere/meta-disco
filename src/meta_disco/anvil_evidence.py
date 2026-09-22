@@ -1,4 +1,4 @@
-"""Read AnVIL's submitter tables into evidence files, through the slot map (#369).
+"""Read AnVIL's tables into evidence files, through a slot map (#369, #497).
 
 The verbatim manifests (#368) carry the submitter tables unaltered, and the slot map
 (`slot_map`) says which of their columns and names speak to which slot. This module is
@@ -132,9 +132,10 @@ class DatasetImport:
 def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[str] | None = None) -> list[str]:
     """How the map disagrees with the manifests on disk, one line per problem; empty when none.
 
-    First the map against the published-table declaration (contract 7.12): a
-    ``published_value`` map maps exactly ``PUBLISHED_TABLES[REPOSITORY]`` and a
-    ``repository_metadata`` map does not map it — two sources, kept apart at the map.
+    First the map's kind (:func:`_check_kind`): it has an evidence directory here, and
+    over the chosen datasets it holds to the published-table declaration (contract 7.12)
+    — a ``published_value`` map maps exactly ``PUBLISHED_TABLES[REPOSITORY]`` and a
+    ``repository_metadata`` map does not map it, two sources kept apart at the map.
     Per mapped dataset (or those in ``datasets``, which must be in the map): the sidecar
     names it and its verbatim manifest is on disk. Per mapped table: at least one row of that type exists. Per
     file-link column: it appears on some row, and every non-empty value it holds is a
@@ -145,10 +146,11 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     missing, or a table with no rows, masks the problems beneath it until that one is
     fixed.
     """
-    problems = _check_published_tables(slot_map)
     named = sidecar_datasets(manifest_root, catalog)
     known = slot_map.datasets()
-    for dataset in known if datasets is None else dict.fromkeys(datasets):
+    chosen = known if datasets is None else list(dict.fromkeys(datasets))
+    problems = _check_kind(slot_map, set(chosen))
+    for dataset in chosen:
         if dataset not in known:
             problems.append(f"{dataset}: not in the slot map")
             continue
@@ -166,9 +168,18 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     return problems
 
 
-def _check_published_tables(slot_map: SlotMap) -> list[str]:
+def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
+    """The map's kind against this importer, over ``datasets``' entries only.
+
+    The published table is declared per repository whose files the evidence is about
+    (``EvidenceTarget.system``), and this importer writes about ``REPOSITORY``'s, so
+    that is the key read here and the one ``require_one_published_source`` reads at
+    the run.
+    """
+    if slot_map.source_type not in EVIDENCE_DIRS:
+        return [f"a {slot_map.source_type} map has no evidence directory here: {sorted(EVIDENCE_DIRS)}"]
     published = PUBLISHED_TABLES[REPOSITORY]
-    tables = {(e.dataset, e.table) for e in slot_map.entries}
+    tables = {(e.dataset, e.table) for e in slot_map.entries if e.dataset in datasets}
     if slot_map.source_type == SOURCE_PUBLISHED_VALUE:
         return [
             f"{dataset}/{table}: a {SOURCE_PUBLISHED_VALUE} map maps only {REPOSITORY}'s published table, {published!r}"

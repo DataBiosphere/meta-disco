@@ -236,6 +236,21 @@ datasets:
             "D/anvil_file: anvil's published table is the published_value map's, not a repository_metadata map's"
         ]
 
+    def test_the_kind_check_is_scoped_to_the_datasets_an_import_will_touch(self, tmp_path):
+        write_dataset(tmp_path, "D", HIFI_ROWS)
+        text = (
+            HIFI_MAP + "  E:\n    anvil_file:\n      file_ref:\n        reference_assembly:\n          - {cell: ra}\n"
+        )
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG, datasets=["D"]) == []
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)[0].startswith("E/anvil_file: anvil's published")
+
+    def test_a_map_of_a_kind_with_no_directory_here_is_a_problem_check_names(self, tmp_path):
+        write_dataset(tmp_path, "D", HIFI_ROWS)
+        text = HIFI_MAP.replace("catalog: anvil15", "catalog: anvil15\nsource_type: external_ground_truth")
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == [
+            "a external_ground_truth map has no evidence directory here: ['published_value', 'repository_metadata']"
+        ]
+
     def test_a_list_of_drs_uris_is_a_file_link(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"hifi": [drs(1), drs(2)]})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      hifi:\n        platform:\n          - {column_name: hifi}\n"

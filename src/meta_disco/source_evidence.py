@@ -952,19 +952,23 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
     Over the current files a run found (:func:`report_evidence_files`), three things
     are refused, with ``ValueError``: a ``published_value`` file whose source table is
     not the declared one; one whose target repository declares none; and a second
-    current one for the same repository and dataset, naming both. A file whose envelope
-    could not be read is not judged here, it is already named in the report.
+    current one for the same repository, catalog version and dataset, naming both. The
+    version is part of the key because *current* is per version (:func:`discover`):
+    an anvil15 and an anvil16 generation of one dataset are both current, and which
+    describes the run's catalog is not decided here (see the module docstring on
+    currency). A file whose envelope could not be read is not judged here, it is
+    already named in the report.
 
     The importer refuses a map that would write the wrong label at ``check``
     (``anvil_evidence``), so what this catches at discovery is a file placed by hand or
     written by another tool.
     """
-    current: dict[tuple[str, str | None], Path] = {}
+    current: dict[tuple[str, str | None, str | None], Path] = {}
     for status in statuses:
         envelope = status.envelope
         if envelope is None or envelope.source_type != SOURCE_PUBLISHED_VALUE:
             continue
-        repository, dataset = envelope.target.system, envelope.target.dataset
+        repository, version, dataset = envelope.target.system, envelope.target.version, envelope.target.dataset
         declared = published_tables.get(repository)
         if envelope.source.table != declared:
             expected = (
@@ -976,13 +980,14 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from table {envelope.source.table!r}, but "
                 f"{expected} — a repository has exactly one published source (contract 7.12)"
             )
-        if (repository, dataset) in current:
+        key = (repository, version, dataset)
+        if key in current:
             raise ValueError(
-                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{dataset}: "
-                f"{current[(repository, dataset)]} and {status.path} — a repository has exactly one published "
-                "source (contract 7.12), so one of them is not it"
+                f"two current evidence files carry {SOURCE_PUBLISHED_VALUE} for {repository}/{dataset} @{version}: "
+                f"{current[key]} and {status.path} — a repository has exactly one published source "
+                "(contract 7.12), so one of them is not it"
             )
-        current[(repository, dataset)] = status.path
+        current[key] = status.path
 
 
 def _describe(status: EvidenceFileStatus, root: Path, now: datetime | None) -> str:
