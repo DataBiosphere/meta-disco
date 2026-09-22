@@ -83,7 +83,8 @@ columns. ``dataset`` crosses onto each row as well as staying on the envelope: i
 is what makes a ``column`` legible, since the same column name means different things
 in different datasets. ``source_type`` is on the envelope for the same reason and is
 not on the line at all: one repository, dataset and table is one kind of source, so
-it is checked once against ``IMPORTER_SOURCE_TYPES`` rather than a few million times,
+it is checked once, against the generated model's ``ImporterSourceTypeEnum``, rather
+than a few million times,
 and reconcile reads it there when it stamps the claim it makes (#421).
 
 **The importer owns the mapping between the two keys** — and *only* that mapping. It
@@ -122,7 +123,7 @@ import json
 import os
 import re
 from collections.abc import Iterable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -368,9 +369,9 @@ def _envelope_from_block(block: object, where: str) -> EvidenceFileEnvelope:
             elif error["type"] == "extra_forbidden":
                 unknown.append(location)
             else:
-                # The pattern validators embed the offending value, and the one way to
-                # fail `^[^\r\n]+\Z` is a line break — escaped, because the report
-                # prints one file per line and this message is that line.
+                # The pattern validators embed the offending value, and a value that
+                # fails `^[^\r\n]+\Z` is empty or carries a line break — escaped,
+                # because the report prints one file per line and this message is that line.
                 message = error["msg"].replace("\r", "\\r").replace("\n", "\\n")
                 faults.append(f"{location}: {message}")
         if unknown:
@@ -424,10 +425,11 @@ class EvidenceEntry:
 class EvidenceFileStatus:
     """One evidence file as a run sees it: its provenance, or why it could not be read.
 
-    Exactly one of ``envelope`` and ``error`` is set, and ``fetched_at`` is set with
-    the envelope. ``error`` is the envelope's own parse or IO failure, held rather
-    than raised so that one unreadable file does not hide the provenance of the ones
-    behind it in the report.
+    Exactly one of ``envelope`` and ``error`` is set. ``fetched_at`` is derived from
+    the envelope when there is one — never passed — so a status with an envelope
+    always has its instant. ``error`` is the envelope's own parse or IO failure, held
+    rather than raised so that one unreadable file does not hide the provenance of
+    the ones behind it in the report.
 
     A run does not judge an evidence file beyond this and the published-source check
     (:func:`require_one_published_source`, #497). Whether the rows still describe
@@ -443,7 +445,18 @@ class EvidenceFileStatus:
     error: str | None = None
     # The envelope's `fetched_at` as an instant, for the age line. The envelope keeps
     # the string the schema declares; this is the one place a run wants it parsed.
-    fetched_at: datetime | None = None
+    fetched_at: datetime | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        """Parse the envelope's ``fetched_at`` once, here, for the one reader that wants an instant.
+
+        The reader already parsed it as a gate (:func:`_envelope_from_block`), so for
+        an envelope read off disk this cannot raise; an envelope built in-process and
+        handed here directly is parsed the same way.
+        """
+        if self.envelope is not None:
+            fetched_at = parse_iso_datetime(self.envelope.fetched_at, "envelope fetched_at", str(self.path))
+            object.__setattr__(self, "fetched_at", fetched_at)
 
 
 def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Iterable[EvidenceEntry]) -> int:
@@ -487,7 +500,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
     require_scoped_target(envelope, "evidence file envelope")
-    parse_iso_datetime(envelope.fetched_at, "fetched_at", "evidence file envelope")
+    parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", "evidence file envelope")
     path.parent.mkdir(parents=True, exist_ok=True)
     # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
     # shared that name: both wrote, one renamed, the other's rename hit a file that
@@ -738,11 +751,10 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     for path in discover(root):
         try:
             envelope = read_envelope(path)
-            fetched_at = parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", path.name)
         except (OSError, ValueError) as exc:
             statuses.append(EvidenceFileStatus(path, None, f"envelope could not be read: {exc}"))
             continue
-        statuses.append(EvidenceFileStatus(path, envelope, fetched_at=fetched_at))
+        statuses.append(EvidenceFileStatus(path, envelope))
 
     if not statuses:
         print(f"Evidence files: none under {root} — this run imports nothing.")

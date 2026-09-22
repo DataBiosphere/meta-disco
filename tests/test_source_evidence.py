@@ -607,7 +607,7 @@ class TestMalformedFiles:
     def test_an_envelope_naming_a_key_the_target_does_not_have_is_refused(self, tmp_path):
         """`target_key` is a key of the *target*. A source keyed by something else maps
         it to one of these itself rather than adding a term here."""
-        with pytest.raises(ValueError, match="target_key"):
+        with pytest.raises(ValueError, match=r"target_key\s+Input should be 'file_id'"):
             evidence_file_envelope(target_key="sample_id")
 
 
@@ -662,7 +662,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         The schema refuses it — the slots carry `pattern: "^[^\\r\\n]+\\Z"` — and the
         generated model carries the same pattern, so the constructor refuses it.
         """
-        with pytest.raises(ValueError, match="repository"):
+        with pytest.raises(ValueError, match=r"repository\s+Value error, Invalid repository format"):
             evidence_file_envelope(source=EvidenceFileSource(repository=forged, dataset="R2", table="t"))
 
     @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
@@ -676,7 +676,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         networked import fails at its own first line rather than at the next
         classification run.
         """
-        with pytest.raises(ValueError, match="source_type"):
+        with pytest.raises(ValueError, match=r"source_type\s+Input should be 'external_ground_truth'"):
             evidence_file_envelope(source_type=bad)
 
     def test_a_curator_cannot_be_written_as_an_evidence_file(self):
@@ -691,11 +691,11 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """
         assert SOURCE_WRANGLER_ANNOTATION in models.EXTERNAL_SOURCE_TYPES
         assert SOURCE_WRANGLER_ANNOTATION not in models.IMPORTER_SOURCE_TYPES
-        with pytest.raises(ValueError, match="source_type"):
+        with pytest.raises(ValueError, match=r"source_type\s+Input should be 'external_ground_truth'"):
             evidence_file_envelope(source_type=SOURCE_WRANGLER_ANNOTATION)
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
-        with pytest.raises(ValueError, match="repository"):
+        with pytest.raises(ValueError, match=r"repository\s+Value error, Invalid repository format"):
             evidence_file_envelope(source=EvidenceFileSource(repository=""))
 
     def test_an_envelope_with_a_non_datetime_fetch_time_is_refused_when_it_is_built(self):
@@ -712,14 +712,14 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         the file.
         """
         assert "column" not in EvidenceFileSource.model_fields
-        with pytest.raises(ValueError, match="column"):
+        with pytest.raises(ValueError, match=r"column\s+Extra inputs are not permitted"):
             EvidenceFileSource(repository="HPRC", table="t", column="platform")  # type: ignore[call-arg]
 
     def test_an_envelope_whose_source_has_a_non_string_member_is_refused_when_it_is_built(self):
         """The annotation says `str | None`, so the ignore is the point of the test:
         type hints do not run, and an importer mapping a source's own JSON can hand
         over whatever that JSON held."""
-        with pytest.raises(ValueError, match="table"):
+        with pytest.raises(ValueError, match=r"table\s+Input should be a valid string"):
             evidence_file_envelope(source=EvidenceFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
 
     def test_a_hand_built_row_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
@@ -793,9 +793,9 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """The report prints one file per line, and a refusal is that file's line.
 
         The generated pattern validators embed the offending value in their message,
-        and the one way to fail the no-line-break pattern is a line break — so the
-        refusal would carry the forged second line into the report unescaped (#494
-        security review). Escaped, as the removed reader's `!r` escaped it.
+        and a value that fails the no-line-break pattern is empty or carries a line
+        break — so the refusal would carry the forged second line into the report
+        unescaped (#494 security review). Escaped, as the removed reader's `!r` escaped it.
         """
         path = tmp_path / "c.ndjson"
         block = {**envelope_block(), "source_version": "1\nforged line"}
