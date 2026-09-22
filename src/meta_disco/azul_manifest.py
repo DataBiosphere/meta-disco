@@ -96,7 +96,8 @@ DRS_PREFIX = "drs://"
 # How an input was derived, written as ``input_source`` into every envelope
 # ``metadata_block`` builds (#499) so a reader of ``anvil_files_metadata.json`` need not
 # infer it from the other fields. Not every envelope: the HPRC builder writes its own
-# (``scripts/classify_hprc_files.py``) and carries no such field. Three kinds: today's compact join (this module, ``record_from_compact_manifest_row``);
+# (``scripts/classify_hprc_files.py``) and carries no such field. Three kinds: today's
+# compact join (this module, ``record_from_compact_manifest_row``);
 # the verbatim manifest read through ``snapshot_input.AzulVerbatim``; and a snapshot read
 # in place from BigQuery through ``snapshot_input.TdrDirect``. Nothing reads the field
 # yet — choosing a reader is #500's — so it is provenance, not a switch. Named here

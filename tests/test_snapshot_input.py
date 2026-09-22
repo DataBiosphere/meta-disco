@@ -40,9 +40,20 @@ CATALOG = "anvil15"
 ROOT = Path("data/anvil")
 REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
-# The six per-file fields the issue's parity criteria compare: what the compact join
-# and the snapshot's `anvil_file` row both carry for a file, under the record's names.
-COMPARED_FIELDS = ("file_name", "file_format", "file_size", "file_md5sum", "drs_uri", "is_supplementary")
+# The six per-file fields the issue's parity criteria compare — what the compact join
+# and the snapshot's `anvil_file` row both carry for a file, under the record's names —
+# plus the two published dimensions, so the claim that both derivations carry the same
+# `published` block is checked rather than asserted.
+COMPARED_FIELDS = (
+    "file_name",
+    "file_format",
+    "file_size",
+    "file_md5sum",
+    "drs_uri",
+    "is_supplementary",
+    "data_modality",
+    "reference_assembly",
+)
 
 DATASET_ROW: dict[str, Any] = {
     "datarepo_row_id": "5671c9ff-1045-4467-88d6-7e56ca77668c",
@@ -80,7 +91,9 @@ TABLES = {"anvil_dataset": [DATASET_ROW], "anvil_file": FILE_ROWS, "anvil_donor"
 def verbatim_manifest(path: Path, tables: dict[str, list[dict]]) -> Path:
     """Write the tables as Azul's verbatim manifest would carry them: `version` on
     every entity, `drs_uri` beside `file_ref` on `anvil_file`, `file_path` dropped,
-    and Azul's own `duos_dataset_registration` entity."""
+    and Azul's own `duos_dataset_registration` entity. This applies the same three
+    additions the adapter removes, so a test over it checks the round trip, not that
+    the list of additions is right — that is the #477 measurement the module cites."""
     lines = []
     for table, rows in tables.items():
         for row in rows:

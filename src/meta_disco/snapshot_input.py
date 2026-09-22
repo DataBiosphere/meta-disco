@@ -73,13 +73,16 @@ from .azul_manifest import (
 TABLE_DATASET = "anvil_dataset"
 REQUIRED_TABLES = (TABLE_DATASET, VERBATIM_FILE)
 
-# What Azul adds to a snapshot's tables on the way into its verbatim manifest,
-# measured on #477 against three prod snapshots (1000G, nhp_dGTEx_V1, ENCORE_293T:
-# every row of every table, every column but one): a ``version`` on every entity,
-# ``drs_uri`` on ``anvil_file`` — a copy of TDR's ``file_ref``, equal on 26,016 of
-# 26,016 rows — and one entity type of its own. :class:`AzulVerbatim` removes each
-# so the tables come out in TDR's shape. The one column Azul *drops*,
-# ``anvil_file.file_path``, cannot be put back.
+# What Azul adds to a snapshot's tables on the way into its verbatim manifest. Measured
+# 2026-09-20 and recorded as comments on #477: the TDR side read in BigQuery from a Terra
+# notebook, the manifest side diffed against it, for three prod snapshots (1000G,
+# nhp_dGTEx_V1, ENCORE_293T — every row of every table, every column but one). Azul adds
+# a ``version`` on every entity, ``drs_uri`` on ``anvil_file`` — a copy of TDR's
+# ``file_ref``, equal on every row, which the twelve-manifest parity test checks across
+# the corpus — and one entity type of its own. :class:`AzulVerbatim` removes each so the
+# tables come out in TDR's shape. The one column Azul *drops*, ``anvil_file.file_path``,
+# cannot be put back. Nothing offline can re-derive this list: a manifest alone cannot
+# tell an Azul addition from a TDR column.
 AZUL_ADDED_COLUMNS = frozenset({"version"})
 AZUL_ADDED_FILE_COLUMNS = frozenset({"drs_uri"})
 AZUL_ADDED_TABLES = frozenset({"duos_dataset_registration"})

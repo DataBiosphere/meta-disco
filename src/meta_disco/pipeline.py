@@ -333,7 +333,7 @@ def load_envelope(input_path: Path) -> dict:
 
 
 def refuse_bad_published_shape(
-    records: list[dict], input_path: Path, key_field: str | None, max_examples: int = 5
+    records: list[dict], input_path: Path, record_key_field: str | None, max_examples: int = 5
 ) -> None:
     """Raise if any record's published values are not a list of strings, naming the offenders.
 
@@ -369,9 +369,10 @@ def refuse_bad_published_shape(
     """
     bad: list[tuple[int, object, str, object, str]] = []
     for position, record in enumerate(records):
-        # Named by the source's record key (`key_field`), which differs by source, or
-        # left unnamed where the envelope declares none; the id is for the message only.
-        label = record.get(key_field) if key_field else None
+        # Named by the source's record key (`record_key_field`, from `key_field`), which
+        # differs by source, or left unnamed where the envelope declares none; the id is
+        # for the message only.
+        label = record.get(record_key_field) if record_key_field else None
         for field in PUBLISHED_FIELDS:
             value = record.get(field)
             if value is None:

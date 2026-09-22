@@ -190,8 +190,11 @@ evidence}` entry — plus the controlled vocabulary:
     catalog is re-indexed and the other two are not, which is why a consumer joins on
     `file_id` — the schema's slot descriptions carry that, not the tuple. Since #499
     `entry_id` is optional on the input: absent from a record derived from a snapshot,
-    and null on that record's output row. A diagnostic names a record by the source's
-    record key (`pipeline.key_field`), never by `entry_id`.
+    and null on that record's output row. The input gate's samples and the
+    published-shape refusal name a record by the source's record key
+    (`pipeline.key_field`), not by `entry_id`; the reports that echo the catalog
+    identity (`excluded_files.json`, the unprocessable report, the published
+    comparison's TSV) still carry `entry_id` as one of its three columns.
   - **The input is a TDR snapshot's tables, however they arrived** (#499). The one
     canonical shape is `snapshot_input.SnapshotTables` — table names, one table's rows
     streamed, TDR's column names — with two readers behind it: `TdrDirect` (BigQuery in
@@ -233,11 +236,14 @@ evidence}` entry — plus the controlled vocabulary:
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
     is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
     because its catalogs issue no identifier — no catalog identity is minted for an HPRC
-    record. Four readers use it and none may hard-code a field: the input gate
-    (`scripts/validate_metadata.py`), the catch-all producer's skip set
+    record. Five readers use it and none may hard-code a field: the input gate
+    (`scripts/validate_metadata.py`, which also names its sample records by it through
+    `pipeline.key_field`), the catch-all producer's skip set
     (`scripts/classify_remaining_files.py`), the index producer's parent join
-    (`scripts/classify_index_files.py`, #486) and the post-run one-row-per-file check
-    (#445). The two producers read another producer's rows through `pipeline.keyed_rows`
+    (`scripts/classify_index_files.py`, #486), the post-run one-row-per-file check
+    (#445) and the shared load path's published-shape refusal
+    (`pipeline.refuse_bad_published_shape`, #499, which names an offending record by
+    it). The two producers read another producer's rows through `pipeline.keyed_rows`
     and the input record each compares against those rows — every record for the
     catch-all, the matched parent for the index producer — through
     `pipeline.input_key_value`; both raise on a missing key rather than skip. An
