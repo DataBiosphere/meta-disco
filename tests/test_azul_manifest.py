@@ -514,6 +514,16 @@ class TestRecordMapping:
         }
         assert list(block["datasets"]) == ["a", "b"]
 
+    def test_a_direct_read_names_no_manifest(self):
+        # A snapshot read in place touched no manifest, so the two fields that describe
+        # the manifest path are null rather than claiming one; the compact and verbatim
+        # kinds both came through one and keep them.
+        when = datetime(2026, 9, 22)
+        direct = am.metadata_block("anvil", {"a": _entry(1)}, when, am.INPUT_SOURCE_TDR_DIRECT)
+        assert (direct["api_url"], direct["source"], direct["input_source"]) == (None, None, "tdr-direct")
+        verbatim = am.metadata_block("anvil15", {"a": _entry(1)}, when, am.INPUT_SOURCE_AZUL_VERBATIM)
+        assert (verbatim["api_url"], verbatim["source"]) == (am.MANIFEST_URL, "manifest")
+
     def test_an_input_source_that_is_not_one_of_the_three_is_refused(self):
         with pytest.raises(ValueError, match="input_source 'manifest' is not one of"):
             am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4), "manifest")

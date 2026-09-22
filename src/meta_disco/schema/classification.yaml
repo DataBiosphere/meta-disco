@@ -718,9 +718,12 @@ slots:
     range: integer
   entry_id:
     description: >-
-      Source catalog entry identifier the record was classified from. Unique within a
-      run; regenerated when the catalog is re-indexed, so it scopes a weaker key rather
-      than outliving a refresh (#433).
+      Source catalog entry identifier the record was classified from: Azul's per-index
+      document id. Where present it is unique within a run and regenerated when the
+      catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh
+      (#433). Null on a record whose input came from a TDR snapshot's tables rather
+      than the compact manifest (#499), and on every HPRC record; `file_id` is the
+      durable identity.
   file_id:
     description: >-
       The repository's own file identifier, and the durable one: it survives a catalog
@@ -1113,14 +1116,16 @@ enums:
     permissible_values:
       file_id:
         description: >-
-          The target's own file identifier. Present on every record and unique on
-          every record — with `entry_id` and `drs_uri`, one of the three keys that
-          need no scope.
+          The target's own file identifier. Present on every AnVIL record and unique on
+          every record — with `drs_uri`, a key that needs no scope, and the durable
+          one across a re-index (#433).
       entry_id:
         description: >-
-          The target's entry identifier. Present and unique on every record. The
-          scope that makes a weaker key usable: `(file_md5sum, entry_id)` and
-          `(file_name, entry_id)` are each unique corpus-wide.
+          The target's entry identifier, Azul's per-index document id. Present and
+          unique on every record of the compact-derived corpus, where
+          `(file_md5sum, entry_id)` and `(file_name, entry_id)` are each unique
+          corpus-wide — but absent from a corpus derived from a TDR snapshot's tables
+          (#499), where a target keyed on it joins nothing.
       drs_uri:
         description: >-
           DRS URI. Present and unique on every record of the AnVIL corpus.

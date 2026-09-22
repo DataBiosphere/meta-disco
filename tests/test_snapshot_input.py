@@ -168,6 +168,7 @@ class TestTheGate:
         assert n == 3
         written = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
         assert written["metadata"]["input_source"] == "tdr-direct"
+        assert written["metadata"]["api_url"] is None, "a direct read claims no manifest"
         assert all("entry_id" not in record for record in written["files"])
         assert validate_metadata.main(["-i", str(tmp_path / "anvil_files_metadata.json")]) == 0
         assert "OK — no problems." in capsys.readouterr().out

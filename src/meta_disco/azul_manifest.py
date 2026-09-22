@@ -812,6 +812,11 @@ def metadata_block(
     downloader passes :data:`INPUT_SOURCE_AZUL_COMPACT` — so a reader never has to
     take an absent field as meaning the compact path. An envelope written before the
     field existed lacks it; nothing reads it yet, so such a file loads as before.
+    The two fields that describe the Azul manifest path, ``api_url`` and ``source``,
+    are written only for an input that came through it (either manifest kind) and are
+    null for a snapshot read in place, which touched no manifest; ``catalog`` is
+    written as given, because :func:`pipeline.published_source` reads it and what a
+    direct read should say there is #500's to decide.
 
     ``repository`` names who published these files, so nothing downstream has to infer
     it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
@@ -835,13 +840,14 @@ def metadata_block(
     """
     if input_source not in INPUT_SOURCES:
         raise ValueError(f"input_source {input_source!r} is not one of {sorted(INPUT_SOURCES)}")
+    via_manifest = input_source != INPUT_SOURCE_TDR_DIRECT
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(int(entry["file_count"]) for entry in datasets.values()),
-        "api_url": MANIFEST_URL,
+        "api_url": MANIFEST_URL if via_manifest else None,
         "repository": REPOSITORY,
         "catalog": catalog,
-        "source": "manifest",
+        "source": "manifest" if via_manifest else None,
         "input_source": input_source,
         "datasets": {title: datasets[title] for title in sorted(datasets)},
     }
