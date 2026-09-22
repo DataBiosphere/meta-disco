@@ -70,9 +70,10 @@ from .source_evidence import (
 )
 
 # Where a map's generations go under the evidence root, by the kind of source the map
-# declares. The directory is the only thing `source_evidence.discover` keys supersession
-# on, so it is derived from the map rather than passed beside it: two maps of one kind
-# would supersede each other, and that is the intent; two kinds never do.
+# declares. `source_evidence.discover` keys supersession on source directory, version and
+# dataset, and this directory is the part of that key a map's kind decides, so it is
+# derived from the map rather than passed beside it: two maps of one kind supersede
+# each other's generations of a dataset, and that is the intent; two kinds never do.
 PUBLISHED_DIR = f"{REPOSITORY}_published"
 EVIDENCE_DIRS = {SOURCE_REPOSITORY_METADATA: REPOSITORY, SOURCE_PUBLISHED_VALUE: PUBLISHED_DIR}
 
