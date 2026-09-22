@@ -777,6 +777,18 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match=r"c\.ndjson line 1"):
             read_envelope(path)
 
+    def test_a_well_shaped_fetched_at_that_is_not_a_day_is_refused_at_write(self, tmp_path):
+        """The one check beyond the schema's pattern, run on the writer's side too.
+
+        `2026-02-30T09:14:03` matches the pattern, so the generated model builds the
+        envelope; the reader would refuse the file at line 1. The writer refuses it
+        first, before creating anything (#507 review).
+        """
+        path = tmp_path / "hprc" / "c.ndjson"
+        with pytest.raises(ValueError, match="fetched_at '2026-02-30T09:14:03' is not an ISO 8601"):
+            write_evidence_file(path, evidence_file_envelope(fetched_at="2026-02-30T09:14:03"), [_entry()])
+        assert not path.parent.exists()
+
     def test_a_refused_member_carrying_a_line_break_is_reported_on_one_line(self, tmp_path):
         """The report prints one file per line, and a refusal is that file's line.
 

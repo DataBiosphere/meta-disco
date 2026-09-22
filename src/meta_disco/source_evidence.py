@@ -240,10 +240,13 @@ _RETIRED_LINE_KEYS = {
 # is — which members, which are required, that none carries a line break, that
 # `source_type` is a kind an importer may write and `target_key` a key of the target
 # — and the generated model carries every one of those, `extra="forbid"` included, so
-# the reader and the schema refuse the same files by construction. Until #494 three
-# frozen dataclasses re-stated all of that by hand, with a test pinning the two copies
-# of the `fetched_at` pattern equal; the drift test in `schema/tests` now holds the
-# model to the schema instead.
+# on structure and patterns the reader and the schema refuse the same files by
+# construction. Until #494 three frozen dataclasses re-stated all of that by hand,
+# with a test pinning the two copies of the `fetched_at` pattern equal; the drift
+# test in `schema/tests` now holds the model to the schema instead. The one check
+# beyond the schema's is the calendar: `2026-02-30T09:14:03` matches the pattern and
+# is not a day, and only a parse can say so (`parse_iso_datetime`, run at write and
+# at read), which the schema records on its `fetched_at` slot.
 #
 # `fetched_at` is a string on the model, as it is in the schema, which pins it by
 # pattern rather than `range: datetime` so that a date with no time of day is refused
@@ -461,9 +464,11 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     names, raises rather than being written and discovered by a reader later. The
     envelope's four source facts are flattened once, here, and compared against per
     row — they are constant for the file.
-    The generated model checked the envelope's members when it was built; the one
-    rule it cannot carry is checked here (:func:`require_scoped_target`), before
-    anything touches the filesystem.
+    The generated model checked the envelope's members when it was built; the two
+    checks it cannot carry — the scope rule (:func:`require_scoped_target`) and the
+    calendar behind a well-shaped ``fetched_at`` (:func:`parse_iso_datetime`) — run
+    here, before anything touches the filesystem, so a writer cannot emit a file its
+    own reader refuses.
 
     A *retired* member — a mapped ``value``, a ``tier``, a ``join_key`` — is not
     refused here because it cannot get this far: ``EvidenceEntry`` has four members
@@ -482,6 +487,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
     require_scoped_target(envelope, "evidence file envelope")
+    parse_iso_datetime(envelope.fetched_at, "fetched_at", "evidence file envelope")
     path.parent.mkdir(parents=True, exist_ok=True)
     # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
     # shared that name: both wrote, one renamed, the other's rename hit a file that
