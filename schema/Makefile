@@ -11,18 +11,22 @@ unexport VIRTUAL_ENV
 # tooling project references them from there (issue #164).
 SCHEMA = ../src/meta_disco/schema/classification.yaml
 METADATA_SCHEMA = ../src/meta_disco/schema/metadata.yaml
-# The input-record Pydantic model is committed and imported by the runtime (the
-# validator in metadata_schema.py, issue #161), unlike the output artifacts below.
+# The two Pydantic models are committed and imported by the runtime — the
+# input-record model by the validator in metadata_schema.py (#161), the
+# classification model by source_evidence.py for the evidence-file envelope (#494)
+# — unlike the JSON Schema below, which is a build output.
 METADATA_MODEL = ../src/meta_disco/schema/metadata_model.py
+CLASSIFICATION_MODEL = ../src/meta_disco/schema/classification_model.py
 GEN_DIR = generated
 
-# Regenerate JSON Schema + Pydantic from the canonical LinkML schema.
-# These artifacts are gitignored — they are build outputs, not source.
+# Regenerate JSON Schema + Pydantic from the canonical LinkML schema. The JSON
+# Schema is gitignored; the Pydantic model is committed (#494), and
+# tests/test_model_drift.py fails when it lags the schema.
 gen:
 	mkdir -p $(GEN_DIR)
 	uv run gen-json-schema $(SCHEMA) > $(GEN_DIR)/classification.schema.json.tmp && mv $(GEN_DIR)/classification.schema.json.tmp $(GEN_DIR)/classification.schema.json
-	uv run gen-pydantic $(SCHEMA) > $(GEN_DIR)/classification_model.py.tmp && mv $(GEN_DIR)/classification_model.py.tmp $(GEN_DIR)/classification_model.py
-	@echo "Generated $(GEN_DIR)/classification.schema.json and classification_model.py"
+	uv run gen-pydantic $(SCHEMA) > $(CLASSIFICATION_MODEL).tmp && mv $(CLASSIFICATION_MODEL).tmp $(CLASSIFICATION_MODEL)
+	@echo "Generated $(GEN_DIR)/classification.schema.json and $(CLASSIFICATION_MODEL)"
 
 # Regenerate the input-record Pydantic model from metadata.yaml. Committed (not
 # gitignored): the runtime imports it to validate records at load (#161).

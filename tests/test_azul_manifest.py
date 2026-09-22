@@ -390,6 +390,11 @@ class TestVerbatimReader:
                     "E": {"file_count": 1, "verbatim.jsonl": {"requested_at": "last tuesday"}},
                     "F": {"file_count": 1},
                     "G": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03T21:45:47Z"}},
+                    # Shapes pydantic's parser alone would take and the envelope's pattern
+                    # refuses: a digit string it reads as a Unix epoch, and a date with no
+                    # time of day. This value becomes an envelope's fetched_at (#494 review).
+                    "H": {"file_count": 1, "verbatim.jsonl": {"requested_at": "20260903"}},
+                    "I": {"file_count": 1, "verbatim.jsonl": {"requested_at": "2026-09-03"}},
                 },
             },
         )
@@ -401,6 +406,9 @@ class TestVerbatimReader:
         )
         with pytest.raises(ValueError, match=r"anvil15 sidecar, E \(verbatim.jsonl\): requested_at 'last tuesday'"):
             am.sidecar_requested_at(tmp_path, "anvil15", "E", "verbatim.jsonl")
+        for dataset in ("H", "I"):
+            with pytest.raises(ValueError, match=r"requested_at .* is not an ISO 8601 datetime with a time of day"):
+                am.sidecar_requested_at(tmp_path, "anvil15", dataset, "verbatim.jsonl")
 
     def test_submitter_tables_are_everything_not_harmonized(self):
         assert am.is_submitter_table("hifi") and am.is_submitter_table("1KGP_CHM13v2_sample")

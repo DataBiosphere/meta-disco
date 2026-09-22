@@ -56,6 +56,8 @@ from typing import Any, Protocol
 
 import requests
 
+from .source_evidence import parse_iso_datetime
+
 API_URL = "https://service.explore.anvilproject.org"
 FILES_URL = f"{API_URL}/index/files"
 MANIFEST_URL = f"{API_URL}/fetch/manifest/files"
@@ -351,16 +353,11 @@ def sidecar_requested_at(root: Path, catalog: str, dataset_title: str, fmt: str)
     requested = (entry.get(fmt) or {}).get("requested_at")
     if not isinstance(requested, str):
         return None
-    # A trailing `Z` is normalized to `+00:00` first: `fromisoformat` rejects it on
-    # Python 3.10, this project's floor, and accepts it from 3.11 — the same interpreter
-    # divergence `source_evidence` closes for the envelope's `fetched_at`.
-    normalized = requested.removesuffix("Z") + "+00:00" if requested.endswith("Z") else requested
-    try:
-        return datetime.fromisoformat(normalized)
-    except ValueError:
-        raise ValueError(
-            f"{catalog} sidecar, {dataset_title} ({fmt}): requested_at {requested!r} is not an ISO 8601 datetime"
-        ) from None
+    # The evidence envelope's own parser: the schema's shape for a timestamp first,
+    # then pydantic's parse, which takes a trailing `Z` on every interpreter (#494).
+    # This value is written into the envelope as `fetched_at`, so it is held to that
+    # slot's shape here rather than laundered into one.
+    return parse_iso_datetime(requested, "requested_at", f"{catalog} sidecar, {dataset_title} ({fmt})")
 
 
 def sidecar_datasets(root: Path, catalog: str) -> dict[str, Dataset]:

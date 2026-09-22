@@ -1,0 +1,925 @@
+from __future__ import annotations
+
+import re
+import sys
+from datetime import (
+    date,
+    datetime,
+    time
+)
+from decimal import Decimal
+from enum import Enum
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    Optional,
+    Union
+)
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    RootModel,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer
+)
+
+
+metamodel_version = "1.11.0"
+version = "None"
+
+
+class ConfiguredBaseModel(BaseModel):
+    model_config = ConfigDict(
+        serialize_by_alias = True,
+        validate_by_name = True,
+        validate_assignment = True,
+        validate_default = True,
+        extra = "forbid",
+        arbitrary_types_allowed = True,
+        use_enum_values = True,
+        strict = False,
+    )
+
+
+
+
+
+class LinkMLMeta(RootModel):
+    root: dict[str, Any] = {}
+    model_config = ConfigDict(frozen=True)
+
+    def __getattr__(self, key:str):
+        return getattr(self.root, key)
+
+    def __getitem__(self, key:str):
+        return self.root[key]
+
+    def __setitem__(self, key:str, value):
+        self.root[key] = value
+
+    def __contains__(self, key:str) -> bool:
+        return key in self.root
+
+
+linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
+     'default_range': 'string',
+     'description': 'Full classification data model for meta-disco: the five '
+                    'metadata dimensions, per-field evidence, classification '
+                    'status, and typed derivation edges. Supersedes the retired '
+                    'anvil_file.yaml stub (issue #33) and realizes the data-model '
+                    'decision record in docs/derived-file-data-model.md.\n'
+                    'Authoring source of truth. `make gen` generates JSON Schema '
+                    'and Pydantic from this file (via `gen-json-schema` / '
+                    '`gen-pydantic`) — do not hand-edit the generated copies. The '
+                    "schema's vocabulary backs the rule drift check "
+                    '(tests/test_rule_vocabulary.py), and `ClassificationRecord` '
+                    'now matches the pipeline output shape (`{..., '
+                    '"classifications": {...}}`, see '
+                    'docs/derived-file-data-model.md section 5a) so whole records '
+                    'validate against it (schema/tests/test_output_validation.py, '
+                    'run closed=False, so any unmodeled key is tolerated; in '
+                    "practice the pipeline's only such extras are the fastq scalar "
+                    'hints inside `classifications` — modeling them is a #134 '
+                    'follow-up). Adopting typed records in the pipeline is done: '
+                    '`run()` parses each routed record into a typed view at the '
+                    'load boundary (`src/meta_disco/records.py`, #172).',
+     'id': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+     'imports': ['linkml:types'],
+     'name': 'meta_disco_classification',
+     'prefixes': {'anvil': {'prefix_prefix': 'anvil',
+                            'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
+                  'linkml': {'prefix_prefix': 'linkml',
+                             'prefix_reference': 'https://w3id.org/linkml/'}},
+     'source_file': '../src/meta_disco/schema/classification.yaml',
+     'title': 'Meta-Disco File Classification Model'} )
+
+class DataModalityEnum(str, Enum):
+    """
+    The biological signal a file carries. Dotted values are hierarchical.
+    """
+    genomic = "genomic"
+    transcriptomicFULL_STOPbulk = "transcriptomic.bulk"
+    transcriptomicFULL_STOPsingle_cell = "transcriptomic.single_cell"
+    epigenomicFULL_STOPchromatin_accessibility = "epigenomic.chromatin_accessibility"
+    epigenomicFULL_STOPhistone_modification = "epigenomic.histone_modification"
+    epigenomicFULL_STOPmethylation = "epigenomic.methylation"
+    imagingFULL_STOPhistology = "imaging.histology"
+
+
+class DataTypeEnum(str, Enum):
+    """
+    Content type, spanning two classes. BIOLOGICAL: the bytes are the signal. DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.)
+    """
+    alignments = "alignments"
+    reads = "reads"
+    sequence = "sequence"
+    assembly = "assembly"
+    assemblyFULL_STOPreference = "assembly.reference"
+    pangenome = "pangenome"
+    pangenomeFULL_STOPreference = "pangenome.reference"
+    variants = "variants"
+    variantsFULL_STOPgermline = "variants.germline"
+    variantsFULL_STOPsomatic = "variants.somatic"
+    variantsFULL_STOPstructural = "variants.structural"
+    variantsFULL_STOPcnv = "variants.cnv"
+    genotypes = "genotypes"
+    expression_matrix = "expression_matrix"
+    quantification = "quantification"
+    annotations = "annotations"
+    peaks = "peaks"
+    signal = "signal"
+    raw_signal = "raw_signal"
+    array_signal = "array_signal"
+    images = "images"
+    index = "index"
+    checksum = "checksum"
+    statistics = "statistics"
+    log = "log"
+    interval_set = "interval_set"
+
+
+class ReferenceAssemblyEnum(str, Enum):
+    GRCh37 = "GRCh37"
+    GRCh38 = "GRCh38"
+    CHM13 = "CHM13"
+
+
+class ReferenceNameSourceEnum(str, Enum):
+    """
+    Which part of a file's header a declared reference name was read from (issue #354). See ``ReferenceBuild.name_source``.
+    """
+    reference_field = "reference_field"
+    command_line = "command_line"
+
+
+class AssayTypeEnum(str, Enum):
+    WGS = "WGS"
+    WES = "WES"
+    RNA_seq = "RNA-seq"
+    ATAC_seq = "ATAC-seq"
+    ChIP_seq = "ChIP-seq"
+    Bisulfite_seq = "Bisulfite-seq"
+    Methylation_array = "Methylation array"
+    Histology = "Histology"
+
+
+class PlatformEnum(str, Enum):
+    ILLUMINA = "ILLUMINA"
+    PACBIO = "PACBIO"
+    ONT = "ONT"
+    MGI = "MGI"
+    ELEMENT = "ELEMENT"
+    ULTIMA = "ULTIMA"
+
+
+class ClassificationStatusEnum(str, Enum):
+    """
+    Why a field has (or lacks) a value. Replaces sentinel values that were previously smuggled into each dimension enum (not_applicable / not_classified). See issues #56, #88.
+    """
+    classified = "classified"
+    """
+    A value was determined.
+    """
+    not_applicable = "not_applicable"
+    """
+    The field has no meaning for this file.
+    """
+    not_classified = "not_classified"
+    """
+    The field is meaningful but no value could be determined.
+    """
+    conflict = "conflict"
+    """
+    Multiple rules disagreed at the same tier.
+    """
+
+
+class RelationEnum(str, Enum):
+    """
+    Derivation verbs we can currently detect. subset_of / merged_from / member_of are intentionally held back until detectable (data-model doc 8d).
+    """
+    index_of = "index_of"
+    checksum_of = "checksum_of"
+    summarizes = "summarizes"
+    lifted_over_from = "lifted_over_from"
+    derived_from = "derived_from"
+
+
+class ParentKindEnum(str, Enum):
+    """
+    The kind of file a derivation edge points at.
+    """
+    alignment = "alignment"
+    variants = "variants"
+    reads = "reads"
+    sequence = "sequence"
+    intervals = "intervals"
+    signal = "signal"
+    expression_matrix = "expression_matrix"
+    genotypes = "genotypes"
+    any = "any"
+
+
+class SourceTypeEnum(str, Enum):
+    """
+    Kind of source behind a claim (provenance model, #90). Every claim carries one (#392). Distinct from `tier`, which is the resolution input: two kinds share `CONTENT_TIER`, and one fires at a rule tier without being a rule.
+    """
+    filename_rule = "filename_rule"
+    """
+    A rule matching on the file name or its extension (tiers 1-2 of unified_rules.yaml). The extension is part of the name, so both tiers are this kind.
+    """
+    header_rule = "header_rule"
+    """
+    A rule matching on fetched header content (tier 3 of unified_rules.yaml).
+    """
+    contig_detection = "contig_detection"
+    """
+    Read from the contig or sequence declarations in the file's own bytes — SAM ``@SQ``, VCF ``##contig``, FASTA sequence names, GFA ``SN`` segment tags, BED contig names and coordinates.
+    """
+    content_read = "content_read"
+    """
+    Read from the file's bytes, but not from contig declarations — today the member names in an archive head. Separate from `contig_detection` so neither has to describe the other.
+    """
+    signal_inference = "signal_inference"
+    """
+    Derived from dimensions this file has already resolved, plus its format and size, rather than read from the file — the assay_type inference.
+    """
+    derivation_inheritance = "derivation_inheritance"
+    """
+    Inherited from a related file rather than determined for this one, as an index file inherits its parent's classification.
+    """
+    external_ground_truth = "external_ground_truth"
+    """
+    An external catalog or authority published outside AnVIL, e.g. the HPRC Data Explorer.
+    """
+    repository_metadata = "repository_metadata"
+    """
+    A table the submitter wrote, carried by the repository — an AnVIL verbatim manifest's submitter table.
+    """
+    published_value = "published_value"
+    """
+    The value the repository's own system of record publishes for the file (#497) — AnVIL's harmonized `anvil_file` columns, today read as the verbatim manifest copies that TDR table (claims contract 7.12). Distinct from `repository_metadata` so a reader of a conflict can tell the repository's official value from a submitter's opinion.
+    """
+    wrangler_annotation = "wrangler_annotation"
+    """
+    A human curator's decision, recorded deliberately rather than inferred.
+    """
+
+
+class ImporterSourceTypeEnum(str, Enum):
+    """
+    The kinds of source an importer may write, and so the kinds an evidence file's envelope may declare (#421). A strict subset of `source_type_enum`, excluding two groups for two reasons.
+The inference kinds, because a file declaring `filename_rule` would be naming our own rule engine as its publisher.
+And `wrangler_annotation`, because a curator does not reach us as evidence. The claims contract 1.6 puts it plainly — a curator "is unlike every other in how it enters: as rules, not as evidence" — and 1.7 makes a decision about a single file a rule whose selection matches one file. Accepting one here would let the curator table (#397) be built as an importer against a format that takes it and a resolution stage with nowhere to put it.
+Listed rather than derived because LinkML has no enum-subset construct that `gen-json-schema` honours; `test_the_external_source_types_are_a_subset` pins the two so a value can be added to one and not lost from the other. The values carry no description of their own for the same reason the pin exists: `source_type_enum` defines these terms, and a second copy of that prose could drift from it without any test noticing.
+    """
+    external_ground_truth = "external_ground_truth"
+    """
+    As in `source_type_enum`.
+    """
+    repository_metadata = "repository_metadata"
+    """
+    As in `source_type_enum`.
+    """
+    published_value = "published_value"
+    """
+    As in `source_type_enum`.
+    """
+
+
+class ClaimStateEnum(str, Enum):
+    """
+    Why a claim that consulted a source produced no vocabulary value (issue #392). Each state was observed in the spike over three real producers on `AnVIL_HPRC_R2`. None of them declares a value, so none competes in resolution. `mapped` is not a member: a claim that mapped carries a `value`, and `not_applicable` / `not_classified` remain statuses, unchanged.
+    """
+    unmapped = "unmapped"
+    """
+    The source said something and no map entry covers it, e.g. `library_selection=RANDOM`. The review queue: a mapping may be owed.
+    """
+    no_vocabulary_term = "no_vocabulary_term"
+    """
+    The raw value was mapped deliberately to nothing because the vocabulary has no term for it, e.g. `Hi-C`, `CenSat`. A recorded decision, not a gap in the mapping.
+    """
+    declined = "declined"
+    """
+    This column is not an authority on this dimension, so no claim is made from it whatever it says. A property of the (source, column, dimension) triple, not of a value: `alignments_v2.location` points at pangenome graphs and at a VCF of variants under one column, so neither a value-level mapping nor a finer key can fix it.
+    """
+
+
+class JoinKeyEnum(str, Enum):
+    """
+    A key by which a claim is attached to a row in the target system (issue #392, extended in #401). One vocabulary in two positions: an evidence file's envelope declares which of these it is keyed by (`EvidenceFileEnvelope. target_key`), and a claim records which one actually attached it (`Evidence.join_key`) once the join has run.
+These are keys of the *target*, not names a source publishes. A source keyed by an ENA run accession adds no term here: its importer maps that accession to one of these and writes the value in the target's space, which is what keeps corpus knowledge in the importer and transform logic out of the join.
+Measured on the AnVIL corpus, 708,088 records. The keys differ enormously in how far they can be trusted, which is why the one used is recorded per claim (#390).
+    """
+    file_id = "file_id"
+    """
+    The target's own file identifier. Present on every AnVIL record and unique on every record — with `drs_uri`, a key that needs no scope, and the durable one across a re-index (#433).
+    """
+    entry_id = "entry_id"
+    """
+    The target's entry identifier, Azul's per-index document id. Present and unique on every record of the compact-derived corpus, where `(file_md5sum, entry_id)` and `(file_name, entry_id)` are each unique corpus-wide — but absent from a corpus derived from a TDR snapshot's tables (#499), where a target keyed on it joins nothing.
+    """
+    drs_uri = "drs_uri"
+    """
+    DRS URI. Present and unique on every record of the AnVIL corpus.
+    """
+    file_path = "file_path"
+    """
+    Full path, where the target publishes one.
+    """
+    file_md5sum = "file_md5sum"
+    """
+    Content checksum. Present on every record and non-unique on 1.72% of them (12,203 rows): 8,119 of those collide inside a single dataset and 4,084 across datasets, so a dataset scope narrows the ambiguity without removing it. Note that a record whose md5 was synthesized from its URL rather than its content can never match one carrying a real checksum.
+    """
+    file_name = "file_name"
+    """
+    Bare file name, and often the only key a catalog publishes. The weakest: present on every record but non-unique on 69.4%. Collisions are wildly per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3% within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a dataset scope, which is what `EvidenceTarget.dataset` is for.
+    """
+    archive_accession = "archive_accession"
+    """
+    Sequence-archive run accession (ENA, SRA). Not a field of the input record but a fact classification *derives*, read from a fastq's read headers — accessions appear in no input file name at all. A claim from an archive can be attached only by this, which is why the join runs after inference rather than over the input corpus.
+    """
+
+
+class EvidenceMarkerEnum(str, Enum):
+    """
+    Kind of synthetic resolution marker on an evidence entry (issue #228): a note that no claim was made or that claims conflicted, rather than a claim.
+    """
+    not_classified = "not_classified"
+    """
+    No rule or content classifier determined a value.
+    """
+    conflict = "conflict"
+    """
+    Claims disagreed at the top tier, so the field is ambiguous.
+    """
+
+
+
+class ClassificationRecord(ConfiguredBaseModel):
+    """
+    One classified file. `classifications` carries the file's identity (the five dimension fields — what it is); derived_from is a typed edge to the file it was derived from (where it came from). Matches the pipeline output shape (see docs/derived-file-data-model.md section 5a).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'tree_root': True})
+
+    md5sum: str = Field(default=..., description="""MD5 checksum of the file; primary key for records.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    file_name: Optional[str] = Field(default=None, description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    file_format: Optional[str] = Field(default=None, description="""File extension / compound extension (e.g. .bam, .vcf.gz).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    file_size: Optional[int] = Field(default=None, description="""File size in bytes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    entry_id: Optional[str] = Field(default=None, description="""Source catalog entry identifier the record was classified from: Azul's per-index document id. Where present it is unique within a run and regenerated when the catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh (#433). Null on a record whose input came from a TDR snapshot's tables rather than the compact manifest (#499), and on every HPRC record. An AnVIL record's durable identity is `file_id`; an HPRC record's is the URL hash it carries in `md5sum` (`pipeline.SOURCE_RECORD_KEYS`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    file_id: Optional[str] = Field(default=None, description="""The repository's own file identifier, and the durable one: it survives a catalog re-index, which `entry_id` does not (#433). It is the join key, not the handle a resolver takes — that is `drs_uri`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    classifications: Classifications = Field(default=..., description="""The five classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    derived_from: Optional[DerivationEdge] = Field(default=None, description="""Typed derivation edge to the parent file, if this is a derived file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    published: Optional[Published] = Field(default=None, description="""What the repository publishes for this file today, beside what this run inferred. Null on a file the repository publishes nothing for.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+
+
+class Published(ConfiguredBaseModel):
+    """
+    What the repository publishes for this file of its own accord: the published output (#424), the answer its users see today. Not this project's answer, and not an input to inference — nothing in classification reads this block, no claim is built from it, and a file's `value` is whatever inference concluded whether this block is present or not. The published values are also written as evidence (claims contract 4.1 kind 2, #497) that no run reads yet (#432), never through this block. It is here so the two can be compared per file, which is what `scripts/generate_published_comparison.py` does.
+    Repository-neutral by design: AnVIL is the only publisher today, but only the `source` names one, so a second repository needs no schema change.
+    Each dimension is the value list the repository published, transcribed verbatim — a list wherever it published a list, every value exactly as written, no mapping and no normalization. Null on a dimension the repository publishes nothing for, and the whole block is null on a file it publishes nothing for at all (~98% of the corpus).
+    The block exists precisely because a published value may yield nothing else. Not one published value in the corpus is a term in this schema's vocabulary — `GRCm39` has no `reference_assembly_enum` member and `single-nucleus ATAC-seq` has no `data_modality_enum` one — so without this block those values would appear in the output nowhere at all.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    source: Optional[str] = Field(default=None, description="""Which repository this was read from, as publishing system and catalog generation (`anvil/anvil15`). Null when the run's input carried no envelope naming a catalog — an unnamed repository rather than a guessed one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
+    data_modality: Optional[list[str]] = Field(default=None, description="""The published data modality/modalities, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    reference_assembly: Optional[list[str]] = Field(default=None, description="""The published reference assembly/assemblies, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    in_vocabulary: PublishedVocabulary = Field(default=..., description="""Which published values are terms in this schema's vocabulary, per dimension. Required whenever this block exists: contract 7.6 records vocabulary standing for every published value, and `records.build_published` always emits the map. Optional here would let a hand-edited or future producer omit it and validate, and the comparison report would read the absence as \"no value is a term\" — under-reporting coverage rather than failing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published']} })
+
+
+class PublishedVocabulary(ConfiguredBaseModel):
+    """
+    Per dimension, the subset of that dimension's published values that *are* terms in its enum. An empty list means the repository published something this vocabulary cannot say, which is the case for every published value in the corpus today; that is what makes the mapping gap countable from the output rather than asserted about it. A dimension the repository publishes nothing for is absent here rather than present and empty, so these keys are exactly the dimensions it speaks to.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    data_modality: Optional[list[DataModalityEnum]] = Field(default=None, description="""Published data modalities that are `data_modality_enum` terms.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    reference_assembly: Optional[list[ReferenceAssemblyEnum]] = Field(default=None, description="""Published assemblies that are `reference_assembly_enum` terms.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+
+
+class Classifications(ConfiguredBaseModel):
+    """
+    The five metadata dimensions for one file, each a Classification entry. The pipeline also emits some file-type-specific scalar hints here (e.g. fastq's is_paired_end / instrument_model); those are not modeled yet and pass under the gate's closed=False mode (see #134 follow-up).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'assay_type': {'name': 'assay_type',
+                                       'range': 'AssayTypeClassification',
+                                       'required': True},
+                        'data_modality': {'name': 'data_modality',
+                                          'range': 'DataModalityClassification',
+                                          'required': True},
+                        'data_type': {'name': 'data_type',
+                                      'range': 'DataTypeClassification',
+                                      'required': True},
+                        'platform': {'name': 'platform',
+                                     'range': 'PlatformClassification',
+                                     'required': True},
+                        'reference_assembly': {'name': 'reference_assembly',
+                                               'range': 'ReferenceAssemblyClassification',
+                                               'required': True}}})
+
+    data_modality: DataModalityClassification = Field(default=..., description="""The biological signal the file carries.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    data_type: DataTypeClassification = Field(default=..., description="""The content type of the file (biological or descriptive class).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+    reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+    platform: PlatformClassification = Field(default=..., description="""The sequencing platform / instrument family.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+
+
+class Classification(ConfiguredBaseModel):
+    """
+    A single classified field: its resolved value (null unless status is 'classified'), a status sentinel, and the evidence behind it. Subclasses narrow `value` to the right enum per dimension.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'abstract': True,
+         'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class DataModalityClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'data_modality_enum'}}})
+
+    value: Optional[DataModalityEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class DataTypeClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'data_type_enum'}}})
+
+    value: Optional[DataTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class ReferenceAssemblyClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'reference_assembly_enum'}}})
+
+    build: Optional[ReferenceBuild] = Field(default=None, description="""The specific reference build behind this dimension's coarse value. Named ``build`` rather than ``reference`` because ``Evidence.reference`` already means a provenance pointer. ReferenceBuild's own fields are class-local attributes, so they add nothing to the global slot namespace.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceAssemblyClassification']} })
+    value: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class AssayTypeClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'assay_type_enum'}}})
+
+    value: Optional[AssayTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class PlatformClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'platform_enum'}}})
+
+    value: Optional[PlatformEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class ReferenceBuild(ConfiguredBaseModel):
+    """
+    The specific reference build a file was aligned to, refining the coarse family in ``reference_assembly.value`` (issue #340). Two files can both be ``CHM13`` and be aligned to builds whose coordinates differ; this says which one.
+    ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are OBSERVED, read from the file's own header. ``base`` and ``version`` are DERIVED by matching those observations against a table of known builds. ``version`` is null unless the evidence identifies exactly one build; ``base`` is filled whenever every candidate agrees on the family, which is often true when the version is not. An ambiguous file keeps its observations rather than being assigned a nearest match.
+    Not a claim: it carries no tier, never competes in claim resolution, and cannot change which ``value`` won. Absent entirely when nothing was observed.
+    Declared as class-local ``attributes`` rather than global ``slots``: ``name``, ``base`` and ``version`` are the kind of identifier that collides across a shared namespace, and nothing outside this class needs them.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    base: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""Assembly family of the resolved build. Duplicates the coarse value when both are known, so a build is readable on its own; null when no single family was identified. Range-constrained rather than merely documented as such, so a table entry naming a family outside the vocabulary fails validation instead of passing as free text.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+    version: Optional[str] = Field(default=None, description="""Build version within the family. Free text by necessity: T2T releases (``v1.0``, ``v1.1``, ``v2.0``) and GRC patches (``p12``) are not the same kind of thing, and CHM13 has no patch concept. Where a build grafts a chromosome from elsewhere the origin is part of the version (``v1.0+GRCh38chrY``), because that is a real difference in the reference. Null unless the evidence identifies exactly one build.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'EvidenceTarget']} })
+    chr1_m5: Optional[str] = Field(default=None, description="""MD5 of the chr1 sequence, from SAM ``@SQ M5``. Identifies the sequence, not the packaging: two references with different decoy or alt content share this value when their chr1 is the same. Null for VCF, whose ``##contig`` md5 attribute is optional in the specification and unpopulated in practice.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+    chry_m5: Optional[str] = Field(default=None, description="""MD5 of the chrY sequence, from SAM ``@SQ M5``. Recorded because chr1 alone cannot separate some builds — CHM13 v2.0 is v1.1 plus a chrY, so their autosomes are identical. One build can appear with more than one value here at identical chrY length; the header cannot say why, so both are recorded as observations and neither is preferred.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+    name: Optional[str] = Field(default=None, description="""Reference filename as the file declares it, from SAM ``@SQ UR`` or VCF ``##reference`` when present, else from a program command line in the header (``@PG CL``, ``##GATKCommandLine``; issue #354) — ``name_source`` says which. An observation about the file, not a statement about the reference's content: one name can denote references that differ, and differently-named references can be identical.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'ClaimSource']} })
+    name_source: Optional[ReferenceNameSourceEnum] = Field(default=None, description="""Where ``name`` was read from. ``reference_field`` is the field that exists to carry it; ``command_line`` is the command line of the program that produced the file, one step further from the file, and taken only when the header declares contigs, every command line that names a reference names the same one, and (for VCF) the file carries no liftover INFO fields. Null when ``name`` is null.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+
+
+class ClaimSource(ConfiguredBaseModel):
+    """
+    Identity of a source that produced a claim, for a source that is not one of our rules (issue #392): an external catalog, a submitter manifest, a curator table. Names the source, the table or file within it, and the column the raw value was read from — the granularity at which a mapping is reviewed and at which a column can be `declined` as an authority for a dimension.
+    A claim from one of our own rules carries `rule_id` and no source object. An external claim carries this *and* a `rule_id`, which names the mapping entry that turned the raw value into one of ours — an identity mapping included, since a source value that happens to spell a vocabulary term is a coincidence of spelling rather than an agreement about meaning. The one external claim with no rule is `unmapped`, which means exactly that no entry exists for the raw value (#401).
+    Declared as class-local ``attributes`` rather than global ``slots``: ``name``, ``url``, ``dataset``, ``table`` and ``column`` are words too generic to own in a shared namespace, and nothing outside this class needs them. Evidence files (#401) carry all of these but ``column`` once per file in their envelope, and put ``column`` on each claim — one shape, factored, not a second one.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    name: str = Field(default=..., description="""Name of the source, e.g. ``AnVIL`` or ``HPRC Data Explorer``. Required: a source object with no name identifies nothing, and ``to_dict`` omits null members, so an unnamed source would serialize as a bare url or column with no owner.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'ClaimSource']} })
+    url: Optional[str] = Field(default=None, description="""URL the source was read from, if it has one. Null for a source with no published address, such as a curator table held in this repository.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource']} })
+    dataset: Optional[str] = Field(default=None, description="""The collection within the source that the claim came from — an AnVIL dataset title, an HPRC release, an ENA study accession. Null for a source with no such level.
+Carried on the claim and not only on the evidence file's envelope because it is what makes `column` legible: the same column name means different things in different datasets, and a consumer reading this evidence cannot go back to the file the claim arrived in (#401).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource', 'EvidenceTarget']} })
+    table: Optional[str] = Field(default=None, description="""The table or file within the source that the claim came from, e.g. an AnVIL verbatim manifest table name. Null when the source is a single undivided file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource']} })
+    column: Optional[str] = Field(default=None, description="""The column within that table the raw value was read from. Null when the source has no column structure.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
+
+    @field_validator('name')
+    def pattern_name(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid name format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid name format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('url')
+    def pattern_url(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid url format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid url format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('dataset')
+    def pattern_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid dataset format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('table')
+    def pattern_table(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid table format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid table format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('column')
+    def pattern_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class EvidenceFileSource(ConfiguredBaseModel):
+    """
+    Where a whole evidence file's claims were read from (issue #401) — the `source` on a `EvidenceFileEnvelope`.
+    Three levels, because a source is not flat: a repository publishes datasets, and a dataset has tables. The AnVIL manifests are `AnVIL / AnVIL_HPRC_R2 / alignments_v2`; the HPRC Data Explorer is `HPRC Data Explorer / R2 / sequencing-data`; ENA is `ENA / <study accession> / read_run`, where `read_run` is literally the `result=` parameter its API takes and the fields it returns are the columns. A source with no middle level leaves `dataset` null, as `table` may be null.
+    Distinct from `ClaimSource` rather than reusing it. A row's source carries a `column`, which belongs to the row because one table's rows are read from several columns; a file's source carries a `dataset`, which belongs to the file because every row in it came from the same one. Modeling them as one class would let an envelope name a column that could disagree with every line in the file.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    repository: str = Field(default=..., description="""What publishes the source — `AnVIL`, `HPRC Data Explorer`, `ENA`. Required and non-empty: a source that names no repository identifies nothing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileSource']} })
+    dataset: Optional[str] = Field(default=None, description="""The collection within that repository the claims were read from. Null for a source with no such level.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource', 'EvidenceTarget']} })
+    table: Optional[str] = Field(default=None, description="""The table or file within the dataset — `alignments_v2`, `sequencing-data`, ENA's `read_run`. Null for a source with no table structure. The column within it stays on each claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource']} })
+    url: Optional[str] = Field(default=None, description="""Where the source was read from, if it has a public address. Null for a source with none, such as a curator table held in this repository.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource']} })
+
+    @field_validator('repository')
+    def pattern_repository(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid repository format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid repository format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('dataset')
+    def pattern_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid dataset format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('table')
+    def pattern_table(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid table format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid table format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('url')
+    def pattern_url(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid url format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid url format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class EvidenceTarget(ConfiguredBaseModel):
+    """
+    The system an evidence file's claims are *about* (issue #401) — the `target` on a `EvidenceFileEnvelope`.
+    An evidence file says \"the row in this system whose this key is that value\". The target names the system, so an importer is not implicitly bound to AnVIL and the file records which system it resolved its keys against.
+    The mapping from the source's own names to these is the importer's knowledge: the source calls its collection `R2`, the target calls the same thing `AnVIL_HPRC_R2`. The importer records both sides and the run performs equality lookup only.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    system: str = Field(default=..., description="""The system the claims are about — `anvil` today. Required: a claim with no target is about nothing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceTarget']} })
+    dataset: Optional[str] = Field(default=None, description="""The scope the join runs within, in the *target's* name for it. Not decoration: keyed by `file_name` alone, 69% of the AnVIL corpus's 708,088 rows carry a non-unique key, and 20% remain non-unique scoped by dataset title alone — but within `AnVIL_HPRC_R2` the collision rate is 2 rows in 16,271. A filename join is unusable without a dataset scope and reliable with one.
+Null for a source whose key is unique across the whole target (`file_id`, `entry_id`, `drs_uri`), where a corpus-wide match is correct.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource', 'EvidenceTarget']} })
+    version: Optional[str] = Field(default=None, description="""Which generation of the target the importer resolved against — an AnVIL catalog such as `anvil15`. Null when the importer did not resolve against a particular generation, which is the ordinary case for a source that publishes names and values rather than reading our catalog.
+Provenance for the importer's own next pass, not a gate on the run: a run reports it and refuses nothing on it, because nothing offline establishes which generation is current — AnVIL deletes a superseded catalog rather than keeping it to be compared against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'EvidenceTarget']} })
+
+    @field_validator('system')
+    def pattern_system(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid system format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid system format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('dataset')
+    def pattern_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid dataset format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('version')
+    def pattern_version(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid version format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid version format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class EvidenceRow(ConfiguredBaseModel):
+    """
+    One line of an evidence file after the envelope (#401, amended by #421): an observation, not an answer. It reads \"about the row in the envelope's `target` whose `target_key` equals `target_key_value`, the source wrote `raw_value` for `field`\".
+    **It declares nothing.** No `value`, no `status`, no `claim_state`, no `rule_id` and no `tier` — an importer maps structure and the rule engine maps meaning (contract 1.1, 1.3). The claim that reconcile eventually makes from this row is an `Evidence`, which is the class that carries those; this one is what the source said before anyone interpreted it. Validated `closed`, like the envelope, and `source_evidence._entry_from_line` refuses each retired member by name, so a producer written against #401's format is told what to write instead rather than having the member silently dropped.
+    **Where this gate is weaker than the reader.** `column` is optional, LinkML models an optional slot as nullable (`gen-json-schema` emits `type: [string, null]`), so `{\"column\": null}` is valid here by construction — and `_entry_from_line` refuses it, because the writer omits a member it does not have and a written-out null is a line this writer could not have produced. The envelope, read through the model generated from this schema, accepts such a null as the absent member it means (#494); a row is read by hand, on the hot path, and keeps the stricter rule.
+    The reader is deliberately the stricter of the two, which is the safe direction: a producer that validates here and writes explicit nulls is refused at read, rather than publishing a file we would later read as though the member were absent. Accepting it would be exactly the silent normalization every other member refuses. `test_a_line_whose_column_is_an_explicit_null_is_refused` pins it.
+    Deliberately outside the `ClassificationRecord` tree and referenced by no slot in it, for the reason `EvidenceFileEnvelope` is: it describes an artefact exchanged *between* runs. Modeled here so that a producer can validate a whole evidence file — both its line kinds — against the schema rather than against the reader alone.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'raw_value': {'description': 'What the source wrote, verbatim '
+                                                     '(contract 1.4) — not casefolded, '
+                                                     'trimmed, corrected or '
+                                                     'suppressed. The same slot an '
+                                                     '`Evidence` claim carries beside '
+                                                     'its mapped value; on a row it is '
+                                                     'the whole content, because a row '
+                                                     'maps nothing.\n'
+                                                     'No pattern and no enum, '
+                                                     "deliberately: a source's "
+                                                     'spellings are its own, a value '
+                                                     'our vocabulary has no word for '
+                                                     "is the review queue's input "
+                                                     'rather than an error (contract '
+                                                     '3.7), and an empty cell is '
+                                                     'something the source published, '
+                                                     "whose meaning is a rule's to "
+                                                     'decide.',
+                                      'name': 'raw_value',
+                                      'required': True}}})
+
+    raw_value: str = Field(default=..., description="""What the source wrote, verbatim (contract 1.4) — not casefolded, trimmed, corrected or suppressed. The same slot an `Evidence` claim carries beside its mapped value; on a row it is the whole content, because a row maps nothing.
+No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
+    field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the five classification dimensions.
+Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `CLASSIFICATION_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
+    target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
+    column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
+
+    @field_validator('field')
+    def pattern_field(cls, v):
+        pattern=re.compile(r"^(data_modality|data_type|platform|reference_assembly|assay_type)\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid field format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid field format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('target_key_value')
+    def pattern_target_key_value(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid target_key_value format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid target_key_value format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('column')
+    def pattern_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class EvidenceFileEnvelope(ConfiguredBaseModel):
+    """
+    What an evidence file records once, for every row in it (issue #401, amended by #421). An importer runs out of band from classification — when a catalog refreshes, with network — and writes an evidence file of `EvidenceRow`s; a run reads it and reports this provenance, so that what a run found, and how old it was, is on the record. Found and not consumed: until the join lands (#402) a run reads each file's envelope and none of its rows.
+    It names both sides of the join, symmetrically: `source` / `source_version` / `source_key`, and `target` / `target.version` / `target_key`. A line then reads \"this row is about the row in `target` whose `target_key` equals its `target_key_value`; about that row's `field`, the source wrote its `raw_value`.\"
+    **The reader is this class.** `source_evidence` reads line 1 through the pydantic model gen-pydantic emits from this schema (#494), so what this gate refuses and what the reader refuses are one definition rather than two kept in step. An explicit null on an optional member, such as `source: {repository: HPRC, table: null}`, is valid here — LinkML models an optional slot as nullable — and the reader accepts it as the absent member it means, though the writer never emits one. The one known divergence is a calendar-invalid `fetched_at` (see that slot).
+    The key *names* are here rather than on each line because they do not change within a file — every claim an importer writes is keyed the same way — so repeating them on a few million lines would be this block written out again. Only the key value varies, so only that is on the line. It is the same factoring that keeps a source's repository, url and table here while `column` stays on each claim.
+    Deliberately outside the `ClassificationRecord` tree, and referenced by no slot in it: an envelope describes an artefact exchanged *between* runs and never appears in a classified record. It is modeled here so that the file a claim arrives in is defined where the claim itself is, rather than in an importer. On disk the file is NDJSON — this envelope wrapped in a `evidence_file` key on line 1, one row per line after it — because millions of claims must not be read through a whole-file parse (#374); `src/meta_disco/source_evidence.py` is the reader and writer.
+    Declared as class-local `attributes` for the reason `ClaimSource` is: these are words too generic to own in a shared namespace.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'rules': [{'description': 'A file keyed by `file_name` must name the dataset '
+                                   'that scopes it. The key is non-unique on 69.4% of '
+                                   "the AnVIL corpus's 708,088 rows and on 20% even "
+                                   'scoped by dataset title, against 2 rows in 16,271 '
+                                   'within `AnVIL_HPRC_R2` — so an unscoped filename '
+                                   'claim attaches to rows a join cannot choose '
+                                   'between. `source_evidence.require_scoped_target` '
+                                   'refuses the same envelope at write and at read, '
+                                   'because gen-pydantic does not emit class rules; '
+                                   'this rule is what stops a producer validating '
+                                   'against the schema alone and publishing a file the '
+                                   'reader will not read (#401 review).',
+                    'postconditions': {'slot_conditions': {'target': {'name': 'target',
+                                                                      'range_expression': {'slot_conditions': {'dataset': {'name': 'dataset',
+                                                                                                                           'required': True}}}}}},
+                    'preconditions': {'slot_conditions': {'target_key': {'equals_string': 'file_name',
+                                                                         'name': 'target_key'}}}}]})
+
+    source: EvidenceFileSource = Field(default=..., description="""Where the claims were read from — repository, dataset and table. `inlined` for the reason `Evidence.source` is: line 1 carries the whole object, and without the declaration a class-valued slot is read as a reference rather than as the object the file holds.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
+    source_type: ImporterSourceTypeEnum = Field(default=..., description="""Which kind of external source this file was read from. On the envelope rather than on every row for the reason the key names are: one repository, dataset and table is one kind of source, so it is checked once per file rather than a few million times, and reconcile reads it from here when it stamps the claim it makes from a row (#421).
+Restricted to the kinds an importer may write. A file declaring `filename_rule` would be naming our own rule engine as its publisher, and one declaring `wrangler_annotation` would be a curator arriving as evidence, which contract 1.6 routes to rules instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
+    source_version: str = Field(default=..., description="""The version of the source the claims were taken from — a release tag, a publication date, a catalog generation. Required even where the source publishes no version of its own: an evidence file that cannot say what it was built from cannot be reasoned about later.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+    source_key: str = Field(default=..., description="""The key the *source* publishes its rows by, in the source's own name for it — `filename`, `run_accession`, `object_id`. Recorded as provenance: the values on each line are already in the target's space, so the run never reads this, but a person auditing the file needs to know which column of the source produced them.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+    target: EvidenceTarget = Field(default=..., description="""The system the claims are about, the scope within it, and the generation resolved against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+    target_key: JoinKeyEnum = Field(default=..., description="""Which key of the target each line's `target_key_value` is to be matched against. Drawn from `join_key_enum`, which spans the target's own record fields *and* facts classification derives — `archive_accession` is read from a fastq's read headers, so a claim keyed by it can only be joined after inference has run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+    fetched_at: str = Field(default=..., description="""When the importer read the source, ISO 8601, with a time of day and not a date alone. A run reports the age of every evidence file it finds from this, so that a person can see an artefact going stale before it is wrong — and two imports on the same day, which is where that report matters most, are only distinguishable if the time is recorded. A date-only value is refused rather than read as midnight, which would be a precision the file never stated.
+Constrained by pattern rather than `range: datetime`, which was measured and does not do the job: LinkML coerces the value before matching, so a bare `2026-09-01` is accepted under a datetime range — and the pattern is then never applied. An evidence file would pass this schema and be reported unreadable by the reader, which is the mismatch this class's tests exist to prevent.
+The trade is deliberate: a consumer generating models from this schema gets a string rather than a datetime. The reader parses it either way, and the pattern says what the string must look like, so what is given up is a type hint and what is bought is that both sides refuse the same files.
+The pattern spells out the field ranges rather than accepting any non-newline text after the separator, because the loose form let `2026-09-01Tfoo` and `2026-13-45T99:99:99` through the gate for the reader to refuse. Measured across seventeen shapes, the two sides now agree on sixteen. The one that remains is a date no regex can rule out: `2026-02-30T09:14:03` is well-formed and not a day, so the reader stays the authority on whether a well-shaped timestamp is a real instant (#401 review).
+The offset is `±HH:MM` or `Z` and nothing more. An offset carrying seconds, `+01:00:30`, is a shape `datetime.fromisoformat` happens to take and RFC 3339 does not have; the reader parses with pydantic, which refuses it, and no source emits one — so the pattern refuses it too rather than admitting a file the reader will not read (#494 review).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
+
+    @field_validator('source_version')
+    def pattern_source_version(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid source_version format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid source_version format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('source_key')
+    def pattern_source_key(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid source_key format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid source_key format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('fetched_at')
+    def pattern_fetched_at(cls, v):
+        pattern=re.compile(r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?([+-]([01]\d|2[0-3]):[0-5]\d|Z)?\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid fetched_at format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid fetched_at format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class Evidence(ConfiguredBaseModel):
+    """
+    One piece of supporting evidence. Either a claim (declares a value, a status, or a claim_state, and carries a source_type), or a synthetic resolution marker (carries marker, no rule_id) recording that no claim was made or that claims conflicted.
+    A claim from one of our rules or content classifiers carries rule_id + tier. A claim from an external source (issue #392) carries `source` as well as a rule_id — the mapping entry it fired, not a rule of ours — and no tier, because an import does not compete on the rule ladder (#401). It carries the raw value it read and, once the join has run, how it was matched to our file. Evidence that is neither — the note left when a fetch or the input contract failed — carries a rule_id and a reason but declares nothing.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'status': {'name': 'status', 'required': False}}})
+
+    rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    reason: Optional[str] = Field(default=None, description="""Human-readable rationale.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    status: Optional[ClassificationStatusEnum] = Field(default=None, description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
+    claim_state: Optional[ClaimStateEnum] = Field(default=None, description="""The state of a claim that produced no vocabulary value — see `claim_state_enum` for what each state means. Present instead of `value` or `status`, and only on such a claim: one that mapped successfully carries a `value`, and the two sentinels are carried in `status` as before.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    tier: Optional[int] = Field(default=None, description="""The tier at which this evidence fired.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    competing_values: Optional[list[str]] = Field(default=None, description="""On a `conflict` marker, the disagreeing top-tier values that made the field ambiguous. Absent on claims and on the `not_classified` marker.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    source_type: Optional[SourceTypeEnum] = Field(default=None, description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
+    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
+    raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
+    join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+
+
+class DerivationEdge(ConfiguredBaseModel):
+    """
+    Typed link from a derived file to the file it was derived from. The verb (relation) and parent_kind are the type — knowable from the filename; parent_md5sum is the grounding, which may be null when the parent cannot be resolved. See docs/derived-file-data-model.md.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    relation: RelationEnum = Field(default=..., description="""The derivation verb.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    parent_md5sum: Optional[str] = Field(default=None, description="""md5sum of the parent file; null if the edge is ungrounded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    parent_file: Optional[str] = Field(default=None, description="""Name of the parent file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+
+
+# Model rebuild
+# see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
+ClassificationRecord.model_rebuild()
+Published.model_rebuild()
+PublishedVocabulary.model_rebuild()
+Classifications.model_rebuild()
+Classification.model_rebuild()
+DataModalityClassification.model_rebuild()
+DataTypeClassification.model_rebuild()
+ReferenceAssemblyClassification.model_rebuild()
+AssayTypeClassification.model_rebuild()
+PlatformClassification.model_rebuild()
+ReferenceBuild.model_rebuild()
+ClaimSource.model_rebuild()
+EvidenceFileSource.model_rebuild()
+EvidenceTarget.model_rebuild()
+EvidenceRow.model_rebuild()
+EvidenceFileEnvelope.model_rebuild()
+Evidence.model_rebuild()
+DerivationEdge.model_rebuild()

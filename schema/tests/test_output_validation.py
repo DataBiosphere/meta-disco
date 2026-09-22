@@ -124,7 +124,7 @@ def envelope_validator():
     one checks slot ranges and patterns, and the jsonschema one is the only of the two
     that enforces a class's ``rules`` — measured, not assumed. The envelope has one
     rule (a ``file_name`` target needs ``target.dataset``), and under the pydantic
-    plugin alone the schema validated envelopes ``EvidenceFileEnvelope.from_dict``
+    plugin alone the schema validated envelopes ``source_evidence.read_envelope``
     refuses, which is exactly the gap a producer would fall into (#401 review).
     """
     return Validator(
@@ -510,7 +510,7 @@ def test_evidence_file_envelope_accepts_a_target_with_no_scope(envelope_validato
 
 
 def test_evidence_file_envelope_refuses_an_unscoped_file_name_target(envelope_validator):
-    # The rule the reader has: `EvidenceFileEnvelope.__post_init__` refuses the same
+    # The rule the reader has: `source_evidence.require_scoped_target` refuses the same
     # envelope. Without it here a producer could validate an evidence file against the
     # schema, publish it, and have `read_envelope` refuse the file — the schema
     # saying yes to something the only reader says no to.
@@ -564,33 +564,34 @@ def test_evidence_file_envelope_refuses_a_source_type_an_importer_cannot_write(e
     # file declaring one would be naming our rule engine as its publisher.
     # `wrangler_annotation` is a real *external* kind and still refused: a curator
     # enters as rules, not as evidence (contract 1.6, 1.7), so the format must not be
-    # able to express it. `EvidenceFileEnvelope.__post_init__` refuses all five, and
-    # the gate has to agree or a producer validates here and is refused at read (#421).
+    # able to express it. The generated model refuses all five, and the gate has to
+    # agree or a producer validates here and is refused at read (#421).
     report = envelope_validator.validate(_envelope(source_type=bad), target_class="EvidenceFileEnvelope")
     assert report.results, f"a source_type of {bad!r} should have failed"
 
 
 def test_evidence_file_envelope_refuses_a_non_datetime_fetched_at(envelope_validator):
-    # The slot's pattern refuses what EvidenceFileEnvelope.from_dict refuses rather
-    # than accepting free text the reader will not take.
+    # The slot's pattern refuses what the reader refuses — the reader runs the
+    # generated model, which carries this pattern — rather than accepting free text.
     report = envelope_validator.validate(_envelope(fetched_at="yesterday"), target_class="EvidenceFileEnvelope")
     assert report.results, "a non-datetime fetched_at should have failed"
 
 
 # The schema must refuse what the reader refuses. Each of these was a value that
-# passed LinkML validation and was then rejected by `EvidenceFileEnvelope.from_dict`
-# or `__post_init__`, so an evidence file could clear the schema gate and still be
-# reported unreadable (#401 review).
+# passed LinkML validation and was then rejected by the hand-rolled reader, so an
+# evidence file could clear the schema gate and still be reported unreadable (#401
+# review). The reader now runs the model generated from this schema (#494), so the
+# cases stay as a pin on the schema itself.
 
 
 def test_evidence_file_envelope_refuses_an_empty_source_version(envelope_validator):
-    # `required` alone admits ""; `required_str` does not.
+    # `required` alone admits ""; the pattern does not.
     report = envelope_validator.validate(_envelope(source_version=""), target_class="EvidenceFileEnvelope")
     assert report.results, "an empty source_version should have failed"
 
 
 def test_evidence_file_envelope_refuses_an_empty_target_version(envelope_validator):
-    # Absent is fine; present-and-empty is not, matching `optional_str`.
+    # Absent is fine; present-and-empty is not.
     report = envelope_validator.validate(
         _envelope(target={"system": "anvil", "version": ""}), target_class="EvidenceFileEnvelope"
     )
@@ -614,13 +615,22 @@ def test_evidence_file_envelope_refuses_a_source_naming_a_column(envelope_valida
 
 
 @pytest.mark.parametrize(
-    "bad", ["2026-09-01Tfoo", "2026-13-45T99:99:99", "2026-09-01T09:14:03+0100", "20260901T091403"]
+    "bad",
+    [
+        "2026-09-01Tfoo",
+        "2026-13-45T99:99:99",
+        "2026-09-01T09:14:03+0100",
+        "20260901T091403",
+        "2026-09-01T09:14:03+01:00:30",
+    ],
 )
 def test_evidence_file_envelope_refuses_a_misshapen_fetched_at(envelope_validator, bad):
-    # `EvidenceFileEnvelope.from_dict` refuses each of these, so the gate must too, or a
-    # producer clears the schema and publishes a file the only reader will not read.
+    # The reader refuses each of these through this same pattern, so the gate must
+    # too, or a producer clears the schema and publishes a file the only reader will not read.
     # The offset without a colon is the subtle one: `fromisoformat` wants `+HH:MM` on
-    # 3.10, and a looser pattern let `+0100` through (#401 review).
+    # 3.10, and a looser pattern let `+0100` through (#401 review). The offset with
+    # seconds is the other way round: `fromisoformat` takes it and pydantic, which the
+    # reader parses with, does not, so the schema refuses it too (#494 review).
     report = envelope_validator.validate(_envelope(fetched_at=bad), target_class="EvidenceFileEnvelope")
     assert report.results, f"a fetched_at of {bad!r} should have failed"
 
@@ -636,8 +646,7 @@ def test_evidence_file_envelope_accepts_the_shapes_the_reader_parses(envelope_va
 def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validator):
     # A date with no time of day reads back as midnight — a precision the file never
     # stated. The slot is constrained by a pattern rather than `range: datetime`,
-    # which would accept one, so the schema and `EvidenceFileEnvelope.from_dict` refuse
-    # the same strings.
+    # which would accept one, so the schema and the reader refuse the same strings.
     report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="EvidenceFileEnvelope")
     assert report.results, "a date-only fetched_at should have failed"
 

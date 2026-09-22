@@ -395,7 +395,7 @@ class TestProvenance:
         assert (envelope.source_key, envelope.target_key) == (JOIN_KEY_DRS_URI, JOIN_KEY_DRS_URI)
         assert (envelope.target.system, envelope.target.dataset) == ("anvil", "D")
         # When the source was fetched: the manifest's request time, not the import's.
-        assert envelope.fetched_at == datetime.fromisoformat(FETCHED)
+        assert envelope.fetched_at == FETCHED
 
     def test_a_sidecar_that_cannot_say_when_the_manifest_was_fetched_is_refused(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS, fetched=None)
