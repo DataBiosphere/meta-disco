@@ -93,6 +93,18 @@ ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", "file_ref")
 # What a file pointer in a submitter cell starts with.
 DRS_PREFIX = "drs://"
 
+# How an input was derived, written into every input envelope as ``input_source``
+# (#499) so a reader of ``anvil_files_metadata.json`` need not infer it from the other
+# fields. Three kinds: today's compact join (this module, ``record_from_compact_manifest_row``);
+# the verbatim manifest read through ``snapshot_input.AzulVerbatim``; and a snapshot read
+# in place from BigQuery through ``snapshot_input.TdrDirect``. Nothing reads the field
+# yet — choosing a reader is #500's — so it is provenance, not a switch. Named here
+# because this module writes the envelope, not because every kind is Azul's.
+INPUT_SOURCE_AZUL_COMPACT = "azul-compact"
+INPUT_SOURCE_AZUL_VERBATIM = "azul-verbatim"
+INPUT_SOURCE_TDR_DIRECT = "tdr-direct"
+INPUT_SOURCES = frozenset({INPUT_SOURCE_AZUL_COMPACT, INPUT_SOURCE_AZUL_VERBATIM, INPUT_SOURCE_TDR_DIRECT})
+
 # Azul joins a multi-valued field with this in a compact cell.
 _MULTI_VALUE_SEP = " || "
 # How a compact cell spells a boolean (all 708,088 anvil15 rows use one of these).
@@ -454,7 +466,22 @@ def _published(cell: str) -> list[str] | None:
     """
     if not cell:
         return None
-    return [value for value in cell.split(_MULTI_VALUE_SEP) if value] or None
+    return published_list(cell.split(_MULTI_VALUE_SEP))
+
+
+def published_list(values: list[Any] | None) -> list[str] | None:
+    """A published multi-value as the record carries it: the non-empty values, or None.
+
+    The list half of :func:`_published`, shared with the readers that get the value as
+    a list rather than a joined cell — an ``anvil_file`` row's ``data_modality`` is an
+    array in TDR and in the verbatim manifest (``snapshot_input``). Same rule, so a
+    record derived either way carries the same ``published`` block: an empty element is
+    dropped, and an empty or absent list reads as ``None`` — no published value — rather
+    than as ``[]``, which ``records.build_published`` refuses.
+    """
+    if not values:
+        return None
+    return [value for value in values if value] or None
 
 
 SOURCE_ID_COLUMN = "sources.source_id"
@@ -718,12 +745,20 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
                 yield entity_type, value
 
 
-def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime) -> dict[str, Any]:
+def metadata_block(
+    catalog: str, datasets: dict[str, dict[str, Any]], downloaded_at: datetime, input_source: str
+) -> dict[str, Any]:
     """The ``metadata`` envelope written beside ``files`` in ``anvil_files_metadata.json``.
 
     Records the catalog generation the files came from (issue #335: the July
     2026 snapshot could not say it was anvil14 once anvil14 was deleted), that
     they came through the manifest path, and what each dataset contributed.
+
+    ``input_source`` names how the records were derived, one of :data:`INPUT_SOURCES`
+    (#499); any other value is refused. Every writer states it explicitly — the
+    downloader passes :data:`INPUT_SOURCE_AZUL_COMPACT` — so a reader never has to
+    take an absent field as meaning the compact path. An envelope written before the
+    field existed lacks it; nothing reads it yet, so such a file loads as before.
 
     ``repository`` names who published these files, so nothing downstream has to infer
     it (#424). ``pipeline.published_source`` reads it with ``catalog`` to name the
@@ -745,6 +780,8 @@ def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded
     ``classify_single`` path. Contrast #433, whose fact genuinely varies per file and
     therefore belongs on the record.
     """
+    if input_source not in INPUT_SOURCES:
+        raise ValueError(f"input_source {input_source!r} is not one of {sorted(INPUT_SOURCES)}")
     return {
         "downloaded_at": downloaded_at.isoformat(),
         "total_files": sum(int(entry["file_count"]) for entry in datasets.values()),
@@ -752,6 +789,7 @@ def metadata_block(catalog: str, datasets: dict[str, dict[str, Any]], downloaded
         "repository": REPOSITORY,
         "catalog": catalog,
         "source": "manifest",
+        "input_source": input_source,
         "datasets": {title: datasets[title] for title in sorted(datasets)},
     }
 

@@ -48,7 +48,6 @@ class TestFieldConstraints:
     @pytest.mark.parametrize(
         "field",
         [
-            "entry_id",
             "file_id",
             "file_name",
             "file_format",
@@ -62,10 +61,18 @@ class TestFieldConstraints:
         reasons = validate_record(_valid(**{field: None}))
         assert any(field in r for r in reasons)
 
+    def test_entry_id_is_optional_but_non_empty_where_present(self):
+        # Azul's per-index document id: the compact path emits it, a record derived
+        # from a snapshot's tables has none (#499), and nothing keys on it (#446).
+        absent = _valid()
+        del absent["entry_id"]
+        assert validate_record(absent) == []
+        assert validate_record(_valid(entry_id=None)) == []
+        assert any("entry_id" in r for r in validate_record(_valid(entry_id="")))
+
     @pytest.mark.parametrize(
         "field",
         [
-            "entry_id",
             "file_id",
             "file_name",
             "file_format",
@@ -132,13 +139,14 @@ class TestValidationReport:
         (kind,) = report.kinds.values()
         assert kind.count == 100
 
-    def test_sample_is_bounded_and_names_entry_ids(self):
-        records = [_valid(entry_id=f"e{i}", file_size="x") for i in range(50)]
+    def test_sample_is_bounded_and_names_file_ids(self):
+        records = [_valid(file_id=f"f{i}", file_size="x") for i in range(50)]
         report = validate_records(records)
         (kind,) = report.kinds.values()
         assert kind.count == 50
-        assert len(kind.sample_entry_ids) == 5  # bounded
-        assert kind.sample_entry_ids[0] == "e0"
+        assert len(kind.sample_file_ids) == 5  # bounded
+        assert kind.sample_file_ids[0] == "f0"
+        assert "sample file_ids: f0, f1, f2, f3, f4" in report.summary()
         summary = report.summary()
         assert "50 record(s)" in summary
         assert "+45 more" in summary
@@ -154,19 +162,19 @@ class TestValidationReport:
         assert report.invalid == 3
         assert len(report.kinds) == 3
 
-    def test_missing_entry_id_sampled_as_unknown(self):
+    def test_missing_file_id_sampled_as_unknown(self):
         rec = _valid(file_size="x")
-        del rec["entry_id"]
+        del rec["file_id"]
         report = validate_records([rec])
-        samples = {s for k in report.kinds.values() for s in k.sample_entry_ids}
+        samples = {s for k in report.kinds.values() for s in k.sample_file_ids}
         assert "<unknown>" in samples
 
     @pytest.mark.parametrize("empty", ["", None])
-    def test_present_but_empty_entry_id_sampled_as_empty_not_unknown(self, empty):
-        # A present-but-empty entry_id is a distinct violation from a missing key;
+    def test_present_but_empty_file_id_sampled_as_empty_not_unknown(self, empty):
+        # A present-but-empty file_id is a distinct violation from a missing key;
         # the sample must not conflate the two into "<unknown>".
-        report = validate_records([_valid(entry_id=empty, file_size="x")])
-        samples = {s for k in report.kinds.values() for s in k.sample_entry_ids}
+        report = validate_records([_valid(file_id=empty, file_size="x")])
+        samples = {s for k in report.kinds.values() for s in k.sample_file_ids}
         assert "<empty>" in samples
         assert "<unknown>" not in samples
 

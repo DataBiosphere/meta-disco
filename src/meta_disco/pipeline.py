@@ -352,29 +352,30 @@ def refuse_bad_published_shape(records: list[dict], input_path: Path, max_exampl
             if value is None:
                 continue
             if not isinstance(value, list):
-                bad.append((position, record.get("entry_id"), field, value, f"is {type(value).__name__}, not a list"))
+                bad.append((position, record.get("file_id"), field, value, f"is {type(value).__name__}, not a list"))
             elif not all(isinstance(element, str) for element in value):
-                bad.append((position, record.get("entry_id"), field, value, "holds a non-string value"))
+                bad.append((position, record.get("file_id"), field, value, "holds a non-string value"))
             elif not value:
                 # `all([])` is True, so the emptiness test below is blind to this.
-                bad.append((position, record.get("entry_id"), field, value, "is an empty list; absent is null"))
+                bad.append((position, record.get("file_id"), field, value, "is an empty list; absent is null"))
             elif not all(value):
                 # `build_published` refuses this too, so letting it through here would
                 # raise in a worker and lose the row — the failure this function exists
                 # to close. The manifest reader never produces it: it drops empty
                 # elements, so such a cell arrives as no published value at all.
-                bad.append((position, record.get("entry_id"), field, value, "holds an empty value"))
+                bad.append((position, record.get("file_id"), field, value, "holds an empty value"))
     if not bad:
         return
     # Records, not entries: one record can be wrong on both fields, and calling that two
     # records would misreport how much of the snapshot is bad. Counted by position in the
-    # list, not by ``entry_id`` — the input contract requires that to be non-empty but
-    # not unique, so deduplicating on it would merge two distinct bad records (and merge
-    # every record missing one, which all read as None).
+    # list, not by ``file_id`` — the record contract requires that to be non-empty, and
+    # only the gate checks it unique, which a file loaded here need not have passed; so
+    # deduplicating on it could merge two distinct bad records, and would merge every
+    # record missing one, which all read as None. The id is for the message only.
     offenders = len({position for position, _, _, _, _ in bad})
     examples = "; ".join(
-        f"record {position} ({entry_id}): {field}={value!r} ({why})"
-        for position, entry_id, field, value, why in bad[:max_examples]
+        f"record {position} ({file_id}): {field}={value!r} ({why})"
+        for position, file_id, field, value, why in bad[:max_examples]
     )
     more = f" (+{len(bad) - max_examples:,} more)" if len(bad) > max_examples else ""
     # The pre-#424 hint belongs only to the scalar case, which is the shape a snapshot of

@@ -28,7 +28,7 @@ from .schema.metadata_model import AnvilFileMetadataRecord
 # rule_id stamped on the evidence of a record that failed input validation.
 VALIDATION_RULE_ID = "input_validation"
 
-# Offending entry_ids kept per problem kind, so a report over 758k records stays
+# Offending file_ids kept per problem kind, so a report over 758k records stays
 # bounded while still pointing at concrete records to inspect.
 _MAX_SAMPLE = 5
 
@@ -179,7 +179,7 @@ class _ProblemKind:
 
     reason: str
     count: int = 0
-    sample_entry_ids: list = field(default_factory=list)
+    sample_file_ids: list = field(default_factory=list)
 
 
 @dataclass
@@ -198,14 +198,14 @@ class ValidationReport:
     def ok(self) -> bool:
         return self.invalid == 0
 
-    def _record_problem(self, reason: str, entry_id) -> None:
+    def _record_problem(self, reason: str, file_id) -> None:
         kind = self.kinds.get(reason)
         if kind is None:
             kind = _ProblemKind(reason=reason)
             self.kinds[reason] = kind
         kind.count += 1
-        if len(kind.sample_entry_ids) < _MAX_SAMPLE:
-            kind.sample_entry_ids.append(entry_id)
+        if len(kind.sample_file_ids) < _MAX_SAMPLE:
+            kind.sample_file_ids.append(file_id)
 
     def summary(self) -> str:
         """A human-readable summary: one block per problem kind, biggest first."""
@@ -216,10 +216,10 @@ class ValidationReport:
         lines.append(f"FAIL — {len(self.kinds)} problem kind(s), {self.invalid:,} record(s) affected:")
         for kind in sorted(self.kinds.values(), key=lambda k: (-k.count, k.reason)):
             lines.append(f"  {kind.reason}    {kind.count:,} record(s)")
-            sample = ", ".join(str(e) for e in kind.sample_entry_ids)
-            more = kind.count - len(kind.sample_entry_ids)
+            sample = ", ".join(str(e) for e in kind.sample_file_ids)
+            more = kind.count - len(kind.sample_file_ids)
             suffix = f" … (+{more:,} more)" if more > 0 else ""
-            lines.append(f"    sample entry_ids: {sample}{suffix}")
+            lines.append(f"    sample file_ids: {sample}{suffix}")
         return "\n".join(lines)
 
 
@@ -238,10 +238,12 @@ def validate_records(records) -> ValidationReport:
 
 
 def _sample_label(record) -> str:
-    """A record's entry_id for the report sample, distinguishing the states that a
-    truthy-or default would conflate: a missing key vs a present-but-empty/null
-    entry_id (itself a contract violation worth seeing in drift diagnosis)."""
-    if not isinstance(record, dict) or "entry_id" not in record:
+    """A record's file_id for the report sample — the durable identity every source
+    carries (#446; `entry_id` used to serve, and no longer exists on a record derived
+    from a snapshot, #499) — distinguishing the states that a truthy-or default would
+    conflate: a missing key vs a present-but-empty/null file_id (itself a contract
+    violation worth seeing in drift diagnosis)."""
+    if not isinstance(record, dict) or "file_id" not in record:
         return "<unknown>"
-    entry_id = record["entry_id"]
-    return entry_id if entry_id not in (None, "") else "<empty>"
+    file_id = record["file_id"]
+    return file_id if file_id not in (None, "") else "<empty>"

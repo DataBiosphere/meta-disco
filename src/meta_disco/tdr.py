@@ -66,8 +66,10 @@ class Snapshot:
     spelling, the Azul envelope's ``sources.source_spec``
     (``tdr:bigquery:gcp:<project>:<snapshot>``, see
     :func:`meta_disco.azul_manifest.dataset_source`). No conversion between the
-    two exists yet; the first reader that needs one (#499) should add it here,
-    as a constructor, rather than split the string where it is read."""
+    two exists yet — the direct reader (``snapshot_input.TdrDirect``, #499) takes
+    a built ``Snapshot`` — so the first caller that needs one (#500, which maps a
+    deployment's datasets to their snapshots) should add it here, as a constructor,
+    rather than split the string where it is read."""
 
     project: str
     name: str

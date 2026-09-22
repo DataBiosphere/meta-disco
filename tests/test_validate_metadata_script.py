@@ -128,7 +128,7 @@ class TestChecksumGate:
         assert validate_metadata.main(["-i", str(path)]) == 1
         out = capsys.readouterr().out
         assert "file_md5sum" in out
-        assert "e2" in out  # the offending record is named
+        assert "f2" in out  # the offending record is named, by file_id
 
     def test_a_corpus_of_well_formed_checksums_passes(self, tmp_path, capsys):
         path = _write(tmp_path / "m.json", [_valid(), _valid(entry_id="e2", file_id="f2", file_md5sum="b" * 32)])

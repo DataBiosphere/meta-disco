@@ -16,50 +16,9 @@ import probe_tdr_snapshot as probe
 import pytest
 
 from meta_disco import tdr
+from tests.tdr_fixtures import DisagreeingClient, FakeClient
 
 SNAPSHOT = tdr.Snapshot(project="datarepo-ce3811eb", name="ANVIL_1000G_2019_Dev")
-
-
-class FakeTableItem:
-    def __init__(self, table_id: str):
-        self.table_id = table_id
-
-
-class FakeResult:
-    """Rows handed out lazily, with a count of how many were pulled."""
-
-    def __init__(self, rows):
-        self._rows = rows
-        self.pulled = 0
-
-    def __iter__(self):
-        for row in self._rows:
-            self.pulled += 1
-            yield row
-
-
-class FakeClient:
-    """Tables → rows. Records every query issued, its page size, and the result handed out."""
-
-    def __init__(self, tables: dict[str, list[dict]]):
-        self._tables = tables
-        self.queries: list[str] = []
-        self.page_sizes: list = []
-        self.results: list[FakeResult] = []
-        self.listed: list[str] = []
-
-    def list_tables(self, dataset: str):
-        self.listed.append(dataset)
-        return [FakeTableItem(name) for name in self._tables]
-
-    def query_and_wait(self, query: str, page_size=None):
-        self.queries.append(query)
-        self.page_sizes.append(page_size)
-        rows = self._tables[query.rsplit(".", 1)[1].rstrip("`")]
-        result = FakeResult([{"n": len(rows)}] if query.startswith("SELECT COUNT(*)") else rows)
-        self.results.append(result)
-        return result
-
 
 WHEN = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
 
@@ -185,15 +144,9 @@ class TestProbeScript:
         assert client.queries == []  # refused before any COUNT(*) is billed
 
     def test_a_row_count_mismatch_is_reported_and_fails(self, client):
-        class Disagreeing(FakeClient):
-            def query_and_wait(self, query, page_size=None):
-                result = super().query_and_wait(query, page_size)
-                if query.startswith("SELECT COUNT(*)"):
-                    result._rows = [{"n": 99}]
-                return result
-
         lines: list[str] = []
-        assert probe.probe(Disagreeing({"anvil_file": FILE_ROWS}), SNAPSHOT, "anvil_file", log=lines.append) == 1
+        client = DisagreeingClient({"anvil_file": FILE_ROWS}, count=99)
+        assert probe.probe(client, SNAPSHOT, "anvil_file", log=lines.append) == 1
         assert "anvil_file: streamed 3 row(s) but COUNT(*) said 99" in lines[-1]
 
     def test_arguments(self):

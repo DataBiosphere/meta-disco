@@ -46,6 +46,7 @@ from meta_disco.azul_manifest import (
     DEFAULT_MAX_WAIT,
     FORMAT_COMPACT,
     FORMATS,
+    INPUT_SOURCE_AZUL_COMPACT,
     Dataset,
     HttpSession,
     Sleep,
@@ -191,7 +192,7 @@ def download(
             "source_spec": source[1] if source else None,
         }
 
-    block = metadata_block(catalog, entries, datetime.now())
+    block = metadata_block(catalog, entries, datetime.now(), INPUT_SOURCE_AZUL_COMPACT)
     n = write_input_files(output_dir, block, _all_records(output_dir, catalog, datasets))
     print(f"Wrote {n:,} records to {output_dir / 'anvil_files_metadata.json'} (catalog {catalog})")
     return 0

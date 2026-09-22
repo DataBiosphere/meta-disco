@@ -72,7 +72,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                     'in the `files` array of '
                     '`data/anvil/anvil_files_metadata.json`, as derived by '
                     '`scripts/download_anvil_manifest.py` from the compact Azul '
-                    'manifest (#368).\n'
+                    'manifest (#368) or by `snapshot_input.derive_records` from a '
+                    "TDR snapshot's tables (#499). The envelope's `input_source` "
+                    'says which.\n'
                     'This is the *input* to classification, distinct from '
                     '`classification.yaml` which models the classified *output*.\n'
                     'It models what classification consumes, and nothing else. '
@@ -119,12 +121,12 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class AnvilFileMetadataRecord(ConfiguredBaseModel):
     """
-    One raw AnVIL file metadata record, before classification. Every slot is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
+    One raw AnVIL file metadata record, before classification. Every slot but `entry_id` is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
          'tree_root': True})
 
-    entry_id: str = Field(default=..., description="""The AnVIL Explorer catalog entry identifier.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
+    entry_id: Optional[str] = Field(default=None, description="""The AnVIL Explorer catalog entry identifier: Azul's document id for the file in one index, regenerated when the catalog is re-indexed. Only the compact-manifest path emits it (`files.document_id`); a record derived from a TDR snapshot's tables — read in place or through the verbatim manifest (#499) — has none, because the snapshot predates the index. Nothing in a run keys on it since the record key became `file_id` (#446), so no source is required to carry it. Where present it is non-empty.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_id: str = Field(default=..., description="""The repository's own identifier for the file, and the durable one: unlike `entry_id` it is not regenerated when the catalog is re-indexed, so it is what a consumer joins on (#433). The handle a DRS resolver takes is `drs_uri`, which is carried separately because it does not always wrap this id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_name: str = Field(default=..., description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     file_format: str = Field(default=..., description="""File extension / format label (e.g. bam, vcf.gz). 62 distinct values in the current corpus, including the literal \"Other\".""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })

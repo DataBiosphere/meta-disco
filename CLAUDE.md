@@ -188,7 +188,22 @@ evidence}` entry — plus the controlled vocabulary:
     spelling the three; #433 had to add two fields to seven hand-written copies, which is
     what the tuple exists to prevent a third time. `entry_id` is regenerated when the
     catalog is re-indexed and the other two are not, which is why a consumer joins on
-    `file_id` — the schema's slot descriptions carry that, not the tuple.
+    `file_id` — the schema's slot descriptions carry that, not the tuple. Since #499
+    `entry_id` is optional on the input and null on a record derived from a snapshot;
+    a diagnostic names a record by `file_id`, never by `entry_id`.
+  - **The input is a TDR snapshot's tables, however they arrived** (#499). The one
+    canonical shape is `snapshot_input.SnapshotTables` — table names, one table's rows
+    streamed, TDR's column names — with two readers behind it: `TdrDirect` (BigQuery in
+    place through `meta_disco.tdr`; identity and the `tdr` extra per that module's
+    docstring) and `AzulVerbatim` (the verbatim manifest on disk, Azul's additions
+    stripped; needs nothing, and is the stand-in and parity oracle, not the target).
+    `derive_records` is AnVIL's: it reads `anvil_file` and `anvil_dataset` and refuses a
+    snapshot lacking either before yielding a record. The compact path
+    (`record_from_compact_manifest_row`) stands beside it unchanged, and every input
+    envelope names how its records were derived in `input_source`
+    (`azul_manifest.INPUT_SOURCES`), stated by the writer and never inferred; nothing
+    reads it until a run can choose its reader (#500). Neither reader is wired to
+    `make download` or `make classify` — also #500.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all eleven outputs; one wired into a producer does not.

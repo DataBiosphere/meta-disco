@@ -585,8 +585,8 @@ def test_the_load_boundary_refuses_a_snapshot_before_any_record_is_processed(tmp
     the file would vanish while the run reported success. Refusing at load is what makes
     "the snapshot is refused" true.
     """
-    good = valid_record(file_name="a.test", file_format=".test", entry_id="ok", reference_assembly=["GRCh38"])
-    bad = valid_record(file_name="b.test", file_format=".test", entry_id="drifted", data_modality="genomic")
+    good = valid_record(file_name="a.test", file_format=".test", file_id="ok", reference_assembly=["GRCh38"])
+    bad = valid_record(file_name="b.test", file_format=".test", file_id="drifted", data_modality="genomic")
     path = tmp_path / "in.json"
     path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": [good, bad]}))
 
