@@ -101,17 +101,20 @@ def _classified_record(
     and the defaults in ``_PARENT_VALUES``.
 
     Any other dimension may be overridden by keyword, as for
-    :func:`run_fixtures.classifications`. ``build`` is the resolved build detail (#340)
-    carried beside the reference_assembly value.
+    :func:`run_fixtures.classifications`; ``reference_assembly`` is the positional
+    ``assembly`` and is refused as a keyword, so a row cannot name two. ``build`` is the
+    resolved build detail (#340) carried beside the reference_assembly value.
 
     ``file_id`` is what the index producer joins a parent on, so a fixture without
     one would be joined by nothing.
     """
-    record = output_record(file_name, md5, **{**_PARENT_VALUES, "reference_assembly": assembly, **dims})
+    if "reference_assembly" in dims:
+        raise TypeError("pass the assembly positionally, not as reference_assembly=")
+    record = output_record(
+        file_name, md5, file_id=file_id or _fid(md5), **{**_PARENT_VALUES, "reference_assembly": assembly, **dims}
+    )
     if build:
         record["classifications"]["reference_assembly"] = build_field_entry(assembly, detail={"build": build})
-    # What the index producer joins a parent on.
-    record["file_id"] = file_id or _fid(md5)
     return record
 
 
@@ -543,10 +546,15 @@ class TestLoadClassifications:
             "chry_m5": "dd7264df17e7e4a4dac5b0f1f19dcfe0",
             "name": "chm13v2.0.fasta",
         }
+        parent = _classified_record("2" * 32, "CHM13", "s.bam", build=build)
+        # A row carrying only this one dimension: the parent map must read a missing
+        # entry as nothing to inherit rather than raise, so this parent is deliberately
+        # partial — the only one in the file that is.
+        parent["classifications"] = {"reference_assembly": parent["classifications"]["reference_assembly"]}
         output = run_index_producer(
             tmp_path,
             [_file("s.bam", ".bam", "2" * 32, "e1"), _file("s.bam.bai", ".bai", "1" * 32, "e2")],
-            [_classified_record("2" * 32, "CHM13", "s.bam", build=build)],
+            [parent],
         )
         entry = output["classifications"][0]["classifications"]["reference_assembly"]
         assert entry["value"] == "CHM13"
@@ -558,7 +566,7 @@ class TestLoadClassifications:
         output = run_index_producer(
             tmp_path,
             [_file("s.bam", ".bam", "2" * 32, "e1"), _file("s.bam.bai", ".bai", "1" * 32, "e2")],
-            [_classified_record("2" * 32, (None, CONFLICT), "s.bam")],
+            [_classified_record("2" * 32, CONFLICT, "s.bam")],
         )
         cls = output["classifications"][0]["classifications"]
         assert field_status(cls, "reference_assembly") == CONFLICT
