@@ -1,9 +1,11 @@
 """Data models for file classification."""
 
 from collections.abc import Mapping
-from dataclasses import MISSING, dataclass, field, fields
-from functools import cache
+from dataclasses import dataclass, field, fields
+from datetime import datetime
 from typing import Any
+
+from pydantic import TypeAdapter, ValidationError
 
 from .file_name import FileName
 
@@ -399,26 +401,23 @@ def field_label(record: dict, field_name: str) -> str | None:
 def required_str(value: object, label: str, where: str) -> str:
     """Return ``value`` as a non-empty string, or raise naming ``label`` and ``where``.
 
-    One definition of "this member is a usable string" for the evidence-file records,
-    applied on both sides of the file: ``EvidenceFileEnvelope.__post_init__`` uses it on
-    an envelope being built and the ``from_dict`` pair on one being read, so a writer
-    cannot produce a file its own reader will refuse (#401 review).
+    One definition of "this member is a usable string" for :class:`ClaimSource` and
+    for ``value_map``'s scope identifiers. The evidence-file envelope used it too until
+    #494, when the envelope became the model generated from the schema, whose
+    patterns say the same thing; this is the hand-written twin for the records that
+    stay dataclasses.
 
-    A required member is one ``to_dict`` would always have written, so its absence is
-    a malformed record. ``None`` is rejected here rather than by a key check: an
-    explicit ``"name": null`` is a present key, and ``to_dict`` omits null members
-    entirely, so both arrive as an absent value that a key check would read
-    differently from each other. The empty string is refused too — a version or a
-    name that identifies nothing.
+    ``None`` is rejected here rather than by a key check: an explicit ``"name": null``
+    is a present key, and ``to_dict`` omits null members entirely, so both arrive as
+    an absent value that a key check would read differently from each other. The
+    empty string is refused too — a name that identifies nothing.
 
     A line break is refused with it. These members are identifiers — a repository, a
-    dataset, a table, a catalog version — and none of them contains one, while every
-    one is printed by ``source_evidence._describe`` in the run's report, where an embedded
-    newline is a second report line an evidence file wrote. The schema refuses the same
-    value — the slots carry ``pattern: "^[^\\r\\n]+\\Z"``, which excludes a line
-    terminator anywhere, including the trailing one that ``$`` would have allowed
-    through — so without this the reader would accept what the schema rejects
-    (#401 review).
+    dataset, a table — and none of them contains one, while every one can be printed
+    on one line of a report, where an embedded newline is a second report line. The
+    schema refuses the same value — the slots carry ``pattern: "^[^\\r\\n]+\\Z"``,
+    which excludes a line terminator anywhere, including the trailing one that ``$``
+    would have allowed through (#401 review).
 
     ``where`` locates the fault — a file and line for a reader, the constructing call
     for a writer — and prefixes every message.
@@ -440,10 +439,12 @@ def optional_str(value: object, label: str, where: str) -> str | None:
     return None if value is None else required_str(value, label, where)
 
 
-# Missing-key sentinel for `_flat_from_dict`. `None` cannot serve: `_flat_to_dict`
-# omits a null member, so an absent key and an explicit `"dataset": null` both read
-# as None through `dict.get`, and the second is a record we did not write.
+# Missing-key sentinel for `member_optional_str`. `None` cannot serve: the evidence
+# writer omits a null member, so an absent key and an explicit `"column": null` both
+# read as None through `dict.get`, and the second is a line we did not write.
 _ABSENT = object()
+
+_DATETIME = TypeAdapter(datetime)
 
 
 def _require_one_of(value: object, vocabulary: frozenset[str], noun: str, label: str, where: str) -> str:
@@ -490,19 +491,40 @@ def require_join_key(value: object, label: str, where: str) -> str:
     return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
 
 
+def parse_iso_datetime(value: object, label: str, where: str) -> datetime:
+    """Parse an ISO 8601 timestamp the way pydantic does, or raise naming ``label`` and ``where``.
+
+    One parser for the two timestamps read off disk — an evidence file's ``fetched_at``
+    and a manifest sidecar's ``requested_at``. Not ``datetime.fromisoformat``: that
+    rejects a trailing ``Z`` on Python 3.10, this project's floor and what CI runs, and
+    accepts it from 3.11, so a file written on one interpreter read differently on the
+    other. pydantic's parser is the same on every interpreter and takes ``Z`` (#494).
+
+    A shape check is not this function's job. The evidence envelope's ``fetched_at``
+    is held to the schema's pattern by the generated model before it gets here — a
+    date with no time of day is refused there — and this parse then decides whether a
+    well-shaped timestamp is a real instant, which no pattern can (``2026-02-30`` is
+    well-formed and not a day).
+    """
+    try:
+        return _DATETIME.validate_python(value)
+    except ValidationError:
+        raise ValueError(f"{where}: {label} {value!r} is not an ISO 8601 datetime") from None
+
+
 def member_optional_str(block: dict, key: str, label: str, where: str, checker=optional_str) -> str | None:
     """Read one member of ``block`` through ``checker``, refusing an explicit null.
 
-    The single statement of the absent-versus-null rule, used by both readers that
-    need it: :func:`_flat_from_dict` for every member of a flat record, and
-    ``source_evidence`` for an evidence line's ``column`` — the one source member a
-    line carries rather than the envelope. ``dict.get`` with a default cannot tell an
-    absent key from a present null, and collapsing the two would accept a record the
-    writer could not have produced while every other member refuses it (#401 review).
+    The absent-versus-null rule for an evidence line's ``column`` — the one source
+    member a line carries rather than the envelope (``source_evidence._entry_from_line``,
+    its only caller since #494). ``dict.get`` with a default cannot tell an absent key
+    from a present null, and collapsing the two would accept a line the writer could
+    not have produced while every other member refuses it (#401 review). The envelope
+    itself no longer draws this distinction: it is read through the model generated
+    from the schema, and the schema admits a null on an optional member.
 
     ``checker`` is what a present value must satisfy; it defaults to
-    :func:`optional_str` because most members are, and :func:`_flat_from_dict` passes
-    :func:`required_str` for a member with no dataclass default.
+    :func:`optional_str`.
 
     Read rather than removed: while a line held a claim, the members left after this
     one became ``make_claim``'s keyword arguments, so taking it out was the point. A
@@ -515,93 +537,17 @@ def member_optional_str(block: dict, key: str, label: str, where: str, checker=o
     return checker(None if value is _ABSENT else value, label, where)
 
 
-def _flat_to_dict(record) -> dict:
-    """Serialize a flat dataclass of optional strings, dropping the absent ones.
-
-    Shared by the evidence-file records (``ClaimSource``, ``EvidenceFileSource``,
-    ``EvidenceTarget``). Only the first of those is still in this module: the envelope
-    and its parts describe one artefact and moved to ``source_evidence`` with it
-    (#409), while ``ClaimSource`` stays here because it reaches output evidence on
-    every imported claim. This family of helpers stays here with it, and
-    ``source_evidence`` imports them.
-
-    Keys come from ``fields()`` rather than being listed, so a
-    member added to one of those dataclasses is emitted rather than silently dropped
-    from every evidence file — the same reason ``ExcludedFile.to_dict`` derives its keys.
-
-    Null members are omitted rather than written as explicit nulls: these records
-    either have a member or do not, and there is no "we looked and found nothing"
-    state for a reader to tell apart from an absent one. (``ReferenceBuild.to_dict``
-    keeps its nulls for exactly that reason, which is why it is not one of these.)
-    """
-    return {f.name: v for f in fields(record) if (v := getattr(record, f.name)) is not None}
-
-
-@cache
-def _flat_plan(cls) -> tuple[frozenset, tuple, tuple]:
-    """The per-class reading plan for :func:`_flat_from_dict`, computed once.
-
-    ``fields()`` walks the dataclass on every call and is not free; the members and
-    which checker each one gets cannot change for a class, so they are derived once
-    and cached. Measured, this is a cold path and the cache is insurance rather than a
-    win. Reading a whole evidence file — a thousand rows or a million — consults it
-    five times across three classes: once for ``EvidenceFileEnvelope`` and twice each for
-    ``EvidenceFileSource`` and ``EvidenceTarget``, which the envelope both reads and
-    re-validates by round-tripping. Writing one never consults it at all, and neither
-    does a row on either side: a row stopped carrying a claim in #421, so the
-    per-claim ``_flat_to_dict`` this note used to warn about — ``make_claim``'s
-    ``source.to_dict()``, a call for every claim on both sides — is gone. The one
-    ``to_dict`` left on a row's path is in ``_evidence_line``'s error branch.
-
-    Returns the known names, those names sorted for an error message, and
-    ``(name, checker)`` pairs: a member with no dataclass default is required.
-    """
-    members = tuple((f.name, required_str if f.default is MISSING else optional_str) for f in fields(cls))
-    names = frozenset(name for name, _ in members)
-    return names, tuple(sorted(names)), members
-
-
 def _reject_unknown(block: dict, known: frozenset, expected: tuple, where: str, label: str) -> None:
     """Refuse a member the record does not have, rather than ignoring it.
 
-    The schema validates these records ``closed=True``, so a reader that quietly
+    The schema validates an evidence row ``closed=True``, so a reader that quietly
     dropped an unknown key would accept documents the schema rejects — the two must
-    refuse the same files (#401 review). Shared by the flat records and by
-    ``EvidenceFileEnvelope``, so one refusal is worded one way.
+    refuse the same files (#401 review). Called by ``source_evidence._entry_from_line``
+    for a line carrying a member outside the row's four; the envelope gets the same
+    refusal from the generated model's ``extra="forbid"`` (#494).
     """
     if extra := sorted(set(block) - known):
         raise ValueError(f"{where}: {label} has unknown member(s) {extra} (expected {list(expected)})")
-
-
-def _flat_from_dict(cls, block: object, where: str, label: str):
-    """Rebuild one of those records from what :func:`_flat_to_dict` wrote.
-
-    The inverse, and derived from ``fields()`` for the same reason. Every member is
-    checked: a required one (no dataclass default) must be a non-empty string, an
-    optional one must be absent or a non-empty string.
-
-    An explicit ``null`` is refused rather than read as absent. ``_flat_to_dict``
-    omits nulls, so a record we wrote never contains one, and a file that does was
-    not written by us — accepting it would silently normalize a shape this writer
-    could not have produced. Distinguishing the two needs a sentinel, because
-    ``dict.get`` returns ``None`` for both an absent key and a present null.
-
-    This is the one rule the schema does not share: LinkML models an optional slot as
-    nullable and ``gen-json-schema`` emits ``type: [string, null]`` for it, so an
-    explicit null passes the gate by construction and is refused here. Measured, it is
-    the only class of envelope the two disagree on, and the reader is the stricter
-    side — which is the safe direction (#401 review).
-    """
-    if not isinstance(block, dict):
-        raise ValueError(f"{where}: {label} is {type(block).__name__}, not an object")
-    known, expected, members = _flat_plan(cls)
-    _reject_unknown(block, known, expected, where, label)
-    # Values are only ever `str | None` to a type checker — `required_str` raises
-    # rather than returning None, but that is not visible through the splat.
-    values: dict[str, Any] = {
-        name: member_optional_str(block, name, f"{label} {name}", where, checker) for name, checker in members
-    }
-    return cls(**values)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -619,13 +565,17 @@ class ClaimSource:
     interpreted without going back to the file it arrived in, which nothing that
     reads output evidence can do (#401 review).
 
-    An evidence file's envelope holds the first three for a whole file and uses
-    :class:`EvidenceFileSource` for it, which has no ``column`` because one table's
-    claims are read from several. :meth:`EvidenceFileSource.as_claim_source` copies the
+    An evidence file's envelope holds the first three for a whole file and uses the
+    schema's ``EvidenceFileSource`` for it, which has no ``column`` because one table's
+    claims are read from several. ``source_evidence.claim_source_for`` copies the
     three across and adds this claim's column. The one asymmetry is deliberate: the
     envelope calls the top level ``repository`` because an evidence file names a system,
     while a claim calls it ``name`` because that is what it has always been and it is
     what the output ``evidence`` array already carries.
+
+    A dataclass and not a generated model like the envelope (#494): ``to_dict`` runs
+    once per imported claim in ``rule_engine.make_claim``, and the record is built once
+    per column of an evidence file being read — it stays on the cheap side.
 
     Frozen because a source's identity is a fact about where a claim came from,
     not state to edit after the claim is built; that also lets one instance be
@@ -641,17 +591,12 @@ class ClaimSource:
     def __post_init__(self) -> None:
         """Check the members, because a dataclass annotation is not a runtime check.
 
-        This is the one evidence-file record that reaches output evidence without
-        passing through an envelope: ``EvidenceFileSource`` and ``EvidenceTarget`` are
-        validated by :meth:`EvidenceFileEnvelope.__post_init__`, but a ``ClaimSource``
-        can be handed straight to ``make_claim``, and ``ClaimSource(name="HPRC",
-        dataset=7)`` would otherwise serialize a number into the schema's ``Evidence``
-        and only be caught at a file or schema boundary, if at all (#401 review).
-
-        Members are checked rather than the record round-tripped through
-        :meth:`from_dict`, which would call this again on the record it rebuilds. Per
-        source object and not per claim: an evidence file builds one per column and every
-        claim read from that column shares it.
+        This record reaches output evidence: a ``ClaimSource`` is handed straight to
+        ``make_claim``, and ``ClaimSource(name="HPRC", dataset=7)`` would otherwise
+        serialize a number into the schema's ``Evidence`` and only be caught at a file
+        or schema boundary, if at all (#401 review). Per source object and not per
+        claim: an evidence file builds one per column and every claim read from that
+        column shares it.
         """
         where = "claim source"
         required_str(self.name, "name", where)
@@ -659,13 +604,16 @@ class ClaimSource:
             optional_str(getattr(self, member), member, where)
 
     def to_dict(self) -> dict:
-        """Serialize for output, dropping members the source does not have."""
-        return _flat_to_dict(self)
+        """Serialize for output, dropping members the source does not have.
 
-    @classmethod
-    def from_dict(cls, block: object, where: str) -> "ClaimSource":
-        """Rebuild a source from what :meth:`to_dict` wrote, validating each member."""
-        return _flat_from_dict(cls, block, where, "source")
+        Keys come from ``fields()`` rather than being listed, so a member added here
+        is emitted rather than silently dropped from every claim. Null members are
+        omitted rather than written as explicit nulls: a source either has a member
+        or does not, and there is no "we looked and found nothing" state for a reader
+        to tell apart from an absent one. (``ReferenceBuild.to_dict`` keeps its nulls
+        for exactly that reason.)
+        """
+        return {f.name: v for f in fields(self) if (v := getattr(self, f.name)) is not None}
 
 
 @dataclass

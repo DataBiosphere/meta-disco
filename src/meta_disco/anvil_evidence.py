@@ -56,12 +56,14 @@ from .azul_manifest import (
     sidecar_requested_at,
 )
 from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
     EvidenceTarget,
+    claim_source_for,
     evidence_file_path,
     generation_dir,
     new_generation,
@@ -326,14 +328,19 @@ def import_dataset(
     try:
         for table in slot_map.tables(dataset):
             file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=API_URL)
+            # The generated model types the two vocabulary members as its enums and
+            # stores their values (`use_enum_values`), so the runtime constants are
+            # wrapped for the type checker and read back as the plain strings they are.
             envelope = EvidenceFileEnvelope(
                 source=file_source,
-                source_type=slot_map.source_type,
+                source_type=ImporterSourceTypeEnum(slot_map.source_type),
                 source_version=catalog,
                 source_key=JOIN_KEY_DRS_URI,
                 target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
-                target_key=JOIN_KEY_DRS_URI,
-                fetched_at=fetched_at,
+                target_key=JoinKeyEnum(JOIN_KEY_DRS_URI),
+                # The envelope carries the timestamp as the schema does, as an ISO 8601
+                # string; the sidecar's `+00:00`/naive form round-trips unchanged.
+                fetched_at=fetched_at.isoformat(),
             )
             result = TableImport(table=table, path=evidence_file_path(directory, table))
             entries = _table_entries(path, table, slot_map.columns(dataset, table), handles, file_source, result)
@@ -392,7 +399,7 @@ def _table_entries(
                             continue
                         claim_source = by_column.get(column)
                         if claim_source is None:
-                            claim_source = by_column[column] = source.as_claim_source(column)
+                            claim_source = by_column[column] = claim_source_for(source, column)
                         # Counted here and not when the link resolved: a file whose every
                         # mapped cell is null receives nothing, and is not "a file with evidence".
                         result.files.add(handle)

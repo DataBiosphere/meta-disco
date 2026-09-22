@@ -34,6 +34,7 @@ import threading
 from dataclasses import fields, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -62,6 +63,7 @@ from meta_disco.source_evidence import (
     EvidenceFileEnvelope,
     EvidenceFileSource,
     EvidenceTarget,
+    claim_source_for,
     discover,
     generation_dir,
     is_generation,
@@ -87,27 +89,30 @@ ANVIL_MANIFEST = EvidenceFileSource(
 )
 ANVIL_TARGET = EvidenceTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil15")
 FETCHED_AT = datetime(2026, 9, 1, 9, 14, 3)
-# A fetch time as an envelope on disk carries it. Used wherever a case needs a
-# *valid* fetched_at so that it isolates the member actually under test — a bare
-# date is refused in its own right, for having no time of day.
+# A fetch time as an envelope carries it, on disk and on the model alike: an ISO 8601
+# string, as the schema declares the slot. Used wherever a case needs a *valid*
+# fetched_at so that it isolates the member actually under test — a bare date is
+# refused in its own right, for having no time of day.
 ISO_NOW = FETCHED_AT.isoformat()
 
 
 def evidence_file_envelope(**overrides) -> EvidenceFileEnvelope:
     """An HPRC catalog envelope: filenames the catalog publishes, matched against
-    AnVIL's ``file_name`` within the dataset that makes that key usable."""
-    return replace(
-        EvidenceFileEnvelope(
-            source=HPRC_CATALOG,
-            source_type=SOURCE_REPOSITORY_METADATA,
-            source_version="2026-09-01",
-            source_key="filename",
-            target=ANVIL_TARGET,
-            target_key=JOIN_KEY_FILE_NAME,
-            fetched_at=FETCHED_AT,
-        ),
-        **overrides,
-    )
+    AnVIL's ``file_name`` within the dataset that makes that key usable.
+
+    Overrides go through the constructor rather than a copy, so a case overriding one
+    member with a bad value is refused the way an importer building one would be.
+    """
+    members: dict[str, Any] = {
+        "source": HPRC_CATALOG,
+        "source_type": SOURCE_REPOSITORY_METADATA,
+        "source_version": "2026-09-01",
+        "source_key": "filename",
+        "target": ANVIL_TARGET,
+        "target_key": JOIN_KEY_FILE_NAME,
+        "fetched_at": ISO_NOW,
+    }
+    return EvidenceFileEnvelope(**{**members, **overrides})
 
 
 def published_envelope(
@@ -140,7 +145,7 @@ def _entry(column="instrumentModel", raw="Revio", name="HG002.bam", source=HPRC_
         field="platform",
         target_key_value=name,
         raw_value=raw,
-        source=source.as_claim_source(column),
+        source=claim_source_for(source, column),
     )
 
 
@@ -155,7 +160,7 @@ class TestRoundTrip:
         assert envelope.source == HPRC_CATALOG
         assert envelope.source.dataset == "R2"
         assert envelope.source.url == "https://data.humanpangenome.org/"
-        assert envelope.fetched_at == FETCHED_AT
+        assert envelope.fetched_at == ISO_NOW
         assert envelope.source_version == "2026-09-01"
         assert envelope.source_type == SOURCE_REPOSITORY_METADATA
         # Both sides of the join, and which key pairs with which.
@@ -396,7 +401,7 @@ class TestMalformedFiles:
         rather than the line-numbered ValueError this module promises. The file is
         opened as bytes and decoded where the line number is known."""
         path = tmp_path / "c.ndjson"
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}).encode() + b"\n"
+        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)}).encode() + b"\n"
         path.write_bytes(envelope + b'{"field":"platform","target_key_value":"\xff\xfe","raw_value":"x"}\n')
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 2: not valid UTF-8"):
@@ -411,7 +416,7 @@ class TestMalformedFiles:
         the opposite of the report naming every file it found (#401 review).
         """
         deep = "[" * 2000 + "]" * 2000
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()})
+        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
         first = '{"evidence_file":' + deep + "}" if line == 1 else envelope
         second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + deep + "}"
         path = tmp_path / "evidence.ndjson"
@@ -429,7 +434,7 @@ class TestMalformedFiles:
         and line every other malformed line carries.
         """
         big = "1" * 5000
-        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()})
+        envelope = json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
         first = '{"evidence_file":{"n":' + big + "}}" if line == 1 else envelope
         second = envelope if line == 1 else '{"field":"platform","target_key_value":"x","raw_value":' + big + "}"
         path = tmp_path / "evidence.ndjson"
@@ -485,31 +490,33 @@ class TestMalformedFiles:
             ({"source": {"repository": None}}, "source repository"),
             ({"source": {"repository": "HPRC", "table": 7}}, "source table"),
             ({"fetched_at": None}, "fetched_at"),
-            ({"fetched_at": "yesterday"}, "not an ISO 8601"),
-            ({"fetched_at": "2026-09-01"}, "time of day"),
+            ({"fetched_at": "yesterday"}, "fetched_at"),
+            ({"fetched_at": "2026-09-01"}, "fetched_at"),
             # A date can be longer than ten characters without carrying a time:
-            # `fromisoformat` reads all three of these as midnight, and the first two
+            # `fromisoformat` read all three of these as midnight, and the first two
             # come straight off an API that stamps a UTC designator on a date (#401
             # review). The third is a real separator's worth of characters in the
-            # right place and still not a `T`.
-            ({"fetched_at": "2026-09-01Z"}, "time of day"),
-            ({"fetched_at": "2026-09-01+00:00"}, "time of day"),
-            ({"fetched_at": "2026-09-01X09:14:03"}, "time of day"),
-            # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts —
-            # so it reaches the parse branch on one interpreter and the shape branch
-            # on the other. Refused by both, in words both branches share, which is
-            # the divergence the `Z` normalization exists to prevent.
-            ({"fetched_at": "20260901T091403"}, "is not an ISO 8601"),
+            # right place and still not a `T`. The schema's pattern refuses each.
+            ({"fetched_at": "2026-09-01Z"}, "fetched_at"),
+            ({"fetched_at": "2026-09-01+00:00"}, "fetched_at"),
+            ({"fetched_at": "2026-09-01X09:14:03"}, "fetched_at"),
+            # Basic-format ISO 8601, which 3.10 refuses to parse and 3.11 accepts.
+            # The pattern refuses it before any parser sees it, so the file reads the
+            # same on every interpreter.
+            ({"fetched_at": "20260901T091403"}, "fetched_at"),
+            # Well-shaped and not a day: the pattern passes it and the parse refuses
+            # it, which is the one check no regex can make (#401 review).
+            ({"fetched_at": "2026-02-30T09:14:03"}, "fetched_at.*not an ISO 8601"),
             ({"source_version": ""}, "source_version"),
             ({"source_key": None}, "source_key"),
             # An evidence file is written by an importer reading something we do not
             # own, so its source_type is one of IMPORTER_SOURCE_TYPES. `content_read`
             # is the reachable mistake: a real source_type, and our own inference's.
-            ({"source_type": SOURCE_CONTENT_READ}, "not a kind of source an importer may write"),
-            ({"source_type": None}, "not a kind of source an importer may write"),
+            ({"source_type": SOURCE_CONTENT_READ}, "source_type"),
+            ({"source_type": None}, "source_type"),
             ({"target": {"system": ""}}, "target system"),
             ({"target": {"system": "anvil", "dataset": 7}}, "target dataset"),
-            ({"target_key": "sample_id"}, "not a key of the target"),
+            ({"target_key": "sample_id"}, "target_key"),
         ],
     )
     def test_an_envelope_missing_a_fact_is_refused(self, tmp_path, envelope, expected):
@@ -518,10 +525,14 @@ class TestMalformedFiles:
         Each case overrides one member of a valid envelope — or, where the member
         under test is inside ``source`` or ``target``, that whole nested record — so
         what it asserts is the member named and not an unrelated one that happened to
-        be missing too.
+        be missing too. The checks are the generated model's (#494); what this pins is
+        that the refusal reaches the reader's caller as a ``ValueError`` naming the
+        member.
         """
         path = tmp_path / "evidence.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().to_dict(), **envelope}}) + "\n")
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().model_dump(exclude_none=True), **envelope}}) + "\n"
+        )
 
         with pytest.raises(ValueError, match=expected):
             read_envelope(path)
@@ -578,7 +589,7 @@ class TestMalformedFiles:
     def test_an_envelope_naming_a_key_the_target_does_not_have_is_refused(self, tmp_path):
         """`target_key` is a key of the *target*. A source keyed by something else maps
         it to one of these itself rather than adding a term here."""
-        with pytest.raises(ValueError, match="not a key of the target"):
+        with pytest.raises(ValueError, match="target_key"):
             evidence_file_envelope(target_key="sample_id")
 
 
@@ -597,14 +608,25 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         with pytest.raises(ValueError, match="source_version"):
             evidence_file_envelope(source_version=version)
 
-    def test_an_envelope_keyed_by_file_name_needs_a_dataset_to_scope_it(self):
+    def test_an_envelope_keyed_by_file_name_needs_a_dataset_to_scope_it(self, tmp_path):
         """The guard the whole filename join rests on: 69.4% of rows share a name.
 
-        Refused where it is built, not where it is joined, because a file written
-        without a scope is already unusable by the time a join reads it.
+        Refused where the file is written, not where it is joined, because a file
+        written without a scope is already unusable by the time a join reads it. The
+        schema declares the rule and gen-pydantic drops it, so the constructor accepts
+        this envelope and `require_scoped_target` refuses it on both paths (#494).
         """
+        unscoped = evidence_file_envelope(
+            target=EvidenceTarget(system="anvil", version="anvil15"), target_key="file_name"
+        )
+        path = tmp_path / "c.ndjson"
         with pytest.raises(ValueError, match="needs a target dataset to scope it"):
-            evidence_file_envelope(target=EvidenceTarget(system="anvil", version="anvil15"), target_key="file_name")
+            write_evidence_file(path, unscoped, [_entry()])
+        assert not path.exists()
+
+        path.write_text(json.dumps({ENVELOPE_KEY: unscoped.model_dump(exclude_none=True)}) + "\n")
+        with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*needs a target dataset to scope it"):
+            read_envelope(path)
 
     def test_an_envelope_keyed_by_a_unique_key_needs_no_dataset(self):
         """`file_id` is unique on every one of the 708,088 rows: no scope to add."""
@@ -619,10 +641,10 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """Every one of these is printed in the run's report, one file per line.
 
         A newline in a repository name is a second report line the evidence file wrote.
-        The schema refuses it too — the slots are `pattern: "^.+$"` — so accepting it
-        here would be the reader taking what the gate rejects.
+        The schema refuses it — the slots carry `pattern: "^[^\\r\\n]+\\Z"` — and the
+        generated model carries the same pattern, so the constructor refuses it.
         """
-        with pytest.raises(ValueError, match="line break"):
+        with pytest.raises(ValueError, match="repository"):
             evidence_file_envelope(source=EvidenceFileSource(repository=forged, dataset="R2", table="t"))
 
     @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
@@ -636,7 +658,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         networked import fails at its own first line rather than at the next
         classification run.
         """
-        with pytest.raises(ValueError, match="not a kind of source an importer may write"):
+        with pytest.raises(ValueError, match="source_type"):
             evidence_file_envelope(source_type=bad)
 
     def test_a_curator_cannot_be_written_as_an_evidence_file(self):
@@ -651,11 +673,11 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """
         assert SOURCE_WRANGLER_ANNOTATION in models.EXTERNAL_SOURCE_TYPES
         assert SOURCE_WRANGLER_ANNOTATION not in models.IMPORTER_SOURCE_TYPES
-        with pytest.raises(ValueError, match="not a kind of source an importer may write"):
+        with pytest.raises(ValueError, match="source_type"):
             evidence_file_envelope(source_type=SOURCE_WRANGLER_ANNOTATION)
 
     def test_an_envelope_with_a_nameless_source_is_refused_when_it_is_built(self):
-        with pytest.raises(ValueError, match="source repository"):
+        with pytest.raises(ValueError, match="repository"):
             evidence_file_envelope(source=EvidenceFileSource(repository=""))
 
     def test_an_envelope_with_a_non_datetime_fetch_time_is_refused_when_it_is_built(self):
@@ -666,19 +688,20 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """A column belongs to a row, not to a file — the type says so.
 
         `EvidenceFileSource` has no `column` member, so an envelope naming one is not a
-        value to be refused at runtime but a shape that cannot be expressed. One
-        table's rows are read from several columns, so a column on the envelope
-        could disagree with every line in the file.
+        value to be refused at runtime but a shape the model does not have — it is
+        `extra="forbid"`, as the schema is `closed`. One table's rows are read from
+        several columns, so a column on the envelope could disagree with every line in
+        the file.
         """
-        assert "column" not in {f.name for f in fields(EvidenceFileSource)}
-        with pytest.raises(TypeError):
+        assert "column" not in EvidenceFileSource.model_fields
+        with pytest.raises(ValueError, match="column"):
             EvidenceFileSource(repository="HPRC", table="t", column="platform")  # type: ignore[call-arg]
 
     def test_an_envelope_whose_source_has_a_non_string_member_is_refused_when_it_is_built(self):
         """The annotation says `str | None`, so the ignore is the point of the test:
         type hints do not run, and an importer mapping a source's own JSON can hand
         over whatever that JSON held."""
-        with pytest.raises(ValueError, match="source table"):
+        with pytest.raises(ValueError, match="table"):
             evidence_file_envelope(source=EvidenceFileSource(repository="HPRC", table=7))  # type: ignore[arg-type]
 
     def test_a_hand_built_row_the_reader_would_refuse_is_refused_at_write(self, tmp_path):
@@ -698,12 +721,13 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         """The schema validates the envelope `closed=True`; the reader must agree.
 
         A `"column": null` on an envelope source used to be accepted here and
-        silently stripped while the schema rejected it. Refusing it in `from_dict`
-        also names the file and line, which `__post_init__` cannot — it validates a
-        constructed envelope and does not know where one came from.
+        silently stripped while the schema rejected it. The generated model is
+        `extra="forbid"`, and the reader re-words its refusal with the file and line,
+        which the model cannot — it validates a block and does not know where one
+        came from (#494).
         """
         path = tmp_path / "c.ndjson"
-        envelope = {**evidence_file_envelope().to_dict(), **block}
+        envelope = {**evidence_file_envelope().model_dump(exclude_none=True), **block}
         path.write_text(json.dumps({ENVELOPE_KEY: envelope}) + "\n")
 
         with pytest.raises(ValueError, match=r"c\.ndjson line 1: .*unknown member"):
@@ -723,7 +747,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
         Otherwise the same malformed provenance is discarded rather than reported
         depending only on which side of one brace it sat.
         """
-        envelope = evidence_file_envelope().to_dict()
+        envelope = evidence_file_envelope().model_dump(exclude_none=True)
         payload = (
             [envelope if v == "ENVELOPE" else v for v in wrapper]
             if isinstance(wrapper, list)
@@ -738,15 +762,20 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
     def test_a_utc_z_suffix_reads_back_on_every_supported_interpreter(self, tmp_path):
         """`fromisoformat` rejects `Z` on 3.10 (the floor and what CI runs), takes it on 3.11+.
 
-        Our writer emits `+00:00`, but the importers in #369/#394 read web APIs that
-        emit `Z` almost universally — an evidence file must not parse on a dev box and
-        fail on CI.
+        The importers read web APIs that emit `Z` almost universally — an evidence
+        file must not parse on a dev box and fail on CI. The envelope carries the
+        string as written; the parse to an instant is pydantic's, which is the same on
+        every interpreter (#494).
         """
         path = tmp_path / "c.ndjson"
-        block = {**evidence_file_envelope().to_dict(), "fetched_at": "2026-09-01T09:14:03Z"}
+        block = {**evidence_file_envelope().model_dump(exclude_none=True), "fetched_at": "2026-09-01T09:14:03Z"}
         path.write_text(json.dumps({ENVELOPE_KEY: block}) + "\n")
 
-        assert read_envelope(path).fetched_at == datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
+        envelope = read_envelope(path)
+        assert envelope.fetched_at == "2026-09-01T09:14:03Z"
+        assert models.parse_iso_datetime(envelope.fetched_at, "fetched_at", "c.ndjson") == datetime(
+            2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc
+        )
 
 
 class TestALineIsAnObservationNotAClaim:
@@ -764,7 +793,10 @@ class TestALineIsAnObservationNotAClaim:
         path = tmp_path / "c.ndjson"
         line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio", **members}
         path.write_text(
-            json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n",
+            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
+            + "\n"
+            + json.dumps(line)
+            + "\n",
         )
         return path
 
@@ -824,7 +856,12 @@ class TestALineIsAnObservationNotAClaim:
             "target_key_value": "HG002.bam",
             "claim": {"rule_id": "map_hprc_platform_v1", "value": "PACBIO", "raw_value": "Revio"},
         }
-        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
+            + "\n"
+            + json.dumps(line)
+            + "\n"
+        )
 
         with pytest.raises(ValueError, match="'claim' is not a member of an evidence row"):
             list(iter_evidence(path))
@@ -835,7 +872,12 @@ class TestALineIsAnObservationNotAClaim:
         line = {"field": "platform", "target_key_value": "HG002.bam", "raw_value": "Revio"}
         del line[missing]
         path = tmp_path / "c.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + json.dumps(line) + "\n")
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)})
+            + "\n"
+            + json.dumps(line)
+            + "\n"
+        )
 
         with pytest.raises(ValueError, match=f"evidence row has no {missing!r}"):
             list(iter_evidence(path))
@@ -843,7 +885,9 @@ class TestALineIsAnObservationNotAClaim:
     def test_a_line_that_is_not_an_object_is_refused(self, tmp_path):
         """A bare list or string parses as JSON and is not a row."""
         path = tmp_path / "c.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: evidence_file_envelope().to_dict()}) + "\n" + '["platform"]\n')
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: evidence_file_envelope().model_dump(exclude_none=True)}) + "\n" + '["platform"]\n'
+        )
 
         with pytest.raises(ValueError, match="not an evidence row"):
             list(iter_evidence(path))
@@ -860,18 +904,23 @@ class TestALineIsAnObservationNotAClaim:
             list(iter_evidence(path))
 
     @pytest.mark.parametrize("member", ["url", "dataset", "table"])
-    def test_an_optional_source_member_that_is_an_explicit_null_is_refused(self, tmp_path, member):
-        """An *optional* member, so only the null branch can refuse it.
+    def test_an_optional_envelope_member_that_is_an_explicit_null_reads_as_absent(self, tmp_path, member):
+        """The envelope agrees with the schema here, and the line does not (next test).
 
-        A required member's null is caught by the type check whether or not the null
-        branch exists, which is what makes those cases no evidence for this one.
+        LinkML models an optional slot as nullable, so the schema admits
+        `"table": null` on an envelope source; the reader is the model generated from
+        the schema and admits the same (#494). The writer never emits one — it omits
+        the member — so the only file this reaches is one written by hand, and reading
+        the null as the absent member it means is what the schema says it means.
         """
-        source = {**evidence_file_envelope().source.to_dict(), member: None}
+        source = {**evidence_file_envelope().source.model_dump(exclude_none=True), member: None}
         path = tmp_path / "evidence.ndjson"
-        path.write_text(json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().to_dict(), "source": source}}) + "\n")
+        path.write_text(
+            json.dumps({ENVELOPE_KEY: {**evidence_file_envelope().model_dump(exclude_none=True), "source": source}})
+            + "\n"
+        )
 
-        with pytest.raises(ValueError, match=f"source {member} is an explicit null"):
-            read_envelope(path)
+        assert getattr(read_envelope(path).source, member) is None
 
     def test_a_line_whose_column_is_an_explicit_null_is_refused(self, tmp_path):
         """Absent is fine; a written-out null is a record the writer could not produce.
@@ -1031,7 +1080,7 @@ class TestTheRunReport:
 
     def test_an_aware_fetch_time_is_aged_without_a_type_error(self, tmp_path, capsys):
         """Ages are taken in the envelope's own timezone, so either kind subtracts."""
-        aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
+        aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc).isoformat()
         write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(fetched_at=aware), [])
 
         report_evidence_files(tmp_path)
@@ -1044,7 +1093,7 @@ class TestTheRunReport:
         That disagreement used to raise inside `_describe`, which would have taken
         every other file's line down with it — the opposite of what the report is for.
         """
-        aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc)
+        aware = datetime(2026, 9, 1, 9, 14, 3, tzinfo=timezone.utc).isoformat()
         write_evidence_file(tmp_path / "c.ndjson", evidence_file_envelope(fetched_at=aware), [])
 
         report_evidence_files(tmp_path, now=datetime(2026, 9, 9, 9, 14, 3))
@@ -1074,19 +1123,18 @@ class TestAnEvidenceFileIsWrittenBySomeoneElse:
             field="data_modality",
             target_key_value="a" * 32,
             raw_value="GENOMIC",
-            source=registry.as_claim_source("library_source"),
+            source=claim_source_for(registry, "library_source"),
         )
         path = tmp_path / "registry.ndjson"
         write_evidence_file(
             path,
-            EvidenceFileEnvelope(
+            evidence_file_envelope(
                 source=registry,
                 source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
                 source_version="rev-3",
                 source_key="sample_id",
                 target=EvidenceTarget(system="anvil"),
                 target_key=JOIN_KEY_FILE_MD5SUM,
-                fetched_at=FETCHED_AT,
             ),
             [entry],
         )
@@ -1104,7 +1152,7 @@ class TestAnEvidenceFileIsWrittenBySomeoneElse:
 
 @pytest.fixture(scope="module")
 def schema() -> dict:
-    """The LinkML schema, parsed once for the two tests that read it.
+    """The LinkML schema, parsed once for the tests that read it.
 
     Through `schema_vocab.default_schema_path()` rather than a hand-built path: it is
     the canonical locator (`test_package_data` uses it the same way) and it does not
@@ -1158,20 +1206,6 @@ def test_the_row_field_pattern_lists_every_dimension(schema):
     pattern = schema["classes"]["EvidenceRow"]["attributes"]["field"]["pattern"]
 
     assert set(pattern.removeprefix("^(").removesuffix(r")\Z").split("|")) == set(CLASSIFICATION_FIELDS)
-
-
-def test_the_reader_and_the_schema_share_one_pattern(schema):
-    """`fetched_at` is checked by the same regex on both sides, character for character.
-
-    Two copies of a timestamp pattern drift in ways nobody guesses: the reader used a
-    prefix of this one, which agreed with the schema on 3.10 and disagreed on 3.11,
-    where `fromisoformat` accepts a basic-format offset the schema always refused.
-    Pinning the strings equal is what makes "both sides refuse the same files" a fact
-    rather than an intention (#401 review).
-    """
-    slot = schema["classes"]["EvidenceFileEnvelope"]["attributes"]["fetched_at"]
-
-    assert slot["pattern"] == source_evidence._FETCHED_AT_PATTERN
 
 
 def test_no_claim_is_constructed_on_either_path():
