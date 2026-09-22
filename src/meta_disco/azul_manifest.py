@@ -93,9 +93,10 @@ ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", "file_ref")
 # What a file pointer in a submitter cell starts with.
 DRS_PREFIX = "drs://"
 
-# How an input was derived, written into every input envelope as ``input_source``
-# (#499) so a reader of ``anvil_files_metadata.json`` need not infer it from the other
-# fields. Three kinds: today's compact join (this module, ``record_from_compact_manifest_row``);
+# How an input was derived, written as ``input_source`` into every envelope
+# ``metadata_block`` builds (#499) so a reader of ``anvil_files_metadata.json`` need not
+# infer it from the other fields. Not every envelope: the HPRC builder writes its own
+# (``scripts/classify_hprc_files.py``) and carries no such field. Three kinds: today's compact join (this module, ``record_from_compact_manifest_row``);
 # the verbatim manifest read through ``snapshot_input.AzulVerbatim``; and a snapshot read
 # in place from BigQuery through ``snapshot_input.TdrDirect``. Nothing reads the field
 # yet — choosing a reader is #500's — so it is provenance, not a switch. Named here
@@ -477,10 +478,14 @@ def published_list(values: list[Any] | None) -> list[str] | None:
     array in TDR and in the verbatim manifest (``snapshot_input``). Same rule, so a
     record derived either way carries the same ``published`` block: an empty element is
     dropped, and an empty or absent list reads as ``None`` — no published value — rather
-    than as ``[]``, which ``records.build_published`` refuses.
+    than as ``[]``, which ``records.build_published`` refuses. A value that is neither
+    a list nor ``None`` is refused: a string would otherwise be split into its
+    characters, each a non-empty ``str`` that every later shape check accepts.
     """
-    if not values:
+    if values is None:
         return None
+    if not isinstance(values, list):
+        raise ValueError(f"a published value is a list of strings or null, not {type(values).__name__}: {values!r}")
     return [value for value in values if value] or None
 
 
@@ -726,15 +731,25 @@ def iter_verbatim_entities(path: Path, types: Iterable[str] | None = None) -> It
     if wanted is not None and not wanted:
         return
     gate = None if wanted is None else re.compile("|".join(re.escape(f'"{t}"') for t in sorted(wanted)))
+    for n, line in iter_verbatim_lines(path):
+        if gate is not None and gate.search(line) is None:
+            continue
+        entity_type, value = parse_verbatim_line(path, n, line)
+        if wanted is None or entity_type in wanted:
+            yield entity_type, value
+
+
+def iter_verbatim_lines(path: Path) -> Iterator[tuple[int, str]]:
+    """Every non-blank line of a verbatim manifest with its line number, unparsed.
+
+    What a line *is* — UTF-8, numbered from 1, a blank one carrying no entity and passed
+    over — decided once, so :func:`iter_verbatim_entities` and the listing scan in
+    ``snapshot_input.AzulVerbatim`` agree on line numbers in their messages.
+    """
     with path.open(encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            if gate is not None and gate.search(line) is None:
-                continue
-            entity_type, value = parse_verbatim_line(path, n, line)
-            if wanted is None or entity_type in wanted:
-                yield entity_type, value
+            if line.strip():
+                yield n, line
 
 
 def parse_verbatim_line(path: Path, n: int, line: str) -> tuple[str, dict[str, Any]]:

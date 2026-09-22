@@ -162,6 +162,14 @@ PUBLISHED_TABLES: dict[str, str] = {
 }
 
 
+def _declared_key(metadata: dict) -> RecordKey | None:
+    """The :data:`SOURCE_RECORD_KEYS` entry for the repository the envelope names, or
+    ``None`` where it names no declared one. The one lookup behind :func:`key_field`,
+    which tolerates ``None``, and :func:`record_key`, which refuses it."""
+    repository = metadata.get("repository")
+    return SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
+
+
 def key_field(metadata: dict) -> str | None:
     """The input-record field the envelope's repository declares as its record key, or
     ``None`` where the envelope names no declared repository (an ``.ndjson`` input, a
@@ -170,8 +178,7 @@ def key_field(metadata: dict) -> str | None:
     :data:`SOURCE_RECORD_KEYS`), so no diagnostic may hard-code one. Unlike
     :func:`record_key` this does not refuse — a report over a file with no usable
     envelope still wants to run, and labels its records as unidentified."""
-    repository = metadata.get("repository")
-    key = SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
+    key = _declared_key(metadata)
     return None if key is None else key.input_field
 
 
@@ -184,9 +191,9 @@ def record_key(metadata: dict, input_path: Path) -> RecordKey:
     ``None``: a reader that needs the key cannot do its job without one, and guessing
     a field is how a file gets a second row.
     """
-    repository = metadata.get("repository")
-    key = SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
-    if key is None:  # the same lookup as `key_field`, but a refusal
+    key = _declared_key(metadata)
+    if key is None:
+        repository = metadata.get("repository")
         raise ValueError(
             f"{input_path}: the input envelope names repository {repository!r}, which declares no "
             f"record key — the field that identifies a file uniquely, which a run needs to know "

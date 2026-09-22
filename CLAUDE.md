@@ -189,8 +189,9 @@ evidence}` entry — plus the controlled vocabulary:
     what the tuple exists to prevent a third time. `entry_id` is regenerated when the
     catalog is re-indexed and the other two are not, which is why a consumer joins on
     `file_id` — the schema's slot descriptions carry that, not the tuple. Since #499
-    `entry_id` is optional on the input and null on a record derived from a snapshot;
-    a diagnostic names a record by `file_id`, never by `entry_id`.
+    `entry_id` is optional on the input: absent from a record derived from a snapshot,
+    and null on that record's output row. A diagnostic names a record by the source's
+    record key (`pipeline.key_field`), never by `entry_id`.
   - **The input is a TDR snapshot's tables, however they arrived** (#499). The one
     canonical shape is `snapshot_input.SnapshotTables` — table names, one table's rows
     streamed, TDR's column names — with two readers behind it: `TdrDirect` (BigQuery in

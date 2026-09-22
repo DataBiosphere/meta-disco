@@ -291,3 +291,15 @@ class TestParityWithTheCompactPath:
         datasets = sorted(p.name.removesuffix(".compact.tsv") for p in REAL_MANIFESTS.glob("*.compact.tsv"))
         assert len(datasets) == 12
         assert _derived_records_agree_with_compact(datasets) == 708_088
+
+
+class TestPublishedColumnShape:
+    def test_a_scalar_published_value_is_refused_not_split_into_characters(self):
+        # A string would otherwise become a list of one-letter "values" that every
+        # later shape check accepts.
+        with pytest.raises(ValueError, match="a published value is a list of strings or null, not str"):
+            si.record_from_file_row(file_row(1, data_modality="whole genome"), DATASET_ROW)
+
+    def test_a_dataset_row_lacking_a_column_is_named_to_its_own_table(self):
+        with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):
+            si.record_from_file_row(file_row(1), {"dataset_id": "d"})

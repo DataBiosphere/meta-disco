@@ -384,9 +384,11 @@ class EvidenceTarget:
     ambiguity the join must still record rather than resolve, which is #402's, and
     this scope is what brings it down to something a person can look at.
 
-    Null is correct only where the key is unique across the whole target. Measured,
-    that is ``file_id``, ``entry_id`` and ``drs_uri`` — each present and unique on
-    every one of the 708,088 records. ``file_md5sum`` is *not*: it is non-unique on
+    Null is correct only where the key is unique across the whole target. Measured on
+    the compact-derived corpus, that is ``file_id``, ``entry_id`` and ``drs_uri`` — each
+    present and unique on every one of the 708,088 records. ``entry_id`` is Azul's
+    per-index id, and a corpus derived from a snapshot's tables (#499) carries it on no
+    record at all, so a target key of ``entry_id`` joins nothing there. ``file_md5sum`` is *not*: it is non-unique on
     1.72% of rows, 12,203 of them. Two thirds of those are collisions **inside** one
     dataset — 8,119 rows from 1,118 md5s — which a dataset scope would not separate
     either; the remaining 4,084 rows are 2,026 md5s registered in more than one

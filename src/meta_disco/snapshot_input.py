@@ -60,6 +60,7 @@ from . import tdr
 from .azul_manifest import (
     VERBATIM_FILE,
     iter_verbatim_entities,
+    iter_verbatim_lines,
     parse_verbatim_line,
     published_list,
     verbatim_line_type,
@@ -147,14 +148,11 @@ class AzulVerbatim:
         if self._tables is None:
             seen: dict[str, None] = {}
             held: dict[str, list[dict[str, Any]]] = {table: [] for table in self.held}
-            with self.path.open(encoding="utf-8") as f:
-                for n, line in enumerate(f, start=1):
-                    if not line.strip():
-                        continue
-                    entity_type = verbatim_line_type(self.path, n, line)
-                    seen.setdefault(entity_type, None)
-                    if entity_type in held:
-                        held[entity_type].append(self._strip(entity_type, parse_verbatim_line(self.path, n, line)[1]))
+            for n, line in iter_verbatim_lines(self.path):
+                entity_type = verbatim_line_type(self.path, n, line)
+                seen.setdefault(entity_type, None)
+                if entity_type in held:
+                    held[entity_type].append(self._strip(entity_type, parse_verbatim_line(self.path, n, line)[1]))
             self._tables = [t for t in seen if t not in AZUL_ADDED_TABLES]
             self._held_rows = held
         return self._tables
@@ -213,8 +211,13 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     ``published`` block as one derived from the compact join. A row lacking any column
     the record reads — the two published ones included, since a snapshot whose
     ``anvil_file`` lacks them is schema drift, not a snapshot that publishes nothing —
-    raises naming it; only ``file_path`` is optional.
+    raises naming the column and its table; only ``file_path`` is optional. A published
+    value that is not a list is refused too (:func:`azul_manifest.published_list`).
     """
+    try:
+        dataset_id, dataset_title = dataset["dataset_id"], dataset["title"]
+    except KeyError as exc:
+        raise ValueError(f"cannot map an {TABLE_DATASET} row: no {exc.args[0]!r} column") from None
     try:
         record = {
             "file_id": row["file_id"],
@@ -226,8 +229,8 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
             "reference_assembly": published_list(row["reference_assembly"]),
             "is_supplementary": row["is_supplementary"],
             "drs_uri": row["file_ref"],
-            "dataset_id": dataset["dataset_id"],
-            "dataset_title": dataset["title"],
+            "dataset_id": dataset_id,
+            "dataset_title": dataset_title,
         }
     except KeyError as exc:
         raise ValueError(f"cannot map an {VERBATIM_FILE} row to a record: no {exc.args[0]!r} column") from None

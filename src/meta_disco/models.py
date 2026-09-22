@@ -111,9 +111,11 @@ SOURCE_TYPES = frozenset(
 # one of these and writes the value in the target's space, which is what keeps corpus
 # knowledge in the importer and transform logic out of the join.
 #
-# Measured on the AnVIL corpus (708,088 records, `anvil_files_metadata.ndjson`):
-# `file_id`, `entry_id`, `drs_uri`, `file_md5sum` and `file_name` are each present on
-# every record, and the first three are unique on every record too. What separates
+# Measured on the compact-derived AnVIL corpus (708,088 records,
+# `anvil_files_metadata.ndjson`): `file_id`, `entry_id`, `drs_uri`, `file_md5sum` and
+# `file_name` are each present on every record, and the first three are unique on every
+# record too. `entry_id` is the exception a snapshot-derived corpus (#499) makes: it is
+# Azul's per-index id and no such record carries it. What separates
 # them is uniqueness: `file_md5sum` is non-unique on 1.72% of rows and `file_name` on
 # 69.4%, so a filename is usable only inside a dataset scope (2 collisions in 16,271
 # within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model). No
