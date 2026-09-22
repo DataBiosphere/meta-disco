@@ -4,20 +4,18 @@ against a fake client, and the layer importing without the client library.
 One test per acceptance criterion on the issue, plus the stream's row-count
 check and the probe script's report against the same fake. That the package
 and this module import without the extra is exercised by this file's own import
-lines: the dev environment carries no `google` package (CI syncs the same lock,
-without extras)."""
+lines where the venv carries no `google` package — CI syncs the lock without
+extras, so there the import lines are the check; a local venv holds the library
+after `make probe-tdr` until the next plain `uv sync`."""
 
 import sys
+import types
 from datetime import datetime, timezone
-from pathlib import Path
 
+import probe_tdr_snapshot as probe
 import pytest
 
 from meta_disco import tdr
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
-import probe_tdr_snapshot as probe
 
 SNAPSHOT = tdr.Snapshot(project="datarepo-ce3811eb", name="ANVIL_1000G_2019_Dev")
 
@@ -124,6 +122,8 @@ class TestIterRows:
             tdr.iter_rows(client, SNAPSHOT, "anvil_file` UNION ALL SELECT * FROM `x")  # at the call, not the first row
         with pytest.raises(ValueError, match="snapshot name"):
             tdr.count_rows(client, tdr.Snapshot(project="p", name="a.b"), "anvil_file")
+        with pytest.raises(ValueError, match="project name"):
+            tdr.count_rows(client, tdr.Snapshot(project="p`;", name="s"), "anvil_file")
         assert client.queries == []
 
 
@@ -135,6 +135,34 @@ class TestImportWithoutTheExtra:
         monkeypatch.setitem(sys.modules, "google.cloud", None)
         with pytest.raises(ImportError, match="uv sync --extra tdr"):
             tdr.default_client()
+
+
+class TestDefaultClient:
+    """The one function that carries the issue's promise: the client is built
+    bare, with no credential argument, so the environment's identity is the
+    only one there is. A recording `bigquery.Client` stands in for the library."""
+
+    @pytest.fixture
+    def client_calls(self, monkeypatch):
+        calls: list[dict] = []
+        bigquery = types.ModuleType("google.cloud.bigquery")
+        bigquery.Client = lambda **kwargs: calls.append(kwargs) or "a client"  # type: ignore[attr-defined]
+        cloud = types.ModuleType("google.cloud")
+        cloud.bigquery = bigquery  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "google", types.ModuleType("google"))
+        monkeypatch.setitem(sys.modules, "google.cloud", cloud)
+        monkeypatch.setitem(sys.modules, "google.cloud.bigquery", bigquery)
+        return calls
+
+    def test_the_client_is_built_with_only_a_project_never_a_credential(self, client_calls):
+        assert tdr.default_client() == "a client"
+        assert tdr.default_client("billing-p") == "a client"
+        assert client_calls == [{"project": None}, {"project": "billing-p"}]
+
+    def test_main_passes_the_billing_project_through(self, client_calls, monkeypatch):
+        monkeypatch.setattr(probe, "probe", lambda client, snapshot, table, log: 0)
+        assert probe.main(["--project", "datarepo-x", "--snapshot", "S", "--billing-project", "ws-p"]) == 0
+        assert client_calls == [{"project": "ws-p"}]
 
 
 class TestProbeScript:

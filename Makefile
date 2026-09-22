@@ -120,7 +120,8 @@ download:
 # each, stream one (TABLE; the script's default is anvil_file) and time it.
 # `--extra tdr` syncs the client library in for this run, so a plain `uv sync`
 # in between cannot strand the target. BILLING_PROJECT is for a laptop whose
-# ADC has no default project; inside Terra it is the workspace's own. Identity:
+# ADC has no default project; inside Terra the environment's own is expected to
+# be the workspace project (the live probe on #478 confirms). Identity:
 # see meta_disco.tdr.
 probe-tdr:
 	uv run --extra tdr python scripts/probe_tdr_snapshot.py --project $(PROJECT) --snapshot $(SNAPSHOT) $(if $(TABLE),--table $(TABLE)) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))

@@ -276,7 +276,7 @@ these, and flag any that overclaim.
 
 ## Environment
 
-- Classification (root): Python 3.10+, `pyproject.toml`; runtime deps `pyyaml`, `requests`; dev `pytest`, `ruff`
+- Classification (root): Python 3.10+, `pyproject.toml`; runtime deps `pyyaml`, `requests`, `pydantic`; dev `pytest`, `ruff`, `pyright`
 - The `tdr` extra (`uv sync --extra tdr`) adds `google-cloud-bigquery` for reading a TDR
   snapshot in place (`meta_disco.tdr`, #498); the package imports and `make test` runs
   without it. **Identity is the environment's, never meta-disco's**: the module docstring

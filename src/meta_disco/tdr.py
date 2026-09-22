@@ -78,7 +78,7 @@ class Snapshot:
         return f"{self.project}.{self.name}"
 
     def table_ref(self, table: str) -> str:
-        """The backtick-quoted table reference for SQL, ``\\`project.snapshot.table\\```.
+        """The table reference for SQL: ``project.snapshot.table``, wrapped in backticks.
         The one place a name enters query text: each of the three must match
         :data:`_IDENTIFIER` in full, or is refused with ``ValueError``; only then is
         it wrapped in backticks."""
@@ -145,9 +145,10 @@ def default_client(billing_project: str | None = None) -> BigQueryClient:
     Default Credentials (the module docstring says how); no credential is taken.
 
     ``billing_project`` is where query jobs run and are billed, not who runs
-    them; left ``None``, the client takes it from the environment (inside Terra,
-    the workspace's own Google project). Needs the ``tdr`` extra — this is the
-    only import of the client library.
+    them; left ``None``, the client takes it from the environment — expected to
+    be the workspace's own project inside Terra, which the live probe on #478
+    confirms. Needs the ``tdr`` extra — this is the only import of the client
+    library.
     """
     try:
         from google.cloud import bigquery  # pyright: ignore[reportAttributeAccessIssue]

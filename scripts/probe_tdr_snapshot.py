@@ -78,7 +78,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--billing-project",
         default=None,
-        help="where query jobs run and are billed; default: the environment's own (inside Terra, the workspace project)",
+        help="where query jobs run and are billed; default: the environment's own, expected to be the workspace project inside Terra",
     )
     return parser.parse_args(argv)
 
