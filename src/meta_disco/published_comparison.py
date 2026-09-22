@@ -1,17 +1,19 @@
 """Compare a run's inferred values against the ones the repository publishes (#424).
 
 A repository publishes values for some of the dimensions this project infers — AnVIL
-serves `data_modality` and `reference_assembly` as facets on its file index. Those
-values are not a second *source* to reconcile with: this project has exactly one
-source, inference, and one source has nothing to reconcile with. They are the
-**published output** — the answer the repository's users see today, which a run's own
-answer can be compared against and a recommendation made about.
+serves `data_modality` and `reference_assembly` as facets on its file index. They are
+the **published output** — the answer the repository's users see today, which a run's
+own answer can be compared against and a recommendation made about. Since #497 they
+are also an input (claims contract 4.1 kind 2): the published importer writes them as
+evidence for reconcile (#432). No run reads that evidence yet, so this report still
+compares against the `published` block the pipeline carried into the output from the
+input snapshot (`records.build_published`); when reconcile builds that block from the
+evidence, this reads it there (7.4).
 
 So nothing here resolves anything. Inference resolves by tier exactly as it does
 without this module, and every file's `value` is what inference concluded. This reads
-the `published` block the pipeline carried into the output (`records.build_published`)
-and reports, per file and per dimension, what each side has and what the repository
-should do about the difference.
+the `published` block and reports, per file and per dimension, what each side has and
+what the repository should do about the difference.
 
 Deliberately repository-neutral. AnVIL is the only publisher today, but the report is
 addressed to whichever repository's data team reads it, so no name appears in the

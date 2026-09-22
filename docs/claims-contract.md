@@ -397,9 +397,10 @@ depends on that, and a second repository needs no change to these assertions.
 7.12 **Every repository has exactly one published source**, and exactly one importer reads it. Which
      table it is, is declared once (`pipeline.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
      its TDR snapshot) and its evidence carries `published_value`, a kind of its own so a reader of a
-     conflict can tell the repository's value from a submitter's (kind 3). A current evidence file that
-     carries the label from any other table or from a repository other than the one its rows are
-     about, or a second one for a dataset of one catalog version, is refused before a run starts
+     conflict can tell the repository's value from a submitter's (kind 3). The declaration holds in both
+     directions: a current evidence file that carries the label from any other table or from a
+     repository other than the one its rows are about, one from the declared table under any other
+     label, or a second one for a dataset of one catalog version, is refused before a run starts
      (`source_evidence.require_one_published_source`). A repository whose published source is not yet
      declared — HPRC today, see "What is not true yet" — can have no file claim one until it is. The
      compact Azul manifest is

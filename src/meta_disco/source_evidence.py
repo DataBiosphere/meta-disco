@@ -950,12 +950,15 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
     the evidence is about (``EvidenceTarget.system``) to its published table — or a
     test's stand-in; taken as a parameter so this module stays free of the pipeline
     and of any one repository's constants. Over the
-    current files a run found (:func:`report_evidence_files`), a ``published_value``
-    file is refused with ``ValueError`` when its source repository is not the one its
-    rows are about (a published source is that repository's own); when its source table
-    is not the one declared for that repository, undeclared included; and when a second
-    current one exists for the same target — repository, catalog version and dataset —
-    naming both. The version is part of the key because *current* is per version
+    current files a run found (:func:`report_evidence_files`), the declaration is held
+    in both directions, with ``ValueError``. A file from a repository's own declared
+    table that carries any label but ``published_value`` is refused, the mislabelling
+    ``anvil_evidence._check_kind`` refuses in a map. A ``published_value`` file is
+    refused when its source repository is not the one its rows are about (a published
+    source is that repository's own); when its source table is not the one declared for
+    that repository, undeclared included; and when a second current one exists for the
+    same target — repository, catalog version and dataset — naming both. The version is
+    part of the key because *current* is per version
     (:func:`discover`): an anvil15 and an anvil16 generation are both current, and
     which describes the run's catalog is not decided here (module docstring, currency).
     A file whose envelope could not be read is already named in the report.
@@ -966,10 +969,18 @@ def require_one_published_source(statuses: list[EvidenceFileStatus], published_t
     current: dict[EvidenceTarget, Path] = {}
     for status in statuses:
         envelope = status.envelope
-        if envelope is None or envelope.source_type != SOURCE_PUBLISHED_VALUE:
+        if envelope is None:
             continue
         target = envelope.target
         repository = target.system
+        if envelope.source_type != SOURCE_PUBLISHED_VALUE:
+            if envelope.source.repository == repository and envelope.source.table == published_tables.get(repository):
+                raise ValueError(
+                    f"{status.path}: carries {envelope.source_type} from {repository}'s published table "
+                    f"{envelope.source.table!r}, which carries {SOURCE_PUBLISHED_VALUE} and nothing else "
+                    "(contract 7.12)"
+                )
+            continue
         if envelope.source.repository != repository:
             raise ValueError(
                 f"{status.path}: carries {SOURCE_PUBLISHED_VALUE} from repository {envelope.source.repository!r} "

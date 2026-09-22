@@ -115,13 +115,14 @@ def published_envelope(
     table: str = VERBATIM_FILE,
     version: str = "anvil15",
     repository: str = REPOSITORY,
+    source_type: str = SOURCE_PUBLISHED_VALUE,
 ) -> EvidenceFileEnvelope:
     """The envelope the published map writes (#497): AnVIL's own ``anvil_file`` table,
     labelled ``published_value``, keyed by DRS URI on both sides and versioned by the
     catalog, about that same dataset's files."""
     return evidence_file_envelope(
         source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=API_URL),
-        source_type=SOURCE_PUBLISHED_VALUE,
+        source_type=source_type,
         source_version=version,
         source_key=JOIN_KEY_DRS_URI,
         target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=version),
@@ -626,7 +627,7 @@ class TestAWriterCannotProduceWhatTheReaderRefuses:
 
     @pytest.mark.parametrize("bad", [SOURCE_CONTENT_READ, "hearsay", None, ""])
     def test_an_envelope_with_a_source_type_an_importer_cannot_write_is_refused_when_built(self, bad):
-        """An importer reads something we do not own, so the kind is one of two.
+        """An importer reads something we do not own, so the kind is one of ``IMPORTER_SOURCE_TYPES``.
 
         `content_read` is the reachable mistake and the reason this is checked rather
         than assumed: it is a real `source_type`, and it is inference's own — an
@@ -1236,6 +1237,14 @@ class TestOnePublishedSourcePerRepository:
         table is even consulted."""
         self._published(tmp_path, "a/anvil_file.ndjson", repository="HPRC Data Explorer")
         with pytest.raises(ValueError, match="from repository 'HPRC Data Explorer' about anvil's files"):
+            require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+    def test_the_declared_table_under_any_other_label_is_refused(self, tmp_path):
+        """The other direction: AnVIL's own `anvil_file` rows labelled `repository_metadata`
+        would reach reconcile as a submitter's opinion. Refused as `_check_kind` refuses
+        the same mislabelling in a map."""
+        self._published(tmp_path, "a/anvil_file.ndjson", source_type=SOURCE_REPOSITORY_METADATA)
+        with pytest.raises(ValueError, match="carries repository_metadata from anvil's published table 'anvil_file'"):
             require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
 
     def test_a_repository_whose_published_source_is_undeclared_can_have_no_file_claim_it(self, tmp_path):
