@@ -480,12 +480,16 @@ def published_list(values: list[Any] | None) -> list[str] | None:
     dropped, and an empty or absent list reads as ``None`` — no published value — rather
     than as ``[]``, which ``records.build_published`` refuses. A value that is neither
     a list nor ``None`` is refused: a string would otherwise be split into its
-    characters, each a non-empty ``str`` that every later shape check accepts.
+    characters, each a non-empty ``str`` that every later shape check accepts. So is
+    a list holding anything but strings: only an empty *string* is dropped, since a
+    ``0`` or a ``None`` element is schema drift and would otherwise read as no value.
     """
     if values is None:
         return None
     if not isinstance(values, list):
         raise ValueError(f"a published value is a list of strings or null, not {type(values).__name__}: {values!r}")
+    if not all(isinstance(value, str) for value in values):
+        raise ValueError(f"a published value holds a non-string element: {values!r}")
     return [value for value in values if value] or None
 
 

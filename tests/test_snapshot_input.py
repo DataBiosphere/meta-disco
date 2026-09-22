@@ -228,14 +228,20 @@ class TestVerbatimAdapter:
 
 
 class TestDerivationRefusals:
-    @pytest.mark.parametrize("dataset_rows", [[], [DATASET_ROW, DATASET_ROW]], ids=["none", "two"])
-    def test_other_than_one_dataset_row_is_refused_before_any_record(self, dataset_rows):
+    @pytest.mark.parametrize(
+        ("dataset_rows", "message"),
+        [([], "holds no row"), ([DATASET_ROW] * 1000, "holds more than one row")],
+        ids=["none", "many"],
+    )
+    def test_other_than_one_dataset_row_is_refused_before_any_record(self, dataset_rows, message):
         client = FakeClient({"anvil_dataset": dataset_rows, "anvil_file": FILE_ROWS})
-        with pytest.raises(
-            ValueError, match=f"anvil_dataset holds {len(dataset_rows)} rows; a snapshot is one dataset"
-        ):
+        with pytest.raises(ValueError, match=f"anvil_dataset {message}; a snapshot is one dataset"):
             si.derive_records(si.TdrDirect(client, SNAPSHOT))
         assert not any(q.startswith("SELECT * FROM") and q.endswith("anvil_file`") for q in client.queries)
+        # The dataset table is streamed, not listed: a drifted snapshot with a large one
+        # is refused after its second row, the rest never pulled.
+        streamed = [r for q, r in zip(client.queries, client.results, strict=True) if q.startswith("SELECT * FROM")]
+        assert [r.pulled for r in streamed] == [min(len(dataset_rows), 2)]
 
     @pytest.mark.parametrize("column", ["file_ref", "data_modality"])
     def test_a_row_lacking_a_column_the_record_needs_is_refused_naming_it(self, column):
@@ -299,6 +305,13 @@ class TestPublishedColumnShape:
         # later shape check accepts.
         with pytest.raises(ValueError, match="a published value is a list of strings or null, not str"):
             si.record_from_file_row(file_row(1, data_modality="whole genome"), DATASET_ROW)
+
+    @pytest.mark.parametrize("value", [[0], [None], ["whole genome", 1]], ids=["zero", "null", "mixed"])
+    def test_a_non_string_element_is_refused_not_dropped(self, value):
+        # `[0]` would otherwise be filtered to nothing and read as "publishes no value";
+        # only an empty string is dropped.
+        with pytest.raises(ValueError, match="a published value holds a non-string element"):
+            si.record_from_file_row(file_row(1, data_modality=value), DATASET_ROW)
 
     def test_a_dataset_row_lacking_a_column_is_named_to_its_own_table(self):
         with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):

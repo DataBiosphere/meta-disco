@@ -180,18 +180,23 @@ def derive_records(tables: SnapshotTables) -> Iterator[dict[str, Any]]:
     Refuses before yielding anything — the checks run at the call, and only the file
     stream is deferred — when a required table is not listed, naming it, or when
     ``anvil_dataset`` holds other than exactly one row: a snapshot is one dataset
-    (#434's envelope shape rests on it), so two rows is that assumption breaking and
-    picking one would be a guess. ``anvil_file`` is then streamed a row at a time
+    (#434's envelope shape rests on it), so a second row is that assumption breaking
+    and picking one would be a guess. The dataset table is read as a stream and only
+    its first two rows are ever taken, so a drifted snapshot with a large one is
+    refused without being held. ``anvil_file`` is then streamed a row at a time
     through :func:`record_from_file_row`.
     """
     present = tables.tables()
     missing = [table for table in REQUIRED_TABLES if table not in present]
     if missing:
         raise ValueError(f"snapshot has no {', '.join(missing)} table; it lists {present}")
-    datasets = list(tables.rows(TABLE_DATASET))
-    if len(datasets) != 1:
-        raise ValueError(f"{TABLE_DATASET} holds {len(datasets)} rows; a snapshot is one dataset")
-    return (record_from_file_row(row, datasets[0]) for row in tables.rows(VERBATIM_FILE))
+    datasets = tables.rows(TABLE_DATASET)
+    dataset = next(datasets, None)
+    if dataset is None:
+        raise ValueError(f"{TABLE_DATASET} holds no row; a snapshot is one dataset")
+    if next(datasets, None) is not None:
+        raise ValueError(f"{TABLE_DATASET} holds more than one row; a snapshot is one dataset")
+    return (record_from_file_row(row, dataset) for row in tables.rows(VERBATIM_FILE))
 
 
 def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[str, Any]:
