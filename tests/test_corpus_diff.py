@@ -2,9 +2,6 @@
 
 import json
 from collections import Counter
-from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import TypedDict
 
 import pytest
 
@@ -20,6 +17,7 @@ from meta_disco.corpus_diff import (
 )
 from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, build_field_entry
 from tests.metadata_fixtures import valid_record
+from tests.run_fixtures import output_record, write_run
 
 _DIMS = CLASSIFICATION_FIELDS
 
@@ -93,47 +91,13 @@ def test_read_snapshot_tolerates_a_non_numeric_total(tmp_path):
     assert read_snapshot(path)[0].total_files is None
 
 
-def _write_run(run_dir: Path, records: Sequence[Mapping[str, object]], fname="bam_classifications.json"):
-    """Write a run directory holding one classification output file.
-
-    ``Sequence[Mapping[...]]`` rather than ``list[dict]``: this only serializes,
-    and both `list` and `dict` are invariant, so a caller's `list[_RunRecord]`
-    would not be assignable however correct it is.
-    """
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / fname).write_text(json.dumps({"metadata": {}, "classifications": records}))
-    return run_dir
-
-
-class _RunRecord(TypedDict):
-    """The four fields of an output record that `run_labels` reads.
-
-    ``dataset_title`` is nullable because the HPRC source publishes none, and
-    `corpus_diff` keeps such a record rather than dropping that whole corpus —
-    the case ``test_run_labels_keeps_records_whose_dataset_title_is_absent``
-    pins. ``classifications`` stays ``dict[str, dict]`` because its keys are
-    `CLASSIFICATION_FIELDS`, read here through a loop rather than by name.
-    """
-
-    file_name: str
-    md5sum: str
-    dataset_title: str | None
-    classifications: dict[str, dict]
-
-
-def _run_record(name, md5, dataset="DS1", **labels) -> _RunRecord:
-    """A classification output record; each dim kwarg is a value, else not_classified.
-
-    Entries come from ``models.build_field_entry`` — the single place that assembles
-    the ``{value, status, evidence}`` shape — so the fixture follows the output
-    shape rather than restating it.
-    """
-    classifications = {dim: build_field_entry(labels.get(dim)) for dim in _DIMS}
-    return {"file_name": name, "md5sum": md5, "dataset_title": dataset, "classifications": classifications}
+def _run_record(name, md5, dataset="DS1", **labels) -> dict:
+    """An output row of this file's default dataset; each dim kwarg is a value, else not_classified."""
+    return output_record(name, md5, dataset, **labels)
 
 
 def test_run_labels_reads_identity_and_labels(tmp_path):
-    run = _write_run(tmp_path / "run", [_run_record("a.bam", "m1", data_modality="genomic")])
+    run = write_run(tmp_path / "run", [_run_record("a.bam", "m1", data_modality="genomic")])
     labels = run_labels(run)
     assert list(labels) == [("DS1", "a.bam", "m1")]
     (label_tuple,) = labels[("DS1", "a.bam", "m1")]
@@ -143,7 +107,7 @@ def test_run_labels_reads_identity_and_labels(tmp_path):
 
 def test_run_labels_skips_a_missing_output_file(tmp_path):
     """A run that did not write every CLASSIFICATION_FILES entry still reads."""
-    run = _write_run(tmp_path / "run", [_run_record("a.bam", "m1")])
+    run = write_run(tmp_path / "run", [_run_record("a.bam", "m1")])
     assert len(run_labels(run)) == 1
 
 
@@ -160,8 +124,8 @@ def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):
     """
     record = _run_record("a.bam", "m1", data_modality="genomic")
     record["dataset_title"] = None
-    old = _write_run(tmp_path / "old", [dict(record)])
-    new = _write_run(tmp_path / "new", [dict(record)])
+    old = write_run(tmp_path / "old", [dict(record)])
+    new = write_run(tmp_path / "new", [dict(record)])
     assert set(run_labels(old)) == set(run_labels(new)) == {("", "a.bam", "m1")}
     diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
     assert (diff.classified_lost, diff.classified_gained) == (0, 0)
@@ -169,8 +133,8 @@ def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):
 
 
 def test_diff_attributes_a_label_change_to_the_classifier(tmp_path):
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1")])
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
+    old = write_run(tmp_path / "old", [_run_record("a.bam", "m1")])
+    new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
     diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
     assert diff.changed == Counter({("not_classified", "genomic"): 1})
     assert (diff.classified_lost, diff.classified_gained) == (0, 0)
@@ -179,11 +143,11 @@ def test_diff_attributes_a_label_change_to_the_classifier(tmp_path):
 
 
 def test_diff_attributes_a_dropped_file_to_corpus_loss(tmp_path):
-    old = _write_run(
+    old = write_run(
         tmp_path / "old",
         [_run_record("a.bam", "m1", data_modality="genomic"), _run_record("gone.bam", "m2", data_modality="genomic")],
     )
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
+    new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
     diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
     assert diff.classified_lost == 1
     assert (diff.classified_gained, diff.classified_net_changed) == (0, 0)
@@ -192,8 +156,8 @@ def test_diff_attributes_a_dropped_file_to_corpus_loss(tmp_path):
 
 
 def test_diff_attributes_a_new_file_to_corpus_gain(tmp_path):
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1", data_modality="genomic")])
-    new = _write_run(
+    old = write_run(tmp_path / "old", [_run_record("a.bam", "m1", data_modality="genomic")])
+    new = write_run(
         tmp_path / "new",
         [_run_record("a.bam", "m1", data_modality="genomic"), _run_record("fresh.bam", "m9", data_modality="genomic")],
     )
@@ -208,15 +172,15 @@ def test_diff_reports_an_md5_change_as_loss_plus_gain(tmp_path):
     Which run's corpus a file belongs to is then decided by content, and the
     snapshot parity table is what says how many such files there were.
     """
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1", data_modality="genomic")])
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m2", data_modality="genomic")])
+    old = write_run(tmp_path / "old", [_run_record("a.bam", "m1", data_modality="genomic")])
+    new = write_run(tmp_path / "new", [_run_record("a.bam", "m2", data_modality="genomic")])
     diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
     assert (diff.classified_lost, diff.classified_gained) == (1, 1)
     assert not diff.changed
 
 
 def test_classified_by_dataset_counts_values_per_dataset(tmp_path):
-    run = _write_run(
+    run = write_run(
         tmp_path / "run",
         [
             _run_record("a.bam", "m1", dataset="A", data_modality="genomic"),
@@ -235,7 +199,7 @@ def test_classified_by_dataset_excludes_not_applicable(tmp_path):
     """not_applicable is a status, not a value, so it must not count as coverage."""
     record = _run_record("a.gfa", "m1")
     record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
-    run = _write_run(tmp_path / "run", [record])
+    run = write_run(tmp_path / "run", [record])
     counts = classified_by_dataset(run_labels(run))
     assert counts["DS1"]["platform"] == 0
 
@@ -247,7 +211,7 @@ def test_classified_by_dataset_keeps_a_dataset_with_nothing_classified(tmp_path)
     most needs to show. Asserted on the keys, since the returned mapping is a plain
     dict and would otherwise raise rather than auto-create.
     """
-    run = _write_run(
+    run = write_run(
         tmp_path / "run",
         [
             _run_record("a.bam", "m1", dataset="EMPTY"),
@@ -261,8 +225,8 @@ def test_classified_by_dataset_keeps_a_dataset_with_nothing_classified(tmp_path)
 
 def test_dataset_section_lists_a_dataset_with_nothing_classified(tmp_path):
     """The rendered table keeps that dataset's row rather than dropping it."""
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1", dataset="QUIET")])
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m1", dataset="QUIET")])
+    old = write_run(tmp_path / "old", [_run_record("a.bam", "m1", dataset="QUIET")])
+    new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", dataset="QUIET")])
     rendered = "\n".join(render_dataset_section(run_labels(old), run_labels(new)))
     assert "QUIET" in rendered
 
@@ -284,11 +248,11 @@ def test_sort_key_tolerates_a_none_label():
 
 def test_diff_pairs_repeated_identities_as_multisets(tmp_path):
     """Two copies of one identity, one of which changed label, yields one change."""
-    old = _write_run(
+    old = write_run(
         tmp_path / "old",
         [_run_record("dup.bam", "m1"), _run_record("dup.bam", "m1")],
     )
-    new = _write_run(
+    new = write_run(
         tmp_path / "new",
         [_run_record("dup.bam", "m1"), _run_record("dup.bam", "m1", data_modality="genomic")],
     )
@@ -304,8 +268,8 @@ def test_diff_counts_an_extra_copy_of_an_identity_as_a_gain(tmp_path):
     The extra copy arrived in the corpus, so it belongs in gained rather than
     being dropped from the attribution.
     """
-    old = _write_run(tmp_path / "old", [_run_record("dup.bam", "m1", data_modality="genomic")])
-    new = _write_run(
+    old = write_run(tmp_path / "old", [_run_record("dup.bam", "m1", data_modality="genomic")])
+    new = write_run(
         tmp_path / "new",
         [_run_record("dup.bam", "m1", data_modality="genomic"), _run_record("dup.bam", "m1", data_type="alignment")],
     )
@@ -317,7 +281,7 @@ def test_diff_counts_an_extra_copy_of_an_identity_as_a_gain(tmp_path):
 
 def test_attribution_accounts_for_the_whole_delta(tmp_path):
     """new - old == gained - lost + net(changed), over a mixed scenario."""
-    old = _write_run(
+    old = write_run(
         tmp_path / "old",
         [
             _run_record("stable.bam", "m1", data_modality="genomic"),
@@ -326,7 +290,7 @@ def test_attribution_accounts_for_the_whole_delta(tmp_path):
             _run_record("declassified.bam", "m4", data_modality="genomic"),
         ],
     )
-    new = _write_run(
+    new = write_run(
         tmp_path / "new",
         [
             _run_record("stable.bam", "m1", data_modality="genomic"),
@@ -345,7 +309,7 @@ def test_not_applicable_is_not_counted_as_classified(tmp_path):
     """not_applicable is a status label, so it must not inflate the classified count."""
     record = _run_record("a.gfa", "m1")
     record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
-    run = _write_run(tmp_path / "run", [record])
+    run = write_run(tmp_path / "run", [record])
     labels = run_labels(run)
     diff = diff_runs(labels, labels)["platform"]
     assert diff.classified_old == diff.classified_new == 0
@@ -370,8 +334,8 @@ def test_read_snapshot_tolerates_an_unlabelled_snapshot(tmp_path):
 
 
 def test_render_report_covers_every_section(tmp_path):
-    old = _write_run(tmp_path / "old", [_run_record("a.bam", "m1"), _run_record("g.svs", "m2", dataset="GONE")])
-    new = _write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
+    old = write_run(tmp_path / "old", [_run_record("a.bam", "m1"), _run_record("g.svs", "m2", dataset="GONE")])
+    new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
     old_snap = tmp_path / "old.json"
     new_snap = tmp_path / "new.json"
     old_snap.write_text(json.dumps({"metadata": {"total_files": 2}, "files": []}))
@@ -399,7 +363,7 @@ def test_render_report_covers_every_section(tmp_path):
 
 
 def test_render_report_says_so_when_no_label_changed(tmp_path):
-    run = _write_run(tmp_path / "run", [_run_record("a.bam", "m1", data_modality="genomic")])
+    run = write_run(tmp_path / "run", [_run_record("a.bam", "m1", data_modality="genomic")])
     snap = tmp_path / "snap.json"
     snap.write_text(json.dumps({"metadata": {"catalog": "anvil15", "total_files": 1}, "files": []}))
     report = render_report(

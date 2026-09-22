@@ -30,7 +30,12 @@ class _Record(TypedDict):
 
 
 def _rec(md5="m", name="f.bam", **dims) -> _Record:
-    """Build a record; each dim kwarg is a (value, status) tuple, default not_classified."""
+    """Build a record; each dim kwarg is a (value, status) tuple, default not_classified.
+
+    Not `run_fixtures.output_record` on purpose: that builds every entry through
+    `build_field_entry`, which refuses an incoherent value/status pair, and the linter
+    under test must read exactly such rows (a value beside a not_classified status).
+    """
     classifications: dict[str, dict] = {}
     for dim in _DIMS:
         value, status = dims.get(dim, (None, "not_classified"))

@@ -7,7 +7,6 @@ over a run directory (``published.gather``).
 """
 
 import json
-import pathlib
 from typing import TypedDict
 
 import pytest
@@ -31,6 +30,7 @@ from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, bu
 from tests.metadata_fixtures import valid_record
 from tests.pipeline_fixtures import make_config
 from tests.producer_sweep import STANDALONE_PRODUCERS, run_index_producer, run_producer
+from tests.run_fixtures import write_run
 
 
 def _entry(value=None, status=None):
@@ -58,6 +58,11 @@ class _Record(TypedDict):
 
 
 def _record(name, *, modality=None, assembly=None, published=None, dataset="AnVIL_IGVF_Mouse_R1") -> _Record:
+    """An output row as this report reads it: two dimensions and a `published` block.
+
+    Not `run_fixtures.output_record` on purpose — that writes all five dimensions and no
+    `published`, and this report reads exactly the two it compares (#424).
+    """
     return {
         "file_name": name,
         "md5sum": name,
@@ -66,12 +71,6 @@ def _record(name, *, modality=None, assembly=None, published=None, dataset="AnVI
         "classifications": {"data_modality": _entry(modality), "reference_assembly": _entry(assembly)},
         "published": published,
     }
-
-
-def _write_run(run_dir, records):
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "bam_classifications.json").write_text(json.dumps({"metadata": {}, "classifications": records}))
-    return run_dir
 
 
 class TestBuildPublished:
@@ -185,7 +184,7 @@ class TestRecommendation:
 
 class TestGather:
     def test_it_counts_every_file_and_rows_only_the_published_ones(self, tmp_path):
-        run = _write_run(
+        run = write_run(
             tmp_path / "run",
             [
                 _record("a.bam", modality="genomic"),
@@ -220,7 +219,7 @@ class TestGather:
         published = build_published(
             {"data_modality": None, "reference_assembly": ["GRCh38 + Gencode40"]}, "anvil/anvil15"
         )
-        run = _write_run(
+        run = write_run(
             tmp_path / "run",
             [
                 _record(f"e{i}.bam", assembly="GRCh38", published=published, dataset="AnVIL_ENCORE_RS293")
@@ -239,7 +238,7 @@ class TestGather:
             },
             "anvil/anvil15",
         )
-        run = _write_run(
+        run = write_run(
             tmp_path / "run", [_record("x.h5ad", modality="transcriptomic.single_cell", published=published)]
         )
         report = gather(run)
@@ -254,9 +253,7 @@ class TestGather:
 class TestRender:
     def test_the_tsv_has_one_row_per_published_file_and_dimension(self, tmp_path):
         published = build_published({"data_modality": ["GRCm39"], "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-        run = _write_run(
-            tmp_path / "run", [_record("m.bam", published=published), _record("n.bam", modality="genomic")]
-        )
+        run = write_run(tmp_path / "run", [_record("m.bam", published=published), _record("n.bam", modality="genomic")])
         lines = render_tsv(gather(run)).strip().split("\n")
         assert lines[0].split("\t") == [
             "entry_id",
@@ -294,7 +291,7 @@ class TestRender:
 
     def test_the_report_names_the_vocabulary_gap(self, tmp_path):
         published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-        run = _write_run(tmp_path / "run", [_record("m.bam", published=published)])
+        run = write_run(tmp_path / "run", [_record("m.bam", published=published)])
         text = render_report(gather(run))
         assert "`GRCm39`" in text
         assert "1 of 1 distinct published values have no term in the schema vocabulary" in text
@@ -400,7 +397,7 @@ def test_two_files_sharing_a_name_in_one_dataset_are_counted_twice(tmp_path):
         rec = _record("same.bam", published=published)
         rec["entry_id"], rec["md5sum"] = entry, entry
         twins.append(rec)
-    report = gather(_write_run(tmp_path / "run", twins))
+    report = gather(write_run(tmp_path / "run", twins))
 
     assert report.files == 2
     assert report.duplicate_records == 0
@@ -463,7 +460,7 @@ def test_the_dataset_table_omits_datasets_with_nothing_published(tmp_path):
     presentation change altering which rows a report contains.
     """
     published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-    run = _write_run(
+    run = write_run(
         tmp_path / "run",
         [
             _record("published.bam", dataset="HAS_PUBLISHED", published=published),
@@ -550,12 +547,12 @@ def test_the_review_preamble_follows_the_vocabulary_table(tmp_path):
     above it the day #414 lands a term.
     """
     unknown = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
-    run = _write_run(tmp_path / "unknown", [_record("m.bam", assembly="GRCh38", published=unknown)])
+    run = write_run(tmp_path / "unknown", [_record("m.bam", assembly="GRCh38", published=unknown)])
     assert "None of the published values above is a term the schema knows" in render_report(gather(run))
 
     # `GRCh38` *is* a reference_assembly_enum term, so the report must not say otherwise.
     known = build_published({"data_modality": None, "reference_assembly": ["GRCh38"]}, "anvil/anvil15")
-    run = _write_run(tmp_path / "known", [_record("k.bam", assembly="GRCh38", published=known)])
+    run = write_run(tmp_path / "known", [_record("k.bam", assembly="GRCh38", published=known)])
     text = render_report(gather(run))
     assert "None of the published values above is a term the schema knows" not in text
     assert "1 of 1 published values *are* terms the schema knows" in text
@@ -572,7 +569,7 @@ def test_a_tab_in_a_published_value_does_not_break_the_tsv(tmp_path):
     import io
 
     published = build_published({"data_modality": ["has\ttab"], "reference_assembly": None}, "anvil/anvil15")
-    run = _write_run(tmp_path / "run", [_record("t.bam", published=published)])
+    run = write_run(tmp_path / "run", [_record("t.bam", published=published)])
     text = render_tsv(gather(run))
 
     rows = list(csv.reader(io.StringIO(text), delimiter="\t"))
@@ -744,7 +741,7 @@ def test_two_entry_ids_whose_string_forms_coincide_are_distinct_files(tmp_path):
         rec = _record("same.bam", published=published)
         rec["entry_id"], rec["md5sum"] = entry, "shared-md5"
         twins.append(rec)
-    report = gather(_write_run(tmp_path / "run", twins))
+    report = gather(write_run(tmp_path / "run", twins))
 
     assert report.files == 2, "an int and a string entry_id are different files"
     assert report.duplicate_records == 0
@@ -756,6 +753,6 @@ def test_an_unhashable_entry_id_does_not_raise(tmp_path):
     published = build_published({"data_modality": None, "reference_assembly": ["GRCm39"]}, "anvil/anvil15")
     rec = _record("drifted.bam", published=published)
     rec["entry_id"] = ["a", "list"]
-    report = gather(_write_run(tmp_path / "run", [rec]))
+    report = gather(write_run(tmp_path / "run", [rec]))
     assert report.files == 1
     assert report.rows[0].entry_id == "['a', 'list']"

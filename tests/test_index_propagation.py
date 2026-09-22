@@ -13,7 +13,6 @@ from classify_index_files import (
 )
 
 from meta_disco.models import (
-    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
     NOT_APPLICABLE,
@@ -26,6 +25,7 @@ from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from meta_disco.producers import INDEX_TO_PARENT
 from tests.metadata_fixtures import write_metadata as _write_metadata
 from tests.producer_sweep import run_index_producer
+from tests.run_fixtures import output_record
 
 ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]
 HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
@@ -94,10 +94,11 @@ def _classified_record(
 ) -> dict:
     """A parent classification whose ``reference_assembly`` is ``assembly``.
 
-    Entries come from :func:`models.build_field_entry`, the single place that
-    assembles the ``{value, status, evidence}`` shape, so the fixture follows the
-    output shape rather than restating it — and the dimensions come from
-    ``CLASSIFICATION_FIELDS`` rather than a fourth hand-written copy of them.
+    The row and its entries come from :func:`run_fixtures.output_record`, which builds
+    every entry through :func:`models.build_field_entry` — the single place that
+    assembles the ``{value, status, evidence}`` shape — so the fixture follows the
+    output shape rather than restating it. What this adds is the parent's identity
+    and the defaults in ``_PARENT_VALUES``.
 
     Any other dimension may be overridden by keyword: a real value, a sentinel
     (``NOT_CLASSIFIED``, ``NOT_APPLICABLE`` — the builder turns it into a status with a
@@ -108,20 +109,12 @@ def _classified_record(
     ``file_id`` is what the index producer joins a parent on, so a fixture without
     one would be joined by nothing.
     """
-    values = {**_PARENT_VALUES, "reference_assembly": assembly, **dims}
-    classifications = {}
-    for fld in CLASSIFICATION_FIELDS:
-        value, status = values[fld] if isinstance(values[fld], tuple) else (values[fld], None)
-        detail = {"build": build} if fld == "reference_assembly" and build else None
-        classifications[fld] = build_field_entry(value, status, detail=detail)
-    return {
-        "md5sum": md5,
-        "file_name": file_name,
-        "file_id": file_id or _fid(md5),
-        # Producers write this on every row.
-        "dataset_title": "test",
-        "classifications": classifications,
-    }
+    record = output_record(file_name, md5, **{**_PARENT_VALUES, "reference_assembly": assembly, **dims})
+    if build:
+        record["classifications"]["reference_assembly"] = build_field_entry(assembly, detail={"build": build})
+    # What the index producer joins a parent on.
+    record["file_id"] = file_id or _fid(md5)
+    return record
 
 
 @pytest.mark.parametrize(

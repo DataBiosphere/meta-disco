@@ -2,7 +2,6 @@
 structural exclusions applied and counted; the join to a stored run; and the same join
 over written evidence — on a synthetic run and manifests."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -12,6 +11,7 @@ from meta_disco.anvil_evidence import import_dataset
 from meta_disco.models import CLASSIFIED, JOIN_KEY_FILE_MD5SUM, NOT_APPLICABLE, NOT_CLASSIFIED, build_field_entry
 from meta_disco.slot_map import load_slot_map
 from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
+from tests.run_fixtures import write_run
 from tests.test_anvil_evidence import CATALOG, anvil_file, drs, write_dataset
 from tests.test_source_evidence import evidence_file_envelope
 
@@ -22,10 +22,9 @@ def classification(slot_values: dict[str, tuple[str, str | None]]) -> dict:
     return {slot: build_field_entry(value, status) for slot, (status, value) in slot_values.items()}
 
 
-def write_run(root: Path) -> Path:
+def write_forecast_run(root: Path) -> Path:
     """Three records: a CRAM on CHM13, a FASTQ with no assembly, and a BED with no value."""
     run = root / "20260101_000000"
-    run.mkdir(parents=True)
     bam = [
         {
             "drs_uri": drs(1),
@@ -48,12 +47,12 @@ def write_run(root: Path) -> Path:
     ]
     bed = [{"drs_uri": drs(3), "classifications": classification({"reference_assembly": (NOT_CLASSIFIED, None)})}]
     for name, records in (("bam", bam), ("fastq", fastq), ("bed", bed)):
-        (run / f"{name}_classifications.json").write_text(json.dumps({"metadata": {}, "classifications": records}))
+        write_run(run, records, fname=f"{name}_classifications.json")
     return run
 
 
 def test_index_run_keeps_status_value_and_whether_the_record_is_a_fastq(tmp_path):
-    run = af.index_run(write_run(tmp_path))
+    run = af.index_run(write_forecast_run(tmp_path))
     assert set(run) == {drs(1), drs(2), drs(3), drs(4)}
     assert run[drs(2)].is_fastq and not run[drs(1)].is_fastq
     assert run[drs(1)].slots["reference_assembly"] == (CLASSIFIED, "CHM13")
@@ -99,7 +98,7 @@ class TestNameClaims:
 
 
 def test_name_signals_needs_no_map_and_reports_every_verdict(tmp_path):
-    run = af.index_run(write_run(tmp_path))
+    run = af.index_run(write_forecast_run(tmp_path))
     write_dataset(
         tmp_path,
         "D",
@@ -130,7 +129,7 @@ def test_name_signals_needs_no_map_and_reports_every_verdict(tmp_path):
 
 
 def test_name_signals_measures_a_dataset_once_and_names_a_missing_manifest(tmp_path):
-    run = af.index_run(write_run(tmp_path))
+    run = af.index_run(write_forecast_run(tmp_path))
     write_dataset(tmp_path, "D", [anvil_file(1), (DATASET, {"cram": drs(1)})])
     assert [s.dataset for s in af.name_signals(tmp_path, CATALOG, run, ["D", "D"])] == ["D"]
     with pytest.raises(ValueError, match="E: no verbatim manifest at"):
@@ -138,7 +137,7 @@ def test_name_signals_measures_a_dataset_once_and_names_a_missing_manifest(tmp_p
 
 
 def test_evidence_forecast_counts_what_the_import_is_judged_on(tmp_path):
-    run = af.index_run(write_run(tmp_path))
+    run = af.index_run(write_forecast_run(tmp_path))
     write_dataset(
         tmp_path,
         "D",
