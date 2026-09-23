@@ -100,9 +100,10 @@ INFERENCE = "inference"
 # match or harmonized (it declared, and no other input declared differently), disagreed
 # (another input declared differently), unreviewed (its value has no authored row),
 # no_claim (its value's authored row declares nothing for the slot, or declares
-# `not_classified`, which is no answer), silent. Inference:
-# agreed (a source declared the same), added (no other input declared anything),
-# disagreed (another input declared differently, or its own rules conflicted), silent.
+# `not_classified`, which is no answer), silent. Inference: agreed (a source declared
+# the same), added (every source was silent), unconfirmed (no source declared a value,
+# but one spoke — unreviewed or no_claim — so it was not silent), disagreed (another
+# input declared differently, or its own rules conflicted), silent.
 #
 # Per slot, exactly one of: filled_by_<source> or filled_by_<source>_harmonized for the
 # first source in SOURCE_PRECEDENCE that declared the delivered value — verbatim before
@@ -122,6 +123,7 @@ NO_CLAIM = "no_claim"
 SILENT = "silent"
 AGREED = "agreed"
 ADDED = "added"
+UNCONFIRMED = "unconfirmed"
 DISAGREED = "disagreed"
 FILLED_BY_INFERENCE = "filled_by_inference"
 PUBLISHED_UNREVIEWED = "published_unreviewed"
@@ -633,7 +635,10 @@ class Report:
         others = {declaration(c) for c in said.claims} - {None}
         if others - {own}:
             return DISAGREED
-        return AGREED if own in others else ADDED
+        if own in others:
+            return AGREED
+        spoke = said.unreviewed or said.no_claim or any(c.get("status") == NOT_CLASSIFIED for c in said.claims)
+        return UNCONFIRMED if spoke else ADDED
 
     @staticmethod
     def _source_outcome(said: SlotEvidence, own: str | None, source_type: str) -> str:

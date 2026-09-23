@@ -393,10 +393,12 @@ classes:
           against a particular generation, which is the ordinary case for a source
           that publishes names and values rather than reading our catalog.
 
-          Provenance for the importer's own next pass, not a gate on the run: a run
-          reports it and refuses nothing on it, because nothing offline
-          establishes which generation is current — AnVIL deletes a superseded
-          catalog rather than keeping it to be compared against.
+          Inference reports it and refuses nothing on it. The reconcile stage (#432)
+          uses it as a gate: where the run's input envelope names a catalog, it reads
+          only the files whose version equals that catalog, and leaves the rest (an
+          older generation's history, or a null version) unread. Nothing offline
+          establishes which generation is current beyond that — AnVIL deletes a
+          superseded catalog rather than keeping it to be compared against.
 
 
   EvidenceRow:
@@ -486,8 +488,8 @@ classes:
       importer runs out of band from classification — when a catalog refreshes,
       with network — and writes an evidence file of `EvidenceRow`s; a run reads it
       and reports this provenance, so that what a run found, and how old it was,
-      is on the record. Found and not consumed: until the join lands (#402) a run
-      reads each file's envelope and none of its rows.
+      is on the record. Inference reads each file's envelope and none of its rows;
+      the reconcile stage (#432) reads the rows and joins them to the run's records.
 
       It names both sides of the join, symmetrically: `source` / `source_version`
       / `source_key`, and `target` / `target.version` / `target_key`. A line then

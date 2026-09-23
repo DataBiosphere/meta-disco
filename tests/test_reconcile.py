@@ -705,3 +705,10 @@ def test_a_row_without_a_record_key_is_refused(tmp_path, run, table):
     write_run(run, [row])
     with pytest.raises(ValueError, match="file_id"):
         go(run, tmp_path, None, table)
+
+
+def test_inference_is_unconfirmed_not_added_when_a_source_spoke_without_declaring(tmp_path, run, evidence, table):
+    write_run(run, [record(1, platform="ILLUMINA"), record(2, platform="ILLUMINA")])
+    write_evidence(evidence, [("platform", drs(1), "MYSTERY")])  # a seeded row: unreviewed
+    result = go(run, tmp_path, evidence, table)
+    assert result["inputs"][DATASET]["platform"]["inference"] == {"unconfirmed": 1, "added": 1}
