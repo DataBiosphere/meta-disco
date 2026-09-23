@@ -203,8 +203,14 @@ manifest-survey:
 	uv run python scripts/generate_manifest_survey.py
 
 # The survey reads what `make download` leaves on disk, so the two belong
-# together after a catalog refresh — the same shape as classify-and-report.
-download-and-survey: download manifest-survey
+# together after a catalog refresh — the same shape as classify-and-report. The
+# survey reads prod's compact and verbatim manifests (#500 does not give it a
+# deployment), so only a prod azul-compact download is surveyed; any other choice
+# is refused before the download rather than surveying manifests it did not pull.
+download-and-survey:
+	$(if $(filter-out prod,$(DEPLOYMENT)),$(error download-and-survey surveys prod's manifests only; drop DEPLOYMENT=$(DEPLOYMENT)))
+	$(if $(filter-out azul-compact,$(INPUT_SOURCE)),$(error download-and-survey needs both manifests, which only INPUT_SOURCE=azul-compact pulls))
+	$(MAKE) download manifest-survey
 
 # The AnVIL slot map (#369): check it against the manifests on disk, or import
 # every dataset it names as one new generation of evidence files under

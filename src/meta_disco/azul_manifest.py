@@ -538,9 +538,9 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
     12 datasets, 12 distinct ``(source_id, source_spec)`` pairs, none with more than one.
 
     None means no row named a snapshot — an empty manifest, or one whose source cells
-    are all blank, which is how Azul writes an absent value. :func:`metadata_block`
-    records that as nulls rather than omitting the keys, so a reader never has to tell
-    "no snapshot" from "this build predates #434". A *missing column* is a different
+    are all blank, which is how Azul writes an absent value. The downloader refuses a
+    compact manifest that names none, since it cannot check the deployment's declared
+    snapshot against it (#500), so no envelope is written from one. A *missing column* is a different
     thing and raises, because it means the manifest's shape changed rather than that
     this dataset has nothing to say.
     """
