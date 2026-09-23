@@ -63,7 +63,7 @@ No earlier reconciled run to compare with.
 
 Whether each value from the source tables found its file in this run. A value that found no file, or more than one, is not used.
 
-**All 46 evidence files matched:** 437,112 values, none unmatched or ambiguous.
+**All 437,112 values in the 46 evidence files joined their file;** none unmatched or ambiguous.
 
 <details markdown="1">
 <summary>Evidence files read (46)</summary>

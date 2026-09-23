@@ -161,8 +161,8 @@
       const offered = ev.reduce((a, e) => a + e.offered, 0);
       document.getElementById('evidence').innerHTML = !ev.length ? '<p>No evidence was read.</p>'
         : (problems.length
-            ? `<p><strong>${problems.length} of ${ev.length} evidence files have values that did not match</strong> (${n(offered)} values in all):</p>` + evidenceTable(problems)
-            : `<p><strong>All ${ev.length} evidence files matched:</strong> ${n(offered)} values, none unmatched or ambiguous.</p>`)
+            ? `<p><strong>${problems.length} of ${ev.length} evidence files have values that did not join their file</strong> (${n(offered)} values in all):</p>` + evidenceTable(problems)
+            : `<p><strong>All ${n(offered)} values in the ${ev.length} evidence files joined their file;</strong> none unmatched or ambiguous.</p>`)
           + `<details><summary>Evidence files read (${ev.length})</summary>`
           + '<p class="note"><em>offered</em>: values read from the table; <em>matched</em>: found their file; <em>unmatched</em>: found no file; <em>ambiguous</em>: found more than one file.</p>'
           + evidenceTable(ev) + '</details>';

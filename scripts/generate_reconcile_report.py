@@ -407,11 +407,12 @@ def render_markdown(data: dict) -> str:
         offered = sum(e["offered"] for e in evidence)
         if not problems:
             lines.append(
-                f"**All {len(evidence)} evidence files matched:** {offered:,} values, none unmatched or ambiguous."
+                f"**All {offered:,} values in the {len(evidence)} evidence files joined their file;** "
+                "none unmatched or ambiguous."
             )
         else:
             lines += [
-                f"**{len(problems)} of {len(evidence)} evidence files have values that did not match** "
+                f"**{len(problems)} of {len(evidence)} evidence files have values that did not join their file** "
                 f"({offered:,} values in all):",
                 "",
                 *evidence_table(problems),
