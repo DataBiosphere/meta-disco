@@ -112,10 +112,10 @@ def load_report(run_dir: Path, previous: bool = False) -> dict:
 
 def find_previous(run_dir: Path) -> Path | None:
     """The newest run before ``run_dir``, beside it, that holds a reconcile report; None if there is none."""
-    # Resolved, so a symlinked name (`latest`) is compared as the run it points at.
-    name = run_dir.resolve().name
+    # Resolved, so a symlink (`latest`) is read as the run it points at, among that run's siblings.
+    run = run_dir.resolve()
     return max(
-        (d for d in list_runs(run_dir.parent) if d.name < name and (d / RECONCILED_DIR / REPORT_FILE).is_file()),
+        (d for d in list_runs(run.parent) if d.name < run.name and (d / RECONCILED_DIR / REPORT_FILE).is_file()),
         key=lambda d: d.name,
         default=None,
     )

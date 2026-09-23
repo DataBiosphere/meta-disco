@@ -146,10 +146,23 @@ def test_a_report_written_before_the_conflict_tally_is_refused_but_still_compare
     assert "conflicts" not in rr.load_report(conflicted, previous=True)
 
 
+def reconcile_later(tmp_path: Path, earlier: Path) -> Path:
+    """A second reconciled run beside ``earlier``: its report copied under a later name."""
+    later = earlier.parent / "20260925_000000"
+    (later / RECONCILED_DIR).mkdir(parents=True)
+    shutil.copy(earlier / RECONCILED_DIR / REPORT_FILE, later / RECONCILED_DIR / REPORT_FILE)
+    return later
+
+
 def test_a_symlinked_run_is_not_its_own_previous_run(tmp_path, conflicted):
     latest = conflicted.parent / "latest"
     latest.symlink_to(conflicted.name)
     assert rr.find_previous(latest) is None
+
+    # A symlink elsewhere still finds the run's own earlier siblings.
+    elsewhere = tmp_path / "latest"
+    elsewhere.symlink_to(later := reconcile_later(tmp_path, conflicted))
+    assert rr.find_previous(elsewhere) == conflicted and later.name > conflicted.name
 
 
 def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
