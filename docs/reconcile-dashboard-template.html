@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AnVIL Reconciliation</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #fff; color: #24292f; }
+    h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+    h2 { margin-top: 36px; border-bottom: 1px solid #d0d7de; padding-bottom: 6px; }
+    p.note { color: #656d76; font-size: 14px; max-width: 900px; }
+    dl.prov { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 14px; }
+    dl.prov dt { color: #656d76; }
+    dl.prov dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+    .scroll { overflow-x: auto; }
+    table { border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+    th, td { border: 1px solid #d0d7de; padding: 5px 9px; }
+    th { background: #f6f8fa; text-align: left; vertical-align: bottom; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.conflict { background: #fff1f0; }
+    select { font-size: 14px; padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <nav style="font-size: 14px; margin-bottom: 12px; color: #656d76;">
+    <a href="coverage-dashboard.html" style="color: #0969da; text-decoration: none;">Coverage Report</a>
+    &middot;
+    <a href="validation-dashboard.html" style="color: #0969da; text-decoration: none;">Validation Report</a>
+    &middot;
+    <strong style="color: #24292f;">Reconciliation Report</strong>
+  </nav>
+  <h1>AnVIL Reconciliation Report</h1>
+  <dl class="prov" id="provenance"></dl>
+
+  <p><label>Dataset: <select id="dataset"></select></label></p>
+
+  <h2>How each slot settled</h2>
+  <p class="note">Each file's slot in each dimension is counted in exactly one category, so a row sums to the files.
+    A value every declaring input agreed on is credited to the first source in precedence order (published, then
+    submitter; verbatim before harmonized), else to inference. <em>Added over published</em> is our value where the
+    published source speaks to the dimension and said nothing for the file (&ndash; where it speaks to it nowhere in
+    scope). <em>Filled over inference</em> is the slots inference left without an answer that a source's declaration
+    answers. Both overlap the categories.</p>
+  <div class="scroll" id="headline"></div>
+
+  <h2>Conflict rate</h2>
+  <p id="rate-summary"></p>
+  <div class="scroll" id="rate"></div>
+
+  <h2>Conflicts by competing values</h2>
+  <p class="note">Each distinct set of values the inputs declared on a conflicted slot (contract 5.1).
+    <em>Inference</em> lists its value, or its rules' competing values where they disagreed among themselves; an input
+    marked <em>(unreviewed)</em> spoke with a raw value no authored translation row reads.</p>
+  <div class="scroll" id="conflicts"></div>
+
+  <h2>Change since the previous reconciled run</h2>
+  <p class="note" id="change-note"></p>
+  <div class="scroll" id="change"></div>
+
+  <h2>The join, per evidence file</h2>
+  <div class="scroll" id="evidence"></div>
+
+  <script type="module">
+    // Data injected by scripts/generate_reconcile_report.py; every table is precomputed there.
+    const DATA = RECONCILE_DATA_PLACEHOLDER;
+    const CONFLICT_KEYS = new Set(DATA.conflict_categories);
+    const LABEL = Object.fromEntries(DATA.columns.map(c => [c.key, c.label]));
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    const n = v => v === null || v === undefined ? '–' : v.toLocaleString('en-US');
+    const signed = v => v === null || v === undefined ? '–' : v === 0 ? '0' : (v > 0 ? '+' : '') + v.toLocaleString('en-US');
+    const pct = v => (v * 100).toFixed(3) + '%';
+    // reconcile counts a record with no dataset_title under "".
+    const shown = name => name || '(no dataset title)';
+
+    function table(header, rows) {
+      // rows: arrays of {text, cls} or plain strings
+      const head = '<tr>' + header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr>';
+      const body = rows.map(r => '<tr>' + r.map(c => {
+        const cell = typeof c === 'object' ? c : {text: c};
+        return `<td class="${cell.cls || ''}">${esc(cell.text)}</td>`;
+      }).join('') + '</tr>').join('');
+      return `<table>${head}${body}</table>`;
+    }
+
+    function headlineTable(rows, fmt) {
+      const header = ['dimension', ...DATA.columns.map(c => c.label), 'added over published', 'filled over inference'];
+      return table(header, rows.map(r => [
+        r.dimension,
+        ...DATA.columns.map(c => ({
+          text: fmt(r.counts[c.key]),
+          cls: 'num' + (CONFLICT_KEYS.has(c.key) && r.counts[c.key] ? ' conflict' : ''),
+        })),
+        {text: fmt(r.added_over_published), cls: 'num'},
+        {text: fmt(r.filled_over_inference), cls: 'num'},
+      ]));
+    }
+
+    const competing = inputs => Object.entries(inputs)
+      .map(([name, values]) => `${name}: ${values.length ? values.join(', ') : '(no values carried)'}`).join('; ');
+
+    const p = DATA.provenance;
+    const prov = [
+      ['Run', `${p.run} (${n(p.files)} files)`],
+      ['Input', p.input],
+      ['Repository / catalog', `${p.repository} / ${p.catalog || 'none'}`],
+      ['Translation table sha256', p.value_map_sha256],
+    ];
+    if (p.evidence_excluded) prov.push(['Evidence', 'excluded: the reconciled artifact concludes what inference concluded (contract 6.6)']);
+    if (DATA.skipped_evidence) prov.push(['Evidence files skipped', String(DATA.skipped_evidence)]);
+    document.getElementById('provenance').innerHTML = prov.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+
+    const select = document.getElementById('dataset');
+    select.innerHTML = Object.keys(DATA.scopes).map(name => `<option value="${esc(name)}">${esc(shown(name))}</option>`).join('');
+
+    function render(name) {
+      const scope = DATA.scopes[name];
+      const whole = name === DATA.all;
+      document.getElementById('headline').innerHTML = headlineTable(scope.headline, n);
+
+      document.getElementById('rate-summary').innerHTML =
+        `<strong>${n(scope.conflicts)} of ${n(scope.slots)} slots (${pct(scope.conflict_rate)})</strong> are a conflict in ${whole ? 'the run' : esc(shown(name))} (${n(scope.files)} files).`;
+      document.getElementById('rate').innerHTML = table(
+        ['dimension', 'conflicts', 'rate', 'inference agreed with a source'],
+        scope.headline.map(r => [r.dimension, {text: n(r.conflicts), cls: 'num'}, {text: pct(r.conflict_rate), cls: 'num'}, {text: n(r.inference_agreed), cls: 'num'}]),
+      );
+
+      const c = scope.conflict_rows;
+      document.getElementById('conflicts').innerHTML = !c.length ? '<p>No conflicts.</p>'
+        : table(['dataset', 'dimension', 'kind', 'files', 'competing values'],
+            c.map(r => [shown(r.dataset), r.dimension, LABEL[r.kind], {text: n(r.files), cls: 'num'}, competing(r.inputs)]));
+
+      const note = document.getElementById('change-note');
+      if (scope.change === null) {
+        note.textContent = DATA.previous ? `${shown(name)} is not in the previous reconciled run (${DATA.previous.run}).` : 'No earlier reconciled run to compare with.';
+        document.getElementById('change').innerHTML = '';
+      } else {
+        const same = DATA.previous.value_map_sha256 === p.value_map_sha256 ? 'the same' : 'a different';
+        note.textContent = `Against ${DATA.previous.run} (${n(DATA.previous.files)} files; ${same} translation table). Each cell is this run's count minus that run's.`;
+        document.getElementById('change').innerHTML = headlineTable(scope.change, signed);
+      }
+
+      const ev = scope.evidence;
+      document.getElementById('evidence').innerHTML = !ev.length ? '<p>No evidence was read.</p>' : table(
+        ['source type', 'dataset', 'table', 'key', 'offered', 'matched', 'unmatched', 'ambiguous'],
+        ev.map(e => [e.source_type, e.dataset || DATA.all, e.table || '-', e.key,
+          ...['offered', 'matched', 'unmatched', 'ambiguous'].map(k => ({text: n(e[k]), cls: 'num'}))]),
+      );
+    }
+
+    select.addEventListener('change', () => render(select.value));
+    render(DATA.all);
+  </script>
+</body>
+</html>

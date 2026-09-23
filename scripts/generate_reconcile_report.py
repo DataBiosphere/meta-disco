@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""Render a reconciled run's report as markdown and an HTML dashboard (#395).
+
+Reads ``<run>/reconciled/reconcile_report.json``, which ``make reconcile`` writes (#432),
+and nothing else of the run: no record is re-read. Writes ``docs/reconcile-report.md``
+and ``docs/reconcile-dashboard.html`` (from ``docs/reconcile-dashboard-template.html``).
+
+Both show, for the whole run and per dataset: how each slot of each dimension settled
+(the slot categories of ``meta_disco.reconcile``), the conflict rate, the join per
+evidence file, and the conflicts listed by their distinct competing values (contract
+5.1). With a previous reconciled run, each category's change per dimension.
+
+Usage:
+    python scripts/generate_reconcile_report.py
+    python scripts/generate_reconcile_report.py --run-dir output/anvil/20260922_230521
+    python scripts/generate_reconcile_report.py --previous output/anvil/20260922_221819
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_PUBLISHED_VALUE
+from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
+from meta_disco.reconcile import (
+    CONFLICT_CATEGORIES,
+    EVERY_DATASET,
+    INFERENCE,
+    REPORT_FILE,
+    SLOT_CATEGORIES,
+    SOURCE_PRECEDENCE,
+    fill_category,
+)
+from meta_disco.summaries import escape_md_cell, md_table
+
+PROJECT_ROOT = Path(__file__).parent.parent
+TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
+PLACEHOLDER = "RECONCILE_DATA_PLACEHOLDER"
+ALL = EVERY_DATASET
+# What a cell shows where there is no count to show.
+DASH = "\u2013"
+# Beside the categories, overlapping them: our value where the published source speaks to
+# the slot and said nothing for the file, and the gaps inference left that a source filled.
+ADDED = "added_over_published"
+FILLED_OVER = "filled_over_inference"
+
+
+def shown(dataset: str) -> str:
+    """A dataset's name as displayed: reconcile counts a record with no ``dataset_title`` under ""."""
+    return dataset or "(no dataset title)"
+
+
+def label(category: str) -> str:
+    """A slot category as a column heading: ``filled_by_submitter_harmonized`` is "submitter harmonized"."""
+    if category.startswith("conflict_"):
+        return f"conflict ({category.removeprefix('conflict_')})"
+    return category.removeprefix("filled_by_").replace("_", " ")
+
+
+class ReportError(Exception):
+    """The report cannot be rendered from what is on disk."""
+
+
+def load_report(run_dir: Path, previous: bool = False) -> dict:
+    """A run's reconcile report, refused if this code cannot render it.
+
+    A report with a slot category this code does not know is refused, and so is one
+    written before the conflict tally, unless it is only the ``previous`` run the
+    change is computed against, which reads no conflicts.
+    """
+    path = run_dir / RECONCILED_DIR / REPORT_FILE
+    if not path.is_file():
+        raise ReportError(f"{path} not found: run `make reconcile RUN_DIR={run_dir}` first")
+    try:
+        report = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ReportError(f"{path} is not JSON ({exc}): run `make reconcile RUN_DIR={run_dir}` again") from None
+    unknown = {
+        category
+        for per_slot in report["slots"].values()
+        for counts in per_slot.values()
+        for category in counts
+        if category not in SLOT_CATEGORIES
+    }
+    if unknown:
+        raise ReportError(f"{path}: slot categories this report does not know: {sorted(unknown)}")
+    if "conflicts" not in report and not previous:
+        raise ReportError(f"{path} predates the conflict tally: run `make reconcile RUN_DIR={run_dir}` again")
+    return report
+
+
+def find_previous(run_dir: Path) -> Path | None:
+    """The newest run before ``run_dir``, beside it, that holds a reconcile report; None if there is none."""
+    # Resolved, so a symlinked name (`latest`) is compared as the run it points at.
+    name = run_dir.resolve().name
+    return max(
+        (d for d in list_runs(run_dir.parent) if d.name < name and (d / RECONCILED_DIR / REPORT_FILE).is_file()),
+        key=lambda d: d.name,
+        default=None,
+    )
+
+
+def _datasets(report: dict, dataset: str | None) -> list[str]:
+    return sorted(report["files"]) if dataset is None else [dataset]
+
+
+def columns(*reports: dict) -> list[str]:
+    """The categories shown: all of them, less the fill columns of a source no evidence file of these reports came from.
+
+    Such a source (the external one, today) can fill nothing, so its two columns would be
+    zero by construction. A source that was read and filled nothing keeps its zeros: they
+    say its values have no authored row yet.
+    """
+    read = {ev["source_type"] for report in reports for ev in report["evidence"]}
+    unread = {
+        fill_category(name, harmonized)
+        for source_type, name in SOURCE_PRECEDENCE
+        if source_type not in read
+        for harmonized in (False, True)
+    }
+    return [c for c in SLOT_CATEGORIES if c not in unread]
+
+
+def headline(report: dict, dataset: str | None = None) -> list[dict]:
+    """Per dimension: each category's count, added over published, filled over inference, conflict rate.
+
+    ``added_over_published`` is None where the published source speaks to that dimension
+    in none of the datasets in scope — there is nothing it could have added over.
+    """
+    names = _datasets(report, dataset)
+    files = sum(report["files"].get(d, 0) for d in names)
+    rows = []
+    for slot in CLASSIFICATION_FIELDS:
+        counts = dict.fromkeys(SLOT_CATEGORIES, 0)
+        for d in names:
+            for category, n in report["slots"].get(d, {}).get(slot, {}).items():
+                counts[category] += n
+        speaks = any(SOURCE_PUBLISHED_VALUE in report["inputs"].get(d, {}).get(slot, {}) for d in names)
+        conflicts = sum(counts[k] for k in CONFLICT_CATEGORIES)
+        rows.append(
+            {
+                "dimension": slot,
+                "counts": counts,
+                ADDED: sum(report[ADDED].get(d, {}).get(slot, 0) for d in names) if speaks else None,
+                FILLED_OVER: sum(report[FILLED_OVER].get(d, {}).get(slot, 0) for d in names),
+                "inference_agreed": sum(
+                    report["inputs"].get(d, {}).get(slot, {}).get(INFERENCE, {}).get("agreed", 0) for d in names
+                ),
+                "conflicts": conflicts,
+                "conflict_rate": conflicts / files if files else 0.0,
+            }
+        )
+    return rows
+
+
+def conflict_rows(report: dict, dataset: str | None = None) -> list[dict]:
+    """Every distinct set of competing values, most files first."""
+    rows: list[dict] = [
+        {"dataset": d, "dimension": slot, "kind": kind, "inputs": entry["inputs"], "files": entry["files"]}
+        for d in _datasets(report, dataset)
+        for slot, per_kind in report["conflicts"].get(d, {}).items()
+        for kind, entries in per_kind.items()
+        for entry in entries
+    ]
+    return sorted(rows, key=lambda r: (-r["files"], r["dataset"], r["dimension"], r["kind"]))
+
+
+def evidence_rows(report: dict, dataset: str | None = None) -> list[dict]:
+    keys = ("source_type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous")
+    return [
+        {k: ev.get(k) for k in keys}
+        for ev in report["evidence"]
+        if dataset is None or ev.get("dataset") in (dataset, None)
+    ]
+
+
+def change(new: dict, old: dict, dataset: str | None = None) -> list[dict]:
+    """Per dimension, each category's count in ``new`` minus ``old``, and the two added/filled counts'."""
+    before = {row["dimension"]: row for row in headline(old, dataset)}
+    rows = []
+    for row in headline(new, dataset):
+        was = before[row["dimension"]]
+        delta = {k: row["counts"][k] - was["counts"][k] for k in SLOT_CATEGORIES}
+        added = None if row[ADDED] is None and was[ADDED] is None else (row[ADDED] or 0) - (was[ADDED] or 0)
+        rows.append(
+            {
+                "dimension": row["dimension"],
+                "counts": delta,
+                ADDED: added,
+                FILLED_OVER: row[FILLED_OVER] - was[FILLED_OVER],
+            }
+        )
+    return rows
+
+
+def provenance(report: dict) -> dict:
+    return {
+        "run": report["run"],
+        "input": report["input"],
+        "repository": report["repository"],
+        "catalog": report["catalog"],
+        "value_map_sha256": report["value_map_sha256"],
+        "evidence_excluded": report["evidence_excluded"],
+        "files": sum(report["files"].values()),
+    }
+
+
+def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
+    """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: every table precomputed per scope.
+
+    These key names are the contract with that template's JavaScript. ``scopes`` holds
+    the whole run under ``ALL`` and each dataset under its name; a scope's ``change`` is
+    None where there is no previous run or the dataset is not in it.
+    """
+    scopes = {}
+    for dataset in [None, *sorted(report["files"])]:
+        files = sum(report["files"].get(d, 0) for d in _datasets(report, dataset))
+        rows = headline(report, dataset)
+        conflicts = sum(r["conflicts"] for r in rows)
+        slots = files * len(rows)
+        old = previous if previous and (dataset is None or dataset in previous["files"]) else None
+        scopes[ALL if dataset is None else dataset] = {
+            "files": files,
+            "headline": rows,
+            "conflicts": conflicts,
+            "slots": slots,
+            "conflict_rate": conflicts / slots if slots else 0.0,
+            "conflict_rows": conflict_rows(report, dataset),
+            "evidence": evidence_rows(report, dataset),
+            "change": change(report, old, dataset) if old else None,
+        }
+    cols = columns(report, previous) if previous else columns(report)
+    return {
+        "source": str(source),
+        "provenance": provenance(report),
+        "previous": provenance(previous) if previous else None,
+        "skipped_evidence": len(report.get("skipped_evidence", [])),
+        "columns": [{"key": c, "label": label(c)} for c in cols],
+        "conflict_categories": list(CONFLICT_CATEGORIES),
+        "all": ALL,
+        "scopes": scopes,
+    }
+
+
+# --- markdown -----------------------------------------------------------------------
+
+
+def _n(value: int | None) -> str:
+    return DASH if value is None else f"{value:,}"
+
+
+def _signed(value: int | None) -> str:
+    return DASH if value is None else ("0" if value == 0 else f"{value:+,}")
+
+
+def _headline_table(rows: list[dict], cols: list[dict], fmt=_n) -> list[str]:
+    header = ["dimension", *(c["label"] for c in cols), "added over published", "filled over inference"]
+    body = [
+        [r["dimension"], *(fmt(r["counts"][c["key"]]) for c in cols), fmt(r[ADDED]), fmt(r[FILLED_OVER])] for r in rows
+    ]
+    return md_table(header, body, align="right")
+
+
+def competing(inputs: dict[str, list[str]]) -> str:
+    return "; ".join(
+        f"{name}: {', '.join(values) if values else '(no values carried)'}" for name, values in inputs.items()
+    )
+
+
+def _conflict_table(rows: list[dict], with_dataset: bool) -> list[str]:
+    if not rows:
+        return ["No conflicts."]
+    header = (["dataset"] if with_dataset else []) + ["dimension", "kind", "files", "competing values"]
+    body = [
+        ([shown(r["dataset"])] if with_dataset else [])
+        + [r["dimension"], label(r["kind"]), _n(r["files"]), competing(r["inputs"])]
+        for r in rows
+    ]
+    return md_table(header, body)
+
+
+def render_markdown(data: dict) -> str:
+    p, cols, whole = data["provenance"], data["columns"], data["scopes"][ALL]
+    catalog = p["catalog"] or "none"
+    lines = [
+        "# Reconciliation report",
+        "",
+        f"Generated by `make reconcile-report` from `{data['source']}` (#395).",
+        "",
+        f"- **Run:** `{p['run']}`, {p['files']:,} files",
+        f"- **Input:** `{p['input']}` (repository `{p['repository']}`, catalog `{catalog}`)",
+        f"- **Translation table sha256:** `{p['value_map_sha256']}`",
+    ]
+    if p["evidence_excluded"]:
+        lines.append(
+            "- **Evidence excluded:** the reconciled artifact concludes what inference concluded (contract 6.6)."
+        )
+    if data["skipped_evidence"]:
+        lines.append(f"- **Evidence files skipped** (another system or catalog): {data['skipped_evidence']}")
+    lines += [
+        "",
+        "## How each slot settled",
+        "",
+        "Each file's slot in each dimension is counted in exactly one category, so a row sums to the files. "
+        "A value every declaring input agreed on is credited to the first source in precedence order "
+        "(published, then submitter; verbatim before harmonized), else to inference. "
+        "*Added over published* is our value where the published source speaks to the dimension and said nothing "
+        f"for the file ({DASH} where it speaks to it in no dataset). *Filled over inference* is the slots inference left "
+        "without an answer that a source's declaration answers. Both overlap the categories.",
+        "",
+        *_headline_table(whole["headline"], cols),
+        "",
+        "## Conflict rate",
+        "",
+    ]
+    lines += [
+        f"**{whole['conflicts']:,} of {whole['slots']:,} slots ({whole['conflict_rate']:.3%})** "
+        "are a conflict across the run.",
+        "",
+        *md_table(
+            ["dimension", "conflicts", "rate", "inference agreed with a source"],
+            [
+                [r["dimension"], _n(r["conflicts"]), f"{r['conflict_rate']:.3%}", _n(r["inference_agreed"])]
+                for r in whole["headline"]
+            ],
+            align="right",
+        ),
+        "",
+        "## Conflicts by competing values",
+        "",
+        "Each distinct set of values the inputs declared on a conflicted slot (contract 5.1). "
+        "*Inference* lists its value, or its rules' competing values where they disagreed among themselves; "
+        "an input marked *(unreviewed)* spoke with a raw value no authored translation row reads.",
+        "",
+        *_conflict_table(whole["conflict_rows"], with_dataset=True),
+        "",
+        "## Change since the previous reconciled run",
+        "",
+    ]
+    if whole["change"] is None:
+        lines.append("No earlier reconciled run to compare with.")
+    else:
+        q = data["previous"]
+        same = "the same" if q["value_map_sha256"] == p["value_map_sha256"] else "a different"
+        lines += [
+            f"Against `{q['run']}` ({q['files']:,} files; {same} translation table). "
+            "Each cell is this run's count minus that run's.",
+            "",
+            *_headline_table(whole["change"], cols, fmt=_signed),
+        ]
+    lines += ["", "## The join, per evidence file", ""]
+    if whole["evidence"]:
+        lines += md_table(
+            ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"],
+            [
+                [e["source_type"], e["dataset"] or ALL, e["table"] or "-", e["key"]]
+                + [_n(e[k]) for k in ("offered", "matched", "unmatched", "ambiguous")]
+                for e in whole["evidence"]
+            ],
+        )
+    else:
+        lines.append("No evidence was read.")
+    lines += ["", "## Per dataset", ""]
+    for name, scope in data["scopes"].items():
+        if name == ALL:
+            continue
+        lines += [
+            f"### {escape_md_cell(shown(name))}",
+            "",
+            f"{scope['files']:,} files.",
+            "",
+            *_headline_table(scope["headline"], cols),
+        ]
+        if scope["conflict_rows"]:
+            lines += ["", *_conflict_table(scope["conflict_rows"], with_dataset=False)]
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_html(data: dict, template: str) -> str:
+    # Escape </ so the payload cannot close the <script> tag it sits in.
+    return template.replace(PLACEHOLDER, json.dumps(data).replace("</", r"<\/"))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Render a reconciled run's report (#395)")
+    parser.add_argument("--run-dir", type=Path, help="Reconciled run directory (default: latest under output/anvil)")
+    parser.add_argument(
+        "--previous", type=Path, help="Run to compare with (default: the newest earlier run holding a reconcile report)"
+    )
+    parser.add_argument("--no-previous", action="store_true", help="Compare with no earlier run")
+    parser.add_argument("--markdown", type=Path, default=PROJECT_ROOT / "docs" / "reconcile-report.md")
+    parser.add_argument("--html", type=Path, default=PROJECT_ROOT / "docs" / "reconcile-dashboard.html")
+    args = parser.parse_args(argv)
+    try:
+        run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
+        report = load_report(run_dir)
+        previous_dir = None if args.no_previous else (args.previous or find_previous(run_dir))
+        previous = load_report(previous_dir, previous=True) if previous_dir else None
+    except (ReportError, FileNotFoundError) as exc:
+        print(f"reconcile-report: {exc}", file=sys.stderr)
+        return 1
+    data = dashboard_data(report, previous, run_dir / RECONCILED_DIR / REPORT_FILE)
+    args.markdown.write_text(render_markdown(data))
+    args.html.write_text(render_html(data, TEMPLATE.read_text()))
+    compared = f", compared with {previous_dir.name}" if previous_dir else ""
+    print(f"Reconcile report for {run_dir.name}{compared} -> {args.markdown}, {args.html}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
