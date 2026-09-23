@@ -9,12 +9,14 @@ deployment. A :class:`Deployment` names all four together, and the input root is
 the deployment's own — ``data/anvil/prod/`` and ``data/anvil/dev/`` — so one
 deployment's input can never land in another's.
 
-**A deployment declares its snapshots, and the declaration is checked, not
-consulted.** ``tdr-direct`` has no manifest to read a snapshot from, so it reads the
-ones declared here. ``azul-compact`` reads the snapshot the compact manifest names
-on every row (``azul_manifest.dataset_source``) and refuses the download when that
-disagrees with the declaration, naming both, rather than writing the manifest's and
-carrying on. Decision of 2026-09-22 on #500: a snapshot change is the drift the
+**A deployment declares its snapshots.** How the declaration is used depends on the
+input source. ``tdr-direct`` has no manifest to read a snapshot from, so it reads
+the ones declared here. ``azul-verbatim``'s manifest carries no snapshot column, so
+its envelope records the declared ones. On ``azul-compact`` the declaration is
+checked, not consulted: the compact manifest names the snapshot on every row
+(``azul_manifest.dataset_source``), and the download refuses a manifest that names
+another than the declared one, or none, naming both, rather than writing the
+manifest's and carrying on. Decision of 2026-09-22 on #500: a snapshot change is the drift the
 catalog pin in #335 exists to catch, and the fix is updating the line here.
 Consequently a catalog dataset this file does not declare is not part of the
 deployment: the downloader reports it and skips it, which is how dev's
