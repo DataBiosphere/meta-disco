@@ -11,7 +11,7 @@ from typing import TypedDict
 
 import pytest
 
-from meta_disco.models import NOT_APPLICABLE, NOT_CLASSIFIED
+from meta_disco.models import CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline, load_classifiable_snapshot, published_source
 from meta_disco.published_comparison import (
     ADD,
@@ -176,6 +176,12 @@ class TestRecommendation:
         # filing it under keep would claim we had no opinion.
         assert spoke(NOT_APPLICABLE)
         assert recommendation(["single-nucleus ATAC-seq"], NOT_APPLICABLE) == REVIEW
+
+    def test_a_conflict_is_reviewed_beside_a_published_value_and_never_added(self):
+        # A conflict is our rules disagreeing (#88): worth a look against what the
+        # repository publishes, but it has no value to offer where nothing is published.
+        assert recommendation(["GRCh38"], CONFLICT) == REVIEW
+        assert recommendation(None, CONFLICT) == NONE
 
     def test_not_classified_is_the_only_silence(self):
         assert not spoke(NOT_CLASSIFIED)

@@ -195,7 +195,7 @@ class ClassificationStatusEnum(str, Enum):
     """
     conflict = "conflict"
     """
-    Multiple rules disagreed at the same tier.
+    Rules at the same tier disagreed and no curator rule has answered it (#88; claims contract 4.3, 4.7). The value is null; the competing claims stay in the evidence beside a `conflict` marker naming them.
     """
 
 
@@ -227,7 +227,7 @@ class ParentKindEnum(str, Enum):
 
 class SourceTypeEnum(str, Enum):
     """
-    Kind of source behind a claim (provenance model, #90). Every claim carries one (#392). Distinct from `tier`, which is the resolution input: two kinds share `CONTENT_TIER`, and one fires at a rule tier without being a rule.
+    Kind of source behind a claim (provenance model, #90). Every claim carries one (#392). Distinct from `tier`, which is the resolution input: two kinds share `CONTENT_TIER`.
     """
     filename_rule = "filename_rule"
     """
@@ -244,10 +244,6 @@ class SourceTypeEnum(str, Enum):
     content_read = "content_read"
     """
     Read from the file's bytes, but not from contig declarations — today the member names in an archive head. Separate from `contig_detection` so neither has to describe the other.
-    """
-    signal_inference = "signal_inference"
-    """
-    Derived from dimensions this file has already resolved, plus its format and size, rather than read from the file — the assay_type inference.
     """
     derivation_inheritance = "derivation_inheritance"
     """
@@ -877,7 +873,7 @@ class Evidence(ConfiguredBaseModel):
          'slot_usage': {'status': {'name': 'status', 'required': False}}})
 
     rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
-    marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). The marker's `status` is the status the field resolved to — `conflict` on a conflict marker (#88). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     reason: Optional[str] = Field(default=None, description="""Human-readable rationale.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })
     status: Optional[ClassificationStatusEnum] = Field(default=None, description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'Evidence']} })

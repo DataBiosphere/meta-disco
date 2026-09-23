@@ -12,6 +12,7 @@ import pytest
 
 from meta_disco.models import (
     CLASSIFIED,
+    CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     build_field_entry,
@@ -215,6 +216,11 @@ class TestCoherenceGuard:
 
 
 class TestBuildFieldEntry:
+    def test_a_conflict_label_becomes_the_conflict_status_never_a_value(self):
+        # The index producer re-emits a parent's label; "conflict" is a status the
+        # label can carry (#88), so it must not land as a classified value "conflict".
+        assert build_field_entry(CONFLICT) == {"value": None, "status": CONFLICT, "evidence": []}
+
     def test_classified_keeps_value(self):
         e = build_field_entry("genomic", evidence=[{"x": 1}])
         assert e == {"value": "genomic", "status": CLASSIFIED, "evidence": [{"x": 1}]}

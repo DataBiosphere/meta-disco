@@ -31,29 +31,12 @@ except ImportError:  # pragma: no cover - 3.10
 _sre_parse = _sre_mod.parse
 
 
-def _when_value_violations(rules):
-    """Enum-backed `when` condition values not in the schema vocabulary.
-
-    The single detection path for the antecedent-value check — exercised by both
-    the suite-wide test and the negative test, so the latter load-bears on the
-    real logic rather than re-deriving the membership assertion.
-    """
-    violations = []
-    for rule in rules.rules:
-        for key, dimension in schema_vocab.ENUM_BACKED_WHEN_KEYS.items():
-            value = (rule.when or {}).get(key)
-            if value is not None and not schema_vocab.value_in_vocabulary(dimension, value):
-                violations.append(f"{rule.id}: when.{key}={value!r}")
-    return violations
-
-
 def _when_format_violations(rules):
     """`when.format` values that are not real Format members.
 
-    The format counterpart to _when_value_violations. Format is an in-code enum
-    rather than a LinkML schema dimension, so it is checked directly against the
-    enum instead of through schema_vocab (#243) — but it is the same antecedent-
-    value drift check, in the same test layer (the loader validates when *keys*,
+    Format is an in-code enum rather than a LinkML schema dimension, so it is
+    checked directly against the enum instead of through schema_vocab (#243) — an
+    antecedent-value drift check, in the same test layer (the loader validates when *keys*,
     values are checked here). Shared by the suite-wide and negative tests.
 
     A present `format` must be a string in the Format vocabulary; anything else
@@ -116,27 +99,12 @@ def test_rule_then_status_values_are_schema_statuses():
     )
 
 
-def test_rule_when_values_in_vocabulary():
-    """Enum-backed `when` condition values must also be in the schema vocabulary.
-
-    Mirrors the `then`-value check for the antecedent side (issue #113). Only
-    `when` keys in ENUM_BACKED_WHEN_KEYS are dimension-enum-backed; the rest
-    (regexes, header codes, numeric bounds, booleans) are not checkable this way.
-    """
-    violations = _when_value_violations(get_unified_rules())
-    assert not violations, (
-        "Rules use `when` condition values not in the LinkML schema vocabulary.\n"
-        "Add them to classification.yaml or fix the rule:\n  " + "\n  ".join(violations)
-    )
-
-
 def test_rule_when_format_values_valid():
     """Every `when.format` value must be a real Format member (#243).
 
-    The in-code counterpart to test_rule_when_values_in_vocabulary: `format` is
-    backed by the Format enum, not the schema, so it is drift-checked directly
-    against the enum. Catches a typo'd format (which would silently never match)
-    the same way the platform check catches a typo'd platform.
+    `format` is backed by the Format enum, not the schema, so it is drift-checked
+    directly against the enum. Catches a typo'd format, which would otherwise
+    silently never match.
     """
     violations = _when_format_violations(get_unified_rules())
     assert not violations, (
@@ -578,38 +546,24 @@ def test_accession_check_catches_an_unanchored_token(tmp_path):
         assert accession_hits(loaded, exempt=frozenset()), pattern
 
 
-def test_when_value_check_rejects_bogus_platform(tmp_path):
-    """The when-value drift check catches a typo'd enum-backed value (issue #113).
+def test_loader_refuses_a_state_condition(tmp_path):
+    """A rule may not condition on what another rule said (#88).
 
-    Runs the real scan (_when_value_violations) over a rule whose when.platform is
-    bogus. The loader accepts the *key* (`platform` is a valid when key); this is
-    the *value* gap #113 closes.
+    `platform`, `modality_not_set` and `reference_not_set` made a rule fire only on
+    another rule's answer or its absence — the fallback shape. They are gone from
+    the loader's `when` keys, so a rule file that uses one fails to load rather than
+    having the condition silently ignored.
     """
-    path = _write_rules_file(
-        tmp_path,
-        {
-            "id": "bogus_when_platform",
+    for key, value in (("platform", "ILLUMINA"), ("modality_not_set", True), ("reference_not_set", True)):
+        rule = {
+            "id": "state_rule",
             "tier": 2,
             "scope": "filename",
-            "when": {"platform": "ILUMINA"},  # typo: should be ILLUMINA
+            "when": {key: value},
             "then": {"data_modality": "genomic"},
-        },
-    )
-    violations = _when_value_violations(RuleLoader(path).load())
-    assert violations == ["bogus_when_platform: when.platform='ILUMINA'"]
-
-
-def test_assay_type_inference_values_in_vocabulary():
-    """assay_type_rules (the inference block) must also use vocabulary values."""
-    rules = get_unified_rules()
-    violations = [
-        f"{r.id}: assay_type={r.assay_type!r}"
-        for r in rules.assay_type_rules
-        if r.assay_type and not schema_vocab.value_in_vocabulary("assay_type", r.assay_type)
-    ]
-    assert not violations, "assay_type inference rules emit values not in the schema vocabulary:\n  " + "\n  ".join(
-        violations
-    )
+        }
+        with pytest.raises(ValueError, match="unknown 'when' condition key"):
+            RuleLoader(_write_rules_file(tmp_path, rule)).load()
 
 
 def test_reference_build_families_in_vocabulary():
@@ -617,8 +571,7 @@ def test_reference_build_families_in_vocabulary():
 
     The build table is non-rule data in the same YAML as the rules, and its
     generated comment asserts that `family` matches the enum — this is what makes
-    that true rather than merely claimed. Same guard the assay_type inference
-    block gets above, for the same reason: a value that drifts out of the
+    that true rather than merely claimed: a value that drifts out of the
     vocabulary would surface as a build that resolves to a family no consumer
     recognises.
     """
@@ -631,160 +584,6 @@ def test_reference_build_families_in_vocabulary():
     assert not violations, "reference_builds families not in the schema vocabulary:\n  " + "\n  ".join(violations)
 
 
-def _assay_condition_violations(rules):
-    """Enum-backed assay_type_rules *condition* values not in the vocabulary.
-
-    The antecedent side of the assay-inference block — the same class as
-    _when_value_violations, for the conditions matched in infer_assay_type.
-    """
-    violations = []
-    for rule in rules.assay_type_rules:
-        conditions = rule.conditions or {}
-        for key, (dimension, is_list) in schema_vocab.ENUM_BACKED_ASSAY_CONDITIONS.items():
-            if key not in conditions:
-                continue
-            raw = conditions[key]
-            values = raw if is_list and isinstance(raw, list) else [raw]
-            for value in values:
-                if not schema_vocab.value_in_vocabulary(dimension, value):
-                    violations.append(f"{rule.id}: conditions.{key}={value!r}")
-    return violations
-
-
-def test_assay_rules_name_only_rules_that_exist():
-    """A `matched_rules_any` entry must name a rule the file still declares (#430).
-
-    Deleting five program rules left the then `rnaseq_program` listing all five; each
-    entry was a branch that could never be satisfied, and nothing said so. The rule ids
-    are the join between the two documents, and this is the drift check for it.
-    """
-    rules = get_unified_rules()
-    ids = {rule.id for rule in rules.rules}
-    dangling = [
-        f"{assay.id}: {ref}"
-        for assay in rules.assay_type_rules
-        for ref in (assay.conditions.get("matched_rules_any") or [])
-        if ref not in ids
-    ]
-    assert not dangling, "Assay rules reference rule ids that no longer exist:\n  " + "\n  ".join(dangling)
-
-
-def test_assay_type_condition_values_in_vocabulary():
-    """Enum-backed assay_type_rules *conditions* must use vocabulary values too.
-
-    The antecedent-value gap (#113) also exists in the assay-inference block:
-    data_modality / platform / platform_in are matched against the schema enums
-    in infer_assay_type, so a typo there silently never matches.
-    """
-    violations = _assay_condition_violations(get_unified_rules())
-    assert not violations, (
-        "assay_type_rules conditions use values not in the LinkML schema vocabulary:\n  " + "\n  ".join(violations)
-    )
-
-
-def test_assay_condition_check_rejects_bogus_platform(tmp_path):
-    """The assay-condition drift check catches a typo'd enum-backed value (#113)."""
-    path = tmp_path / "rules.yaml"
-    with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump_all(
-            [
-                {"rules": []},
-                {"validators": {}},
-                {
-                    "assay_type_rules": [
-                        {
-                            "id": "bogus_assay",
-                            "priority": 1,
-                            "conditions": {"platform_in": ["ILUMINA"]},  # typo: should be ILLUMINA
-                            "assay_type": "WGS",
-                        }
-                    ]
-                },
-            ],
-            f,
-        )
-    violations = _assay_condition_violations(RuleLoader(path).load())
-    assert violations == ["bogus_assay: conditions.platform_in='ILUMINA'"]
-
-
-def _write_assay_rules_file(tmp_path, assay_rule):
-    """Write a rules file whose third document holds a single assay_type_rule."""
-    path = tmp_path / "rules.yaml"
-    with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump_all(
-            [
-                {"rules": []},
-                {"validators": {}},
-                {"assay_type_rules": [assay_rule]},
-            ],
-            f,
-        )
-    return path
-
-
-@pytest.mark.parametrize("bad_conditions", ["always", "", [], 0])
-def test_loader_rejects_non_mapping_assay_conditions(tmp_path, bad_conditions):
-    # A non-mapping `conditions` must raise at load time rather than crash
-    # infer_assay_type (which assumes a mapping). Mirrors the when/then guard.
-    path = _write_assay_rules_file(
-        tmp_path,
-        {
-            "id": "bad_conditions",
-            "priority": 1,
-            "conditions": bad_conditions,
-            "assay_type": "WGS",
-        },
-    )
-    with pytest.raises(ValueError, match="'conditions' must be a mapping"):
-        RuleLoader(path).load()
-
-
-def test_loader_accepts_null_assay_conditions(tmp_path):
-    # A null `conditions` block is a catch-all rule; coerced to {}, not a crash.
-    path = _write_assay_rules_file(
-        tmp_path,
-        {
-            "id": "null_conditions",
-            "priority": 1,
-            "conditions": None,
-            "assay_type": "WGS",
-        },
-    )
-    loaded = RuleLoader(path).load()
-    assert loaded.assay_type_rules[0].conditions == {}
-
-
-@pytest.mark.parametrize("list_key", ["platform_in", "matched_rules_any"])
-def test_loader_rejects_scalar_list_valued_assay_condition(tmp_path, list_key):
-    # A scalar where a list is expected would be iterated char-by-char by
-    # infer_assay_type and silently mis-match; the loader must reject it.
-    path = _write_assay_rules_file(
-        tmp_path,
-        {
-            "id": "scalar_list",
-            "priority": 1,
-            "conditions": {list_key: "ILLUMINA"},  # should be ["ILLUMINA"]
-            "assay_type": "WGS",
-        },
-    )
-    with pytest.raises(ValueError, match=f"condition '{list_key}' must be a list"):
-        RuleLoader(path).load()
-
-
-def test_loader_accepts_list_valued_assay_conditions(tmp_path):
-    path = _write_assay_rules_file(
-        tmp_path,
-        {
-            "id": "list_ok",
-            "priority": 1,
-            "conditions": {"platform_in": ["PACBIO", "ONT"], "matched_rules_any": ["r1"]},
-            "assay_type": "WGS",
-        },
-    )
-    loaded = RuleLoader(path).load()
-    assert loaded.assay_type_rules[0].conditions["platform_in"] == ["PACBIO", "ONT"]
-
-
 def test_dimension_values_unknown_field_raises_clear_error():
     with pytest.raises(ValueError, match="Unknown classification dimension"):
         schema_vocab.dimension_values("not_a_field")
@@ -792,8 +591,13 @@ def test_dimension_values_unknown_field_raises_clear_error():
 
 def test_status_values_from_schema():
     # The permissible per-field `status` values, loaded from the schema enum —
-    # incl. `conflict` (#88), which is not yet produced but is a valid status.
+    # incl. `conflict`, which the rule engine produces since #88. The Python
+    # constants (CLASSIFIED plus models.STATUS_LABELS) are pinned to the enum so a
+    # status added to one and not the other cannot pass silently.
+    from meta_disco.models import CLASSIFIED, STATUS_LABELS
+
     assert schema_vocab.status_values() == frozenset({"classified", "not_applicable", "not_classified", "conflict"})
+    assert STATUS_LABELS | {CLASSIFIED} == schema_vocab.status_values()
 
 
 def test_marker_constants_match_schema_enum():
@@ -918,8 +722,7 @@ def test_loader_rejects_unknown_when_key(tmp_path):
 def test_format_value_check_rejects_bogus_format(tmp_path):
     """The format drift check catches a typo'd Format value (#243).
 
-    The format analogue of test_when_value_check_rejects_bogus_platform. The
-    loader accepts the `format` *key* (it is a valid when key); the *value* gap
+    The loader accepts the `format` *key* (it is a valid when key); the *value* gap
     is closed by the _when_format_violations scan, so this exercises that scan
     over a rule whose when.format is bogus.
     """

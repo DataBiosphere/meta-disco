@@ -26,7 +26,7 @@ file_format (extension)
 - `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
-- `RNA-seq` ← STAR in @PG (`program_star` declares it), or any transcriptomic modality (`rnaseq_modality`)
+- `RNA-seq` ← STAR in @PG (`program_star` declares it). No rule infers it from the modality: that read another rule's answer, and was removed (#88)
 - `WGS` is no longer inferred: `hifi` names a chemistry, which says neither assay nor modality, and a long-read platform is not an assay (#430)
 
 **platform**:
@@ -138,13 +138,10 @@ data can verify (#430). They report nothing. If one arrives, a rule keyed on the
 extension can claim `data_type: peaks` — the format is used for ATAC and ChIP alike,
 so the extension cannot say which, and `data_modality` would stay unset.
 
-A `.bed` whose name carries a peak indicator (`atac`, `chip`, `h3k*`, `peak`,
-`summit`) is excluded from `intervals_fallback` and so reports nothing, rather than
-being called `genomic` annotations by default. The indicator is too weak to say which
-epigenomic assay produced the file — which is why the rules that claimed one were
-deleted — and strong enough to say the genomic default is wrong. It appears in the
-rules only as an exclusion: a token that withholds a claim can cost coverage, but
-cannot assert a wrong value.
+A `.bed` with no signal of its own reports nothing. The rule that called such a file
+`genomic` annotations by default, `intervals_fallback`, was deleted with every other
+fallback (#88): a rule has an opinion or none, never fills a field only because other
+rules left it empty, and a disagreement is settled by tier or by a curator.
 
 Four rules used to claim `peaks` from a filename instead — `bed_peaks_generic`,
 `bed_atac_peaks`, `bed_chip_peaks` and `intervals_chip_peaks` — and all four fired on no
@@ -153,7 +150,7 @@ other two were delimiter-carrying (`\.chip\.|chip[-_]?seq|…`) and went for bei
 not for being unanchored.
 
 **data_modality**:
-- `genomic` ← regions.bed pattern, fallback default
+- `genomic` ← regions.bed pattern
 - `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
 - `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)

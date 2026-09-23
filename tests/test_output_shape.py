@@ -156,6 +156,13 @@ GOLDEN_INPUTS = {
             entry_id="g-vcf-1",
             **PUBLISHED_ASSEMBLY_ONLY,
         ),
+        # Names two assemblies, so two tier-2 filename rules disagree and the slot is a
+        # `conflict` (#88) — the only record here that carries one, so the schema gate
+        # checks that shape. A VCF because its stub header declares no contigs, which
+        # leaves the conflict standing (the BED stub's coordinates would decide it).
+        _golden_record(
+            "8", file_name="sample.chm13.hg38.vcf.gz", file_size=5001, file_format=".vcf.gz", entry_id="g-vcf-2"
+        ),
     ],
     "fastq": [
         _golden_record("d", file_name="sample.fastq.gz", file_size=8000, file_format=".fastq.gz", entry_id="g-fastq-1"),
@@ -511,6 +518,24 @@ def test_output_structural_contract(output):
                     assert ev.get("source_type") in schema_vocab.source_type_values(), (
                         f"{ftype}.{field} claim has missing or unknown source_type: {ev}"
                     )
+
+
+def test_the_golden_carries_a_conflict(output):
+    """At least one golden record is in conflict, marker included, so the schema gate
+    validates the shape #88 added rather than only the three older statuses."""
+    conflicts = [
+        (ftype, record["file_name"], field)
+        for ftype, record in _all_records(output)
+        for field in CLASSIFICATION_FIELDS
+        if record["classifications"][field]["status"] == "conflict"
+    ]
+    assert conflicts, "no golden record carries a conflict; the schema gate would not check that shape"
+    for ftype, name, field in conflicts:
+        entry = next(r for t, r in _all_records(output) if t == ftype and r["file_name"] == name)["classifications"][
+            field
+        ]
+        assert entry["value"] is None
+        assert any(e.get("marker") == "conflict" for e in entry["evidence"]), f"{name}.{field}: no conflict marker"
 
 
 def test_output_values_in_vocabulary(output):

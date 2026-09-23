@@ -24,8 +24,7 @@ decidable from which side has a value. Whether two values *agree* is not: `GRCh3
 Gencode40` and `GRCh38` are the same assembly and different strings, so splitting
 `review` into agrees/disagrees needs the value mappings, which `value_map` now holds
 (#414) and this report does not yet read. Rather than guess at equality, `review` names the pair and the report lists every
-one — 1,055 files across five distinct pairs, small enough to read and exactly the row
-set #414 is owed.
+one — a small enough set to read, and exactly the row set #414 is owed.
 
 **`keep` is a recommendation, not an adoption.** The inferred `value` on those files
 stays `not_classified`. Nothing here is merged into the answer; the recommendation
@@ -41,7 +40,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import NOT_CLASSIFIED, field_label
+from .models import CONFLICT, NOT_CLASSIFIED, field_label
 from .output_utils import iter_records
 from .records import PUBLISHED_FIELDS
 from .summaries import md_table
@@ -84,13 +83,15 @@ def _code(value: str) -> str:
     return f"{fence}{pad}{value}{pad}{fence}"
 
 
-# The repository publishes nothing; this run inferred a value. Nothing is owed.
+# The repository publishes nothing; this run inferred a value (a real value or
+# not_applicable — never a conflict, which offers nothing to add). Nothing is owed.
 ADD = "add"
 # The repository publishes a value; this run inferred none. The published value should
 # stand — a recommendation about a value we do not publish, not a change to one we do.
 KEEP = "keep"
-# Both have a value. Whether they agree is not decided here — this report does not read
-# the value map (#414) — so the pair is named rather than judged.
+# Both have an answer — ours may be a conflict, which is worth a look beside what is
+# published. Whether they agree is not decided here — this report does not read the
+# value map (#414) — so the pair is named rather than judged.
 REVIEW = "review"
 # Neither has a value. The residual backlog.
 NONE = "none"
@@ -102,7 +103,7 @@ RECOMMENDATIONS = (ADD, KEEP, REVIEW, NONE)
 # A `review` pair listed file by file rather than only counted. Above this a pair is
 # bulk (the two 400+ and 600+ cohorts, one value pair each) and the count is the fact;
 # below it the individual files are, and that is where the eight interesting rows live
-# — four .bai/.tbi, two intervals_fallback BEDs, two .h5ad.
+# — four .bai/.tbi and two .h5ad.
 MAX_NAMED_PER_PAIR = 20
 
 
@@ -120,12 +121,17 @@ def spoke(label: str | None) -> bool:
 
 
 def recommendation(published_values: list[str] | None, label: str | None) -> str:
-    """The recommendation for one file and one dimension. See the module docstring."""
+    """The recommendation for one file and one dimension. See the module docstring.
+
+    A ``conflict`` beside a published value is ``review``, because our rules
+    disagreeing is worth a look against what is published; with nothing published it
+    is ``none``, because a conflict carries no value to add (#88).
+    """
     if published_values and spoke(label):
         return REVIEW
     if published_values:
         return KEEP
-    return ADD if spoke(label) else NONE
+    return ADD if spoke(label) and label != CONFLICT else NONE
 
 
 @dataclass(frozen=True)
@@ -432,10 +438,10 @@ def render_report(report: ComparisonReport) -> str:
         *md_table(
             ["recommendation", "meaning"],
             [
-                ["`add`", "nothing published; meta-disco inferred a value"],
-                ["`keep`", "a value is published; meta-disco inferred none"],
-                ["`review`", "both have a value"],
-                ["`none`", "neither has a value"],
+                ["`add`", "nothing published; meta-disco inferred a value or not_applicable"],
+                ["`keep`", "a value is published; meta-disco inferred nothing"],
+                ["`review`", "a value is published; meta-disco inferred a value, not_applicable, or a conflict"],
+                ["`none`", "nothing published; meta-disco inferred nothing, or a conflict"],
             ],
         ),
         "",

@@ -13,14 +13,15 @@ from .models import (
     CLAIM_STATES,
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    CONFLICT,
     EXTERNAL_SOURCE_TYPES,
     NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
-    SOURCE_SIGNAL_INFERENCE,
     SOURCE_TYPES,
+    STATUS_LABELS,
     UNMAPPED,
     ClaimSource,
     ClassificationResult,
@@ -194,8 +195,7 @@ def make_claim(
     an external claim; the one it carries names a real, reviewable mapping. ``source_type`` is required
     on every claim and checked against the schema's ``source_type_enum``; it is
     deliberately not derived from ``tier``, which cannot tell ``contig_detection``
-    from ``content_read`` (both at ``CONTENT_TIER``) nor either from
-    ``signal_inference`` (at a rule tier without being a rule).
+    from ``content_read`` (both at ``CONTENT_TIER``).
 
     **Tier.** Required on a claim that declares a ``value`` or ``status`` *and
     competes* — that is, one of ours. A claim that competes must never fall back to a
@@ -407,12 +407,15 @@ def _not_classified_marker(fld: str) -> dict:
     }
 
 
-def _conflict_marker(fld: str, competing: list[str]) -> dict:
-    """The synthetic marker recording that top-tier claims disagreed."""
+def conflict_marker(fld: str, competing: list[str]) -> dict:
+    """The synthetic marker recording that top-tier claims disagreed. It carries the
+    same ``conflict`` status the field resolves to (#88) and the competing values;
+    the claims themselves stay in the evidence beside it. Public because the coverage
+    report reads the shape by key and its test builds the fixture through it."""
     return {
         "marker": CONFLICT_MARKER,
         "reason": f"Conflicting {fld}: {competing} — ambiguous",
-        "status": NOT_CLASSIFIED,
+        "status": CONFLICT,
         "competing_values": competing,
     }
 
@@ -451,9 +454,9 @@ class ExtendedClassificationResult:
         ``status_for_value(value)``. A CLASSIFIED status stores the value; any
         non-classified status stores None (the sentinel lives only in
         ``field_status``). ``fld`` must be a known classification field and
-        ``status`` one of classified / not_applicable / not_classified — a typo
-        raises rather than silently creating a stray attribute or emitting an
-        invalid status. The (value, status) pairing is checked against the single
+        ``status`` CLASSIFIED or one of ``models.STATUS_LABELS`` — a typo raises
+        rather than silently creating a stray attribute or emitting an invalid
+        status. The (value, status) pairing is checked against the single
         coherence definition (``models._assert_coherent``): a CLASSIFIED status
         without a real value, or a non-classified status carrying one, raises
         rather than silently mis-storing.
@@ -461,7 +464,7 @@ class ExtendedClassificationResult:
         self._require_field(fld)
         if status is None:
             status = status_for_value(value)
-        if status not in (CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED):
+        if status != CLASSIFIED and status not in STATUS_LABELS:
             raise ValueError(f"unknown status {status!r} for field {fld}")
         _assert_coherent(value, status)  # single coherence definition (models)
         setattr(self, fld, value if status == CLASSIFIED else None)
@@ -497,7 +500,7 @@ class ExtendedClassificationResult:
         whose only claim is an imported one therefore stays ``not_classified``, with
         the import visible beside the placeholder saying no rule determined a value —
         which is true of it, and is what #396 will compare against. A same-tier
-        disagreement therefore resolves to ``not_classified`` here, rather than the
+        disagreement therefore resolves to ``conflict`` here (#88), rather than the
         last writer silently winning. A ``state`` claim declares nothing, so
         appending one records the source's answer without changing the field —
         and a field carrying only such claims keeps its synthetic
@@ -531,6 +534,26 @@ class ExtendedClassificationResult:
         self.set_field(fld, evaluation.value, evaluation.status)
         self._sync_markers(fld, evaluation)
 
+    def merge_claims(self, other: "ExtendedClassificationResult") -> None:
+        """Add ``other``'s claims to this result and re-resolve every field.
+
+        For a second read of the same file's content (the FASTQ read name behind an
+        archive prefix): its claims join this result's and compete by tier like any
+        others, so neither pass overrides the other outside resolution (#88). A claim
+        already present — same rule, same declaration — is not added twice, and
+        ``other``'s synthetic markers are dropped, since ``_sync_markers`` writes the
+        ones the merged resolution warrants.
+        """
+        for fld in self.field_status:
+            present = {(c.get("rule_id"), _claim_declaration(c)) for c in self.field_evidence[fld]}
+            for claim in other.field_evidence.get(fld, []):
+                if _is_synthetic_marker(claim) or (claim.get("rule_id"), _claim_declaration(claim)) in present:
+                    continue
+                self.field_evidence[fld].append(claim)
+            evaluation = evaluate_claims(self.field_evidence[fld])
+            self.set_field(fld, evaluation.value, evaluation.status)
+            self._sync_markers(fld, evaluation)
+
     def _sync_markers(self, fld: str, evaluation: "ClaimResolution") -> None:
         """Rewrite a field's synthetic markers to match its current resolution.
 
@@ -547,7 +570,7 @@ class ExtendedClassificationResult:
         # competing_values is non-None iff the resolution is a conflict (ClaimResolution
         # invariant); testing it directly narrows the type without a separate assert.
         if evaluation.competing_values is not None:
-            self.field_evidence[fld].append(_conflict_marker(fld, evaluation.competing_values))
+            self.field_evidence[fld].append(conflict_marker(fld, evaluation.competing_values))
         elif evaluation.reason == ResolutionReason.NO_CLAIMS:
             self.field_evidence[fld].append(_not_classified_marker(fld))
 
@@ -559,15 +582,10 @@ class ExtendedClassificationResult:
             raise ValueError(f"unknown classification field {fld!r}")
 
     def status_of(self, fld: str) -> str:
-        """Resolved status of a dimension (classified / not_applicable / not_classified)."""
+        """Resolved status of a dimension (classified / not_applicable / not_classified /
+        conflict)."""
         self._require_field(fld)
         return self.field_status[fld]
-
-    def is_declared(self, fld: str) -> bool:
-        """True if a definitive statement was made for the field — a real value
-        (CLASSIFIED) or an explicit not_applicable — vs not_classified/unset."""
-        self._require_field(fld)
-        return self.field_status[fld] in (CLASSIFIED, NOT_APPLICABLE)
 
     def label(self, fld: str) -> str | None:
         """Combined value-or-status label for the field (mirrors models.field_label):
@@ -585,12 +603,8 @@ class ExtendedClassificationResult:
         conflict markers) carry no ``rule_id`` and are skipped — they are not
         rules. The content classifiers in ``header_classifier`` do contribute
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
-        ``vcf_contig_length``, ``aligned_to_reference``, the ``fasta_*`` and
-        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
-        assay contributes the id of the assay rule that matched — ``rnaseq_modality``
-        — which lives in the file's ``assay_type_rules`` document, not its ``rules``
-        list; the one shared
-        ``infer_assay_type`` id those used to emit is gone (#430).
+        ``vcf_contig_length``, the ``fasta_*`` and
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``.
 
         So a caller must not assume an ID here names a rule in the ``rules`` list of
         unified_rules.yaml.
@@ -598,11 +612,8 @@ class ExtendedClassificationResult:
         **An imported claim now contributes one too.** It used to carry a ``source``
         and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
         cites the ``rule_id`` of the mapping that produced it, and only an
-        ``unmapped`` one still names nothing. The assay rules that
-        ``infer_assay_type`` evaluates read this list through their
-        ``matched_rules_any`` conditions, written against our own rule IDs, so a
-        ``map_*`` id could satisfy — or fail to satisfy — one of them. Nothing feeds an imported claim into ``field_evidence`` until the join
-        lands, so whether these belong here is #402's to settle.
+        ``unmapped`` one still names nothing. Nothing feeds an imported claim into
+        ``field_evidence`` until reconcile lands (#432).
         """
         seen = set()
         result = []
@@ -718,8 +729,9 @@ class ResolutionReason(str, Enum):
 class ClaimResolution:
     """The resolved outcome of ``evaluate_claims`` for one classification field.
 
-    ``competing_values`` is non-None only for a conflict (``None`` otherwise);
-    ``is_conflict`` derives from it, so the two can never disagree.
+    ``competing_values`` is non-None exactly when ``status`` is CONFLICT (#88), which
+    ``__post_init__`` enforces; ``is_conflict`` derives from it, so the three can
+    never disagree.
     """
 
     value: str | None
@@ -727,24 +739,36 @@ class ClaimResolution:
     reason: ResolutionReason
     competing_values: list[str] | None = None
 
+    def __post_init__(self) -> None:
+        if (self.competing_values is not None) != (self.status == CONFLICT):
+            raise ValueError(f"competing_values and status {self.status!r} disagree about being a conflict")
+
     @property
     def is_conflict(self) -> bool:
         return self.competing_values is not None
 
 
-def _resolved(
-    declaration: str | None,
-    reason: ResolutionReason,
-    competing: list[str] | None = None,
-) -> ClaimResolution:
+def _resolved(declaration: str | None, reason: ResolutionReason) -> ClaimResolution:
     """Package a winning declaration as a ``ClaimResolution``: a real declaration
     becomes value with status CLASSIFIED; a status declaration becomes that status
-    with value None — so a sentinel never lands in ``value``."""
+    with value None — so a sentinel never lands in ``value``. A conflict has no
+    winning declaration and is built by ``_conflict`` instead."""
     status = status_for_value(declaration)
     return ClaimResolution(
         value=declaration if status == CLASSIFIED else None,
         status=status,
         reason=reason,
+    )
+
+
+def _conflict(competing: list[str]) -> ClaimResolution:
+    """Package a same-tier disagreement: status CONFLICT, no value, and the
+    competing declarations (#88). ``status_for_value`` cannot derive CONFLICT — no
+    value carries it — which is why this is not a ``_resolved`` call."""
+    return ClaimResolution(
+        value=None,
+        status=CONFLICT,
+        reason=ResolutionReason.CONFLICT,
         competing_values=competing,
     )
 
@@ -765,7 +789,7 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     - All claims agree → use that declaration
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
-    - Claims disagree, same max tier → conflict (not_classified)
+    - Claims disagree, same max tier → conflict (status ``conflict``, no value, #88)
 
     Tier ladder: tiers 1-3 are the rule tiers (extension / filename / header,
     declared in ``unified_rules.yaml``); ``CONTENT_TIER`` (4) is reserved for
@@ -857,34 +881,7 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
         return _resolved(top_tier_decls.pop(), ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE)
 
     # Same tier, different values — conflict
-    return _resolved(NOT_CLASSIFIED, ResolutionReason.CONFLICT, competing=sorted(top_tier_decls))
-
-
-_CONDITION_WORDS = {
-    "matched_rules_any": "the aligner named in the header",
-    "data_modality_contains": "the resolved modality",
-    "data_modality": "the resolved modality",
-    "platform": "the resolved platform",
-    "platform_in": "the resolved platform",
-    "file_format": "the file format",
-    "file_format_not": "the file format",
-    "file_size_gb_gt": "the file size",
-    "file_size_gb_lt": "the file size",
-}
-
-
-def _describe_conditions(conditions: dict) -> str:
-    """The signals an assay rule actually reads, for its evidence reason.
-
-    Derived from the rule's condition keys rather than typed, so the reason cannot
-    say "file size" after the last size rule is gone — which the previous constant
-    did (#430)."""
-    words = []
-    for key in conditions:
-        w = _CONDITION_WORDS.get(key, key)
-        if w not in words:
-            words.append(w)
-    return " and ".join(words) if words else "no conditions"
+    return _conflict(sorted(top_tier_decls))
 
 
 class RuleEngine:
@@ -984,11 +981,10 @@ class RuleEngine:
         for tier in range(1, max_tier + 1):
             tier_rules = [r for r in applicable_rules if r.tier == tier]
             for rule in tier_rules:
-                if self._rule_matches(rule, ext_info, result):
+                if self._rule_matches(rule, ext_info):
                     self._apply_rule(rule, result)
-        # Evaluate all collected claims, then attempt assay_type inference
+        # Evaluate all collected claims
         self._finalize_result(result)
-        self.infer_assay_type(result, ext_info)
         return result
 
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
@@ -1005,10 +1001,10 @@ class RuleEngine:
             result.set_field(fld, evaluation.value, evaluation.status)
             result._sync_markers(fld, evaluation)
 
-    def _rule_matches(
-        self, rule: UnifiedRule, file_info: ExtendedFileInfo, current: ExtendedClassificationResult
-    ) -> bool:
-        """Check if a unified rule's conditions match."""
+    def _rule_matches(self, rule: UnifiedRule, file_info: ExtendedFileInfo) -> bool:
+        """Check if a unified rule's conditions match. It reads only the file: no
+        other rule's result is passed in, so a rule cannot condition on what
+        another rule said (#88)."""
         when = rule.when
 
         # Handle 'always: true'
@@ -1055,37 +1051,9 @@ class RuleEngine:
         ):
             return False
 
-        # Check platform constraint — check claims since fields aren't set until evaluation
-        if platform := when.get("platform"):
-            platform_claims = [c.get("value") for c in current.field_evidence.get("platform", [])]
-            if platform not in platform_claims and file_info.platform != platform:
-                return False
-
         # Check file format constraint
         if (file_format := when.get("file_format")) and file_info.file_format != file_format:
             return False
-
-        # Check modality_not_set — true unless data_modality already has a
-        # definitive declaration (a real value or an explicit not_applicable; a
-        # not_classified declaration does not count as "set").
-        if when.get("modality_not_set"):
-            declared = [
-                c
-                for c in current.field_evidence.get("data_modality", [])
-                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
-            ]
-            if declared:
-                return False
-
-        # Check reference_not_set — same "definitive declaration" test as above.
-        if when.get("reference_not_set"):
-            declared = [
-                c
-                for c in current.field_evidence.get("reference_assembly", [])
-                if _claim_declaration(c) not in (None, NOT_CLASSIFIED)
-            ]
-            if declared:
-                return False
 
         # Check header section (tier 3) — skip if checking for absence
         if (
@@ -1201,93 +1169,6 @@ class RuleEngine:
                 result.field_evidence[fld].append(
                     make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, source_type=source_type, status=status)
                 )
-
-    def infer_assay_type(self, result: ExtendedClassificationResult, file_info: ExtendedFileInfo) -> None:
-        """Infer assay type from other classification signals.
-
-        Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already declared
-        (a real value or an explicit not_applicable).
-        """
-        if result.is_declared("assay_type"):
-            return
-        # Don't infer over conflicts
-        assay_evidence = result.field_evidence.get("assay_type", [])
-        if any(e.get("marker") == CONFLICT_MARKER for e in assay_evidence):
-            return
-
-        for assay_rule in self.rules.assay_type_rules:
-            conditions = assay_rule.conditions
-
-            # Check matched_rules_any condition
-            if (matched_any := conditions.get("matched_rules_any")) and not any(
-                r in result.rules_matched for r in matched_any
-            ):
-                continue
-
-            # Check data_modality_contains condition
-            if modality_contains := conditions.get("data_modality_contains"):
-                if result.data_modality is None:
-                    continue
-                if modality_contains not in result.data_modality:
-                    continue
-
-            # Check data_modality exact match condition
-            if (modality := conditions.get("data_modality")) and result.data_modality != modality:
-                continue
-
-            # Check platform condition
-            if (platform := conditions.get("platform")) and result.platform != platform:
-                continue
-
-            # Check platform_in condition
-            if (platform_in := conditions.get("platform_in")) and result.platform not in platform_in:
-                continue
-
-            # Check file_format condition
-            if (file_format := conditions.get("file_format")) and file_info.file_format != file_format:
-                continue
-
-            # Check file_format_not condition
-            if (file_format_not := conditions.get("file_format_not")) and file_info.file_format == file_format_not:
-                continue
-
-            # Check file_size_gb_gt condition
-            if (size_gt := conditions.get("file_size_gb_gt")) and (
-                file_info.file_size_gb is None or file_info.file_size_gb <= size_gt
-            ):
-                continue
-
-            # Check file_size_gb_lt condition
-            if (size_lt := conditions.get("file_size_gb_lt")) and (
-                file_info.file_size_gb is None or file_info.file_size_gb >= size_lt
-            ):
-                continue
-
-            # All conditions passed — record the inference as a claim, under the
-            # matched rule's own id. These rules used to emit one constant id
-            # with a reason naming only the value, so distinct rules collapsed
-            # into one line and whether a given one had ever fired was
-            # unanswerable from any run (#430) — which is how the file-size
-            # rules went unmeasured until then, and then went altogether.
-            # add_claim sets the field, drops the synthetic not_classified
-            # placeholder, and enforces make_claim's invariants. tier 3: the inference derives from
-            # already-resolved signals (the header-derived platform is typically
-            # tier 3), so it carries a tier rather than the tier-0 default #228
-            # will forbid; it never competes (the is_declared guard above means it
-            # only fires when no other claim determined assay_type), so the tier is
-            # for consistency, not resolution. Its source kind is stated rather
-            # than read off that tier: this reads other dimensions' resolved
-            # values, plus the file's format and size — not a header (#392).
-            result.add_claim(
-                "assay_type",
-                rule_id=assay_rule.id,
-                tier=3,
-                source_type=SOURCE_SIGNAL_INFERENCE,
-                reason=f"Inferred {assay_rule.assay_type} by {assay_rule.id} from {_describe_conditions(assay_rule.conditions)}",
-                value=assay_rule.assay_type,
-            )
-            return
 
     def classify_with_bam_header(
         self,

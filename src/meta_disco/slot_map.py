@@ -187,9 +187,7 @@ DERIVATIVE = "derivative"
 def structural_exclusion(slot: str, column: str, span: str) -> str | None:
     """Which of the two structural rules refuses ``span`` as a source for ``slot`` on ``column``, if either.
 
-    The one statement of both rules: the loader raises on what this returns, and the
-    forecast (`anvil_forecast.name_claims`) counts it, so a rule added here reaches
-    both. ``ENTITY`` — a token of the span names what a row is; ``DERIVATIVE`` — the
+    The one statement of both rules: the loader raises on what this returns. ``ENTITY`` — a token of the span names what a row is; ``DERIVATIVE`` — the
     slot is ``data_type`` and the column is an index or checksum sidecar.
     """
     if any(token in ENTITY_TOKENS for token in name_tokens(span)):

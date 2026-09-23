@@ -6,6 +6,7 @@ from meta_disco.file_name import EXTENSION_MAP, FileName, Format
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
+    CONFLICT,
     DECLINED,
     NO_VOCABULARY_TERM,
     NOT_APPLICABLE,
@@ -175,12 +176,11 @@ class TestFormatMatching:
         from meta_disco.rule_loader import UnifiedRule
 
         fasta = ExtendedFileInfo(name=FileName.parse("genome.fa"), format=Format.FASTA)
-        result = ExtendedClassificationResult()
         empty_fmt = UnifiedRule(id="x", tier=1, scope="extension", when={"format": ""}, then={}, rationale="")
-        assert engine._rule_matches(empty_fmt, fasta, result) is False
+        assert engine._rule_matches(empty_fmt, fasta) is False
         # Control: the same rule keyed on the real format still matches.
         real_fmt = UnifiedRule(id="y", tier=1, scope="extension", when={"format": "FASTA"}, then={}, rationale="")
-        assert engine._rule_matches(real_fmt, fasta, result) is True
+        assert engine._rule_matches(real_fmt, fasta) is True
 
     def test_classify_extended_normalizes_file_format_case(self, engine):
         """A mixed-case header-only file_format is lower-cased once at the source,
@@ -319,7 +319,7 @@ class TestSetFieldValidation:
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
-    @pytest.mark.parametrize("accessor", ["status_of", "is_declared", "label"])
+    @pytest.mark.parametrize("accessor", ["status_of", "label"])
     def test_read_accessors_reject_unknown_field(self, accessor):
         # Read helpers raise a consistent ValueError (not a bare KeyError) on a typo.
         result = ExtendedClassificationResult()
@@ -588,7 +588,7 @@ class TestAddClaim:
 
     def test_second_claim_accumulates_and_re_resolves(self):
         # Two calls accumulate (append, not replace) and the field re-derives from
-        # the full list — here a same-tier disagreement resolves to not_classified,
+        # the full list — here a same-tier disagreement resolves to conflict (#88),
         # and _sync_markers records a conflict marker explaining why, so add_claim
         # stays consistent with _finalize_result. The resolution rule itself is
         # TestEvaluateClaims' job.
@@ -600,10 +600,11 @@ class TestAddClaim:
             "reference_assembly", rule_id="b", reason="y", tier=2, source_type=SOURCE_FILENAME_RULE, value="GRCh37"
         )
         assert result.reference_assembly is None
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
         evidence = result.field_evidence["reference_assembly"]
         assert [e.get("rule_id") for e in evidence[:2]] == ["a", "b"]
         assert evidence[-1]["marker"] == "conflict"
+        assert evidence[-1]["status"] == CONFLICT
         assert "rule_id" not in evidence[-1]
         assert set(evidence[-1]["competing_values"]) == {"GRCh38", "GRCh37"}
 
@@ -642,7 +643,7 @@ class TestAddClaim:
         )
         result.add_claim(
             "data_modality",
-            rule_id="aligned_to_reference",
+            rule_id="content_modality",
             reason="aligned",
             tier=4,
             source_type=SOURCE_CONTIG_DETECTION,
@@ -650,7 +651,7 @@ class TestAddClaim:
         )
         assert result.data_modality == "genomic"
         rule_ids = [e["rule_id"] for e in result.field_evidence["data_modality"]]
-        assert rule_ids == ["fastq_modality_unknown", "aligned_to_reference"], rule_ids
+        assert rule_ids == ["fastq_modality_unknown", "content_modality"], rule_ids
 
     def test_drops_synthetic_placeholder_even_on_non_assertive_add(self):
         # Adding any claim makes the synthetic "no rule determined a value"
@@ -685,7 +686,7 @@ class TestAddClaim:
                 {
                     "marker": "conflict",
                     "reason": "Conflicting reference_assembly: ['GRCh37', 'GRCh38'] — ambiguous",
-                    "status": NOT_CLASSIFIED,
+                    "status": CONFLICT,
                     "competing_values": ["GRCh37", "GRCh38"],
                 },
             ]
@@ -812,50 +813,58 @@ class TestAssemblyTokenIsNotTheGatkReferenceName:
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
 
-class TestPeakNamedBedFallback:
-    """`intervals_fallback` declines a peak-named `.bed` rather than calling it genomic.
+class TestMergeClaims:
+    """A second read of the same content joins the first by tier, never over it (#88)."""
 
-    The positive peak rules are gone (#430); this pins the exclusion that replaced
-    them, so a future edit to the fallback's lookahead cannot quietly restore the
-    `genomic` default for `atac_peaks.bed`."""
+    @staticmethod
+    def _result(*claims):
+        result = ExtendedClassificationResult()
+        for rule_id, value in claims:
+            result.add_claim(
+                "platform", rule_id=rule_id, reason="r", tier=3, source_type=SOURCE_FILENAME_RULE, value=value
+            )
+        return result
+
+    def test_a_merged_claim_that_disagrees_at_the_same_tier_is_a_conflict(self):
+        first = self._result(("archive_form", "ILLUMINA"))
+        first.merge_claims(self._result(("original_form", "PACBIO")))
+        assert first.status_of("platform") == CONFLICT
+        assert first.field_evidence["platform"][-1]["marker"] == "conflict"
+
+    def test_a_conflict_is_not_overwritten_by_a_merged_agreeing_claim(self):
+        first = self._result(("a", "ILLUMINA"), ("b", "PACBIO"))
+        first.merge_claims(self._result(("c", "ILLUMINA")))
+        assert first.status_of("platform") == CONFLICT
+
+    def test_a_claim_both_passes_made_is_kept_once(self):
+        first = self._result(("same_rule", "ONT"))
+        first.merge_claims(self._result(("same_rule", "ONT")))
+        assert first.platform == "ONT"
+        assert [e["rule_id"] for e in first.field_evidence["platform"]] == ["same_rule"]
+
+
+class TestNoBedFallback:
+    """No rule answers for a BED only because no other rule did (#88).
+
+    `intervals_fallback` called any BED with no other signal `genomic` annotations,
+    excluding peak-named ones; it is deleted, because a rule has an opinion of its
+    own or none and never fills a field others left empty. Every name here — peak
+    indicator or not — now gets no modality rather than a default."""
 
     @pytest.mark.parametrize(
         "name",
         [
+            "sample.bed",
+            "chr_sizes.bed",
             "atac_peaks.bed",
             "H3K27ac_chip_peaks.bed",
             "sample_summits.bed",
-            "H3K27ac.bed",
-            "sample.chip.bed",
-            # The assay spelled as one word, which a bare `atac`/`chip` token misses
             "atacseq.bed",
-            "chipseq.bed",
-            "atac-seq.bed",
-            "histone_marks.bed",
         ],
     )
-    def test_a_peak_indicator_declines_rather_than_asserting_genomic(self, engine, name):
-        """A name carrying a peak indicator gets no answer, not a confident wrong one.
-
-        Deleting the bare-token peak rules left these falling through to
-        `intervals_fallback`, which called them `genomic` annotations — on `main` they
-        were `epigenomic.chromatin_accessibility`. The token is too weak to say which
-        epigenomic assay it is, which is why those rules went; it is strong enough to
-        say we should not answer `genomic`.
-
-        So the indicator returns to the rules file in an exclusion only. A token used
-        to withhold a claim can cost coverage; it cannot assert a wrong value, which is
-        the failure #430 is about.
-        """
+    def test_a_bed_with_no_signal_of_its_own_is_not_classified(self, engine, name):
         result = engine.classify_extended(FileInfo.from_filename(name))
         assert result.status_of("data_modality") == NOT_CLASSIFIED
-
-    def test_a_plain_bed_still_falls_back_to_genomic(self, engine):
-        """Narrowing `intervals_fallback` to `.bed` and excluding the peak token left
-        its own case untouched — it still answers for a BED with no other signal."""
-        result = engine.classify_extended(FileInfo.from_filename("sample.bed"))
-        assert result.data_modality == "genomic"
-        assert result.data_type == "annotations"
 
 
 class TestTextFiles:
@@ -898,17 +907,18 @@ class TestIntegration:
 
 
 class TestConflictingReferenceRules:
-    """Test that conflicting reference_assembly rules produce not_classified."""
+    """Test that conflicting reference_assembly rules produce a conflict (#88)."""
 
     def test_ambiguous_filename_two_refs(self, engine):
-        """Filename with both CHM13 and hg38 should be not_classified."""
+        """Filename with both CHM13 and hg38 is a conflict, with no value (#88)."""
         result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
+        assert result.reference_assembly is None
 
     def test_liftover_chain_two_refs(self, engine):
-        """Liftover chain with two references should be not_classified."""
+        """Liftover chain with two references is a conflict (#88)."""
         result = engine.classify_extended(FileInfo.from_filename("liftover.hg19.to.hg38.chain"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == CONFLICT
 
     def test_single_ref_not_affected(self, engine):
         """Single reference in filename should still work."""
@@ -928,10 +938,10 @@ class TestConflictingClassificationFields:
     """Test that conflict detection works for all classification fields, not just reference_assembly."""
 
     def test_data_modality_conflict(self, engine):
-        """Same-tier rules disagreeing on data_modality produce not_classified."""
+        """Same-tier rules disagreeing on data_modality produce a conflict (#88)."""
         # `cpg` says methylation and `counts` says expression, both at tier 2.
         result = engine.classify_extended(FileInfo.from_filename("sample.cpg.counts.bed"))
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == CONFLICT
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
 
@@ -945,12 +955,12 @@ class TestConflictingClassificationFields:
         assert any(e.get("marker") == "conflict" for e in evidence)
 
     def test_conflict_evidence_has_status_and_competing_values(self, engine):
-        """Conflict evidence carries a not_classified status (in the status field,
-        not the value slot) and the structured competing_values field."""
+        """The conflict marker carries the field's own conflict status (in the
+        status field, not the value slot) and the structured competing_values."""
         result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
         evidence = result.field_evidence.get("reference_assembly", [])
         conflict = next(e for e in evidence if e.get("marker") == "conflict")
-        assert conflict["status"] == NOT_CLASSIFIED
+        assert conflict["status"] == CONFLICT
         assert "value" not in conflict
         assert set(conflict["competing_values"]) == {"GRCh38", "CHM13"}
 
@@ -1008,14 +1018,14 @@ class TestEvaluateClaims:
         assert result.is_conflict is False
 
     def test_disagree_same_tier(self):
-        """Same tier, different values → conflict (not_classified status, no value)."""
+        """Same tier, different values → conflict: status conflict, no value (#88)."""
         result = evaluate_claims(
             [
                 {"rule_id": "r1", "value": "GRCh38", "tier": 2},
                 {"rule_id": "r2", "value": "CHM13", "tier": 2},
             ]
         )
-        assert result.status == NOT_CLASSIFIED
+        assert result.status == CONFLICT
         assert result.value is None
         assert result.is_conflict is True
         assert result.reason == ResolutionReason.CONFLICT
@@ -1031,7 +1041,7 @@ class TestEvaluateClaims:
                 {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
             ]
         )
-        assert result.status == NOT_CLASSIFIED
+        assert result.status == CONFLICT
         assert result.value is None
         assert result.is_conflict is True
 
@@ -1237,8 +1247,7 @@ class TestClaimStatesDoNotResolve:
 
     def test_accessors_skip_a_claim_with_no_rule_id(self):
         # An external claim names no rule, so rules_matched and reasons pass over
-        # it rather than raising — and rules_matched is read by infer_assay_type's
-        # matched_rules_any conditions, which are written against rule IDs.
+        # it rather than raising.
         result = ExtendedClassificationResult()
         result.add_claim(
             "platform", rule_id="r", reason="illumina", tier=2, source_type=SOURCE_FILENAME_RULE, value="ILLUMINA"
@@ -1322,55 +1331,6 @@ class TestContentTier:
         assert result.value == "GRCh38"
         assert result.is_conflict is False
         assert result.reason == ResolutionReason.UNANIMOUS
-
-
-class TestAssayTypeInference:
-    """Test that infer_assay_type records evidence correctly."""
-
-    def test_inferred_assay_type_has_evidence(self, engine):
-        """Inferred assay_type carries the matched assay rule's id as its evidence."""
-        file_info = ExtendedFileInfo(
-            name=FileName.parse("sample.bam"),
-            file_size=60_000_000_000,
-            file_format=".bam",
-        )
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        # Set the condition that triggers the modality inference (set_field to stay coherent)
-        result.set_field("data_modality", "transcriptomic.bulk")
-        result.set_field("assay_type", status=NOT_CLASSIFIED)
-        result.field_evidence["assay_type"] = []
-        engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "RNA-seq"
-        evidence = result.field_evidence["assay_type"]
-        assert len(evidence) == 1
-        # The matched assay rule's own id, not a shared constant: a transcriptomic
-        # BAM is `rnaseq_modality`, and the evidence says so (#430).
-        assert evidence[0]["rule_id"] == "rnaseq_modality"
-        assert evidence[0]["source_type"] == "signal_inference"
-
-    def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
-        """Inference should remove stale not_classified placeholder evidence."""
-        file_info = ExtendedFileInfo(
-            name=FileName.parse("sample.bam"),
-            file_size=60_000_000_000,
-            file_format=".bam",
-        )
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        result.set_field("data_modality", "transcriptomic.bulk")
-        result.set_field("assay_type", status=NOT_CLASSIFIED)
-        result.field_evidence["assay_type"] = [
-            {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": NOT_CLASSIFIED,
-            }
-        ]
-        engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "RNA-seq"
-        markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
-        assert "not_classified" not in markers
-        rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
-        assert "rnaseq_modality" in rule_ids
 
 
 class TestReasonChain:

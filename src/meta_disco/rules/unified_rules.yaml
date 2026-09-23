@@ -28,11 +28,13 @@
 # 4. CONDITION EVALUATION: All conditions in 'when' must match (AND logic).
 #    If any condition fails, the rule is skipped.
 #
-# 5. EFFECT APPLICATION: When a rule matches, all effects in 'then' are applied.
-#    Effects accumulate across rules unless a field is already set.
+# 5. EFFECT APPLICATION: When a rule matches, each effect in 'then' becomes one
+#    claim on its field. Every matching rule's claims are kept; none is skipped
+#    because a field already has a value.
 #
-# 6. TERMINAL RULES: If terminal=true and the rule matches, processing stops
-#    immediately. Use for definitive classifications.
+# 6. RESOLUTION: After all rules run, each field resolves from its claims: they
+#    agree, or the highest tier wins, or same-tier claims disagree and the field is
+#    a conflict. A not_applicable at the top tier wins over a value there.
 #
 # 7. REASONS: Each matching rule adds its rationale to the reasons list.
 #
@@ -60,9 +62,9 @@
 #  meta_disco.file_name in #252, so it is no longer a document here.)
 # 1. rules: The classification rules (main content)
 # 2. validators: Python validator configurations for complex logic
-# 3. assay_type_rules: Rules for inferring RNA-seq from the aligner and modality
-# 4. illumina_instruments: Instrument ID prefix to model mapping
-# 5. reference_contig_lengths: Chromosome sizes for reference detection
+# 3. illumina_instruments: Instrument ID prefix to model mapping
+# 4. reference_contig_lengths: Chromosome sizes for reference detection
+# (Assay-type inference, which read other rules' answers, was removed in #88.)
 #
 #
 # RULE SCHEMA
@@ -111,10 +113,11 @@
 # - file_size_min_gb: minimum file size in GB
 # - file_size_max_gb: maximum file size in GB
 #
-# State conditions (for rule ordering):
-# - modality_not_set: true if data_modality must be unset
-# - reference_not_set: true if reference_assembly must be unset
-# - platform: required platform value (ILLUMINA, PACBIO, ONT)
+# There are no state conditions: a rule has an opinion or not, and never reads
+# what another rule said. Disagreement is settled only by tier, or by a curator
+# (#88). A rule that names an assay declares the modality that assay implies in
+# its own `then`, from the same evidence; no step derives one slot from another
+# slot's answer.
 #
 # Header conditions (tier 3):
 # - header_section: BAM header section (@HD, @RG, @PG, @SQ)
@@ -139,10 +142,11 @@
 #
 # TIPS FOR REVIEWING/EDITING RULES
 # --------------------------------
-# 1. Check rule order matters within a tier - first match wins for terminal rules
-# 2. More specific patterns should come before general patterns
-# 3. Use terminal=true for definitive classifications to avoid override
-# 4. Use modality_not_set/reference_not_set for fallback rules
+# 1. Rule order does not matter: every matching rule's claims are kept and resolved
+# 2. A pattern should match only what it can vouch for; two rules at one tier that
+#    disagree on a file make a conflict, which is the intended outcome
+# 3. A more specific signal belongs at a higher tier, not in an earlier position
+# 4. No fallback rules: a rule never fills a field only because others left it empty
 # 5. Confidence should reflect certainty: 0.95 for definitive, 0.60-0.80 for heuristics
 # 6. Always provide a rationale explaining the classification logic
 # 7. Test regex patterns - they're case-insensitive by default
@@ -1020,27 +1024,11 @@ rules:
     scope: fastq_header
     when:
       extensions: [".fastq", ".fq"]
-      modality_not_set: true
     then:
       status:
         data_modality: not_classified
     rationale: "FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay"
 
-  # ===========================================================================
-  # FALLBACK RULES
-  # ===========================================================================
-
-  - id: intervals_fallback
-    tier: 2
-    scope: filename
-    when:
-      extensions: [".bed"]
-      filename_pattern: "(?i)^(?!(?:.*[._-])?(?:(?:narrow|broad)peak|h3k\\w*|histone|(?:atac|chip)(?:[-_]?seq)?|peaks?|summits?)[._-])"
-      modality_not_set: true
-    then:
-      data_modality: genomic
-      data_type: annotations
-    rationale: "BED file with no specific pattern - defaulting to genomic intervals"
 
 
 ---
@@ -1085,26 +1073,6 @@ validators:
     module: "meta_disco.validators.read_name_parsers"
     function: "infer_illumina_instrument_model"
     applies_to: ["header", "fastq_header"]
-
----
-# =============================================================================
-# ASSAY TYPE INFERENCE RULES
-# =============================================================================
-# Priority-ordered rules for inferring assay type from other signals
-
-assay_type_rules:
-  - id: rnaseq_modality
-    priority: 95
-    conditions:
-      data_modality_contains: transcriptomic
-    assay_type: RNA-seq
-
-
-
-
-
-
-
 
 ---
 # =============================================================================

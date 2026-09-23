@@ -84,6 +84,9 @@
       '#218bff', '#a475f9', '#d4a72c', '#ff8c00', '#6e7781',
     ];
     const NC_COLOR = '#d0d7de';
+    const CONFLICT_COLOR = '#bf8700';
+    // A status label's bar colour; a real value takes the next palette colour.
+    const STATUS_COLORS = { not_classified: NC_COLOR, None: NC_COLOR, conflict: CONFLICT_COLOR };
 
     // Summary cards
     const cardsEl = document.getElementById('summary-cards');
@@ -127,9 +130,10 @@
         <table class="nc-table" style="width: auto; margin-bottom: 12px;">
           <tr><td><strong>Files classified</strong></td><td>${dim.classified.toLocaleString()}</td><td>${(100 * dim.classified / DATA.total).toFixed(1)}%</td></tr>
           <tr><td><strong>Not classified</strong></td><td>${dim.not_classified.toLocaleString()}</td><td>${(100 * dim.not_classified / DATA.total).toFixed(1)}%</td></tr>
+          <tr><td><strong>Conflict</strong></td><td>${dim.conflict.toLocaleString()}</td><td>${(100 * dim.conflict / DATA.total).toFixed(1)}%</td></tr>
         </table>
       `;
-      html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 20px;">Of the ${DATA.total.toLocaleString()} files, we were able to assign a ${dim.label} to ${dim.classified.toLocaleString()} files, including ${naCount.toLocaleString()} files assigned "not_applicable". There were ${dim.not_classified.toLocaleString()} files we were not able to determine a ${dim.label} for.</p>`;
+      html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 20px;">Of the ${DATA.total.toLocaleString()} files, we were able to assign a ${dim.label} to ${dim.classified.toLocaleString()} files, including ${naCount.toLocaleString()} files assigned "not_applicable". There were ${dim.not_classified.toLocaleString()} files we were not able to determine a ${dim.label} for, and ${dim.conflict.toLocaleString()} where our own rules disagreed.</p>`;
 
       // Horizontal bar chart
       const maxCount = Math.max(...dim.values.map(v => v.count));
@@ -137,7 +141,7 @@
       html += '<div class="chart-container"><div class="bar-chart">';
       dim.values.forEach((v, vi) => {
         const width = (v.count / maxCount * 100).toFixed(1);
-        const color = v.name === 'not_classified' || v.name === 'None' ? NC_COLOR : COLORS[vi % COLORS.length];
+        const color = STATUS_COLORS[v.name] ?? COLORS[vi % COLORS.length];
         const extRows = (v.extensions || [])
           .map(e => `<tr><td>${e.ext}</td><td>${e.count.toLocaleString()}</td></tr>`)
           .join('');
@@ -161,6 +165,17 @@
         html += '<table class="nc-table"><tr><th>Extension</th><th>Count</th><th>Root cause</th></tr>';
         for (const nc of dim.not_classified_breakdown) {
           html += `<tr><td>${nc.ext}</td><td>${nc.count.toLocaleString()}</td><td>${nc.why}</td></tr>`;
+        }
+        html += '</table>';
+      }
+
+      // Conflict breakdown (#88): same-tier rules disagreed, nothing has answered it
+      if (dim.conflict_breakdown && dim.conflict_breakdown.length > 0) {
+        html += '<h3>What\'s in conflict?</h3>';
+        html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 12px;">Rules at the same tier disagreed on ${dim.label} for these files and no curator rule has answered it; no value is asserted.</p>`;
+        html += '<table class="nc-table"><tr><th>Extension</th><th>Competing values</th><th>Count</th></tr>';
+        for (const c of dim.conflict_breakdown) {
+          html += `<tr><td>${c.ext}</td><td>${c.competing}</td><td>${c.count.toLocaleString()}</td></tr>`;
         }
         html += '</table>';
       }

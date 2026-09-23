@@ -20,7 +20,7 @@ from meta_disco.header_classifier import (
     parse_ont_read_name,
     parse_pacbio_read_name,
 )
-from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import CLASSIFIED, CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 
@@ -642,12 +642,12 @@ class TestBamCramClassification:
         assert val(result, "platform") == "PACBIO"
 
     def test_illumina_platform_with_ccs_program_conflict(self):
-        """Illumina platform + PacBio CCS program = platform conflict."""
+        """Illumina platform + PacBio CCS program = platform conflict (#88)."""
         header = """@HD\tVN:1.6
 @RG\tID:sample1\tPL:ILLUMINA
 @PG\tID:ccs\tPN:ccs\tVN:6.4.0"""
         result = classify_from_header(header)
-        assert field_status(result, "platform") == NOT_CLASSIFIED
+        assert field_status(result, "platform") == CONFLICT
 
     def test_empty_header(self):
         """Handle empty header — treated as unaligned."""

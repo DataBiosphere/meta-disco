@@ -39,7 +39,7 @@ from pathlib import Path
 
 import requests
 
-from meta_disco.models import field_status, field_value
+from meta_disco.models import STATUS_LABELS, field_status, field_value
 from meta_disco.output_utils import find_latest_run
 from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
 
@@ -51,8 +51,9 @@ FIELDS = "run_accession,instrument_platform,library_strategy,library_source"
 # guard rejects only letters/digits (an embedded ...XERR123456 is not an
 # accession), not underscores. Greedy \d{6,} consumes the whole digit run.
 ACCESSION_RE = re.compile(r"(?<![A-Za-z0-9])([ESD]RR\d{6,})")
-# Statuses that mean "our side committed nothing" ("" = status absent).
-_SENTINEL_STATUSES = {"not_classified", "not_applicable", "conflict", ""}
+# Statuses that mean "our side committed nothing": every status label
+# (`models.STATUS_LABELS`, conflict included, #88) and "" for a status absent.
+_SENTINEL_STATUSES = STATUS_LABELS | {""}
 
 
 def stored_accession(rec: dict) -> str | None:

@@ -13,9 +13,9 @@ from .file_name import FileName
 CLASSIFIED = "classified"
 NOT_APPLICABLE = "not_applicable"
 NOT_CLASSIFIED = "not_classified"
-# Top-tier claims disagreed (issue #88). Today the rule engine records this as an
-# evidence marker under NOT_CLASSIFIED; the constant exists so consumers that
-# re-emit a parent's status can carry it once it becomes a status of its own.
+# Top-tier claims disagreed and no curator rule has answered it (issue #88; claims
+# contract 4.3's tier stage, 4.7). The rule engine resolves such a field to this status with a
+# null value, and the index producer re-emits a parent's conflict as it.
 CONFLICT = "conflict"
 
 # What field_label emits in place of a value. It renders a classified field as its
@@ -41,13 +41,11 @@ CLAIM_STATES = frozenset({UNMAPPED, NO_VOCABULARY_TERM, DECLINED})
 
 # Kinds of source behind a claim (issue #392). Deliberately not derived from a
 # claim's tier: SOURCE_CONTIG_DETECTION and SOURCE_CONTENT_READ share
-# CONTENT_TIER, and SOURCE_SIGNAL_INFERENCE fires at a rule tier without being a
-# rule.
+# CONTENT_TIER.
 SOURCE_FILENAME_RULE = "filename_rule"
 SOURCE_HEADER_RULE = "header_rule"
 SOURCE_CONTIG_DETECTION = "contig_detection"
 SOURCE_CONTENT_READ = "content_read"
-SOURCE_SIGNAL_INFERENCE = "signal_inference"
 SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
 SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
 SOURCE_REPOSITORY_METADATA = "repository_metadata"
@@ -91,7 +89,6 @@ SOURCE_TYPES = frozenset(
         SOURCE_HEADER_RULE,
         SOURCE_CONTIG_DETECTION,
         SOURCE_CONTENT_READ,
-        SOURCE_SIGNAL_INFERENCE,
         SOURCE_DERIVATION_INHERITANCE,
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
@@ -205,13 +202,17 @@ def status_for_value(value) -> str:
 
     The one place that maps a sentinel-carrying ``value`` to a status string:
     ``not_applicable`` → NOT_APPLICABLE, ``None``/``not_classified`` →
-    NOT_CLASSIFIED, any real value → CLASSIFIED. Used by the read side
+    NOT_CLASSIFIED, ``conflict`` → CONFLICT (#88), any real value → CLASSIFIED.
+    So every label ``field_label`` can emit maps back to its own status, and a
+    ``conflict`` label can never be read as a classified value. Used by the read side
     (``_entry_status``) and by ``build_field_entry`` when a producer carries the
     sentinel in ``value`` and no explicit status is given, so reader and producers
     stay in lockstep as epic #116 moves sentinels out of ``value``.
     """
     if value == NOT_APPLICABLE:
         return NOT_APPLICABLE
+    if value == CONFLICT:
+        return CONFLICT
     if value is None or value == NOT_CLASSIFIED:
         return NOT_CLASSIFIED
     return CLASSIFIED
@@ -341,11 +342,10 @@ def field_status(record: dict, field_name: str) -> str:
     """Status of a classification field.
 
     Returns an explicit non-None ``status`` from the field entry verbatim when
-    present (the shape the migration is moving toward — this may be values beyond
-    the three below, e.g. ``conflict`` in later stages). Otherwise derives the
-    status from the current sentinel-in-``value`` convention, yielding one of
-    CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None value reads as
-    NOT_CLASSIFIED.
+    present — any of the four statuses, ``conflict`` included, which no value can
+    carry. Otherwise derives the status from the sentinel-in-``value`` convention,
+    yielding one of CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None
+    value reads as NOT_CLASSIFIED.
     """
     return _entry_status(_field_entry(record, field_name))
 

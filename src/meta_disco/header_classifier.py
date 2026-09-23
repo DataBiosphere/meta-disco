@@ -215,18 +215,9 @@ def classify_from_header(
             reason=reason,
             value=contig_ref,
         )
-        # Aligned to a known reference genome = genomic data. Guarded so a header
-        # rule that already declared a modality (e.g. transcriptomic) is not
-        # overridden by this genomic claim.
-        if not result.is_declared("data_modality"):
-            result.add_claim(
-                "data_modality",
-                rule_id="aligned_to_reference",
-                tier=CONTENT_TIER,
-                source_type=SOURCE_CONTIG_DETECTION,
-                reason=f"Aligned to {contig_ref} — file contains genomic alignments",
-                value="genomic",
-            )
+        # No modality claim follows from the contigs: DNA and RNA reads aligned to
+        # one genome share its @SQ dictionary, so "aligned to a genome" does not say
+        # which the reads are. The "genomic" guess this used to make is removed (#88).
 
     # Resolve the specific build behind the coarse family (#340). Additive: this
     # never sets or changes reference_assembly, only records which build the
@@ -234,9 +225,6 @@ def classify_from_header(
     # when it concluded nothing — an unresolvable file still keeps its observed
     # checksums so a later table row can resolve it without re-fetching.
     _record_reference_build(result, resolve_identity(signatures, declared))
-
-    # Infer assay type
-    engine.infer_assay_type(result, file_info)
 
     return result.to_output_dict()
 
@@ -390,25 +378,16 @@ def classify_from_fastq_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
-    # If no platform detected and this is archive-reformatted, try the stripped version
-    # This handles cases like @ERR... A00297:... where the Illumina pattern is after the space
-    if not result.is_declared("platform") and accession and remainder.strip():
+    # An archive-reformatted read (@ERR... A00297:...) carries two read names: the
+    # archive's and, after the space, the instrument's original. Both are content,
+    # and a rule may match either (fastq_illumina_ena_hiseq reads the archive form),
+    # so the original is always classified too and its claims resolve by tier with
+    # the first pass's — never only when the first found nothing, and never by
+    # overwriting it (#88).
+    if accession and remainder.strip():
         stripped_read = "@" + remainder.strip()
         file_info_stripped = replace(file_info, fastq_first_read=stripped_read)
-        result_stripped = engine.classify_extended(file_info_stripped, include_tier3=True)
-        if result_stripped.platform:
-            # Merge results - keep the platform and modality from stripped version.
-            # Adopt the stripped modality whenever it made a definitive statement
-            # (a real value or not_applicable), carrying its status — a status-only
-            # declaration has data_modality=None, so a truthiness check would drop it.
-            result.set_field("platform", result_stripped.platform)
-            if result_stripped.is_declared("data_modality"):
-                result.set_field(
-                    "data_modality", result_stripped.data_modality, result_stripped.status_of("data_modality")
-                )
-            # Merge per-field evidence
-            for fld, entries in result_stripped.field_evidence.items():
-                result.field_evidence[fld].extend(entries)
+        result.merge_claims(engine.classify_extended(file_info_stripped, include_tier3=True))
 
     # Detect paired-end from read names or filename
     is_paired_end = None
@@ -879,16 +858,11 @@ def classify_from_fasta_header(
 
         # Need a substantial fraction of expected chromosomes to call it a reference
         if best_count >= 20:
-            # If multiple assemblies tied (all use same chr names), use filename to disambiguate
+            # Assemblies that share chromosome names tie, and a tie names no reference.
+            # The contigs say only what they say: no other claim (a filename's, say) is
+            # borrowed to break it (#88); a filename rule speaks for itself.
             tied = [a for a, c in assembly_counts.items() if c == best_count]
-            if len(tied) == 1:
-                best_ref = tied[0]
-            elif result.reference_assembly:
-                # Rule engine already detected reference from filename (e.g., "chm13" in name)
-                best_ref = result.reference_assembly
-            else:
-                # Can't distinguish — contigs match multiple references equally
-                best_ref = None
+            best_ref = tied[0] if len(tied) == 1 else None
 
             ref_reason = f"Matched {best_count} contigs to reference chromosomes" + (
                 f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"
@@ -986,27 +960,9 @@ def classify_from_fasta_header(
         )
         return result.to_output_dict()
 
-    # 5. Default: preserve rule engine results if they set modality/type,
-    #    otherwise fall back to genomic/sequence. Guarded so a filename rule that
-    #    already declared the field is not overridden by the content default.
-    if not result.is_declared("data_modality"):
-        result.add_claim(
-            "data_modality",
-            rule_id="fasta_default_genomic",
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTIG_DETECTION,
-            reason=f"FASTA with {num_contigs} contigs — defaulting to genomic",
-            value="genomic",
-        )
-    if not result.is_declared("data_type"):
-        result.add_claim(
-            "data_type",
-            rule_id="fasta_default_genomic",
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTIG_DETECTION,
-            reason="Unable to determine specific FASTA type from headers",
-            value="sequence",
-        )
+    # 5. Nothing above matched: the rule engine's results stand as they are. There is
+    #    no content default — a FASTA the contigs say nothing about keeps whatever the
+    #    rules concluded, `not_classified` included (#88 removed a genomic/sequence guess).
     return result.to_output_dict()
 
 
@@ -1131,13 +1087,12 @@ def classify_from_bed_signals(
     if max_coordinates:
         coord_ref, coord_rationale = _infer_bed_reference(signals)
 
-        if coord_ref and result.status_of("reference_assembly") != NOT_APPLICABLE:
+        if coord_ref:
             # Coordinate detection reads the actual file content, so at CONTENT_TIER
             # it overrides a filename-based reference guess (CLAUDE.md design
             # principle: prefer reading actual file content over guessing from
-            # filenames). The guard preserves an existing not_applicable — a positive
-            # determination ("no reference applies"), not a filename guess — which a
-            # CONTENT_TIER value claim would otherwise out-rank.
+            # filenames). It claims whatever else was claimed: it never checks
+            # another claim first (#88), and resolution settles it against them.
             result.add_claim(
                 "reference_assembly",
                 rule_id="bed_coordinate_reference",

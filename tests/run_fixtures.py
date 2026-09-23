@@ -5,13 +5,11 @@
 of it (`output_record`, its `classifications` block on its own). `write_run` is shared
 by every test that writes a run directory for a reader — the report tests
 `test_corpus_diff`, `test_unprocessable` and `test_published_comparison`, the
-post-run one-row-per-file gate in `test_row_uniqueness`, the forecast in
-`test_anvil_forecast`, and the index producer's parent file in
+post-run one-row-per-file gate in `test_row_uniqueness`, and the index producer's parent file in
 `producer_sweep.run_index_producer`, `test_index_propagation` and
 `test_producer_exclusions`. `output_record` is shared by the tests whose rows are
 full output rows: `test_corpus_diff`, `test_unprocessable` and the three index-producer
-modules, which join on the row's `file_id`. `test_anvil_forecast` takes the
-`classifications` block and keys its rows by `drs_uri`, which its report joins on.
+modules, which join on the row's `file_id`.
 
 What stays local, and why, is said in each place: `test_consistency._rec` writes
 whatever `status` a case names beside the value, and a case may replace an entry's
