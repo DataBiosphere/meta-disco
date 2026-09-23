@@ -690,3 +690,10 @@ def test_the_published_source_speaks_to_every_column_its_map_declares(tmp_path, 
     result = go(run, tmp_path, evidence, table)
     assert result["inputs"][DATASET]["data_modality"][SOURCE_PUBLISHED_VALUE] == {"silent": 1}
     assert result["added_over_published"][DATASET] == {"data_modality": 1}
+
+
+def test_a_run_with_two_rows_for_one_file_is_refused(tmp_path, run, table):
+    write_run(run, [record(1), {**record(2), "file_id": "file-1"}])
+    with pytest.raises(ValueError, match="file-1"):
+        go(run, tmp_path, None, table)
+    assert not (run / RECONCILED_DIR).exists()
