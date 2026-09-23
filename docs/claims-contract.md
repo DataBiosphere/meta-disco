@@ -378,7 +378,7 @@ depends on that, and a second repository needs no change to these assertions.
 ## What is not true yet
 
 No code reads this document, and the pipeline it describes does not exist. In section 7, the importer's
-half is built — 7.12 is enforced (below), and the published importer reads the system of record (7.1)
+half is built — 7.12 is enforced (below), and the published importer reads the system of record (7.1, today through the verbatim manifest, 7.12)
 and transcribes verbatim (7.3, #497, #421) — while what 7.1, 7.2 and 7.10 say about claims and comparison
 is the reconcile stage's (#432), which is not built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 

@@ -226,8 +226,9 @@ evidence}` entry — plus the controlled vocabulary:
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all eleven outputs; one wired into a producer does not.
-    That is why the sweeps the `published` block (#424, since deleted by #513) and the
-    catalog identity (#433) needed are gone: `test_output_shape` pins the record's key set across all eleven instead.
+    That is why the per-producer sweeps for the catalog identity (#433), and formerly
+    for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
+    pins the record's key set across all eleven instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
