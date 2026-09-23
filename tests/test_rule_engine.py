@@ -879,8 +879,12 @@ class TestTextFiles:
                 {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
                 id="expression file is transcriptomic",
             ),
-            # ANVIL_T2T's per-population files are chromosome/bin/count tables, not
-            # expression matrices; `counts` alone says nothing about what is counted (#485).
+            pytest.param(
+                "sample.tpm.txt",
+                {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
+                id="TPM table is transcriptomic",
+            ),
+            # The content is a chromosome/bin/count table; see `text_expression` (#485).
             pytest.param(
                 "chr5.PEL.counts.txt",
                 {"data_modality": NOT_CLASSIFIED, "data_type": NOT_CLASSIFIED},

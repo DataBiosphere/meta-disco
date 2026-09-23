@@ -298,7 +298,7 @@ def _sample_matches(pattern, cap=64):
 WORD_FORMING = {
     "haplotype": "nine characters; carries 12,808 files, all delimited",
     "leafcutter": "ten characters; a tool name",
-    "expression": "ten characters; carries five `text_counts` files",
+    "expression": "ten characters; carries five `text_expression` files",
     "modbam2bed": "ten characters; a tool name",
     "unreliable": "ten characters",
 }

@@ -652,7 +652,7 @@ rules:
         platform: not_applicable
     rationale: "QC/stats file — supplementary data, not primary experimental data"
 
-  - id: text_counts
+  - id: text_expression
     tier: 2
     scope: filename
     when:
@@ -661,9 +661,10 @@ rules:
     then:
       data_modality: transcriptomic.bulk
       data_type: expression_matrix
-    # No bare `counts.txt`: ANVIL_T2T's chrN.<population>.counts.txt are chromosome/bin/count
-    # tables, not expression matrices (#485).
-    rationale: "Filename names expression data or an expression unit (TPM/FPKM)"
+    # No bare `counts.txt`: a count says nothing about what is counted, so a gene-count
+    # table is left unclassified too. ANVIL_T2T's chrN.<population>.counts.txt are
+    # chromosome/bin/count tables, not expression matrices (#485).
+    rationale: "Filename contains `expression`, or ends in `tpm.txt` / `fpkm.txt`"
 
   - id: salmon_quant
     tier: 2
