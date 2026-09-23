@@ -379,7 +379,22 @@ def render_markdown(data: dict) -> str:
             "",
             *_headline_table(whole["change"], cols, fmt=_signed),
         ]
-    lines += ["", "## The join, per evidence file", ""]
+    lines += [
+        "",
+        "## The join, per evidence file",
+        "",
+        "An evidence file is one source table's values, imported for one dataset: a submitter table "
+        "(*repository_metadata*) or the catalog's published columns (*published_value*). Each line names the "
+        "file it describes by a key (*key*, today the DRS URI). Reconcile attaches each line to the one file in "
+        "the run carrying that key, within the dataset the evidence file names; only an attached line can "
+        "confirm, fill or contradict inference.",
+        "",
+        "- **offered:** lines in the evidence file.",
+        "- **matched:** lines that found exactly one file in the run.",
+        "- **unmatched:** lines whose key no file in the run carries.",
+        "- **ambiguous:** lines whose key more than one file carries, so they attach to none.",
+        "",
+    ]
     if whole["evidence"]:
         lines += md_table(
             ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"],

@@ -64,6 +64,17 @@
   <div class="scroll" id="change"></div>
 
   <h2>The join, per evidence file</h2>
+  <p class="note">An evidence file is one source table's values, imported for one dataset: a submitter table
+    (<em>repository_metadata</em>) or the catalog's published columns (<em>published_value</em>). Each line names the
+    file it describes by a key (<em>key</em>, today the DRS URI). Reconcile attaches each line to the one file in the
+    run carrying that key, within the dataset the evidence file names; only an attached line can confirm, fill or
+    contradict inference.</p>
+  <ul class="note">
+    <li><strong>offered:</strong> lines in the evidence file.</li>
+    <li><strong>matched:</strong> lines that found exactly one file in the run.</li>
+    <li><strong>unmatched:</strong> lines whose key no file in the run carries.</li>
+    <li><strong>ambiguous:</strong> lines whose key more than one file carries, so they attach to none.</li>
+  </ul>
   <div class="scroll" id="evidence"></div>
 
   <script type="module">
