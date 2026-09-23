@@ -326,11 +326,16 @@ def render_markdown(data: dict) -> str:
         "",
         "## How each slot settled",
         "",
-        "Each file's slot in each dimension is counted in exactly one category, so a row sums to the files. "
-        "A value every declaring input agreed on is credited to the first source in precedence order "
-        "(published, then submitter; verbatim before harmonized), else to inference.",
+        "Every file is counted once per dimension, in one of the columns from *published* to *not classified*, "
+        "so those columns add up to the file count. An answer the inputs agreed on is credited to where it came "
+        "from: the published column first, then a submitter table (verbatim before harmonized), and inference "
+        "only when no source gave it.",
         "",
-        "The last two columns count something else, and overlap the categories:",
+        "- **Published unreviewed:** the catalog publishes a value that no translation row reads yet, and no "
+        "other input gave an answer, so the file has none. Beside another input's answer, the same value counts "
+        "as *conflict (published)*.",
+        "",
+        "The last two columns are extra counts laid over those, not part of the sum:",
         "",
         "- **Added over published:** files where we deliver a value and the catalog publishes none for that "
         "file, because its published column is empty there or it has no published column for the dimension: "

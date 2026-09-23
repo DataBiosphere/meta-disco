@@ -35,10 +35,16 @@
   <p><label>Dataset: <select id="dataset"></select></label></p>
 
   <h2>How each slot settled</h2>
-  <p class="note">Each file's slot in each dimension is counted in exactly one category, so a row sums to the files.
-    A value every declaring input agreed on is credited to the first source in precedence order (published, then
-    submitter; verbatim before harmonized), else to inference.</p>
-  <p class="note">The last two columns count something else, and overlap the categories:</p>
+  <p class="note">Every file is counted once per dimension, in one of the columns from <em>published</em> to
+    <em>not classified</em>, so those columns add up to the file count. An answer the inputs agreed on is credited to
+    where it came from: the published column first, then a submitter table (verbatim before harmonized), and inference
+    only when no source gave it.</p>
+  <ul class="note">
+    <li><strong>Published unreviewed:</strong> the catalog publishes a value that no translation row reads yet, and no
+      other input gave an answer, so the file has none. Beside another input's answer, the same value counts as
+      <em>conflict (published)</em>.</li>
+  </ul>
+  <p class="note">The last two columns are extra counts laid over those, not part of the sum:</p>
   <ul class="note">
     <li><strong>Added over published:</strong> files where we deliver a value and the catalog publishes none for that
       file, because its published column is empty there or it has no published column for the dimension: metadata the
