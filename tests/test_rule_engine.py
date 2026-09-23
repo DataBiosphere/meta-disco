@@ -875,7 +875,20 @@ class TestTextFiles:
         [
             pytest.param("sample.stats.txt", {"data_modality": NOT_APPLICABLE}, id="QC stats file is not_applicable"),
             pytest.param(
-                "gene_counts.txt", {"data_modality": "transcriptomic.bulk"}, id="count matrix is transcriptomic"
+                "expression.counts.csv",
+                {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
+                id="expression file is transcriptomic",
+            ),
+            pytest.param(
+                "sample.tpm.txt",
+                {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
+                id="TPM table is transcriptomic",
+            ),
+            # The content is a chromosome/bin/count table; see `text_expression` (#485).
+            pytest.param(
+                "chr5.PEL.counts.txt",
+                {"data_modality": NOT_CLASSIFIED, "data_type": NOT_CLASSIFIED, "assay_type": NOT_CLASSIFIED},
+                id="counts.txt alone is not classified",
             ),
             pytest.param("data.txt", {"data_modality": NOT_CLASSIFIED}, id="ambiguous text is not classified"),
         ],
