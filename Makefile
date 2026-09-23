@@ -246,7 +246,7 @@ review-queue:
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
 # comparison out of this report, and #513 deleted it: AnVIL's published values are
-# evidence, which the reconcile stage reads, `make reconcile`, #432). Its input,
+# evidence, which `make reconcile` reads, #432). Its input,
 # output/hprc/hprc_validation_results.json, is generated and gitignored, so without this prerequisite a standalone run on a fresh
 # checkout finds no sources and exits 1 — which it did not before, when the AnVIL branch
 # keyed off the always-present downloaded metadata.
