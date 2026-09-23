@@ -648,9 +648,9 @@ class ExtendedClassificationResult:
         leaves the text to be resolved from the mapping rule — which this accessor
         does not do. ``add_claim`` is the public path that can put one
         there today, and does so in the tests; nothing in the classification run takes
-        it, so no corpus output is affected until the join lands (#402). Whichever of
-        #395 or #402 first makes it routine owns deciding whether these belong here at
-        all. An external claim's reason is read from the evidence itself, which keeps
+        it, and reconcile (#432) builds its own records rather than calling this, so no
+        corpus output is affected. Whichever of #395 or a later caller first makes it
+        routine owns deciding whether these belong here at all. An external claim's reason is read from the evidence itself, which keeps
         every claim, not from here.
         """
         seen = set()

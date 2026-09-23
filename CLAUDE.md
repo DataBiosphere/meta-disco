@@ -187,7 +187,7 @@ evidence}` entry — plus the controlled vocabulary:
     applies comes from the input envelope's `repository`, and its `catalog` where it
     names one (HPRC never will). `resolve_slot` is the whole resolution rule and
     `use_for` the per-slot `use` indicator (`meta_disco` | `published`) the indexer
-    reads; per-input outcomes (match, harmonized, conflict, unreviewed, silent) are
+    reads; per-input outcomes (match, harmonized, conflict, unreviewed, no_claim, silent) are
     computed in the report and never stored on a record. `corpus_diff` must be told
     which artifact it compares (`--artifact inference|reconciled`).
   - **No output record carries what a repository publishes** (#513). The `published`

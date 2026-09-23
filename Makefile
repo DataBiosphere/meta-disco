@@ -269,7 +269,7 @@ corpus-diff:
 # output/anvil; DEPLOYMENT names whose input envelope says the repository and catalog.
 # Pass `ARGS=--no-evidence` to exclude all evidence (contract 6.6).
 reconcile:
-	uv run python scripts/reconcile.py $(if $(RUN),--run $(RUN)) --deployment $(or $(DEPLOYMENT),prod) $(ARGS)
+	uv run python scripts/reconcile.py $(if $(RUN),--run $(RUN)) $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(ARGS)
 
 all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
 

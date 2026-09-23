@@ -36,8 +36,8 @@ unscoped, and returns the row whole. Two rows keyed alike on one slot at one sco
 alternates included, cannot load; two rows with different keys declaring one slot can,
 since whether they collide depends on which cells a file has (4.8).
 
-**Nothing in a classification run reads this module**; the reconcile stage (#432) is
-its one reader in a run, through :func:`claims_from`, and writes its own artifact. The seeder and the review queue read evidence
+**Inference never reads this module**; the reconcile stage (#432) reads it through
+:func:`claims_from`, and writes its own artifact. The seeder and the review queue read evidence
 files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
 output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
 key)`` no row selects for, after the last row, so an authored row is untouched
@@ -407,7 +407,7 @@ def _seeded_from(node: yaml.Node, at: str) -> tuple[str, ...]:
 
 
 def claims_from(
-    entry: EvidenceEntry, source_type: str, table: ValueMap, join_key: str | None = None
+    entry: EvidenceEntry, source_type: str, table: ValueMap, join_key: str | None = None, row: Row | None = None
 ) -> list[tuple[str, dict]]:
     """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else ``[]``.
 
@@ -416,9 +416,12 @@ def claims_from(
     one file stay distinguishable (4.8). Nothing here compares, merges or ranks: that
     is reconcile's (#432). ``source_type`` is the envelope's, which the line does not carry.
     ``join_key`` is the key the line was matched to a file by; when given, the claim
-    records it with ``match_exact`` true, since the join is an equality lookup.
+    records it with ``match_exact`` true, since the join is an equality lookup. ``row``
+    is the row ``table.select`` already chose for this line, for a caller that selected
+    it itself; it is selected here otherwise.
     """
-    row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
+    if row is None:
+        row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
     if row is None or not row.authored:
         return []
     claims = []

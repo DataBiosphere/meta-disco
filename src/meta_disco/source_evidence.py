@@ -427,13 +427,13 @@ class EvidenceFileStatus:
     rather than raised so that one unreadable file does not hide the provenance of
     the ones behind it in the report.
 
-    A run does not judge an evidence file beyond this and the published-source check
-    (:func:`require_one_published_source`, #497). Whether the rows still describe
-    the catalog being classified is left to the importer, which compares its own
-    file's ``target.version`` against the configured catalog when deciding to re-fetch,
-    and to the boundary where an enhancement is offered back to a catalog — which
-    requires the run's output to record which catalog it enhances, and that is #404,
-    not something this PR added. Nothing enforces it today.
+    Inference does not judge an evidence file beyond this and the published-source
+    check (:func:`require_one_published_source`, #497). The reconcile stage compares a
+    file's ``target.version`` with the catalog its input envelope names
+    (``reconcile.select_evidence``, #432), and the importer compares it with the
+    configured catalog when deciding to re-fetch. That a stored run was classified from
+    that input needs the run's output to record the catalog it enhances, which is #404
+    and is not built.
     """
 
     path: Path
@@ -721,17 +721,17 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
 
     Prints one line per file — source, table, version, the catalog it was built for
     if it names one, fetch date and age — so a run says which evidence files it found
-    and how old they were. *Found* and not *consumed*: no claim reaches classification
-    until the join lands (#402), and this report is the whole of what a run does with
-    one today. Returns the statuses in the order printed.
+    and how old they were. *Found* and not *consumed*: inference reads no evidence, and
+    the reconcile stage (#432) reads the files these statuses name. Returns the statuses
+    in the order printed.
 
     The report does not judge currency, and nothing here stops the run. Whether an evidence file has
     outlived what it describes is not answerable from the file: the sources have no
     common version to compare (HPRC has a major release and may drift from it), and
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
     against. That question is settled where it can be acted on — the importer decides
-    whether to re-fetch, and the run's output records which catalog it enhances, so
-    an enhancement offered to a catalog that has moved on is refused there.
+    whether to re-fetch, and reconcile checks a file's catalog against the input's
+    (#432); recording on the run which catalog it enhances is #404, not built.
 
     A file whose envelope cannot be read is reported as an error rather than raising:
     the point of the report is to name every file, and one unreadable file should not

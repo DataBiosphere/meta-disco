@@ -34,17 +34,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import CLASSIFICATION_FIELDS, STATUS_LABELS, field_label
-from .output_utils import iter_reconciled_records, iter_records
+from .output_utils import ARTIFACT_READERS
 from .pipeline import load_snapshot
 from .summaries import escape_md_cell
 
-# The two artifacts a run can hold (contract 6.9, #432): what inference concluded, at
-# the run root, and what reconcile concluded, under ``reconciled/``. A comparison names
-# which it reads — neither is a default, because a diff that silently read inference
-# where the caller meant the delivered answer would report the wrong numbers.
-ARTIFACT_INFERENCE = "inference"
-ARTIFACT_RECONCILED = "reconciled"
-ARTIFACTS = (ARTIFACT_INFERENCE, ARTIFACT_RECONCILED)
+# Which artifact of a run a comparison reads (contract 6.9, #432). Neither is a default:
+# a diff that silently read inference where the caller meant the delivered answer would
+# report the wrong numbers.
+ARTIFACTS = tuple(ARTIFACT_READERS)
 
 # A file's identity across generations: (dataset_title, file_name, md5sum).
 FileKey = tuple[str, str, str]
@@ -319,7 +316,7 @@ def run_labels(run_dir: Path, artifact: str) -> dict[FileKey, Counter[Labels]]:
     if not run_dir.is_dir():
         raise FileNotFoundError(f"Run directory not found: {run_dir}")
 
-    records = iter_records(run_dir) if artifact == ARTIFACT_INFERENCE else iter_reconciled_records(run_dir)
+    records = ARTIFACT_READERS[artifact](run_dir)
     labels: dict[FileKey, Counter[Labels]] = defaultdict(Counter)
     # The corpus holds ~700K records but only a few dozen distinct label tuples, so
     # each tuple is interned: one shared object per distinct combination instead of

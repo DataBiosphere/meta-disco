@@ -83,17 +83,25 @@ def entry(field, raw_value, file="drs://f1", dataset="AnVIL_HPRC_R2", table="hif
     return EvidenceEntry(field=field, target_key_value=file, raw_value=raw_value, source=source)
 
 
-def write_generation(root: Path, dataset: str, table: str, entries: list[EvidenceEntry]) -> Path:
-    """One evidence file in the generation layout the reader discovers, keyed by DRS URI."""
-    directory = generation_dir(root, "anvil", "anvil15", dataset, STAMP)
+def write_generation(
+    root: Path, dataset: str, table: str, entries: list[EvidenceEntry], envelope=None, source: str = "anvil"
+) -> Path:
+    """One evidence file in the generation layout the reader discovers, keyed by DRS URI.
+
+    ``envelope`` replaces the default submitter-table one, and ``source`` names the
+    evidence directory it lands under (``anvil_published`` for the published importer's);
+    the version directory is the envelope's ``source_version``.
+    """
+    if envelope is None:
+        envelope = evidence_file_envelope(
+            source=file_source(dataset, table),
+            source_version="anvil15",
+            source_key=JOIN_KEY_DRS_URI,
+            target=EvidenceTarget(system="anvil", dataset=dataset, version="anvil15"),
+            target_key=JOIN_KEY_DRS_URI,
+        )
+    directory = generation_dir(root, source, envelope.source_version, dataset, STAMP)
     directory.mkdir(parents=True, exist_ok=True)
-    envelope = evidence_file_envelope(
-        source=file_source(dataset, table),
-        source_version="anvil15",
-        source_key=JOIN_KEY_DRS_URI,
-        target=EvidenceTarget(system="anvil", dataset=dataset, version="anvil15"),
-        target_key=JOIN_KEY_DRS_URI,
-    )
     write_evidence_file(evidence_file_path(directory, table), envelope, entries)
     return directory
 
