@@ -1,8 +1,8 @@
 """Reconcile: a stored inference run plus source evidence, settled by agreement (#432).
 
-The third stage of a run (contract 6.1): **infer → read sources → reconcile**. Reading
-sources is the join below and lives inside this stage; its per-source counts are a line
-of the report, not a stage of their own (6.7). Reconcile reads a stored run and never
+The stage after inference (contract 6.1): **infer → reconcile**. Reading the sources is
+the join below, reconcile's first step, and its per-source counts are a line of the
+report (6.7). Reconcile reads a stored run and never
 re-infers or fetches, so answering a review item costs a reconcile, not a corpus run
 (6.4). It writes its own artifact beside the inference output and never touches it
 (6.3): one NDJSON file per inference file under ``<run>/reconciled/`` (6.11), with an

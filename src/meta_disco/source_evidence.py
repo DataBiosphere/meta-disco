@@ -5,8 +5,7 @@ network — and writes an evidence file. The main loop reads it. Classification 
 offline and deterministic while the importers do the networked work, the same shape
 as the evidence cache, and either side can be re-run without forcing the other::
 
-    inference  →  read sources (read evidence files, match to our files)
-                  →  reconcile  →  output
+    inference  →  reconcile (read evidence files, match to our files, settle)  →  output
 
 **A line is an observation, not an answer** (contract 1.1-1.5). An importer
 transcribes what a source wrote about a slot and stops; only the rule engine turns

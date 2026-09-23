@@ -277,7 +277,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 6. The pipeline
 
-6.1 A run has three stages: **infer**, **read sources**, **reconcile**.
+6.1 A run has two stages: **infer**, then **reconcile**. Reading the sources — joining their evidence to
+    our files — is reconcile's first step, not a stage of its own (6.7, #432).
 
 6.2 Inference output is a kept artifact, not an intermediate. It is what inference alone concluded, and it is provenance.
 
