@@ -799,7 +799,8 @@ def metadata_block(
     every kind of input — for a snapshot read in place too, where it is the generation
     the deployment's Azul serves over these snapshots rather than anything the read
     touched; it is declared, not inferred (decision of 2026-09-22 on #500, so that
-    field is never null for want of a manifest). It is provenance: no code reads it.
+    field is never null for want of a manifest). ``corpus_diff.read_snapshot`` reads it,
+    to name the catalog each snapshot in a comparison came from.
 
     ``input_source`` names how the records were derived, one of :data:`INPUT_SOURCES`
     (#499); any other value is refused. Every writer states it explicitly — the
