@@ -1248,8 +1248,7 @@ class TestClaimStatesDoNotResolve:
 
     def test_accessors_skip_a_claim_with_no_rule_id(self):
         # An external claim names no rule, so rules_matched and reasons pass over
-        # it rather than raising — and rules_matched is read by infer_assay_type's
-        # matched_rules_any conditions, which are written against rule IDs.
+        # it rather than raising.
         result = ExtendedClassificationResult()
         result.add_claim(
             "platform", rule_id="r", reason="illumina", tier=2, source_type=SOURCE_FILENAME_RULE, value="ILLUMINA"
@@ -1333,55 +1332,6 @@ class TestContentTier:
         assert result.value == "GRCh38"
         assert result.is_conflict is False
         assert result.reason == ResolutionReason.UNANIMOUS
-
-
-class TestAssayTypeInference:
-    """Test that infer_assay_type records evidence correctly."""
-
-    def test_inferred_assay_type_has_evidence(self, engine):
-        """Inferred assay_type carries the matched assay rule's id as its evidence."""
-        file_info = ExtendedFileInfo(
-            name=FileName.parse("sample.bam"),
-            file_size=60_000_000_000,
-            file_format=".bam",
-        )
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        # Set the condition that triggers the modality inference (set_field to stay coherent)
-        result.set_field("data_modality", "transcriptomic.bulk")
-        result.set_field("assay_type", status=NOT_CLASSIFIED)
-        result.field_evidence["assay_type"] = []
-        engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "RNA-seq"
-        evidence = result.field_evidence["assay_type"]
-        assert len(evidence) == 1
-        # The matched assay rule's own id, not a shared constant: a transcriptomic
-        # BAM is `rnaseq_modality`, and the evidence says so (#430).
-        assert evidence[0]["rule_id"] == "rnaseq_modality"
-        assert evidence[0]["source_type"] == "signal_inference"
-
-    def test_inferred_assay_type_removes_not_classified_placeholder(self, engine):
-        """Inference should remove stale not_classified placeholder evidence."""
-        file_info = ExtendedFileInfo(
-            name=FileName.parse("sample.bam"),
-            file_size=60_000_000_000,
-            file_format=".bam",
-        )
-        result = engine.classify_extended(FileInfo.from_filename("sample.bam", file_size=60_000_000_000))
-        result.set_field("data_modality", "transcriptomic.bulk")
-        result.set_field("assay_type", status=NOT_CLASSIFIED)
-        result.field_evidence["assay_type"] = [
-            {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": NOT_CLASSIFIED,
-            }
-        ]
-        engine.infer_assay_type(result, file_info)
-        assert result.assay_type == "RNA-seq"
-        markers = [e.get("marker") for e in result.field_evidence["assay_type"]]
-        assert "not_classified" not in markers
-        rule_ids = [e.get("rule_id") for e in result.field_evidence["assay_type"]]
-        assert "rnaseq_modality" in rule_ids
 
 
 class TestReasonChain:

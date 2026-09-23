@@ -60,9 +60,9 @@
 #  meta_disco.file_name in #252, so it is no longer a document here.)
 # 1. rules: The classification rules (main content)
 # 2. validators: Python validator configurations for complex logic
-# 3. assay_type_rules: Rules for inferring RNA-seq from the aligner and modality
-# 4. illumina_instruments: Instrument ID prefix to model mapping
-# 5. reference_contig_lengths: Chromosome sizes for reference detection
+# 3. illumina_instruments: Instrument ID prefix to model mapping
+# 4. reference_contig_lengths: Chromosome sizes for reference detection
+# (Assay-type inference, which read other rules' answers, was removed in #88.)
 #
 #
 # RULE SCHEMA
@@ -113,7 +113,9 @@
 #
 # There are no state conditions: a rule has an opinion or not, and never reads
 # what another rule said. Disagreement is settled only by tier, or by a curator
-# (#88).
+# (#88). A rule that names an assay declares the modality that assay implies in
+# its own `then`, from the same evidence; no step derives one slot from another
+# slot's answer.
 #
 # Header conditions (tier 3):
 # - header_section: BAM header section (@HD, @RG, @PG, @SQ)
@@ -1068,26 +1070,6 @@ validators:
     module: "meta_disco.validators.read_name_parsers"
     function: "infer_illumina_instrument_model"
     applies_to: ["header", "fastq_header"]
-
----
-# =============================================================================
-# ASSAY TYPE INFERENCE RULES
-# =============================================================================
-# Priority-ordered rules for inferring assay type from other signals
-
-assay_type_rules:
-  - id: rnaseq_modality
-    priority: 95
-    conditions:
-      data_modality_contains: transcriptomic
-    assay_type: RNA-seq
-
-
-
-
-
-
-
 
 ---
 # =============================================================================

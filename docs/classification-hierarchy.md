@@ -26,7 +26,7 @@ file_format (extension)
 - `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
-- `RNA-seq` ← STAR in @PG (`program_star` declares it), or any transcriptomic modality (`rnaseq_modality`)
+- `RNA-seq` ← STAR in @PG (`program_star` declares it). No rule infers it from the modality: that read another rule's answer, and was removed (#88)
 - `WGS` is no longer inferred: `hifi` names a chemistry, which says neither assay nor modality, and a long-read platform is not an assay (#430)
 
 **platform**:

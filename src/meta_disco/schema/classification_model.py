@@ -245,10 +245,6 @@ class SourceTypeEnum(str, Enum):
     """
     Read from the file's bytes, but not from contig declarations — today the member names in an archive head. Separate from `contig_detection` so neither has to describe the other.
     """
-    signal_inference = "signal_inference"
-    """
-    Derived from dimensions this file has already resolved, plus its format and size, rather than read from the file — the assay_type inference.
-    """
     derivation_inheritance = "derivation_inheritance"
     """
     Inherited from a related file rather than determined for this one, as an index file inherits its parent's classification.

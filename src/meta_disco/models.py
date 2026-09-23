@@ -41,13 +41,11 @@ CLAIM_STATES = frozenset({UNMAPPED, NO_VOCABULARY_TERM, DECLINED})
 
 # Kinds of source behind a claim (issue #392). Deliberately not derived from a
 # claim's tier: SOURCE_CONTIG_DETECTION and SOURCE_CONTENT_READ share
-# CONTENT_TIER, and SOURCE_SIGNAL_INFERENCE fires at a rule tier without being a
-# rule.
+# CONTENT_TIER.
 SOURCE_FILENAME_RULE = "filename_rule"
 SOURCE_HEADER_RULE = "header_rule"
 SOURCE_CONTIG_DETECTION = "contig_detection"
 SOURCE_CONTENT_READ = "content_read"
-SOURCE_SIGNAL_INFERENCE = "signal_inference"
 SOURCE_DERIVATION_INHERITANCE = "derivation_inheritance"
 SOURCE_EXTERNAL_GROUND_TRUTH = "external_ground_truth"
 SOURCE_REPOSITORY_METADATA = "repository_metadata"
@@ -91,7 +89,6 @@ SOURCE_TYPES = frozenset(
         SOURCE_HEADER_RULE,
         SOURCE_CONTIG_DETECTION,
         SOURCE_CONTENT_READ,
-        SOURCE_SIGNAL_INFERENCE,
         SOURCE_DERIVATION_INHERITANCE,
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,

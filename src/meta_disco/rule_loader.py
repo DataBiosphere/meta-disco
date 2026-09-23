@@ -69,16 +69,6 @@ class ValidatorConfig:
 
 
 @dataclass
-class AssayTypeRule:
-    """Rule for inferring assay type from other signals."""
-
-    id: str
-    priority: int
-    conditions: dict[str, Any]
-    assay_type: str
-
-
-@dataclass
 class IlluminaInstrument:
     """Mapping from instrument ID prefix to model name."""
 
@@ -151,7 +141,6 @@ class UnifiedRules:
 
     rules: list[UnifiedRule]
     validators: dict[str, ValidatorConfig]
-    assay_type_rules: list[AssayTypeRule]
     illumina_instruments: list[IlluminaInstrument]
     reference_contig_lengths: dict[str, dict[str, int]]
     reference_builds: list[ReferenceBuild]
@@ -243,12 +232,6 @@ class RuleLoader:
     # written by a rule (mirrors schema_vocab's antecedent/emitted split).
     AUTHORABLE_STATUSES: ClassVar[frozenset[str]] = AUTHORABLE_STATUSES
 
-    # assay_type_rules condition keys that infer_assay_type() treats as iterables
-    # (`x not in platform_in`, `any(r in ... for r in matched_rules_any)`). A
-    # scalar string here silently becomes a per-character membership test, so it
-    # must be a list. Keep in sync with rule_engine.RuleEngine.infer_assay_type().
-    LIST_VALUED_ASSAY_CONDITIONS: ClassVar[set[str]] = {"platform_in", "matched_rules_any"}
-
     def __init__(self, rules_path: str | Path | None = None):
         """Initialize the rule loader.
 
@@ -330,31 +313,26 @@ class RuleLoader:
         if len(docs) > 1 and docs[1]:
             validators = self._parse_validators(docs[1].get("validators", {}))
 
-        # Third document: assay type rules (optional)
-        assay_type_rules = []
-        if len(docs) > 2 and docs[2]:
-            assay_type_rules = self._parse_assay_type_rules(docs[2].get("assay_type_rules", []))
-
-        # Fourth document: illumina instruments (optional)
+        # Third document: illumina instruments (optional). The assay-inference
+        # document that stood here is gone (#88): no rule reads another rule's answer.
         illumina_instruments = []
-        if len(docs) > 3 and docs[3]:
-            illumina_instruments = self._parse_illumina_instruments(docs[3].get("illumina_instruments", []))
+        if len(docs) > 2 and docs[2]:
+            illumina_instruments = self._parse_illumina_instruments(docs[2].get("illumina_instruments", []))
 
-        # Fifth document: reference tables (both optional). Contig lengths drive
+        # Fourth document: reference tables (both optional). Contig lengths drive
         # the coarse family detection; reference_builds is the finer build table
         # read by validators.reference_builds (#340). They share a document
         # because both describe references, not because either depends on the
         # other — the coarse path does not consult the build table.
         reference_contig_lengths = {}
         reference_builds: list[ReferenceBuild] = []
-        if len(docs) > 4 and docs[4]:
-            reference_contig_lengths = docs[4].get("reference_contig_lengths", {})
-            reference_builds = self._parse_reference_builds(docs[4].get("reference_builds", []) or [])
+        if len(docs) > 3 and docs[3]:
+            reference_contig_lengths = docs[3].get("reference_contig_lengths", {})
+            reference_builds = self._parse_reference_builds(docs[3].get("reference_builds", []) or [])
 
         self._rules = UnifiedRules(
             rules=rules,
             validators=validators,
-            assay_type_rules=assay_type_rules,
             illumina_instruments=illumina_instruments,
             reference_contig_lengths=reference_contig_lengths,
             reference_builds=reference_builds,
@@ -483,48 +461,6 @@ class RuleLoader:
             )
 
         return validators
-
-    def _parse_assay_type_rules(self, rules_data: list[dict]) -> list[AssayTypeRule]:
-        """Parse assay type inference rules from YAML."""
-        rules = []
-
-        for rule_data in rules_data:
-            assay_id = rule_data.get("id", "")
-
-            # Coerce only a null block to {} (a catch-all rule); any other
-            # non-mapping is malformed and must raise rather than crash
-            # infer_assay_type, which assumes conditions is a mapping. Mirrors
-            # the when/then handling in _parse_rules.
-            conditions = rule_data.get("conditions", {})
-            if conditions is None:
-                conditions = {}
-            if not isinstance(conditions, dict):
-                raise ValueError(
-                    f"Assay type rule {assay_id}: 'conditions' must be a mapping, got {type(conditions).__name__}"
-                )
-
-            # List-typed condition keys must be lists; a scalar string would be
-            # iterated character-by-character by infer_assay_type and silently
-            # mis-match (e.g. platform_in: ILLUMINA).
-            for key in self.LIST_VALUED_ASSAY_CONDITIONS:
-                if key in conditions and not isinstance(conditions[key], list):
-                    raise ValueError(
-                        f"Assay type rule {assay_id}: condition '{key}' must be a "
-                        f"list, got {type(conditions[key]).__name__}"
-                    )
-
-            rules.append(
-                AssayTypeRule(
-                    id=assay_id,
-                    priority=rule_data.get("priority", 0),
-                    conditions=conditions,
-                    assay_type=rule_data.get("assay_type", ""),
-                )
-            )
-
-        # Sort by priority (highest first)
-        rules.sort(key=lambda r: r.priority, reverse=True)
-        return rules
 
     def _parse_illumina_instruments(self, instruments_data: list[dict]) -> list[IlluminaInstrument]:
         """Parse Illumina instrument mappings from YAML."""

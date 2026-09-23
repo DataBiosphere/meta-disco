@@ -226,9 +226,6 @@ def classify_from_header(
     # checksums so a later table row can resolve it without re-fetching.
     _record_reference_build(result, resolve_identity(signatures, declared))
 
-    # Infer assay type
-    engine.infer_assay_type(result, file_info)
-
     return result.to_output_dict()
 
 

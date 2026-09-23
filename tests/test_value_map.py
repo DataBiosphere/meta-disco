@@ -838,11 +838,11 @@ def test_row_ids_are_slot_dot_slug_with_set_elements_joined():
 
 def test_row_ids_and_rule_ids_are_disjoint_by_shape(tmp_path):
     """A row id starts with its slot and a dot; no rule id contains a dot; so a claim's ``rule_id`` names one or
-    the other and neither loader has to read the other's file. Rule ids live in three places: the rule set, its
-    assay rules, and the literals the content classifiers and standalone producers write — as a keyword, a
-    dictionary entry, or a ``*_RULE_ID`` constant."""
+    the other and neither loader has to read the other's file. Rule ids live in two places: the rule set, and the
+    literals the content classifiers and standalone producers write — as a keyword, a dictionary entry, or a
+    ``*_RULE_ID`` constant."""
     rules = get_unified_rules()
-    ids = {rule.id for rule in rules.rules} | {rule.id for rule in rules.assay_type_rules}
+    ids = {rule.id for rule in rules.rules}
     for path in [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]:
         if path.name != "value_map.py":
             # Both spellings a producer writes one in: `rule_id="x"` to `make_claim`, `"rule_id": "x"` in a dict.

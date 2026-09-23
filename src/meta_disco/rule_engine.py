@@ -20,7 +20,6 @@ from .models import (
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
-    SOURCE_SIGNAL_INFERENCE,
     SOURCE_TYPES,
     STATUS_LABELS,
     UNMAPPED,
@@ -196,8 +195,7 @@ def make_claim(
     an external claim; the one it carries names a real, reviewable mapping. ``source_type`` is required
     on every claim and checked against the schema's ``source_type_enum``; it is
     deliberately not derived from ``tier``, which cannot tell ``contig_detection``
-    from ``content_read`` (both at ``CONTENT_TIER``) nor either from
-    ``signal_inference`` (at a rule tier without being a rule).
+    from ``content_read`` (both at ``CONTENT_TIER``).
 
     **Tier.** Required on a claim that declares a ``value`` or ``status`` *and
     competes* — that is, one of ours. A claim that competes must never fall back to a
@@ -612,11 +610,7 @@ class ExtendedClassificationResult:
         rules. The content classifiers in ``header_classifier`` do contribute
         their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
         ``vcf_contig_length``, the ``fasta_*`` and
-        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``. An inferred
-        assay contributes the id of the assay rule that matched — ``rnaseq_modality``
-        — which lives in the file's ``assay_type_rules`` document, not its ``rules``
-        list; the one shared
-        ``infer_assay_type`` id those used to emit is gone (#430).
+        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``.
 
         So a caller must not assume an ID here names a rule in the ``rules`` list of
         unified_rules.yaml.
@@ -624,11 +618,8 @@ class ExtendedClassificationResult:
         **An imported claim now contributes one too.** It used to carry a ``source``
         and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
         cites the ``rule_id`` of the mapping that produced it, and only an
-        ``unmapped`` one still names nothing. The assay rules that
-        ``infer_assay_type`` evaluates read this list through their
-        ``matched_rules_any`` conditions, written against our own rule IDs, so a
-        ``map_*`` id could satisfy — or fail to satisfy — one of them. Nothing feeds an imported claim into ``field_evidence`` until the join
-        lands, so whether these belong here is #402's to settle.
+        ``unmapped`` one still names nothing. Nothing feeds an imported claim into
+        ``field_evidence`` until reconcile lands (#432).
         """
         seen = set()
         result = []
@@ -899,33 +890,6 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     return _conflict(sorted(top_tier_decls))
 
 
-_CONDITION_WORDS = {
-    "matched_rules_any": "the aligner named in the header",
-    "data_modality_contains": "the resolved modality",
-    "data_modality": "the resolved modality",
-    "platform": "the resolved platform",
-    "platform_in": "the resolved platform",
-    "file_format": "the file format",
-    "file_format_not": "the file format",
-    "file_size_gb_gt": "the file size",
-    "file_size_gb_lt": "the file size",
-}
-
-
-def _describe_conditions(conditions: dict) -> str:
-    """The signals an assay rule actually reads, for its evidence reason.
-
-    Derived from the rule's condition keys rather than typed, so the reason cannot
-    say "file size" after the last size rule is gone — which the previous constant
-    did (#430)."""
-    words = []
-    for key in conditions:
-        w = _CONDITION_WORDS.get(key, key)
-        if w not in words:
-            words.append(w)
-    return " and ".join(words) if words else "no conditions"
-
-
 class RuleEngine:
     """Engine for classifying files using the unified rules format.
 
@@ -1025,9 +989,8 @@ class RuleEngine:
             for rule in tier_rules:
                 if self._rule_matches(rule, ext_info, result):
                     self._apply_rule(rule, result)
-        # Evaluate all collected claims, then attempt assay_type inference
+        # Evaluate all collected claims
         self._finalize_result(result)
-        self.infer_assay_type(result, ext_info)
         return result
 
     def _finalize_result(self, result: ExtendedClassificationResult) -> None:
@@ -1212,93 +1175,6 @@ class RuleEngine:
                 result.field_evidence[fld].append(
                     make_claim(rule_id=rule.id, reason=reason, tier=rule.tier, source_type=source_type, status=status)
                 )
-
-    def infer_assay_type(self, result: ExtendedClassificationResult, file_info: ExtendedFileInfo) -> None:
-        """Infer assay type from other classification signals.
-
-        Sets result.assay_type and appends evidence when a matching
-        assay_type_rule is found. Skips if assay_type is already declared
-        (a real value or an explicit not_applicable).
-        """
-        if result.is_declared("assay_type"):
-            return
-        # Don't infer over a conflict: two assay rules already disagreed, and a
-        # signal-derived value would paper over that rather than answer it.
-        if result.status_of("assay_type") == CONFLICT:
-            return
-
-        for assay_rule in self.rules.assay_type_rules:
-            conditions = assay_rule.conditions
-
-            # Check matched_rules_any condition
-            if (matched_any := conditions.get("matched_rules_any")) and not any(
-                r in result.rules_matched for r in matched_any
-            ):
-                continue
-
-            # Check data_modality_contains condition
-            if modality_contains := conditions.get("data_modality_contains"):
-                if result.data_modality is None:
-                    continue
-                if modality_contains not in result.data_modality:
-                    continue
-
-            # Check data_modality exact match condition
-            if (modality := conditions.get("data_modality")) and result.data_modality != modality:
-                continue
-
-            # Check platform condition
-            if (platform := conditions.get("platform")) and result.platform != platform:
-                continue
-
-            # Check platform_in condition
-            if (platform_in := conditions.get("platform_in")) and result.platform not in platform_in:
-                continue
-
-            # Check file_format condition
-            if (file_format := conditions.get("file_format")) and file_info.file_format != file_format:
-                continue
-
-            # Check file_format_not condition
-            if (file_format_not := conditions.get("file_format_not")) and file_info.file_format == file_format_not:
-                continue
-
-            # Check file_size_gb_gt condition
-            if (size_gt := conditions.get("file_size_gb_gt")) and (
-                file_info.file_size_gb is None or file_info.file_size_gb <= size_gt
-            ):
-                continue
-
-            # Check file_size_gb_lt condition
-            if (size_lt := conditions.get("file_size_gb_lt")) and (
-                file_info.file_size_gb is None or file_info.file_size_gb >= size_lt
-            ):
-                continue
-
-            # All conditions passed — record the inference as a claim, under the
-            # matched rule's own id. These rules used to emit one constant id
-            # with a reason naming only the value, so distinct rules collapsed
-            # into one line and whether a given one had ever fired was
-            # unanswerable from any run (#430) — which is how the file-size
-            # rules went unmeasured until then, and then went altogether.
-            # add_claim sets the field, drops the synthetic not_classified
-            # placeholder, and enforces make_claim's invariants. tier 3: the inference derives from
-            # already-resolved signals (the header-derived platform is typically
-            # tier 3), so it carries a tier rather than the tier-0 default #228
-            # will forbid; it never competes (the is_declared guard above means it
-            # only fires when no other claim determined assay_type), so the tier is
-            # for consistency, not resolution. Its source kind is stated rather
-            # than read off that tier: this reads other dimensions' resolved
-            # values, plus the file's format and size — not a header (#392).
-            result.add_claim(
-                "assay_type",
-                rule_id=assay_rule.id,
-                tier=3,
-                source_type=SOURCE_SIGNAL_INFERENCE,
-                reason=f"Inferred {assay_rule.assay_type} by {assay_rule.id} from {_describe_conditions(assay_rule.conditions)}",
-                value=assay_rule.assay_type,
-            )
-            return
 
     def classify_with_bam_header(
         self,

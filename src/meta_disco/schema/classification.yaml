@@ -1026,10 +1026,6 @@ enums:
           Read from the file's bytes, but not from contig declarations — today the
           member names in an archive head. Separate from `contig_detection` so
           neither has to describe the other.
-      signal_inference:
-        description: >-
-          Derived from dimensions this file has already resolved, plus its format
-          and size, rather than read from the file — the assay_type inference.
       derivation_inheritance:
         description: >-
           Inherited from a related file rather than determined for this one, as an

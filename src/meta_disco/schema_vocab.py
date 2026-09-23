@@ -44,21 +44,6 @@ JOIN_KEY_ENUM = "join_key_enum"
 RELATION_ENUM = "relation_enum"
 PARENT_KIND_ENUM = "parent_kind_enum"
 
-# assay_type_rules ``conditions`` keys whose value(s) must be dimension-enum
-# members, mapped to (dimension, is_list): a typo'd value silently never matches
-# rather than erroring, the class of bug the ``then``-value check guards against.
-# No rule ``when`` key is enum-backed since #88 removed the ``platform`` state
-# condition — a rule never reads another rule's answer. Excluded
-# (intentionally): data_modality_contains (substring match, not full-enum
-# membership), file_format / file_format_not (extension_map, not a dimension
-# enum — see #114), matched_rules_any (rule ids), and numeric size bounds.
-# Keep in sync with rule_engine.RuleEngine.infer_assay_type().
-ENUM_BACKED_ASSAY_CONDITIONS = {
-    "data_modality": ("data_modality", False),
-    "platform": ("platform", False),
-    "platform_in": ("platform", True),
-}
-
 
 def default_schema_path():
     """The canonical LinkML classification schema, as a package-data resource.

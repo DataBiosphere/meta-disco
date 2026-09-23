@@ -231,14 +231,14 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Inherited from parent file: sample.flnc.bam",
+                "reason": "Parent file sample.flnc.bam had no value for assay_type",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
-                "value": "RNA-seq"
+                "status": "not_classified"
               }
             ],
-            "status": "classified",
-            "value": "RNA-seq"
+            "status": "not_classified",
+            "value": null
           },
           "data_modality": {
             "evidence": [
