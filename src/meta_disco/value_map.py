@@ -166,6 +166,9 @@ class ValueMap:
     """A loaded table, its selection index, and a memo of selections already made."""
 
     rows: tuple[Row, ...]
+    # The sha256 of the text the table was loaded from, so an artifact built from it can
+    # say which table that was; None for a table built in memory.
+    digest: str | None = None
     _index: dict[tuple[str, Key, Scope | None], Row] = field(default_factory=dict, init=False, repr=False)
     _selected: dict[tuple[str, str, str | None, str | None], Row | None] = field(
         default_factory=dict, init=False, repr=False
@@ -223,7 +226,7 @@ def load_value_map(path: Path | None = None) -> ValueMap:
     """
     resource = path if path is not None else default_value_map_resource()
     text = resource.read_text(encoding="utf-8")
-    return ValueMap(rows=tuple(_rows(_parse(text))))
+    return ValueMap(rows=tuple(_rows(_parse(text))), digest=hashlib.sha256(text.encode("utf-8")).hexdigest())
 
 
 def _parse(text: str) -> list[yaml.Node]:

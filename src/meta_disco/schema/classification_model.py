@@ -195,7 +195,7 @@ class ClassificationStatusEnum(str, Enum):
     """
     conflict = "conflict"
     """
-    Declarations disagreed and no curator rule has answered it (claims contract 4.3-4.7). On an inference record, rules at the same tier disagreed (#88), and the competing claims stay in the evidence beside a `conflict` marker naming them. On a reconciled record (#432), inference and the sources disagreed, or inference's own conflict stands, or the published source spoke with a value no authored row reads while another input spoke too. The value is null either way.
+    Declarations disagreed and no curator rule has answered it (claims contract 4.3-4.7). On an inference record, rules at the same tier disagreed (#88), and the competing claims stay in the evidence beside a `conflict` marker naming them. On a reconciled record (#432), inputs declared different answers (inference and a source, or sources among themselves), or inference's own conflict stands, or the published source spoke with a value no authored row reads while another input declared an answer. The value is null either way.
     """
 
 

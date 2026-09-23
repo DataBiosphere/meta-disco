@@ -101,7 +101,10 @@ INFERENCE = "inference"
 # match or harmonized (it declared, and no other input declared differently), disagreed
 # (another input declared differently), unreviewed (its value has no authored row),
 # no_claim (its value's authored row declares nothing for the slot, or declares
-# `not_classified`, which is no answer), silent. Inference: agreed (a source declared
+# `not_classified`, which is no answer), silent. A source's `not_applicable` counts toward
+# match/harmonized like a value, so its harmonized total also covers slots whose category
+# is `not_applicable`; a source beside inference's own conflict is scored against the
+# other sources only, since that conflict declares nothing. Inference: agreed (a source declared
 # the same), added (every source was silent), unconfirmed (no source declared a value,
 # but one spoke — unreviewed or no_claim — so it was not silent), disagreed (another
 # input declared differently, or its own rules conflicted), silent.
@@ -561,6 +564,11 @@ class Report:
     # added over what the repository publishes. Kept apart from `slots`, whose categories
     # sum to the file count; this one overlaps them.
     added_over_published: dict = field(default_factory=lambda: defaultdict(Counter))
+    # Per dataset and slot, the files where inference declared nothing and a source's
+    # declaration now answers the slot (`classified` or `not_applicable`): the gaps the
+    # sources filled. Also apart from `slots`, whose filled_by_<source> credits a source
+    # whether or not inference agreed.
+    filled_over_inference: dict = field(default_factory=lambda: defaultdict(Counter))
     inputs: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
@@ -599,6 +607,12 @@ class Report:
             own = declaration(settled["inferred"])
             covering = self.covering(dataset, slot)
             self.slots[dataset][slot][self._category(settled, said)] += 1
+            if (
+                own is None
+                and settled["inferred"]["status"] != CONFLICT
+                and settled["status"] in (CLASSIFIED, NOT_APPLICABLE)
+            ):
+                self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
             for source_type in covering:
@@ -650,7 +664,8 @@ class Report:
             others = {declaration(c) for c in said.claims if c.get("source_type") != source_type} | {own}
             if len(declared) > 1 or (others - {None}) - declared:
                 return DISAGREED
-            return HARMONIZED if any(is_harmonized(c) for c in mine) else MATCH
+            # The same rule the slot's category uses: verbatim if any claim is verbatim.
+            return MATCH if any(not is_harmonized(c) for c in mine) else HARMONIZED
         if source_type in said.unreviewed:
             return UNREVIEWED
         if source_type in said.no_claim or any(
@@ -678,6 +693,7 @@ class Report:
             "slots": plain(self.slots),
             "inputs": plain(self.inputs),
             "added_over_published": plain(self.added_over_published),
+            "filled_over_inference": plain(self.filled_over_inference),
             "conflict_rate": conflict_rate,
             "coverage": {
                 source_type: {
@@ -705,8 +721,8 @@ def reconcile_run(
     reconciled artifact recoverable: untouched, or moved aside as ``reconciled.replaced`` if
     the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
-    written does — so the same run, evidence and input paths write the same bytes
-    (criterion 16). The report echoes the input path as given and evidence paths
+    written does — so the same run, evidence, translation table and input paths write the
+    same bytes (criterion 16); the table's sha256 is in the envelope and the report. The report echoes the input path as given and evidence paths
     relative to ``evidence_root``.
     """
     if not run_dir.is_dir():
@@ -742,6 +758,7 @@ def reconcile_run(
         "catalog": catalog,
         "evidence_excluded": evidence_root is None,
         "evidence": [ev.identity(root) for ev in applicable],
+        "value_map_sha256": table.digest,
     }
 
     # Every row must carry its own record key: joined evidence is keyed by it, so a row

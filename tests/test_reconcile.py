@@ -729,3 +729,43 @@ def test_inference_detail_is_kept_while_its_value_stands_and_reconcile_keys_are_
     rows = reconciled(run)
     assert field_detail(rows["file-1"], "reference_assembly") == {"build": {"base": "GRCh38"}, "other_detail": 7}
     assert field_detail(rows["file-2"], "reference_assembly") == {}
+
+
+def test_a_source_with_one_verbatim_and_one_harmonized_claim_is_verbatim_in_both_places(tmp_path, run, evidence):
+    table = load(
+        tmp_path,
+        TABLE
+        + """
+  - id: platform.pacbio
+    match: {slot: platform, value: PACBIO}
+    declares: {platform: PACBIO}
+    reason: Identity.
+""",
+    )
+    write_run(run, [record(1)])
+    write_evidence(evidence, [("platform", drs(1), "PACBIO"), ("platform", drs(1), "PACBIO_SMRT")])
+    result = go(run, tmp_path, evidence, table)
+    assert result["slots"][DATASET]["platform"] == {"filled_by_submitter": 1}
+    assert result["inputs"][DATASET]["platform"][SOURCE_REPOSITORY_METADATA] == {"match": 1}
+
+
+def test_filled_over_inference_counts_only_the_gaps_sources_filled(tmp_path, run, evidence, table):
+    write_run(run, [record(1), record(2, platform="PACBIO")])
+    write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT"), ("platform", drs(2), "PACBIO_SMRT")])
+    result = go(run, tmp_path, evidence, table)
+    # Both are credited to the submitter; only file 1 was a gap inference left.
+    assert result["slots"][DATASET]["platform"] == {"filled_by_submitter_harmonized": 2}
+    assert result["filled_over_inference"] == {DATASET: {"platform": 1}}
+
+
+def test_the_artifact_names_the_translation_table_it_was_built_from(tmp_path, run, table):
+    write_run(run, [record(1)])
+    result = go(run, tmp_path, None, table)
+    assert result["value_map_sha256"] == table.digest and len(table.digest) == 64
+
+
+def test_every_importer_source_type_has_a_place_in_the_precedence():
+    from meta_disco.models import IMPORTER_SOURCE_TYPES
+    from meta_disco.reconcile import SOURCE_PRECEDENCE
+
+    assert {t for t, _ in SOURCE_PRECEDENCE} == set(IMPORTER_SOURCE_TYPES)
