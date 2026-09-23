@@ -159,7 +159,7 @@ def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
         report[block][rr.ALL] = report[block][DATASET]
     data = rr.dashboard_data(report, None, Path("report.json"))
     assert data["run"]["files"] == 6
-    assert {name: scope["files"] for name, scope in data["datasets"].items()} == {rr.ALL: 3, DATASET: 3}
+    assert [(scope["name"], scope["files"]) for scope in data["datasets"]] == [(rr.ALL, 3), (DATASET, 3)]
 
 
 def test_catalog_text_is_html_escaped_in_the_markdown():
@@ -170,3 +170,14 @@ def test_catalog_text_is_html_escaped_in_the_markdown():
     )[2:]
     assert "<img" not in line and "<b>" not in line
     assert '&lt;img src=x onerror="a()"&gt;' in line and "&lt;b&gt;D&lt;/b&gt;" in line
+
+
+def test_no_catalog_text_can_close_the_dashboards_script_tag():
+    html = rr.render_html(
+        {"name": "</SCRIPT><img src=x>", "other": "<!--<script"},
+        "<script>const D = PLACEHOLDER;</script>".replace("PLACEHOLDER", rr.PLACEHOLDER),
+    )
+    assert html.count("<") == 2  # the template's own two tags
+    assert (
+        json.loads(html.removeprefix("<script>const D = ").removesuffix(";</script>"))["name"] == "</SCRIPT><img src=x>"
+    )

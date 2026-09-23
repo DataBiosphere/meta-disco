@@ -118,14 +118,13 @@
 
     const select = document.getElementById('dataset');
     // Options are indexed rather than named, so no dataset title can be read as the whole run.
-    const names = Object.keys(DATA.datasets);
     select.innerHTML = `<option value="-1">${esc(DATA.all)}</option>` +
-      names.map((name, i) => `<option value="${i}">${esc(shown(name))}</option>`).join('');
+      DATA.datasets.map((d, i) => `<option value="${i}">${esc(shown(d.name))}</option>`).join('');
 
     function render(index) {
       const whole = index < 0;
-      const name = whole ? DATA.all : names[index];
-      const scope = whole ? DATA.run : DATA.datasets[name];
+      const scope = whole ? DATA.run : DATA.datasets[index];
+      const name = whole ? DATA.all : scope.name;
       document.getElementById('headline').innerHTML = headlineTable(scope.headline, n);
 
       document.getElementById('rate-summary').innerHTML =

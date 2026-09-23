@@ -224,8 +224,9 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: every table precomputed per scope.
 
     These key names are the contract with that template's JavaScript. ``run`` is the
-    whole run's scope and ``datasets`` each dataset's by its title — apart, so no title can
-    stand in for the whole run. A scope's ``change`` is None where there is no previous run
+    whole run's scope and ``datasets`` a list of each dataset's, carrying its title as
+    ``name`` — apart from the run, so no title can stand in for it, and a list rather than
+    a map, so no title is read as a JavaScript object key (``__proto__``). A scope's ``change`` is None where there is no previous run
     or the dataset is not in it.
     """
 
@@ -256,7 +257,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "conflict_categories": list(CONFLICT_CATEGORIES),
         "all": ALL,
         "run": scope(None),
-        "datasets": {dataset: scope(dataset) for dataset in sorted(report["files"])},
+        "datasets": [{"name": dataset, **scope(dataset)} for dataset in sorted(report["files"])],
     }
 
 
@@ -385,7 +386,8 @@ def render_markdown(data: dict) -> str:
     else:
         lines.append("No evidence was read.")
     lines += ["", "## Per dataset", ""]
-    for name, scope in data["datasets"].items():
+    for scope in data["datasets"]:
+        name = scope["name"]
         lines += [
             f"### {escape_md_cell(text(shown(name)))}",
             "",
@@ -400,8 +402,9 @@ def render_markdown(data: dict) -> str:
 
 
 def render_html(data: dict, template: str) -> str:
-    # Escape </ so the payload cannot close the <script> tag it sits in.
-    return template.replace(PLACEHOLDER, json.dumps(data).replace("</", r"<\/"))
+    # Every < as \u003c, which JSON and JavaScript read back as <: no value can then close
+    # the <script> tag the payload sits in, or open an HTML comment inside it.
+    return template.replace(PLACEHOLDER, json.dumps(data).replace("<", "\\u003c"))
 
 
 def main(argv: list[str] | None = None) -> int:
