@@ -737,21 +737,26 @@ def reconcile_run(
         "evidence": [ev.identity(root) for ev in applicable],
     }
 
-    # Every row must carry its own record key: joined evidence is keyed by it, so two rows
-    # sharing one would both receive what matched either. `make classify` fails such a run
+    # Every row must carry its own record key: joined evidence is keyed by it, so a row
+    # without one could receive nothing, and two rows sharing one would both receive what
+    # matched either. `make classify` fails such a run
     # (#445), but its directory is still on disk to be named here.
     seen: set[str] = set()
 
     def settle(records: list[dict]):
         for record in records:
             identity = record.get(key.output_field)
-            if is_key_value(identity):
-                if identity in seen:
-                    raise ValueError(
-                        f"{run_dir}: two rows share {key.output_field} {identity!r}; a run must hold one row per file (#445)"
-                    )
-                seen.add(identity)
-            record_slots = joined.slots.get(identity, {}) if is_key_value(identity) else {}
+            if not is_key_value(identity):
+                raise ValueError(
+                    f"{run_dir}: row {record.get('file_name')!r} has no usable {key.output_field}, the run's record "
+                    "key; it cannot be joined or checked for a second row"
+                )
+            if identity in seen:
+                raise ValueError(
+                    f"{run_dir}: two rows share {key.output_field} {identity!r}; a run must hold one row per file (#445)"
+                )
+            seen.add(identity)
+            record_slots = joined.slots.get(identity, {})
             reconciled = reconcile_record(record, record_slots)
             report.add(reconciled, record_slots)
             yield reconciled

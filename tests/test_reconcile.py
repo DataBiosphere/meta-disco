@@ -697,3 +697,11 @@ def test_a_run_with_two_rows_for_one_file_is_refused(tmp_path, run, table):
     with pytest.raises(ValueError, match="file-1"):
         go(run, tmp_path, None, table)
     assert not (run / RECONCILED_DIR).exists()
+
+
+def test_a_row_without_a_record_key_is_refused(tmp_path, run, table):
+    row = record(1)
+    del row["file_id"]
+    write_run(run, [row])
+    with pytest.raises(ValueError, match="file_id"):
+        go(run, tmp_path, None, table)
