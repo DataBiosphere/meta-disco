@@ -63,7 +63,6 @@ from .azul_manifest import (
     iter_verbatim_entities,
     iter_verbatim_lines,
     parse_verbatim_line,
-    published_list,
     verbatim_line_type,
 )
 
@@ -242,21 +241,18 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     """One classifier input record from one ``anvil_file`` row and the dataset row.
 
     The keys are the input contract (``schema/metadata.yaml``) less ``entry_id``, which
-    the snapshot does not hold, plus the two published dimensions the contract does not
-    model (#424) and, where the row carries it, ``file_path`` — the column Azul's
+    the snapshot does not hold, plus, where the row carries it, ``file_path`` — the column Azul's
     manifests drop, kept as an extra key because it is the full path #277's uniform
     cache key wanted and never had. ``drs_uri`` is read from ``file_ref``, TDR's name
     for it; ``dataset_id`` and ``dataset_title`` come from the dataset row.
 
     Every other value is transcribed as the reader delivered it, nulls included: a
     null ``file_md5sum`` stays null and is excluded at load (#376), exactly as the
-    compact path's empty cell is. The published lists go through
-    :func:`azul_manifest.published_list` so a record derived here carries the same
-    ``published`` block as one derived from the compact join. A row lacking any column
-    the record reads — the two published ones included, since a snapshot whose
-    ``anvil_file`` lacks them is schema drift, not a snapshot that publishes nothing —
-    raises naming the column and its table; only ``file_path`` is optional. A published
-    value that is not a list is refused too (:func:`azul_manifest.published_list`).
+    compact path's empty cell is. A row lacking any column the record reads raises
+    naming the column and its table; only ``file_path`` is optional. The two dimensions
+    ``anvil_file`` publishes (``data_modality`` / ``reference_assembly``) are not read:
+    they enter as the published importer's evidence (contract 7.12, #513), which the
+    reconcile stage is to read (#432, not built).
     """
     try:
         dataset_id, dataset_title = dataset["dataset_id"], dataset["title"]
@@ -269,8 +265,6 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
             "file_format": row["file_format"],
             "file_size": row["file_size"],
             "file_md5sum": row["file_md5sum"],
-            "data_modality": published_list(row["data_modality"]),
-            "reference_assembly": published_list(row["reference_assembly"]),
             "is_supplementary": row["is_supplementary"],
             "drs_uri": row["file_ref"],
             "dataset_id": dataset_id,

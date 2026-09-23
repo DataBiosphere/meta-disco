@@ -58,7 +58,7 @@ from meta_disco.pipeline import (
     RecordKey,
     input_key_value,
     keyed_rows,
-    load_classifiable_snapshot,
+    load_classifiable_records,
     load_envelope,
     record_key,
     repeated_key_values,
@@ -287,7 +287,7 @@ def index_data_type_entry(index_ext: str) -> dict:
     )
 
 
-def declined_record(record: dict, index_ext: str, reason: str, source: str | None) -> dict:
+def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     """One output record for an index file this producer took no parent for.
 
     Says the one thing that is known and refuses the four that are not. The extension
@@ -346,7 +346,6 @@ def declined_record(record: dict, index_ext: str, reason: str, source: str | Non
     return OutputRecord.from_record(
         record,
         {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS},
-        source,
         derived_from=derivation_edge(None, None, index_ext),
     ).to_dict()
 
@@ -411,8 +410,7 @@ def propagate_to_index_files(
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
-    source, files = snapshot.source, snapshot.records
+    files = load_classifiable_records(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     # A key two input records share would let an index inherit the wrong parent's
@@ -444,7 +442,7 @@ def propagate_to_index_files(
     # A dict keyed that way silently collapses a name two files share, which is what
     # let an index inherit from a parent picked by iteration order (#438); keeping the
     # list makes "this name identifies one file" a thing the match loop can test.
-    # Every *record* here has a well-formed md5 — `load_classifiable_snapshot` excluded
+    # Every *record* here has a well-formed md5 — `load_classifiable_records` excluded
     # the rest (#376) — so reading one off a chosen file never needs a guard. That says
     # nothing about names: a name reaching more than one record is the case this exists
     # to detect.
@@ -576,8 +574,8 @@ def propagate_to_index_files(
             result = {
                 # The raw input record this row is about; the output is built from it.
                 # This intermediate adds only the parent's labels, and the two must stay
-                # apart: reading `published` off this dict would publish the parent's
-                # answer as the index file's own.
+                # apart: the output row is built from the record, never from this dict,
+                # whose labels are the parent's answer and not the index file's own.
                 "record": f,
                 # The extension this file matched on, which is not always `file_format`:
                 # every `.fai` in the corpus carries `file_format: "Other"` (#437).
@@ -746,13 +744,12 @@ def propagate_to_index_files(
             OutputRecord.from_record(
                 r["record"],
                 classifications,
-                source,
                 derived_from=derivation_edge(parent, r["parent_md5sum"], r["index_extension"]),
             ).to_dict()
         )
 
     for rec, index_ext, reason in declined:
-        standard_results.append(declined_record(rec, index_ext, reason, source))
+        standard_results.append(declined_record(rec, index_ext, reason))
 
     with output_path.open("w") as f:
         json.dump(

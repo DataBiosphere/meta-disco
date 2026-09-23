@@ -2,8 +2,7 @@
 
 Beside `metadata_fixtures` rather than in it: that module builds *input* records and
 stays free of the pipeline, while this one exists for the tests that run a pipeline end
-to end — `test_pipeline` and the two published-comparison tests that pin what the
-pipeline writes as `published.source`, with and without a catalog in the envelope.
+to end — today only `test_pipeline`.
 """
 
 from dataclasses import replace

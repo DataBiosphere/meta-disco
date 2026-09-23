@@ -102,7 +102,7 @@ evidence}` entry — plus the controlled vocabulary:
   cache is keyed by it), so it is *excluded* from classification rather than
   written as a row echoing a null md5 — such a row has no usable identity and
   would collide with any other in `corpus_diff` (#376). Exclusion happens once,
-  at the shared load path (`pipeline.load_classifiable_snapshot`), so every
+  at the shared load path (`pipeline.load_classifiable_records`), so every
   producer inherits it — and that same load writes the run's
   `excluded_files.json`, so excluding a record and naming it are one act, down
   to a standalone `make classify-bam`. `make unprocessable-report` lists them
@@ -179,27 +179,14 @@ evidence}` entry — plus the controlled vocabulary:
     so no evidence reaches classification and a run with evidence files present
     produces the same output as one without. Currency is not decidable offline;
     recording which catalog a run enhances is #404, and is not built.
-  - Published values (contract section 7, built by #424) live in each output record's
-    `published` block — what the repository publishes for that file today, beside what
-    the run inferred. `records.build_published` is its single construction site, reached
-    through `OutputRecord` either way: `from_work_item` off the pipeline's typed work
-    item, `from_record` off a standalone producer's raw dict. Both drive the field list
-    from `PUBLISHED_FIELDS`, so no call site can read a stale subset. The two fields are
-    not slots of the input contract (`schema/metadata.yaml`): they enter as evidence the
-    published importer writes (contract 4.1 kind 2, #497), which nothing reads until
-    reconcile (#432); this block is built off the record until then.
-    Contract 7.7 — every producer writes the block — is structural since #450,
-    pinned for all eleven by `RECORD_KEYS`. What structure cannot pin is that a producer
-    passed `source`, and 7.11 makes that the field that matters: no recommendation names
-    a publisher, only `source` does. Omitting it writes `"source": null` with no error
-    anywhere, so `test_a_standalone_producer_passes_the_source_through` asserts it per
-    producer and `test_the_pipeline_carries_the_catalog_into_a_written_record` covers
-    the pipeline.
-    `make published-comparison` renders the report. It is the *only* comparison against
-    a repository's own values, having replaced `generate_validation_report`'s
-    `compare_anvil` (#424), whose two value maps are #414's seed. Its vocabulary is
-    repository-neutral on purpose (contract 7.11): `add` / `keep` / `review` / `none`
-    name what a data team should do, never who publishes.
+  - **No output record carries what a repository publishes** (#513). The `published`
+    block (#424) and `make published-comparison` are deleted: the published values are
+    input kind 2, written by the published importer as evidence (contract 7.1, 7.12,
+    #497), and reconcile (#432) is where they meet inference. The input path no longer
+    copies AnVIL's two published columns onto a record; an input file written before
+    that still carries them, and the input model ignores them (`extra="ignore"`). Do not
+    add a per-record copy back: a published value no authored row maps is listed by
+    `make review-queue`, not carried on a record.
   - The **catalog identity** — `entry_id`, `file_id`, `drs_uri` — is one set with one
     name, `records.CATALOG_IDENTITY_FIELDS`, reached through `records.identity_from`
     (`coerce=True` for the `unmatched_files` diagnostic, which echoes a drifted value the
@@ -209,11 +196,10 @@ evidence}` entry — plus the controlled vocabulary:
     catalog is re-indexed and the other two are not, which is why a consumer joins on
     `file_id` — the schema's slot descriptions carry that, not the tuple. Since #499
     `entry_id` is optional on the input: absent from a record derived from a snapshot,
-    and null on that record's output row. The input gate's samples and the
-    published-shape refusal name a record by the source's record key
-    (`pipeline.key_field`), not by `entry_id`; the reports that echo the catalog
-    identity (`excluded_files.json`, the unprocessable report, the published
-    comparison's TSV) still carry `entry_id` as one of its three columns.
+    and null on that record's output row. The input gate's samples name a record by
+    the source's record key (`pipeline.key_field`), not by `entry_id`; the reports that
+    echo the catalog identity (`excluded_files.json`, the unprocessable report) still
+    carry `entry_id` as one of its three columns.
   - **The input is a TDR snapshot's tables, however they arrived** (#499). The one
     canonical shape is `snapshot_input.SnapshotTables` — table names, one table's rows
     streamed, TDR's column names — with two readers behind it: `TdrDirect` (BigQuery in
@@ -239,8 +225,8 @@ evidence}` entry — plus the controlled vocabulary:
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all eleven outputs; one wired into a producer does not.
-    That is why the two sweeps `published` (#424) and the catalog identity (#433) needed
-    are gone: `test_output_shape` pins the record's key set across all eleven instead.
+    That is why the sweeps the `published` block (#424, since deleted by #513) and the
+    catalog identity (#433) needed are gone: `test_output_shape` pins the record's key set across all eleven instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -263,14 +249,12 @@ evidence}` entry — plus the controlled vocabulary:
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
     is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
     because its catalogs issue no identifier — no catalog identity is minted for an HPRC
-    record. Five readers use it and none may hard-code a field: the input gate
+    record. Four readers use it and none may hard-code a field: the input gate
     (`scripts/validate_metadata.py`, which also names its sample records by it through
     `pipeline.key_field`), the catch-all producer's skip set
     (`scripts/classify_remaining_files.py`), the index producer's parent join
-    (`scripts/classify_index_files.py`, #486), the post-run one-row-per-file check
-    (#445) and the shared load path's published-shape refusal
-    (`pipeline.refuse_bad_published_shape`, #499, which names an offending record by
-    it). The two producers read another producer's rows through `pipeline.keyed_rows`
+    (`scripts/classify_index_files.py`, #486) and the post-run one-row-per-file check
+    (#445). The two producers read another producer's rows through `pipeline.keyed_rows`
     and the input record each compares against those rows — every record for the
     catch-all, the matched parent for the index producer — through
     `pipeline.input_key_value`; both raise on a missing key rather than skip. An

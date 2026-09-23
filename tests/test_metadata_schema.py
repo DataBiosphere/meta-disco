@@ -33,11 +33,10 @@ class TestValidRecords:
 
         They are not input — they are what the repository publishes — so this model has
         no slot for them and `extra="ignore"` accepts whatever they carry, including
-        shapes nothing should produce. This pins the tolerance deliberately: two tests
-        used to assert they were "nullable declarations" that "may carry a value", which
-        after #424 passed for *any* value and so asserted nothing. What actually
-        constrains the shape now is the output schema's `Published` class
-        (`schema/tests/test_output_validation.py`), not this gate.
+        shapes nothing should produce. Since #513 the downloader no longer writes them,
+        but an input file written before then still carries them on every record, and
+        this pins that such a file still passes the gate. Nothing reads them: the
+        published values enter as the published importer's evidence (#497).
         """
         assert validate_record(_valid(data_modality=value, reference_assembly=value)) == []
 

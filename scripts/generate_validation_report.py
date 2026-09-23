@@ -6,11 +6,11 @@ catalogs) and reports agreement, discrepancies, and coverage gaps.
 
 **The AnVIL comparison moved out of here (#424).** This script used to score our
 values against AnVIL's published `data_modality`/`reference_assembly` through two
-hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. That comparison
-is now `meta_disco.published_comparison` / `make published-comparison`, which reports the same two
-dimensions per file against the values the repository publishes. Two reports scoring the
-same files by different rules is the drift `docs/claims-contract.md` exists to stop,
-so there is one.
+hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. #424 moved that
+comparison to its own report, and #513 deleted that report: AnVIL's published values
+are an input (the published importer's evidence, #497), and reconcile (#432) is where
+they meet the inferred ones. Two reports scoring the same files by different rules is
+the drift `docs/claims-contract.md` exists to stop.
 
 The dicts themselves were the only AnVIL value translations in the repo. They were
 script-local, carried no row ids, and were validated against no vocabulary, so they

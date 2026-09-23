@@ -4,7 +4,7 @@
 `{"metadata", "classifications"}` file a producer publishes (`write_run`) and one row
 of it (`output_record`, its `classifications` block on its own). `write_run` is shared
 by every test that writes a run directory for a reader — the report tests
-`test_corpus_diff`, `test_unprocessable` and `test_published_comparison`, the
+`test_corpus_diff` and `test_unprocessable`, the
 post-run one-row-per-file gate in `test_row_uniqueness`, and the index producer's parent file in
 `producer_sweep.run_index_producer`, `test_index_propagation` and
 `test_producer_exclusions`. `output_record` is shared by the tests whose rows are
@@ -14,8 +14,7 @@ modules, which join on the row's `file_id`.
 What stays local, and why, is said in each place: `test_consistency._rec` writes
 whatever `status` a case names beside the value, and a case may replace an entry's
 `evidence` with a non-list, because the linter must read malformed rows;
-`test_published_comparison._record` carries two dimensions and a `published` block,
-because that report reads only those; `test_remaining_skip_key` writes identity-only
+`test_remaining_skip_key` writes identity-only
 rows with no `classifications` block at all, because the catch-all's skip set reads
 nothing else.
 """

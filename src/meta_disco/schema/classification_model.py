@@ -374,32 +374,6 @@ class ClassificationRecord(ConfiguredBaseModel):
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     classifications: Classifications = Field(default=..., description="""The five classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     derived_from: Optional[DerivationEdge] = Field(default=None, description="""Typed derivation edge to the parent file, if this is a derived file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    published: Optional[Published] = Field(default=None, description="""What the repository publishes for this file today, beside what this run inferred. Null on a file the repository publishes nothing for.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-
-
-class Published(ConfiguredBaseModel):
-    """
-    What the repository publishes for this file of its own accord: the published output (#424), the answer its users see today. Not this project's answer, and not an input to inference — nothing in classification reads this block, no claim is built from it, and a file's `value` is whatever inference concluded whether this block is present or not. The published values are also written as evidence (claims contract 4.1 kind 2, #497) that no run reads yet (#432), never through this block. It is here so the two can be compared per file, which is what `scripts/generate_published_comparison.py` does.
-    Repository-neutral by design: AnVIL is the only publisher today, but only the `source` names one, so a second repository needs no schema change.
-    Each dimension is the value list the repository published, transcribed verbatim — a list wherever it published a list, every value exactly as written, no mapping and no normalization. Null on a dimension the repository publishes nothing for, and the whole block is null on a file it publishes nothing for at all (~98% of the corpus).
-    The block exists precisely because a published value may yield nothing else. Not one published value in the corpus is a term in this schema's vocabulary — `GRCm39` has no `reference_assembly_enum` member and `single-nucleus ATAC-seq` has no `data_modality_enum` one — so without this block those values would appear in the output nowhere at all.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
-
-    source: Optional[str] = Field(default=None, description="""Which repository this was read from, as publishing system and catalog generation (`anvil/anvil15`). Null when the run's input carried no envelope naming a catalog — an unnamed repository rather than a guessed one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
-    data_modality: Optional[list[str]] = Field(default=None, description="""The published data modality/modalities, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
-    reference_assembly: Optional[list[str]] = Field(default=None, description="""The published reference assembly/assemblies, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
-    in_vocabulary: PublishedVocabulary = Field(default=..., description="""Which published values are terms in this schema's vocabulary, per dimension. Required whenever this block exists: contract 7.6 records vocabulary standing for every published value, and `records.build_published` always emits the map. Optional here would let a hand-edited or future producer omit it and validate, and the comparison report would read the absence as \"no value is a term\" — under-reporting coverage rather than failing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published']} })
-
-
-class PublishedVocabulary(ConfiguredBaseModel):
-    """
-    Per dimension, the subset of that dimension's published values that *are* terms in its enum. An empty list means the repository published something this vocabulary cannot say, which is the case for every published value in the corpus today; that is what makes the mapping gap countable from the output rather than asserted about it. A dimension the repository publishes nothing for is absent here rather than present and empty, so these keys are exactly the dimensions it speaks to.
-    """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
-
-    data_modality: Optional[list[DataModalityEnum]] = Field(default=None, description="""Published data modalities that are `data_modality_enum` terms.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
-    reference_assembly: Optional[list[ReferenceAssemblyEnum]] = Field(default=None, description="""Published assemblies that are `reference_assembly_enum` terms.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
 
 
 class Classifications(ConfiguredBaseModel):
@@ -423,9 +397,9 @@ class Classifications(ConfiguredBaseModel):
                                                'range': 'ReferenceAssemblyClassification',
                                                'required': True}}})
 
-    data_modality: DataModalityClassification = Field(default=..., description="""The biological signal the file carries.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    data_modality: DataModalityClassification = Field(default=..., description="""The biological signal the file carries.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     data_type: DataTypeClassification = Field(default=..., description="""The content type of the file (biological or descriptive class).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
-    reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'PublishedVocabulary', 'Classifications']} })
+    reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     platform: PlatformClassification = Field(default=..., description="""The sequencing platform / instrument family.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
 
@@ -811,7 +785,7 @@ class EvidenceFileEnvelope(ConfiguredBaseModel):
                     'preconditions': {'slot_conditions': {'target_key': {'equals_string': 'file_name',
                                                                          'name': 'target_key'}}}}]})
 
-    source: EvidenceFileSource = Field(default=..., description="""Where the claims were read from — repository, dataset and table. `inlined` for the reason `Evidence.source` is: line 1 carries the whole object, and without the declaration a class-valued slot is read as a reference rather than as the object the file holds.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
+    source: EvidenceFileSource = Field(default=..., description="""Where the claims were read from — repository, dataset and table. `inlined` for the reason `Evidence.source` is: line 1 carries the whole object, and without the declaration a class-valued slot is read as a reference rather than as the object the file holds.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
     source_type: ImporterSourceTypeEnum = Field(default=..., description="""Which kind of external source this file was read from. On the envelope rather than on every row for the reason the key names are: one repository, dataset and table is one kind of source, so it is checked once per file rather than a few million times, and reconcile reads it from here when it stamps the claim it makes from a row (#421).
 Restricted to the kinds an importer may write. A file declaring `filename_rule` would be naming our own rule engine as its publisher, and one declaring `wrangler_annotation` would be a curator arriving as evidence, which contract 1.6 routes to rules instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
     source_version: str = Field(default=..., description="""The version of the source the claims were taken from — a release tag, a publication date, a catalog generation. Required even where the source publishes no version of its own: an evidence file that cannot say what it was built from cannot be reasoned about later.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
@@ -881,7 +855,7 @@ class Evidence(ConfiguredBaseModel):
     tier: Optional[int] = Field(default=None, description="""The tier at which this evidence fired.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     competing_values: Optional[list[str]] = Field(default=None, description="""On a `conflict` marker, the disagreeing top-tier values that made the field ambiguous. Absent on claims and on the `not_classified` marker.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     source_type: Optional[SourceTypeEnum] = Field(default=None, description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
-    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Published', 'EvidenceFileEnvelope', 'Evidence']} })
+    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
     raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
     join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
@@ -902,8 +876,6 @@ class DerivationEdge(ConfiguredBaseModel):
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
 ClassificationRecord.model_rebuild()
-Published.model_rebuild()
-PublishedVocabulary.model_rebuild()
 Classifications.model_rebuild()
 Classification.model_rebuild()
 DataModalityClassification.model_rebuild()

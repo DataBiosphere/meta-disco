@@ -21,7 +21,6 @@ from meta_disco.azul_manifest import (
 )
 from meta_disco.deployments import PROD
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
-from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
 from meta_disco.source_evidence import (
     discover,
@@ -37,6 +36,10 @@ CATALOG = "anvil15"
 SERVICE = "https://azul.test"
 FETCHED = "2026-09-03T21:45:47.517283"
 REAL_MANIFESTS = PROD.input_root / "manifest" / CATALOG
+
+# The two harmonized columns AnVIL publishes on `anvil_file`, each a slot of the
+# published slot map. Spelled here as the expectation the map is held to.
+PUBLISHED_COLUMNS = ("data_modality", "reference_assembly")
 
 
 def drs(n: int) -> str:
@@ -656,7 +659,7 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     imports = ae.import_all(
         published, PROD.input_root, CATALOG, PROD.service, tmp_path / "ev", generation="20260920T000000Z"
     )
-    files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
+    files: dict[str, set[str]] = {field: set() for field in PUBLISHED_COLUMNS}
     two_valued = 0
     for run in imports:
         (table,) = run.tables

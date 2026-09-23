@@ -85,7 +85,7 @@ def _report_exclusions(output_dir: Path) -> int | None:
     shared with the report, so the console and the markdown cannot disagree.
 
     Reads rather than recomputes. Each producer writes ``excluded_files.json`` as it
-    loads (``pipeline.load_classifiable_snapshot``), which is what makes the record
+    loads (``pipeline.load_classifiable_records``), which is what makes the record
     unconditional — a standalone ``make classify-<type>`` records its exclusions too,
     with no orchestrator involved. So the orchestrator's job here is only to surface the
     number: ``run_script`` captures each producer's stdout and prints it only on failure,

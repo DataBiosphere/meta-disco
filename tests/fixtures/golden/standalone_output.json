@@ -71,23 +71,7 @@
         "file_id": "g-file-4",
         "file_name": "cohort.pvar",
         "file_size": 1000,
-        "md5sum": "44444444444444444444444444444444",
-        "published": {
-          "data_modality": [
-            "single-nucleus ATAC-seq"
-          ],
-          "in_vocabulary": {
-            "data_modality": [],
-            "reference_assembly": [
-              "GRCh38"
-            ]
-          },
-          "reference_assembly": [
-            "GRCh38",
-            "GRCm39"
-          ],
-          "source": "anvil/anvil15"
-        }
+        "md5sum": "44444444444444444444444444444444"
       }
     ],
     "metadata": {
@@ -187,23 +171,7 @@
         "file_id": "g-file-3",
         "file_name": "slide.svs",
         "file_size": 1000,
-        "md5sum": "33333333333333333333333333333333",
-        "published": {
-          "data_modality": [
-            "single-nucleus ATAC-seq"
-          ],
-          "in_vocabulary": {
-            "data_modality": [],
-            "reference_assembly": [
-              "GRCh38"
-            ]
-          },
-          "reference_assembly": [
-            "GRCh38",
-            "GRCm39"
-          ],
-          "source": "anvil/anvil15"
-        }
+        "md5sum": "33333333333333333333333333333333"
       }
     ],
     "metadata": {
@@ -302,8 +270,7 @@
         "file_id": "g-file-1",
         "file_name": "sample.flnc.bam.bai",
         "file_size": 9000,
-        "md5sum": "11111111111111111111111111111111",
-        "published": null
+        "md5sum": "11111111111111111111111111111111"
       },
       {
         "classifications": {
@@ -381,8 +348,7 @@
         "file_id": "g-file-2",
         "file_name": "orphan.bai",
         "file_size": 9001,
-        "md5sum": "22222222222222222222222222222222",
-        "published": null
+        "md5sum": "22222222222222222222222222222222"
       }
     ],
     "metadata": {
@@ -490,23 +456,7 @@
         "file_id": "g-file-5",
         "file_name": "mystery.xyz",
         "file_size": 1000,
-        "md5sum": "55555555555555555555555555555555",
-        "published": {
-          "data_modality": [
-            "single-nucleus ATAC-seq"
-          ],
-          "in_vocabulary": {
-            "data_modality": [],
-            "reference_assembly": [
-              "GRCh38"
-            ]
-          },
-          "reference_assembly": [
-            "GRCh38",
-            "GRCm39"
-          ],
-          "source": "anvil/anvil15"
-        }
+        "md5sum": "55555555555555555555555555555555"
       }
     ],
     "metadata": {

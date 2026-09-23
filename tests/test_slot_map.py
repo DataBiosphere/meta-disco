@@ -15,7 +15,6 @@ from meta_disco.models import (
     SOURCE_REPOSITORY_METADATA,
     SOURCE_WRANGLER_ANNOTATION,
 )
-from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import (
     ENTITY_TOKENS,
     SOURCE_CELL,
@@ -37,6 +36,10 @@ datasets:
           - {cell: platform}
           - {table_name: hifi}
 """
+
+# The two harmonized columns AnVIL publishes on `anvil_file`, each a slot of the
+# published slot map. Spelled here as the expectation the map is held to.
+PUBLISHED_COLUMNS = ("data_modality", "reference_assembly")
 
 
 def load(tmp_path: Path, text: str):
@@ -315,7 +318,7 @@ class TestTheBundledPublishedMap:
         submitter wrote and no name span."""
         for entry in load_slot_map(published_slot_map_resource()).entries:
             assert (entry.table, entry.column) == (PUBLISHED_TABLE, "file_ref"), entry
-            assert set(entry.slots) == set(PUBLISHED_FIELDS), entry
+            assert set(entry.slots) == set(PUBLISHED_COLUMNS), entry
             for slot, sources in entry.slots.items():
                 assert [(source.form, source.value) for source in sources] == [(SOURCE_CELL, slot)], entry
 

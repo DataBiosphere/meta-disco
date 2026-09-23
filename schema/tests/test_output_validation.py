@@ -11,9 +11,9 @@ dimension's enum.
 **Two fixtures, all eleven producers** (#465). The golden carries the seven
 ``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
 ones, which until #465 reached no schema validation at all. Between them they also put
-the two blocks only some producers emit in front of the schema as records a producer
-wrote: ``published`` (#424) and ``derived_from`` (#450), whose classes were otherwise
-exercised only by dicts typed by hand below. The root suite owns what this side cannot
+the block only one producer emits in front of the schema as records it wrote:
+``derived_from`` (#450), whose class was otherwise exercised only by dicts typed by
+hand below. The root suite owns what this side cannot
 check: that the two fixtures' producer keys together equal ``producers.PRODUCERS``, and
 that each fixture is what a fresh run produces.
 
@@ -77,25 +77,6 @@ def _dimension_classes() -> dict:
 
 
 DIMENSION_CLASS = _dimension_classes()
-
-
-def _published_fields() -> list:
-    """The dimensions a ``Published`` block speaks to, off the schema's own attributes.
-
-    ``records.PUBLISHED_FIELDS`` is the authority, but this project cannot import it — so
-    read the schema, which has to agree with that tuple, rather than spell the dimensions
-    a third time.
-
-    Off ``PublishedVocabulary``, whose attributes *are* the dimensions, and not off
-    ``Published`` minus the names that are not: a future non-dimension attribute would
-    slip into that list and make the one-sided-block check below vacuously true — a guard
-    that stops guarding without failing.
-    """
-    schema = yaml.safe_load(_SCHEMA.read_text(encoding="utf-8"))
-    return list(schema["classes"]["PublishedVocabulary"]["attributes"])
-
-
-_PUBLISHED_FIELDS = _published_fields()
 
 
 @pytest.fixture(scope="session")
@@ -219,9 +200,9 @@ def test_a_derivation_edge_without_a_verb_is_refused(validator):
     edge = {"parent_md5sum": None, "parent_file": None, "parent_kind": None}
     report = validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord")
     # Assert it fails *because of* the missing verb, as this file's other negative cases
-    # do. The base record is a real fixture row carrying a `published` block, so a
-    # regression there would invalidate the record itself and leave a bare
-    # `assert report.results` green while saying nothing about `relation`.
+    # do. The base record is a real fixture row, so a regression elsewhere in it would
+    # invalidate the record itself and leave a bare `assert report.results` green while
+    # saying nothing about `relation`.
     assert any("relation" in result.message for result in report.results), (
         f"expected a failure citing the missing relation, got: {[r.message for r in report.results]}"
     )
@@ -230,8 +211,7 @@ def test_a_derivation_edge_without_a_verb_is_refused(validator):
 def test_output_records_validate_against_schema(validator):
     # Whole-record gate (#134): every record from both fixtures — all eleven producers
     # (#465) — validates against ClassificationRecord, exercising the `classifications`
-    # container end to end, and with it the `published` and `derived_from` blocks those
-    # records carry.
+    # container end to end, and with it the `derived_from` edges those records carry.
     failures = []
     checked = 0
     for label, record in _fixture_records():
@@ -245,83 +225,9 @@ def test_output_records_validate_against_schema(validator):
 
 
 # What the whole-record gate above actually reaches depends on what the fixtures carry,
-# and they are regenerated from inputs. These three say what those inputs have to keep
-# producing: without them a regeneration from published-value-free inputs would quietly
-# take `Published`, `PublishedVocabulary` and `DerivationEdge` back out of the gate —
-# the state #465 found and closed.
-
-
-@pytest.mark.parametrize("path", [_GOLDEN, _STANDALONE], ids=["pipeline", "standalone"])
-def test_a_producers_published_block_reaches_the_gate(path):
-    """Each fixture carries a record publishing both dimensions, with an `in_vocabulary`
-    map holding a term and lacking one.
-
-    Per fixture, not pooled over both, because the two fixtures are the two construction
-    sites: ``OutputRecord.from_work_item`` off the pipeline's typed work item, and
-    ``from_record`` off a standalone producer's raw dict. Pooled, the golden's rows alone
-    satisfied this — measured by dropping the published values from the standalone inputs
-    and regenerating, which nulled all five of its blocks with the whole suite still
-    green, since the root deep-equal accepts a fixture that matches the run that made it.
-
-    Both halves of the map on one record, which is what #465 asks for: aggregated over
-    records a fixture could satisfy each half separately and no producer would ever have
-    written the mixed map. Satisfying it on one record supplies each half by construction.
-    """
-    blocks = [record["published"] for _, record in _records_in(path) if record.get("published")]
-    assert blocks, f"no record in {path.name} carries a published block; regenerate with `{_REGEN}`"
-
-    def vocabulary(block):
-        return block.get("in_vocabulary", {}).values()
-
-    assert any(
-        all(block.get(field) for field in _PUBLISHED_FIELDS)
-        and any(terms for terms in vocabulary(block))
-        and any(not terms for terms in vocabulary(block))
-        for block in blocks
-    ), f"no one record in {path.name} publishes both dimensions with a term this vocabulary has and one it lacks"
-
-
-def test_in_vocabulary_names_the_dimensions_the_block_speaks_to():
-    """``in_vocabulary``'s keys are exactly the dimensions carrying a published value.
-
-    The class's own description: a dimension the repository publishes nothing for is
-    absent here rather than present and empty. Checked against the output because the
-    record gate cannot — it runs ``closed=False``, so an unmodeled key inside the map is
-    tolerated there, and the reachability checks above read only the map's values, where
-    a renamed key still leaves one populated list and one empty one. Measured: renaming
-    ``reference_assembly`` to ``ref`` in ``build_published`` and regenerating passed all
-    91 tests in this suite.
-
-    ``build_published``'s own tests in ``tests/test_published_comparison.py`` also catch
-    that rename — nine of them — so this is the schema side holding its half of an
-    invariant it declares, rather than the only thing standing between the drift and
-    ``main``.
-    """
-    for label, record in _fixture_records():
-        block = record.get("published")
-        if not block:
-            continue
-        speaks_to = {field for field in _PUBLISHED_FIELDS if block.get(field)}
-        assert set(block["in_vocabulary"]) == speaks_to, (
-            f"{label}: in_vocabulary names {sorted(block['in_vocabulary'])}, "
-            f"but the block publishes {sorted(speaks_to)}"
-        )
-
-
-def test_a_one_sided_published_block_reaches_the_gate():
-    """Some record publishes one dimension and explicitly nulls the other — the shape
-    almost every published record in the corpus takes.
-
-    Not per fixture: only the pipeline's inputs carry a one-sided record, and which
-    construction site built it does not change the shape. `field in block` rather than
-    `block.get(field) is None`, because `build_published` emits every dimension key and
-    spells "publishes nothing here" as an explicit null — accepting an omitted key would
-    let a block that had dropped one satisfy this.
-    """
-    blocks = [record["published"] for _, record in _fixture_records() if record.get("published")]
-    assert any(any(block[field] is None for field in _PUBLISHED_FIELDS if field in block) for block in blocks), (
-        "no fixture record carries a block naming one dimension and explicitly nulling the other"
-    )
+# and they are regenerated from inputs. This says what those inputs have to keep
+# producing: without it a regeneration from parent-free inputs would quietly take
+# `DerivationEdge` back out of the gate — the state #465 found and closed.
 
 
 def test_a_producers_derivation_edge_reaches_the_gate():
@@ -649,107 +555,3 @@ def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validato
     # which would accept one, so the schema and the reader refuse the same strings.
     report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="EvidenceFileEnvelope")
     assert report.results, "a date-only fetched_at should have failed"
-
-
-# --- Published, the repository's own values (#424) --------------------------------
-#
-# Records a producer wrote now carry the populated shape into the gates above (#465),
-# which is what catches a `build_published` that stops emitting a key. These cases
-# overlap them on purpose and stay: each is one shape written out together with what
-# would pass CI without it — a wrong range, a lost `multivalued`, a malformed or absent
-# `in_vocabulary` — where the same coverage read off a fixture holds only for as long as
-# its inputs go on publishing those values.
-
-
-def _record_with(published):
-    """A minimal valid ClassificationRecord carrying `published`."""
-    ok = {"value": None, "status": "not_classified", "evidence": []}
-    return {
-        "md5sum": "a" * 32,
-        "file_name": "IGVFFI0000TEST.bam",
-        "classifications": dict.fromkeys(DIMENSION_CLASS, ok),
-        "published": published,
-    }
-
-
-def test_a_populated_published_block_validates(validator):
-    # The shape the pipeline writes: lists on both dimensions, a source, and the
-    # vocabulary subset — here empty, as it is for every published value in the corpus.
-    published = {
-        "source": "anvil/anvil15",
-        "data_modality": ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"],
-        "reference_assembly": ["GRCm39"],
-        "in_vocabulary": {"data_modality": [], "reference_assembly": []},
-    }
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    assert not report.results, [r.message for r in report.results]
-
-
-def test_a_published_block_validates_with_one_dimension_absent(validator):
-    # Null on a dimension the repository publishes nothing for, and that dimension
-    # absent from in_vocabulary. One of the two one-sided shapes: 4,476 records are
-    # assembly-only like this one, 6,535 are modality-only, and 220 carry both.
-    published = {
-        "source": "anvil/anvil15",
-        "data_modality": None,
-        "reference_assembly": ["GRCh38 + Gencode40"],
-        "in_vocabulary": {"reference_assembly": []},
-    }
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    assert not report.results, [r.message for r in report.results]
-
-
-def test_a_published_block_validates_when_a_value_is_in_vocabulary(validator):
-    # Empty in_vocabulary lists are today's corpus-wide state, so the non-empty branch
-    # needs its own case or the day #414 lands a term is the day this is first exercised.
-    published = {
-        "source": "anvil/anvil15",
-        "data_modality": None,
-        "reference_assembly": ["GRCh38"],
-        "in_vocabulary": {"reference_assembly": ["GRCh38"]},
-    }
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    assert not report.results, [r.message for r in report.results]
-
-
-def test_the_published_gate_rejects_a_scalar_where_a_list_belongs(validator):
-    # Proves the gate bites on the shape that matters. A pre-#424 snapshot spells these
-    # as scalars, and the input contract no longer models them (#424 — they are not
-    # input), so neither `validate_metadata` nor any caller guarantee covers the shape.
-    # `records.build_published` refuses one first, so a scalar should never reach a
-    # record; this is the second gate, and the one that would still catch a record
-    # written by some future producer that bypassed that constructor.
-    published = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": "GRCh38"}
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    # Assert it fails *because of* the shape, not some unrelated reason — otherwise a
-    # regression that stopped enforcing `multivalued` could leave this test green.
-    assert any("published.reference_assembly" in r.message for r in report.results), (
-        f"expected a failure citing the scalar published value, got: {[r.message for r in report.results]}"
-    )
-
-
-def test_in_vocabulary_is_required_whenever_a_published_block_exists(validator):
-    # Contract 7.6 records vocabulary standing for every published value, and
-    # `build_published` always emits the map. Optional would let a hand-edited or future
-    # producer omit it and validate, and the report would read the absence as "no value
-    # is a term" — under-reporting coverage rather than failing.
-    published = {"source": "anvil/anvil15", "data_modality": None, "reference_assembly": ["GRCh38"]}
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    assert any("in_vocabulary" in r.message for r in report.results), (
-        f"expected a failure citing the missing map, got: {[r.message for r in report.results]}"
-    )
-
-
-def test_in_vocabulary_refuses_a_value_that_is_not_a_vocabulary_term(validator):
-    # The map holds enum terms by definition, so `range: string` would let a
-    # non-term validate and leave `build_published` as the only thing enforcing it.
-    published = {
-        "source": "anvil/anvil15",
-        "data_modality": None,
-        "reference_assembly": ["GRCh38"],
-        "in_vocabulary": {"reference_assembly": ["not_an_assembly"]},
-    }
-    report = validator.validate(_record_with(published), target_class="ClassificationRecord")
-    assert any("not_an_assembly" in r.message for r in report.results), (
-        f"expected a failure citing the bad term, got: {[r.message for r in report.results]}"
-    )

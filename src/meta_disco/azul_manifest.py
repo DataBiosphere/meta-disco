@@ -458,57 +458,11 @@ def _first(cell: str) -> str | None:
     Used for ``organism_type`` and ``phenotypic_sex`` only — the two donor fields
     the page downloader also emitted, which the input contract does not model and
     ignores as extra keys. Taking element zero of a list is lossy, so it is kept
-    only where nothing reads the result: the two fields AnVIL *declares* about a
-    file went through here too until #424, where element zero was not dropping
-    data but manufacturing a wrong answer (twelve IGVF files declare two
-    modalities and all twelve arrived as the first one). Those two read
-    :func:`_published` instead.
+    only where nothing reads the result.
     """
     if not cell:
         return None
     return cell.split(_MULTI_VALUE_SEP, 1)[0] or None
-
-
-def _published(cell: str) -> list[str] | None:
-    """Every value of a ``||``-joined multi-value cell, or None for an empty cell.
-
-    The published values transcribed as Azul published it (#424): a list
-    where Azul published a list, and each value exactly as it was written — no
-    mapping, no normalization, no casefolding. Splitting on the full ``" || "``
-    separator rather than ``"||"`` is what keeps a value free of the separator's
-    own padding.
-
-    An empty element is dropped rather than transcribed: it declares nothing, and
-    a cell of nothing but separators yields ``None`` like a blank one. That is the
-    only case in which the returned list is not the cell split verbatim, and the
-    only value this can ever drop.
-    """
-    if not cell:
-        return None
-    return published_list(cell.split(_MULTI_VALUE_SEP))
-
-
-def published_list(values: list[Any] | None) -> list[str] | None:
-    """A published multi-value as the record carries it: the non-empty values, or None.
-
-    The list half of :func:`_published`, shared with the readers that get the value as
-    a list rather than a joined cell — an ``anvil_file`` row's ``data_modality`` is an
-    array in TDR and in the verbatim manifest (``snapshot_input``). Same rule, so a
-    record derived either way carries the same ``published`` block: an empty element is
-    dropped, and an empty or absent list reads as ``None`` — no published value — rather
-    than as ``[]``, which ``records.build_published`` refuses. A value that is neither
-    a list nor ``None`` is refused: a string would otherwise be split into its
-    characters, each a non-empty ``str`` that every later shape check accepts. So is
-    a list holding anything but strings: only an empty *string* is dropped, since a
-    ``0`` or a ``None`` element is schema drift and would otherwise read as no value.
-    """
-    if values is None:
-        return None
-    if not isinstance(values, list):
-        raise ValueError(f"a published value is a list of strings or null, not {type(values).__name__}: {values!r}")
-    if not all(isinstance(value, str) for value in values):
-        raise ValueError(f"a published value holds a non-string element: {values!r}")
-    return [value for value in values if value] or None
 
 
 SOURCE_ID_COLUMN = "sources.source_id"
@@ -586,21 +540,22 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
 def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     """One classifier input record from one compact manifest row.
 
-    The keys are the input contract (``schema/metadata.yaml``) plus four fields the
-    contract does not model and ignores as extra keys: the two dimensions the
-    repository publishes, and the two donor fields the page downloader also emitted.
+    The keys are the input contract (``schema/metadata.yaml``) plus two fields the
+    contract does not model and ignores as extra keys: the donor fields the page
+    downloader also emitted.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's strict
     validation requires; a cell that is not one of Azul's ``True`` / ``False``
     spellings raises rather than silently becoming ``False``.
 
-    Four fields read an empty cell as ``None``, and they split a multi-valued one two
-    different ways. ``data_modality`` and ``reference_assembly`` are what the repository
-    publishes for this file today — classification reads them as nothing and the output
-    carries them as its ``published`` block (#424) — so they are transcribed as the full
-    list (:func:`_published`). ``organism_type`` and ``phenotypic_sex`` still keep
-    element zero (:func:`_first`), which nothing reads. Every other field is passed
-    through as the cell's text, and the contract's non-empty patterns are what reject a
-    blank one.
+    ``organism_type`` and ``phenotypic_sex`` read an empty cell as ``None`` and keep
+    element zero of a multi-valued one (:func:`_first`), which nothing reads. Every
+    other field is passed through as the cell's text, and the contract's non-empty
+    patterns are what reject a blank one.
+
+    The two dimensions the repository publishes for a file (``files.data_modality`` /
+    ``files.reference_assembly``) are not copied: they enter as the published importer's
+    evidence, read from ``anvil_file`` (contract 7.12, #513), not off this join; the
+    reconcile stage is to read it (#432, not built).
     """
     return {
         "entry_id": row["files.document_id"],
@@ -609,8 +564,6 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
         "file_format": row["files.file_format"],
         "file_size": int(row["files.file_size"]),
         "file_md5sum": row["files.file_md5sum"],
-        "data_modality": _published(row.get("files.data_modality", "")),
-        "reference_assembly": _published(row.get("files.reference_assembly", "")),
         "is_supplementary": _BOOL_CELL[row["files.is_supplementary"]],
         "drs_uri": row["files.drs_uri"],
         "dataset_id": row["datasets.dataset_id"],
@@ -845,10 +798,8 @@ def metadata_block(
     The envelope's ``deployment`` (#500) is ``deployment.name``, and its ``catalog`` is written for
     every kind of input — for a snapshot read in place too, where it is the generation
     the deployment's Azul serves over these snapshots rather than anything the read
-    touched; it is declared, not inferred, and :func:`pipeline.published_source` reads
-    it with ``repository`` to name the repository a run's ``published`` blocks came
-    from (decision of 2026-09-22 on #500, so that field is never null for want of a
-    manifest).
+    touched; it is declared, not inferred (decision of 2026-09-22 on #500, so that
+    field is never null for want of a manifest).
 
     ``input_source`` names how the records were derived, one of :data:`INPUT_SOURCES`
     (#499); any other value is refused. Every writer states it explicitly — the
@@ -861,9 +812,7 @@ def metadata_block(
     no manifest.
 
     ``repository`` names who published these files, so nothing downstream has to infer
-    it (#424). ``pipeline.published_source`` used to prefix a hard-coded ``anvil``
-    there, which would have mislabelled any other repository's snapshot loaded through
-    the same shared path.
+    it (#424); a run reads the source's record key off it (``pipeline.SOURCE_RECORD_KEYS``).
 
     ``datasets`` maps a title to a :func:`dataset_entry`: ``file_count`` plus the TDR
     snapshot it was materialised from (#434) — for a compact-sourced input the one the

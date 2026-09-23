@@ -43,9 +43,7 @@ ROOT = PROD.input_root
 REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
 # The six per-file fields the issue's parity criteria compare — what the compact join
-# and the snapshot's `anvil_file` row both carry for a file, under the record's names —
-# plus the two published dimensions, so the claim that both derivations carry the same
-# `published` block is checked rather than asserted.
+# and the snapshot's `anvil_file` row both carry for a file, under the record's names.
 COMPARED_FIELDS = (
     "file_name",
     "file_format",
@@ -53,8 +51,6 @@ COMPARED_FIELDS = (
     "file_md5sum",
     "drs_uri",
     "is_supplementary",
-    "data_modality",
-    "reference_assembly",
 )
 
 DATASET_ROW: dict[str, Any] = {
@@ -132,10 +128,8 @@ class TestDirectRead:
             assert record["dataset_title"] == DATASET_ROW["title"]
             assert record["dataset_id"] == DATASET_ROW["dataset_id"]
             assert "entry_id" not in record
-        # The published lists under the compact path's rule: empty is None, and an
-        # empty element is dropped.
-        assert records[0]["data_modality"] is None
-        assert records[1]["data_modality"] == ["whole genome"]
+            # The published columns are the published importer's evidence (#513).
+            assert "data_modality" not in record and "reference_assembly" not in record
 
     def test_file_path_is_kept_on_the_record(self, client):
         # AC 2: the one column Azul's manifests drop reaches the record.
@@ -272,10 +266,8 @@ class TestDerivationRefusals:
         streamed = [r for q, r in zip(client.queries, client.results, strict=True) if q.startswith("SELECT * FROM")]
         assert [r.pulled for r in streamed] == [min(len(dataset_rows), 2)]
 
-    @pytest.mark.parametrize("column", ["file_ref", "data_modality"])
+    @pytest.mark.parametrize("column", ["file_ref", "file_md5sum"])
     def test_a_row_lacking_a_column_the_record_needs_is_refused_naming_it(self, column):
-        # The published columns included: an `anvil_file` without them is schema
-        # drift, not a snapshot that publishes nothing.
         row = {k: v for k, v in file_row(1).items() if k != column}
         with pytest.raises(ValueError, match=f"cannot map an anvil_file row to a record: no '{column}' column"):
             si.record_from_file_row(row, DATASET_ROW)
@@ -342,20 +334,7 @@ class TestParityWithTheCompactPath:
         assert _derived_records_agree_with_compact(datasets) == 708_088
 
 
-class TestPublishedColumnShape:
-    def test_a_scalar_published_value_is_refused_not_split_into_characters(self):
-        # A string would otherwise become a list of one-letter "values" that every
-        # later shape check accepts.
-        with pytest.raises(ValueError, match="a published value is a list of strings or null, not str"):
-            si.record_from_file_row(file_row(1, data_modality="whole genome"), DATASET_ROW)
-
-    @pytest.mark.parametrize("value", [[0], [None], ["whole genome", 1]], ids=["zero", "null", "mixed"])
-    def test_a_non_string_element_is_refused_not_dropped(self, value):
-        # `[0]` would otherwise be filtered to nothing and read as "publishes no value";
-        # only an empty string is dropped.
-        with pytest.raises(ValueError, match="a published value holds a non-string element"):
-            si.record_from_file_row(file_row(1, data_modality=value), DATASET_ROW)
-
+class TestDatasetRowShape:
     def test_a_dataset_row_lacking_a_column_is_named_to_its_own_table(self):
         with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):
             si.record_from_file_row(file_row(1), {"dataset_id": "d"})

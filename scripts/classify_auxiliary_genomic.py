@@ -13,7 +13,7 @@ from pathlib import Path
 # Add project root to path for imports
 from meta_disco.deployments import PROD
 from meta_disco.models import FileInfo, field_label
-from meta_disco.pipeline import load_classifiable_snapshot
+from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
@@ -35,8 +35,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
-    source, files = snapshot.source, snapshot.records
+    files = load_classifiable_records(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     engine = RuleEngine()
@@ -66,7 +65,7 @@ def classify_auxiliary_genomic(metadata_path: Path, output_path: Path):
             stats[matched_ext]["with_ref"] += 1
 
         # One record shape for every producer (#450).
-        results.append(OutputRecord.from_record(f, result.to_output_dict(), source).to_dict())
+        results.append(OutputRecord.from_record(f, result.to_output_dict()).to_dict())
 
     # Print summary
     print("\n" + "=" * 70)

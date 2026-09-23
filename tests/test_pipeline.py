@@ -486,9 +486,6 @@ class TestPipelineRun:
         assert out.file_name == "123"
         assert out.file_format == ""
         assert isinstance(out.file_name, str) and isinstance(out.file_format, str)
-        # The repository publishes nothing for it, so the envelope carries the key with
-        # no block (#424).
-        assert out.published is None
 
     @pytest.mark.parametrize("workers", [1, 2])
     def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
@@ -569,7 +566,7 @@ class TestPipelineRun:
         # classify_single emits the same canonical envelope as every other producer
         # (#204, widened to all eleven by #450). Every field it has no input record to
         # carry is present and None: dataset_title/entry_id, file_id/drs_uri (#433),
-        # published (#424), and derived_from (#450).
+        # and derived_from (#450).
         assert set(result) == RECORD_KEYS
         for absent in ("dataset_title", "entry_id", "file_id", "drs_uri", "derived_from"):
             assert result[absent] is None, f"{absent} has no source on the single-file path"
