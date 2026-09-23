@@ -541,17 +541,18 @@ class Report:
         """The source types that speak to ``slot`` in ``dataset``.
 
         Read off the evidence lines, except for the published source: it is one table with
-        the same columns in every dataset (contract 7.12), and its importer skips an empty
-        cell, so a column that is empty for a whole dataset leaves no line there. It speaks
-        to every slot it has a line for anywhere, in every dataset it has a file for.
+        the same columns in every dataset of its repository (contract 7.12,
+        ``pipeline.PUBLISHED_TABLES``), and its importer skips an empty cell and writes no
+        file for a dataset whose columns are all empty. So it speaks to every slot it has a
+        line for anywhere, in every dataset of the run — a dataset with no published file
+        is one where AnVIL publishes nothing, which is still that source's silence.
         """
         at = (dataset, slot)
         if at not in self._covering:
             covering = []
             for source_type, pairs in self.coverage.items():
                 if source_type == SOURCE_PUBLISHED_VALUE:
-                    datasets = {d for d, _ in pairs}
-                    speaks = slot in {s for _, s in pairs} and (dataset in datasets or None in datasets)
+                    speaks = slot in {s for _, s in pairs}
                 else:
                     speaks = at in pairs or (None, slot) in pairs
                 if speaks:

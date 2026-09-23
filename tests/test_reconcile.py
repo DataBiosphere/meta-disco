@@ -512,7 +512,7 @@ def test_a_source_is_scored_only_on_slots_it_speaks_to(tmp_path, run, evidence, 
     assert SOURCE_REPOSITORY_METADATA not in result["inputs"][DATASET]["data_type"]
 
 
-def test_the_published_source_speaks_to_its_columns_in_every_dataset_it_covers(tmp_path, run, evidence, table):
+def test_the_published_source_speaks_to_its_columns_in_every_dataset(tmp_path, run, evidence, table):
     """A published column empty for a whole dataset leaves no line there, and is still that source's silence."""
     write_run(run, [record(1, reference_assembly="GRCh38", data_modality="genomic")])
     published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
@@ -628,3 +628,18 @@ def test_a_value_is_attributed_by_source_precedence_verbatim_before_harmonized(t
         "filled_by_published_harmonized": 1,
         "filled_by_inference": 1,
     }
+
+
+def test_a_dataset_with_no_published_file_is_one_where_the_published_source_is_silent(tmp_path, run, evidence, table):
+    """The importer writes no file for a dataset whose published columns are all empty."""
+    write_run(
+        run,
+        [
+            record(1, reference_assembly="GRCh38"),
+            record(2, dataset="AnVIL_NOTHING_PUBLISHED", reference_assembly="CHM13"),
+        ],
+    )
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
+    result = go(run, tmp_path, evidence, table)
+    assert result["added_over_published"] == {"AnVIL_NOTHING_PUBLISHED": {"reference_assembly": 1}}
+    assert result["inputs"]["AnVIL_NOTHING_PUBLISHED"]["reference_assembly"][SOURCE_PUBLISHED_VALUE] == {"silent": 1}
