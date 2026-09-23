@@ -5,7 +5,7 @@ and the records derived from either.
 One test per acceptance criterion on the issue, in the issue's order, plus the
 refusals the derivation makes. All offline: the direct reader runs against
 ``tests.tdr_fixtures.FakeClient``; the two parity checks over prod's manifests
-read ``data/anvil/manifest/anvil15/`` and skip where it is absent, as the
+read ``data/anvil/prod/manifest/anvil15/`` and skip where it is absent, as the
 evidence-importer tests do. Their comparison side is derived from the compact
 manifests through the reader the downloader uses, so they compare the two
 derivations rather than a derivation against a file that may be stale.
@@ -279,6 +279,20 @@ class TestDerivationRefusals:
         row = {k: v for k, v in file_row(1).items() if k != column}
         with pytest.raises(ValueError, match=f"cannot map an anvil_file row to a record: no '{column}' column"):
             si.record_from_file_row(row, DATASET_ROW)
+
+    def test_a_dataset_row_of_another_title_is_refused_before_any_record(self):
+        # #500: the snapshot declared for one dataset holding another is refused at the
+        # call, before the file table is read.
+        client = FakeClient(TABLES)
+        with pytest.raises(ValueError, match="expected dataset 'X', but the snapshot holds 'ANVIL_1000G_2019_Dev'"):
+            si.derive_records(si.TdrDirect(client, SNAPSHOT), "X")
+        assert not any(table_of(query) == "anvil_file" for query in client.queries)
+        assert len(list(si.derive_records(si.TdrDirect(FakeClient(TABLES), SNAPSHOT), DATASET_ROW["title"]))) == 3
+
+    def test_a_dataset_row_without_a_title_is_named_as_drift_not_as_another_dataset(self):
+        tables = {**TABLES, "anvil_dataset": [{k: v for k, v in DATASET_ROW.items() if k != "title"}]}
+        with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):
+            si.derive_records(si.TdrDirect(FakeClient(tables), SNAPSHOT), "X")
 
     def test_a_null_value_is_transcribed_not_refused(self):
         # A null md5 stays null: the load path excludes it (#376), the way the compact

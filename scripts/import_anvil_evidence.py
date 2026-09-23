@@ -38,6 +38,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Import AnVIL's tables as evidence files, through a slot map")
     parser.add_argument("--catalog", default=None, help="Azul catalog (default: the one the map was authored against)")
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR, help="Directory holding manifest/<catalog>/")
+    parser.add_argument(
+        "--service",
+        default=PROD.service,
+        help="The Azul service the manifests in --data-dir were pulled from, written into each evidence file's "
+        f"source url (default: prod's, {PROD.service})",
+    )
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
     parser.add_argument("--dataset", action="append", help="Import only this dataset (repeatable)")
     parser.add_argument("--check", action="store_true", help="Check the map against the manifests and write nothing")
@@ -65,7 +71,7 @@ def main() -> int:
     if args.check:
         return 0
 
-    imports = import_all(slot_map, args.data_dir, catalog, args.evidence_root, args.dataset)
+    imports = import_all(slot_map, args.data_dir, catalog, args.service, args.evidence_root, args.dataset)
     for line in describe(imports):
         print(line)
     print(

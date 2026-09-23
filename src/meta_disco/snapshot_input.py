@@ -113,21 +113,25 @@ class SnapshotTables(Protocol):
 class TdrDirect:
     """A snapshot read in place from BigQuery, through :mod:`meta_disco.tdr`.
 
-    ``tables`` is the dataset's table listing. ``rows`` is :func:`tdr.checked_rows`:
-    the table counted with ``COUNT(*)`` and then streamed, page by page, with that
-    count as the stream's expectation — so a stream that ends short or long raises
-    after its last row rather than yielding a partial table as a whole one.
+    ``tables`` is the dataset's table listing. ``rows`` counts the table with
+    ``COUNT(*)`` at the call and then streams it, page by page, with that count as the
+    stream's expectation — so a stream that ends short or long raises after its last
+    row rather than yielding a partial table as a whole one. Each count is kept in
+    ``counts``, by table, so a caller that needs a table's size before streaming it
+    (the downloader's envelope, #500) reads it there rather than counting again.
     """
 
     def __init__(self, client: tdr.BigQueryClient, snapshot: tdr.Snapshot):
         self.client = client
         self.snapshot = snapshot
+        self.counts: dict[str, int] = {}
 
     def tables(self) -> list[str]:
         return tdr.list_tables(self.client, self.snapshot)
 
     def rows(self, table: str) -> Iterator[dict[str, Any]]:
-        return tdr.checked_rows(self.client, self.snapshot, table)
+        self.counts[table] = tdr.count_rows(self.client, self.snapshot, table)
+        return tdr.iter_rows(self.client, self.snapshot, table, expect=self.counts[table])
 
 
 class AzulVerbatim:
@@ -197,17 +201,23 @@ class AzulVerbatim:
         return {column: cell for column, cell in value.items() if column not in dropped}
 
 
-def derive_records(tables: SnapshotTables) -> Iterator[dict[str, Any]]:
+def derive_records(tables: SnapshotTables, dataset_title: str | None = None) -> Iterator[dict[str, Any]]:
     """One input record per ``anvil_file`` row, streamed, from a snapshot's tables.
 
     Refuses before yielding anything — the checks run at the call, and only the file
-    stream is deferred — when a required table is not listed, naming it, or when
+    stream is deferred — when a required table is not listed, naming it; when
     ``anvil_dataset`` holds other than exactly one row: a snapshot is one dataset
     (#434's envelope shape rests on it), so a second row is that assumption breaking
-    and picking one would be a guess. The dataset table is read as a stream and only
+    and picking one would be a guess; or, given ``dataset_title``, when that row's
+    ``title`` is another — the snapshot declared for (or the manifest requested for)
+    one dataset holding another is a wrong declaration, not an input (#500). Every
+    record takes its ``dataset_title`` from that one row, so checking the row checks
+    them all. The dataset table is read as a stream and only
     its first two rows are ever taken, so a drifted snapshot with a large one is
-    refused without being held. ``anvil_file`` is then streamed a row at a time
-    through :func:`record_from_file_row`.
+    refused without being held. The ``anvil_file`` stream is opened here, at the call —
+    so a reader that counts a table when it opens it (:class:`TdrDirect`) has counted
+    the file table by the time this returns — and is then read a row at a time through
+    :func:`record_from_file_row` as the returned iterator is consumed.
     """
     present = tables.tables()
     missing = [table for table in REQUIRED_TABLES if table not in present]
@@ -219,7 +229,13 @@ def derive_records(tables: SnapshotTables) -> Iterator[dict[str, Any]]:
         raise ValueError(f"{TABLE_DATASET} holds no row; a snapshot is one dataset")
     if next(datasets, None) is not None:
         raise ValueError(f"{TABLE_DATASET} holds more than one row; a snapshot is one dataset")
-    return (record_from_file_row(row, dataset) for row in tables.rows(VERBATIM_FILE))
+    if dataset_title is not None:
+        if "title" not in dataset:
+            raise ValueError(f"cannot map an {TABLE_DATASET} row: no 'title' column")
+        if dataset["title"] != dataset_title:
+            raise ValueError(f"expected dataset {dataset_title!r}, but the snapshot holds {dataset['title']!r}")
+    file_rows = tables.rows(VERBATIM_FILE)
+    return (record_from_file_row(row, dataset) for row in file_rows)
 
 
 def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[str, Any]:

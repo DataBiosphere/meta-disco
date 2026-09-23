@@ -131,7 +131,9 @@ class FakeSession:
         payloads: dict[tuple[str, str], bytes],
         polls: int = 2,
         rate_limits: int = 0,
+        service: str = SERVICE,
     ):
+        self.service = service  # the Azul service whose two endpoints this fake answers
         self.datasets = datasets  # None: the catalog is gone, discovery 404s
         self.payloads = payloads
         self.polls = polls
@@ -142,7 +144,7 @@ class FakeSession:
     def get(self, url, **kwargs):
         params = kwargs.get("params")
         self.calls.append(("GET", url, params))
-        if url == am.files_url(SERVICE):
+        if url == am.files_url(self.service):
             if self.datasets is None:
                 return FakeResponse(json_body={"message": "no such catalog"}, status_code=404)
             terms = [{"term": t, "count": c} for t, c in self.datasets.items()]
@@ -160,7 +162,7 @@ class FakeSession:
     def put(self, url, **kwargs):
         params = kwargs.get("params")
         self.calls.append(("PUT", url, params))
-        assert url == am.manifest_url(SERVICE) and params is not None
+        assert url == am.manifest_url(self.service) and params is not None
         if self.rate_limits > 0:
             self.rate_limits -= 1
             return FakeResponse(json_body={"message": "slow down"}, status_code=429, headers={"Retry-After": "7"})
@@ -588,12 +590,9 @@ DEPLOYMENT = deployment(Path("unused"))
 
 
 def _entry(file_count: int, source: str = "s") -> dict:
-    """One `datasets` entry: the count, plus the snapshot it was materialised from."""
-    return {
-        "file_count": file_count,
-        "source_id": f"{source}-id",
-        "source_spec": f"tdr:bigquery:gcp:datarepo-{source}:SNAPSHOT_{source}",
-    }
+    """One `datasets` entry for a snapshot named after ``source``, in the shape the
+    downloader writes (`am.dataset_entry`)."""
+    return entry(file_count, f"{source}-id", Snapshot(f"datarepo-{source}", f"SNAPSHOT_{source}"))
 
 
 class TestDatasetSource:
@@ -758,7 +757,7 @@ class TestScript:
 
         class Unreachable(FakeSession):
             def get(self, url, **kwargs):
-                if url == am.files_url(SERVICE):
+                if url == am.files_url(self.service):
                     raise requests.ConnectionError("no route")
                 return super().get(url, **kwargs)
 

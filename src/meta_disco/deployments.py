@@ -73,16 +73,6 @@ class Deployment:
     def input_ndjson(self) -> Path:
         return self.input_root / INPUT_NDJSON_NAME
 
-    def snapshot(self, dataset_title: str) -> Snapshot:
-        """The declared snapshot of ``dataset_title``; ``ValueError`` if none is declared."""
-        try:
-            return self.snapshots[dataset_title]
-        except KeyError:
-            raise ValueError(
-                f"deployment {self.name!r} declares no snapshot for dataset {dataset_title!r}; "
-                f"it declares {sorted(self.snapshots)}"
-            ) from None
-
 
 def _snapshots(**by_title: tuple[str, str]) -> Mapping[str, Snapshot]:
     return MappingProxyType({title: Snapshot(project, name) for title, (project, name) in by_title.items()})
@@ -129,11 +119,3 @@ DEPLOYMENTS: Mapping[str, Deployment] = MappingProxyType({d.name: d for d in (PR
 
 #: What every entry point reads when no deployment is named: today's behaviour.
 DEFAULT_DEPLOYMENT = PROD.name
-
-
-def deployment(name: str) -> Deployment:
-    """The deployment called ``name``; ``ValueError`` naming the known ones otherwise."""
-    try:
-        return DEPLOYMENTS[name]
-    except KeyError:
-        raise ValueError(f"unknown deployment {name!r}; known deployments: {sorted(DEPLOYMENTS)}") from None

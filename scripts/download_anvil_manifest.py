@@ -39,8 +39,9 @@ snapshot the manifest names on every row is checked against the declaration, and
 disagreement refuses the run naming both (decision of 2026-09-22 on #500): the
 declaration says what the deployment reads, and the fix is to update it.
 
-A manifest already on disk is not re-requested unless ``--force`` is given, and the
-input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
+A manifest already on disk is not re-requested unless ``--force`` is given or
+another manifest the input source needs for that dataset is missing — a dataset is
+fetched whole, so its manifests share one file count — and the input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
 what is fetched, never what the input file covers, so a targeted repair cannot shrink
 the corpus. Discovery decides what to fetch; parity is judged against the sidecar's
 stored counts, so a catalog that has moved on since the pull — or been deleted, as
@@ -95,30 +96,11 @@ from meta_disco.azul_manifest import (
     save_sidecar,
     write_input_files,
 )
-from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, Deployment, deployment
-from meta_disco.snapshot_input import AzulVerbatim, SnapshotTables, TdrDirect, derive_records
+from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, Deployment
+from meta_disco.snapshot_input import AzulVerbatim, TdrDirect, derive_records
 
 #: Which manifests each Azul kind fetches. ``tdr-direct`` fetches none and is not here.
 MANIFEST_FORMATS = {INPUT_SOURCE_AZUL_COMPACT: FORMATS, INPUT_SOURCE_AZUL_VERBATIM: (FORMAT_VERBATIM,)}
-
-
-def _dataset_records(dep: Deployment, title: str, tables: SnapshotTables) -> Iterator[dict[str, Any]]:
-    """The records :func:`derive_records` derives from ``tables``, refusing the stream if
-    a record's ``dataset_title`` is not ``title`` — the snapshot declared for (or the
-    manifest requested for) one dataset holding another is a wrong declaration, not an
-    input. The derivation's own refusals (a missing table, a second dataset row) fire
-    here, at the call, before any record."""
-    records = derive_records(tables)
-
-    def titled() -> Iterator[dict[str, Any]]:
-        for record in records:
-            if record["dataset_title"] != title:
-                raise ValueError(
-                    f"{title}: the {dep.name} deployment's snapshot for it holds dataset {record['dataset_title']!r}"
-                )
-            yield record
-
-    return titled()
 
 
 def _compact_records(dep: Deployment, datasets: list[Dataset]) -> Iterator[dict[str, Any]]:
@@ -129,7 +111,11 @@ def _compact_records(dep: Deployment, datasets: list[Dataset]) -> Iterator[dict[
 def _verbatim_records(dep: Deployment, datasets: list[Dataset]) -> Iterator[dict[str, Any]]:
     for dataset in datasets:
         path = manifest_path(dep.input_root, dep.catalog, dataset.title, FORMAT_VERBATIM)
-        yield from _dataset_records(dep, dataset.title, AzulVerbatim(path))
+        yield from derive_records(AzulVerbatim(path), dataset.title)
+
+
+#: How each Azul kind derives its records from the manifests on disk.
+RECORDS = {INPUT_SOURCE_AZUL_COMPACT: _compact_records, INPUT_SOURCE_AZUL_VERBATIM: _verbatim_records}
 
 
 def download(
@@ -199,24 +185,33 @@ def download(
             return 1
         entry = stored.setdefault(title, {})
         on_disk = all(manifest_path(root, catalog, title, fmt).is_file() for fmt in formats)
-        if on_disk and not (force and title in fetch) and "file_count" in entry:
+        # A dataset is fetched whole: when any manifest this source needs is missing, every
+        # one is requested again, so they are all counted under the one file count stored
+        # below. Otherwise a verbatim manifest pulled earlier (by an azul-verbatim run)
+        # would be judged against the count a later compact pull stores, and fail parity.
+        refetch = title in fetch and (force or not on_disk)
+        if on_disk and not refetch and "file_count" in entry:
             # Parity is judged against the count the manifests were requested under.
             if title in live and live[title].file_count != entry["file_count"]:
                 print(f"  {title}: catalog now says {live[title].file_count:,} files, stored {entry['file_count']:,}")
         elif title in live:
             entry["file_count"] = live[title].file_count
         if "file_count" not in entry:
-            # Neither a stored count nor a live one: the sidecar entry is from an
-            # interrupted first fetch of a dataset the catalog no longer lists.
-            print(f"  {title}: no manifests on disk and the catalog no longer lists it", file=sys.stderr)
+            # Neither a stored count nor a live one: a declared dataset never pulled (or
+            # pulled only partway) that the catalog does not list, or could not be asked
+            # about because discovery failed.
+            print(
+                f"  {title}: no manifests on disk, and the catalog does not list it or could not be reached",
+                file=sys.stderr,
+            )
             return 1
         dataset = Dataset(title, entry["file_count"])
         datasets.append(dataset)
         for fmt in formats:
             path = manifest_path(root, catalog, title, fmt)
-            if path.is_file() and not (force and title in fetch):
+            if path.is_file() and not refetch:
                 print(f"  {title} {fmt}: on disk, {path.stat().st_size:,} bytes")
-            elif title not in fetch:
+            elif not refetch:
                 continue  # missing and not being fetched: parity reports it
             else:
                 started = datetime.now()
@@ -252,12 +247,15 @@ def download(
     # kind takes the declaration on its own.
     entries: dict[str, dict[str, Any]] = {}
     for dataset in datasets:
-        snapshot = dep.snapshot(dataset.title)
+        snapshot = dep.snapshots[dataset.title]
         source_id = None
         if input_source == INPUT_SOURCE_AZUL_COMPACT:
             try:
-                source = dataset_source(manifest_path(root, catalog, dataset.title, FORMAT_COMPACT))
-                named = tdr.Snapshot.from_source_spec(source[1]) if source else None
+                source_id, spec = dataset_source(manifest_path(root, catalog, dataset.title, FORMAT_COMPACT)) or (
+                    None,
+                    None,
+                )
+                named = tdr.Snapshot.from_source_spec(spec) if spec else None
             except ValueError as exc:
                 # Reported the way every other failure here is — to stderr with a non-zero
                 # exit — rather than as a traceback. The input file is not written either
@@ -269,7 +267,17 @@ def download(
                 # record stream, and blaming that on the snapshot columns would misdirect.
                 print(f"Cannot read {dataset.title}'s compact manifest:\n  {exc}", file=sys.stderr)
                 return 1
-            if named is not None and named != snapshot:
+            if named is None:
+                # Azul writes the snapshot on every compact row, so a manifest naming none is
+                # not a dataset without one; the declaration cannot be checked, and writing it
+                # would record it as confirmed (decision of 2026-09-22 on #500: refuse).
+                print(
+                    f"{dataset.title}: the compact manifest names no snapshot, so the {dep.name} "
+                    f"deployment's declared {snapshot.source_spec} cannot be checked. Input file not written.",
+                    file=sys.stderr,
+                )
+                return 1
+            if named != snapshot:
                 print(
                     f"{dataset.title}: the compact manifest names snapshot {named.source_spec}, but the "
                     f"{dep.name} deployment declares {snapshot.source_spec}. The catalog has moved to "
@@ -278,13 +286,11 @@ def download(
                     file=sys.stderr,
                 )
                 return 1
-            source_id = source[0] if source else None
         entries[dataset.title] = dataset_entry(dataset.file_count, snapshot, source_id)
 
     block = metadata_block(dep, entries, datetime.now(), input_source)
-    records = _compact_records(dep, datasets) if input_source == INPUT_SOURCE_AZUL_COMPACT else None
     try:
-        n = write_input_files(root, block, records if records is not None else _verbatim_records(dep, datasets))
+        n = write_input_files(root, block, RECORDS[input_source](dep, datasets))
     except ValueError as exc:
         print(
             f"Cannot derive the input from the {input_source} manifests; input file not written:\n  {exc}",
@@ -297,26 +303,27 @@ def download(
 
 def derive_direct(dep: Deployment, client: tdr.BigQueryClient) -> int:
     """Derive the deployment's input from its declared snapshots, read in place through
-    ``client``. Every snapshot is opened — its tables listed and checked — before the
-    first is counted or streamed, so a snapshot this identity cannot read, or one
-    without the tables the derivation needs, refuses the run before anything is
-    written. Returns the process exit code."""
-    streams: dict[str, Iterator[dict[str, Any]]] = {}
+    ``client``. Every snapshot is opened — its tables listed and checked, its dataset
+    row read and checked against the declared title, its ``anvil_file`` table counted —
+    before any is streamed or anything written, so a snapshot without the tables the
+    derivation needs, or one holding another dataset, refuses the run with a one-line
+    message and nothing written. A snapshot this identity cannot read fails at the same
+    point, before anything is written, but with the client library's own exception and
+    traceback: this script does not import that library to catch its errors. Returns
+    the process exit code."""
+    streams: list[Iterator[dict[str, Any]]] = []
     entries: dict[str, dict[str, Any]] = {}
     try:
         for title, snapshot in dep.snapshots.items():
-            streams[title] = _dataset_records(dep, title, TdrDirect(client, snapshot))
-        for title, snapshot in dep.snapshots.items():
-            # The envelope is written before the records, so the count comes first; the
-            # stream is checked against its own COUNT(*) again by `tdr.checked_rows`.
-            entries[title] = dataset_entry(tdr.count_rows(client, snapshot, VERBATIM_FILE), snapshot)
-    except ValueError as exc:
-        print(f"Cannot derive the {dep.name} input from its snapshots; nothing written:\n  {exc}", file=sys.stderr)
-        return 1
-    dep.input_root.mkdir(parents=True, exist_ok=True)
-    block = metadata_block(dep, entries, datetime.now(), INPUT_SOURCE_TDR_DIRECT)
-    try:
-        n = write_input_files(dep.input_root, block, (record for stream in streams.values() for record in stream))
+            reader = TdrDirect(client, snapshot)
+            streams.append(derive_records(reader, title))
+            # `derive_records` opened the file stream at the call, which counted the
+            # table; the envelope is written before the records, so it takes that count,
+            # which the stream is then checked against.
+            entries[title] = dataset_entry(reader.counts[VERBATIM_FILE], snapshot)
+        dep.input_root.mkdir(parents=True, exist_ok=True)
+        block = metadata_block(dep, entries, datetime.now(), INPUT_SOURCE_TDR_DIRECT)
+        n = write_input_files(dep.input_root, block, (record for stream in streams for record in stream))
     except (ValueError, tdr.RowCountMismatch) as exc:
         print(
             f"Cannot derive the {dep.name} input from its snapshots; input file not written:\n  {exc}", file=sys.stderr
@@ -363,7 +370,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    dep = deployment(args.deployment)
+    dep = DEPLOYMENTS[args.deployment]
     if args.input_source == INPUT_SOURCE_TDR_DIRECT:
         if args.datasets or args.force:
             # There is nothing on disk to narrow to or to re-request: every declared

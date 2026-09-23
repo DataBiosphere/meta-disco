@@ -1,7 +1,7 @@
 """The deployment and the input source as named choices (issue #500).
 
-One test per acceptance criterion of #500, in its order, plus the refusals the
-plan added: a compact manifest naming another snapshot than the declared one, a
+One test class per acceptance criterion of #500, in its order, plus the refusals
+the plan added: a compact manifest naming another snapshot than the declared one, a
 snapshot holding another dataset than the declared one, and a catalog dataset the
 deployment does not declare. Offline except the one marked ``network``.
 """
@@ -20,8 +20,8 @@ import validate_metadata
 
 from meta_disco import azul_manifest as am
 from meta_disco import tdr
-from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, DEV, PROD, Deployment, deployment
-from meta_disco.pipeline import load_records
+from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, DEV, PROD, Deployment
+from meta_disco.pipeline import load_envelope, load_records
 from tests.tdr_fixtures import FakeClient, table_of
 from tests.test_azul_manifest import (
     SERVICE,
@@ -48,13 +48,13 @@ def verbatim_bytes(tmp_path: Path, title: str, n: int) -> bytes:
     return verbatim_manifest(tmp_path / f"{title}.served.jsonl", tables(title, n)).read_bytes()
 
 
-def session_for(tmp_path: Path, counts: dict[str, int]) -> FakeSession:
-    """A catalog listing ``counts``, serving both manifests of each dataset."""
+def session_for(tmp_path: Path, counts: dict[str, int], service: str = SERVICE) -> FakeSession:
+    """A catalog at ``service`` listing ``counts``, serving both manifests of each dataset."""
     payloads = {}
     for title, n in counts.items():
         payloads[(title, am.FORMAT_COMPACT)] = compact_payload(title, n)
         payloads[(title, am.FORMAT_VERBATIM)] = verbatim_bytes(tmp_path, title, n)
-    return FakeSession(dict(counts), payloads)
+    return FakeSession(dict(counts), payloads, service=service)
 
 
 def download(dep: Deployment, source: str, session: FakeSession) -> int:
@@ -66,18 +66,17 @@ def digest(path: Path) -> str:
 
 
 def envelope(dep: Deployment) -> dict:
-    return json.loads(dep.input_file.read_text())["metadata"]
+    return load_envelope(dep.input_file)
 
 
-class NoNetwork:
-    """Stands in for every way a run could reach the outside; any call fails the test."""
+def no_network(monkeypatch) -> None:
+    """Replace every way a run could reach the outside with a call that fails the test."""
 
-    def __init__(self, monkeypatch):
-        def refuse(*_args, **_kwargs):
-            raise AssertionError("an unknown name must be refused before any request or query")
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("an unknown name must be refused before any request or query")
 
-        monkeypatch.setattr(dl.requests, "Session", refuse)
-        monkeypatch.setattr(dl.tdr, "default_client", refuse)
+    monkeypatch.setattr(dl.requests, "Session", refuse)
+    monkeypatch.setattr(dl.tdr, "default_client", refuse)
 
 
 class TestTheDefaultIsTodaysBehaviour:
@@ -120,7 +119,7 @@ class TestAnUnknownNameIsRefusedFirst:
         ],
     )
     def test_the_download_refuses_it_before_touching_anything(self, argv, tmp_path, monkeypatch, capsys):
-        NoNetwork(monkeypatch)
+        no_network(monkeypatch)
         monkeypatch.chdir(tmp_path)
         with pytest.raises(SystemExit) as exc:
             dl.main(argv)
@@ -134,10 +133,6 @@ class TestAnUnknownNameIsRefusedFirst:
             validate_metadata.main(["--deployment", "staging"])
         assert exc.value.code == 2
         assert "invalid choice" in capsys.readouterr().err
-
-    def test_the_library_lookup_names_the_known_ones(self):
-        with pytest.raises(ValueError, match=r"unknown deployment 'staging'; known deployments: \['dev', 'prod'\]"):
-            deployment("staging")
 
 
 class TestADevInputLeavesProdsAlone:
@@ -215,7 +210,7 @@ class TestTheVerbatimKind:
         session.payloads[("ds", am.FORMAT_VERBATIM)] = verbatim_bytes(tmp_path, "other", 2)
         dep = fixture_deployment(tmp_path)
         assert download(dep, VERBATIM, session) == 1
-        assert "holds dataset 'other'" in capsys.readouterr().err
+        assert "expected dataset 'ds', but the snapshot holds 'other'" in capsys.readouterr().err
         assert not dep.input_file.exists()
 
 
@@ -227,9 +222,7 @@ class TestDevThroughTheVerbatimManifest:
     def test_the_requests_name_devs_service_and_its_one_dataset_only(self, tmp_path):
         dev = dataclasses.replace(DEV, input_root=tmp_path)
         title = "ANVIL_1000G_2019_Dev"
-        session = session_for(tmp_path, {title: 3, "ANVIL_CMG_Sample_1": 2})
-        # The fake answers the test service's endpoints; point it at dev's.
-        session_calls_dev(session)
+        session = session_for(tmp_path, {title: 3, "ANVIL_CMG_Sample_1": 2}, service=DEV.service)
         assert download(dev, VERBATIM, session) == 0
         puts = [(url, params) for method, url, params in session.calls if method == "PUT"]
         assert puts == [
@@ -251,26 +244,6 @@ class TestDevThroughTheVerbatimManifest:
         assert len(load_records(dev.input_ndjson)) == 26_016
 
 
-def session_calls_dev(session: FakeSession) -> None:
-    """Make ``session`` answer dev's Azul endpoints instead of the test service's."""
-    get, put = session.get, session.put
-
-    def as_test(url: str) -> str:
-        return url.replace(DEV.service, SERVICE, 1)
-
-    def dev_get(url, **kwargs):
-        response = get(as_test(url), **kwargs)
-        session.calls[-1] = (session.calls[-1][0], url, session.calls[-1][2])
-        return response
-
-    def dev_put(url, **kwargs):
-        response = put(as_test(url), **kwargs)
-        session.calls[-1] = (session.calls[-1][0], url, session.calls[-1][2])
-        return response
-
-    session.get, session.put = dev_get, dev_put  # type: ignore[method-assign]
-
-
 class TestDevReadInPlace:
     """AC 6: dev's tdr-direct derivation queries dev's one snapshot only and writes
     under dev's root with the envelope of AC 4. The live derivation is Dave's, in Terra."""
@@ -281,7 +254,7 @@ class TestDevReadInPlace:
         client = FakeClient(tables("ANVIL_1000G_2019_Dev", 3))
         assert dl.derive_direct(dev, client) == 0
         assert client.listed == [snapshot.dataset]
-        assert {query.split("FROM ")[1].rsplit(".", 1)[0].lstrip("`") for query in client.queries} == {snapshot.dataset}
+        assert all(snapshot.table_ref(table_of(query)) in query for query in client.queries)
         assert {table_of(query) for query in client.queries} == {"anvil_dataset", "anvil_file"}
         block = envelope(dev)
         assert (block["deployment"], block["input_source"], block["catalog"]) == ("dev", DIRECT, "anvil")
@@ -291,7 +264,7 @@ class TestDevReadInPlace:
     def test_a_snapshot_holding_another_dataset_is_refused_and_writes_nothing(self, tmp_path, capsys):
         dev = dataclasses.replace(DEV, input_root=tmp_path / "dev")
         assert dl.derive_direct(dev, FakeClient(tables("ANVIL_CMG_Sample_1", 2))) == 1
-        assert "holds dataset 'ANVIL_CMG_Sample_1'" in capsys.readouterr().err
+        assert "the snapshot holds 'ANVIL_CMG_Sample_1'" in capsys.readouterr().err
         assert not dev.input_file.exists()
 
     def test_a_snapshot_without_the_file_table_refuses_before_any_count(self, tmp_path, capsys):
@@ -303,7 +276,7 @@ class TestDevReadInPlace:
         assert not dev.input_root.exists()
 
     def test_datasets_and_force_have_no_meaning_for_a_direct_read(self, monkeypatch, capsys):
-        NoNetwork(monkeypatch)
+        no_network(monkeypatch)
         assert dl.main(["--input-source", DIRECT, "--force"]) == 2
         assert "no meaning for tdr-direct" in capsys.readouterr().err
 
@@ -318,6 +291,28 @@ class TestTheDeclarationIsChecked:
         err = capsys.readouterr().err
         assert f"names snapshot {SNAPSHOT.source_spec}" in err and f"declares {declared.source_spec}" in err
         assert not dep.input_file.exists()
+
+    def test_a_compact_manifest_naming_no_snapshot_refuses_the_download(self, tmp_path, capsys):
+        # Decision of 2026-09-22 on #500: Azul writes the snapshot on every row, so none
+        # at all cannot confirm the declaration, and writing it would claim it had.
+        session = session_for(tmp_path, {"ds": 2})
+        blank = session.payloads[("ds", am.FORMAT_COMPACT)].replace(SOURCE_ID.encode(), b"")
+        session.payloads[("ds", am.FORMAT_COMPACT)] = blank.replace(SNAPSHOT.source_spec.encode(), b"")
+        dep = fixture_deployment(tmp_path)
+        assert download(dep, COMPACT, session) == 1
+        assert "the compact manifest names no snapshot" in capsys.readouterr().err
+        assert not dep.input_file.exists()
+
+    def test_switching_to_compact_after_a_verbatim_pull_fetches_the_dataset_whole(self, tmp_path):
+        # The verbatim manifest pulled under the old count is requested again with the
+        # compact one, so both are judged against the one count stored for them.
+        dep = fixture_deployment(tmp_path)
+        assert download(dep, VERBATIM, session_for(tmp_path, {"ds": 2})) == 0
+        session = session_for(tmp_path, {"ds": 3})
+        assert download(dep, COMPACT, session) == 0
+        formats = sorted(params["format"] for method, _, params in session.calls if method == "PUT" and params)
+        assert formats == [am.FORMAT_COMPACT, am.FORMAT_VERBATIM]
+        assert envelope(dep)["datasets"]["ds"]["file_count"] == 3
 
     def test_a_catalog_dataset_the_deployment_does_not_declare_is_skipped(self, tmp_path, capsys):
         dep = fixture_deployment(tmp_path, ["ds"])
@@ -334,7 +329,10 @@ class TestTheDeclarationIsChecked:
     def test_a_declared_dataset_the_catalog_lacks_with_nothing_on_disk_is_refused(self, tmp_path, capsys):
         dep = fixture_deployment(tmp_path, ["ds", "gone"])
         assert download(dep, COMPACT, session_for(tmp_path, {"ds": 2})) == 1
-        assert "gone: no manifests on disk and the catalog no longer lists it" in capsys.readouterr().err
+        assert (
+            "gone: no manifests on disk, and the catalog does not list it or could not be reached"
+            in capsys.readouterr().err
+        )
         assert not dep.input_file.exists()
 
     def test_only_an_azul_kind_downloads(self, tmp_path, capsys):
@@ -364,18 +362,6 @@ class TestTheDeclarations:
     def test_prods_declaration_is_the_snapshots_its_input_names(self):
         # The declaration was transcribed from this envelope; a re-derived input that
         # disagrees has been refused by the downloader, so this pins the transcription.
-        with PROD.input_file.open() as f:
-            head = f.read(16_384)
-        metadata = json.loads(head[: head.index(', "files": [')] + "}")["metadata"]
+        metadata = load_envelope(PROD.input_file)
         named = {title: tdr.Snapshot.from_source_spec(e["source_spec"]) for title, e in metadata["datasets"].items()}
         assert named == dict(PROD.snapshots)
-
-
-def test_the_envelope_block_is_the_downloads(tmp_path):
-    # `metadata_block` is the one construction site: the downloader's envelope for a
-    # compact run equals the block built from the same entries, but for the timestamp.
-    dep = fixture_deployment(tmp_path)
-    assert download(dep, COMPACT, session_for(tmp_path, {"ds": 2})) == 0
-    written = envelope(dep)
-    built = am.metadata_block(dep, {"ds": entry(2)}, datetime.fromisoformat(written["downloaded_at"]), COMPACT)
-    assert written == built

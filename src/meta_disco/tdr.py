@@ -81,8 +81,9 @@ class Snapshot:
         """The snapshot a ``tdr:bigquery:gcp:<project>:<snapshot>`` spec addresses.
 
         Refused with ``ValueError`` unless the spec has exactly five colon-separated
-        fields and the leading three are :attr:`SPEC_PREFIX`: the format is TDR's, and a
-        spec of another shape is not one this module knows how to query."""
+        fields, the leading three are :attr:`SPEC_PREFIX`, and the project and snapshot
+        are non-empty: the format is TDR's, and a spec of another shape is not one this
+        module knows how to query."""
         parts = spec.split(":")
         if len(parts) != 5 or tuple(parts[:3]) != cls.SPEC_PREFIX or not all(parts[3:]):
             raise ValueError(f"not a TDR BigQuery source spec ('tdr:bigquery:gcp:<project>:<snapshot>'): {spec!r}")
@@ -159,14 +160,6 @@ def iter_rows(
             raise RowCountMismatch(f"{table}: streamed {streamed} row(s) but COUNT(*) said {expect}")
 
     return rows()
-
-
-def checked_rows(client: BigQueryClient, snapshot: Snapshot, table: str) -> Iterator[dict[str, Any]]:
-    """:func:`iter_rows` with ``expect`` set from :func:`count_rows` — the table
-    streamed and checked against its own ``COUNT(*)`` in one call, so a reader that
-    wants every streamed table checked (``snapshot_input.TdrDirect``, #499) has one
-    thing to call and cannot stream unchecked by leaving ``expect`` off."""
-    return iter_rows(client, snapshot, table, expect=count_rows(client, snapshot, table))
 
 
 def default_client(billing_project: str | None = None) -> BigQueryClient:

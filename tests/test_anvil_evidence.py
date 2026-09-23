@@ -33,6 +33,8 @@ from meta_disco.source_evidence import (
 )
 
 CATALOG = "anvil15"
+# The Azul service the fixture manifests stand for; written into every envelope.
+SERVICE = "https://azul.test"
 FETCHED = "2026-09-03T21:45:47.517283"
 REAL_MANIFESTS = PROD.input_root / "manifest" / CATALOG
 
@@ -156,7 +158,7 @@ PUBLISHED_ROWS = [
 
 
 def published_import(tmp_path: Path, stamp: str = "20260920T000000Z") -> ae.DatasetImport:
-    return ae.import_dataset(slot_map(tmp_path, PUBLISHED_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", stamp)
+    return ae.import_dataset(slot_map(tmp_path, PUBLISHED_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", stamp)
 
 
 # --- check ---------------------------------------------------------------------
@@ -276,7 +278,7 @@ class TestTranscription:
     def test_a_string_cell_is_verbatim_and_the_empty_string_is_kept(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         result = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (table,) = result.tables
         rows = rows_of(table.path)
@@ -287,7 +289,7 @@ class TestTranscription:
         """`library_source` feeds two slots; row b is null on it and counts once, not twice (R6)."""
         write_dataset(tmp_path, "D", HIFI_ROWS)
         result = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (table,) = result.tables
         assert table.null_cells == {"instrument_model": 1, "library_source": 1}
@@ -309,7 +311,7 @@ class TestTranscription:
         )
         text = "catalog: anvil15\ndatasets:\n  D:\n    file:\n      file_ref:\n        reference_assembly:\n          - {cell: ra}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         assert result.files == 1
         assert result.tables[0].null_cells == {"ra": 1}
@@ -320,7 +322,7 @@ class TestTranscription:
         write_dataset(tmp_path, "D", [anvil_file(1), ("file", {"file_path": drs(1), "assay_titles": titles})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    file:\n      file_path:\n        assay_type:\n          - {cell: assay_titles}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (row,) = rows_of(result.tables[0].path)
         assert row == ("assay_type", drs(1), json.dumps(titles), "assay_titles")
@@ -340,7 +342,7 @@ class TestTranscription:
         )
         text = "catalog: anvil15\ndatasets:\n  D:\n    file:\n      file_path:\n        assay_type:\n          - {cell: assay_titles}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         assert rows_of(result.tables[0].path) == [("assay_type", drs(2), "", "assay_titles")]
         assert result.tables[0].null_cells == {"assay_titles": 1}
@@ -349,7 +351,7 @@ class TestTranscription:
         write_dataset(tmp_path, "D", [anvil_file(1), ("t", {"c": drs(1), "depth": 30, "flag": True})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    t:\n      c:\n        platform:\n          - {cell: depth}\n          - {cell: flag}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         assert [r[2] for r in rows_of(result.tables[0].path)] == ["30", "true"]
 
@@ -358,7 +360,7 @@ class TestProvenance:
     def test_the_column_is_the_cell_the_value_came_from_not_the_link(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         result = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         rows = rows_of(result.tables[0].path)
         assert ("platform", drs(1), "Revio", "instrument_model") in rows
@@ -377,7 +379,7 @@ class TestProvenance:
             "        data_type:\n          - {column_name: fastq}\n"
         )
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         rows = rows_of(result.tables[0].path)
         assert ("reference_assembly", drs(1), "CHM13v2", None) in rows
@@ -387,10 +389,12 @@ class TestProvenance:
     def test_the_envelope_names_both_sides_of_the_join(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         result = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         envelope = read_envelope(result.tables[0].path)
         assert (envelope.source.repository, envelope.source.dataset, envelope.source.table) == ("anvil", "D", "hifi")
+        # The service the manifests were pulled from, as the caller named it (#500).
+        assert envelope.source.url == SERVICE
         assert envelope.source_type == SOURCE_REPOSITORY_METADATA
         assert (envelope.source_version, envelope.target.version) == (CATALOG, CATALOG)
         assert (envelope.source_key, envelope.target_key) == (JOIN_KEY_DRS_URI, JOIN_KEY_DRS_URI)
@@ -401,14 +405,14 @@ class TestProvenance:
     def test_a_sidecar_that_cannot_say_when_the_manifest_was_fetched_is_refused(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS, fetched=None)
         with pytest.raises(ValueError, match="requested_at"):
-            ae.import_dataset(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev")
+            ae.import_dataset(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev")
 
 
 class TestLinks:
     def test_an_empty_link_is_no_link_and_an_unknown_one_is_unresolved(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         result = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (table,) = result.tables
         assert table.rows == 4
@@ -426,7 +430,7 @@ class TestLinks:
         )
         text = "catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (table,) = result.tables
         assert table.not_link == {"path": 1}
@@ -437,7 +441,7 @@ class TestLinks:
         write_dataset(tmp_path, "D", [anvil_file(1), anvil_file(2), ("sample", {"hifi": [drs(1), drs(2), drs(7)]})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      hifi:\n        platform:\n          - {column_name: hifi}\n"
         result = ae.import_dataset(
-            slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         (table,) = result.tables
         assert rows_of(table.path) == [("platform", drs(1), "hifi", "hifi"), ("platform", drs(2), "hifi", "hifi")]
@@ -448,8 +452,8 @@ class TestGenerations:
     def test_a_second_import_is_a_new_generation_and_only_it_is_discovered(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         m = slot_map(tmp_path, HIFI_MAP)
-        first = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
-        second = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260921T000000Z")
+        first = ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z")
+        second = ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260921T000000Z")
         assert first.tables[0].path.is_file(), "the earlier generation is kept as history"
         assert discover(tmp_path / "ev") == [second.tables[0].path]
         assert is_generation(second.generation)
@@ -460,9 +464,11 @@ class TestGenerations:
         write_dataset(tmp_path, "E", HIFI_ROWS)
         text = HIFI_MAP + "  E:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
         m = slot_map(tmp_path, text)
-        both = ae.import_all(m, tmp_path, CATALOG, tmp_path / "ev", generation="20260920T000000Z")
+        both = ae.import_all(m, tmp_path, CATALOG, SERVICE, tmp_path / "ev", generation="20260920T000000Z")
         assert [i.dataset for i in both] == ["D", "E"]
-        only_d = ae.import_all(m, tmp_path, CATALOG, tmp_path / "ev", datasets=["D"], generation="20260921T000000Z")
+        only_d = ae.import_all(
+            m, tmp_path, CATALOG, SERVICE, tmp_path / "ev", datasets=["D"], generation="20260921T000000Z"
+        )
         current = discover(tmp_path / "ev")
         assert only_d[0].tables[0].path in current
         assert both[1].tables[0].path in current, "E's evidence did not disappear because D was re-imported"
@@ -471,9 +477,9 @@ class TestGenerations:
     def test_an_import_never_writes_over_a_generation(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         m = slot_map(tmp_path, HIFI_MAP)
-        ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z")
         with pytest.raises(FileExistsError, match="never overwrites"):
-            ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+            ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z")
 
     def test_a_failure_part_way_leaves_no_half_written_generation(self, tmp_path, monkeypatch):
         """The previous complete generation stays current; the partial one is removed."""
@@ -481,7 +487,7 @@ class TestGenerations:
         text = HIFI_MAP + "    ont:\n      path:\n        platform:\n          - {cell: platform}\n"
         m = slot_map(tmp_path, text)
         write_dataset(tmp_path, "D", [*HIFI_ROWS, ("ont", {"path": drs(3), "platform": "OXFORD_NANOPORE"})])
-        first = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        first = ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z")
         real = ae.write_evidence_file
         calls = []
 
@@ -493,7 +499,7 @@ class TestGenerations:
 
         monkeypatch.setattr(ae, "write_evidence_file", failing)
         with pytest.raises(OSError, match="disk full"):
-            ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260921T000000Z")
+            ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260921T000000Z")
         assert calls == ["hifi.ndjson", "ont.ndjson"]
         assert not (tmp_path / "ev" / "anvil" / CATALOG / "D" / "20260921T000000Z").exists()
         assert discover(tmp_path / "ev") == [t.path for t in first.tables]
@@ -511,7 +517,7 @@ class TestGenerations:
             return real(path, envelope, entries)
 
         monkeypatch.setattr(ae, "write_evidence_file", observing)
-        result = ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+        result = ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z")
         assert seen == [True], "written under the staging name"
         assert result.tables[0].path.is_file() and result.tables[0].path.parent.name == "20260920T000000Z"
         # A kill part-way: the staging directory is left behind.
@@ -521,26 +527,28 @@ class TestGenerations:
         assert discover(tmp_path / "ev") == [result.tables[0].path], "the unfinished import is never current"
         assert unfinished_imports(tmp_path / "ev") == [killed]
         with pytest.raises(FileExistsError, match="unfinished import"):
-            ae.import_dataset(m, tmp_path, CATALOG, "D", tmp_path / "ev", "20260921T000000Z")
+            ae.import_dataset(m, tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260921T000000Z")
 
     def test_a_mapped_table_that_reaches_no_file_is_an_error_not_an_empty_file(self, tmp_path):
         """Contract 5.3: evidence matching no file is the map disagreeing with the catalog."""
         write_dataset(tmp_path, "D", [anvil_file(1), ("hifi", {"path": drs(9), "platform": "PACBIO_SMRT"})])
         text = "catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
         with pytest.raises(ValueError, match="D/hifi: no evidence row written"):
-            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+            ae.import_dataset(
+                slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+            )
         assert discover(tmp_path / "ev") == []
 
     def test_import_all_refuses_a_dataset_the_map_does_not_name(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
         with pytest.raises(ValueError, match="not in the slot map"):
-            ae.import_all(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, tmp_path / "ev", datasets=["Z"])
+            ae.import_all(slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, tmp_path / "ev", datasets=["Z"])
 
 
 def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
     write_dataset(tmp_path, "D", HIFI_ROWS)
     result = ae.import_dataset(
-        slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+        slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
     )
     lines = ae.describe([result])
     assert lines[0].startswith("D -> ") and lines[0].endswith("(2 files)")
@@ -591,7 +599,7 @@ class TestThePublishedMap:
         generation of each — two sources, both current."""
         write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
         submitter = ae.import_dataset(
-            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z"
+            slot_map(tmp_path, HIFI_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         published = published_import(tmp_path, "20260921T000000Z")
         current = discover(tmp_path / "ev")
@@ -604,13 +612,20 @@ class TestThePublishedMap:
         write_dataset(tmp_path, "D", [*PUBLISHED_ROWS, *HIFI_ROWS[3:]])
         text = PUBLISHED_MAP + "    hifi:\n      path:\n        platform:\n          - {cell: platform}\n"
         with pytest.raises(ValueError, match="D/hifi: a published_value map maps only"):
-            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+            ae.import_dataset(
+                slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+            )
         assert discover(tmp_path / "ev") == []
 
     def test_import_all_derives_the_directory_from_the_map(self, tmp_path):
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         (result,) = ae.import_all(
-            slot_map(tmp_path, PUBLISHED_MAP), tmp_path, CATALOG, tmp_path / "ev", generation="20260920T000000Z"
+            slot_map(tmp_path, PUBLISHED_MAP),
+            tmp_path,
+            CATALOG,
+            SERVICE,
+            tmp_path / "ev",
+            generation="20260920T000000Z",
         )
         assert result.directory.parts[-4] == ae.PUBLISHED_DIR
 
@@ -618,7 +633,9 @@ class TestThePublishedMap:
         write_dataset(tmp_path, "D", PUBLISHED_ROWS)
         text = PUBLISHED_MAP.replace(SOURCE_PUBLISHED_VALUE, "external_ground_truth")
         with pytest.raises(ValueError, match="map kind 'external_ground_truth' has no evidence directory"):
-            ae.import_dataset(slot_map(tmp_path, text), tmp_path, CATALOG, "D", tmp_path / "ev", "20260920T000000Z")
+            ae.import_dataset(
+                slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+            )
         assert discover(tmp_path / "ev") == []
 
 
@@ -636,7 +653,9 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     reproduced from the `anvil_file` rows of the verbatim one."""
     published = load_slot_map(published_slot_map_resource())
     assert ae.check(published, PROD.input_root, CATALOG) == []
-    imports = ae.import_all(published, PROD.input_root, CATALOG, tmp_path / "ev", generation="20260920T000000Z")
+    imports = ae.import_all(
+        published, PROD.input_root, CATALOG, PROD.service, tmp_path / "ev", generation="20260920T000000Z"
+    )
     files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
     two_valued = 0
     for run in imports:

@@ -122,12 +122,11 @@ classify-and-report: classify classify-hprc all-reports
 # only) or tdr-direct (the snapshots read in place from BigQuery, nothing downloaded).
 # An unknown value of either is refused before any request, query or write.
 # tdr-direct runs with `--extra tdr`, the way probe-tdr does, and takes its identity
-# from the environment: see meta_disco.tdr.
-DEPLOYMENT ?= prod
-INPUT_SOURCE ?= azul-compact
-
+# from the environment: see meta_disco.tdr. Unset, each is the script's own default
+# (prod, azul-compact), so the defaults have one spelling.
 download:
-	uv run $(if $(filter tdr-direct,$(INPUT_SOURCE)),--extra tdr) python scripts/download_anvil_manifest.py --deployment $(DEPLOYMENT) --input-source $(INPUT_SOURCE) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
+	$(if $(CATALOG),$(error CATALOG is retired (#500): the deployment names its catalog, so pass DEPLOYMENT=prod or DEPLOYMENT=dev))
+	uv run $(if $(filter tdr-direct,$(INPUT_SOURCE)),--extra tdr) python scripts/download_anvil_manifest.py $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(if $(INPUT_SOURCE),--input-source $(INPUT_SOURCE)) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
 
 # Probe a TDR snapshot through the BigQuery layer (#498): list its tables, count
 # each, stream one (TABLE; the script's default is anvil_file) and time it.
@@ -144,11 +143,7 @@ probe-tdr:
 # `make download`; `make classify` also runs it as a prerequisite (#376), so a long
 # run cannot start on a corpus that violates the contract.
 validate-metadata:
-	uv run python scripts/validate_metadata.py --deployment $(DEPLOYMENT)
-
-# The input a classification run reads: prod's, until a run is given a deployment
-# (#480). The same path is `deployments.PROD.input_file`.
-PROD_INPUT := data/anvil/prod/anvil_files_metadata.json
+	uv run python scripts/validate_metadata.py $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT))
 
 # `make classify-headers` runs the six header types into ONE dated partials folder
 # (a shared RUN_DIR). A standalone `make classify-<type>` run instead lands in its
@@ -168,25 +163,25 @@ classify-headers:
 		RUN_DIR="output/anvil/partials/$$(date +%Y%m%d_%H%M%S)"
 
 classify-bam:
-	uv run python scripts/classify_headers.py --type bam -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 4
+	uv run python scripts/classify_headers.py --type bam $(RUN_DIR_ARG) -w 4
 
 classify-vcf:
-	uv run python scripts/classify_headers.py --type vcf -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type vcf $(RUN_DIR_ARG) -w 10
 
 classify-fastq:
-	uv run python scripts/classify_headers.py --type fastq -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type fastq $(RUN_DIR_ARG) -w 10
 
 classify-fasta:
-	uv run python scripts/classify_headers.py --type fasta -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type fasta $(RUN_DIR_ARG) -w 10
 
 classify-gfa:
-	uv run python scripts/classify_headers.py --type gfa -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type gfa $(RUN_DIR_ARG) -w 10
 
 classify-tar:
-	uv run python scripts/classify_headers.py --type tar -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type tar $(RUN_DIR_ARG) -w 10
 
 classify-bed:
-	uv run python scripts/classify_headers.py --type bed -i $(PROD_INPUT) $(RUN_DIR_ARG) -w 10
+	uv run python scripts/classify_headers.py --type bed $(RUN_DIR_ARG) -w 10
 
 consistency-report:
 	uv run python scripts/check_consistency.py

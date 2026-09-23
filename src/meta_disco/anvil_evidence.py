@@ -54,7 +54,6 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
-from .deployments import PROD
 from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
@@ -253,6 +252,7 @@ def import_all(
     slot_map: SlotMap,
     manifest_root: Path,
     catalog: str,
+    service: str,
     evidence_root: Path,
     datasets: list[str] | None = None,
     generation: str | None = None,
@@ -269,13 +269,16 @@ def import_all(
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
     stamp = generation if generation is not None else new_generation()
-    return [import_dataset(slot_map, manifest_root, catalog, dataset, evidence_root, stamp) for dataset in chosen]
+    return [
+        import_dataset(slot_map, manifest_root, catalog, service, dataset, evidence_root, stamp) for dataset in chosen
+    ]
 
 
 def import_dataset(
     slot_map: SlotMap,
     manifest_root: Path,
     catalog: str,
+    service: str,
     dataset: str,
     evidence_root: Path,
     generation: str | None = None,
@@ -299,7 +302,9 @@ def import_dataset(
     that reaches none is the map disagreeing with the catalog (contract 5.3), not an
     empty result.
     The target system and the envelope's source repository are both ``REPOSITORY``, the
-    repository the manifests came from; the envelope's ``source_type`` is the map's, and
+    repository the manifests came from, and the envelope's source ``url`` is ``service``,
+    the Azul service the manifests under ``manifest_root`` were pulled from (a
+    deployment's ``service``, #500) — passed in, because nothing on disk records it; the envelope's ``source_type`` is the map's, and
     so is the directory under the evidence root (:func:`evidence_dir`). The map's kind
     is held to :func:`_check_kind` here as well as at ``check``, so this cannot write a
     file the run would refuse.
@@ -336,10 +341,7 @@ def import_dataset(
     tables = []
     try:
         for table in slot_map.tables(dataset):
-            # The manifests this importer reads are prod's (`scripts/import_anvil_evidence.py`
-            # defaults to prod's input root), so the URL is prod's service. Reading a
-            # deployment's evidence through either snapshot reader is #508's.
-            file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=PROD.service)
+            file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=service)
             envelope = EvidenceFileEnvelope(
                 source=file_source,
                 source_type=source_type,

@@ -526,8 +526,10 @@ def dataset_source(path: Path) -> tuple[str, str] | None:
     is a view over snapshots rather than the thing itself.
 
     Read verbatim. ``source_spec`` packs a provider, a cloud, a BigQuery project, a
-    snapshot name and its date, and this does not split them: the format is TDR's, not
-    ours, and the whole string is what addresses the snapshot.
+    snapshot name and its date, and this function does not split them: the whole string
+    is what addresses the snapshot. The one place it is split is
+    ``tdr.Snapshot.from_source_spec``, where the downloader compares it with a
+    deployment's declaration (#500).
 
     **Every row is read, not just the first, because the point is to refuse rather than
     guess.** One snapshot per dataset is what makes #434's envelope shape correct — the
@@ -840,7 +842,7 @@ def metadata_block(
     from (issue #335: the July 2026 snapshot could not say it was anvil14 once anvil14
     was deleted), how the records were derived, and what each dataset contributed.
 
-    ``deployment`` (#500) is the deployment's name, and its ``catalog`` is written for
+    The envelope's ``deployment`` (#500) is ``deployment.name``, and its ``catalog`` is written for
     every kind of input — for a snapshot read in place too, where it is the generation
     the deployment's Azul serves over these snapshots rather than anything the read
     touched; it is declared, not inferred, and :func:`pipeline.published_source` reads
