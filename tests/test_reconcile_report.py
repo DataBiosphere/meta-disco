@@ -74,7 +74,7 @@ def test_the_report_is_rendered_from_the_reconcile_report_alone(tmp_path, confli
     assert f"inference: GRCh38; {SOURCE_REPOSITORY_METADATA}: CHM13" in md
     assert 'published_value (unreviewed): ["GRCm39"]' in md
     assert "**2 of 15 slots (13.333%)**" in md
-    assert f"### {DATASET}" in md
+    assert f"### `{DATASET}`" in md
     assert rr.PLACEHOLDER not in html and '"(every dataset)"' in html and f'"{DATASET}"' in html
 
 
@@ -175,14 +175,18 @@ def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
     assert [(scope["name"], scope["files"]) for scope in data["datasets"]] == [(rr.ALL, 3), (DATASET, 3)]
 
 
-def test_catalog_text_is_html_escaped_in_the_markdown():
-    """Pages renders the markdown through Jekyll, which passes raw HTML through."""
+def test_catalog_text_is_a_code_span_in_the_markdown():
+    """Pages renders the markdown through Jekyll: a value holding a link, an image or HTML must show literally."""
     row = {"dataset": "<b>D</b>", "dimension": "platform", "kind": "conflict_sources", "files": 1}
-    (line,) = rr._conflict_table(
-        [{**row, "inputs": {"published_value (unreviewed)": ['<img src=x onerror="a()">']}}], True
-    )[2:]
-    assert "<img" not in line and "<b>" not in line
-    assert '&lt;img src=x onerror="a()"&gt;' in line and "&lt;b&gt;D&lt;/b&gt;" in line
+    value = "![x](https://example.invalid/t)"
+    (line,) = rr._conflict_table([{**row, "inputs": {"published_value (unreviewed)": [value]}}], True)[2:]
+    assert "| `<b>D</b>` |" in line and f"`published_value (unreviewed): {value}`" in line
+
+
+def test_a_code_span_outlasts_the_backticks_in_its_value():
+    assert rr.code("a`b") == "``a`b``"
+    assert rr.code("`x`") == "`` `x` ``"
+    assert rr.code("one\ntwo") == "`one two`"
 
 
 def test_no_catalog_text_can_close_the_dashboards_script_tag():

@@ -41,19 +41,19 @@ Each distinct set of values the inputs declared on a conflicted slot (contract 5
 
 | dataset | dimension | kind | files | competing values |
 | --- | --- | --- | --- | --- |
-| AnVIL_HPRC_R2 | data_type | conflict (sources) | 1,539 | inference: alignments; repository_metadata: reads |
-| ANVIL_T2T_CHRY | reference_assembly | conflict (sources) | 558 | inference: not_applicable; repository_metadata: GRCh38 |
-| AnVIL_IGVF_Mouse_R1 | data_modality | conflict (published) | 412 | inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus RNA sequencing assay"] |
-| AnVIL_ENCORE_RS293 | reference_assembly | conflict (published) | 410 | inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"] |
-| AnVIL_ENCORE_293T | reference_assembly | conflict (published) | 224 | inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"] |
-| ANVIL_T2T | reference_assembly | conflict (inference) | 133 | inference: CHM13, GRCh38 |
-| ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | assay_type | conflict (sources) | 6 | inference: not_applicable; repository_metadata: WGS |
-| ANVIL_HPRC | reference_assembly | conflict (inference) | 2 | inference: CHM13, GRCh38; repository_metadata: GRCh38 |
-| AnVIL_HPRC_R2 | data_type | conflict (sources) | 2 | inference: sequence; repository_metadata: assembly |
-| AnVIL_IGVF_Mouse_R1 | data_modality | conflict (published) | 2 | inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"] |
-| ANVIL_HPRC | reference_assembly | conflict (inference) | 1 | inference: CHM13, GRCh38 |
-| ANVIL_T2T | reference_assembly | conflict (inference) | 1 | inference: (no values carried) |
-| ANVIL_T2T_CHRY | reference_assembly | conflict (inference) | 1 | inference: CHM13, GRCh38 |
+| `AnVIL_HPRC_R2` | data_type | conflict (sources) | 1,539 | `inference: alignments; repository_metadata: reads` |
+| `ANVIL_T2T_CHRY` | reference_assembly | conflict (sources) | 558 | `inference: not_applicable; repository_metadata: GRCh38` |
+| `AnVIL_IGVF_Mouse_R1` | data_modality | conflict (published) | 412 | `inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus RNA sequencing assay"]` |
+| `AnVIL_ENCORE_RS293` | reference_assembly | conflict (published) | 410 | `inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"]` |
+| `AnVIL_ENCORE_293T` | reference_assembly | conflict (published) | 224 | `inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"]` |
+| `ANVIL_T2T` | reference_assembly | conflict (inference) | 133 | `inference: CHM13, GRCh38` |
+| `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | assay_type | conflict (sources) | 6 | `inference: not_applicable; repository_metadata: WGS` |
+| `ANVIL_HPRC` | reference_assembly | conflict (inference) | 2 | `inference: CHM13, GRCh38; repository_metadata: GRCh38` |
+| `AnVIL_HPRC_R2` | data_type | conflict (sources) | 2 | `inference: sequence; repository_metadata: assembly` |
+| `AnVIL_IGVF_Mouse_R1` | data_modality | conflict (published) | 2 | `inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]` |
+| `ANVIL_HPRC` | reference_assembly | conflict (inference) | 1 | `inference: CHM13, GRCh38` |
+| `ANVIL_T2T` | reference_assembly | conflict (inference) | 1 | `inference: (no values carried)` |
+| `ANVIL_T2T_CHRY` | reference_assembly | conflict (inference) | 1 | `inference: CHM13, GRCh38` |
 
 ## Change since the previous reconciled run
 
@@ -63,56 +63,56 @@ No earlier reconciled run to compare with.
 
 | source type | dataset | table | key | offered | matched | unmatched | ambiguous |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| repository_metadata | ANVIL_1000G_PRIMED_data_model | plink_file_wide | drs_uri | 8,562 | 8,562 | 0 | 0 |
-| repository_metadata | ANVIL_1000G_high_coverage_2019 | participant | drs_uri | 12,796 | 12,796 | 0 | 0 |
-| repository_metadata | ANVIL_1000G_high_coverage_2019 | sample | drs_uri | 28,809 | 28,809 | 0 | 0 |
-| repository_metadata | ANVIL_HPRC | assembly_annotation | drs_uri | 1,151 | 1,151 | 0 | 0 |
-| repository_metadata | ANVIL_HPRC | assembly_sample | drs_uri | 376 | 376 | 0 | 0 |
-| repository_metadata | ANVIL_HPRC | minigraph_cactus | drs_uri | 4 | 4 | 0 | 0 |
-| repository_metadata | ANVIL_HPRC | sample | drs_uri | 1,111 | 1,111 | 0 | 0 |
-| repository_metadata | ANVIL_NIA_CARD_Coriell_Cell_Lines_Open | sequencing | drs_uri | 24 | 24 | 0 | 0 |
-| repository_metadata | ANVIL_T2T | chromosome | drs_uri | 120 | 120 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | 1KGP_CHM13v2_chromosome | drs_uri | 240 | 240 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | 1KGP_CHM13v2_sample | drs_uri | 184,105 | 184,105 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | PAR_interval_CHM13v2 | drs_uri | 62,316 | 62,316 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | PAR_interval_GRCh38 | drs_uri | 30,864 | 30,864 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | SGDP_CHM13v2_chromosome | drs_uri | 168 | 168 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | SGDP_CHM13v2_sample | drs_uri | 16,324 | 16,324 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | SGDP_GRCh38_chromosome | drs_uri | 168 | 168 | 0 | 0 |
-| repository_metadata | ANVIL_T2T_CHRY | SGDP_GRCh38_sample | drs_uri | 16,324 | 16,324 | 0 | 0 |
-| repository_metadata | AnVIL_ENCORE_293T | file | drs_uri | 1,544 | 1,544 | 0 | 0 |
-| repository_metadata | AnVIL_ENCORE_RS293 | file | drs_uri | 2,932 | 2,932 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | alignments_v2 | drs_uri | 24 | 24 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | alignments_winnowmap | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | assembly | drs_uri | 466 | 466 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | censat | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | censat_centromeres | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | chains_to_chm13_mc | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | chains_to_grch38_mc | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | deepconsensus | drs_uri | 3,714 | 3,714 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | gaps | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | hic | drs_uri | 21,014 | 21,014 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | hifi | drs_uri | 6,414 | 6,414 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | illumina | drs_uri | 800 | 800 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | kinnex | drs_uri | 1,380 | 1,380 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | liftoff_genes | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | ont | drs_uri | 5,574 | 5,574 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | ont_methylation | drs_uri | 924 | 924 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | repeat_masker_bed | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | repeat_masker_out | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | segdups | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | t2t_sequences | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | to_ref_chm13_winnowmap | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | to_ref_grch38_winnowmap | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_HPRC_R2 | to_ref_grch38_winnowmap_bai | drs_uri | 462 | 462 | 0 | 0 |
-| repository_metadata | AnVIL_IGVF_Mouse_R1 | file | drs_uri | 10,945 | 10,945 | 0 | 0 |
-| published_value | AnVIL_ENCORE_293T | anvil_file | drs_uri | 1,544 | 1,544 | 0 | 0 |
-| published_value | AnVIL_ENCORE_RS293 | anvil_file | drs_uri | 2,932 | 2,932 | 0 | 0 |
-| published_value | AnVIL_IGVF_Mouse_R1 | anvil_file | drs_uri | 6,975 | 6,975 | 0 | 0 |
+| `repository_metadata` | `ANVIL_1000G_PRIMED_data_model` | `plink_file_wide` | `drs_uri` | 8,562 | 8,562 | 0 | 0 |
+| `repository_metadata` | `ANVIL_1000G_high_coverage_2019` | `participant` | `drs_uri` | 12,796 | 12,796 | 0 | 0 |
+| `repository_metadata` | `ANVIL_1000G_high_coverage_2019` | `sample` | `drs_uri` | 28,809 | 28,809 | 0 | 0 |
+| `repository_metadata` | `ANVIL_HPRC` | `assembly_annotation` | `drs_uri` | 1,151 | 1,151 | 0 | 0 |
+| `repository_metadata` | `ANVIL_HPRC` | `assembly_sample` | `drs_uri` | 376 | 376 | 0 | 0 |
+| `repository_metadata` | `ANVIL_HPRC` | `minigraph_cactus` | `drs_uri` | 4 | 4 | 0 | 0 |
+| `repository_metadata` | `ANVIL_HPRC` | `sample` | `drs_uri` | 1,111 | 1,111 | 0 | 0 |
+| `repository_metadata` | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | `sequencing` | `drs_uri` | 24 | 24 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T` | `chromosome` | `drs_uri` | 120 | 120 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `1KGP_CHM13v2_chromosome` | `drs_uri` | 240 | 240 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `1KGP_CHM13v2_sample` | `drs_uri` | 184,105 | 184,105 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `PAR_interval_CHM13v2` | `drs_uri` | 62,316 | 62,316 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `PAR_interval_GRCh38` | `drs_uri` | 30,864 | 30,864 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_chromosome` | `drs_uri` | 168 | 168 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_sample` | `drs_uri` | 16,324 | 16,324 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_GRCh38_chromosome` | `drs_uri` | 168 | 168 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_GRCh38_sample` | `drs_uri` | 16,324 | 16,324 | 0 | 0 |
+| `repository_metadata` | `AnVIL_ENCORE_293T` | `file` | `drs_uri` | 1,544 | 1,544 | 0 | 0 |
+| `repository_metadata` | `AnVIL_ENCORE_RS293` | `file` | `drs_uri` | 2,932 | 2,932 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `alignments_v2` | `drs_uri` | 24 | 24 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `alignments_winnowmap` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `assembly` | `drs_uri` | 466 | 466 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `censat` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `censat_centromeres` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `chains_to_chm13_mc` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `chains_to_grch38_mc` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `deepconsensus` | `drs_uri` | 3,714 | 3,714 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `gaps` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `hic` | `drs_uri` | 21,014 | 21,014 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `hifi` | `drs_uri` | 6,414 | 6,414 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `illumina` | `drs_uri` | 800 | 800 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `kinnex` | `drs_uri` | 1,380 | 1,380 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `liftoff_genes` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `ont` | `drs_uri` | 5,574 | 5,574 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `ont_methylation` | `drs_uri` | 924 | 924 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `repeat_masker_bed` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `repeat_masker_out` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `segdups` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `t2t_sequences` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `to_ref_chm13_winnowmap` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `to_ref_grch38_winnowmap` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_HPRC_R2` | `to_ref_grch38_winnowmap_bai` | `drs_uri` | 462 | 462 | 0 | 0 |
+| `repository_metadata` | `AnVIL_IGVF_Mouse_R1` | `file` | `drs_uri` | 10,945 | 10,945 | 0 | 0 |
+| `published_value` | `AnVIL_ENCORE_293T` | `anvil_file` | `drs_uri` | 1,544 | 1,544 | 0 | 0 |
+| `published_value` | `AnVIL_ENCORE_RS293` | `anvil_file` | `drs_uri` | 2,932 | 2,932 | 0 | 0 |
+| `published_value` | `AnVIL_IGVF_Mouse_R1` | `anvil_file` | `drs_uri` | 6,975 | 6,975 | 0 | 0 |
 
 ## Per dataset
 
-### ANVIL_1000G_PRIMED_data_model
+### `ANVIL_1000G_PRIMED_data_model`
 
 11,493 files.
 
@@ -124,7 +124,7 @@ No earlier reconciled run to compare with.
 | reference_assembly | 0 | 0 | 0 | 0 | 8,641 | 0 | 0 | 0 | 0 | 2,852 | 0 | 8,641 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | 0 | 0 |
 
-### ANVIL_1000G_high_coverage_2019
+### `ANVIL_1000G_high_coverage_2019`
 
 26,016 files.
 
@@ -136,7 +136,7 @@ No earlier reconciled run to compare with.
 | reference_assembly | 0 | 0 | 0 | 0 | 12,908 | 0 | 0 | 0 | 0 | 13,008 | 100 | 12,908 | 0 |
 | assay_type | 0 | 0 | 9,603 | 0 | 0 | 0 | 0 | 0 | 0 | 13,008 | 3,405 | 9,603 | 9,603 |
 
-### ANVIL_HPRC
+### `ANVIL_HPRC`
 
 23,185 files.
 
@@ -150,10 +150,10 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (inference) | 2 | inference: CHM13, GRCh38; repository_metadata: GRCh38 |
-| reference_assembly | conflict (inference) | 1 | inference: CHM13, GRCh38 |
+| reference_assembly | conflict (inference) | 2 | `inference: CHM13, GRCh38; repository_metadata: GRCh38` |
+| reference_assembly | conflict (inference) | 1 | `inference: CHM13, GRCh38` |
 
-### ANVIL_NIA_CARD_Coriell_Cell_Lines_Open
+### `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open`
 
 12,534 files.
 
@@ -167,9 +167,9 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| assay_type | conflict (sources) | 6 | inference: not_applicable; repository_metadata: WGS |
+| assay_type | conflict (sources) | 6 | `inference: not_applicable; repository_metadata: WGS` |
 
-### ANVIL_T2T
+### `ANVIL_T2T`
 
 289,204 files.
 
@@ -183,10 +183,10 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (inference) | 133 | inference: CHM13, GRCh38 |
-| reference_assembly | conflict (inference) | 1 | inference: (no values carried) |
+| reference_assembly | conflict (inference) | 133 | `inference: CHM13, GRCh38` |
+| reference_assembly | conflict (inference) | 1 | `inference: (no values carried)` |
 
-### ANVIL_T2T_CHRY
+### `ANVIL_T2T_CHRY`
 
 309,979 files.
 
@@ -200,10 +200,10 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (sources) | 558 | inference: not_applicable; repository_metadata: GRCh38 |
-| reference_assembly | conflict (inference) | 1 | inference: CHM13, GRCh38 |
+| reference_assembly | conflict (sources) | 558 | `inference: not_applicable; repository_metadata: GRCh38` |
+| reference_assembly | conflict (inference) | 1 | `inference: CHM13, GRCh38` |
 
-### ANVIL_nhp_dGTEx_V1
+### `ANVIL_nhp_dGTEx_V1`
 
 3,591 files.
 
@@ -215,7 +215,7 @@ No earlier reconciled run to compare with.
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,591 | 0 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 1,372 | 0 | 0 | 0 | 0 | 0 | 2,219 | 1,372 | 0 |
 
-### AnVIL_ENCORE_293T
+### `AnVIL_ENCORE_293T`
 
 1,992 files.
 
@@ -229,9 +229,9 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (published) | 224 | inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"] |
+| reference_assembly | conflict (published) | 224 | `inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"]` |
 
-### AnVIL_ENCORE_RS293
+### `AnVIL_ENCORE_RS293`
 
 3,752 files.
 
@@ -245,9 +245,9 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (published) | 410 | inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"] |
+| reference_assembly | conflict (published) | 410 | `inference: GRCh38; published_value (unreviewed): ["GRCh38 + Gencode40"]` |
 
-### AnVIL_HPRC_R2
+### `AnVIL_HPRC_R2`
 
 16,271 files.
 
@@ -261,10 +261,10 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| data_type | conflict (sources) | 1,539 | inference: alignments; repository_metadata: reads |
-| data_type | conflict (sources) | 2 | inference: sequence; repository_metadata: assembly |
+| data_type | conflict (sources) | 1,539 | `inference: alignments; repository_metadata: reads` |
+| data_type | conflict (sources) | 2 | `inference: sequence; repository_metadata: assembly` |
 
-### AnVIL_IGVF_Mouse_R1
+### `AnVIL_IGVF_Mouse_R1`
 
 6,786 files.
 
@@ -278,10 +278,10 @@ No earlier reconciled run to compare with.
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| data_modality | conflict (published) | 412 | inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus RNA sequencing assay"] |
-| data_modality | conflict (published) | 2 | inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"] |
+| data_modality | conflict (published) | 412 | `inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus RNA sequencing assay"]` |
+| data_modality | conflict (published) | 2 | `inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]` |
 
-### AnVIL_MAGE
+### `AnVIL_MAGE`
 
 3,285 files.
 

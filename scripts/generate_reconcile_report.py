@@ -19,8 +19,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -35,7 +35,7 @@ from meta_disco.reconcile import (
     SOURCE_PRECEDENCE,
     fill_category,
 )
-from meta_disco.summaries import escape_md_cell, md_table
+from meta_disco.summaries import md_table
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
@@ -47,14 +47,20 @@ ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
 
 
-def text(value: str) -> str:
-    """Catalog or evidence text for the markdown report, HTML-escaped.
+def code(value: str) -> str:
+    """Catalog or evidence text for the markdown report, as a code span.
 
-    Pages builds ``docs/`` with Jekyll, which passes raw HTML in markdown through, so a
-    catalog value holding markup would render as markup. ``md_table`` escapes only what
-    reshapes a table. The dashboard escapes the same values in its own ``esc``.
+    Pages builds ``docs/`` with Jekyll, which renders markdown syntax and passes raw HTML
+    through, so a catalog value holding markup or a link (``![x](https://…)``) would render
+    as one. A code span is shown literally. Its fence is one backtick longer than the
+    longest run in the value, padded with a space where the value starts or ends with a
+    backtick, and line breaks become spaces. ``md_table`` still escapes a pipe. The
+    dashboard escapes the same values in its own ``esc``.
     """
-    return html.escape(value, quote=False)
+    value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    fence = "`" * (max((len(run) for run in re.findall("`+", value)), default=0) + 1)
+    pad = " " if value.startswith("`") or value.endswith("`") else ""
+    return f"{fence}{pad}{value}{pad}{fence}"
 
 
 def shown(dataset: str) -> str:
@@ -291,8 +297,8 @@ def _conflict_table(rows: list[dict], with_dataset: bool) -> list[str]:
         return ["No conflicts."]
     header = (["dataset"] if with_dataset else []) + ["dimension", "kind", "files", "competing values"]
     body = [
-        ([text(shown(r["dataset"]))] if with_dataset else [])
-        + [r["dimension"], label(r["kind"]), _n(r["files"]), text(competing(r["inputs"]))]
+        ([code(shown(r["dataset"]))] if with_dataset else [])
+        + [r["dimension"], label(r["kind"]), _n(r["files"]), code(competing(r["inputs"]))]
         for r in rows
     ]
     return md_table(header, body)
@@ -378,7 +384,7 @@ def render_markdown(data: dict) -> str:
         lines += md_table(
             ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"],
             [
-                [text(e["source_type"]), text(e["dataset"] or ALL), text(e["table"] or "-"), text(e["key"])]
+                [code(e["source_type"]), code(e["dataset"] or ALL), code(e["table"] or "-"), code(e["key"])]
                 + [_n(e[k]) for k in ("offered", "matched", "unmatched", "ambiguous")]
                 for e in whole["evidence"]
             ],
@@ -389,7 +395,7 @@ def render_markdown(data: dict) -> str:
     for scope in data["datasets"]:
         name = scope["name"]
         lines += [
-            f"### {escape_md_cell(text(shown(name)))}",
+            f"### {code(shown(name))}",
             "",
             f"{scope['files']:,} files.",
             "",
