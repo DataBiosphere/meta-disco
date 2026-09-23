@@ -368,7 +368,7 @@ Match regular expressions against filenames to infer modality or reference.
 | Rule                        | Pattern                  | Classification               |
 | --------------------------- | ------------------------ | ---------------------------- |
 | `alignment_isoseq_filename` | `(?i)\.flnc\.`           | data_modality transcriptomic.bulk |
-| `filename_ref_grch38`       | `(?i)(hg38\|grch38\|…)`   | reference_assembly GRCh38    |
+| `filename_ref_grch38`       | `(?i)(hg38\|grch38\|…)`   | reference_assembly GRCh38, only on a file kind that holds coordinates on a reference (#523) |
 | `alignment_hifi_filename`   | `(?i)(^\|[._-])hifi\|_pb_` | platform PACBIO — the chemistry, not a modality or assay (#430) |
 
 #### Header Inspection Rules
