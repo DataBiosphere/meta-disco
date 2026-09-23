@@ -309,10 +309,16 @@ def render_markdown(data: dict) -> str:
         "",
         "Each file's slot in each dimension is counted in exactly one category, so a row sums to the files. "
         "A value every declaring input agreed on is credited to the first source in precedence order "
-        "(published, then submitter; verbatim before harmonized), else to inference. "
-        "*Added over published* is our value where the published source speaks to the dimension and said nothing "
-        f"for the file ({DASH} where it speaks to it in no dataset). *Filled over inference* is the slots inference left "
-        "without an answer that a source's declaration answers. Both overlap the categories.",
+        "(published, then submitter; verbatim before harmonized), else to inference.",
+        "",
+        "The last two columns count something else, and overlap the categories:",
+        "",
+        "- **Added over published:** files where we deliver a value and the published column for this dimension "
+        "is empty for that file: metadata the catalog does not show today. "
+        f"{DASH} where there is no published column for the dimension.",
+        "- **Filled over inference:** files where inference found no answer (`not_classified`) but a source table "
+        "supplied one (a value, or not applicable): gaps inference alone would have left empty. For example, "
+        "`ANVIL_T2T_CHRY` files whose reference assembly only the submitter's table names.",
         "",
         *_headline_table(whole["headline"], cols),
         "",

@@ -8,7 +8,7 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #fff; color: #24292f; }
     h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
     h2 { margin-top: 36px; border-bottom: 1px solid #d0d7de; padding-bottom: 6px; }
-    p.note { color: #656d76; font-size: 14px; max-width: 900px; }
+    .note { color: #656d76; font-size: 14px; max-width: 900px; }
     dl.prov { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 14px; }
     dl.prov dt { color: #656d76; }
     dl.prov dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
@@ -37,10 +37,16 @@
   <h2>How each slot settled</h2>
   <p class="note">Each file's slot in each dimension is counted in exactly one category, so a row sums to the files.
     A value every declaring input agreed on is credited to the first source in precedence order (published, then
-    submitter; verbatim before harmonized), else to inference. <em>Added over published</em> is our value where the
-    published source speaks to the dimension and said nothing for the file (&ndash; where it speaks to it nowhere in
-    scope). <em>Filled over inference</em> is the slots inference left without an answer that a source's declaration
-    answers. Both overlap the categories.</p>
+    submitter; verbatim before harmonized), else to inference.</p>
+  <p class="note">The last two columns count something else, and overlap the categories:</p>
+  <ul class="note">
+    <li><strong>Added over published:</strong> files where we deliver a value and the published column for this
+      dimension is empty for that file: metadata the catalog does not show today. &ndash; where there is no published
+      column for the dimension.</li>
+    <li><strong>Filled over inference:</strong> files where inference found no answer (<code>not_classified</code>) but
+      a source table supplied one (a value, or not applicable): gaps inference alone would have left empty. For
+      example, <code>ANVIL_T2T_CHRY</code> files whose reference assembly only the submitter's table names.</li>
+  </ul>
   <div class="scroll" id="headline"></div>
 
   <h2>Conflict rate</h2>
