@@ -160,3 +160,13 @@ def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
     data = rr.dashboard_data(report, None, Path("report.json"))
     assert data["run"]["files"] == 6
     assert {name: scope["files"] for name, scope in data["datasets"].items()} == {rr.ALL: 3, DATASET: 3}
+
+
+def test_catalog_text_is_html_escaped_in_the_markdown():
+    """Pages renders the markdown through Jekyll, which passes raw HTML through."""
+    row = {"dataset": "<b>D</b>", "dimension": "platform", "kind": "conflict_sources", "files": 1}
+    (line,) = rr._conflict_table(
+        [{**row, "inputs": {"published_value (unreviewed)": ['<img src=x onerror="a()">']}}], True
+    )[2:]
+    assert "<img" not in line and "<b>" not in line
+    assert '&lt;img src=x onerror="a()"&gt;' in line and "&lt;b&gt;D&lt;/b&gt;" in line

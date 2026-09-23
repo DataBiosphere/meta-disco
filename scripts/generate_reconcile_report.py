@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import sys
 from pathlib import Path
@@ -44,6 +45,16 @@ ALL = EVERY_DATASET
 # for the file, and the gaps inference left that a source filled.
 ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
+
+
+def text(value: str) -> str:
+    """Catalog or evidence text for the markdown report, HTML-escaped.
+
+    Pages builds ``docs/`` with Jekyll, which passes raw HTML in markdown through, so a
+    catalog value holding markup would render as markup. ``md_table`` escapes only what
+    reshapes a table. The dashboard escapes the same values in its own ``esc``.
+    """
+    return html.escape(value, quote=False)
 
 
 def shown(dataset: str) -> str:
@@ -279,8 +290,8 @@ def _conflict_table(rows: list[dict], with_dataset: bool) -> list[str]:
         return ["No conflicts."]
     header = (["dataset"] if with_dataset else []) + ["dimension", "kind", "files", "competing values"]
     body = [
-        ([shown(r["dataset"])] if with_dataset else [])
-        + [r["dimension"], label(r["kind"]), _n(r["files"]), competing(r["inputs"])]
+        ([text(shown(r["dataset"]))] if with_dataset else [])
+        + [r["dimension"], label(r["kind"]), _n(r["files"]), text(competing(r["inputs"]))]
         for r in rows
     ]
     return md_table(header, body)
@@ -366,7 +377,7 @@ def render_markdown(data: dict) -> str:
         lines += md_table(
             ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"],
             [
-                [e["source_type"], e["dataset"] or ALL, e["table"] or "-", e["key"]]
+                [text(e["source_type"]), text(e["dataset"] or ALL), text(e["table"] or "-"), text(e["key"])]
                 + [_n(e[k]) for k in ("offered", "matched", "unmatched", "ambiguous")]
                 for e in whole["evidence"]
             ],
@@ -376,7 +387,7 @@ def render_markdown(data: dict) -> str:
     lines += ["", "## Per dataset", ""]
     for name, scope in data["datasets"].items():
         lines += [
-            f"### {escape_md_cell(shown(name))}",
+            f"### {escape_md_cell(text(shown(name)))}",
             "",
             f"{scope['files']:,} files.",
             "",
