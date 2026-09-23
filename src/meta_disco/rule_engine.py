@@ -613,7 +613,8 @@ class ExtendedClassificationResult:
         and no ``rule_id`` (#392), so it was skipped like a marker; under #401 it
         cites the ``rule_id`` of the mapping that produced it, and only an
         ``unmapped`` one still names nothing. Nothing feeds an imported claim into
-        ``field_evidence`` until reconcile lands (#432).
+        ``field_evidence``: reconcile (#432) attaches source claims to its own record,
+        never to inference's.
         """
         seen = set()
         result = []

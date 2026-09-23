@@ -86,11 +86,29 @@ classes:
     description: >-
       A single classified field: its resolved value (null unless status is
       'classified'), a status sentinel, and the evidence behind it. Subclasses
-      narrow `value` to the right enum per dimension.
+      narrow `value` to the right enum per dimension. A reconciled record (#432)
+      carries the same entry plus `use` and `inferred`; an inference record
+      carries neither.
     slots:
       - value
       - status
       - evidence
+      - use
+      - inferred
+
+  InferredConclusion:
+    description: >-
+      What inference concluded for a slot before reconciliation (#432): its tier-resolved
+      status and value, as the inference record states them. On a reconciled record so
+      it reads alone (contract 6.10) — inference's evidence cannot rebuild it without
+      re-running tier resolution.
+    attributes:
+      value:
+        description: Inference's value; null unless its status is 'classified'.
+        required: false
+      status:
+        range: classification_status_enum
+        required: true
 
   DataModalityClassification:
     is_a: Classification
@@ -700,6 +718,20 @@ slots:
     range: Evidence
     multivalued: true
     inlined_as_list: true
+  use:
+    description: >-
+      On a reconciled record only (#432): whether the indexer takes this record's value
+      (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the
+      repository's published value (`published`, when it is `conflict` or
+      `not_classified`). Computed by reconcile so an export is structure only.
+    range: use_enum
+    required: false
+  inferred:
+    description: >-
+      On a reconciled record only (#432): what inference concluded for this slot.
+    range: InferredConclusion
+    required: false
+    inlined: true
 
   # --- ReferenceBuild link (issue #340) ---
   build:
@@ -889,9 +921,24 @@ enums:
         description: The field is meaningful but no value could be determined.
       conflict:
         description: >-
-          Rules at the same tier disagreed and no curator rule has answered it
-          (#88; claims contract 4.3, 4.7). The value is null; the competing
-          claims stay in the evidence beside a `conflict` marker naming them.
+          Declarations disagreed and no curator rule has answered it (claims
+          contract 4.3-4.7). On an inference record, rules at the same tier
+          disagreed (#88), and the competing claims stay in the evidence beside a
+          `conflict` marker naming them. On a reconciled record (#432), inference
+          and the sources disagreed, or inference's own conflict stands, or the
+          published source spoke with a value no authored row reads while another
+          input spoke too. The value is null either way.
+
+  use_enum:
+    description: >-
+      Which value the indexer takes for a reconciled slot (#432): this record's, or the
+      one the repository already publishes (the not-worse path, until curator rules
+      answer conflicts).
+    permissible_values:
+      meta_disco:
+        description: Take this record's value; its status is `classified` or `not_applicable`.
+      published:
+        description: Keep the repository's published value; the status is `conflict` or `not_classified`.
 
   relation_enum:
     description: >-

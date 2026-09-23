@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff reconcile all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -35,7 +35,8 @@ help:
 	@echo "  make review-queue       List every evidence value whose value-map row is not authored (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
-	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
+	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
+	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN=, DEPLOYMENT=)"
 	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
@@ -245,7 +246,7 @@ review-queue:
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
 # comparison out of this report, and #513 deleted it: AnVIL's published values are
-# evidence, which the reconcile stage (#432, not built) is to read). Its input,
+# evidence, which the reconcile stage reads, `make reconcile`, #432). Its input,
 # output/hprc/hprc_validation_results.json, is generated and gitignored, so without this prerequisite a standalone run on a fresh
 # checkout finds no sources and exits 1 — which it did not before, when the AnVIL branch
 # keyed off the always-present downloaded metadata.
@@ -255,11 +256,20 @@ validation-report: validate-hprc
 # Compare two corpus generations: input snapshots file-by-file by md5, and run
 # outputs by label, splitting each coverage delta into corpus loss / corpus gain /
 # label change so a catalog migration is not mistaken for classifier drift (#335).
-# Defaults compare the archived anvil14 generation with the latest run; pass other
-# snapshots or runs through ARGS, e.g.
-# `make corpus-diff ARGS="--new-run output/anvil/20260904_010319"`.
+# Defaults compare the archived anvil14 generation with the latest run. Which artifact
+# of the runs to compare is required (#432): pass `--artifact inference` or
+# `--artifact reconciled` through ARGS, with other snapshots or runs, e.g.
+# `make corpus-diff ARGS="--artifact inference --new-run output/anvil/20260904_010319"`.
 corpus-diff:
 	uv run python scripts/compare_corpus.py $(ARGS)
+
+# Reconcile a stored inference run with the source evidence (#432): writes
+# <run>/reconciled/ (one NDJSON file per inference file, plus reconcile_report.json)
+# and never touches the inference output. RUN defaults to the latest run under
+# output/anvil; DEPLOYMENT names whose input envelope says the repository and catalog.
+# Pass `ARGS=--no-evidence` to exclude all evidence (contract 6.6).
+reconcile:
+	uv run python scripts/reconcile.py $(if $(RUN),--run $(RUN)) --deployment $(or $(DEPLOYMENT),prod) $(ARGS)
 
 all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
 

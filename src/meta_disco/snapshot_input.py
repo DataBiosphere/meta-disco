@@ -252,7 +252,7 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     naming the column and its table; only ``file_path`` is optional. The two dimensions
     ``anvil_file`` publishes (``data_modality`` / ``reference_assembly``) are not read:
     they enter as the published importer's evidence (contract 7.12, #513), which the
-    reconcile stage is to read (#432, not built).
+    reconcile stage reads (#432).
     """
     try:
         dataset_id, dataset_title = dataset["dataset_id"], dataset["title"]

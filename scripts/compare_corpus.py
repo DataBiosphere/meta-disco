@@ -12,9 +12,12 @@ The defaults compare the archived anvil14 generation with the current one: the
 read-only snapshot and run under ``data/anvil/archive/`` and
 ``output/anvil/20260802_170826``, against the live input and the latest run dir.
 
+``--artifact`` is required: ``inference`` compares what the two runs inferred,
+``reconciled`` what their reconcile stage concluded (#432). Neither is assumed.
+
 Usage:
-    python scripts/compare_corpus.py
-    python scripts/compare_corpus.py --new-run output/anvil/20260904_010000
+    python scripts/compare_corpus.py --artifact inference
+    python scripts/compare_corpus.py --artifact reconciled --new-run output/anvil/20260904_010000
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from meta_disco.corpus_diff import read_snapshot, render_report, run_labels, snapshot_parity
+from meta_disco.corpus_diff import ARTIFACTS, read_snapshot, render_report, run_labels, snapshot_parity
 from meta_disco.deployments import PROD
 from meta_disco.output_utils import find_latest_run
 
@@ -46,6 +49,12 @@ def main(argv=None) -> int:
         help="Current run directory (default: the latest run under output/anvil)",
     )
     parser.add_argument("--output", "-o", type=Path, default=DEFAULT_OUTPUT, help="Report to write")
+    parser.add_argument(
+        "--artifact",
+        choices=ARTIFACTS,
+        required=True,
+        help="Which artifact of each run to compare: what inference concluded, or what reconcile concluded",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -73,8 +82,13 @@ def main(argv=None) -> int:
     del old_records, new_records
 
     print(f"Runs: {args.old_run} → {new_run}")
-    old_labels = run_labels(args.old_run)
-    new_labels = run_labels(new_run)
+    print(f"Artifact: {args.artifact}")
+    try:
+        old_labels = run_labels(args.old_run, args.artifact)
+        new_labels = run_labels(new_run, args.artifact)
+    except FileNotFoundError as exc:
+        print(exc)
+        return 2
 
     report = render_report(
         old_meta=old_meta,
@@ -84,6 +98,7 @@ def main(argv=None) -> int:
         new_run=new_run,
         old_labels=old_labels,
         new_labels=new_labels,
+        artifact=args.artifact,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)

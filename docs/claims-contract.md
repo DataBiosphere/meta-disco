@@ -265,6 +265,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     and may not become one: it would produce a claim no rule backs and nothing could review,
     against 3.2. Retired from ADR-0001, which decided it; that document is deleted and its salvage is #422.
 
+5.6 **Review precedes a deploy.** The conflict list (5.1) and the unmatched-value list (5.2) are reviewed
+    before a reconciled artifact is deployed. Review answers a conflict with a curator rule (4.7) or leaves
+    it standing; either is a recorded outcome. Answering costs a reconcile (6.4), never a corpus run.
+    Until the report that lists them (#395) and curator rules (#397) exist, this is a stated rule and not
+    a gate; the gate belongs with `make check-catalog` (#405).
+
 ## 6. The pipeline
 
 6.1 A run has three stages: **infer**, **read sources**, **reconcile**.
@@ -285,7 +291,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
     to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
-6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
+6.7 Reading sources is the reconcile stage's join, not a stage of its own (#432, which absorbed #402), and
+    its measurement is a line of reconcile's report: per source and dataset, evidence offered, matched,
+    unmatched and ambiguous, and by which key. The join is an equality lookup on the key the evidence
+    envelope names; a line whose key two records carry attaches to neither.
 
 6.8 Resolution across sources is by agreement, and is not tier math.
     Tier resolution *within* a source applies to inference, which has competing rules at four tiers.
@@ -373,14 +382,23 @@ depends on that, and a second repository needs no change to these assertions.
      in for the tables, and the published importer is the
      submitter-table importer run over a second slot map (`anvil_published_slot_map.yaml`).
 
+7.13 **A conflict is deliverable.** A slot in `conflict` is delivered as it is: no value, status
+     `conflict`, every competing declaration in its evidence, and `use: published`, which tells the
+     indexer to keep the value the repository already publishes. A `not_classified` slot carries the same
+     instruction. A delivery never picks a side, and shipping a conflict does not make the delivered answer
+     worse than the published one: our value is null and the published value is untouched (#432). A slot
+     that is `classified` or `not_applicable` carries `use: meta_disco`. `use` is computed by reconcile, so an
+     export (#444) is structure only; the published value never enters our record, whose values stay in
+     our vocabulary.
+
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist. In section 7, the importer's
-half is built — 7.12 is enforced (below), and the published importer reads the system of record (7.1, today through the verbatim manifest, 7.12)
-and transcribes verbatim (7.3, #497, #421) — while what 7.1, 7.2 and 7.10 say about claims and comparison
-is the reconcile stage's (#432), which is not built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
+No code reads this document, and parts of the pipeline it describes do not exist. In section 7, the
+importer's half is built — 7.12 is enforced (below), and the published importer reads the system of record
+(7.1, today through the verbatim manifest, 7.12) and transcribes verbatim (7.3, #497, #421) — and what 7.1,
+7.2, 7.10 and 7.13 say about claims, comparison and delivery is the reconcile stage's (#432), which is built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
@@ -391,20 +409,21 @@ is the reconcile stage's (#432), which is not built. Parts of it *are* enforced 
   repository, and 7.12 at the map for AnVIL and at the run for every repository; that a map was
   authored from nothing a run concluded is
   not enforceable, and a test greps each file for the strings that would say otherwise. No other source
-  has a map, there is no rule scope for source evidence, and no classification run consumes what is
-  written — the value map's seeder and review queue read it, the pipeline does not: section 2 is
-  produced and not yet read by a run.
-- **The translation table exists and nothing in a run reads it** (#414). `value_map` holds 3.9's row,
+  has a map and there is no rule scope for source evidence. Inference consumes none of what is written;
+  the value map's seeder and review queue read it, and so does reconcile (#432).
+- **The translation table is read by reconcile alone** (#414, #432). `value_map` holds 3.9's row,
   enforces 3.11's split, 3.12's scope and collision rules and 3.5's bound, seeds from evidence and lists
-  5.2's queue; `claims_from` builds a line's claims through `make_claim`. Which values have a row is
-  `make review-queue`'s to say, not this document's. No stage calls it, so 3.7's queue is a listing a person runs, not a place a run sends a
-  value to, and no claim it can make reaches a record until reconcile (#432).
+  5.2's queue; `claims_from` builds a line's claims through `make_claim`, and reconcile is its caller.
+  Which values have a row is `make review-queue`'s to say, not this document's. 3.7's queue is still a
+  listing a person runs, not a place a run sends a value to: reconcile counts an unreviewed value in its
+  report and, for the published source, lets it move the slot (7.13), but writes no queue.
 - **HPRC's published source is not declared** (7.12). `PUBLISHED_TABLES` names AnVIL only; which HPRC
   catalog is the system of record for what HPRC publishes is undecided, so the HPRC run has no published
   evidence and a file claiming to be it is refused until the declaration exists.
-- **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
-- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. Until it exists, **no output shows what a repository publishes for a file**: the published evidence is on disk (7.12) and nothing in a run reads it, and the `published` block that used to carry the values on the inference record is deleted (#513).
-- **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
+- **Reconcile is a command, not a phase of `make classify`** (#432). `make reconcile` runs it against a stored run; nothing runs it after inference on its own, and a stored run does not record which input it was classified from (#404), so reconcile reads the deployment's input envelope and cannot prove it is the run's.
+- **6.9 holds for `corpus_diff` only.** It is told which artifact it compares; the coverage, validation and consistency reports still read the inference artifact.
+- **6.11 holds for the reconciled artifact only.** It is NDJSON under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
+- **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.
 
@@ -429,8 +448,15 @@ A line leaves this section when the assertion above it is enforced, not when it 
   namespace, kept disjoint by shape.** A claim cites either kind by `rule_id`. A row id is `<slot>.<slug>`
   and the value map's loader requires the slot prefix; no rule id contains a dot, and `test_value_map` checks
   that against the loaded rule set, so neither loader reads the other.
-- What an inference-resolved `conflict` does in stage two. 4.3 sends every surviving declaration to reconciliation, but `conflict` is a status the first stage really produces (`evaluate_claims` → `is_conflict`) and 4.6's axis names only `not_classified` and `not_applicable`. Concrete undefined case: inference resolves `platform` to `conflict` and one source declares `PACBIO`. 4.4 does not apply, 4.5 is about disagreeing inputs, 4.6 names neither arm.
-- The conflict rate on a second dataset. The spike measured ~0.1% on `AnVIL_HPRC_R2` alone; at 1% across the corpus the review queue stops being viable and 4.5 needs rethinking.
+- ~~What an inference-resolved `conflict` does in stage two.~~ **Answered by #432 (maintainer, 2026-09-22):
+  it stands.** A source agreeing with one of two disagreeing rules is agreement with a claim, not resolution
+  of a conflict, which 4.7 reserves for a curator rule; the source's claim is recorded beside it.
+- ~~The conflict rate on a second dataset.~~ **Measured by #432** over the ten datasets with evidence: 3,291
+  conflicting slots across the corpus, concentrated in a few places a person can read — unaligned BAMs
+  inference calls `alignments` where the submitter says `unaligned reads` (1,539, `AnVIL_HPRC_R2`), FASTQs
+  inference calls `not_applicable` beside a declared assembly (558, `ANVIL_T2T_CHRY`), published values no
+  authored row reads yet (1,048, the ENCORE and IGVF datasets), and inference's own conflicts carried through
+  (138). The numbers are on the PR.
 - ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered twice** — #424 no,
   #472/#497 yes (maintainer, 2026-09-21); 4.1 carries the reasoning. The number was never reused.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
@@ -448,6 +474,6 @@ A line leaves this section when the assertion above it is enforced, not when it 
   question for #364 rather than a mapping one.
 - Whether a subject-level key and subject-level slots are worth adding. Without them IGSR, which keys by sample id, cannot be imported at all — correctly, but at the cost of a source. Related to the instrument-model question above, to #336 and to #361.
 - What the two artifacts are called. `*_classifications.json` means inference today and the name should be corrected rather than inherited. This is #271's scope — it already covers naming drift in `output/`, and it says it can land independently of the rest of #268.
-- How many files carry a source-declared value for a slot inference calls `not_applicable` — an unaligned FASTQ
-  with a declared assembly is the shape. Measurable from the manifests already on disk. 4.6 makes each one a
-  conflict, which is right if the number is small and wrong if it floods the queue.
+- ~~How many files carry a source-declared value for a slot inference calls `not_applicable`.~~ **Measured by
+  #432:** 564 slots — 558 FASTQs in `ANVIL_T2T_CHRY` with a declared `GRCh38`, and 6 `assay_type` slots in
+  `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open`. Small enough that 4.6 stands.

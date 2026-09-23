@@ -75,6 +75,40 @@ def iter_records(run_dir: Path):
         yield from _records_in(run_dir / fname)
 
 
+# Where the reconcile stage writes its artifact inside a run directory (#432), and the
+# key of the envelope on line 1 of each of its files.
+RECONCILED_DIR = "reconciled"
+RECONCILED_ENVELOPE_KEY = "reconcile"
+
+
+def reconciled_name(classification_file: str) -> str:
+    """The reconciled artifact's file name for one inference file: same stem, ``.ndjson``."""
+    return Path(classification_file).with_suffix(".ndjson").name
+
+
+def iter_reconciled_records(run_dir: Path):
+    """Yield every reconciled record (a dict) under ``run_dir/reconciled/``, streaming.
+
+    One NDJSON file per inference file, in ``CLASSIFICATION_FILES`` order; line 1 of each
+    is the envelope (``{"reconcile": ...}``), skipped here. A file reconcile did not write
+    is skipped, as :func:`iter_records` skips one a run did not write. Raises
+    FileNotFoundError when the run has no reconciled artifact at all — reading nothing
+    would pass for a run with no coverage.
+    """
+    directory = run_dir / RECONCILED_DIR
+    if not directory.is_dir():
+        raise FileNotFoundError(f"No reconciled artifact in {run_dir}. Run 'make reconcile' first.")
+    for fname in CLASSIFICATION_FILES:
+        path = directory / reconciled_name(fname)
+        if not path.exists():
+            continue
+        with path.open() as f:
+            for line in f:
+                record = json.loads(line)
+                if isinstance(record, dict) and RECONCILED_ENVELOPE_KEY not in record:
+                    yield record
+
+
 def iter_records_with_source(run_dir: Path):
     """Yield ``(classification file name, record)``, for a reader that must name the
     producer a record came from."""

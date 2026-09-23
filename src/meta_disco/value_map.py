@@ -36,8 +36,8 @@ unscoped, and returns the row whole. Two rows keyed alike on one slot at one sco
 alternates included, cannot load; two rows with different keys declaring one slot can,
 since whether they collide depends on which cells a file has (4.8).
 
-**Nothing in a classification run reads this module.** :func:`claims_from` exists for
-the reconcile stage (#432) and the tests. The seeder and the review queue read evidence
+**Nothing in a classification run reads this module**; the reconcile stage (#432) is
+its one reader in a run, through :func:`claims_from`, and writes its own artifact. The seeder and the review queue read evidence
 files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
 output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
 key)`` no row selects for, after the last row, so an authored row is untouched
@@ -406,13 +406,17 @@ def _seeded_from(node: yaml.Node, at: str) -> tuple[str, ...]:
 # --- claims -----------------------------------------------------------------------
 
 
-def claims_from(entry: EvidenceEntry, source_type: str, table: ValueMap) -> list[tuple[str, dict]]:
+def claims_from(
+    entry: EvidenceEntry, source_type: str, table: ValueMap, join_key: str | None = None
+) -> list[tuple[str, dict]]:
     """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else ``[]``.
 
     Each goes through ``make_claim`` citing the row's id and carrying the verbatim raw
     value and the line's ``ClaimSource``, so two claims on one slot from two cells of
     one file stay distinguishable (4.8). Nothing here compares, merges or ranks: that
     is reconcile's (#432). ``source_type`` is the envelope's, which the line does not carry.
+    ``join_key`` is the key the line was matched to a file by; when given, the claim
+    records it with ``match_exact`` true, since the join is an equality lookup.
     """
     row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
     if row is None or not row.authored:
@@ -427,6 +431,8 @@ def claims_from(entry: EvidenceEntry, source_type: str, table: ValueMap) -> list
             status=declared if is_status else None,
             source=entry.source,
             raw_value=entry.raw_value,
+            join_key=join_key,
+            match_exact=True if join_key is not None else None,
         )
         claims.append((slot, claim))
     return claims

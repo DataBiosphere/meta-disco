@@ -13,34 +13,30 @@ transcribes what a source wrote about a slot and stops; only the rule engine tur
 that raw value into one of our terms. #401 shipped the other arrangement — a line
 carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
-(``value_map``, #414), whose ``claims_from`` is built for the reconcile stage (#432)
-and is called by nothing in a run until that stage exists; the table checks a declared
-term against its slot's vocabulary when it loads.
+(``value_map``, #414), whose ``claims_from`` the reconcile stage calls (#432); the
+table checks a declared term against its slot's vocabulary when it loads.
 
 This module is the artefact and everything about it: the envelope record and its
 parts, the layout on disk, the line format, the streaming writer and reader, and the
-report a run prints of what it found — found and not consumed, since no evidence reaches classification until the
-join lands (#402). Anything that needs to find or write an evidence file should come
-through here rather than re-deriving the layout. Matching a row to one of our files
-is #402, and the importers that will produce these files are #369 (AnVIL manifests)
-and #394 (external catalogs).
+report a run prints of what it found. Anything that needs to find or write an evidence
+file should come through here rather than re-deriving the layout. Matching a row to one
+of our files is the reconcile stage's join (``reconcile.join``, #432, which absorbed
+#402); the importers that produce these files are ``anvil_evidence`` (#369, #497) and,
+to come, #394 (external catalogs).
 
-**What a run does with these today.** It discovers them and reports each one's
+**What a run does with these.** Inference discovers them and reports each one's
 source, version, catalog and age — ``classify_run.run_all_classifications`` calls
-:func:`report_evidence_files` and never :func:`iter_evidence`. No evidence reaches
-classification, so a run with evidence files present writes the same output as one
-without. Matching rows to our files is #402; the writer and reader here exist so
-the producers (#369, #394) can be built against a settled contract before that lands.
+:func:`report_evidence_files` and never :func:`iter_evidence`, so its output is the
+same with evidence files present or absent. The reconcile stage (``make reconcile``)
+is what reads them, through :func:`iter_evidence`, into its own artifact.
 
-**Currency is not decided here**, and will not be when the join does: a run will
-import from every file it found and refuse none. It cannot do better offline — the
-sources share no version to compare, and AnVIL deletes a superseded catalog rather
-than keeping it to be matched against. The two places that can act on the question
-own it instead: the importer, which compares its file's ``target.version`` against
-the configured catalog when deciding to re-fetch, and the run's output, which is to
-record the catalog it enhances so that an enhancement offered to a catalog that has
-moved on is refused at that boundary — that one is #404 and is not built, so nothing
-enforces it yet.
+**Currency is decided only as far as offline allows.** The sources share no version to
+compare, and AnVIL deletes a superseded catalog rather than keeping it to be matched
+against. Reconcile refuses a file whose ``target.version`` is not the catalog the
+input envelope names, where it names one; the importer compares its file's
+``target.version`` against the configured catalog when deciding to re-fetch. What
+neither can check is that a stored run was classified from that input: that needs the
+run's output to record the catalog it enhances, which is #404 and is not built.
 
 **The file.** One ``.ndjson`` file: line 1 is the envelope, every later line is one
 evidence row. NDJSON rather than a JSON array because 708,088 files by 5 dimensions

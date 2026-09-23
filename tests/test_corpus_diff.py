@@ -98,7 +98,7 @@ _run_record = functools.partial(output_record, dataset="DS1")
 
 def test_run_labels_reads_identity_and_labels(tmp_path):
     run = write_run(tmp_path / "run", [_run_record("a.bam", "m1", data_modality="genomic")])
-    labels = run_labels(run)
+    labels = run_labels(run, "inference")
     assert list(labels) == [("DS1", "a.bam", "m1")]
     (label_tuple,) = labels[("DS1", "a.bam", "m1")]
     assert label_tuple[_DIMS.index("data_modality")] == "genomic"
@@ -108,12 +108,12 @@ def test_run_labels_reads_identity_and_labels(tmp_path):
 def test_run_labels_skips_a_missing_output_file(tmp_path):
     """A run that did not write every CLASSIFICATION_FILES entry still reads."""
     run = write_run(tmp_path / "run", [_run_record("a.bam", "m1")])
-    assert len(run_labels(run)) == 1
+    assert len(run_labels(run, "inference")) == 1
 
 
 def test_run_labels_raises_on_a_missing_run_dir(tmp_path):
     with pytest.raises(FileNotFoundError):
-        run_labels(tmp_path / "absent")
+        run_labels(tmp_path / "absent", "inference")
 
 
 def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):
@@ -126,8 +126,8 @@ def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):
     record["dataset_title"] = None
     old = write_run(tmp_path / "old", [dict(record)])
     new = write_run(tmp_path / "new", [dict(record)])
-    assert set(run_labels(old)) == set(run_labels(new)) == {("", "a.bam", "m1")}
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    assert set(run_labels(old, "inference")) == set(run_labels(new, "inference")) == {("", "a.bam", "m1")}
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert (diff.classified_lost, diff.classified_gained) == (0, 0)
     assert diff.classified_old == diff.classified_new == 1
 
@@ -135,7 +135,7 @@ def test_run_labels_keeps_records_whose_dataset_title_is_absent(tmp_path):
 def test_diff_attributes_a_label_change_to_the_classifier(tmp_path):
     old = write_run(tmp_path / "old", [_run_record("a.bam", "m1")])
     new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert diff.changed == Counter({("not_classified", "genomic"): 1})
     assert (diff.classified_lost, diff.classified_gained) == (0, 0)
     assert diff.classified_net_changed == 1
@@ -148,7 +148,7 @@ def test_diff_attributes_a_dropped_file_to_corpus_loss(tmp_path):
         [_run_record("a.bam", "m1", data_modality="genomic"), _run_record("gone.bam", "m2", data_modality="genomic")],
     )
     new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", data_modality="genomic")])
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert diff.classified_lost == 1
     assert (diff.classified_gained, diff.classified_net_changed) == (0, 0)
     assert not diff.changed
@@ -161,7 +161,7 @@ def test_diff_attributes_a_new_file_to_corpus_gain(tmp_path):
         tmp_path / "new",
         [_run_record("a.bam", "m1", data_modality="genomic"), _run_record("fresh.bam", "m9", data_modality="genomic")],
     )
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert diff.classified_gained == 1
     assert (diff.classified_lost, diff.classified_net_changed) == (0, 0)
 
@@ -174,7 +174,7 @@ def test_diff_reports_an_md5_change_as_loss_plus_gain(tmp_path):
     """
     old = write_run(tmp_path / "old", [_run_record("a.bam", "m1", data_modality="genomic")])
     new = write_run(tmp_path / "new", [_run_record("a.bam", "m2", data_modality="genomic")])
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert (diff.classified_lost, diff.classified_gained) == (1, 1)
     assert not diff.changed
 
@@ -188,7 +188,7 @@ def test_classified_by_dataset_counts_values_per_dataset(tmp_path):
             _run_record("c.bam", "m3", dataset="B", data_modality="genomic", data_type="alignment"),
         ],
     )
-    counts = classified_by_dataset(run_labels(run))
+    counts = classified_by_dataset(run_labels(run, "inference"))
     assert set(counts) == {"A", "B"}
     assert counts["A"]["data_modality"] == 1
     assert counts["A"]["data_type"] == 0
@@ -200,7 +200,7 @@ def test_classified_by_dataset_excludes_not_applicable(tmp_path):
     record = _run_record("a.gfa", "m1")
     record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
     run = write_run(tmp_path / "run", [record])
-    counts = classified_by_dataset(run_labels(run))
+    counts = classified_by_dataset(run_labels(run, "inference"))
     assert counts["DS1"]["platform"] == 0
 
 
@@ -218,7 +218,7 @@ def test_classified_by_dataset_keeps_a_dataset_with_nothing_classified(tmp_path)
             _run_record("b.bam", "m2", dataset="FULL", data_type="alignment"),
         ],
     )
-    counts = classified_by_dataset(run_labels(run))
+    counts = classified_by_dataset(run_labels(run, "inference"))
     assert set(counts) == {"EMPTY", "FULL"}
     assert sum(counts["EMPTY"].values()) == 0
 
@@ -227,7 +227,7 @@ def test_dataset_section_lists_a_dataset_with_nothing_classified(tmp_path):
     """The rendered table keeps that dataset's row rather than dropping it."""
     old = write_run(tmp_path / "old", [_run_record("a.bam", "m1", dataset="QUIET")])
     new = write_run(tmp_path / "new", [_run_record("a.bam", "m1", dataset="QUIET")])
-    rendered = "\n".join(render_dataset_section(run_labels(old), run_labels(new)))
+    rendered = "\n".join(render_dataset_section(run_labels(old, "inference"), run_labels(new, "inference")))
     assert "QUIET" in rendered
 
 
@@ -256,7 +256,7 @@ def test_diff_pairs_repeated_identities_as_multisets(tmp_path):
         tmp_path / "new",
         [_run_record("dup.bam", "m1"), _run_record("dup.bam", "m1", data_modality="genomic")],
     )
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert diff.changed == Counter({("not_classified", "genomic"): 1})
     assert diff.old["not_classified"] == 2
     assert diff.new["genomic"] == 1
@@ -273,7 +273,7 @@ def test_diff_counts_an_extra_copy_of_an_identity_as_a_gain(tmp_path):
         tmp_path / "new",
         [_run_record("dup.bam", "m1", data_modality="genomic"), _run_record("dup.bam", "m1", data_type="alignment")],
     )
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     assert diff.classified_gained == 0  # the extra copy is not classified on this dimension
     assert diff.gained["not_classified"] == 1
     assert diff.classified_new - diff.classified_old == 0
@@ -299,7 +299,7 @@ def test_attribution_accounts_for_the_whole_delta(tmp_path):
             _run_record("fresh.bam", "m5", data_modality="genomic"),
         ],
     )
-    diff = diff_runs(run_labels(old), run_labels(new))["data_modality"]
+    diff = diff_runs(run_labels(old, "inference"), run_labels(new, "inference"))["data_modality"]
     delta = diff.classified_new - diff.classified_old
     assert delta == diff.classified_gained - diff.classified_lost + diff.classified_net_changed
     assert (diff.classified_lost, diff.classified_gained, diff.classified_net_changed) == (1, 1, 0)
@@ -310,7 +310,7 @@ def test_not_applicable_is_not_counted_as_classified(tmp_path):
     record = _run_record("a.gfa", "m1")
     record["classifications"]["platform"] = build_field_entry(None, status=NOT_APPLICABLE)
     run = write_run(tmp_path / "run", [record])
-    labels = run_labels(run)
+    labels = run_labels(run, "inference")
     diff = diff_runs(labels, labels)["platform"]
     assert diff.classified_old == diff.classified_new == 0
     assert diff.old["not_applicable"] == 1
@@ -350,9 +350,10 @@ def test_render_report_covers_every_section(tmp_path):
         ),
         old_run=old,
         new_run=new,
-        old_labels=run_labels(old),
-        new_labels=run_labels(new),
+        old_labels=run_labels(old, "inference"),
+        new_labels=run_labels(new, "inference"),
         generated_at="2026-09-04 01:00",
+        artifact="inference",
     )
     assert "## Input snapshots" in report
     assert "## Coverage by dimension" in report
@@ -372,8 +373,9 @@ def test_render_report_says_so_when_no_label_changed(tmp_path):
         parity=snapshot_parity([_snapshot_record("a.bam", "m1")], [_snapshot_record("a.bam", "m1")]),
         old_run=run,
         new_run=run,
-        old_labels=run_labels(run),
-        new_labels=run_labels(run),
+        old_labels=run_labels(run, "inference"),
+        new_labels=run_labels(run, "inference"),
         generated_at="2026-09-04 01:00",
+        artifact="inference",
     )
     assert "No file present in both runs changed a label." in report

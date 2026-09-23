@@ -240,8 +240,8 @@ class OutputRecord:
     its diagnostic array for files it took no parent for.
 
     It carries nothing the repository publishes for the file (#513): that is the published
-    importer's evidence (contract 7.1, 7.12), which the reconcile stage is to read (#432,
-    not built); no run reads it today.
+    importer's evidence (contract 7.1, 7.12), which the reconcile stage reads (#432) into
+    its own artifact; inference never reads it.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).

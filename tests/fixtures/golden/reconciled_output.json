@@ -1,0 +1,1569 @@
+{
+  "auxiliary": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "PLINK files contain genotype data (genomic)",
+                "rule_id": "plink_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "PLINK files contain genotype data (genomic)",
+                "rule_id": "plink_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genotypes"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genotypes"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genotypes"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-4",
+        "entry_id": "g-auxiliary-1",
+        "file_format": ".pvar",
+        "file_id": "g-file-4",
+        "file_name": "cohort.pvar",
+        "file_size": 1000,
+        "md5sum": "44444444444444444444444444444444"
+      }
+    ]
+  },
+  "bam": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
+                "rule_id": "alignment_isoseq_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "transcriptomic.bulk"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "transcriptomic.bulk"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "transcriptomic.bulk"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
+                "rule_id": "alignment_isoseq_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "alignments"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "alignments"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "alignments"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment",
+                "rule_id": "unaligned_no_sq",
+                "source_type": "header_rule",
+                "status": "not_applicable",
+                "tier": 3
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-b",
+        "entry_id": "g-bam-1",
+        "file_format": ".bam",
+        "file_id": "g-file-b",
+        "file_name": "sample.flnc.bam",
+        "file_size": 12345678,
+        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  },
+  "bed": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
+                "rule_id": "bed_regions",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
+                "rule_id": "bed_regions",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "annotations"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "annotations"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "annotations"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming",
+                "rule_id": "bed_coordinate_reference",
+                "source_type": "contig_detection",
+                "tier": 4,
+                "value": "GRCh37"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "GRCh37"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "GRCh37"
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-7",
+        "entry_id": "g-bed-1",
+        "file_format": ".bed.gz",
+        "file_id": "g-file-7",
+        "file_name": "sample.regions.bed.gz",
+        "file_size": 45000,
+        "md5sum": "77777777777777777777777777777777"
+      }
+    ]
+  },
+  "fasta": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
+                "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "genomic"
+              },
+              {
+                "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
+                "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "sequence"
+              },
+              {
+                "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
+                "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "assembly"
+              },
+              {
+                "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
+                "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "assembly"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "assembly"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "assembly"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
+                "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              },
+              {
+                "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
+                "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-a",
+        "entry_id": "g-fasta-1",
+        "file_format": ".fasta",
+        "file_id": "g-file-a",
+        "file_name": "hapdup_contigs.hap1.fasta",
+        "file_size": 2974881710,
+        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "fastq": {
+    "classifications": [
+      {
+        "classifications": {
+          "archive_accession": null,
+          "archive_source": null,
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay",
+                "rule_id": "fastq_modality_unknown",
+                "source_type": "header_rule",
+                "status": "not_classified",
+                "tier": 3
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
+                "rule_id": "reads_base",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "reads"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "reads"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "reads"
+          },
+          "instrument_hint": null,
+          "instrument_model": null,
+          "is_paired_end": false,
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
+                "rule_id": "reads_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-d",
+        "entry_id": "g-fastq-1",
+        "file_format": ".fastq.gz",
+        "file_id": "g-file-d",
+        "file_name": "sample.fastq.gz",
+        "file_size": 8000,
+        "md5sum": "dddddddddddddddddddddddddddddddd"
+      }
+    ]
+  },
+  "gfa": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "pangenome"
+              },
+              {
+                "reason": "1 rGFA segment carries stable rank 0 (SR:i:0) on chr1 \u2014 graph defines a reference coordinate system",
+                "rule_id": "rgfa_stable_rank_reference",
+                "source_type": "contig_detection",
+                "tier": 4,
+                "value": "pangenome.reference"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "pangenome.reference"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "pangenome.reference"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Filename contains GRCh38/hg38 reference indicator",
+                "rule_id": "filename_ref_grch38",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "GRCh38"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "GRCh38"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "GRCh38"
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-e",
+        "entry_id": "g-gfa-1",
+        "file_format": ".gfa.gz",
+        "file_id": "g-file-e",
+        "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
+        "file_size": 848467761,
+        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    ]
+  },
+  "images": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "Histology"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "Histology"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "Histology"
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "imaging.histology"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "imaging.histology"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "imaging.histology"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "images"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "images"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "images"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-3",
+        "entry_id": "g-images-1",
+        "file_format": ".svs",
+        "file_id": "g-file-3",
+        "file_name": "slide.svs",
+        "file_size": 1000,
+        "md5sum": "33333333333333333333333333333333"
+      }
+    ]
+  },
+  "index": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Parent file sample.flnc.bam had no value for assay_type",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Inherited from parent file: sample.flnc.bam",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "value": "transcriptomic.bulk"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "transcriptomic.bulk"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "transcriptomic.bulk"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": ".bai identifies an index file",
+                "rule_id": "index_by_extension",
+                "source_type": "filename_rule",
+                "value": "index"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "index"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "index"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Parent file sample.flnc.bam had no value for platform",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Parent file sample.flnc.bam marks reference_assembly not applicable",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "status": "not_applicable"
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": {
+          "parent_file": "sample.flnc.bam",
+          "parent_kind": "alignment",
+          "parent_md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "relation": "index_of"
+        },
+        "drs_uri": "drs://golden/v2_g-object-1",
+        "entry_id": "g-bai-1",
+        "file_format": ".bai",
+        "file_id": "g-file-1",
+        "file_name": "sample.flnc.bam.bai",
+        "file_size": 9000,
+        "md5sum": "11111111111111111111111111111111"
+      },
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit assay_type from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit data_modality from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": ".bai identifies an index file",
+                "rule_id": "index_by_extension",
+                "source_type": "filename_rule",
+                "value": "index"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "index"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "index"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit platform from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit reference_assembly from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": {
+          "parent_file": null,
+          "parent_kind": "alignment",
+          "parent_md5sum": null,
+          "relation": "index_of"
+        },
+        "drs_uri": "drs://golden/v2_g-object-2",
+        "entry_id": "g-bai-2",
+        "file_format": ".bai",
+        "file_id": "g-file-2",
+        "file_name": "orphan.bai",
+        "file_size": 9001,
+        "md5sum": "22222222222222222222222222222222"
+      }
+    ]
+  },
+  "remaining": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-5",
+        "entry_id": "g-remaining-1",
+        "file_format": ".xyz",
+        "file_id": "g-file-5",
+        "file_name": "mystery.xyz",
+        "file_size": 1000,
+        "md5sum": "55555555555555555555555555555555"
+      }
+    ]
+  },
+  "tar": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
+                "rule_id": "tar_inner_format",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
+                "rule_id": "tar_inner_format",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "variants"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "variants"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "variants"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-f",
+        "entry_id": "g-tar-1",
+        "file_format": ".tar",
+        "file_id": "g-file-f",
+        "file_name": "chr5.136400001_136500001.tar",
+        "file_size": 45516800,
+        "md5sum": "ffffffffffffffffffffffffffffffff"
+      }
+    ]
+  },
+  "vcf": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "variants"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "variants"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "variants"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-c",
+        "entry_id": "g-vcf-1",
+        "file_format": ".vcf.gz",
+        "file_id": "g-file-c",
+        "file_name": "sample.vcf.gz",
+        "file_size": 5000,
+        "md5sum": "cccccccccccccccccccccccccccccccc"
+      },
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "variants"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "variants"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "variants"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Filename contains GRCh38/hg38 reference indicator",
+                "rule_id": "filename_ref_grch38",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "GRCh38"
+              },
+              {
+                "reason": "Filename contains CHM13/T2T reference indicator",
+                "rule_id": "filename_ref_chm13",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "CHM13"
+              },
+              {
+                "competing_values": [
+                  "CHM13",
+                  "GRCh38"
+                ],
+                "marker": "conflict",
+                "reason": "Conflicting reference_assembly: ['CHM13', 'GRCh38'] \u2014 ambiguous",
+                "status": "conflict"
+              }
+            ],
+            "inferred": {
+              "status": "conflict",
+              "value": null
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-8",
+        "entry_id": "g-vcf-2",
+        "file_format": ".vcf.gz",
+        "file_id": "g-file-8",
+        "file_name": "sample.chm13.hg38.vcf.gz",
+        "file_size": 5001,
+        "md5sum": "88888888888888888888888888888888"
+      }
+    ]
+  }
+}
