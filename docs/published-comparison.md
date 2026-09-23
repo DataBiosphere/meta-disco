@@ -1,6 +1,6 @@
 # Published values compared with inferred
 
-Repository: `anvil/anvil15` · run `20260921_011601` · 708,088 files
+Repository: `anvil/anvil15` · run `20260922_183130` · 708,088 files
 
 **11,231 files have a published value**, across 11,451 file/dimension rows. For every other file the
 repository publishes nothing for these dimensions.
@@ -11,16 +11,16 @@ of it, and no inferred value is altered by this report.
 
 | recommendation | meaning |
 | --- | --- |
-| `add` | nothing published; meta-disco inferred a value |
-| `keep` | a value is published; meta-disco inferred none |
-| `review` | both have a value |
-| `none` | neither has a value |
+| `add` | nothing published; meta-disco inferred a value or not_applicable |
+| `keep` | a value is published; meta-disco inferred nothing |
+| `review` | a value is published; meta-disco inferred a value, not_applicable, or a conflict |
+| `none` | nothing published; meta-disco inferred nothing, or a conflict |
 
 ## Totals
 
 | dimension | add | keep | review | none |
 | --- | --- | --- | --- | --- |
-| data_modality | 634,410 | 6,339 | 416 | 66,923 |
+| data_modality | 629,358 | 6,341 | 414 | 71,975 |
 | reference_assembly | 511,316 | 4,062 | 634 | 192,076 |
 
 ## By dataset
@@ -31,7 +31,7 @@ Datasets for which the repository publishes nothing are omitted.
 | --- | --- | --- | --- | --- | --- |
 | AnVIL_ENCORE_293T | reference_assembly | 448 | 1,320 | 224 | 0 |
 | AnVIL_ENCORE_RS293 | reference_assembly | 820 | 2,522 | 410 | 0 |
-| AnVIL_IGVF_Mouse_R1 | data_modality | 0 | 6,339 | 416 | 31 |
+| AnVIL_IGVF_Mouse_R1 | data_modality | 0 | 6,341 | 414 | 31 |
 | AnVIL_IGVF_Mouse_R1 | reference_assembly | 3,970 | 220 | 0 | 2,596 |
 
 ## Vocabulary coverage
@@ -51,8 +51,8 @@ that mapping is worth.
 
 ## Rows needing review
 
-Both sides have a value. Whether they agree cannot be decided until the value mappings exist
-(#414), so each pair is named rather than judged.
+Both sides have a value. Whether they agree is not decided here: this report does not read the
+value map (#414), so each pair is named rather than judged.
 
 None of the published values above is a term the schema knows, so every pair below is an
 unmapped string rather than a disagreement about meaning.
@@ -61,7 +61,6 @@ unmapped string rather than a disagreement about meaning.
 | --- | --- | --- | --- |
 | reference_assembly | `GRCh38 + Gencode40` | `GRCh38` | 634 |
 | data_modality | `single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 412 |
-| data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `genomic` | 2 |
 | data_modality | `single-nucleus ATAC-seq \|\| single-nucleus RNA sequencing assay` | `transcriptomic.single_cell` | 2 |
 
 ### The files behind the small pairs
@@ -71,7 +70,5 @@ file is the fact rather than the count.
 
 | file | dataset | dimension | inferred |
 | --- | --- | --- | --- |
-| IGVFFI1548FAFQ.bed.gz | AnVIL_IGVF_Mouse_R1 | data_modality | `genomic` |
-| IGVFFI9441WCCN.bed.gz | AnVIL_IGVF_Mouse_R1 | data_modality | `genomic` |
 | IGVFFI2080ESEF.h5ad | AnVIL_IGVF_Mouse_R1 | data_modality | `transcriptomic.single_cell` |
 | IGVFFI8515HKDP.h5ad | AnVIL_IGVF_Mouse_R1 | data_modality | `transcriptomic.single_cell` |
