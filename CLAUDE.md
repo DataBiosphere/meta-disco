@@ -60,12 +60,18 @@ make download DEPLOYMENT=dev INPUT_SOURCE=azul-verbatim
 # committing.
 make validate-metadata
 
-# Full pipeline over all file types, in parallel. Reads prod's input: a run is not
-# given a deployment, or its own output and cache roots, until #480.
+# Full pipeline over all file types, in parallel, then reconciled with the source
+# evidence into <run>/reconciled/ (#432). Reads prod's input: a run is not given a
+# deployment, or its own output and cache roots, until #480.
 make classify
 
 # One file type (network required for header fetches)
 make classify-bam        # or classify-vcf / classify-fastq / classify-fasta / classify-gfa
+
+# Reconcile a stored run again (RUN_DIR=, default the latest), then render its
+# reconcile_report.json as docs/reconcile-report.md + docs/reconcile-dashboard.html (#395)
+make reconcile
+make reconcile-report
 
 # What a run could not classify, and why: excluded (no checksum), contract
 # violations, unreadable content (issue #376)

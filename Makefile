@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff reconcile all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff reconcile reconcile-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -10,8 +10,8 @@ help:
 	@echo "  make type               Run pyright type checking on the root project"
 	@echo "  make format             Reformat root project with ruff formatter"
 	@echo "  make format-check       Check formatting without writing (CI)"
-	@echo "  make classify           Run full classification pipeline (all file types, parallel)"
-	@echo "  make classify-and-report Run classify + regenerate all reports"
+	@echo "  make classify           Run full classification pipeline (all file types, parallel), then reconcile"
+	@echo "  make classify-and-report Run classify (which reconciles) + regenerate all reports"
 	@echo "  make download           Derive a deployment's input (DEPLOYMENT=prod|dev, INPUT_SOURCE=azul-compact|azul-verbatim|tdr-direct)"
 	@echo "  make validate-metadata  Check a derived input's shape before classifying (DEPLOYMENT=prod|dev)"
 	@echo "  make probe-tdr          Probe a TDR snapshot in BigQuery (PROJECT=... SNAPSHOT=... [TABLE=...] [BILLING_PROJECT=...])"
@@ -37,7 +37,8 @@ help:
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
-	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable)"
+	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
@@ -104,9 +105,16 @@ format-check:
 # A classification run is not given a deployment yet (#480): it reads prod's input, so
 # its gate checks prod's input whatever DEPLOYMENT says, rather than depending on the
 # validate-metadata target, which follows DEPLOYMENT.
+#
+# The run is then reconciled with the source evidence (#432, #395), so every run carries
+# its reconciled artifact and `make all-reports` can follow `make classify`. Reconcile
+# reads the inference output and never writes it (contract 6.3). It is prod's latest run
+# and prod's input, as above, so it is called directly rather than through the reconcile
+# target, which follows RUN_DIR and DEPLOYMENT.
 classify:
 	uv run python scripts/validate_metadata.py --deployment prod
 	uv run python scripts/rerun_all_classifications.py
+	uv run python scripts/reconcile.py --deployment prod
 
 classify-hprc:
 	uv run python scripts/classify_hprc_files.py
@@ -271,7 +279,14 @@ corpus-diff:
 reconcile:
 	uv run python scripts/reconcile.py $(if $(RUN_DIR),--run $(RUN_DIR)) $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(ARGS)
 
-all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
+# Render a reconciled run's reconcile_report.json (#395) as docs/reconcile-report.md and
+# docs/reconcile-dashboard.html, reading nothing else of the run. RUN_DIR defaults to the
+# latest run, which must have been reconciled (`make reconcile`); PREVIOUS is the run to
+# compare with, by default the newest earlier run holding a reconcile report.
+reconcile-report:
+	uv run python scripts/generate_reconcile_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR)) $(if $(PREVIOUS),--previous $(PREVIOUS))
+
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py

@@ -14,29 +14,32 @@ from .producers import classification_files
 CLASSIFICATION_FILES = classification_files()
 
 
-def find_latest_run(output_dir: Path) -> Path:
-    """Find the most recent timestamped run directory.
+def list_runs(output_dir: Path) -> list[Path]:
+    """The timestamped run directories under ``output_dir``, oldest first.
 
-    Looks for subdirectories whose names start with a digit (e.g., 20260322_112336)
-    and returns the one that sorts last (most recent). By convention, full
-    `make classify` runs write digit-prefixed dirs while the `partials/` folder
-    (standalone/per-type test runs from `make classify-<type>`) starts with a
-    letter, so this digit-prefix filter skips it. The filter keys only on the
-    leading character, so any other digit-prefixed dir here — e.g. one an operator
-    passes via `--run-dir` — would also be considered.
+    A run directory is a subdirectory whose name starts with a digit (e.g.,
+    20260322_112336). By convention, full `make classify` runs write digit-prefixed
+    dirs while the `partials/` folder (standalone/per-type test runs from
+    `make classify-<type>`) starts with a letter, so this digit-prefix filter skips it.
+    The filter keys only on the leading character, so any other digit-prefixed dir
+    here — e.g. one an operator passes via `--run-dir` — is listed too.
 
-    Raises FileNotFoundError if the output directory or run directories don't exist.
+    Raises FileNotFoundError if the output directory does not exist.
     """
     if not output_dir.is_dir():
         raise FileNotFoundError(f"Output directory not found: {output_dir}. Run 'make classify' first.")
-    runs = sorted(
-        [d for d in output_dir.iterdir() if d.is_dir() and d.name[0].isdigit()],
-        key=lambda d: d.name,
-        reverse=True,
-    )
+    return sorted((d for d in output_dir.iterdir() if d.is_dir() and d.name[0].isdigit()), key=lambda d: d.name)
+
+
+def find_latest_run(output_dir: Path) -> Path:
+    """Find the most recent run directory: the one :func:`list_runs` lists last.
+
+    Raises FileNotFoundError if the output directory or run directories don't exist.
+    """
+    runs = list_runs(output_dir)
     if not runs:
         raise FileNotFoundError(f"No run directories found in {output_dir}. Run 'make classify' first.")
-    return runs[0]
+    return runs[-1]
 
 
 def _records_in(path: Path):

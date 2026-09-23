@@ -73,7 +73,7 @@ from .output_utils import (
 )
 from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS
-from .rule_engine import make_claim
+from .rule_engine import CONFLICT_MARKER, make_claim
 from .schema.classification_model import EvidenceFileEnvelope
 from .slot_map import load_slot_map, published_slot_map_resource
 from .source_evidence import (
@@ -134,6 +134,9 @@ PUBLISHED_UNREVIEWED = "published_unreviewed"
 CONFLICT_INFERENCE = "conflict_inference"
 CONFLICT_PUBLISHED = "conflict_published"
 CONFLICT_SOURCES = "conflict_sources"
+CONFLICT_CATEGORIES = (CONFLICT_INFERENCE, CONFLICT_SOURCES, CONFLICT_PUBLISHED)
+# The report's name for evidence that names no dataset, and so covers every one.
+EVERY_DATASET = "(every dataset)"
 
 # The order a delivered value is attributed in, with each source's name in the report:
 # what the repository publishes, then what its submitters wrote, then other catalogs.
@@ -141,6 +144,24 @@ SOURCE_PRECEDENCE = (
     (SOURCE_PUBLISHED_VALUE, "published"),
     (SOURCE_REPOSITORY_METADATA, "submitter"),
     (SOURCE_EXTERNAL_GROUND_TRUTH, "external"),
+)
+
+
+def fill_category(name: str, harmonized: bool) -> str:
+    """The slot category crediting a delivered value to the source named ``name`` in SOURCE_PRECEDENCE."""
+    return f"filled_by_{name}_harmonized" if harmonized else f"filled_by_{name}"
+
+
+# Every category ``Report._category`` returns, in the order a report reads them: each
+# source's fills by precedence, inference's, the three kinds of conflict, then the slot's
+# other outcomes. Exactly one per slot, so a dimension's counts sum to the files.
+SLOT_CATEGORIES = (
+    *(fill_category(name, harmonized) for _, name in SOURCE_PRECEDENCE for harmonized in (False, True)),
+    FILLED_BY_INFERENCE,
+    *CONFLICT_CATEGORIES,
+    PUBLISHED_UNREVIEWED,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
 )
 
 # Each repository's published slot map, whose columns are the slots its published source
@@ -560,9 +581,11 @@ class Report:
     files: Counter = field(default_factory=Counter)
     slots: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and slot, the files where the delivered value is ours and the published
-    # source, which speaks to that slot in that dataset, said nothing for the file: metadata
-    # added over what the repository publishes. Kept apart from `slots`, whose categories
-    # sum to the file count; this one overlaps them.
+    # source said nothing for the file — silent on a column it has, or without a column for
+    # the slot at all: metadata added over what the repository publishes. Counted only when
+    # the published source's evidence was read, since otherwise what it publishes is not
+    # known. Kept apart from `slots`, whose categories sum to the file count; this one
+    # overlaps them.
     added_over_published: dict = field(default_factory=lambda: defaultdict(Counter))
     # Per dataset and slot, the files where inference declared nothing and a source's
     # declaration now answers the slot (`classified` or `not_applicable`): the gaps the
@@ -570,6 +593,9 @@ class Report:
     # whether or not inference agreed.
     filled_over_inference: dict = field(default_factory=lambda: defaultdict(Counter))
     inputs: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
+    # Per dataset, slot and conflict category, the files per distinct set of competing
+    # values (contract 5.1): which input said what, as :meth:`_competing` reads it.
+    conflicts: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -606,7 +632,10 @@ class Report:
             said = record_slots.get(slot, NO_EVIDENCE)
             own = declaration(settled["inferred"])
             covering = self.covering(dataset, slot)
-            self.slots[dataset][slot][self._category(settled, said)] += 1
+            category = self._category(settled, said)
+            self.slots[dataset][slot][category] += 1
+            if category in CONFLICT_CATEGORIES:
+                self.conflicts[dataset][slot][category][self._competing(settled, said, own)] += 1
             if (
                 own is None
                 and settled["inferred"]["status"] != CONFLICT
@@ -615,11 +644,14 @@ class Report:
                 self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
+            published_silent = SOURCE_PUBLISHED_VALUE in self.coverage and SOURCE_PUBLISHED_VALUE not in covering
             for source_type in covering:
                 outcome = self._source_outcome(said, own, source_type)
                 per_input[source_type][outcome] += 1
-                if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT and settled["status"] == CLASSIFIED:
-                    self.added_over_published[dataset][slot] += 1
+                if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT:
+                    published_silent = True
+            if published_silent and settled["status"] == CLASSIFIED:
+                self.added_over_published[dataset][slot] += 1
 
     @staticmethod
     def _category(settled: dict, said: SlotEvidence) -> str:
@@ -638,9 +670,39 @@ class Report:
         for source_type, name in SOURCE_PRECEDENCE:
             declaring = [c for c in said.claims if c["source_type"] == source_type and declaration(c) is not None]
             if declaring:
-                verbatim = any(not is_harmonized(c) for c in declaring)
-                return f"filled_by_{name}" if verbatim else f"filled_by_{name}_harmonized"
+                return fill_category(name, harmonized=all(is_harmonized(c) for c in declaring))
         return FILLED_BY_INFERENCE
+
+    @staticmethod
+    def _competing(settled: dict, said: SlotEvidence, own: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Who said what on a conflicted slot, as sorted ``(input, values)`` pairs.
+
+        Three kinds of input are listed:
+
+        - inference: its value, or where its own rules conflicted, the ``competing_values``
+          of its conflict marker. An index file's conflict inherited from its parent carries
+          no marker (#413), so there inference is listed with no values;
+        - each source type: the values it declared;
+        - ``<source type> (unreviewed)``: the raw values of that source type's unmapped
+          entries — only the published source's are kept on a record (:func:`_translate`).
+
+        A source that declared nothing is left out. Values, not the rules behind them: a rule id per
+        value would multiply the distinct sets.
+        """
+        said_by: dict[str, set[str]] = defaultdict(set)
+        if settled["inferred"]["status"] == CONFLICT:
+            said_by[INFERENCE] = set()
+            for entry in settled["evidence"]:
+                if entry.get("marker") == CONFLICT_MARKER:
+                    said_by[INFERENCE].update(entry.get("competing_values") or ())
+        elif own is not None:
+            said_by[INFERENCE].add(own)
+        for claim in said.claims:
+            if claim.get("claim_state") == UNMAPPED:
+                said_by[f"{claim['source_type']} (unreviewed)"].add(str(claim.get("raw_value")))
+            elif (declared := declaration(claim)) is not None:
+                said_by[claim["source_type"]].add(declared)
+        return tuple(sorted((name, tuple(sorted(values))) for name, values in said_by.items()))
 
     @staticmethod
     def _inference_outcome(settled: dict, said: SlotEvidence, own: str | None) -> str:
@@ -678,10 +740,9 @@ class Report:
         def plain(d):
             return {k: plain(v) for k, v in sorted(d.items())} if isinstance(d, dict) else d
 
-        conflicts = (CONFLICT_INFERENCE, CONFLICT_PUBLISHED, CONFLICT_SOURCES)
         conflict_rate = {
             dataset: {
-                slot: round(sum(counts.get(k, 0) for k in conflicts) / self.files[dataset], 6)
+                slot: round(sum(counts.get(k, 0) for k in CONFLICT_CATEGORIES) / self.files[dataset], 6)
                 if self.files[dataset]
                 else 0.0
                 for slot, counts in sorted(per_slot.items())
@@ -695,9 +756,22 @@ class Report:
             "added_over_published": plain(self.added_over_published),
             "filled_over_inference": plain(self.filled_over_inference),
             "conflict_rate": conflict_rate,
+            "conflicts": {
+                dataset: {
+                    slot: {
+                        category: [
+                            {"inputs": {name: list(values) for name, values in competing}, "files": n}
+                            for competing, n in sorted(tally.items(), key=lambda item: (-item[1], item[0]))
+                        ]
+                        for category, tally in sorted(per_category.items())
+                    }
+                    for slot, per_category in sorted(per_slot.items())
+                }
+                for dataset, per_slot in sorted(self.conflicts.items())
+            },
             "coverage": {
                 source_type: {
-                    dataset or "(every dataset)": sorted(slot for d, slot in pairs if d == dataset)
+                    dataset or EVERY_DATASET: sorted(slot for d, slot in pairs if d == dataset)
                     for dataset in sorted({d for d, _ in pairs}, key=lambda d: d or "")
                 }
                 for source_type, pairs in sorted(self.coverage.items())

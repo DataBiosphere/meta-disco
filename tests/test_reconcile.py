@@ -27,15 +27,18 @@ from meta_disco.output_utils import RECONCILED_DIR, iter_reconciled_records
 from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.reconcile import (
     REPORT_FILE,
+    SLOT_CATEGORIES,
     USE_META_DISCO,
     USE_PUBLISHED,
     ReconcileError,
+    Report,
+    SlotEvidence,
     is_harmonized,
     reconcile_run,
     resolve_slot,
     use_for,
 )
-from meta_disco.rule_engine import make_claim
+from meta_disco.rule_engine import conflict_marker, make_claim
 from meta_disco.schema.classification_model import ClassificationRecord
 from meta_disco.schema_vocab import dimension_values
 from meta_disco.source_evidence import EvidenceEntry, EvidenceFileSource, EvidenceTarget, claim_source_for
@@ -606,6 +609,20 @@ def test_metadata_added_over_published_counts_our_values_where_the_published_sou
     assert result["added_over_published"] == {DATASET: {"reference_assembly": 1}}
 
 
+def test_a_value_where_the_published_source_has_no_column_is_added_over_published(tmp_path, run, evidence, table):
+    """The published map declares no platform column, so every platform value we deliver is added."""
+    write_run(run, [record(1, platform="PACBIO", reference_assembly="GRCh38")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
+    result = go(run, tmp_path, evidence, table)
+    assert result["added_over_published"] == {DATASET: {"platform": 1}}
+
+
+def test_nothing_is_added_over_published_where_its_evidence_was_not_read(tmp_path, run, table):
+    """Without the published source's evidence what it publishes is not known, so nothing is counted."""
+    write_run(run, [record(1, platform="PACBIO")])
+    assert go(run, tmp_path, None, table)["added_over_published"] == {}
+
+
 def test_an_interrupted_swap_is_restored_not_lost(tmp_path, run, table):
     write_run(run, [record(1)])
     go(run, tmp_path, None, table)
@@ -769,3 +786,42 @@ def test_every_importer_source_type_has_a_place_in_the_precedence():
     from meta_disco.reconcile import SOURCE_PRECEDENCE
 
     assert {t for t, _ in SOURCE_PRECEDENCE} == set(IMPORTER_SOURCE_TYPES)
+
+
+def test_the_report_lists_each_conflict_by_its_competing_values(tmp_path, run, evidence, table):
+    """Contract 5.1: every conflict listable with its competing values, counted per distinct set."""
+    write_run(
+        run,
+        [
+            record(1, reference_assembly="GRCh38"),
+            record(2, reference_assembly="GRCh38"),
+            record(3, reference_assembly="GRCh38"),
+        ],
+    )
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13"), ("reference_assembly", drs(2), "CHM13")])
+    published(evidence, [("reference_assembly", drs(3), '["GRCm39"]')])
+    result = go(run, tmp_path, evidence, table)
+    assert result["conflicts"][DATASET]["reference_assembly"] == {
+        "conflict_published": [
+            {"inputs": {"inference": ["GRCh38"], f"{SOURCE_PUBLISHED_VALUE} (unreviewed)": ['["GRCm39"]']}, "files": 1}
+        ],
+        "conflict_sources": [{"inputs": {"inference": ["GRCh38"], SOURCE_REPOSITORY_METADATA: ["CHM13"]}, "files": 2}],
+    }
+    # Every category a slot settles in is one SLOT_CATEGORIES declares, which the report renders by.
+    assert {c for per_slot in result["slots"].values() for counts in per_slot.values() for c in counts} <= set(
+        SLOT_CATEGORIES
+    )
+
+
+def test_an_inference_conflict_lists_its_competing_values_or_none_when_inherited():
+    marked = {
+        "inferred": {"value": None, "status": CONFLICT},
+        "evidence": [conflict_marker("reference_assembly", ["CHM13", "GRCh38"])],
+    }
+    assert Report._competing(marked, SlotEvidence(claims=[claim("GRCh38")]), None) == (
+        ("inference", ("CHM13", "GRCh38")),
+        (SOURCE_REPOSITORY_METADATA, ("GRCh38",)),
+    )
+    # An index file's conflict inherited from its parent carries no marker, so no values.
+    inherited = {"inferred": {"value": None, "status": CONFLICT}, "evidence": [{"status": CONFLICT}]}
+    assert Report._competing(inherited, SlotEvidence(), None) == (("inference", ()),)

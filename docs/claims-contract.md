@@ -272,8 +272,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 5.6 **Review precedes a deploy.** The conflict list (5.1) and the unmatched-value list (5.2) are reviewed
     before a reconciled artifact is deployed. Review answers a conflict with a curator rule (4.7) or leaves
     it standing; either is a recorded outcome. Answering costs a reconcile (6.4), never a corpus run.
-    Until the report that lists them (#395) and curator rules (#397) exist, this is a stated rule and not
-    a gate; the gate belongs with `make check-catalog` (#405).
+    The conflicts are listed by `make reconcile-report` (#395), by their competing values but not yet the
+    rule behind each. Until curator rules (#397) exist, this is a stated rule and not a gate; the gate
+    belongs with `make check-catalog` (#405).
 
 ## 6. The pipeline
 
@@ -314,7 +315,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     — the eval fixtures and the corpus-drift guard (#381), which would read a mapping-rule edit or a catalog
     refresh as inference drift if they read the reconciled artifact.
     Everything else reads the **reconciled** output, because that is the answer: the coverage, validation and
-    consistency reports, the md5 cross-registration check (#395), and every downstream consumer.
+    consistency reports, the md5 cross-registration check (#520), and every downstream consumer.
     A stage of inference reading an earlier stage's file — Phase 2 over Phase 1 — is inference consuming its
     own intermediate, not a reader of the artifact.
     `corpus_diff` must be told which it is comparing: two runs' answers, or inference's behaviour across runs.
@@ -429,6 +430,8 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **6.9 holds for `corpus_diff` only.** It is told which artifact it compares; the coverage, validation and consistency reports still read the inference artifact.
 - **6.11 holds for the reconciled artifact only.** It is NDJSON under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
+- **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
+  per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.
 
