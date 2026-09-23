@@ -84,7 +84,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared directly by some filename and extension rules (`alignment_star_aligner`, `salmon_quant`, `idat_methylation`); where none did, inferred post hoc from a transcriptomic modality (`rnaseq_modality`). Nothing infers `WGS` or `WES` (#430).
+The top-level assay/method class. Declared only by rules that see evidence of the assay (`alignment_star_aligner`, `program_star`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
 
 ```
 assay_type
@@ -894,7 +894,7 @@ All rules are defined in `src/meta_disco/rules/unified_rules.yaml`. The counts b
 by the rule's `scope` — the kind of evidence it reads — as the loader reports them, so
 they describe the file as it is rather than as it was last summarised. #430 cut the set
 from 129 rules to 59, deleting every rule that fired on no file in either
-catalog. Every rule left fires on something in the data, with two deliberate exceptions kept for
+catalog; #88 deleted `intervals_fallback`, leaving 58. Every rule left fires on something in the data, with two deliberate exceptions kept for
 what they guard rather than what they match: `index_file`, the engine's backstop for an index the
 index producer misses, and `image_svs_histology`, which `EXTENSION_MAP` binds by an invariant that
 every image extension has a rule.
@@ -902,14 +902,14 @@ every image extension has a rule.
 | Scope                        | Rule Count |
 | ---------------------------- | ---------- |
 | extension (tier 1–2)         |         14 |
-| filename pattern (tier 2)    |         20 |
+| filename pattern (tier 2)    |         19 |
 | BAM/CRAM header (tier 3)     |          9 |
 | VCF header (tier 3)          |          8 |
 | FASTQ read name (tier 3)     |          8 |
-| **Total**                    | **59** |
+| **Total**                    | **58** |
 
-Beside the rules: 1 post-hoc assay rule (`rnaseq_modality`) and
-6 Python validators the header rules call into. No rule or assay rule reads file size.
+Beside the rules: 6 Python validators the header rules call into. No rule reads file size, and none
+reads another rule's answer (#88).
 
 ---
 
