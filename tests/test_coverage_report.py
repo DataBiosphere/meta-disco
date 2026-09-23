@@ -4,6 +4,7 @@ conflict resolved to ``not_classified`` and the report had no way to tell the tw
 """
 
 import json
+from collections import Counter
 
 import generate_coverage_report as report
 import pytest
@@ -79,7 +80,7 @@ def test_section_lists_the_conflict_row_and_table_only_where_there_is_one(record
 def test_dashboard_payload_carries_the_conflict_count_and_breakdown(records, tmp_path):
     tallies = [(field, label, notes, report.Tally(records, field)) for field, label, notes in report.DIMENSIONS]
     out = tmp_path / "dash.html"
-    report.generate_html_dashboard(tallies, len(records), "run", {}, out)
+    report.generate_html_dashboard(tallies, len(records), "run", Counter(), out)
     # The template's `const DATA = COVERAGE_DATA_PLACEHOLDER;` line becomes the payload.
     line = next(ln for ln in out.read_text().splitlines() if "const DATA = " in ln)
     payload = json.loads(line.split("const DATA = ", 1)[1].rstrip(";").replace(r"<\/", "</"))
