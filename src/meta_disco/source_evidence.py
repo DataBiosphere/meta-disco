@@ -32,8 +32,8 @@ is what reads them, through :func:`iter_evidence`, into its own artifact.
 
 **Currency is decided only as far as offline allows.** The sources share no version to
 compare, and AnVIL deletes a superseded catalog rather than keeping it to be matched
-against. Reconcile refuses a file whose ``target.version`` is not the catalog the
-input envelope names, where it names one; the importer compares its file's
+against. Reconcile reads only the files whose ``target.version`` is the catalog the
+input envelope names, where it names one, and leaves another catalog's unread; the importer compares its file's
 ``target.version`` against the configured catalog when deciding to re-fetch. What
 neither can check is that a stored run was classified from that input: that needs the
 run's output to record the catalog it enhances, which is #404 and is not built.

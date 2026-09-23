@@ -97,30 +97,62 @@ classes:
       - inferred
 
   InferredConclusion:
+    abstract: true
     description: >-
       What inference concluded for a slot before reconciliation (#432): its tier-resolved
       status and value, as the inference record states them. On a reconciled record so
       it reads alone (contract 6.10) — inference's evidence cannot rebuild it without
-      re-running tier resolution.
-    attributes:
+      re-running tier resolution. Subclasses narrow `value` to the dimension's enum, as
+      the Classification subclasses do.
+    slots:
+      - value
+      - status
+
+  DataModalityInferred:
+    is_a: InferredConclusion
+    slot_usage:
       value:
-        description: Inference's value; null unless its status is 'classified'.
-        required: false
-      status:
-        range: classification_status_enum
-        required: true
+        range: data_modality_enum
+
+  DataTypeInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: data_type_enum
+
+  ReferenceAssemblyInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: reference_assembly_enum
+
+  AssayTypeInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: assay_type_enum
+
+  PlatformInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: platform_enum
 
   DataModalityClassification:
     is_a: Classification
     slot_usage:
       value:
         range: data_modality_enum
+      inferred:
+        range: DataModalityInferred
 
   DataTypeClassification:
     is_a: Classification
     slot_usage:
       value:
         range: data_type_enum
+      inferred:
+        range: DataTypeInferred
 
   ReferenceAssemblyClassification:
     is_a: Classification
@@ -129,18 +161,24 @@ classes:
     slot_usage:
       value:
         range: reference_assembly_enum
+      inferred:
+        range: ReferenceAssemblyInferred
 
   AssayTypeClassification:
     is_a: Classification
     slot_usage:
       value:
         range: assay_type_enum
+      inferred:
+        range: AssayTypeInferred
 
   PlatformClassification:
     is_a: Classification
     slot_usage:
       value:
         range: platform_enum
+      inferred:
+        range: PlatformInferred
 
   ReferenceBuild:
     description: >-

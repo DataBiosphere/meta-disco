@@ -276,6 +276,7 @@ def test_ac7_a_seeded_row_makes_no_claim(tmp_path, run, evidence, table):
     write_evidence(evidence, [("platform", drs(1), "MYSTERY")])
     result = go(run, tmp_path, evidence, table)
     platform = slot(run, 1, "platform")
+    # No claim, and a submitter value moves nothing, so the record carries nothing of it.
     assert platform["status"] == NOT_CLASSIFIED and not [e for e in platform["evidence"] if "source" in e]
     assert result["inputs"][DATASET]["platform"][SOURCE_REPOSITORY_METADATA] == {"unreviewed": 1}
 
@@ -462,6 +463,10 @@ def test_ac25_an_unreviewed_published_value_beside_another_input_is_a_conflict(t
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"], ref["use"]) == (CONFLICT, None, USE_PUBLISHED)
     assert result["inputs"][DATASET]["reference_assembly"][SOURCE_PUBLISHED_VALUE] == {"unreviewed": 1}
+    # The record shows why on its own (6.10): what the published source said, declaring nothing.
+    (seen,) = [e for e in ref["evidence"] if "source" in e]
+    assert seen["claim_state"] == "unmapped" and seen["raw_value"] == '["GRCm39"]'
+    assert seen["source_type"] == SOURCE_PUBLISHED_VALUE and "value" not in seen and "rule_id" not in seen
 
 
 def test_ac26_an_unreviewed_published_value_alone_is_missing_work_not_a_conflict(tmp_path, run, evidence, table):
@@ -522,3 +527,12 @@ def test_the_join_runs_within_the_envelopes_target_dataset(tmp_path, run, eviden
     assert (result["evidence"][0]["matched"], result["evidence"][0]["ambiguous"]) == (1, 0)
     assert slot(run, 1, "platform")["value"] == "PACBIO"
     assert slot(run, 2, "platform")["status"] == NOT_CLASSIFIED
+
+
+def test_an_inferred_value_outside_its_dimensions_vocabulary_is_refused(tmp_path, run, table):
+    write_run(run, [record(1, data_modality="genomic")])
+    go(run, tmp_path, None, table)
+    (row,) = iter_reconciled_records(run)
+    row["classifications"]["data_modality"]["inferred"]["value"] = "PACBIO"
+    with pytest.raises(ValueError, match="PACBIO"):
+        ClassificationRecord(**row)

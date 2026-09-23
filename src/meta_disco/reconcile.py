@@ -20,9 +20,10 @@ record key (``pipeline.SOURCE_RECORD_KEYS``), never a hard-coded field.
 
 **Which evidence applies** is read from the input envelope the run was classified from:
 a file applies when its ``target.system`` is the envelope's ``repository``. Where the
-envelope names a ``catalog``, the file's ``target.version`` must equal it or reconcile
-refuses; a repository with no catalog (HPRC, which will never have one) is not checked
-against one. That the stored run was actually made from this input is not provable
+envelope names a ``catalog``, only files whose ``target.version`` equals it are read; a
+file for another catalog is an older generation's history and is left unread. A
+repository with no catalog (HPRC, which will never have one) reads every file about its
+own files. That the stored run was actually made from this input is not provable
 here — recording it on the run is #404.
 
 **Translation**: a matched line's raw value selects a row of the translation table
@@ -57,6 +58,7 @@ from .models import (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_PUBLISHED_VALUE,
+    UNMAPPED,
 )
 from .output_utils import (
     RECONCILED_DIR,
@@ -68,6 +70,7 @@ from .output_utils import (
 )
 from .pipeline import PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS
+from .rule_engine import make_claim
 from .schema.classification_model import EvidenceFileEnvelope
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -411,10 +414,30 @@ def _translate(record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: 
 
     The row is selected here and handed to ``claims_from``, because an authored row
     declaring nothing (``declares: {}``) yields no claim and is still reviewed.
+
+    A line no authored row reads makes no claim (contract 3.7). From the published source
+    it still moves the slot (to ``conflict`` or ``not_classified``), so what it said is
+    kept in the slot's evidence as an ``unmapped`` entry — its source, raw value and join,
+    and no value, status or rule — and the record shows why on its own (6.10). It declares
+    nothing, so resolution does not read it. Another source's unreviewed value moves
+    nothing, is counted in the report, and is not written to the record.
     """
     row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
     if row is None or not row.authored:
-        record_slots[entry.field].unreviewed.add(ev.source_type)
+        said = record_slots[entry.field]
+        said.unreviewed.add(ev.source_type)
+        if ev.source_type != SOURCE_PUBLISHED_VALUE:
+            return
+        seen = make_claim(
+            source_type=ev.source_type,
+            state=UNMAPPED,
+            source=entry.source,
+            raw_value=entry.raw_value,
+            join_key=ev.target_key,
+            match_exact=True,
+        )
+        if seen not in said.claims:
+            said.claims.append(seen)
         return
     if entry.field not in row.declares:
         record_slots[entry.field].no_claim.add(ev.source_type)

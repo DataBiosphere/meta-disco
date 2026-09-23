@@ -137,6 +137,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     queue. Selection reads the evidence's `(slot, raw_value)` *and* its provenance, so one pair can be
     ruled on under one source or dataset and queued under another. A seeded row is a key match and not a
     ruling (3.11), so evidence selecting one is queued as surely as evidence with no row at all.
+    From the published source, such evidence still moves the slot (7.13), so the reconciled record keeps
+    what it said, as an entry in `claim_state: unmapped` carrying its source, raw value and join and
+    declaring nothing (#432): a slot it made `conflict` or `not_classified` must show why on the record
+    (6.10). It is a record of what was seen, not a claim, and resolution does not read it.
 
 3.8 "Rule" means whatever makes a claim and is cited by it. An authored row in a translation table that
     declares something is one (3.9). A seeded row is not, nor is an authored row declaring nothing:

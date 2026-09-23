@@ -1082,6 +1082,19 @@
                 "rule_id": "no_matching_parent_in_dataset",
                 "source_type": "derivation_inheritance",
                 "status": "not_classified"
+              },
+              {
+                "claim_state": "unmapped",
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "[\"GRCm39\"]",
+                "source": {
+                  "column": "reference_assembly",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "anvil_file"
+                },
+                "source_type": "published_value"
               }
             ],
             "inferred": {
@@ -1543,6 +1556,19 @@
                 "marker": "conflict",
                 "reason": "Conflicting reference_assembly: ['CHM13', 'GRCh38'] \u2014 ambiguous",
                 "status": "conflict"
+              },
+              {
+                "claim_state": "unmapped",
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "[\"GRCm39\"]",
+                "source": {
+                  "column": "reference_assembly",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "anvil_file"
+                },
+                "source_type": "published_value"
               }
             ],
             "inferred": {

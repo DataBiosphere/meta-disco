@@ -199,6 +199,18 @@ def test_a_populated_derivation_edge_validates(validator):
     assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
 
 
+def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
+    """A reconciled slot's `inferred` is narrowed per dimension, as its `value` is (#432)."""
+    _, record = next(_records_in(_RECONCILED))
+    classifications = {**record["classifications"]}
+    classifications["data_modality"] = {
+        **classifications["data_modality"],
+        "inferred": {"value": "PACBIO", "status": "classified"},
+    }
+    report = validator.validate({**record, "classifications": classifications}, target_class="ClassificationRecord")
+    assert report.results, "an inferred data_modality of PACBIO passed the schema"
+
+
 def test_a_derivation_edge_without_a_verb_is_refused(validator):
     """`relation` is required, which is why there is no half-edge to emit: the producer
     must name the verb even where it cannot name the parent."""

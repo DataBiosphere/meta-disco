@@ -616,11 +616,26 @@ def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
         join_key="drs_uri",
         match_exact=True,
     )
+    published = ClaimSource(name="anvil", dataset="AnVIL_GOLDEN", table="anvil_file", column="reference_assembly")
+
+    def unreviewed() -> SlotEvidence:
+        # What reconcile keeps of a published value no authored row reads: an `unmapped`
+        # entry declaring nothing, beside the mark that moves the slot.
+        seen = make_claim(
+            source_type=SOURCE_PUBLISHED_VALUE,
+            state="unmapped",
+            source=published,
+            raw_value='["GRCm39"]',
+            join_key="drs_uri",
+            match_exact=True,
+        )
+        return SlotEvidence(claims=[seen], unreviewed={SOURCE_PUBLISHED_VALUE})
+
     reconciled: dict = {}
     for producer, payload in sorted({**pipeline_output, **standalone}.items()):
         rows = []
         for i, row in enumerate(payload["classifications"]):
-            said = SlotEvidence(claims=[platform]) if i % 2 == 0 else SlotEvidence(unreviewed={SOURCE_PUBLISHED_VALUE})
+            said = SlotEvidence(claims=[platform]) if i % 2 == 0 else unreviewed()
             slot = "platform" if i % 2 == 0 else "reference_assembly"
             rows.append(reconcile_record(row, {slot: said}))
         reconciled[producer] = {"classifications": rows}
