@@ -496,19 +496,37 @@ def test_the_report_scores_inference_and_counts_filled_and_agreed_slots(tmp_path
     write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT"), ("platform", drs(2), "PACBIO_SMRT")])
     result = go(run, tmp_path, evidence, table)
     counts = result["slots"][DATASET]["platform"]
-    # The submitter speaks to platform here, so inference's ILLUMINA on file 3 is inference filling a slot a
-    # source covers; file 2's PACBIO is the submitter filling what inference left.
+    # File 2's PACBIO is the submitter filling what inference left; file 3's ILLUMINA is inference alone.
     assert counts == {"agreed": 1, "filled_by_repository_metadata": 1, "filled_by_inference": 1}
     assert result["inputs"][DATASET]["platform"]["inference"] == {"agreed": 1, "added": 1, "silent": 1}
     assert result["conflict_rate"][DATASET]["platform"] == 0.0
 
 
-def test_a_slot_no_source_speaks_to_is_inference_only(tmp_path, run, evidence, table):
+def test_a_source_is_scored_only_on_slots_it_speaks_to(tmp_path, run, evidence, table):
     write_run(run, [record(1, platform="PACBIO", data_type="alignments")])
     write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT")])
     result = go(run, tmp_path, evidence, table)
-    assert result["slots"][DATASET]["data_type"] == {"inference_only": 1}
+    assert result["slots"][DATASET]["data_type"] == {"filled_by_inference": 1}
     assert SOURCE_REPOSITORY_METADATA not in result["inputs"][DATASET]["data_type"]
+
+
+def test_the_published_source_speaks_to_its_columns_in_every_dataset_it_covers(tmp_path, run, evidence, table):
+    """A published column empty for a whole dataset leaves no line there, and is still that source's silence."""
+    write_run(run, [record(1, reference_assembly="GRCh38", data_modality="genomic")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
+    other = published_envelope(dataset="AnVIL_OTHER", table=PUBLISHED_TABLE)
+    write_generation(
+        evidence,
+        "AnVIL_OTHER",
+        PUBLISHED_TABLE,
+        lines_of(other.source, [("data_modality", drs(9), '["genomic"]')], "data_modality"),
+        envelope=other,
+        source="anvil_published",
+    )
+    write_run(run, [record(1, reference_assembly="GRCh38", data_modality="genomic"), record(9, dataset="AnVIL_OTHER")])
+    result = go(run, tmp_path, evidence, table)
+    assert result["inputs"][DATASET]["data_modality"][SOURCE_PUBLISHED_VALUE] == {"silent": 1}
+    assert result["added_over_published"][DATASET] == {"data_modality": 1}
 
 
 def test_an_input_is_scored_disagreed_only_when_another_input_declared_differently(tmp_path, run, evidence, table):

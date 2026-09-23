@@ -102,11 +102,10 @@ INFERENCE = "inference"
 #
 # Per slot, exactly one of: agreed (inference and a source declared the same value),
 # filled_by_<source type> (inference was silent and that source filled the slot; several
-# joined by `+`), filled_by_inference (inference alone gave the value although a source
-# speaks to this slot in this dataset), inference_only (no source speaks to this slot
-# in this dataset), missing_work (`not_classified` because the published source spoke
-# with a value no authored row reads — work to do, not a challenge), or the slot's status
-# (`conflict`, `not_applicable`, `not_classified`).
+# joined by `+`), filled_by_inference (inference gave the value and no source declared
+# one), missing_work (`not_classified` because the published source spoke with a value no
+# authored row reads — work to do, not a challenge), or the slot's status (`conflict`,
+# `not_applicable`, `not_classified`).
 MATCH = "match"
 HARMONIZED = "harmonized"
 UNREVIEWED = "unreviewed"
@@ -117,7 +116,6 @@ ADDED = "added"
 DISAGREED = "disagreed"
 FILLED_BY = "filled_by_"
 FILLED_BY_INFERENCE = "filled_by_inference"
-INFERENCE_ONLY = "inference_only"
 MISSING_WORK = "missing_work"
 
 # How many unmatched and ambiguous key values the report names per evidence file.
@@ -530,11 +528,25 @@ class Report:
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
 
     def covering(self, dataset: str, slot: str) -> tuple[str, ...]:
+        """The source types that speak to ``slot`` in ``dataset``.
+
+        Read off the evidence lines, except for the published source: it is one table with
+        the same columns in every dataset (contract 7.12), and its importer skips an empty
+        cell, so a column that is empty for a whole dataset leaves no line there. It speaks
+        to every slot it has a line for anywhere, in every dataset it has a file for.
+        """
         at = (dataset, slot)
         if at not in self._covering:
-            self._covering[at] = tuple(
-                sorted(t for t, pairs in self.coverage.items() if at in pairs or (None, slot) in pairs)
-            )
+            covering = []
+            for source_type, pairs in self.coverage.items():
+                if source_type == SOURCE_PUBLISHED_VALUE:
+                    datasets = {d for d, _ in pairs}
+                    speaks = slot in {s for _, s in pairs} and (dataset in datasets or None in datasets)
+                else:
+                    speaks = at in pairs or (None, slot) in pairs
+                if speaks:
+                    covering.append(source_type)
+            self._covering[at] = tuple(sorted(covering))
         return self._covering[at]
 
     def add(self, reconciled: dict, record_slots: dict[str, SlotEvidence]) -> None:
@@ -545,7 +557,7 @@ class Report:
             said = record_slots.get(slot, NO_EVIDENCE)
             own = declaration(settled["inferred"])
             covering = self.covering(dataset, slot)
-            self.slots[dataset][slot][self._category(settled, said, own, covering)] += 1
+            self.slots[dataset][slot][self._category(settled, said, own)] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
             for source_type in covering:
@@ -555,7 +567,7 @@ class Report:
                     self.added_over_published[dataset][slot] += 1
 
     @staticmethod
-    def _category(settled: dict, said: SlotEvidence, own: str | None, covering: tuple[str, ...]) -> str:
+    def _category(settled: dict, said: SlotEvidence, own: str | None) -> str:
         status = settled["status"]
         if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
             return MISSING_WORK
@@ -564,9 +576,7 @@ class Report:
         fillers = sorted({c["source_type"] for c in said.claims if declaration(c) is not None})
         if own is None:
             return FILLED_BY + "+".join(fillers)
-        if fillers:
-            return AGREED
-        return FILLED_BY_INFERENCE if covering else INFERENCE_ONLY
+        return AGREED if fillers else FILLED_BY_INFERENCE
 
     @staticmethod
     def _inference_outcome(settled: dict, said: SlotEvidence, own: str | None) -> str:
