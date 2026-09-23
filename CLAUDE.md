@@ -42,13 +42,26 @@ uv run pytest tests/
 ### Classification (run from root directory)
 
 ```bash
-# Validate a freshly downloaded metadata file against the input contract (issue
-# #161). Non-zero exit + grouped summary on any shape violation. `make classify`
-# runs it as a prerequisite (#376), so a long run cannot start on a corpus that
-# violates the contract; run it directly to check a download before committing.
+# Derive a deployment's input (#500). DEPLOYMENT names the deployment, `prod` (the
+# default) or `dev`, each declared in src/meta_disco/deployments.py with its Azul
+# service, catalog, TDR snapshots and its own root, data/anvil/<deployment>/.
+# INPUT_SOURCE names how the records are derived: `azul-compact` (the default,
+# today's behaviour), `azul-verbatim` (the verbatim manifest only), or `tdr-direct`
+# (the snapshots read in place from BigQuery, nothing downloaded; it syncs the `tdr`
+# extra in and takes its identity from the environment, see Environment below). An
+# unknown value of either fails before any request, query or write.
+make download
+make download DEPLOYMENT=dev INPUT_SOURCE=azul-verbatim
+
+# Validate a derived input against the input contract (issue #161), the deployment's
+# own by DEPLOYMENT. Non-zero exit + grouped summary on any shape violation. `make
+# classify` runs it on prod's input first (#376), so a long run cannot start on a
+# corpus that violates the contract; run it directly to check a download before
+# committing.
 make validate-metadata
 
-# Full pipeline over all file types, in parallel
+# Full pipeline over all file types, in parallel. Reads prod's input: a run is not
+# given a deployment, or its own output and cache roots, until #480.
 make classify
 
 # One file type (network required for header fetches)
@@ -212,9 +225,17 @@ evidence}` entry — plus the controlled vocabulary:
     (`record_from_compact_manifest_row`) stands beside it unchanged, and every envelope
     `metadata_block` writes names how its records were derived in `input_source`
     (`azul_manifest.INPUT_SOURCES`), stated by the writer and never inferred — the HPRC
-    builder writes its own envelope and prod's file on disk predates the field; nothing
-    reads it until a run can choose its reader (#500). Neither reader is wired to
-    `make download` or `make classify` — also #500.
+    builder writes its own envelope and prod's file on disk predates the field. The
+    downloader chooses the reader from `INPUT_SOURCE` and writes the kind it ran with
+    (#500); no classification run reads the field.
+  - **A deployment is declared once**, in `deployments.DEPLOYMENTS` (#500): its Azul
+    service, catalog, input root (`data/anvil/<deployment>/`) and each dataset's TDR
+    snapshot. Its datasets are exactly the declared ones — the downloader skips a
+    catalog dataset it does not declare — and the declaration is checked, not
+    consulted: a compact manifest naming another snapshot than the declared one refuses
+    the download. The envelope names the `deployment`, its `catalog` for every kind of
+    input, and per dataset `tdr_project` and `snapshot`. Only the input is the
+    deployment's: output and the header cache stay prod's paths until #480/#479.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all eleven outputs; one wired into a producer does not.

@@ -11,8 +11,10 @@ import pytest
 import requests
 
 from meta_disco import azul_manifest as am
+from meta_disco.deployments import Deployment
 from meta_disco.metadata_schema import validate_record
 from meta_disco.pipeline import load_records
+from meta_disco.tdr import Snapshot
 from tests.metadata_fixtures import valid_record
 
 
@@ -22,6 +24,21 @@ def no_sleep(_seconds: float) -> None:
 
 SOURCE_ID = "5f579a9b-bc5d-4628-85c1-3b38cb1198ea"
 SOURCE_SPEC = "tdr:bigquery:gcp:datarepo-ce3811eb:ANVIL_TEST_20260708_ANV6_202607081759"
+SNAPSHOT = Snapshot.from_source_spec(SOURCE_SPEC)
+# A test deployment's Azul service; the fakes answer only its two endpoints.
+SERVICE = "https://azul.test"
+
+
+def deployment(root: Path, titles=("ds",), catalog: str = "anvil15", snapshot: Snapshot = SNAPSHOT) -> Deployment:
+    """A deployment rooted at ``root`` declaring ``titles``, each from ``snapshot`` — the
+    one every compact fixture row names, so the declaration agrees with the manifests."""
+    return Deployment("test", SERVICE, catalog, root, dict.fromkeys(titles, snapshot))
+
+
+def entry(file_count: int, source_id: str | None = SOURCE_ID, snapshot: Snapshot = SNAPSHOT) -> dict:
+    """The envelope's `datasets` entry the downloader writes for a fixture dataset."""
+    return am.dataset_entry(file_count, snapshot, source_id)
+
 
 COMPACT_HEADER = "\t".join(
     [
@@ -114,7 +131,9 @@ class FakeSession:
         payloads: dict[tuple[str, str], bytes],
         polls: int = 2,
         rate_limits: int = 0,
+        service: str = SERVICE,
     ):
+        self.service = service  # the Azul service whose two endpoints this fake answers
         self.datasets = datasets  # None: the catalog is gone, discovery 404s
         self.payloads = payloads
         self.polls = polls
@@ -125,7 +144,7 @@ class FakeSession:
     def get(self, url, **kwargs):
         params = kwargs.get("params")
         self.calls.append(("GET", url, params))
-        if url == am.FILES_URL:
+        if url == am.files_url(self.service):
             if self.datasets is None:
                 return FakeResponse(json_body={"message": "no such catalog"}, status_code=404)
             terms = [{"term": t, "count": c} for t, c in self.datasets.items()]
@@ -143,7 +162,7 @@ class FakeSession:
     def put(self, url, **kwargs):
         params = kwargs.get("params")
         self.calls.append(("PUT", url, params))
-        assert url == am.MANIFEST_URL and params is not None
+        assert url == am.manifest_url(self.service) and params is not None
         if self.rate_limits > 0:
             self.rate_limits -= 1
             return FakeResponse(json_body={"message": "slow down"}, status_code=429, headers={"Retry-After": "7"})
@@ -170,15 +189,20 @@ def two_dataset_session() -> FakeSession:
     return FakeSession({"a": 3, "b": 2}, payloads)
 
 
-def run(catalog: str, root: Path, session: FakeSession) -> int:
-    return dl.download(catalog, root, None, force=False, session=session, sleep=no_sleep)
+def run(
+    root: Path, session: FakeSession, catalog: str = "anvil15", input_source: str = am.INPUT_SOURCE_AZUL_COMPACT
+) -> int:
+    """One download of a deployment declaring every dataset the session serves."""
+    titles = sorted({title for title, _ in session.payloads}) or ["ds"]
+    dep = deployment(root, titles, catalog)
+    return dl.download(dep, input_source, None, force=False, session=session, sleep=no_sleep)
 
 
 class TestDiscovery:
     def test_lists_the_accessible_datasets_with_counts_largest_first(self):
         """Scenario 1."""
         session = FakeSession({"small": 2, "big": 5}, {})
-        assert am.discover_datasets("anvil15", session) == [am.Dataset("big", 5), am.Dataset("small", 2)]
+        assert am.discover_datasets(SERVICE, "anvil15", session) == [am.Dataset("big", 5), am.Dataset("small", 2)]
         [(_, _, params)] = session.calls
         assert params == {"catalog": "anvil15", "size": 1}
 
@@ -189,7 +213,7 @@ class TestFetchManifest:
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=3)
         sleeps = []
         out = tmp_path / "m.tsv"
-        assert am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=sleeps.append) == 4
+        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", out, session, sleep=sleeps.append) == 4
         assert out.read_bytes() == b"h\nr\n" and not out.with_name("m.tsv.tmp").exists()
         assert [c[0] for c in session.calls] == ["PUT", "GET", "GET", "GET", "GET"]
         assert sleeps == [1.0, 3.0, 3.0]
@@ -212,7 +236,7 @@ class TestFetchManifest:
             return resp
 
         session.put = put
-        assert am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
+        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
         assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
         assert sleeps[:2] == [7.0, 7.0]
         assert [getattr(r, "closed", False) for r in throttled] == [True, True]
@@ -222,7 +246,9 @@ class TestFetchManifest:
         session = FakeSession({}, {("ds", "compact"): b""}, rate_limits=10**6)
         sleeps = []
         with pytest.raises(RuntimeError, match=r"still returning HTTP 429 after 28s of waiting"):
-            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=30)
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=30
+            )
         assert sleeps == [7.0] * 4
         assert session.puts() == 5
 
@@ -242,18 +268,24 @@ class TestFetchManifest:
         session = Throttled("0")
         sleeps = []
         with pytest.raises(RuntimeError):
-            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=3)
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=3
+            )
         assert sleeps == [1.0, 1.0, 1.0]
         session = Throttled("Wed, 21 Oct 2026 07:28:00 GMT")
         sleeps = []
         with pytest.raises(RuntimeError):
-            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=12)
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=12
+            )
         assert sleeps == [5.0]
 
     def test_each_wait_is_reported(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=1)
         messages = []
-        am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, log=messages.append)
+        am.fetch_manifest(
+            SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, log=messages.append
+        )
         assert messages == ["HTTP 429; waiting 7s (7s of 1800s)"]
 
     def test_backoff_without_retry_after_doubles_to_a_cap(self, tmp_path):
@@ -266,7 +298,7 @@ class TestFetchManifest:
 
         session = Flaky({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
         sleeps = []
-        assert am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
+        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
         assert sleeps[:5] == [5.0, 10.0, 20.0, 40.0, 60.0]
 
     def test_a_download_that_dies_midway_leaves_no_manifest(self, tmp_path):
@@ -290,19 +322,19 @@ class TestFetchManifest:
         session = Session({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
         out = tmp_path / "m.tsv"
         with pytest.raises(requests.ConnectionError):
-            am.fetch_manifest("anvil15", "compact", "ds", out, session, sleep=no_sleep)
+            am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", out, session, sleep=no_sleep)
         assert not out.exists() and not out.with_name("m.tsv.tmp").exists()
         assert session.dying is not None and getattr(session.dying, "closed", False)
 
     def test_a_job_that_never_finishes_times_out(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)
         with pytest.raises(TimeoutError):
-            am.fetch_manifest("anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, timeout=5)
+            am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, timeout=5)
 
     def test_an_unknown_format_is_refused_before_any_request(self, tmp_path):
         session = FakeSession({}, {})
         with pytest.raises(ValueError):
-            am.fetch_manifest("anvil15", "terra.bdbag", "ds", tmp_path / "m", session)
+            am.fetch_manifest(SERVICE, "anvil15", "terra.bdbag", "ds", tmp_path / "m", session)
         assert session.calls == []
 
 
@@ -334,9 +366,11 @@ class TestLayout:
             am.manifest_path(tmp_path, "anvil15", "ds", "terra.pfb")
 
     def test_a_hostile_title_from_the_catalog_exits_with_a_message(self, tmp_path, capsys):
+        # Only a declared title reaches a path, so the hostile one is a declaration's.
         session = FakeSession({"../escape": 1}, {})
-        assert run("anvil15", tmp_path, session) == 1
-        assert "Refusing dataset title from the catalog" in capsys.readouterr().err
+        dep = deployment(tmp_path, ["../escape"])
+        assert dl.download(dep, am.INPUT_SOURCE_AZUL_COMPACT, None, force=False, session=session, sleep=no_sleep) == 1
+        assert "Refusing dataset title" in capsys.readouterr().err
         assert not (tmp_path / "manifest").exists() or not list((tmp_path / "manifest").rglob("*.tsv"))
 
 
@@ -490,7 +524,9 @@ class TestRecordMapping:
         assert record["phenotypic_sex"] == "Female"
 
     def test_a_failed_write_leaves_the_previous_input_files(self, tmp_path):
-        block = am.metadata_block("anvil15", {"ds": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
+        block = am.metadata_block(
+            deployment(tmp_path), {"ds": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT
+        )
         assert am.write_input_files(tmp_path, block, [valid_record()]) == 1
         before = (tmp_path / "anvil_files_metadata.json").read_bytes()
 
@@ -506,12 +542,14 @@ class TestRecordMapping:
 
     def test_the_metadata_block_names_the_repository_the_catalog_and_the_source(self):
         datasets = {"b": _entry(1, "b"), "a": _entry(2, "a")}
-        block = am.metadata_block("anvil15", datasets, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
+        block = am.metadata_block(DEPLOYMENT, datasets, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
         assert block == {
             "downloaded_at": "2026-09-04T00:00:00",
             "total_files": 3,
-            "api_url": am.MANIFEST_URL,
+            "api_url": am.manifest_url(SERVICE),
             "repository": "anvil",
+            # Which deployment the input is of (#500); its catalog, declared, not inferred.
+            "deployment": "test",
             "catalog": "anvil15",
             "source": "manifest",
             # How the records were derived (#499): stated by every writer, never inferred.
@@ -527,14 +565,16 @@ class TestRecordMapping:
         # the manifest path are null rather than claiming one; the compact and verbatim
         # kinds both came through one and keep them.
         when = datetime(2026, 9, 22)
-        direct = am.metadata_block("anvil", {"a": _entry(1)}, when, am.INPUT_SOURCE_TDR_DIRECT)
+        direct = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, when, am.INPUT_SOURCE_TDR_DIRECT)
         assert (direct["api_url"], direct["source"], direct["input_source"]) == (None, None, "tdr-direct")
-        verbatim = am.metadata_block("anvil15", {"a": _entry(1)}, when, am.INPUT_SOURCE_AZUL_VERBATIM)
-        assert (verbatim["api_url"], verbatim["source"]) == (am.MANIFEST_URL, "manifest")
+        # The catalog is the deployment's on every kind, so `published_source` still names one.
+        assert direct["catalog"] == "anvil15"
+        verbatim = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, when, am.INPUT_SOURCE_AZUL_VERBATIM)
+        assert (verbatim["api_url"], verbatim["source"]) == (am.manifest_url(SERVICE), "manifest")
 
     def test_an_input_source_that_is_not_one_of_the_three_is_refused(self):
         with pytest.raises(ValueError, match="input_source 'manifest' is not one of"):
-            am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4), "manifest")
+            am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, datetime(2026, 9, 4), "manifest")
 
     def test_the_snapshot_names_its_publisher_so_a_reader_need_not_infer_one(self):
         # `pipeline.published_source` reads `repository` with `catalog` (#424). It used
@@ -542,17 +582,17 @@ class TestRecordMapping:
         # snapshot loaded through the same shared path.
         from meta_disco.pipeline import published_source
 
-        block = am.metadata_block("anvil15", {"a": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
+        block = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
         assert published_source(block) == "anvil/anvil15"
 
 
+DEPLOYMENT = deployment(Path("unused"))
+
+
 def _entry(file_count: int, source: str = "s") -> dict:
-    """One `datasets` entry: the count, plus the snapshot it was materialised from."""
-    return {
-        "file_count": file_count,
-        "source_id": f"{source}-id",
-        "source_spec": f"tdr:bigquery:gcp:datarepo-{source}:SNAPSHOT_{source}",
-    }
+    """One `datasets` entry for a snapshot named after ``source``, in the shape the
+    downloader writes (`am.dataset_entry`)."""
+    return entry(file_count, f"{source}-id", Snapshot(f"datarepo-{source}", f"SNAPSHOT_{source}"))
 
 
 class TestDatasetSource:
@@ -651,7 +691,7 @@ class TestScript:
         """The output directory need not exist beforehand."""
         session = one_dataset_session()
         tmp_path = tmp_path / "data" / "anvil"
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         assert am.manifest_path(tmp_path, "anvil15", "ds", "compact").is_file()
         assert am.manifest_path(tmp_path, "anvil15", "ds", "verbatim.jsonl").is_file()
         sidecar = am.load_sidecar(tmp_path, "anvil15")
@@ -662,9 +702,7 @@ class TestScript:
         out = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
         assert out["metadata"]["catalog"] == "anvil15"
         # Title -> object, carrying the snapshot the dataset was materialised from (#434).
-        assert out["metadata"]["datasets"] == {
-            "ds": {"file_count": 2, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC}
-        }
+        assert out["metadata"]["datasets"] == {"ds": entry(2)}
         for path in ("anvil_files_metadata.json", "anvil_files_metadata.ndjson"):
             records = load_records(tmp_path / path)
             assert [r["file_name"] for r in records] == ["sample0.bam", "sample1.bam"]
@@ -673,10 +711,10 @@ class TestScript:
     def test_a_rerun_skips_manifests_on_disk_but_rebuilds_the_input(self, tmp_path):
         """Scenario 6."""
         session = one_dataset_session()
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         (tmp_path / "anvil_files_metadata.json").unlink()
         puts_before = session.puts()
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         assert session.puts() == puts_before
         assert (tmp_path / "anvil_files_metadata.json").is_file()
 
@@ -684,65 +722,64 @@ class TestScript:
         """The manifests were requested when the facet said 2; today it says 3. They are
         still internally consistent, so the rebuild proceeds and the drift is reported."""
         session = one_dataset_session()
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         session.datasets = {"ds": 3}
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         assert "catalog now says 3 files, stored 2" in capsys.readouterr().out
 
     def test_a_deleted_catalog_still_rebuilds_from_disk(self, tmp_path, capsys):
         """anvil14 was deleted server-side; manifests pulled from it must still yield an input file."""
         session = one_dataset_session()
-        assert run("anvil14", tmp_path, session) == 0
+        assert run(tmp_path, session, "anvil14") == 0
         (tmp_path / "anvil_files_metadata.json").unlink()
         session.datasets = None
-        assert run("anvil14", tmp_path, session) == 0
+        assert run(tmp_path, session, "anvil14") == 0
         assert (tmp_path / "anvil_files_metadata.json").is_file()
         assert "rebuilding from the 1 dataset(s) on disk" in capsys.readouterr().err
 
     def test_a_dataset_subset_fetches_only_that_dataset_but_rebuilds_the_whole_input(self, tmp_path):
         """A targeted repair must not shrink the corpus: --datasets narrows the fetch, not the file."""
         session = two_dataset_session()
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
         am.manifest_path(tmp_path, "anvil15", "b", "compact").unlink()
         puts_before = session.puts()
-        assert dl.download("anvil15", tmp_path, {"b"}, force=True, session=session, sleep=no_sleep) == 0
+        dep = deployment(tmp_path, ["a", "b"])
+        assert dl.download(dep, am.INPUT_SOURCE_AZUL_COMPACT, {"b"}, force=True, session=session, sleep=no_sleep) == 0
         assert session.puts() == puts_before + 2  # b's two manifests, nothing of a's
         out = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
-        assert out["metadata"]["datasets"] == {
-            "a": {"file_count": 3, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC},
-            "b": {"file_count": 2, "source_id": SOURCE_ID, "source_spec": SOURCE_SPEC},
-        }
+        assert out["metadata"]["datasets"] == {"a": entry(3), "b": entry(2)}
         assert len(out["files"]) == 5
 
     def test_an_unreachable_catalog_still_rebuilds_from_disk(self, tmp_path, capsys):
         """Discovery failing with a connection error, not just a 404, must not abort a rebuild."""
         session = one_dataset_session()
-        assert run("anvil15", tmp_path, session) == 0
+        assert run(tmp_path, session) == 0
 
         class Unreachable(FakeSession):
             def get(self, url, **kwargs):
-                if url == am.FILES_URL:
+                if url == am.files_url(self.service):
                     raise requests.ConnectionError("no route")
                 return super().get(url, **kwargs)
 
-        assert run("anvil15", tmp_path, Unreachable({"ds": 2}, session.payloads)) == 0
+        assert run(tmp_path, Unreachable({"ds": 2}, session.payloads)) == 0
         assert "rebuilding from the 1 dataset(s) on disk" in capsys.readouterr().err
 
     def test_discovery_failure_with_nothing_on_disk_exits_with_a_message(self, tmp_path, capsys):
         session = FakeSession(None, {})
-        assert run("anvil15", tmp_path, session) == 1
+        assert run(tmp_path, session) == 1
         assert "nothing is on disk for anvil15" in capsys.readouterr().err
 
     def test_force_does_not_block_a_rebuild_when_the_catalog_is_gone(self, tmp_path, capsys):
         session = one_dataset_session()
-        assert run("anvil14", tmp_path, session) == 0
+        assert run(tmp_path, session, "anvil14") == 0
         session.datasets = None
-        assert dl.download("anvil14", tmp_path, None, force=True, session=session, sleep=no_sleep) == 0
+        dep = deployment(tmp_path, catalog="anvil14")
+        assert dl.download(dep, am.INPUT_SOURCE_AZUL_COMPACT, None, force=True, session=session, sleep=no_sleep) == 0
         assert "--force has no effect without the catalog" in capsys.readouterr().err
 
     def test_a_parity_mismatch_exits_nonzero_and_writes_no_input(self, tmp_path):
         """Scenario 3, end to end: the facet says 3 files, the compact manifest has 2."""
         session = one_dataset_session(n=2, facet=3)
         session.payloads[("ds", "verbatim.jsonl")] = verbatim_payload(3)
-        assert run("anvil15", tmp_path, session) == 1
+        assert run(tmp_path, session) == 1
         assert not (tmp_path / "anvil_files_metadata.json").exists()

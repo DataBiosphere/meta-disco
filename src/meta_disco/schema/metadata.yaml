@@ -3,10 +3,11 @@ name: meta_disco_input_metadata
 title: Meta-Disco AnVIL Input Metadata Model
 description: >-
   The contract for a raw AnVIL file metadata record — one entry in the `files`
-  array of `data/anvil/anvil_files_metadata.json`, as derived by
-  `scripts/download_anvil_manifest.py` from the compact Azul manifest (#368) or by
-  `snapshot_input.derive_records` from a TDR snapshot's tables (#499). An envelope
-  `azul_manifest.metadata_block` wrote says which in `input_source`.
+  array of a deployment's `data/anvil/<deployment>/anvil_files_metadata.json`, as
+  derived by `scripts/download_anvil_manifest.py` from the compact Azul manifest
+  (#368) or by `snapshot_input.derive_records` from a TDR snapshot's tables (#499). An
+  envelope `azul_manifest.metadata_block` wrote says which in `input_source`, and names
+  its `deployment` (#500).
 
   This is the *input* to classification, distinct from `classification.yaml`
   which models the classified *output*.

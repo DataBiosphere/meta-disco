@@ -5,7 +5,7 @@ and the records derived from either.
 One test per acceptance criterion on the issue, in the issue's order, plus the
 refusals the derivation makes. All offline: the direct reader runs against
 ``tests.tdr_fixtures.FakeClient``; the two parity checks over prod's manifests
-read ``data/anvil/manifest/anvil15/`` and skip where it is absent, as the
+read ``data/anvil/prod/manifest/anvil15/`` and skip where it is absent, as the
 evidence-importer tests do. Their comparison side is derived from the compact
 manifests through the reader the downloader uses, so they compare the two
 derivations rather than a derivation against a file that may be stale.
@@ -26,18 +26,20 @@ from meta_disco.azul_manifest import (
     FORMAT_VERBATIM,
     INPUT_SOURCE_AZUL_COMPACT,
     INPUT_SOURCE_TDR_DIRECT,
+    dataset_entry,
     iter_compact_records,
     manifest_dir,
     manifest_path,
     metadata_block,
     write_input_files,
 )
+from meta_disco.deployments import PROD
 from tests.metadata_fixtures import valid_record, write_metadata
 from tests.tdr_fixtures import DisagreeingClient, FakeClient, table_of
 
 SNAPSHOT = tdr.Snapshot(project="datarepo-ce3811eb", name="ANVIL_1000G_2019_Dev")
-CATALOG = "anvil15"
-ROOT = Path("data/anvil")
+CATALOG = PROD.catalog
+ROOT = PROD.input_root
 REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
 # The six per-file fields the issue's parity criteria compare — what the compact join
@@ -175,8 +177,8 @@ class TestDirectRead:
 class TestTheGate:
     def test_a_tdr_sourced_input_with_no_entry_id_passes(self, tmp_path, client, capsys):
         # AC 3, first half: the derived input on disk, through the gate as a run would.
-        entries = {DATASET_ROW["title"]: {"file_count": 3, "source_id": None, "source_spec": None}}
-        block = metadata_block("anvil", entries, datetime(2026, 9, 22), INPUT_SOURCE_TDR_DIRECT)
+        entries = {DATASET_ROW["title"]: dataset_entry(3, SNAPSHOT)}
+        block = metadata_block(PROD, entries, datetime(2026, 9, 22), INPUT_SOURCE_TDR_DIRECT)
         n = write_input_files(tmp_path, block, si.derive_records(si.TdrDirect(client, SNAPSHOT)))
         assert n == 3
         written = json.loads((tmp_path / "anvil_files_metadata.json").read_text())
@@ -277,6 +279,20 @@ class TestDerivationRefusals:
         row = {k: v for k, v in file_row(1).items() if k != column}
         with pytest.raises(ValueError, match=f"cannot map an anvil_file row to a record: no '{column}' column"):
             si.record_from_file_row(row, DATASET_ROW)
+
+    def test_a_dataset_row_of_another_title_is_refused_before_any_record(self):
+        # #500: the snapshot declared for one dataset holding another is refused at the
+        # call, before the file table is read.
+        client = FakeClient(TABLES)
+        with pytest.raises(ValueError, match="expected dataset 'X', but the snapshot holds 'ANVIL_1000G_2019_Dev'"):
+            si.derive_records(si.TdrDirect(client, SNAPSHOT), "X")
+        assert not any(table_of(query) == "anvil_file" for query in client.queries)
+        assert len(list(si.derive_records(si.TdrDirect(FakeClient(TABLES), SNAPSHOT), DATASET_ROW["title"]))) == 3
+
+    def test_a_dataset_row_without_a_title_is_named_as_drift_not_as_another_dataset(self):
+        tables = {**TABLES, "anvil_dataset": [{k: v for k, v in DATASET_ROW.items() if k != "title"}]}
+        with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):
+            si.derive_records(si.TdrDirect(FakeClient(tables), SNAPSHOT), "X")
 
     def test_a_null_value_is_transcribed_not_refused(self):
         # A null md5 stays null: the load path excludes it (#376), the way the compact

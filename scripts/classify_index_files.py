@@ -38,6 +38,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from meta_disco.deployments import PROD
 from meta_disco.file_name import EXTENSION_MAP, FileName
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -790,7 +791,7 @@ def main():
         "--metadata",
         "-m",
         type=Path,
-        default=Path("data/anvil/anvil_files_metadata.json"),
+        default=PROD.input_file,
         help="Path to source metadata JSON",
     )
     parser.add_argument(

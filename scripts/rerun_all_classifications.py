@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from meta_disco.classify_run import run_all_classifications
+from meta_disco.deployments import PROD
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
         "--metadata",
         "-m",
         type=Path,
-        default=Path("data/anvil/anvil_files_metadata.json"),
+        default=PROD.input_file,
         help="Source metadata file: the JSON envelope, whose metadata names the repository (an .ndjson file has none)",
     )
     parser.add_argument(

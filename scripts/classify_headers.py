@@ -5,7 +5,7 @@ Single entry point for header-based classification; #466 deleted the four
 per-type wrappers it replaced.
 
 Examples:
-    python scripts/classify_headers.py --type bam -i data/anvil/anvil_files_metadata.json -o output/anvil/bam.json
+    python scripts/classify_headers.py --type bam -i data/anvil/prod/anvil_files_metadata.json -o output/anvil/bam.json
     python scripts/classify_headers.py --type bam --md5 abc123
 """
 
@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Add project root to path
+from meta_disco.deployments import PROD
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.pipeline import ClassifyPipeline
 
@@ -35,7 +36,7 @@ def main():
         "--input",
         "-i",
         type=Path,
-        default=Path("data/anvil/anvil_files_metadata.json"),
+        default=PROD.input_file,
         help="Input metadata file (JSON or NDJSON)",
     )
     parser.add_argument(

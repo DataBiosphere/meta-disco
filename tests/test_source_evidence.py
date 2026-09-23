@@ -40,7 +40,8 @@ import pytest
 import yaml
 
 from meta_disco import models, source_evidence
-from meta_disco.azul_manifest import API_URL, REPOSITORY, VERBATIM_FILE
+from meta_disco.azul_manifest import REPOSITORY, VERBATIM_FILE
+from meta_disco.deployments import PROD
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_DRS_URI,
@@ -142,7 +143,7 @@ def published_envelope(
     labelled ``published_value``, keyed by DRS URI on both sides and versioned by the
     catalog, about that same dataset's files."""
     return evidence_file_envelope(
-        source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=API_URL),
+        source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url=PROD.service),
         source_type=source_type,
         source_version=version,
         source_key=JOIN_KEY_DRS_URI,

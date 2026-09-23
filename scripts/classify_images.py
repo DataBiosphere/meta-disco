@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 # Add project root to path for imports
+from meta_disco.deployments import PROD
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_snapshot
 from meta_disco.producers import PRODUCERS
@@ -109,7 +110,7 @@ def main():
         "--metadata",
         "-m",
         type=Path,
-        default=Path("data/anvil/anvil_files_metadata.json"),
+        default=PROD.input_file,
         help="Path to source metadata JSON",
     )
     parser.add_argument(
