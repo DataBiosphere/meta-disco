@@ -203,8 +203,8 @@ def test_ac4_the_report_lists_the_join_per_source_and_dataset(tmp_path, run, evi
 
 def test_ac5_a_target_key_that_is_not_a_record_field_is_refused(tmp_path, run, evidence, table):
     write_run(run, [record(1)])
-    write_evidence(evidence, [("platform", "SRR1", "PACBIO_SMRT")], target_key="archive_accession")
-    with pytest.raises(ReconcileError, match="archive_accession"):
+    write_evidence(evidence, [("platform", "SRR1", "PACBIO_SMRT")], target_key="file_path")
+    with pytest.raises(ReconcileError, match="file_path"):
         go(run, tmp_path, evidence, table)
 
 
@@ -476,7 +476,7 @@ def test_ac26_an_unreviewed_published_value_alone_is_missing_work_not_a_conflict
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"], ref["use"]) == (NOT_CLASSIFIED, None, USE_PUBLISHED)
     counts = result["slots"][DATASET]["reference_assembly"]
-    assert counts.get("missing_work") == 1 and CONFLICT not in counts
+    assert counts.get("published_unreviewed") == 1 and CONFLICT not in counts
 
 
 def test_ac27_no_reconciled_value_is_outside_the_vocabulary(tmp_path, run, evidence, table):
@@ -496,8 +496,9 @@ def test_the_report_scores_inference_and_counts_filled_and_agreed_slots(tmp_path
     write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT"), ("platform", drs(2), "PACBIO_SMRT")])
     result = go(run, tmp_path, evidence, table)
     counts = result["slots"][DATASET]["platform"]
-    # File 2's PACBIO is the submitter filling what inference left; file 3's ILLUMINA is inference alone.
-    assert counts == {"agreed": 1, "filled_by_repository_metadata": 1, "filled_by_inference": 1}
+    # Files 1 and 2 are attributed to the submitter (verbatim PACBIO_SMRT -> PACBIO is harmonized), whether
+    # or not inference agreed; file 3's ILLUMINA is inference alone.
+    assert counts == {"filled_by_submitter_harmonized": 2, "filled_by_inference": 1}
     assert result["inputs"][DATASET]["platform"]["inference"] == {"agreed": 1, "added": 1, "silent": 1}
     assert result["conflict_rate"][DATASET]["platform"] == 0.0
 
@@ -613,3 +614,16 @@ def test_an_interrupted_swap_is_restored_not_lost(tmp_path, run, table):
     with pytest.raises(ValueError):
         go(run, tmp_path, None, table)
     assert (run / RECONCILED_DIR / "bam_classifications.ndjson").exists()
+
+
+def test_a_value_is_attributed_by_source_precedence_verbatim_before_harmonized(tmp_path, run, evidence, table):
+    write_run(run, [record(n, reference_assembly="GRCh38") for n in (1, 2, 3)])
+    write_evidence(evidence, [("reference_assembly", drs(1), "GRCh38"), ("reference_assembly", drs(2), "GRCh38")])
+    published(evidence, [("reference_assembly", drs(2), '["GRCh38 + Gencode40"]')])
+    result = go(run, tmp_path, evidence, table)
+    # 1: submitter verbatim. 2: published (harmonized) outranks submitter verbatim. 3: inference alone.
+    assert result["slots"][DATASET]["reference_assembly"] == {
+        "filled_by_submitter": 1,
+        "filled_by_published_harmonized": 1,
+        "filled_by_inference": 1,
+    }

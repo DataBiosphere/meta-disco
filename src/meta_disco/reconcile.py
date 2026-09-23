@@ -57,7 +57,9 @@ from .models import (
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
     UNMAPPED,
 )
 from .output_utils import (
@@ -100,12 +102,13 @@ INFERENCE = "inference"
 # agreed (a source declared the same), added (no other input declared anything),
 # disagreed (another input declared differently, or its own rules conflicted), silent.
 #
-# Per slot, exactly one of: agreed (inference and a source declared the same value),
-# filled_by_<source type> (inference was silent and that source filled the slot; several
-# joined by `+`), filled_by_inference (inference gave the value and no source declared
-# one), missing_work (`not_classified` because the published source spoke with a value no
-# authored row reads — work to do, not a challenge), or the slot's status (`conflict`,
-# `not_applicable`, `not_classified`).
+# Per slot, exactly one of: filled_by_<source> or filled_by_<source>_harmonized for the
+# first source in SOURCE_PRECEDENCE that declared the delivered value — verbatim before
+# harmonized — else filled_by_inference; published_unreviewed (`not_classified` because the
+# published source spoke with a value no authored row reads — work to do, not a
+# challenge); or the slot's status (`conflict`, `not_applicable`, `not_classified`).
+# Precedence only attributes a value every declaring input agreed on; it never picks a
+# value (contract 6.8). Whether inference agreed is its own outcome, in `inputs`.
 MATCH = "match"
 HARMONIZED = "harmonized"
 UNREVIEWED = "unreviewed"
@@ -114,9 +117,16 @@ SILENT = "silent"
 AGREED = "agreed"
 ADDED = "added"
 DISAGREED = "disagreed"
-FILLED_BY = "filled_by_"
 FILLED_BY_INFERENCE = "filled_by_inference"
-MISSING_WORK = "missing_work"
+PUBLISHED_UNREVIEWED = "published_unreviewed"
+
+# The order a delivered value is attributed in, with each source's name in the report:
+# what the repository publishes, then what its submitters wrote, then other catalogs.
+SOURCE_PRECEDENCE = (
+    (SOURCE_PUBLISHED_VALUE, "published"),
+    (SOURCE_REPOSITORY_METADATA, "submitter"),
+    (SOURCE_EXTERNAL_GROUND_TRUTH, "external"),
+)
 
 # How many unmatched and ambiguous key values the report names per evidence file.
 MAX_EXAMPLES = 5
@@ -557,7 +567,7 @@ class Report:
             said = record_slots.get(slot, NO_EVIDENCE)
             own = declaration(settled["inferred"])
             covering = self.covering(dataset, slot)
-            self.slots[dataset][slot][self._category(settled, said, own)] += 1
+            self.slots[dataset][slot][self._category(settled, said)] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
             for source_type in covering:
@@ -567,16 +577,18 @@ class Report:
                     self.added_over_published[dataset][slot] += 1
 
     @staticmethod
-    def _category(settled: dict, said: SlotEvidence, own: str | None) -> str:
+    def _category(settled: dict, said: SlotEvidence) -> str:
         status = settled["status"]
         if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
-            return MISSING_WORK
+            return PUBLISHED_UNREVIEWED
         if status != CLASSIFIED:
             return status
-        fillers = sorted({c["source_type"] for c in said.claims if declaration(c) is not None})
-        if own is None:
-            return FILLED_BY + "+".join(fillers)
-        return AGREED if fillers else FILLED_BY_INFERENCE
+        for source_type, name in SOURCE_PRECEDENCE:
+            declaring = [c for c in said.claims if c["source_type"] == source_type and declaration(c) is not None]
+            if declaring:
+                verbatim = any(not is_harmonized(c) for c in declaring)
+                return f"filled_by_{name}" if verbatim else f"filled_by_{name}_harmonized"
+        return FILLED_BY_INFERENCE
 
     @staticmethod
     def _inference_outcome(settled: dict, said: SlotEvidence, own: str | None) -> str:
