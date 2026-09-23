@@ -657,11 +657,13 @@ rules:
     scope: filename
     when:
       extensions: [".txt", ".tsv", ".csv"]
-      filename_pattern: "(?i)counts?\\.txt|expression|tpm\\.txt|fpkm\\.txt"
+      filename_pattern: "(?i)expression|tpm\\.txt|fpkm\\.txt"
     then:
       data_modality: transcriptomic.bulk
       data_type: expression_matrix
-    rationale: "Filename suggests expression count data"
+    # No bare `counts.txt`: ANVIL_T2T's chrN.<population>.counts.txt are chromosome/bin/count
+    # tables, not expression matrices (#485).
+    rationale: "Filename names expression data or an expression unit (TPM/FPKM)"
 
   - id: salmon_quant
     tier: 2
