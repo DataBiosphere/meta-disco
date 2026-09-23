@@ -239,6 +239,10 @@ def _assert_coherent(value, status) -> None:
 # (``build_field_entry``'s ``detail`` argument), and ``field_detail`` reads it back.
 ENTRY_KEYS = frozenset({"value", "status", "evidence"})
 
+# The keys the reconcile stage adds to a per-field entry (#432): not detail about the
+# dimension, so ``field_detail`` leaves them out.
+RECONCILED_ENTRY_KEYS = frozenset({"use", "inferred"})
+
 
 def build_field_entry(value, status=None, evidence=None, detail=None) -> dict:
     """Build a serialized per-field classification entry.
@@ -351,7 +355,7 @@ def field_status(record: dict, field_name: str) -> str:
 
 
 def field_detail(record: dict, field_name: str) -> dict:
-    """The dimension-specific detail on a field entry: every key beyond ``ENTRY_KEYS``.
+    """The dimension-specific detail on a field entry: every key beyond ``ENTRY_KEYS`` and ``RECONCILED_ENTRY_KEYS``.
 
     The read-side mirror of ``build_field_entry``'s ``detail`` argument, so a
     consumer that rebuilds an entry (the index-propagation script) can carry the
@@ -361,7 +365,7 @@ def field_detail(record: dict, field_name: str) -> dict:
     entry = _field_entry(record, field_name)
     if not isinstance(entry, dict):
         return {}
-    return {key: value for key, value in entry.items() if key not in ENTRY_KEYS}
+    return {key: value for key, value in entry.items() if key not in ENTRY_KEYS and key not in RECONCILED_ENTRY_KEYS}
 
 
 def field_evidence(record: dict, field_name: str) -> list:

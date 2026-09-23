@@ -8,7 +8,8 @@ contract at the schema level: ``status`` is required and drawn from
 ``classification_status_enum``, and ``value`` is either null or a member of that
 dimension's enum.
 
-**Two fixtures, all eleven producers** (#465). The golden carries the seven
+**Two fixtures, all eleven producers** (#465), and a third holding both fixtures' rows as
+the reconcile stage writes them (#432), so a reconciled record is held to the same schema. The golden carries the seven
 ``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
 ones, which until #465 reached no schema validation at all. Between them they also put
 the block only one producer emits in front of the schema as records it wrote:
@@ -53,6 +54,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 _STANDALONE = _REPO_ROOT / "tests/fixtures/golden/standalone_output.json"
+# Both fixtures' rows as the reconcile stage writes them (#432): the same schema holds a
+# reconciled record, with `use` and `inferred` on each slot (contract 6.5).
+_RECONCILED = _REPO_ROOT / "tests/fixtures/golden/reconciled_output.json"
 # Absolute, because this suite runs with `schema/` as its working directory (`make
 # test-schema` is a sub-make): from there `python -m tests.test_output_shape` resolves
 # against `schema/tests/`, finds no such module, and would need the root project's env
@@ -141,9 +145,11 @@ def _records_in(path: Path):
 
 
 def _fixture_records():
-    """Yield (label, record) for every record in both fixtures — all eleven producers."""
+    """Yield (label, record) for every record in the fixtures — all eleven producers, inferred and reconciled."""
     yield from _records_in(_GOLDEN)
     yield from _records_in(_STANDALONE)
+    for label, record in _records_in(_RECONCILED):
+        yield f"reconciled:{label}", record
 
 
 def _fixture_entries():
@@ -156,7 +162,7 @@ def _fixture_entries():
             yield f"{label}.{dim}", dim, classifications[dim]
 
 
-@pytest.mark.parametrize("path", [_GOLDEN, _STANDALONE], ids=["golden", "standalone"])
+@pytest.mark.parametrize("path", [_GOLDEN, _STANDALONE, _RECONCILED], ids=["golden", "standalone", "reconciled"])
 def test_output_fixture_present(path):
     assert path.exists(), f"output fixture not found at {path}; regenerate with `{_REGEN}`"
 
@@ -191,6 +197,18 @@ def test_a_populated_derivation_edge_validates(validator):
         for result in validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord").results:
             failures.append(f"{label}: {result.severity}: {result.message}")
     assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
+
+
+def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
+    """A reconciled slot's `inferred` is narrowed per dimension, as its `value` is (#432)."""
+    _, record = next(_records_in(_RECONCILED))
+    classifications = {**record["classifications"]}
+    classifications["data_modality"] = {
+        **classifications["data_modality"],
+        "inferred": {"value": "PACBIO", "status": "classified"},
+    }
+    report = validator.validate({**record, "classifications": classifications}, target_class="ClassificationRecord")
+    assert report.results, "an inferred data_modality of PACBIO passed the schema"
 
 
 def test_a_derivation_edge_without_a_verb_is_refused(validator):

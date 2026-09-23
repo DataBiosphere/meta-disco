@@ -5,42 +5,37 @@ network — and writes an evidence file. The main loop reads it. Classification 
 offline and deterministic while the importers do the networked work, the same shape
 as the evidence cache, and either side can be re-run without forcing the other::
 
-    inference  →  read sources (read evidence files, match to our files)
-                  →  reconcile  →  output
+    inference  →  reconcile (read evidence files, match to our files, settle)  →  output
 
 **A line is an observation, not an answer** (contract 1.1-1.5). An importer
 transcribes what a source wrote about a slot and stops; only the rule engine turns
 that raw value into one of our terms. #401 shipped the other arrangement — a line
 carried a mapped ``value`` and this module refused one outside the dimension's
 vocabulary — and #421 amended it. The value mapping lives in the translation table
-(``value_map``, #414), whose ``claims_from`` is built for the reconcile stage (#432)
-and is called by nothing in a run until that stage exists; the table checks a declared
-term against its slot's vocabulary when it loads.
+(``value_map``, #414), whose ``claims_from`` the reconcile stage calls (#432); the
+table checks a declared term against its slot's vocabulary when it loads.
 
 This module is the artefact and everything about it: the envelope record and its
 parts, the layout on disk, the line format, the streaming writer and reader, and the
-report a run prints of what it found — found and not consumed, since no evidence reaches classification until the
-join lands (#402). Anything that needs to find or write an evidence file should come
-through here rather than re-deriving the layout. Matching a row to one of our files
-is #402, and the importers that will produce these files are #369 (AnVIL manifests)
-and #394 (external catalogs).
+report a run prints of what it found. Anything that needs to find or write an evidence
+file should come through here rather than re-deriving the layout. Matching a row to one
+of our files is the reconcile stage's join (``reconcile.join``, #432, which absorbed
+#402); the importers that produce these files are ``anvil_evidence`` (#369, #497) and,
+to come, #394 (external catalogs).
 
-**What a run does with these today.** It discovers them and reports each one's
+**What a run does with these.** Inference discovers them and reports each one's
 source, version, catalog and age — ``classify_run.run_all_classifications`` calls
-:func:`report_evidence_files` and never :func:`iter_evidence`. No evidence reaches
-classification, so a run with evidence files present writes the same output as one
-without. Matching rows to our files is #402; the writer and reader here exist so
-the producers (#369, #394) can be built against a settled contract before that lands.
+:func:`report_evidence_files` and never :func:`iter_evidence`, so its output is the
+same with evidence files present or absent. The reconcile stage (``make reconcile``)
+is what reads them, through :func:`iter_evidence`, into its own artifact.
 
-**Currency is not decided here**, and will not be when the join does: a run will
-import from every file it found and refuse none. It cannot do better offline — the
-sources share no version to compare, and AnVIL deletes a superseded catalog rather
-than keeping it to be matched against. The two places that can act on the question
-own it instead: the importer, which compares its file's ``target.version`` against
-the configured catalog when deciding to re-fetch, and the run's output, which is to
-record the catalog it enhances so that an enhancement offered to a catalog that has
-moved on is refused at that boundary — that one is #404 and is not built, so nothing
-enforces it yet.
+**Currency is decided only as far as offline allows.** The sources share no version to
+compare, and AnVIL deletes a superseded catalog rather than keeping it to be matched
+against. Reconcile reads only the files whose ``target.version`` is the catalog the
+input envelope names, where it names one, and leaves another catalog's unread; the importer compares its file's
+``target.version`` against the configured catalog when deciding to re-fetch. What
+neither can check is that a stored run was classified from that input: that needs the
+run's output to record the catalog it enhances, which is #404 and is not built.
 
 **The file.** One ``.ndjson`` file: line 1 is the envelope, every later line is one
 evidence row. NDJSON rather than a JSON array because 708,088 files by 5 dimensions
@@ -431,13 +426,13 @@ class EvidenceFileStatus:
     rather than raised so that one unreadable file does not hide the provenance of
     the ones behind it in the report.
 
-    A run does not judge an evidence file beyond this and the published-source check
-    (:func:`require_one_published_source`, #497). Whether the rows still describe
-    the catalog being classified is left to the importer, which compares its own
-    file's ``target.version`` against the configured catalog when deciding to re-fetch,
-    and to the boundary where an enhancement is offered back to a catalog — which
-    requires the run's output to record which catalog it enhances, and that is #404,
-    not something this PR added. Nothing enforces it today.
+    Inference does not judge an evidence file beyond this and the published-source
+    check (:func:`require_one_published_source`, #497). The reconcile stage compares a
+    file's ``target.version`` with the catalog its input envelope names
+    (``reconcile.select_evidence``, #432), and the importer compares it with the
+    configured catalog when deciding to re-fetch. That a stored run was classified from
+    that input needs the run's output to record the catalog it enhances, which is #404
+    and is not built.
     """
 
     path: Path
@@ -725,17 +720,17 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
 
     Prints one line per file — source, table, version, the catalog it was built for
     if it names one, fetch date and age — so a run says which evidence files it found
-    and how old they were. *Found* and not *consumed*: no claim reaches classification
-    until the join lands (#402), and this report is the whole of what a run does with
-    one today. Returns the statuses in the order printed.
+    and how old they were. *Found* and not *consumed*: inference reads no evidence, and
+    the reconcile stage (#432) reads the files these statuses name. Returns the statuses
+    in the order printed.
 
     The report does not judge currency, and nothing here stops the run. Whether an evidence file has
     outlived what it describes is not answerable from the file: the sources have no
     common version to compare (HPRC has a major release and may drift from it), and
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
     against. That question is settled where it can be acted on — the importer decides
-    whether to re-fetch, and the run's output records which catalog it enhances, so
-    an enhancement offered to a catalog that has moved on is refused there.
+    whether to re-fetch, and reconcile checks a file's catalog against the input's
+    (#432); recording on the run which catalog it enhances is #404, not built.
 
     A file whose envelope cannot be read is reported as an error rather than raising:
     the point of the report is to name every file, and one unreadable file should not

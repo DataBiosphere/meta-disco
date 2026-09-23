@@ -71,6 +71,18 @@ CATALOG_IDENTITY_FIELDS = ("entry_id", "file_id", "drs_uri")
 # for HPRC) spells it from here; ``test_records`` pins it to the record's field.
 OUTPUT_MD5SUM_FIELD = "md5sum"
 
+# The ``join_key_enum`` terms an evidence line can be matched to an output row by, and
+# the row field each is read from (#432). The schema's terms are the input's spellings,
+# so the one rename above applies here too. The enum's other terms (``file_path``,
+# ``archive_accession``) are not fields of an output row, and nothing joins on them yet.
+JOIN_KEY_OUTPUT_FIELDS = {
+    "file_id": "file_id",
+    "entry_id": "entry_id",
+    "drs_uri": "drs_uri",
+    "file_name": "file_name",
+    "file_md5sum": OUTPUT_MD5SUM_FIELD,
+}
+
 
 def identity_from(record: dict, *, coerce: bool = False) -> dict:
     """The catalog identity of one raw input record, ready to splat into an output row.
@@ -240,8 +252,8 @@ class OutputRecord:
     its diagnostic array for files it took no parent for.
 
     It carries nothing the repository publishes for the file (#513): that is the published
-    importer's evidence (contract 7.1, 7.12), which the reconcile stage is to read (#432,
-    not built); no run reads it today.
+    importer's evidence (contract 7.1, 7.12), which the reconcile stage reads (#432) into
+    its own artifact; inference never reads it.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).

@@ -19,7 +19,8 @@ through the same importer; ``--slot-map`` is any other file.
     uv run python scripts/import_anvil_evidence.py --published
 
 A classification run lists these files (``report_evidence_files``) and consumes none,
-so its output is unchanged by them; reconcile (#432) is what will read them.
+so its inference output is unchanged by them; reconcile (``make reconcile``, #432) reads
+them into its own artifact.
 """
 
 import argparse

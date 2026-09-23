@@ -86,23 +86,73 @@ classes:
     description: >-
       A single classified field: its resolved value (null unless status is
       'classified'), a status sentinel, and the evidence behind it. Subclasses
-      narrow `value` to the right enum per dimension.
+      narrow `value` to the right enum per dimension. A reconciled record (#432)
+      carries the same entry plus `use` and `inferred`; an inference record
+      carries neither.
     slots:
       - value
       - status
       - evidence
+      - use
+      - inferred
+
+  InferredConclusion:
+    abstract: true
+    description: >-
+      What inference concluded for a slot before reconciliation (#432): its tier-resolved
+      status and value, as the inference record states them. On a reconciled record so
+      it reads alone (contract 6.10) — inference's evidence cannot rebuild it without
+      re-running tier resolution. Subclasses narrow `value` to the dimension's enum, as
+      the Classification subclasses do.
+    slots:
+      - value
+      - status
+
+  DataModalityInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: data_modality_enum
+
+  DataTypeInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: data_type_enum
+
+  ReferenceAssemblyInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: reference_assembly_enum
+
+  AssayTypeInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: assay_type_enum
+
+  PlatformInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: platform_enum
 
   DataModalityClassification:
     is_a: Classification
     slot_usage:
       value:
         range: data_modality_enum
+      inferred:
+        range: DataModalityInferred
 
   DataTypeClassification:
     is_a: Classification
     slot_usage:
       value:
         range: data_type_enum
+      inferred:
+        range: DataTypeInferred
 
   ReferenceAssemblyClassification:
     is_a: Classification
@@ -111,18 +161,24 @@ classes:
     slot_usage:
       value:
         range: reference_assembly_enum
+      inferred:
+        range: ReferenceAssemblyInferred
 
   AssayTypeClassification:
     is_a: Classification
     slot_usage:
       value:
         range: assay_type_enum
+      inferred:
+        range: AssayTypeInferred
 
   PlatformClassification:
     is_a: Classification
     slot_usage:
       value:
         range: platform_enum
+      inferred:
+        range: PlatformInferred
 
   ReferenceBuild:
     description: >-
@@ -337,10 +393,12 @@ classes:
           against a particular generation, which is the ordinary case for a source
           that publishes names and values rather than reading our catalog.
 
-          Provenance for the importer's own next pass, not a gate on the run: a run
-          reports it and refuses nothing on it, because nothing offline
-          establishes which generation is current — AnVIL deletes a superseded
-          catalog rather than keeping it to be compared against.
+          Inference reports it and refuses nothing on it. The reconcile stage (#432)
+          uses it as a gate: where the run's input envelope names a catalog, it reads
+          only the files whose version equals that catalog, and leaves the rest (an
+          older generation's history, or a null version) unread. Nothing offline
+          establishes which generation is current beyond that — AnVIL deletes a
+          superseded catalog rather than keeping it to be compared against.
 
 
   EvidenceRow:
@@ -430,8 +488,8 @@ classes:
       importer runs out of band from classification — when a catalog refreshes,
       with network — and writes an evidence file of `EvidenceRow`s; a run reads it
       and reports this provenance, so that what a run found, and how old it was,
-      is on the record. Found and not consumed: until the join lands (#402) a run
-      reads each file's envelope and none of its rows.
+      is on the record. Inference reads each file's envelope and none of its rows;
+      the reconcile stage (#432) reads the rows and joins them to the run's records.
 
       It names both sides of the join, symmetrically: `source` / `source_version`
       / `source_key`, and `target` / `target.version` / `target_key`. A line then
@@ -700,6 +758,20 @@ slots:
     range: Evidence
     multivalued: true
     inlined_as_list: true
+  use:
+    description: >-
+      On a reconciled record only (#432): whether the indexer takes this record's value
+      (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the
+      repository's published value (`published`, when it is `conflict` or
+      `not_classified`). Computed by reconcile so an export is structure only.
+    range: use_enum
+    required: false
+  inferred:
+    description: >-
+      On a reconciled record only (#432): what inference concluded for this slot.
+    range: InferredConclusion
+    required: false
+    inlined: true
 
   # --- ReferenceBuild link (issue #340) ---
   build:
@@ -889,9 +961,25 @@ enums:
         description: The field is meaningful but no value could be determined.
       conflict:
         description: >-
-          Rules at the same tier disagreed and no curator rule has answered it
-          (#88; claims contract 4.3, 4.7). The value is null; the competing
-          claims stay in the evidence beside a `conflict` marker naming them.
+          Declarations disagreed and no curator rule has answered it (claims
+          contract 4.3-4.7). On an inference record, rules at the same tier
+          disagreed (#88), and the competing claims stay in the evidence beside a
+          `conflict` marker naming them. On a reconciled record (#432), inputs
+          declared different answers (inference and a source, or sources among
+          themselves), or inference's own conflict stands, or the published source
+          spoke with a value no authored row reads while another input declared an
+          answer. The value is null either way.
+
+  use_enum:
+    description: >-
+      Which value the indexer takes for a reconciled slot (#432): this record's, or the
+      one the repository already publishes (the not-worse path, until curator rules
+      answer conflicts).
+    permissible_values:
+      meta_disco:
+        description: Take this record's value; its status is `classified` or `not_applicable`.
+      published:
+        description: Keep the repository's published value; the status is `conflict` or `not_classified`.
 
   relation_enum:
     description: >-

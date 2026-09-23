@@ -28,7 +28,7 @@ def valid_record(**overrides):
     return record
 
 
-def write_metadata(path, records, repository="anvil", input_source=None):
+def write_metadata(path, records, repository="anvil", input_source=None, catalog=None):
     """Write records into the ``files`` envelope every classification producer reads.
 
     The producers load through ``pipeline.load_classifiable_records`` (#376), which reads
@@ -38,11 +38,14 @@ def write_metadata(path, records, repository="anvil", input_source=None):
 
     The envelope names its ``repository`` and nothing else: the catch-all producer reads
     the source's record key off it (#446). ``input_source`` adds the field ``metadata_block``
-    writes (#499) for a test that wants an envelope shaped like a derived input's.
+    writes (#499) for a test that wants an envelope shaped like a derived input's, and
+    ``catalog`` the catalog it names, which the reconcile stage checks evidence against (#432).
     """
     metadata = {"repository": repository}
     if input_source is not None:
         metadata["input_source"] = input_source
+    if catalog is not None:
+        metadata["catalog"] = catalog
     path.write_text(json.dumps({"metadata": metadata, "files": records}))
     return path
 

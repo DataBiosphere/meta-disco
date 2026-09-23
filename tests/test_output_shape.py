@@ -61,9 +61,18 @@ import pytest
 from meta_disco import schema_vocab
 from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    CLASSIFIED,
+    ENTRY_KEYS,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    ClaimSource,
+)
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import PRODUCERS
+from meta_disco.reconcile import SlotEvidence, reconcile_record
+from meta_disco.rule_engine import make_claim
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
 from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record, write_metadata
 from tests.producer_sweep import (
@@ -77,6 +86,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "golden"
 GOLDEN_PATH = FIXTURES / "expected_output.json"
 # The four standalone producers' rows, for the same schema gate the golden feeds (#465).
 STANDALONE_PATH = FIXTURES / "standalone_output.json"
+# Both fixtures' rows run through the reconcile stage with a fixed set of source claims,
+# so the schema gate validates a reconciled record's shape too (#432, contract 6.5).
+RECONCILED_PATH = FIXTURES / "reconciled_output.json"
 # Named once, because every message that reports a stale or missing fixture has to say
 # it — as `schema/tests/test_output_validation.py` does on its side of the boundary.
 REGEN = "python -m tests.test_output_shape"
@@ -586,8 +598,57 @@ def test_the_shape_test_covers_every_producer():
     assert covered == set(PRODUCERS), f"producers with no record-shape coverage: {set(PRODUCERS) ^ covered}"
 
 
+def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
+    """Every row of both fixtures, reconciled against a fixed, deterministic set of source claims.
+
+    Rows alternate between two situations so the reconciled shapes the stage writes all
+    appear: a submitter claim on ``platform`` (which agrees, fills a gap or conflicts,
+    depending on what the producer inferred), and the published source speaking to
+    ``reference_assembly`` with a value no authored row reads (a conflict or missing work).
+    """
+    source = ClaimSource(name="anvil", dataset="AnVIL_GOLDEN", table="sequencing", column="platform")
+    platform = make_claim(
+        source_type=SOURCE_REPOSITORY_METADATA,
+        rule_id="platform.golden",
+        value="PACBIO",
+        source=source,
+        raw_value="PacBio",
+        join_key="drs_uri",
+        match_exact=True,
+    )
+    published = ClaimSource(name="anvil", dataset="AnVIL_GOLDEN", table="anvil_file", column="reference_assembly")
+
+    def unreviewed() -> SlotEvidence:
+        # What reconcile keeps of a published value no authored row reads: an `unmapped`
+        # entry declaring nothing, beside the mark that moves the slot.
+        seen = make_claim(
+            source_type=SOURCE_PUBLISHED_VALUE,
+            state="unmapped",
+            source=published,
+            raw_value='["GRCm39"]',
+            join_key="drs_uri",
+            match_exact=True,
+        )
+        return SlotEvidence(claims=[seen], unreviewed={SOURCE_PUBLISHED_VALUE})
+
+    reconciled: dict = {}
+    for producer, payload in sorted({**pipeline_output, **standalone}.items()):
+        rows = []
+        for i, row in enumerate(payload["classifications"]):
+            said = SlotEvidence(claims=[platform]) if i % 2 == 0 else unreviewed()
+            slot = "platform" if i % 2 == 0 else "reference_assembly"
+            rows.append(reconcile_record(row, {slot: said}))
+        reconciled[producer] = {"classifications": rows}
+    return reconciled
+
+
+def test_reconciled_output_matches_fixture(output, standalone_output):
+    """The reconciled rows the schema gate validates must deep-equal a fresh reconcile of both fixtures."""
+    _assert_matches_fixture(build_reconciled_output(output, standalone_output), RECONCILED_PATH, "Reconciled")
+
+
 def _regenerate_fixtures():
-    """Write both committed fixtures from a fresh run (manual regen entry point).
+    """Write the committed fixtures from a fresh run (manual regen entry point).
 
     One command for both, because the standalone fixture's index records inherit from
     the golden's bam rows: regenerating either alone would leave that inheritance
@@ -601,7 +662,8 @@ def _regenerate_fixtures():
         standalone_dir = Path(tmp) / "standalone"
         standalone_dir.mkdir()
         standalone = build_standalone_output(standalone_dir, output)
-    for path, payload in ((GOLDEN_PATH, output), (STANDALONE_PATH, standalone)):
+    reconciled = build_reconciled_output(output, standalone)
+    for path, payload in ((GOLDEN_PATH, output), (STANDALONE_PATH, standalone), (RECONCILED_PATH, reconciled)):
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         print(f"Wrote fixture to {path}")
 

@@ -34,9 +34,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import CLASSIFICATION_FIELDS, STATUS_LABELS, field_label
-from .output_utils import iter_records
+from .output_utils import ARTIFACT_READERS
 from .pipeline import load_snapshot
 from .summaries import escape_md_cell
+
+# Which artifact of a run a comparison reads (contract 6.9, #432). Neither is a default:
+# a diff that silently read inference where the caller meant the delivered answer would
+# report the wrong numbers.
+ARTIFACTS = tuple(ARTIFACT_READERS)
 
 # A file's identity across generations: (dataset_title, file_name, md5sum).
 FileKey = tuple[str, str, str]
@@ -275,11 +280,14 @@ def snapshot_parity(old_records: list, new_records: list) -> list[DatasetParity]
     return sorted(rows, key=lambda row: (-(row.md5_changed + row.removed + row.added), row.dataset))
 
 
-def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
-    """Read a run directory into ``file identity -> multiset of label tuples``.
+def run_labels(run_dir: Path, artifact: str) -> dict[FileKey, Counter[Labels]]:
+    """Read one artifact of a run directory into ``file identity -> multiset of label tuples``.
 
-    Reads the run through ``output_utils.iter_records``, so it covers the same
-    files and tolerates the same shapes as the consistency linter. Labels are read
+    ``artifact`` is required and is one of :data:`ARTIFACTS`. ``inference`` reads the
+    run through ``output_utils.iter_records``, so it covers the same files and tolerates
+    the same shapes as the consistency linter; ``reconciled`` reads the reconcile stage's
+    NDJSON through ``output_utils.iter_reconciled_records``, which raises
+    FileNotFoundError when the run was never reconciled. Labels are read
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
@@ -303,15 +311,18 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     Raises FileNotFoundError if the run directory does not exist — an empty result
     would otherwise read as a run with no coverage.
     """
+    if artifact not in ARTIFACTS:
+        raise ValueError(f"artifact {artifact!r} is not one of {ARTIFACTS}")
     if not run_dir.is_dir():
         raise FileNotFoundError(f"Run directory not found: {run_dir}")
 
+    records = ARTIFACT_READERS[artifact](run_dir)
     labels: dict[FileKey, Counter[Labels]] = defaultdict(Counter)
     # The corpus holds ~700K records but only a few dozen distinct label tuples, so
     # each tuple is interned: one shared object per distinct combination instead of
     # a fresh tuple and five fresh strings per record.
     interned: dict[Labels, Labels] = {}
-    for record in iter_records(run_dir):
+    for record in records:
         key: FileKey = (
             str(record.get("dataset_title") or ""),
             str(record.get("file_name") or ""),
@@ -608,8 +619,9 @@ def render_report(
     old_labels: dict[FileKey, Counter[Labels]],
     new_labels: dict[FileKey, Counter[Labels]],
     generated_at: str,
+    artifact: str,
 ) -> str:
-    """Assemble the full comparison report."""
+    """Assemble the full comparison report; ``artifact`` names which artifact of the runs the labels came from."""
     old_total = _run_total(old_labels)
     new_total = _run_total(new_labels)
     diffs = diff_runs(old_labels, new_labels)
@@ -619,7 +631,7 @@ def render_report(
         "",
         f"Generated {generated_at} by `scripts/compare_corpus.py` (issue #335).",
         "",
-        f"Runs compared: `{old_run}` → `{new_run}`.",
+        f"Runs compared: `{old_run}` → `{new_run}`, {artifact} artifact.",
         "",
     ]
     lines += render_parity_section(old_meta, new_meta, parity)

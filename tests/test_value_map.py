@@ -83,17 +83,25 @@ def entry(field, raw_value, file="drs://f1", dataset="AnVIL_HPRC_R2", table="hif
     return EvidenceEntry(field=field, target_key_value=file, raw_value=raw_value, source=source)
 
 
-def write_generation(root: Path, dataset: str, table: str, entries: list[EvidenceEntry]) -> Path:
-    """One evidence file in the generation layout the reader discovers, keyed by DRS URI."""
-    directory = generation_dir(root, "anvil", "anvil15", dataset, STAMP)
+def write_generation(
+    root: Path, dataset: str, table: str, entries: list[EvidenceEntry], envelope=None, source: str = "anvil"
+) -> Path:
+    """One evidence file in the generation layout the reader discovers, keyed by DRS URI.
+
+    ``envelope`` replaces the default submitter-table one, and ``source`` names the
+    evidence directory it lands under (``anvil_published`` for the published importer's);
+    the version directory is the envelope's ``source_version``.
+    """
+    if envelope is None:
+        envelope = evidence_file_envelope(
+            source=file_source(dataset, table),
+            source_version="anvil15",
+            source_key=JOIN_KEY_DRS_URI,
+            target=EvidenceTarget(system="anvil", dataset=dataset, version="anvil15"),
+            target_key=JOIN_KEY_DRS_URI,
+        )
+    directory = generation_dir(root, source, envelope.source_version, dataset, STAMP)
     directory.mkdir(parents=True, exist_ok=True)
-    envelope = evidence_file_envelope(
-        source=file_source(dataset, table),
-        source_version="anvil15",
-        source_key=JOIN_KEY_DRS_URI,
-        target=EvidenceTarget(system="anvil", dataset=dataset, version="anvil15"),
-        target_key=JOIN_KEY_DRS_URI,
-    )
     write_evidence_file(evidence_file_path(directory, table), envelope, entries)
     return directory
 
@@ -791,12 +799,13 @@ def test_two_rows_keyed_alike_are_refused_by_the_table_itself(tmp_path):
         ValueMap(rows=(a, b))
 
 
-def test_ac26_nothing_in_a_run_imports_the_table():
-    """Classification output is unchanged because no run code reaches the module: the argument the
-    issue allows in place of a corpus diff, made checkable over every module and script but the table's own."""
+def test_ac26_nothing_but_reconcile_imports_the_table():
+    """Inference output is unchanged because no classification code reaches the module: the argument the
+    issue allows in place of a corpus diff, made checkable over every module and script but the table's own.
+    The reconcile stage is the table's one reader (#432), and it writes its own artifact, never inference's."""
     sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
-    assert importers == [], importers
+    assert importers == ["src/meta_disco/reconcile.py"], importers
 
 
 def test_ac27_the_seeder_and_the_queue_read_every_line_through_iter_evidence(empty_table, evidence_root, monkeypatch):

@@ -555,7 +555,7 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     The two dimensions the repository publishes for a file (``files.data_modality`` /
     ``files.reference_assembly``) are not copied: they enter as the published importer's
     evidence, read from ``anvil_file`` (contract 7.12, #513), not off this join; the
-    reconcile stage is to read it (#432, not built).
+    reconcile stage reads it (#432).
     """
     return {
         "entry_id": row["files.document_id"],

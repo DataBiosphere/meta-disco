@@ -114,10 +114,11 @@ evidence}` entry — plus the controlled vocabulary:
   reconcile, and what the pipeline's stages are. Cite it by assertion number (`3.4`,
   `6.9`) rather than restating it — restating is the drift it exists to stop.
   **Read its "What is not true yet" section before building against it.** Much of it
-  describes a target state: the read-sources and reconcile stages do not exist yet.
-  The evidence file (#401, amended by #421), the slot map (#369) and the translation
-  table (#414) do, and no classification run reads the evidence or the table. Its Open
-  section lists what is still undecided. Epic #391 tracks the work.
+  describes a target state. The evidence file (#401, amended by #421), the slot map
+  (#369), the translation table (#414) and the reconcile stage (#432, which absorbed
+  read-sources) exist; inference reads neither the evidence nor the table, reconcile
+  reads both. Curator rules (#397) do not exist yet. Its Open section lists what is
+  still undecided. Epic #391 tracks the work.
 
 - **What the code does today, which the contract does not replace:**
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
@@ -174,16 +175,26 @@ evidence}` entry — plus the controlled vocabulary:
     Row ids are `<slot>.<slug>`, and no rule id contains a dot, which is what keeps the
     two apart. `make seed-value-map` appends seeded rows and never rewrites one;
     `make review-queue` lists the unauthored values. `claims_from` builds a line's
-    claims through `make_claim` for reconcile (#432) — nothing in a run calls it.
+    claims through `make_claim`; reconcile is its one caller in a run.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
-    so no evidence reaches classification and a run with evidence files present
-    produces the same output as one without. Currency is not decidable offline;
-    recording which catalog a run enhances is #404, and is not built.
+    so no evidence reaches inference and a run with evidence files present writes the
+    same inference output as one without. Recording which catalog a run enhances is
+    #404, and is not built.
+  - **The reconcile stage** is `reconcile.py` (`make reconcile`, #432): it reads a stored
+    run plus the evidence and writes `<run>/reconciled/` — one NDJSON file per inference
+    file, envelope on line 1, plus `reconcile_report.json` — and never touches the
+    inference output (contract 6.3), which stays JSON at the run root. Which evidence
+    applies comes from the input envelope's `repository`, and its `catalog` where it
+    names one (HPRC never will). `resolve_slot` is the whole resolution rule and
+    `use_for` the per-slot `use` indicator (`meta_disco` | `published`) the indexer
+    reads; per-input outcomes (match, harmonized, disagreed, unreviewed, no_claim, silent) are
+    computed in the report and never stored on a record. `corpus_diff` must be told
+    which artifact it compares (`--artifact inference|reconciled`).
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,
-    #497), which the reconcile stage (#432, not built) is to read; until then nothing
-    compares them with inference. The input path no longer
+    #497), which the reconcile stage reads and reconciles with inference (#432). The
+    input path no longer
     copies AnVIL's two published columns onto a record; an input file written before
     that still carries them, and the input model ignores them (`extra="ignore"`). Do not
     add a per-record copy back: a published value no authored row maps is listed by

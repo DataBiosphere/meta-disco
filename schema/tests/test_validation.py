@@ -15,7 +15,8 @@ def _run(instance):
     # avoids nesting a uv invocation inside the uv run that already launched pytest.
     return subprocess.run(
         [sys.executable, _VALIDATE, _DATA / instance],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
 
 
