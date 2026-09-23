@@ -120,15 +120,18 @@ classify-and-report: classify classify-hprc all-reports
 # advances without notice. INPUT_SOURCE is how the records are derived: azul-compact
 # (the default; both manifests, the compact join), azul-verbatim (the verbatim manifest
 # only) or tdr-direct (the snapshots read in place from BigQuery, nothing downloaded).
-# An unknown value of either is refused by the script before any request, query or
-# write of its own; with INPUT_SOURCE=tdr-direct, `uv run --extra tdr` syncs that
-# extra into the environment first.
+# An unknown value of either is refused before any request, query or write: on the
+# tdr-direct path the names are checked (`--check-args`) without the extra before
+# `uv run --extra tdr` would sync it.
 # tdr-direct runs with `--extra tdr`, the way probe-tdr does, and takes its identity
 # from the environment: see meta_disco.tdr. Unset, each is the script's own default
 # (prod, azul-compact), so the defaults have one spelling.
+DOWNLOAD_ARGS = $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(if $(INPUT_SOURCE),--input-source $(INPUT_SOURCE)) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
+
 download:
 	$(if $(CATALOG),$(error CATALOG is retired (#500): the deployment names its catalog, so pass DEPLOYMENT=prod or DEPLOYMENT=dev))
-	uv run $(if $(filter tdr-direct,$(INPUT_SOURCE)),--extra tdr) python scripts/download_anvil_manifest.py $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(if $(INPUT_SOURCE),--input-source $(INPUT_SOURCE)) $(if $(BILLING_PROJECT),--billing-project $(BILLING_PROJECT))
+	$(if $(filter tdr-direct,$(INPUT_SOURCE)),uv run python scripts/download_anvil_manifest.py $(DOWNLOAD_ARGS) --check-args)
+	uv run $(if $(filter tdr-direct,$(INPUT_SOURCE)),--extra tdr) python scripts/download_anvil_manifest.py $(DOWNLOAD_ARGS)
 
 # Probe a TDR snapshot through the BigQuery layer (#498): list its tables, count
 # each, stream one (TABLE; the script's default is anvil_file) and time it.

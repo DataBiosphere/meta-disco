@@ -369,6 +369,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_MAX_WAIT,
         help=f"Seconds one request may spend waiting out a rate limit before failing (default {DEFAULT_MAX_WAIT:.0f})",
     )
+    # Parse, refuse an unknown name, and exit: the Makefile runs this without the `tdr`
+    # extra before `uv run --extra tdr`, so a bad name fails before that extra is synced.
+    parser.add_argument("--check-args", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--billing-project",
         default=None,
@@ -379,6 +382,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.check_args:
+        return 0
     dep = DEPLOYMENTS[args.deployment]
     if args.input_source == INPUT_SOURCE_TDR_DIRECT:
         if args.datasets or args.force:

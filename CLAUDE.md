@@ -49,8 +49,7 @@ uv run pytest tests/
 # today's behaviour), `azul-verbatim` (the verbatim manifest only), or `tdr-direct`
 # (the snapshots read in place from BigQuery, nothing downloaded; it syncs the `tdr`
 # extra in and takes its identity from the environment, see Environment below). An
-# unknown value of either is refused by the script before any request, query or
-# write of its own (with `tdr-direct`, `uv run --extra tdr` syncs the extra first).
+# unknown value of either fails before any request, query or write.
 make download
 make download DEPLOYMENT=dev INPUT_SOURCE=azul-verbatim
 

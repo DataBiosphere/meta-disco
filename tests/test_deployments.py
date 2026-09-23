@@ -127,6 +127,15 @@ class TestAnUnknownNameIsRefusedFirst:
         assert "invalid choice" in capsys.readouterr().err
         assert list(tmp_path.iterdir()) == []
 
+    def test_the_make_entry_checks_names_without_touching_anything(self, tmp_path, monkeypatch, capsys):
+        # The Makefile runs this before `uv run --extra tdr` on the tdr-direct path.
+        no_network(monkeypatch)
+        monkeypatch.chdir(tmp_path)
+        assert dl.main(["--deployment", "dev", "--input-source", DIRECT, "--check-args"]) == 0
+        with pytest.raises(SystemExit):
+            dl.main(["--deployment", "staging", "--input-source", DIRECT, "--check-args"])
+        assert list(tmp_path.iterdir()) == []
+
     def test_the_gate_refuses_it(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
         with pytest.raises(SystemExit) as exc:
