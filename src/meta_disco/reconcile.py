@@ -98,7 +98,8 @@ INFERENCE = "inference"
 # Per input, scored against the other inputs' declarations for the same slot. A source:
 # match or harmonized (it declared, and no other input declared differently), disagreed
 # (another input declared differently), unreviewed (its value has no authored row),
-# no_claim (its value's authored row declares nothing for the slot), silent. Inference:
+# no_claim (its value's authored row declares nothing for the slot, or declares
+# `not_classified`, which is no answer), silent. Inference:
 # agreed (a source declared the same), added (no other input declared anything),
 # disagreed (another input declared differently, or its own rules conflicted), silent.
 #
@@ -627,7 +628,9 @@ class Report:
             return HARMONIZED if any(is_harmonized(c) for c in mine) else MATCH
         if source_type in said.unreviewed:
             return UNREVIEWED
-        if source_type in said.no_claim:
+        if source_type in said.no_claim or any(
+            c.get("source_type") == source_type and c.get("status") == NOT_CLASSIFIED for c in said.claims
+        ):
             return NO_CLAIM
         return SILENT
 

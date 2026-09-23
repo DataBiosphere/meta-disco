@@ -664,3 +664,20 @@ def test_a_conflict_is_counted_by_who_disagreed(tmp_path, run, evidence, table):
         "conflict_published": 2,
     }
     assert result["conflict_rate"][DATASET]["reference_assembly"] == 1.0
+
+
+def test_a_value_mapped_to_not_classified_is_scored_no_claim(tmp_path, run, evidence):
+    table = load(
+        tmp_path,
+        TABLE
+        + """
+  - id: platform.unknown
+    match: {slot: platform, value: unknown}
+    declares: {platform: not_classified}
+    reason: The source's word for a platform it did not record.
+""",
+    )
+    write_run(run, [record(1)])
+    write_evidence(evidence, [("platform", drs(1), "unknown")])
+    result = go(run, tmp_path, evidence, table)
+    assert result["inputs"][DATASET]["platform"][SOURCE_REPOSITORY_METADATA] == {"no_claim": 1}
