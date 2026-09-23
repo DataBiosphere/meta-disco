@@ -39,9 +39,10 @@ snapshot the manifest names on every row is checked against the declaration, and
 disagreement refuses the run naming both (decision of 2026-09-22 on #500): the
 declaration says what the deployment reads, and the fix is to update it.
 
-A manifest already on disk is not re-requested unless ``--force`` is given or
-another manifest the input source needs for that dataset is missing — a dataset is
-fetched whole, so its manifests share one file count — and the input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
+A manifest already on disk is not re-requested unless ``--force`` is given, or
+another manifest the input source needs for that dataset is missing or recorded
+under another file count — a dataset is fetched whole, so its manifests share one
+count — and the input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
 what is fetched, never what the input file covers, so a targeted repair cannot shrink
 the corpus. Discovery decides what to fetch; parity is judged against the sidecar's
 stored counts, so a catalog that has moved on since the pull — or been deleted, as
@@ -185,11 +186,16 @@ def download(
             return 1
         entry = stored.setdefault(title, {})
         on_disk = all(manifest_path(root, catalog, title, fmt).is_file() for fmt in formats)
-        # A dataset is fetched whole: when any manifest this source needs is missing, every
-        # one is requested again, so they are all counted under the one file count stored
-        # below. Otherwise a verbatim manifest pulled earlier (by an azul-verbatim run)
-        # would be judged against the count a later compact pull stores, and fail parity.
-        refetch = title in fetch and (force or not on_disk)
+        # A dataset is fetched whole: when any manifest this source needs is missing, or
+        # the sidecar records one as holding another row count than the dataset's stored
+        # file count, every one is requested again, so they are all counted under the one
+        # file count stored below. The sidecar is shared by the two Azul kinds, so a pull
+        # of one kind can leave the other's manifest counted under an earlier count (a
+        # verbatim manifest pulled before a compact run, or a compact one left behind by
+        # an `azul-verbatim --force` pull); without this it would fail parity on every
+        # run until --force.
+        stale = any((entry.get(fmt) or {}).get("rows") not in (None, entry.get("file_count")) for fmt in formats)
+        refetch = title in fetch and (force or not on_disk or stale)
         if on_disk and not refetch and "file_count" in entry:
             # Parity is judged against the count the manifests were requested under.
             if title in live and live[title].file_count != entry["file_count"]:

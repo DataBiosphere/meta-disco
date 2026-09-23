@@ -314,6 +314,27 @@ class TestTheDeclarationIsChecked:
         assert formats == [am.FORMAT_COMPACT, am.FORMAT_VERBATIM]
         assert envelope(dep)["datasets"]["ds"]["file_count"] == 3
 
+    def test_a_compact_manifest_left_behind_by_a_forced_verbatim_pull_is_fetched_again(self, tmp_path):
+        # Compact pulled at 2, then a forced verbatim pull at 3 stores the new count; the
+        # compact manifest on disk still holds 2 rows, so the next compact run requests
+        # the dataset whole instead of failing parity until --force.
+        dep = fixture_deployment(tmp_path)
+        assert download(dep, COMPACT, session_for(tmp_path, {"ds": 2})) == 0
+        grown = session_for(tmp_path, {"ds": 3})
+        assert dl.download(dep, VERBATIM, None, force=True, session=grown, sleep=no_sleep) == 0
+        session = session_for(tmp_path, {"ds": 3})
+        assert download(dep, COMPACT, session) == 0
+        formats = sorted(params["format"] for method, _, params in session.calls if method == "PUT" and params)
+        assert formats == [am.FORMAT_COMPACT, am.FORMAT_VERBATIM]
+        assert len(load_records(dep.input_ndjson)) == 3
+
+    def test_manifests_that_agree_with_the_stored_count_are_not_fetched_again(self, tmp_path):
+        dep = fixture_deployment(tmp_path)
+        assert download(dep, COMPACT, session_for(tmp_path, {"ds": 2})) == 0
+        session = session_for(tmp_path, {"ds": 2})
+        assert download(dep, COMPACT, session) == 0
+        assert not [c for c in session.calls if c[0] == "PUT"]
+
     def test_a_catalog_dataset_the_deployment_does_not_declare_is_skipped(self, tmp_path, capsys):
         dep = fixture_deployment(tmp_path, ["ds"])
         session = session_for(tmp_path, {"ds": 2, "placeholders": 50})
