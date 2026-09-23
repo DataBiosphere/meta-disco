@@ -681,3 +681,12 @@ def test_a_value_mapped_to_not_classified_is_scored_no_claim(tmp_path, run, evid
     write_evidence(evidence, [("platform", drs(1), "unknown")])
     result = go(run, tmp_path, evidence, table)
     assert result["inputs"][DATASET]["platform"][SOURCE_REPOSITORY_METADATA] == {"no_claim": 1}
+
+
+def test_the_published_source_speaks_to_every_column_its_map_declares(tmp_path, run, evidence, table):
+    """A published column empty in every dataset writes no line; the map still says the source covers it."""
+    write_run(run, [record(1, reference_assembly="GRCh38", data_modality="genomic")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])  # no data_modality line anywhere
+    result = go(run, tmp_path, evidence, table)
+    assert result["inputs"][DATASET]["data_modality"][SOURCE_PUBLISHED_VALUE] == {"silent": 1}
+    assert result["added_over_published"][DATASET] == {"data_modality": 1}

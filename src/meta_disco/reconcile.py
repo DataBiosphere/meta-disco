@@ -70,10 +70,11 @@ from .output_utils import (
     reconciled_name,
     write_reconciled_file,
 )
-from .pipeline import PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
+from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS
 from .rule_engine import make_claim
 from .schema.classification_model import EvidenceFileEnvelope
+from .slot_map import load_slot_map, published_slot_map_resource
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
     EvidenceEntry,
@@ -135,6 +136,20 @@ SOURCE_PRECEDENCE = (
     (SOURCE_REPOSITORY_METADATA, "submitter"),
     (SOURCE_EXTERNAL_GROUND_TRUTH, "external"),
 )
+
+# Each repository's published slot map, whose columns are the slots its published source
+# speaks to (#497). Read for those slots rather than inferred from the evidence, whose
+# importer writes no line for an empty cell, so a column empty everywhere leaves none.
+PUBLISHED_SLOT_MAPS = {ANVIL_REPOSITORY: published_slot_map_resource}
+
+
+def published_slots(repository: str) -> frozenset[str]:
+    """The slots ``repository``'s published source speaks to, from its published slot map; none if it has no map."""
+    resource = PUBLISHED_SLOT_MAPS.get(repository)
+    if resource is None:
+        return frozenset()
+    return frozenset(slot for entry in load_slot_map(resource()).entries for slot in entry.slots)
+
 
 # How many unmatched and ambiguous key values the report names per evidence file.
 MAX_EXAMPLES = 5
@@ -533,6 +548,8 @@ class Report:
     """Counts per dataset and dimension: how each slot settled, and how each input did."""
 
     coverage: dict[str, set[tuple[str | None, str]]]
+    # The slots the published source's map declares (:func:`published_slots`).
+    published_slots: frozenset[str] = frozenset()
     files: Counter = field(default_factory=Counter)
     slots: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and slot, the files where the delivered value is ours and the published
@@ -551,16 +568,17 @@ class Report:
         Read off the evidence lines, except for the published source: it is one table with
         the same columns in every dataset of its repository (contract 7.12,
         ``pipeline.PUBLISHED_TABLES``), and its importer skips an empty cell and writes no
-        file for a dataset whose columns are all empty. So it speaks to every slot it has a
-        line for anywhere, in every dataset of the run — a dataset with no published file
-        is one where AnVIL publishes nothing, which is still that source's silence.
+        file for a dataset whose columns are all empty. So it speaks to every slot its
+        published slot map declares, and every slot it has a line for, in every dataset
+        of the run — a dataset with no published file is one where the repository
+        publishes nothing, which is still that source's silence.
         """
         at = (dataset, slot)
         if at not in self._covering:
             covering = []
             for source_type, pairs in self.coverage.items():
                 if source_type == SOURCE_PUBLISHED_VALUE:
-                    speaks = slot in {s for _, s in pairs}
+                    speaks = slot in self.published_slots or slot in {s for _, s in pairs}
                 else:
                     speaks = at in pairs or (None, slot) in pairs
                 if speaks:
@@ -707,7 +725,7 @@ def reconcile_run(
         require_one_published_source(statuses, PUBLISHED_TABLES)
         applicable, skipped = select_evidence(statuses, repository, catalog)
     joined = join(applicable, run_dir, key, table)
-    report = Report(coverage=joined.coverage)
+    report = Report(coverage=joined.coverage, published_slots=published_slots(repository))
 
     root = evidence_root or Path()
     header = {
