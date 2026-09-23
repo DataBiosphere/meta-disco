@@ -713,6 +713,97 @@
           ],
           "source": "anvil/anvil15"
         }
+      },
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "genomic"
+              }
+            ],
+            "status": "classified",
+            "value": "genomic"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "VCF files contain variant calls (genomic data)",
+                "rule_id": "variant_default_genomic",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "variants"
+              }
+            ],
+            "status": "classified",
+            "value": "variants"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Filename contains GRCh38/hg38 reference indicator",
+                "rule_id": "filename_ref_grch38",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "GRCh38"
+              },
+              {
+                "reason": "Filename contains CHM13/T2T reference indicator",
+                "rule_id": "filename_ref_chm13",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "CHM13"
+              },
+              {
+                "competing_values": [
+                  "CHM13",
+                  "GRCh38"
+                ],
+                "marker": "conflict",
+                "reason": "Conflicting reference_assembly: ['CHM13', 'GRCh38'] \u2014 ambiguous",
+                "status": "conflict"
+              }
+            ],
+            "status": "conflict",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": null,
+        "drs_uri": "drs://golden/v2_g-object-8",
+        "entry_id": "g-vcf-2",
+        "file_format": ".vcf.gz",
+        "file_id": "g-file-8",
+        "file_name": "sample.chm13.hg38.vcf.gz",
+        "file_size": 5001,
+        "md5sum": "88888888888888888888888888888888",
+        "published": null
       }
     ],
     "metadata": {
@@ -723,9 +814,9 @@
       "errored": 0,
       "failed": 0,
       "from_cache": 0,
-      "processed": 1,
-      "successful": 1,
-      "total_to_process": 1,
+      "processed": 2,
+      "successful": 2,
+      "total_to_process": 2,
       "validation_failed": 0
     }
   }
