@@ -106,7 +106,11 @@ INFERENCE = "inference"
 # first source in SOURCE_PRECEDENCE that declared the delivered value — verbatim before
 # harmonized — else filled_by_inference; published_unreviewed (`not_classified` because the
 # published source spoke with a value no authored row reads — work to do, not a
-# challenge); or the slot's status (`conflict`, `not_applicable`, `not_classified`).
+# challenge); one of three kinds of `conflict`, first match wins: conflict_inference
+# (inference's own rules disagreed), conflict_published (the published source declared a
+# value another input disagrees with, or spoke with an unreviewed value beside another
+# input's), conflict_sources (inference and the other sources, or those sources among
+# themselves, disagreed); or the slot's other status (`not_applicable`, `not_classified`).
 # Precedence only attributes a value every declaring input agreed on; it never picks a
 # value (contract 6.8). Whether inference agreed is its own outcome, in `inputs`.
 MATCH = "match"
@@ -119,6 +123,9 @@ ADDED = "added"
 DISAGREED = "disagreed"
 FILLED_BY_INFERENCE = "filled_by_inference"
 PUBLISHED_UNREVIEWED = "published_unreviewed"
+CONFLICT_INFERENCE = "conflict_inference"
+CONFLICT_PUBLISHED = "conflict_published"
+CONFLICT_SOURCES = "conflict_sources"
 
 # The order a delivered value is attributed in, with each source's name in the report:
 # what the repository publishes, then what its submitters wrote, then other catalogs.
@@ -582,6 +589,13 @@ class Report:
         status = settled["status"]
         if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
             return PUBLISHED_UNREVIEWED
+        if status == CONFLICT:
+            if settled["inferred"]["status"] == CONFLICT:
+                return CONFLICT_INFERENCE
+            published = any(
+                c["source_type"] == SOURCE_PUBLISHED_VALUE and declaration(c) is not None for c in said.claims
+            )
+            return CONFLICT_PUBLISHED if published or SOURCE_PUBLISHED_VALUE in said.unreviewed else CONFLICT_SOURCES
         if status != CLASSIFIED:
             return status
         for source_type, name in SOURCE_PRECEDENCE:
@@ -621,9 +635,12 @@ class Report:
         def plain(d):
             return {k: plain(v) for k, v in sorted(d.items())} if isinstance(d, dict) else d
 
+        conflicts = (CONFLICT_INFERENCE, CONFLICT_PUBLISHED, CONFLICT_SOURCES)
         conflict_rate = {
             dataset: {
-                slot: round(counts.get(CONFLICT, 0) / self.files[dataset], 6) if self.files[dataset] else 0.0
+                slot: round(sum(counts.get(k, 0) for k in conflicts) / self.files[dataset], 6)
+                if self.files[dataset]
+                else 0.0
                 for slot, counts in sorted(per_slot.items())
             }
             for dataset, per_slot in sorted(self.slots.items())

@@ -477,7 +477,7 @@ def test_ac26_an_unreviewed_published_value_alone_is_missing_work_not_a_conflict
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"], ref["use"]) == (NOT_CLASSIFIED, None, USE_PUBLISHED)
     counts = result["slots"][DATASET]["reference_assembly"]
-    assert counts.get("published_unreviewed") == 1 and CONFLICT not in counts
+    assert counts == {"published_unreviewed": 1}
 
 
 def test_ac27_no_reconciled_value_is_outside_the_vocabulary(tmp_path, run, evidence, table):
@@ -643,3 +643,24 @@ def test_a_dataset_with_no_published_file_is_one_where_the_published_source_is_s
     result = go(run, tmp_path, evidence, table)
     assert result["added_over_published"] == {"AnVIL_NOTHING_PUBLISHED": {"reference_assembly": 1}}
     assert result["inputs"]["AnVIL_NOTHING_PUBLISHED"]["reference_assembly"][SOURCE_PUBLISHED_VALUE] == {"silent": 1}
+
+
+def test_a_conflict_is_counted_by_who_disagreed(tmp_path, run, evidence, table):
+    write_run(
+        run,
+        [
+            record(1, reference_assembly=CONFLICT),  # inference's own rules disagreed
+            record(2, reference_assembly="GRCh38"),  # the submitter says CHM13
+            record(3, reference_assembly="GRCh38"),  # the published value is unreviewed
+            record(4, reference_assembly="GRCh38"),  # the published value says CHM13
+        ],
+    )
+    write_evidence(evidence, [("reference_assembly", drs(1), "GRCh38"), ("reference_assembly", drs(2), "CHM13")])
+    published(evidence, [("reference_assembly", drs(3), '["GRCm39"]'), ("reference_assembly", drs(4), "CHM13")])
+    result = go(run, tmp_path, evidence, table)
+    assert result["slots"][DATASET]["reference_assembly"] == {
+        "conflict_inference": 1,
+        "conflict_sources": 1,
+        "conflict_published": 2,
+    }
+    assert result["conflict_rate"][DATASET]["reference_assembly"] == 1.0
