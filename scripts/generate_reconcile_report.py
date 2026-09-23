@@ -383,26 +383,51 @@ def render_markdown(data: dict) -> str:
         "",
         "## The join, per evidence file",
         "",
-        "The source tables this run was checked against, and whether each value from them found its file in the run. "
+        "Whether each value from the source tables found its file in this run. "
         "A value that found no file, or more than one, is not used.",
         "",
-        "- **offered:** values read from the table.",
-        "- **matched:** values that found their file.",
-        "- **unmatched:** values that found no file.",
-        "- **ambiguous:** values that found more than one file.",
-        "",
     ]
-    if whole["evidence"]:
-        lines += md_table(
-            ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"],
+    evidence = whole["evidence"]
+    header = ["source type", "dataset", "table", "key", "offered", "matched", "unmatched", "ambiguous"]
+
+    def evidence_table(rows: list[dict]) -> list[str]:
+        return md_table(
+            header,
             [
                 [code(e["source_type"]), code(e["dataset"] or ALL), code(e["table"] or "-"), code(e["key"])]
                 + [_n(e[k]) for k in ("offered", "matched", "unmatched", "ambiguous")]
-                for e in whole["evidence"]
+                for e in rows
             ],
         )
-    else:
+
+    if not evidence:
         lines.append("No evidence was read.")
+    else:
+        problems = [e for e in evidence if e["unmatched"] or e["ambiguous"]]
+        offered = sum(e["offered"] for e in evidence)
+        if not problems:
+            lines.append(
+                f"**All {len(evidence)} evidence files matched:** {offered:,} values, none unmatched or ambiguous."
+            )
+        else:
+            lines += [
+                f"**{len(problems)} of {len(evidence)} evidence files have values that did not match** "
+                f"({offered:,} values in all):",
+                "",
+                *evidence_table(problems),
+            ]
+        lines += [
+            "",
+            '<details markdown="1">',
+            f"<summary>Evidence files read ({len(evidence)})</summary>",
+            "",
+            "*offered*: values read from the table; *matched*: found their file; *unmatched*: found no file; "
+            "*ambiguous*: found more than one file.",
+            "",
+            *evidence_table(evidence),
+            "",
+            "</details>",
+        ]
     lines += ["", "## Per dataset", ""]
     for scope in data["datasets"]:
         name = scope["name"]

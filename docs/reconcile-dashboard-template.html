@@ -64,14 +64,8 @@
   <div class="scroll" id="change"></div>
 
   <h2>The join, per evidence file</h2>
-  <p class="note">The source tables this run was checked against, and whether each value from them found its file in the run.
-    A value that found no file, or more than one, is not used.</p>
-  <ul class="note">
-    <li><strong>offered:</strong> values read from the table.</li>
-    <li><strong>matched:</strong> values that found their file.</li>
-    <li><strong>unmatched:</strong> values that found no file.</li>
-    <li><strong>ambiguous:</strong> values that found more than one file.</li>
-  </ul>
+  <p class="note">Whether each value from the source tables found its file in this run. A value that found no file,
+    or more than one, is not used.</p>
   <div class="scroll" id="evidence"></div>
 
   <script type="module">
@@ -158,11 +152,20 @@
       }
 
       const ev = scope.evidence;
-      document.getElementById('evidence').innerHTML = !ev.length ? '<p>No evidence was read.</p>' : table(
+      const evidenceTable = rows => table(
         ['source type', 'dataset', 'table', 'key', 'offered', 'matched', 'unmatched', 'ambiguous'],
-        ev.map(e => [e.source_type, e.dataset || DATA.all, e.table || '-', e.key,
+        rows.map(e => [e.source_type, e.dataset || DATA.all, e.table || '-', e.key,
           ...['offered', 'matched', 'unmatched', 'ambiguous'].map(k => ({text: n(e[k]), cls: 'num'}))]),
       );
+      const problems = ev.filter(e => e.unmatched || e.ambiguous);
+      const offered = ev.reduce((a, e) => a + e.offered, 0);
+      document.getElementById('evidence').innerHTML = !ev.length ? '<p>No evidence was read.</p>'
+        : (problems.length
+            ? `<p><strong>${problems.length} of ${ev.length} evidence files have values that did not match</strong> (${n(offered)} values in all):</p>` + evidenceTable(problems)
+            : `<p><strong>All ${ev.length} evidence files matched:</strong> ${n(offered)} values, none unmatched or ambiguous.</p>`)
+          + `<details><summary>Evidence files read (${ev.length})</summary>`
+          + '<p class="note"><em>offered</em>: values read from the table; <em>matched</em>: found their file; <em>unmatched</em>: found no file; <em>ambiguous</em>: found more than one file.</p>'
+          + evidenceTable(ev) + '</details>';
     }
 
     select.addEventListener('change', () => render(Number(select.value)));

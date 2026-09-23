@@ -198,3 +198,13 @@ def test_no_catalog_text_can_close_the_dashboards_script_tag():
     assert (
         json.loads(html.removeprefix("<script>const D = ").removesuffix(";</script>"))["name"] == "</SCRIPT><img src=x>"
     )
+
+
+def test_the_join_lists_only_evidence_files_with_values_that_did_not_match(conflicted):
+    report = rr.load_report(conflicted)
+    md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
+    assert "**All 2 evidence files matched:** 3 values, none unmatched or ambiguous." in md
+    report["evidence"][0] = {**report["evidence"][0], "matched": 1, "unmatched": 1}
+    md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
+    assert "**1 of 2 evidence files have values that did not match** (3 values in all):" in md
+    assert "<summary>Evidence files read (2)</summary>" in md

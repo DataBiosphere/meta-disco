@@ -61,12 +61,14 @@ No earlier reconciled run to compare with.
 
 ## The join, per evidence file
 
-The source tables this run was checked against, and whether each value from them found its file in the run. A value that found no file, or more than one, is not used.
+Whether each value from the source tables found its file in this run. A value that found no file, or more than one, is not used.
 
-- **offered:** values read from the table.
-- **matched:** values that found their file.
-- **unmatched:** values that found no file.
-- **ambiguous:** values that found more than one file.
+**All 46 evidence files matched:** 437,112 values, none unmatched or ambiguous.
+
+<details markdown="1">
+<summary>Evidence files read (46)</summary>
+
+*offered*: values read from the table; *matched*: found their file; *unmatched*: found no file; *ambiguous*: found more than one file.
 
 | source type | dataset | table | key | offered | matched | unmatched | ambiguous |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -116,6 +118,8 @@ The source tables this run was checked against, and whether each value from them
 | `published_value` | `AnVIL_ENCORE_293T` | `anvil_file` | `drs_uri` | 1,544 | 1,544 | 0 | 0 |
 | `published_value` | `AnVIL_ENCORE_RS293` | `anvil_file` | `drs_uri` | 2,932 | 2,932 | 0 | 0 |
 | `published_value` | `AnVIL_IGVF_Mouse_R1` | `anvil_file` | `drs_uri` | 6,975 | 6,975 | 0 | 0 |
+
+</details>
 
 ## Per dataset
 
