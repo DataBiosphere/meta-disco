@@ -96,7 +96,10 @@ def iter_run_files(run_dir: Path, strict: bool = False):
         if not strict:
             yield fname, list(_records_in(path))
             continue
-        rows = _record_list(json.loads(path.read_text()))
+        data = json.loads(path.read_text())
+        rows = _record_list(data)
+        if isinstance(data, dict) and not ({"classifications", "results"} & set(data)):
+            rows = None
         if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
             raise ValueError(
                 f"{path}: its record list is not a list of records, so some of its rows could not be read; "
@@ -133,7 +136,8 @@ def iter_reconciled_records(run_dir: Path):
     """Yield every reconciled record (a dict) under ``run_dir/reconciled/``, streaming.
 
     One NDJSON file per inference file, in ``CLASSIFICATION_FILES`` order; line 1 of each
-    is the envelope :func:`write_reconciled_file` writes, and is skipped. A file reconcile
+    is the envelope :func:`write_reconciled_file` writes, checked and skipped; a file
+    without it raises ``ValueError`` rather than losing its first record. A file reconcile
     did not write is skipped, as :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage.
@@ -146,7 +150,10 @@ def iter_reconciled_records(run_dir: Path):
         if not path.exists():
             continue
         with path.open() as f:
-            next(f, None)
+            first = next(f, None)
+            envelope = json.loads(first) if first is not None else None
+            if not isinstance(envelope, dict) or RECONCILED_ENVELOPE_KEY not in envelope:
+                raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
             for line in f:
                 yield json.loads(line)
 

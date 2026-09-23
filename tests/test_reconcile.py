@@ -496,9 +496,31 @@ def test_the_report_scores_inference_and_counts_filled_and_agreed_slots(tmp_path
     write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT"), ("platform", drs(2), "PACBIO_SMRT")])
     result = go(run, tmp_path, evidence, table)
     counts = result["slots"][DATASET]["platform"]
-    assert (counts["agreed"], counts["filled"], counts["inference_only"]) == (1, 1, 1)
+    # The submitter speaks to platform here, so inference's ILLUMINA on file 3 is inference filling a slot a
+    # source covers; file 2's PACBIO is the submitter filling what inference left.
+    assert counts == {"agreed": 1, "filled_by_repository_metadata": 1, "filled_by_inference": 1}
     assert result["inputs"][DATASET]["platform"]["inference"] == {"agreed": 1, "added": 1, "silent": 1}
     assert result["conflict_rate"][DATASET]["platform"] == 0.0
+
+
+def test_a_slot_no_source_speaks_to_is_inference_only(tmp_path, run, evidence, table):
+    write_run(run, [record(1, platform="PACBIO", data_type="alignments")])
+    write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT")])
+    result = go(run, tmp_path, evidence, table)
+    assert result["slots"][DATASET]["data_type"] == {"inference_only": 1}
+    assert SOURCE_REPOSITORY_METADATA not in result["inputs"][DATASET]["data_type"]
+
+
+def test_an_input_is_scored_disagreed_only_when_another_input_declared_differently(tmp_path, run, evidence, table):
+    """A conflict made by an unreviewed published value is nobody's disagreement; a different value is."""
+    write_run(run, [record(1, reference_assembly="GRCh38"), record(2, reference_assembly="GRCh38")])
+    write_evidence(evidence, [("reference_assembly", drs(1), "GRCh38"), ("reference_assembly", drs(2), "CHM13")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCm39"]')])
+    result = go(run, tmp_path, evidence, table)
+    assert slot(run, 1, "reference_assembly")["status"] == slot(run, 2, "reference_assembly")["status"] == CONFLICT
+    scored = result["inputs"][DATASET]["reference_assembly"]
+    assert scored["inference"] == {"agreed": 1, "disagreed": 1}
+    assert scored[SOURCE_REPOSITORY_METADATA] == {"match": 1, "disagreed": 1}
 
 
 def test_a_source_is_not_scored_on_a_dataset_its_evidence_does_not_cover(tmp_path, run, evidence, table):
@@ -536,3 +558,19 @@ def test_an_inferred_value_outside_its_dimensions_vocabulary_is_refused(tmp_path
     row["classifications"]["data_modality"]["inferred"]["value"] = "PACBIO"
     with pytest.raises(ValueError, match="PACBIO"):
         ClassificationRecord(**row)
+
+
+def test_an_empty_evidence_file_is_refused(tmp_path, run, evidence, table):
+    write_run(run, [record(1)])
+    write_evidence(evidence, [])
+    with pytest.raises(ReconcileError, match="no lines is silent too"):
+        go(run, tmp_path, evidence, table)
+
+
+def test_a_record_missing_a_slot_is_refused(tmp_path, run, table):
+    row = record(1)
+    del row["classifications"]["platform"]["status"]
+    write_run(run, [row])
+    with pytest.raises(ValueError, match="platform"):
+        go(run, tmp_path, None, table)
+    assert not (run / RECONCILED_DIR).exists()

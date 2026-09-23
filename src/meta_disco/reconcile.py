@@ -91,12 +91,22 @@ USE_PUBLISHED = "published"
 
 INFERENCE = "inference"
 
-# Report labels, never stored on a record. Per input: match, harmonized, conflict,
-# unreviewed, no_claim (its value's authored row declares nothing for the slot), silent
-# for a source; agreed, added, conflict, silent for inference. Per
-# slot: agreed, filled, inference_only, missing_work, or the slot's status. `missing_work`
-# is a `not_classified` slot the published source spoke to with a value no authored row
-# reads — work to do, not a challenge.
+# Report labels, never stored on a record.
+#
+# Per input, scored against the other inputs' declarations for the same slot. A source:
+# match or harmonized (it declared, and no other input declared differently), disagreed
+# (another input declared differently), unreviewed (its value has no authored row),
+# no_claim (its value's authored row declares nothing for the slot), silent. Inference:
+# agreed (a source declared the same), added (no other input declared anything),
+# disagreed (another input declared differently, or its own rules conflicted), silent.
+#
+# Per slot, exactly one of: agreed (inference and a source declared the same value),
+# filled_by_<source type> (inference was silent and that source filled the slot; several
+# joined by `+`), filled_by_inference (inference alone gave the value although a source
+# speaks to this slot in this dataset), inference_only (no source speaks to this slot
+# in this dataset), missing_work (`not_classified` because the published source spoke
+# with a value no authored row reads — work to do, not a challenge), or the slot's status
+# (`conflict`, `not_applicable`, `not_classified`).
 MATCH = "match"
 HARMONIZED = "harmonized"
 UNREVIEWED = "unreviewed"
@@ -104,10 +114,11 @@ NO_CLAIM = "no_claim"
 SILENT = "silent"
 AGREED = "agreed"
 ADDED = "added"
-FILLED = "filled"
+DISAGREED = "disagreed"
+FILLED_BY = "filled_by_"
+FILLED_BY_INFERENCE = "filled_by_inference"
 INFERENCE_ONLY = "inference_only"
 MISSING_WORK = "missing_work"
-ADDED_OVER_PUBLISHED = "added_over_published"
 
 # How many unmatched and ambiguous key values the report names per evidence file.
 MAX_EXAMPLES = 5
@@ -321,9 +332,10 @@ class Joined:
     """The join's result: per record identity, per slot, what the sources said."""
 
     slots: dict[str, dict[str, SlotEvidence]]
-    # Per source type, the datasets its evidence covers; None for a file scoped to no
-    # dataset, which covers every dataset.
-    coverage: dict[str, set[str | None]]
+    # Per source type, the (dataset, slot) pairs its evidence speaks to: a line's field,
+    # and every slot a row it selected declares (3.10). Dataset None for a file scoped to
+    # no dataset, which speaks to that slot in every dataset.
+    coverage: dict[str, set[tuple[str | None, str]]]
 
 
 # A key a line is matched by: the output-row field, the dataset the envelope scopes the
@@ -343,13 +355,16 @@ def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: Val
     The evidence is read into memory first — it is small beside the run — and then one
     pass over the run's records finds which records carry each key. Refuses
     (``ReconcileError``) a carrying record with no usable record key, which it could not
-    name, and an evidence file none of whose lines matched (contract 5.3).
+    name, and an evidence file none of whose lines matched, an empty one included
+    (contract 5.3).
     """
     wanted: dict[_Key, list[tuple[int, EvidenceEntry]]] = defaultdict(list)
+    coverage: dict[str, set[tuple[str | None, str]]] = defaultdict(set)
     for n, ev in enumerate(evidence):
         for entry in iter_evidence(ev.path):
             ev.offered += 1
             wanted[(ev.record_field, ev.dataset, entry.target_key_value)].append((n, entry))
+            coverage[ev.source_type].add((ev.dataset, entry.field))
     # The (field, dataset) scopes to look up, grouped by the dataset they need, so a
     # record is looked up only under its own dataset's scopes and the unscoped ones.
     scopes: dict[str | None, set[str]] = defaultdict(set)
@@ -393,23 +408,23 @@ def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: Val
                     ev.ambiguous_examples.append(example)
             else:
                 ev.matched += 1
-                _translate(slots[found[0]], entry, ev, table)
+                for slot in _translate(slots[found[0]], entry, ev, table):
+                    coverage[ev.source_type].add((ev.dataset, slot))
 
     for ev in evidence:
-        if ev.offered and not ev.matched:
+        if not ev.matched:
             raise ReconcileError(
                 f"{ev.path}: none of the {ev.offered:,} lines of {ev.envelope.source.repository} "
                 f"{ev.dataset} ({ev.source_type}, key {ev.target_key}) matched a record of the run — "
-                f"silence is not success (contract 5.3)"
+                f"silence is not success (contract 5.3), and an evidence file with no lines is silent too"
             )
 
-    coverage: dict[str, set[str | None]] = defaultdict(set)
-    for ev in evidence:
-        coverage[ev.source_type].add(ev.dataset)
     return Joined(slots=slots, coverage=dict(coverage))
 
 
-def _translate(record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: EvidenceFile, table: ValueMap) -> None:
+def _translate(
+    record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: EvidenceFile, table: ValueMap
+) -> set[str]:
     """Add a matched line's claims to its record's slots, or mark the slot unreviewed by its source type.
 
     The row is selected here and handed to ``claims_from``, because an authored row
@@ -421,13 +436,15 @@ def _translate(record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: 
     and no value, status or rule — and the record shows why on its own (6.10). It declares
     nothing, so resolution does not read it. Another source's unreviewed value moves
     nothing, is counted in the report, and is not written to the record.
+
+    Returns the slots the line's claims were made on.
     """
     row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
     if row is None or not row.authored:
         said = record_slots[entry.field]
         said.unreviewed.add(ev.source_type)
         if ev.source_type != SOURCE_PUBLISHED_VALUE:
-            return
+            return set()
         seen = make_claim(
             source_type=ev.source_type,
             state=UNMAPPED,
@@ -438,13 +455,16 @@ def _translate(record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: 
         )
         if seen not in said.claims:
             said.claims.append(seen)
-        return
+        return set()
     if entry.field not in row.declares:
         record_slots[entry.field].no_claim.add(ev.source_type)
+    claimed = set()
     for slot, claim in claims_from(entry, ev.source_type, table, join_key=ev.target_key, row=row):
+        claimed.add(slot)
         existing = record_slots[slot].claims
         if claim not in existing:
             existing.append(claim)
+    return claimed
 
 
 # --- the record ---------------------------------------------------------------------
@@ -458,13 +478,20 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
     without re-running tier resolution) and ``use``. Inference's ``build`` stays only
     while the slot still concludes inference's value — it describes that value. Keys of
     ``classifications`` that are not slots (a producer's scalar hints) pass through.
+
+    Raises ``ValueError`` on a record missing a slot or a slot's ``status``: every
+    producer writes all five, so one without is damaged, and settling the rest would
+    write a reconciled record that silently lacks a dimension.
     """
     out = dict(record)
-    classifications = dict(record.get("classifications") or {})
+    classifications = record.get("classifications")
+    if not isinstance(classifications, dict):
+        raise ValueError(f"record {record.get('file_name')!r} has no classifications block; it is damaged")
+    classifications = dict(classifications)
     for slot in CLASSIFICATION_FIELDS:
         entry = classifications.get(slot)
-        if not isinstance(entry, dict):
-            continue
+        if not isinstance(entry, dict) or "status" not in entry:
+            raise ValueError(f"record {record.get('file_name')!r} has no {slot} slot with a status; it is damaged")
         said = record_slots.get(slot, NO_EVIDENCE)
         inferred = {"value": entry.get("value"), "status": entry["status"]}
         status, value = resolve_slot(inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed)
@@ -489,64 +516,69 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
 class Report:
     """Counts per dataset and dimension: how each slot settled, and how each input did."""
 
-    coverage: dict[str, set[str | None]]
+    coverage: dict[str, set[tuple[str | None, str]]]
     files: Counter = field(default_factory=Counter)
     slots: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     inputs: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
-    # Per dataset, the source types whose evidence covers it: only those are scored there.
-    _covering: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Per (dataset, slot), the source types whose evidence speaks to it: only those are
+    # scored there.
+    _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
 
-    def covering(self, dataset: str) -> tuple[str, ...]:
-        if dataset not in self._covering:
-            self._covering[dataset] = tuple(sorted(t for t, ds in self.coverage.items() if dataset in ds or None in ds))
-        return self._covering[dataset]
+    def covering(self, dataset: str, slot: str) -> tuple[str, ...]:
+        at = (dataset, slot)
+        if at not in self._covering:
+            self._covering[at] = tuple(
+                sorted(t for t, pairs in self.coverage.items() if at in pairs or (None, slot) in pairs)
+            )
+        return self._covering[at]
 
     def add(self, reconciled: dict, record_slots: dict[str, SlotEvidence]) -> None:
         dataset = str(reconciled.get("dataset_title") or "")
         self.files[dataset] += 1
-        covering = self.covering(dataset)
         for slot in CLASSIFICATION_FIELDS:
-            settled = reconciled["classifications"].get(slot)
-            if not isinstance(settled, dict):
-                continue
+            settled = reconciled["classifications"][slot]
             said = record_slots.get(slot, NO_EVIDENCE)
             own = declaration(settled["inferred"])
-            per_slot = self.slots[dataset][slot]
-            per_slot[self._category(settled, said, own)] += 1
-            if settled["value"] is not None and not any(
-                c.get("source_type") == SOURCE_PUBLISHED_VALUE for c in said.claims
-            ):
-                per_slot[ADDED_OVER_PUBLISHED] += 1
+            covering = self.covering(dataset, slot)
+            self.slots[dataset][slot][self._category(settled, said, own, covering)] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
             for source_type in covering:
-                per_input[source_type][self._source_outcome(settled, said, source_type)] += 1
+                per_input[source_type][self._source_outcome(said, own, source_type)] += 1
 
     @staticmethod
-    def _category(settled: dict, said: SlotEvidence, own: str | None) -> str:
+    def _category(settled: dict, said: SlotEvidence, own: str | None, covering: tuple[str, ...]) -> str:
         status = settled["status"]
         if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
             return MISSING_WORK
         if status != CLASSIFIED:
             return status
+        fillers = sorted({c["source_type"] for c in said.claims if declaration(c) is not None})
         if own is None:
-            return FILLED
-        return AGREED if any(declaration(c) is not None for c in said.claims) else INFERENCE_ONLY
+            return FILLED_BY + "+".join(fillers)
+        if fillers:
+            return AGREED
+        return FILLED_BY_INFERENCE if covering else INFERENCE_ONLY
 
     @staticmethod
     def _inference_outcome(settled: dict, said: SlotEvidence, own: str | None) -> str:
-        if settled["inferred"]["status"] == CONFLICT or (settled["status"] == CONFLICT and own is not None):
-            return CONFLICT
+        if settled["inferred"]["status"] == CONFLICT:
+            return DISAGREED
         if own is None:
             return SILENT
-        return AGREED if any(declaration(c) == own for c in said.claims) else ADDED
+        others = {declaration(c) for c in said.claims} - {None}
+        if others - {own}:
+            return DISAGREED
+        return AGREED if own in others else ADDED
 
     @staticmethod
-    def _source_outcome(settled: dict, said: SlotEvidence, source_type: str) -> str:
+    def _source_outcome(said: SlotEvidence, own: str | None, source_type: str) -> str:
         mine = [c for c in said.claims if c.get("source_type") == source_type and declaration(c) is not None]
         if mine:
-            if settled["status"] == CONFLICT:
-                return CONFLICT
+            declared = {declaration(c) for c in mine}
+            others = {declaration(c) for c in said.claims if c.get("source_type") != source_type} | {own}
+            if len(declared) > 1 or (others - {None}) - declared:
+                return DISAGREED
             return HARMONIZED if any(is_harmonized(c) for c in mine) else MATCH
         if source_type in said.unreviewed:
             return UNREVIEWED
@@ -570,7 +602,13 @@ class Report:
             "slots": plain(self.slots),
             "inputs": plain(self.inputs),
             "conflict_rate": conflict_rate,
-            "coverage": {k: sorted(d or "(every dataset)" for d in v) for k, v in sorted(self.coverage.items())},
+            "coverage": {
+                source_type: {
+                    dataset or "(every dataset)": sorted(slot for d, slot in pairs if d == dataset)
+                    for dataset in sorted({d for d, _ in pairs}, key=lambda d: d or "")
+                }
+                for source_type, pairs in sorted(self.coverage.items())
+            },
         }
 
 
@@ -643,9 +681,16 @@ def reconcile_run(
         **report.to_dict(),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
+    # Swap by renames, so there is no moment with neither artifact on disk: the earlier
+    # one is moved aside, the new one moved in, and only then the earlier one deleted.
+    replaced = run_dir / f"{RECONCILED_DIR}.replaced"
+    if replaced.exists():
+        shutil.rmtree(replaced)
     if out_dir.exists():
-        shutil.rmtree(out_dir)
+        out_dir.rename(replaced)
     staging.rename(out_dir)
+    if replaced.exists():
+        shutil.rmtree(replaced)
     return full_report
 
 

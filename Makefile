@@ -36,7 +36,7 @@ help:
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
-	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN=, DEPLOYMENT=)"
+	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
 	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
@@ -265,11 +265,11 @@ corpus-diff:
 
 # Reconcile a stored inference run with the source evidence (#432): writes
 # <run>/reconciled/ (one NDJSON file per inference file, plus reconcile_report.json)
-# and never touches the inference output. RUN defaults to the latest run under
+# and never touches the inference output. RUN_DIR defaults to the latest run under
 # output/anvil; DEPLOYMENT names whose input envelope says the repository and catalog.
 # Pass `ARGS=--no-evidence` to exclude all evidence (contract 6.6).
 reconcile:
-	uv run python scripts/reconcile.py $(if $(RUN),--run $(RUN)) $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(ARGS)
+	uv run python scripts/reconcile.py $(if $(RUN_DIR),--run $(RUN_DIR)) $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(ARGS)
 
 all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
 
