@@ -27,7 +27,7 @@ is modeled over exactly the classifier-relevant fields, not the full contract.
 
 Both classes expose the same identity attributes — ``file_name``, ``file_format``,
 ``file_md5sum``, ``file_size``, ``dataset_title``, ``entry_id``, ``file_id`` and
-``drs_uri`` — so ``_build_record`` and the work-list steps read them uniformly
+``drs_uri`` — so ``OutputRecord.from_work_item`` and the work-list steps read them uniformly
 regardless of stream. (Their *declared* fields differ beyond that: ``ClassifierRecord``
 adds ``name``/``url``, ``InvalidRecord`` adds ``reasons``, so the shared set has to be
 named rather than pointed at.)
@@ -223,7 +223,7 @@ class OutputRecord:
     """The per-file output envelope: identity fields wrapping a classifications payload.
 
     The shape every producer in a run writes (#450). ``ClassifyPipeline`` builds it on
-    both its paths — the batch path (``_build_record`` over a
+    both its paths — the batch path (:meth:`from_work_item` over a
     ``ClassifierRecord``/``InvalidRecord`` work item) and the single-file path
     (``classify_single``) — and the four standalone producers through
     :meth:`from_record`. All serialize through ``to_dict``, so the envelope cannot drift
@@ -239,8 +239,9 @@ class OutputRecord:
     The index producer adds the one envelope key that is not a record: ``unmatched_files``,
     its diagnostic array for files it took no parent for.
 
-    It carries nothing the repository publishes for the file: that reaches reconcile as
-    evidence (contract 7.1, 7.2), not this record (#513).
+    It carries nothing the repository publishes for the file (#513): that is the published
+    importer's evidence (contract 7.1, 7.12), which the reconcile stage is to read (#432,
+    not built); no run reads it today.
 
     Identity typing mirrors the two paths it is built from: ``file_name`` is ``str``
     on both (the batch work item types it; ``classify_single`` defaults it to ``""``).

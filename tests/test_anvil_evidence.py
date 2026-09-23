@@ -4,6 +4,7 @@ column, and an import that is a generation — on synthetic manifests small enou
 read, plus the bundled map against the real anvil15 manifests where they are on disk."""
 
 import json
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -36,10 +37,6 @@ CATALOG = "anvil15"
 SERVICE = "https://azul.test"
 FETCHED = "2026-09-03T21:45:47.517283"
 REAL_MANIFESTS = PROD.input_root / "manifest" / CATALOG
-
-# The two harmonized columns AnVIL publishes on `anvil_file`, each a slot of the
-# published slot map. Spelled here as the expectation the map is held to.
-PUBLISHED_COLUMNS = ("data_modality", "reference_assembly")
 
 
 def drs(n: int) -> str:
@@ -659,7 +656,7 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     imports = ae.import_all(
         published, PROD.input_root, CATALOG, PROD.service, tmp_path / "ev", generation="20260920T000000Z"
     )
-    files: dict[str, set[str]] = {field: set() for field in PUBLISHED_COLUMNS}
+    files: dict[str, set[str]] = defaultdict(set)
     two_valued = 0
     for run in imports:
         (table,) = run.tables

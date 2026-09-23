@@ -8,9 +8,9 @@ catalogs) and reports agreement, discrepancies, and coverage gaps.
 values against AnVIL's published `data_modality`/`reference_assembly` through two
 hand-written dicts, `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`. #424 moved that
 comparison to its own report, and #513 deleted that report: AnVIL's published values
-are an input (the published importer's evidence, #497), and reconcile (#432) is where
-they meet the inferred ones. Two reports scoring the same files by different rules is
-the drift `docs/claims-contract.md` exists to stop.
+are an input (the published importer's evidence, #497), which the reconcile stage
+(#432, not built) is to compare with the inferred ones. Until it exists, nothing
+compares the two.
 
 The dicts themselves were the only AnVIL value translations in the repo. They were
 script-local, carried no row ids, and were validated against no vocabulary, so they

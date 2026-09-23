@@ -65,13 +65,12 @@ from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import PRODUCERS
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
-from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record
+from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record, write_metadata
 from tests.producer_sweep import (
     STANDALONE_PRODUCERS,
     run_index_producer,
     run_producer,
     run_producer_envelope,
-    write_snapshot,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
@@ -275,9 +274,8 @@ def build_output(tmp_path: Path) -> dict:
     FileTypeConfig (real classifier + ``to_output_dict``) with the fetcher swapped
     out, so the shape is real but the run is deterministic and network-free.
 
-    The input goes through ``write_snapshot``, the same envelope builder the standalone
-    producers' tests use (#465). Each type gets its own directory because that builder
-    writes one fixed filename.
+    The input goes through ``write_metadata``, the same envelope builder the standalone
+    producers' tests use (#465). Each type gets its own directory so the inputs stay apart.
     """
     out = {}
     for ftype, records in GOLDEN_INPUTS.items():
@@ -287,7 +285,7 @@ def build_output(tmp_path: Path) -> dict:
         config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_make_stub_fetcher(ftype), preflight=None)
         input_dir = tmp_path / f"{ftype}_input"
         input_dir.mkdir()
-        input_path = write_snapshot(input_dir, records)
+        input_path = write_metadata(input_dir / "metadata.json", records)
         # workers=1 forces sequential processing so the record order in the output
         # is the input order (the parallel path writes in thread-completion order,
         # which is nondeterministic) — keeps the deep-equal golden stable even if

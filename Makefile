@@ -244,8 +244,8 @@ review-queue:
 	uv run python scripts/value_map.py $(ARGS) queue
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
-# comparison out of this report, and #513 deleted it: AnVIL's published values reach
-# reconcile as evidence). Its input, output/hprc/hprc_validation_results.json,
+# comparison out of this report, and #513 deleted it: AnVIL's published values are
+# evidence, which the reconcile stage (#432, not built) is to read). Its input, output/hprc/hprc_validation_results.json,
 # is generated and gitignored, so without this prerequisite a standalone run on a fresh
 # checkout finds no sources and exits 1 — which it did not before, when the AnVIL branch
 # keyed off the always-present downloaded metadata.

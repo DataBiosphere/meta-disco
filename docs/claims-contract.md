@@ -318,7 +318,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 #424 built a `published` block on every output record and a report comparing it with the inferred
 values; #497 made the published values an input (7.1, 7.2, 7.12). #513 deleted the block and the
 report: once the values are an input, reconcile is where they meet the others (4.4, 4.5), and a
-second place carrying them beside the answer only repeats it. 7.3–7.11 described that block and
+second place carrying them beside the answer only repeats it. 7.4–7.9 and 7.11 described that block and
 report. Their numbers are kept, marked retired, so a citation of 7.12 still points where it did.
 
 Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
@@ -366,16 +366,19 @@ depends on that, and a second repository needs no change to these assertions.
      declared — HPRC today, see "What is not true yet" — can have no file claim one until it is. The
      compact Azul manifest is
      not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
-     Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one
-     row per line in TDR's column names — stands in for the tables, and the published importer is the
+     Until the published importer reads a snapshot's tables through either reader (#508), the verbatim
+     manifest — the TDR tables synced down as a file, one row per line in TDR's column names — stands
+     in for the tables, and the published importer is the
      submitter-table importer run over a second slot map (`anvil_published_slot_map.yaml`).
 
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist — with section 7 excepted, which
-describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
+No code reads this document, and the pipeline it describes does not exist. In section 7, the importer's
+half is built — 7.12 is enforced (below), and the published importer reads the system of record (7.1)
+and transcribes verbatim (7.3, #497, #421) — while what 7.1, 7.2 and 7.10 say about claims and comparison
+is the reconcile stage's (#432), which is not built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads

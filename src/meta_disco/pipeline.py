@@ -40,14 +40,15 @@ def load_records(input_path: Path) -> list:
     Elements are not guaranteed to be dicts — an NDJSON line, or an entry inside the
     envelope's ``files``/``results`` list, may be any JSON value. (The envelope itself
     must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
-    Hence ``list``, not ``list[dict]``: this is the raw read, used by the
-    ``validate_metadata`` gate, which must see every element to report on it.
-    Classification producers read :func:`load_classifiable_records` instead, which does
+    Hence ``list``, not ``list[dict]``: this is the raw read, which the
+    ``validate_metadata`` gate also takes (through :func:`load_snapshot`, beside the
+    envelope) because it must see every element to report on it. Classification
+    producers read :func:`load_classifiable_records` instead, which calls this and does
     narrow the element type.
 
     A ``.ndjson`` file is one record per line; otherwise a JSON object with a
-    ``files`` (or legacy ``results``) list. Shared by ``ClassifyPipeline`` and the
-    ``validate_metadata`` gate so the envelope handling lives in one place.
+    ``files`` (or legacy ``results``) list. The envelope handling is
+    :func:`load_snapshot`'s, so it lives in one place.
     """
     return load_snapshot(input_path)[1]
 
@@ -328,7 +329,7 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     caller with no run directory to write into (a test, an ad-hoc load).
 
     The ``validate_metadata`` gate deliberately does *not* call this — it reads
-    :func:`load_records` unfiltered, or it could never report the very records it
+    :func:`load_snapshot` unfiltered, or it could never report the very records it
     exists to report.
 
     Unlike :func:`load_records`, every element of the result is a ``dict``: a non-dict
@@ -336,9 +337,10 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
 
-    The source's record key is the one envelope fact a producer needs, and it is read
-    through :func:`load_envelope` before this load, because resolving it is a refusal
-    where no repository is named and that refusal belongs before the parse.
+    The index and catch-all producers also need the source's record key, an envelope
+    fact; they read it through :func:`load_envelope` before this load, because resolving
+    it is a refusal where no repository is named and that refusal belongs before the
+    parse.
     """
     raw = load_records(input_path)
     records, excluded = partition_records(raw)
@@ -746,7 +748,7 @@ class ClassifyPipeline:
         if isinstance(item, InvalidRecord):
             classifications = validation_failed_classifications(item.reasons)
             return RecordOutcome(
-                self._build_record(item, classifications),
+                OutputRecord.from_work_item(item, classifications),
                 was_cached=False,
                 content_unreadable=False,
                 validation_failed=True,
@@ -782,21 +784,8 @@ class ClassifyPipeline:
             was_cached = False
 
         return RecordOutcome(
-            self._build_record(item, classifications), was_cached, content_unreadable, validation_failed=False
+            OutputRecord.from_work_item(item, classifications), was_cached, content_unreadable, validation_failed=False
         )
-
-    @staticmethod
-    def _build_record(item: ClassifierRecord | InvalidRecord, classifications: dict) -> OutputRecord:
-        """Wrap a classifications dict in the typed output envelope.
-
-        Reads identity off the typed work item (a ``ClassifierRecord`` on the success
-        path, an ``InvalidRecord`` on the ``validation_failed`` path); ``OutputRecord``
-        is serialized to the envelope dict at the NDJSON write boundary via
-        ``to_dict``. The identity fields are echoed as the item carries them — typed on
-        the success path, the raw (possibly drifted) values on the ``validation_failed``
-        path — matching what ``classify_single`` writes for the single-file path (#204).
-        """
-        return OutputRecord.from_work_item(item, classifications)
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
         """ThreadPoolExecutor with progress tracking, returns classifications."""

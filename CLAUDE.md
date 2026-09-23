@@ -182,7 +182,8 @@ evidence}` entry — plus the controlled vocabulary:
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,
-    #497), and reconcile (#432) is where they meet inference. The input path no longer
+    #497), which the reconcile stage (#432, not built) is to read; until then nothing
+    compares them with inference. The input path no longer
     copies AnVIL's two published columns onto a record; an input file written before
     that still carries them, and the input model ignores them (`extra="ignore"`). Do not
     add a per-record copy back: a published value no authored row maps is listed by
