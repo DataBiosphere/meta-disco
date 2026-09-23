@@ -275,5 +275,5 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `RNA-seq` | 4,222 | 0.6% | .bam (2,099)<br>.bai (1,465)<br>.sf (634)<br>.bed (12)<br>.tbi (12) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined by a STAR `@PG` line or a transcriptomic modality (RNA-seq), by filename patterns (STAR output), and by extension where the format implies it (`.idat` is a methylation array); no rule reads file size or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and extension where the format implies it (`.idat` is a methylation array, `.svs` histology). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
 

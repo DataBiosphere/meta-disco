@@ -41,11 +41,12 @@ DIMENSIONS = [
         "assay_type",
         "Assay Type",
         "**Note**: Like platform, assay type is inherently unknowable for most "
-        "derived formats. It is determined by a STAR `@PG` line or a transcriptomic "
-        "modality (RNA-seq), by filename patterns (STAR output), and by extension "
-        "where the format implies it (`.idat` is a methylation array); no rule reads "
-        "file size or infers WGS from a long-read platform (#430). The high "
-        "not-classified rate is expected.",
+        "derived formats. It is determined only by a rule that sees evidence of the "
+        "assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), "
+        "and extension where the format implies it (`.idat` is a methylation array, "
+        "`.svs` histology). Nothing infers it from the modality (#88), reads file size, "
+        "or infers WGS from a long-read platform (#430). The high not-classified rate "
+        "is expected.",
     ),
 ]
 
