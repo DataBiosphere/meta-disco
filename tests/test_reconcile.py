@@ -1,6 +1,7 @@
 """The reconcile stage (#432): the join, translation, resolution, the artifact and the report.
 
-One test per acceptance criterion of the issue, numbered ``ac<N>`` in its name. Fixtures
+A test for each acceptance criterion a fixture can check, numbered ``ac<N>`` in its name;
+criterion 22 is the real run, whose numbers are on the pull request. Fixtures
 are a few output rows written through ``run_fixtures.write_run`` and a few evidence lines
 written through ``write_evidence_file`` into the generation layout, so reconcile reads
 them the way it reads a real run and a real import.

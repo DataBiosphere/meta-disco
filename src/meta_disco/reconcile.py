@@ -665,6 +665,14 @@ def reconcile_run(
     """
     if not run_dir.is_dir():
         raise ReconcileError(f"run directory not found: {run_dir}")
+    out_dir = run_dir / RECONCILED_DIR
+    staging = run_dir / f"{RECONCILED_DIR}.partial"
+    replaced = run_dir / f"{RECONCILED_DIR}.replaced"
+    # A swap interrupted after the earlier artifact was moved aside and before the new one
+    # moved in leaves only `.replaced`. Put it back first, so it is readable again even if
+    # this run then fails, and before anything below could delete it.
+    if replaced.exists() and not out_dir.exists():
+        replaced.rename(out_dir)
     envelope = load_envelope(metadata)
     key = record_key(envelope, metadata)
     repository = envelope["repository"]
@@ -698,13 +706,6 @@ def reconcile_run(
             report.add(reconciled, record_slots)
             yield reconciled
 
-    out_dir = run_dir / RECONCILED_DIR
-    staging = run_dir / f"{RECONCILED_DIR}.partial"
-    replaced = run_dir / f"{RECONCILED_DIR}.replaced"
-    # A swap interrupted after the earlier artifact was moved aside and before the new one
-    # moved in leaves only `.replaced`: put it back before anything else can delete it.
-    if replaced.exists() and not out_dir.exists():
-        replaced.rename(out_dir)
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir()
