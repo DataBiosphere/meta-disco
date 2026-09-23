@@ -281,7 +281,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
     record that concludes exactly what its inference record concluded: the same value or status on every
-    slot, from the same claims. Sameness here is of what was concluded, not of the bytes.
+    slot, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
+    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
+    to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
