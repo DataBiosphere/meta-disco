@@ -61,6 +61,7 @@ from .models import (
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     UNMAPPED,
+    field_detail,
 )
 from .output_utils import (
     RECONCILED_DIR,
@@ -508,8 +509,9 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
 
     Each slot keeps inference's evidence as it is, adds the source claims after it, and
     gains ``inferred`` (what inference concluded, which its evidence alone cannot rebuild
-    without re-running tier resolution) and ``use``. Inference's ``build`` stays only
-    while the slot still concludes inference's value — it describes that value. Keys of
+    without re-running tier resolution) and ``use``. Inference's per-dimension detail
+    (``models.field_detail``, e.g. ``build``) stays only while the slot still concludes
+    inference's value — it describes that value. Keys of
     ``classifications`` that are not slots (a producer's scalar hints) pass through.
 
     Raises ``ValueError`` on a record missing a slot or a slot's ``status``: every
@@ -535,8 +537,8 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
             "inferred": inferred,
             "evidence": list(entry.get("evidence") or []) + said.claims,
         }
-        if "build" in entry and (status, value) == (inferred["status"], inferred["value"]):
-            settled["build"] = entry["build"]
+        if (status, value) == (inferred["status"], inferred["value"]):
+            settled.update(field_detail(record, slot))
         classifications[slot] = settled
     out["classifications"] = classifications
     return out

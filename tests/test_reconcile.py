@@ -712,3 +712,20 @@ def test_inference_is_unconfirmed_not_added_when_a_source_spoke_without_declarin
     write_evidence(evidence, [("platform", drs(1), "MYSTERY")])  # a seeded row: unreviewed
     result = go(run, tmp_path, evidence, table)
     assert result["inputs"][DATASET]["platform"]["inference"] == {"unconfirmed": 1, "added": 1}
+
+
+def test_inference_detail_is_kept_while_its_value_stands_and_reconcile_keys_are_not_detail(
+    tmp_path, run, evidence, table
+):
+    from meta_disco.models import field_detail
+
+    agreed, overruled = record(1, reference_assembly="GRCh38"), record(2, reference_assembly="GRCh38")
+    for row in (agreed, overruled):
+        row["classifications"]["reference_assembly"]["build"] = {"base": "GRCh38"}
+        row["classifications"]["reference_assembly"]["other_detail"] = 7
+    write_run(run, [agreed, overruled])
+    write_evidence(evidence, [("reference_assembly", drs(2), "CHM13")])
+    go(run, tmp_path, evidence, table)
+    rows = reconciled(run)
+    assert field_detail(rows["file-1"], "reference_assembly") == {"build": {"base": "GRCh38"}, "other_detail": 7}
+    assert field_detail(rows["file-2"], "reference_assembly") == {}
