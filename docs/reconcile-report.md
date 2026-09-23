@@ -12,16 +12,16 @@ Each file's slot in each dimension is counted in exactly one category, so a row 
 
 The last two columns count something else, and overlap the categories:
 
-- **Added over published:** files where we deliver a value and the published column for this dimension is empty for that file: metadata the catalog does not show today. – where there is no published column for the dimension.
+- **Added over published:** files where we deliver a value and the catalog publishes none for that file, because its published column is empty there or it has no published column for the dimension: metadata the catalog does not show today.
 - **Filled over inference:** files where inference found no answer (`not_classified`) but a source table supplied one (a value, or not applicable): gaps inference alone would have left empty. For example, `ANVIL_T2T_CHRY` files whose reference assembly only the submitter's table names.
 
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 16,658 | 560,128 | 0 | 0 | 414 | 6,341 | 58,492 | 66,055 | 576,786 | 5,920 |
-| data_type | 0 | 0 | 464 | 7,733 | 637,192 | 0 | 1,541 | 0 | 0 | 37,548 | 23,610 | – | 3,649 |
-| platform | 0 | 0 | 9,830 | 8,627 | 45,636 | 0 | 0 | 0 | 0 | 73,749 | 570,246 | – | 6,863 |
+| data_type | 0 | 0 | 464 | 7,733 | 637,192 | 0 | 1,541 | 0 | 0 | 37,548 | 23,610 | 645,389 | 3,649 |
+| platform | 0 | 0 | 9,830 | 8,627 | 45,636 | 0 | 0 | 0 | 0 | 73,749 | 570,246 | 64,093 | 6,863 |
 | reference_assembly | 0 | 0 | 46,798 | 1,255 | 439,453 | 138 | 558 | 634 | 4,062 | 62,653 | 152,537 | 487,506 | 39,401 |
-| assay_type | 0 | 0 | 12,420 | 0 | 4,382 | 0 | 6 | 0 | 0 | 73,743 | 617,537 | – | 12,420 |
+| assay_type | 0 | 0 | 12,420 | 0 | 4,382 | 0 | 6 | 0 | 0 | 73,743 | 617,537 | 16,802 | 12,420 |
 
 ## Conflict rate
 
@@ -119,10 +119,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 8,631 | 0 | 0 | 0 | 0 | 2,852 | 10 | 8,631 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 11,483 | 0 | 0 | 0 | 0 | 0 | 10 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 11,483 | 0 | 0 | 0 | 0 | 0 | 10 | 11,483 | 0 |
+| platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | 0 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 8,641 | 0 | 0 | 0 | 0 | 2,852 | 0 | 8,641 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | 0 | 0 |
 
 ### ANVIL_1000G_high_coverage_2019
 
@@ -131,10 +131,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 9,603 | 3,305 | 0 | 0 | 0 | 0 | 13,008 | 100 | 12,908 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 25,916 | 0 | 0 | 0 | 0 | 0 | 100 | – | 0 |
-| platform | 0 | 0 | 6,398 | 3,205 | 3,202 | 0 | 0 | 0 | 0 | 13,008 | 203 | – | 6,401 |
+| data_type | 0 | 0 | 0 | 0 | 25,916 | 0 | 0 | 0 | 0 | 0 | 100 | 25,916 | 0 |
+| platform | 0 | 0 | 6,398 | 3,205 | 3,202 | 0 | 0 | 0 | 0 | 13,008 | 203 | 12,805 | 6,401 |
 | reference_assembly | 0 | 0 | 0 | 0 | 12,908 | 0 | 0 | 0 | 0 | 13,008 | 100 | 12,908 | 0 |
-| assay_type | 0 | 0 | 9,603 | 0 | 0 | 0 | 0 | 0 | 0 | 13,008 | 3,405 | – | 9,603 |
+| assay_type | 0 | 0 | 9,603 | 0 | 0 | 0 | 0 | 0 | 0 | 13,008 | 3,405 | 9,603 | 9,603 |
 
 ### ANVIL_HPRC
 
@@ -143,10 +143,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 768 | 4,260 | 0 | 0 | 0 | 0 | 4,663 | 13,494 | 5,028 | 768 |
-| data_type | 0 | 0 | 0 | 881 | 12,880 | 0 | 0 | 0 | 0 | 45 | 9,379 | – | 458 |
-| platform | 0 | 0 | 0 | 343 | 4,752 | 0 | 0 | 0 | 0 | 5,568 | 12,522 | – | 0 |
+| data_type | 0 | 0 | 0 | 881 | 12,880 | 0 | 0 | 0 | 0 | 45 | 9,379 | 13,761 | 458 |
+| platform | 0 | 0 | 0 | 343 | 4,752 | 0 | 0 | 0 | 0 | 5,568 | 12,522 | 5,095 | 0 |
 | reference_assembly | 0 | 0 | 0 | 277 | 1,844 | 3 | 0 | 0 | 0 | 11,591 | 9,470 | 2,121 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 160 | 0 | 0 | 0 | 0 | 5,568 | 17,457 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 160 | 0 | 0 | 0 | 0 | 5,568 | 17,457 | 160 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -160,10 +160,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 6 | 108 | 0 | 0 | 0 | 0 | 0 | 12,420 | 114 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 12,518 | 0 | 0 | 0 | 0 | 0 | 16 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 12,403 | 0 | 0 | 0 | 0 | 26 | 105 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 12,518 | 0 | 0 | 0 | 0 | 0 | 16 | 12,518 | 0 |
+| platform | 0 | 0 | 0 | 0 | 12,403 | 0 | 0 | 0 | 0 | 26 | 105 | 12,403 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 64 | 0 | 0 | 0 | 0 | 12,430 | 40 | 64 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 20 | 12,508 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 20 | 12,508 | 0 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -176,10 +176,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 263,793 | 0 | 0 | 0 | 0 | 17,566 | 7,845 | 263,793 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 270,480 | 0 | 0 | 0 | 0 | 17,566 | 1,158 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 12,808 | 0 | 0 | 0 | 0 | 23,980 | 252,416 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 270,480 | 0 | 0 | 0 | 0 | 17,566 | 1,158 | 270,480 | 0 |
+| platform | 0 | 0 | 0 | 0 | 12,808 | 0 | 0 | 0 | 0 | 23,980 | 252,416 | 12,808 | 0 |
 | reference_assembly | 0 | 0 | 0 | 48 | 233,059 | 134 | 0 | 0 | 0 | 6,404 | 49,559 | 233,107 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 23,980 | 265,224 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 23,980 | 265,224 | 0 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -193,10 +193,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 274,592 | 0 | 0 | 0 | 0 | 19,937 | 15,450 | 274,592 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 290,028 | 0 | 0 | 0 | 0 | 19,937 | 14 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 7,520 | 0 | 0 | 0 | 0 | 26,911 | 275,548 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 290,028 | 0 | 0 | 0 | 0 | 19,937 | 14 | 290,028 | 0 |
+| platform | 0 | 0 | 0 | 0 | 7,520 | 0 | 0 | 0 | 0 | 26,911 | 275,548 | 7,520 | 0 |
 | reference_assembly | 0 | 0 | 46,798 | 0 | 178,841 | 1 | 558 | 0 | 0 | 0 | 83,781 | 225,639 | 39,401 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 26,911 | 283,068 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 26,911 | 283,068 | 0 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -210,10 +210,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 1,376 | 0 | 0 | 0 | 0 | 0 | 2,215 | 1,376 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 1,444 | 0 | 0 | 0 | 0 | 0 | 2,147 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 136 | 0 | 0 | 0 | 0 | 0 | 3,455 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 1,444 | 0 | 0 | 0 | 0 | 0 | 2,147 | 1,444 | 0 |
+| platform | 0 | 0 | 0 | 0 | 136 | 0 | 0 | 0 | 0 | 0 | 3,455 | 136 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,591 | 0 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 1,372 | 0 | 0 | 0 | 0 | 0 | 2,219 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 1,372 | 0 | 0 | 0 | 0 | 0 | 2,219 | 1,372 | 0 |
 
 ### AnVIL_ENCORE_293T
 
@@ -222,10 +222,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 464 | 0 | 0 | 0 | 0 | 0 | 1,528 | 464 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 912 | 0 | 0 | 0 | 0 | 0 | 1,080 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 448 | 0 | 0 | 0 | 0 | 0 | 1,544 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 912 | 0 | 0 | 0 | 0 | 0 | 1,080 | 912 | 0 |
+| platform | 0 | 0 | 0 | 0 | 448 | 0 | 0 | 0 | 0 | 0 | 1,544 | 448 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 224 | 1,320 | 448 | 0 | 0 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 448 | 0 | 0 | 0 | 0 | 0 | 1,544 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 448 | 0 | 0 | 0 | 0 | 0 | 1,544 | 448 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -238,10 +238,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 0 | 0 | 0 | 2,932 | 820 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 1,640 | 0 | 0 | 0 | 0 | 0 | 2,112 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 0 | 0 | 0 | 2,932 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 1,640 | 0 | 0 | 0 | 0 | 0 | 2,112 | 1,640 | 0 |
+| platform | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 0 | 0 | 0 | 2,932 | 820 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 410 | 2,522 | 820 | 0 | 0 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 0 | 0 | 0 | 2,932 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 0 | 0 | 0 | 2,932 | 820 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -254,10 +254,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 6,281 | 1,186 | 0 | 0 | 0 | 0 | 466 | 8,338 | 7,467 | 5,152 |
-| data_type | 0 | 0 | 464 | 6,852 | 2,315 | 0 | 1,541 | 0 | 0 | 0 | 5,099 | – | 3,191 |
-| platform | 0 | 0 | 3,432 | 3,079 | 19 | 0 | 0 | 0 | 0 | 1,404 | 8,337 | – | 462 |
+| data_type | 0 | 0 | 464 | 6,852 | 2,315 | 0 | 1,541 | 0 | 0 | 0 | 5,099 | 9,631 | 3,191 |
+| platform | 0 | 0 | 3,432 | 3,079 | 19 | 0 | 0 | 0 | 0 | 1,404 | 8,337 | 6,530 | 462 |
 | reference_assembly | 0 | 0 | 0 | 930 | 2,522 | 0 | 0 | 0 | 0 | 9,572 | 3,247 | 3,452 | 0 |
-| assay_type | 0 | 0 | 2,817 | 0 | 0 | 0 | 0 | 0 | 0 | 1,404 | 12,050 | – | 2,817 |
+| assay_type | 0 | 0 | 2,817 | 0 | 0 | 0 | 0 | 0 | 0 | 1,404 | 12,050 | 2,817 | 2,817 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -271,10 +271,10 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 414 | 6,341 | 0 | 31 | 0 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 4,388 | 0 | 0 | 0 | 0 | 0 | 2,398 | – | 0 |
-| platform | 0 | 0 | 0 | 2,000 | 1,970 | 0 | 0 | 0 | 0 | 0 | 2,816 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 4,388 | 0 | 0 | 0 | 0 | 0 | 2,398 | 4,388 | 0 |
+| platform | 0 | 0 | 0 | 2,000 | 1,970 | 0 | 0 | 0 | 0 | 0 | 2,816 | 3,970 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 220 | 3,970 | 2,596 | 0 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 6,786 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 6,786 | 0 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -288,7 +288,7 @@ No earlier reconciled run to compare with.
 | dimension | published | published harmonized | submitter | submitter harmonized | inference | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 1,593 | 0 | 0 | 0 | 0 | 0 | 1,692 | 1,593 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 3,188 | 0 | 0 | 0 | 0 | 0 | 97 | – | 0 |
-| platform | 0 | 0 | 0 | 0 | 1,558 | 0 | 0 | 0 | 0 | 0 | 1,727 | – | 0 |
+| data_type | 0 | 0 | 0 | 0 | 3,188 | 0 | 0 | 0 | 0 | 0 | 97 | 3,188 | 0 |
+| platform | 0 | 0 | 0 | 0 | 1,558 | 0 | 0 | 0 | 0 | 0 | 1,727 | 1,558 | 0 |
 | reference_assembly | 0 | 0 | 0 | 0 | 1,574 | 0 | 0 | 0 | 0 | 1,558 | 153 | 1,574 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 1,582 | 0 | 0 | 0 | 0 | 0 | 1,703 | – | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 1,582 | 0 | 0 | 0 | 0 | 0 | 1,703 | 1,582 | 0 |

@@ -609,6 +609,20 @@ def test_metadata_added_over_published_counts_our_values_where_the_published_sou
     assert result["added_over_published"] == {DATASET: {"reference_assembly": 1}}
 
 
+def test_a_value_where_the_published_source_has_no_column_is_added_over_published(tmp_path, run, evidence, table):
+    """The published map declares no platform column, so every platform value we deliver is added."""
+    write_run(run, [record(1, platform="PACBIO", reference_assembly="GRCh38")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
+    result = go(run, tmp_path, evidence, table)
+    assert result["added_over_published"] == {DATASET: {"platform": 1}}
+
+
+def test_nothing_is_added_over_published_where_its_evidence_was_not_read(tmp_path, run, table):
+    """Without the published source's evidence what it publishes is not known, so nothing is counted."""
+    write_run(run, [record(1, platform="PACBIO")])
+    assert go(run, tmp_path, None, table)["added_over_published"] == {}
+
+
 def test_an_interrupted_swap_is_restored_not_lost(tmp_path, run, table):
     write_run(run, [record(1)])
     go(run, tmp_path, None, table)

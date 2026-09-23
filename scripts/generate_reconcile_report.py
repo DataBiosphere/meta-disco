@@ -23,7 +23,7 @@ import json
 import sys
 from pathlib import Path
 
-from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_PUBLISHED_VALUE
+from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
@@ -40,10 +40,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
 PLACEHOLDER = "RECONCILE_DATA_PLACEHOLDER"
 ALL = EVERY_DATASET
-# What a cell shows where there is no count to show.
-DASH = "\u2013"
-# Beside the categories, overlapping them: our value where the published source speaks to
-# the slot and said nothing for the file, and the gaps inference left that a source filled.
+# Beside the categories, overlapping them: our value where the published source said nothing
+# for the file, and the gaps inference left that a source filled.
 ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
 
@@ -134,11 +132,7 @@ def columns(*reports: dict) -> list[str]:
 
 
 def headline(report: dict, dataset: str | None = None) -> list[dict]:
-    """Per dimension: each category's count, added over published, filled over inference, conflict rate.
-
-    ``added_over_published`` is None where the published source speaks to that dimension
-    in none of the datasets in scope — there is nothing it could have added over.
-    """
+    """Per dimension: each category's count, added over published, filled over inference, conflict rate."""
     names = _datasets(report, dataset)
     files = sum(report["files"].get(d, 0) for d in names)
     rows = []
@@ -147,13 +141,12 @@ def headline(report: dict, dataset: str | None = None) -> list[dict]:
         for d in names:
             for category, n in report["slots"].get(d, {}).get(slot, {}).items():
                 counts[category] += n
-        speaks = any(SOURCE_PUBLISHED_VALUE in report["inputs"].get(d, {}).get(slot, {}) for d in names)
         conflicts = sum(counts[k] for k in CONFLICT_CATEGORIES)
         rows.append(
             {
                 "dimension": slot,
                 "counts": counts,
-                ADDED: sum(report[ADDED].get(d, {}).get(slot, 0) for d in names) if speaks else None,
+                ADDED: sum(report[ADDED].get(d, {}).get(slot, 0) for d in names),
                 FILLED_OVER: sum(report[FILLED_OVER].get(d, {}).get(slot, 0) for d in names),
                 "inference_agreed": sum(
                     report["inputs"].get(d, {}).get(slot, {}).get(INFERENCE, {}).get("agreed", 0) for d in names
@@ -193,12 +186,11 @@ def change(new: dict, old: dict, dataset: str | None = None) -> list[dict]:
     for row in headline(new, dataset):
         was = before[row["dimension"]]
         delta = {k: row["counts"][k] - was["counts"][k] for k in SLOT_CATEGORIES}
-        added = None if row[ADDED] is None and was[ADDED] is None else (row[ADDED] or 0) - (was[ADDED] or 0)
         rows.append(
             {
                 "dimension": row["dimension"],
                 "counts": delta,
-                ADDED: added,
+                ADDED: row[ADDED] - was[ADDED],
                 FILLED_OVER: row[FILLED_OVER] - was[FILLED_OVER],
             }
         )
@@ -260,12 +252,12 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
 # --- markdown -----------------------------------------------------------------------
 
 
-def _n(value: int | None) -> str:
-    return DASH if value is None else f"{value:,}"
+def _n(value: int) -> str:
+    return f"{value:,}"
 
 
-def _signed(value: int | None) -> str:
-    return DASH if value is None else ("0" if value == 0 else f"{value:+,}")
+def _signed(value: int) -> str:
+    return "0" if value == 0 else f"{value:+,}"
 
 
 def _headline_table(rows: list[dict], cols: list[dict], fmt=_n) -> list[str]:
@@ -322,9 +314,9 @@ def render_markdown(data: dict) -> str:
         "",
         "The last two columns count something else, and overlap the categories:",
         "",
-        "- **Added over published:** files where we deliver a value and the published column for this dimension "
-        "is empty for that file: metadata the catalog does not show today. "
-        f"{DASH} where there is no published column for the dimension.",
+        "- **Added over published:** files where we deliver a value and the catalog publishes none for that "
+        "file, because its published column is empty there or it has no published column for the dimension: "
+        "metadata the catalog does not show today.",
         "- **Filled over inference:** files where inference found no answer (`not_classified`) but a source table "
         "supplied one (a value, or not applicable): gaps inference alone would have left empty. For example, "
         "`ANVIL_T2T_CHRY` files whose reference assembly only the submitter's table names.",

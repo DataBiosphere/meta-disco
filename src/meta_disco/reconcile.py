@@ -581,9 +581,11 @@ class Report:
     files: Counter = field(default_factory=Counter)
     slots: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and slot, the files where the delivered value is ours and the published
-    # source, which speaks to that slot in that dataset, said nothing for the file: metadata
-    # added over what the repository publishes. Kept apart from `slots`, whose categories
-    # sum to the file count; this one overlaps them.
+    # source said nothing for the file — silent on a column it has, or without a column for
+    # the slot at all: metadata added over what the repository publishes. Counted only when
+    # the published source's evidence was read, since otherwise what it publishes is not
+    # known. Kept apart from `slots`, whose categories sum to the file count; this one
+    # overlaps them.
     added_over_published: dict = field(default_factory=lambda: defaultdict(Counter))
     # Per dataset and slot, the files where inference declared nothing and a source's
     # declaration now answers the slot (`classified` or `not_applicable`): the gaps the
@@ -642,11 +644,14 @@ class Report:
                 self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
+            published_silent = SOURCE_PUBLISHED_VALUE in self.coverage and SOURCE_PUBLISHED_VALUE not in covering
             for source_type in covering:
                 outcome = self._source_outcome(said, own, source_type)
                 per_input[source_type][outcome] += 1
-                if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT and settled["status"] == CLASSIFIED:
-                    self.added_over_published[dataset][slot] += 1
+                if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT:
+                    published_silent = True
+            if published_silent and settled["status"] == CLASSIFIED:
+                self.added_over_published[dataset][slot] += 1
 
     @staticmethod
     def _category(settled: dict, said: SlotEvidence) -> str:

@@ -40,9 +40,9 @@
     submitter; verbatim before harmonized), else to inference.</p>
   <p class="note">The last two columns count something else, and overlap the categories:</p>
   <ul class="note">
-    <li><strong>Added over published:</strong> files where we deliver a value and the published column for this
-      dimension is empty for that file: metadata the catalog does not show today. &ndash; where there is no published
-      column for the dimension.</li>
+    <li><strong>Added over published:</strong> files where we deliver a value and the catalog publishes none for that
+      file, because its published column is empty there or it has no published column for the dimension: metadata the
+      catalog does not show today.</li>
     <li><strong>Filled over inference:</strong> files where inference found no answer (<code>not_classified</code>) but
       a source table supplied one (a value, or not applicable): gaps inference alone would have left empty. For
       example, <code>ANVIL_T2T_CHRY</code> files whose reference assembly only the submitter's table names.</li>
@@ -73,8 +73,8 @@
     const LABEL = Object.fromEntries(DATA.columns.map(c => [c.key, c.label]));
 
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-    const n = v => v === null || v === undefined ? '–' : v.toLocaleString('en-US');
-    const signed = v => v === null || v === undefined ? '–' : v === 0 ? '0' : (v > 0 ? '+' : '') + v.toLocaleString('en-US');
+    const n = v => v.toLocaleString('en-US');
+    const signed = v => v === 0 ? '0' : (v > 0 ? '+' : '') + v.toLocaleString('en-US');
     const pct = v => (v * 100).toFixed(3) + '%';
     // reconcile counts a record with no dataset_title under "".
     const shown = name => name || '(no dataset title)';
