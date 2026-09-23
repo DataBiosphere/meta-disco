@@ -141,3 +141,13 @@ def test_a_symlinked_run_is_not_its_own_previous_run(tmp_path, conflicted):
     latest = conflicted.parent / "latest"
     latest.symlink_to(conflicted.name)
     assert rr.find_previous(latest) is None
+
+
+def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
+    """A second dataset whose title is the whole run's label stays one dataset beside the run."""
+    report = rr.load_report(conflicted)
+    for block in ("files", "slots", "inputs", "conflicts"):
+        report[block][rr.ALL] = report[block][DATASET]
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert data["run"]["files"] == 6
+    assert {name: scope["files"] for name, scope in data["datasets"].items()} == {rr.ALL: 3, DATASET: 3}

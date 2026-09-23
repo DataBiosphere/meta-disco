@@ -211,18 +211,19 @@ def provenance(report: dict) -> dict:
 def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: every table precomputed per scope.
 
-    These key names are the contract with that template's JavaScript. ``scopes`` holds
-    the whole run under ``ALL`` and each dataset under its name; a scope's ``change`` is
-    None where there is no previous run or the dataset is not in it.
+    These key names are the contract with that template's JavaScript. ``run`` is the
+    whole run's scope and ``datasets`` each dataset's by its title — apart, so no title can
+    stand in for the whole run. A scope's ``change`` is None where there is no previous run
+    or the dataset is not in it.
     """
-    scopes = {}
-    for dataset in [None, *sorted(report["files"])]:
+
+    def scope(dataset: str | None) -> dict:
         files = sum(report["files"].get(d, 0) for d in _datasets(report, dataset))
         rows = headline(report, dataset)
         conflicts = sum(r["conflicts"] for r in rows)
         slots = files * len(rows)
         old = previous if previous and (dataset is None or dataset in previous["files"]) else None
-        scopes[ALL if dataset is None else dataset] = {
+        return {
             "files": files,
             "headline": rows,
             "conflicts": conflicts,
@@ -232,6 +233,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
             "evidence": evidence_rows(report, dataset),
             "change": change(report, old, dataset) if old else None,
         }
+
     cols = columns(report, previous) if previous else columns(report)
     return {
         "source": str(source),
@@ -241,7 +243,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "columns": [{"key": c, "label": label(c)} for c in cols],
         "conflict_categories": list(CONFLICT_CATEGORIES),
         "all": ALL,
-        "scopes": scopes,
+        "run": scope(None),
+        "datasets": {dataset: scope(dataset) for dataset in sorted(report["files"])},
     }
 
 
@@ -283,7 +286,7 @@ def _conflict_table(rows: list[dict], with_dataset: bool) -> list[str]:
 
 
 def render_markdown(data: dict) -> str:
-    p, cols, whole = data["provenance"], data["columns"], data["scopes"][ALL]
+    p, cols, whole = data["provenance"], data["columns"], data["run"]
     catalog = p["catalog"] or "none"
     lines = [
         "# Reconciliation report",
@@ -364,9 +367,7 @@ def render_markdown(data: dict) -> str:
     else:
         lines.append("No evidence was read.")
     lines += ["", "## Per dataset", ""]
-    for name, scope in data["scopes"].items():
-        if name == ALL:
-            continue
+    for name, scope in data["datasets"].items():
         lines += [
             f"### {escape_md_cell(shown(name))}",
             "",

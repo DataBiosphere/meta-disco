@@ -111,11 +111,15 @@
     document.getElementById('provenance').innerHTML = prov.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
 
     const select = document.getElementById('dataset');
-    select.innerHTML = Object.keys(DATA.scopes).map(name => `<option value="${esc(name)}">${esc(shown(name))}</option>`).join('');
+    // Options are indexed rather than named, so no dataset title can be read as the whole run.
+    const names = Object.keys(DATA.datasets);
+    select.innerHTML = `<option value="-1">${esc(DATA.all)}</option>` +
+      names.map((name, i) => `<option value="${i}">${esc(shown(name))}</option>`).join('');
 
-    function render(name) {
-      const scope = DATA.scopes[name];
-      const whole = name === DATA.all;
+    function render(index) {
+      const whole = index < 0;
+      const name = whole ? DATA.all : names[index];
+      const scope = whole ? DATA.run : DATA.datasets[name];
       document.getElementById('headline').innerHTML = headlineTable(scope.headline, n);
 
       document.getElementById('rate-summary').innerHTML =
@@ -148,8 +152,8 @@
       );
     }
 
-    select.addEventListener('change', () => render(select.value));
-    render(DATA.all);
+    select.addEventListener('change', () => render(Number(select.value)));
+    render(-1);
   </script>
 </body>
 </html>
