@@ -120,7 +120,9 @@ classify-and-report: classify classify-hprc all-reports
 # advances without notice. INPUT_SOURCE is how the records are derived: azul-compact
 # (the default; both manifests, the compact join), azul-verbatim (the verbatim manifest
 # only) or tdr-direct (the snapshots read in place from BigQuery, nothing downloaded).
-# An unknown value of either is refused before any request, query or write.
+# An unknown value of either is refused by the script before any request, query or
+# write of its own; with INPUT_SOURCE=tdr-direct, `uv run --extra tdr` syncs that
+# extra into the environment first.
 # tdr-direct runs with `--extra tdr`, the way probe-tdr does, and takes its identity
 # from the environment: see meta_disco.tdr. Unset, each is the script's own default
 # (prod, azul-compact), so the defaults have one spelling.

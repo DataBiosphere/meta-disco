@@ -40,9 +40,12 @@ disagreement refuses the run naming both (decision of 2026-09-22 on #500): the
 declaration says what the deployment reads, and the fix is to update it.
 
 A manifest already on disk is not re-requested unless ``--force`` is given, or
-another manifest the input source needs for that dataset is missing or recorded
-under another file count — a dataset is fetched whole, so its manifests share one
-count — and the input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
+any manifest the input source needs for that dataset is missing or recorded in the
+sidecar with another row count than the dataset's stored file count — a dataset is
+fetched whole, so its manifests share one count. That includes a manifest of the
+dataset's own last pull that failed parity: the sidecar records its rows before
+parity is judged, so the next run requests the dataset again rather than failing
+on the same file. The input file is rebuilt from every declared dataset either way — ``--datasets`` narrows
 what is fetched, never what the input file covers, so a targeted repair cannot shrink
 the corpus. Discovery decides what to fetch; parity is judged against the sidecar's
 stored counts, so a catalog that has moved on since the pull — or been deleted, as
