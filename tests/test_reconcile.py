@@ -574,3 +574,24 @@ def test_a_record_missing_a_slot_is_refused(tmp_path, run, table):
     with pytest.raises(ValueError, match="platform"):
         go(run, tmp_path, None, table)
     assert not (run / RECONCILED_DIR).exists()
+
+
+def test_metadata_added_over_published_counts_our_values_where_the_published_source_was_silent(
+    tmp_path, run, evidence, table
+):
+    write_run(run, [record(1, reference_assembly="GRCh38"), record(2, reference_assembly="GRCh38")])
+    published(evidence, [("reference_assembly", drs(1), '["GRCh38 + Gencode40"]')])
+    result = go(run, tmp_path, evidence, table)
+    # File 1: published spoke (harmonized). File 2: published covers the slot here and said nothing.
+    assert result["added_over_published"] == {DATASET: {"reference_assembly": 1}}
+
+
+def test_an_interrupted_swap_is_restored_not_lost(tmp_path, run, table):
+    write_run(run, [record(1)])
+    go(run, tmp_path, None, table)
+    (run / RECONCILED_DIR).rename(run / f"{RECONCILED_DIR}.replaced")  # died between the renames
+    real = run / "bam_classifications.json"
+    real.write_text("not json")  # the next run fails before its swap
+    with pytest.raises(ValueError):
+        go(run, tmp_path, None, table)
+    assert (run / RECONCILED_DIR / "bam_classifications.ndjson").exists()

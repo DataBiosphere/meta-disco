@@ -519,6 +519,11 @@ class Report:
     coverage: dict[str, set[tuple[str | None, str]]]
     files: Counter = field(default_factory=Counter)
     slots: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
+    # Per dataset and slot, the files where the delivered value is ours and the published
+    # source, which speaks to that slot in that dataset, said nothing for the file: metadata
+    # added over what the repository publishes. Kept apart from `slots`, whose categories
+    # sum to the file count; this one overlaps them.
+    added_over_published: dict = field(default_factory=lambda: defaultdict(Counter))
     inputs: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
@@ -544,7 +549,10 @@ class Report:
             per_input = self.inputs[dataset][slot]
             per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
             for source_type in covering:
-                per_input[source_type][self._source_outcome(said, own, source_type)] += 1
+                outcome = self._source_outcome(said, own, source_type)
+                per_input[source_type][outcome] += 1
+                if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT and settled["status"] == CLASSIFIED:
+                    self.added_over_published[dataset][slot] += 1
 
     @staticmethod
     def _category(settled: dict, said: SlotEvidence, own: str | None, covering: tuple[str, ...]) -> str:
@@ -601,6 +609,7 @@ class Report:
             "files": dict(sorted(self.files.items())),
             "slots": plain(self.slots),
             "inputs": plain(self.inputs),
+            "added_over_published": plain(self.added_over_published),
             "conflict_rate": conflict_rate,
             "coverage": {
                 source_type: {
@@ -625,7 +634,8 @@ def reconcile_run(
 
     The inference files are read and never written. The output is written to a staging
     directory and renamed into place only when complete, so a failure leaves any earlier
-    reconciled artifact untouched. No request is made and no written byte depends on the
+    reconciled artifact recoverable: untouched, or moved aside as ``reconciled.replaced`` if
+    the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
     written does — so the same run, evidence and input paths write the same bytes
     (criterion 16). The report echoes the input path as given and evidence paths
@@ -668,6 +678,11 @@ def reconcile_run(
 
     out_dir = run_dir / RECONCILED_DIR
     staging = run_dir / f"{RECONCILED_DIR}.partial"
+    replaced = run_dir / f"{RECONCILED_DIR}.replaced"
+    # A swap interrupted after the earlier artifact was moved aside and before the new one
+    # moved in leaves only `.replaced`: put it back before anything else can delete it.
+    if replaced.exists() and not out_dir.exists():
+        replaced.rename(out_dir)
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir()
@@ -681,9 +696,9 @@ def reconcile_run(
         **report.to_dict(),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
-    # Swap by renames, so there is no moment with neither artifact on disk: the earlier
-    # one is moved aside, the new one moved in, and only then the earlier one deleted.
-    replaced = run_dir / f"{RECONCILED_DIR}.replaced"
+    # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only
+    # then the earlier one deleted. Between the two renames only `.replaced` exists, and
+    # the next run restores it (above) before it would be deleted.
     if replaced.exists():
         shutil.rmtree(replaced)
     if out_dir.exists():
