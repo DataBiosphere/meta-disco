@@ -887,7 +887,7 @@ class TestTextFiles:
             # The content is a chromosome/bin/count table; see `text_expression` (#485).
             pytest.param(
                 "chr5.PEL.counts.txt",
-                {"data_modality": NOT_CLASSIFIED, "data_type": NOT_CLASSIFIED},
+                {"data_modality": NOT_CLASSIFIED, "data_type": NOT_CLASSIFIED, "assay_type": NOT_CLASSIFIED},
                 id="counts.txt alone is not classified",
             ),
             pytest.param("data.txt", {"data_modality": NOT_CLASSIFIED}, id="ambiguous text is not classified"),

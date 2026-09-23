@@ -664,7 +664,7 @@ rules:
     # No bare `counts.txt`: a count says nothing about what is counted, so a gene-count
     # table is left unclassified too. ANVIL_T2T's chrN.<population>.counts.txt are
     # chromosome/bin/count tables, not expression matrices (#485).
-    rationale: "Filename contains `expression`, or ends in `tpm.txt` / `fpkm.txt`"
+    rationale: "Filename contains `expression`, `tpm.txt` or `fpkm.txt`"
 
   - id: salmon_quant
     tier: 2
