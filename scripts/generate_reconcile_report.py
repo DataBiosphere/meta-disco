@@ -67,9 +67,9 @@ class ReportError(Exception):
 def load_report(run_dir: Path, previous: bool = False) -> dict:
     """A run's reconcile report, refused if this code cannot render it.
 
-    A report with a slot category this code does not know is refused, and so is one
-    written before the conflict tally, unless it is only the ``previous`` run the
-    change is computed against, which reads no conflicts.
+    A report with a slot category or conflict kind this code does not know is refused.
+    So is one written before the conflict tally, unless it is only the ``previous`` run
+    the change is computed against, which reads no conflicts.
     """
     path = run_dir / RECONCILED_DIR / REPORT_FILE
     if not path.is_file():
@@ -89,6 +89,15 @@ def load_report(run_dir: Path, previous: bool = False) -> dict:
         raise ReportError(f"{path}: slot categories this report does not know: {sorted(unknown)}")
     if "conflicts" not in report and not previous:
         raise ReportError(f"{path} predates the conflict tally: run `make reconcile RUN_DIR={run_dir}` again")
+    kinds = {
+        kind
+        for per_slot in report.get("conflicts", {}).values()
+        for per_kind in per_slot.values()
+        for kind in per_kind
+        if kind not in CONFLICT_CATEGORIES
+    }
+    if kinds:
+        raise ReportError(f"{path}: conflict kinds this report does not know: {sorted(kinds)}")
     return report
 
 

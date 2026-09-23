@@ -116,6 +116,15 @@ def test_a_slot_category_the_report_does_not_know_is_refused(tmp_path, conflicte
         rr.load_report(conflicted)
 
 
+def test_a_conflict_kind_the_report_does_not_know_is_refused(conflicted):
+    path = conflicted / RECONCILED_DIR / REPORT_FILE
+    report = json.loads(path.read_text())
+    report["conflicts"][DATASET]["reference_assembly"]["conflict_curator"] = []
+    path.write_text(json.dumps(report))
+    with pytest.raises(rr.ReportError, match="conflict_curator"):
+        rr.load_report(conflicted)
+
+
 def test_a_source_no_evidence_came_from_has_no_columns(conflicted):
     shown = set(rr.columns(rr.load_report(conflicted)))
     assert "filled_by_published" in shown and "filled_by_submitter_harmonized" in shown
