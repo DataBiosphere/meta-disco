@@ -227,7 +227,7 @@ class ParentKindEnum(str, Enum):
 
 class SourceTypeEnum(str, Enum):
     """
-    Kind of source behind a claim (provenance model, #90). Every claim carries one (#392). Distinct from `tier`, which is the resolution input: two kinds share `CONTENT_TIER`, and one fires at a rule tier without being a rule.
+    Kind of source behind a claim (provenance model, #90). Every claim carries one (#392). Distinct from `tier`, which is the resolution input: two kinds share `CONTENT_TIER`.
     """
     filename_rule = "filename_rule"
     """
