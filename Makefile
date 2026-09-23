@@ -32,13 +32,13 @@ help:
 	@echo "  make check-published-map Check the AnVIL published map against the manifests on disk (offline)"
 	@echo "  make import-anvil-published Import AnVIL's published anvil_file columns as a generation of evidence files"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
-	@echo "  make review-queue       List every evidence value whose value-map row is not authored (offline)"
+	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value no authored row reads (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
 	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
-	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
@@ -249,8 +249,11 @@ import-anvil-published:
 seed-value-map:
 	uv run python scripts/value_map.py $(ARGS) seed
 
+# The review queue (#524) is a report: written to docs/review-queue-report.md and the static page
+# docs/review-queue.html, grouped by published and submitter sources. `scripts/value_map.py
+# queue` still prints the same markdown to the terminal.
 review-queue:
-	uv run python scripts/value_map.py $(ARGS) queue
+	uv run python scripts/generate_review_queue.py $(ARGS)
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
 # comparison out of this report, and #513 deleted it: AnVIL's published values are
@@ -286,7 +289,7 @@ reconcile:
 reconcile-report:
 	uv run python scripts/generate_reconcile_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR)) $(if $(PREVIOUS),--previous $(PREVIOUS))
 
-all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report review-queue
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py

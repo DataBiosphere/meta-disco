@@ -1,5 +1,6 @@
 """Summary printers for classification results."""
 
+import re
 from typing import Literal
 
 from .models import field_label, field_value
@@ -14,6 +15,21 @@ def escape_md_cell(text: str) -> str:
     the table. Shared by every report that renders one.
     """
     return text.replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+
+def md_code(value: str) -> str:
+    """Catalog or evidence text for a markdown report, as a code span.
+
+    Pages builds ``docs/`` with Jekyll, which renders markdown syntax and passes raw HTML
+    through, so a catalog value holding markup or a link (``![x](https://…)``) would render
+    as one. A code span is shown literally. Its fence is one backtick longer than the
+    longest run in the value, padded with a space where the value starts or ends with a
+    backtick, and line breaks become spaces. :func:`md_table` still escapes a pipe.
+    """
+    value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    fence = "`" * (max((len(run) for run in re.findall("`+", value)), default=0) + 1)
+    pad = " " if value.startswith("`") or value.endswith("`") else ""
+    return f"{fence}{pad}{value}{pad}{fence}"
 
 
 def md_table(header: list[str], rows: list[list[str]], align: Literal["left", "right"] = "left") -> list[str]:

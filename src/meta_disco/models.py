@@ -53,6 +53,14 @@ SOURCE_REPOSITORY_METADATA = "repository_metadata"
 # submitter's table (`repository_metadata`); contract 4.1 kind 2, 7.12 (#497).
 SOURCE_PUBLISHED_VALUE = "published_value"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
+# The importer sources in the order a delivered value is credited to them, each with its
+# short name in the reports: what the repository publishes, then what its submitters
+# wrote, then other catalogs. Reconcile attributes by it and the review queue groups by it.
+SOURCE_PRECEDENCE = (
+    (SOURCE_PUBLISHED_VALUE, "published"),
+    (SOURCE_REPOSITORY_METADATA, "submitter"),
+    (SOURCE_EXTERNAL_GROUND_TRUTH, "external"),
+)
 # The kinds that name a source outside this repository. A claim with one of these
 # must carry a `ClaimSource`, and only such a claim may: it is what makes a claim an
 # import, and every import rule `make_claim` enforces — no tier, cite a mapping rule

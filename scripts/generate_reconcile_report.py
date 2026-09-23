@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -35,7 +34,7 @@ from meta_disco.reconcile import (
     SOURCE_PRECEDENCE,
     fill_category,
 )
-from meta_disco.summaries import md_table
+from meta_disco.summaries import md_code, md_table
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
@@ -45,22 +44,6 @@ ALL = EVERY_DATASET
 # for the file, and the gaps inference left that a source filled.
 ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
-
-
-def code(value: str) -> str:
-    """Catalog or evidence text for the markdown report, as a code span.
-
-    Pages builds ``docs/`` with Jekyll, which renders markdown syntax and passes raw HTML
-    through, so a catalog value holding markup or a link (``![x](https://…)``) would render
-    as one. A code span is shown literally. Its fence is one backtick longer than the
-    longest run in the value, padded with a space where the value starts or ends with a
-    backtick, and line breaks become spaces. ``md_table`` still escapes a pipe. The
-    dashboard escapes the same values in its own ``esc``.
-    """
-    value = value.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
-    fence = "`" * (max((len(run) for run in re.findall("`+", value)), default=0) + 1)
-    pad = " " if value.startswith("`") or value.endswith("`") else ""
-    return f"{fence}{pad}{value}{pad}{fence}"
 
 
 def shown(dataset: str) -> str:
@@ -297,8 +280,8 @@ def _conflict_table(rows: list[dict], with_dataset: bool) -> list[str]:
         return ["No conflicts."]
     header = (["dataset"] if with_dataset else []) + ["dimension", "kind", "files", "competing values"]
     body = [
-        ([code(shown(r["dataset"]))] if with_dataset else [])
-        + [r["dimension"], label(r["kind"]), _n(r["files"]), code(competing(r["inputs"]))]
+        ([md_code(shown(r["dataset"]))] if with_dataset else [])
+        + [r["dimension"], label(r["kind"]), _n(r["files"]), md_code(competing(r["inputs"]))]
         for r in rows
     ]
     return md_table(header, body)
@@ -333,7 +316,8 @@ def render_markdown(data: dict) -> str:
         "",
         "- **Published unreviewed:** the catalog publishes a value that no translation row reads yet, and no "
         "other input gave an answer, so the file has none. Beside another input's answer, the same value counts "
-        "as *conflict (published)*.",
+        "as *conflict (published)*. The values themselves are in the "
+        "[review queue](review-queue-report.md).",
         "",
         "The last two columns are extra counts laid over those, not part of the sum:",
         "",
@@ -399,7 +383,7 @@ def render_markdown(data: dict) -> str:
         return md_table(
             header,
             [
-                [code(e["source_type"]), code(e["dataset"] or ALL), code(e["table"] or "-"), code(e["key"])]
+                [md_code(e["source_type"]), md_code(e["dataset"] or ALL), md_code(e["table"] or "-"), md_code(e["key"])]
                 + [_n(e[k]) for k in ("offered", "matched", "unmatched", "ambiguous")]
                 for e in rows
             ],
@@ -438,7 +422,7 @@ def render_markdown(data: dict) -> str:
     for scope in data["datasets"]:
         name = scope["name"]
         lines += [
-            f"### {code(shown(name))}",
+            f"### {md_code(shown(name))}",
             "",
             f"{scope['files']:,} files.",
             "",

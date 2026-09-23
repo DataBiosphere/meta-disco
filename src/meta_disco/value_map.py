@@ -52,7 +52,7 @@ import hashlib
 import os
 import re
 import sys
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
@@ -62,7 +62,15 @@ from uuid import uuid4
 import yaml
 
 from .manifest_survey import name_tokens
-from .models import AUTHORABLE_STATUSES, CLASSIFICATION_FIELDS, required_str
+from .models import (
+    AUTHORABLE_STATUSES,
+    CLASSIFICATION_FIELDS,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_PRECEDENCE,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    required_str,
+)
 from .rule_engine import make_claim
 from .schema_vocab import value_in_vocabulary
 from .slot_map import NO_NOTES, NOTES
@@ -74,7 +82,7 @@ from .source_evidence import (
     list_cell,
     read_envelope,
 )
-from .summaries import md_table
+from .summaries import md_code, md_table
 
 Key = frozenset[str]
 """A normalized match key: one element for a scalar cell, several for a list cell."""
@@ -599,6 +607,8 @@ def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
 class QueueEntry:
     """One unmatched value, as contract 5.2 lists it: where it came from, what it is, how many files carry it."""
 
+    source_type: str
+    """The kind of source its evidence file declares (``published_value``, ``repository_metadata``, …)."""
     source: str
     dataset: str | None
     table: str | None
@@ -610,7 +620,7 @@ class QueueEntry:
     """The seeded row it selects, or None where no row matches."""
 
 
-_Group = tuple[str, str | None, str | None, str | None, str, str]
+_Group = tuple[str, str, str | None, str | None, str | None, str, str]
 
 
 def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> list[QueueEntry]:
@@ -626,69 +636,147 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
     files: dict[_Group, int] = {}
     row_ids: dict[_Group, str | None] = {}
     for path in _current_paths(evidence_root, datasets):
+        source_type = read_envelope(path).source_type
         targets: dict[_Group, set[str]] = {}
         for entry in iter_evidence(path):
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
                 continue
             src = entry.source
-            group = (src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
+            group = (source_type, src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
             targets.setdefault(group, set()).add(entry.target_key_value)
             row_ids.setdefault(group, None if row is None else row.id)
         for group, seen in targets.items():
             files[group] = files.get(group, 0) + len(seen)
-    entries = [
-        QueueEntry(
-            source=source,
-            dataset=dataset,
-            table=table_name,
-            column=column,
-            slot=slot,
-            raw_value=raw_value,
-            files=count,
-            row_id=row_ids[(source, dataset, table_name, column, slot, raw_value)],
-        )
-        for (source, dataset, table_name, column, slot, raw_value), count in files.items()
-    ]
+    # A group's fields are QueueEntry's first seven, in order.
+    entries = [QueueEntry(*group, files=count, row_id=row_ids[group]) for group, count in files.items()]
     entries.sort(
-        key=lambda e: (-e.files, e.slot, e.raw_value, e.source, e.dataset or "", e.table or "", e.column or "")
+        key=lambda e: (
+            -e.files,
+            e.slot,
+            e.raw_value,
+            e.source_type,
+            e.source,
+            e.dataset or "",
+            e.table or "",
+            e.column or "",
+        )
     )
     return entries
 
 
-def render_queue(entries: list[QueueEntry], evidence_root: Path) -> str:
-    """The queue as a markdown table. A raw value is shown as its Python ``repr``: quoted, with every
-    non-printable character and backslash spelled out by the standard library, so an empty string, a value
-    with boundary spaces and one differing only in a control character each read as what they are."""
-    lines = [
-        "# Review queue: values whose selected row is not authored",
-        "",
-        f"Evidence root: `{evidence_root}`. {len(entries)} listed; a value is one line per source, dataset, "
-        "table and column it arrives through (contract 5.2). `row` is the seeded row it selects, or `—` where "
-        "no row matches.",
-        "",
-        *md_table(
-            ["files", "slot", "raw value", "source", "dataset", "table", "column", "row"],
-            [
-                [
-                    f"{e.files:,}",
-                    e.slot,
-                    repr(e.raw_value),
-                    e.source,
-                    e.dataset or "",
-                    e.table or "",
-                    e.column or "",
-                    e.row_id or "—",
-                ]
-                for e in entries
-            ],
-        ),
+# The queue's groups: one per importer source, in SOURCE_PRECEDENCE order, with its heading
+# and whether it is listed when empty (the published and submitter groups always are).
+QUEUE_GROUP_TEXT = {
+    SOURCE_PUBLISHED_VALUE: ("Published", "the catalog's published columns", True),
+    SOURCE_REPOSITORY_METADATA: ("Submitter", "the submitter tables", True),
+    SOURCE_EXTERNAL_GROUND_TRUTH: ("External", "other catalogs", False),
+}
+
+
+@dataclass(frozen=True)
+class QueueColumn:
+    """One column of the rendered queue. ``kind`` says how a renderer shows it: ``num`` right-aligned,
+    ``catalog`` text a source wrote (shown so it cannot render as markup), ``plain`` our own words."""
+
+    header: str
+    kind: str
+    cell: Callable[[QueueEntry], str]
+
+
+QUEUE_COLUMNS = (
+    QueueColumn("files", "num", lambda e: f"{e.files:,}"),
+    QueueColumn("slot", "plain", lambda e: e.slot),
+    # The raw value as its Python ``repr``: quoted, with every non-printable character and
+    # backslash spelled out, so an empty string, boundary spaces and a control character
+    # each read as what they are.
+    QueueColumn("raw value", "catalog", lambda e: repr(e.raw_value)),
+    QueueColumn("source", "catalog", lambda e: e.source),
+    QueueColumn("dataset", "catalog", lambda e: e.dataset or ""),
+    QueueColumn("table", "catalog", lambda e: e.table or ""),
+    QueueColumn("column", "catalog", lambda e: e.column or ""),
+    QueueColumn("row", "plain", lambda e: e.row_id or "—"),
+)
+
+
+def queue_groups(entries: list[QueueEntry]) -> list[tuple[str, str, list[QueueEntry]]]:
+    """``(label, description, entries)`` per importer source in SOURCE_PRECEDENCE order, entries in queue order.
+
+    A group listed only when not empty is left out while it is. Every entry lands in a
+    group: an envelope's source type is one of ``IMPORTER_SOURCE_TYPES``, which a test holds
+    equal to SOURCE_PRECEDENCE's, and another test holds QUEUE_GROUP_TEXT to the same set.
+    """
+    groups = []
+    for source_type, _ in SOURCE_PRECEDENCE:
+        label, description, always = QUEUE_GROUP_TEXT[source_type]
+        group = [e for e in entries if e.source_type == source_type]
+        if group or always:
+            groups.append((label, description, group))
+    return groups
+
+
+def queue_intro(entries: list[QueueEntry], evidence_root: Path, datasets: Iterable[str] | None = None) -> str:
+    """The sentence above the queue, in plain text; each renderer marks it up. It names the datasets
+    when the queue was limited to some, so a partial queue cannot pass for the whole one."""
+    scope = f" for {', '.join(sorted(datasets))} only" if datasets else ""
+    return (
+        "Source values that no authored translation row reads yet, so they make no claim (contract 5.2). "
+        "A value is listed once per source, dataset, table and column it arrives through; the row column "
+        f"names the seeded row it selects, or — where no row matches. {len(entries):,} listed, from "
+        f"evidence{scope} under {_shown_root(evidence_root)}."
+    )
+
+
+# The repository root, the default evidence root's grandparent: what a report names paths against.
+_PROJECT_ROOT = DEFAULT_SOURCE_EVIDENCE_ROOT.parent.parent
+
+
+def _shown_root(evidence_root: Path) -> str:
+    """The evidence root as a report names it: relative to the repository where it lies under it,
+    wherever the command runs, so the report names ``data/source_evidence`` and not one machine's path.
+    Compared unresolved: ``data/`` may be a symlink out of the repository."""
+    try:
+        return str(evidence_root.absolute().relative_to(_PROJECT_ROOT))
+    except ValueError:
+        return str(evidence_root)
+
+
+def queue_summary(entries: list[QueueEntry]) -> list[str]:
+    """One line per group: its label, how many values and how many files."""
+    return [
+        f"  {label}: {len(group)} values, {sum(e.files for e in group):,} files"
+        for label, _, group in queue_groups(entries)
     ]
+
+
+def render_queue(entries: list[QueueEntry], evidence_root: Path, datasets: Iterable[str] | None = None) -> str:
+    """The queue as markdown, one section per source type (:func:`queue_groups`).
+
+    A catalog cell is a code span (:func:`md_code`), so no value renders as markup or a
+    link; an empty one stays empty.
+    """
+    lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets)]
+    for label, description, group in queue_groups(entries):
+        lines += ["", f"## {label}: {description}", ""]
+        if not group:
+            lines.append("No unreviewed values.")
+            continue
+        lines += md_table(
+            [c.header for c in QUEUE_COLUMNS],
+            [
+                [md_code(v) if c.kind == "catalog" and v else v for c in QUEUE_COLUMNS for v in (c.cell(e),)]
+                for e in group
+            ],
+        )
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for ``scripts/value_map.py``: ``seed`` appends seeded rows, ``queue`` prints the queue."""
+    """Entry point for ``scripts/value_map.py``: ``seed`` appends seeded rows, ``queue`` prints the queue.
+
+    ``queue`` prints the markdown to stdout, or writes it to ``--output``, and a count per
+    group to stderr. ``scripts/generate_review_queue.py`` writes the published report.
+    """
     parser = argparse.ArgumentParser(
         description="The value translation table: seed it from evidence, or list its queue"
     )
@@ -712,12 +800,13 @@ def main(argv: list[str] | None = None) -> int:
         for id in result.rows_added:
             print(f"  {id}", file=sys.stderr)
         return 0
-    report = render_queue(
-        review_queue(args.evidence_root, load_value_map(table_path), args.dataset), args.evidence_root
-    )
+    entries = review_queue(args.evidence_root, load_value_map(table_path), args.dataset)
+    report = render_queue(entries, args.evidence_root, args.dataset)
     if args.output is not None:
         args.output.write_text(report)
         print(f"Wrote {args.output}", file=sys.stderr)
     else:
         print(report, end="")
+    for line in queue_summary(entries):
+        print(line, file=sys.stderr)
     return 0
