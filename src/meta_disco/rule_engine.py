@@ -587,12 +587,6 @@ class ExtendedClassificationResult:
         self._require_field(fld)
         return self.field_status[fld]
 
-    def is_declared(self, fld: str) -> bool:
-        """True if a definitive statement was made for the field — a real value
-        (CLASSIFIED) or an explicit not_applicable — vs not_classified/unset."""
-        self._require_field(fld)
-        return self.field_status[fld] in (CLASSIFIED, NOT_APPLICABLE)
-
     def label(self, fld: str) -> str | None:
         """Combined value-or-status label for the field (mirrors models.field_label):
         the real value when CLASSIFIED, else the status string. For flat/legacy
@@ -987,7 +981,7 @@ class RuleEngine:
         for tier in range(1, max_tier + 1):
             tier_rules = [r for r in applicable_rules if r.tier == tier]
             for rule in tier_rules:
-                if self._rule_matches(rule, ext_info, result):
+                if self._rule_matches(rule, ext_info):
                     self._apply_rule(rule, result)
         # Evaluate all collected claims
         self._finalize_result(result)
@@ -1007,10 +1001,10 @@ class RuleEngine:
             result.set_field(fld, evaluation.value, evaluation.status)
             result._sync_markers(fld, evaluation)
 
-    def _rule_matches(
-        self, rule: UnifiedRule, file_info: ExtendedFileInfo, current: ExtendedClassificationResult
-    ) -> bool:
-        """Check if a unified rule's conditions match."""
+    def _rule_matches(self, rule: UnifiedRule, file_info: ExtendedFileInfo) -> bool:
+        """Check if a unified rule's conditions match. It reads only the file: no
+        other rule's result is passed in, so a rule cannot condition on what
+        another rule said (#88)."""
         when = rule.when
 
         # Handle 'always: true'

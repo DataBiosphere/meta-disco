@@ -176,12 +176,11 @@ class TestFormatMatching:
         from meta_disco.rule_loader import UnifiedRule
 
         fasta = ExtendedFileInfo(name=FileName.parse("genome.fa"), format=Format.FASTA)
-        result = ExtendedClassificationResult()
         empty_fmt = UnifiedRule(id="x", tier=1, scope="extension", when={"format": ""}, then={}, rationale="")
-        assert engine._rule_matches(empty_fmt, fasta, result) is False
+        assert engine._rule_matches(empty_fmt, fasta) is False
         # Control: the same rule keyed on the real format still matches.
         real_fmt = UnifiedRule(id="y", tier=1, scope="extension", when={"format": "FASTA"}, then={}, rationale="")
-        assert engine._rule_matches(real_fmt, fasta, result) is True
+        assert engine._rule_matches(real_fmt, fasta) is True
 
     def test_classify_extended_normalizes_file_format_case(self, engine):
         """A mixed-case header-only file_format is lower-cased once at the source,
@@ -320,7 +319,7 @@ class TestSetFieldValidation:
         assert result.reference_assembly is None
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 
-    @pytest.mark.parametrize("accessor", ["status_of", "is_declared", "label"])
+    @pytest.mark.parametrize("accessor", ["status_of", "label"])
     def test_read_accessors_reject_unknown_field(self, accessor):
         # Read helpers raise a consistent ValueError (not a bare KeyError) on a typo.
         result = ExtendedClassificationResult()

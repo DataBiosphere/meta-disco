@@ -571,8 +571,7 @@ def test_reference_build_families_in_vocabulary():
 
     The build table is non-rule data in the same YAML as the rules, and its
     generated comment asserts that `family` matches the enum — this is what makes
-    that true rather than merely claimed. Same guard the assay_type inference
-    block gets above, for the same reason: a value that drifts out of the
+    that true rather than merely claimed: a value that drifts out of the
     vocabulary would surface as a build that resolves to a family no consumer
     recognises.
     """

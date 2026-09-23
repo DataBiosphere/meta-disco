@@ -96,9 +96,7 @@ def assert_output_format(record):
         assert "value" in entry, f"{field} missing 'value'"
         assert "status" in entry, f"{field} missing 'status'"
         assert "evidence" in entry, f"{field} missing 'evidence'"
-        # assay_type may be set by post-hoc inference which doesn't produce evidence
-        if field != "assay_type":
-            assert len(entry["evidence"]) > 0, f"{field} has empty evidence"
+        assert len(entry["evidence"]) > 0, f"{field} has empty evidence"
 
 
 # =============================================================================
@@ -134,16 +132,15 @@ class TestBamE2E:
         assert_output_format(result)
         assert get_val(result, "reference_assembly") == "GRCh38"
         assert get_val(result, "platform") == "ILLUMINA"
-        assert get_val(result, "data_modality") == "genomic"  # from aligned reference contigs
+        assert get_val(result, "data_modality") == "genomic"  # from the BWA aligner in @PG
         assert get_val(result, "data_type") == "alignments"
         assert get_val(result, "assay_type") is None
 
     def test_pacbio_unaligned_reads(self):
         """PacBio reads BAM — 363.9 GB, unaligned, reference N/A.
 
-        The filename carries no `hifi`/`pacbio` token, so nothing claims a modality and
-        the post-hoc assay inference — which needs one — leaves assay_type unclassified.
-        Platform comes from the header's @RG PL alone.
+        The filename carries no `hifi`/`pacbio` token, so nothing claims a modality or
+        an assay. Platform comes from the header's @RG PL alone.
         """
         result = classify_bam(
             "722143247e28f39ccac721728e4a0076",

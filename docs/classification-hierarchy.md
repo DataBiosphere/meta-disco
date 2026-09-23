@@ -150,7 +150,7 @@ other two were delimiter-carrying (`\.chip\.|chip[-_]?seq|…`) and went for bei
 not for being unanchored.
 
 **data_modality**:
-- `genomic` ← regions.bed pattern, fallback default
+- `genomic` ← regions.bed pattern
 - `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
 - `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)

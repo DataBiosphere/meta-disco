@@ -315,6 +315,10 @@ class RuleLoader:
 
         # Third document: illumina instruments (optional). The assay-inference
         # document that stood here is gone (#88): no rule reads another rule's answer.
+        # Documents are positional, so a file still in the five-document layout would
+        # read its assay document here as instruments; refuse it by name instead.
+        if any(isinstance(d, dict) and "assay_type_rules" in d for d in docs):
+            raise ValueError("Rules file carries an `assay_type_rules` document, removed in #88; delete it")
         illumina_instruments = []
         if len(docs) > 2 and docs[2]:
             illumina_instruments = self._parse_illumina_instruments(docs[2].get("illumina_instruments", []))

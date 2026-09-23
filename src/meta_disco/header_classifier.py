@@ -858,16 +858,11 @@ def classify_from_fasta_header(
 
         # Need a substantial fraction of expected chromosomes to call it a reference
         if best_count >= 20:
-            # If multiple assemblies tied (all use same chr names), use filename to disambiguate
+            # Assemblies that share chromosome names tie, and a tie names no reference.
+            # The contigs say only what they say: no other claim (a filename's, say) is
+            # borrowed to break it (#88); a filename rule speaks for itself.
             tied = [a for a, c in assembly_counts.items() if c == best_count]
-            if len(tied) == 1:
-                best_ref = tied[0]
-            elif result.reference_assembly:
-                # Rule engine already detected reference from filename (e.g., "chm13" in name)
-                best_ref = result.reference_assembly
-            else:
-                # Can't distinguish — contigs match multiple references equally
-                best_ref = None
+            best_ref = tied[0] if len(tied) == 1 else None
 
             ref_reason = f"Matched {best_count} contigs to reference chromosomes" + (
                 f" ({best_ref})" if best_ref else " (ambiguous — multiple references share these names)"
@@ -1092,13 +1087,12 @@ def classify_from_bed_signals(
     if max_coordinates:
         coord_ref, coord_rationale = _infer_bed_reference(signals)
 
-        if coord_ref and result.status_of("reference_assembly") != NOT_APPLICABLE:
+        if coord_ref:
             # Coordinate detection reads the actual file content, so at CONTENT_TIER
             # it overrides a filename-based reference guess (CLAUDE.md design
             # principle: prefer reading actual file content over guessing from
-            # filenames). The guard preserves an existing not_applicable — a positive
-            # determination ("no reference applies"), not a filename guess — which a
-            # CONTENT_TIER value claim would otherwise out-rank.
+            # filenames). It claims whatever else was claimed: it never checks
+            # another claim first (#88), and resolution settles it against them.
             result.add_claim(
                 "reference_assembly",
                 rule_id="bed_coordinate_reference",
