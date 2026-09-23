@@ -286,7 +286,7 @@ def run_labels(run_dir: Path) -> dict[FileKey, Counter[Labels]]:
     Every record carries an ``md5sum`` (the output echo of the input contract's
     ``file_md5sum``), and it is well-formed. That is enforced, not assumed: a record
     with no usable ``file_md5sum`` is excluded from classification at the shared load
-    path every producer reads through (``pipeline.load_classifiable_snapshot``, #376),
+    path every producer reads through (``pipeline.load_classifiable_records``, #376),
     so it reaches no ``*_classifications.json`` and therefore no run this function
     reads. Such a record would otherwise normalize to the empty string here, share a
     key with any other record of the same dataset and name, and be compared as one

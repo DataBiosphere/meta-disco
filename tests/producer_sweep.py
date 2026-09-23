@@ -20,6 +20,7 @@ from classify_images import classify_images
 from classify_index_files import propagate_to_index_files
 from classify_remaining_files import classify_remaining
 
+from tests.metadata_fixtures import write_metadata
 from tests.run_fixtures import OUTPUT_FILE, write_run
 
 # The three producers that take `(metadata_path, output_path)` and write one row per
@@ -40,13 +41,6 @@ STANDALONE_PRODUCERS = [
 ]
 
 
-def write_snapshot(tmp_path, records):
-    """The input envelope with a catalog, so the repository is named as in a real run."""
-    path = tmp_path / "metadata.json"
-    path.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": records}))
-    return path
-
-
 def run_producer_envelope(producer, tmp_path, records):
     """Run one of :data:`STANDALONE_PRODUCERS` over ``records``; return the whole envelope.
 
@@ -55,7 +49,7 @@ def run_producer_envelope(producer, tmp_path, records):
     :func:`run_index_producer`, which returns one for its own reason.
     """
     output = tmp_path / "out_classifications.json"
-    producer(write_snapshot(tmp_path, records), output)
+    producer(write_metadata(tmp_path / "metadata.json", records), output)
     return json.loads(output.read_text())
 
 
@@ -77,5 +71,5 @@ def run_index_producer(tmp_path, records, parent_classifications=()):
     """
     parents = write_run(tmp_path, parent_classifications) / OUTPUT_FILE
     output = tmp_path / "index_classifications.json"
-    propagate_to_index_files(write_snapshot(tmp_path, records), [parents], output)
+    propagate_to_index_files(write_metadata(tmp_path / "metadata.json", records), [parents], output)
     return json.loads(output.read_text())

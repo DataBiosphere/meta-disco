@@ -281,9 +281,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
     record that concludes exactly what its inference record concluded: the same value or status on every
-    slot, from the same claims. The records are not byte-identical once 7.4's `published` block moves to
-    the reconciled one, which is a passenger 7.2 keeps out of every conclusion. Sameness here is of what
-    was concluded, not of the bytes.
+    slot, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
+    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
+    to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
 6.7 Reading sources is a stage of its own, separate from reconciling them, and is measured on its own: evidence offered, evidence matched, and by which key.
 
@@ -317,9 +317,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 ## 7. Published values
 
-#424 built the `published` block and the comparison (7.3–7.11); #497 made the published values an
-input (7.1, 7.2, 7.12). 7.4's second half names where the block goes once a reconciled record exists,
-and "What is not true yet" says which parts the code does today.
+#424 built a `published` block on every output record and a report comparing it with the inferred
+values; #497 made the published values an input (7.1, 7.2, 7.12). #513 deleted the block and the
+report: once the values are an input, reconcile is where they meet the others (4.4, 4.5), and a
+second place carrying them beside the answer only repeats it. 7.4–7.9 and 7.11 described that block and
+report. Their numbers are kept, marked retired, so a citation of 7.12 still points where it did.
 
 Written for **a repository**, not for AnVIL. AnVIL is the only publisher today, but nothing here
 depends on that, and a second repository needs no change to these assertions.
@@ -336,63 +338,24 @@ depends on that, and a second repository needs no change to these assertions.
     published importer's envelope as provenance, and are compared there with every other input (4.4,
     4.5).
 
-7.3 They are carried **verbatim**: as the repository wrote them, a list wherever it published a list.
-    Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
-    answer, and 1.4's transcribe-verbatim rule governs them as it governs evidence.
+7.3 They are transcribed **verbatim**: as the repository wrote them, a list wherever it published a
+    list. Keeping element zero of a multi-valued cell is not dropping data, it is manufacturing a wrong
+    answer, and 1.4's transcribe-verbatim rule governs them as it governs every other source's evidence.
 
-7.4 They are carried in a `published` block **beside** the inferred values, never merged into them.
-    Nesting is what keeps 7.2 legible: one block is what this project inferred, the other is what the
-    repository publishes.
-
-    **They belong on the reconciled record, and are on the inference record only because there is not
-    one yet.** 6.10 already describes this block's shape — a reconciled record carries what inference
-    concluded, what each source declared, and the resolution — and 6.2 says the inference artifact is
-    *what inference alone concluded*. A repository's published values are not something inference
-    concluded, so carrying them there is against 6.2's definition of that artifact. #424 did it anyway,
-    because `*_classifications.json` is the only per-file record that exists and the alternative was a
-    second artifact joined back by `(entry_id, md5sum)`.
-
-    So this is a placement of convenience, not a decision. When reconcile lands, the block moves to the
-    reconciled record and the inference artifact goes back to being purely inferential; 6.3 keeps
-    reconciliation from rewriting inference output, so the move is a removal there and an addition here.
-    Tracked on #432, which inherits it; noted on #402. Until then, a reader of `*_classifications.json` should treat `published` as a
-    passenger — nothing in inference reads it, and 7.2 is what guarantees that.
-
-7.5 They are carried **even when they yield nothing else**. A published value this vocabulary has no
-    word for — `GRCm39` — produces no claim under 3.7, so without the block it would appear in the
-    output nowhere at all, and the gap it represents would be unmeasurable from the output.
-
-7.6 Whether a published value is a term in this vocabulary is **recorded per file**, not inferred by a
-    reader. Today no published value in the corpus is one, which is what makes #414's value mappings
-    countable rather than asserted.
-
-7.7 **Every producer of a run writes the block.** This is 7.2's twin: a producer that omits it does not
-    fail, it under-reports, and a missing block is indistinguishable from a file the repository
-    publishes nothing for. The claim is about the whole run, exactly as #376's exclusion claim is.
-
-7.8 The comparison is a stage **after** resolution, and its shape does not depend on how many sources
-    feed it: `sources -> reconcile -> inferred value -> compare against published`. With one source
-    there is nothing to reconcile, and the comparison is the whole of it.
-
-7.9 The comparison **recommends; it does not adopt**. A recommendation that the published value should
-    stand leaves the inferred value exactly as inference resolved it. Nothing here writes an answer.
+7.4–7.9, 7.11 **Retired by #513.** They placed the values in a `published` block beside the inferred
+    ones (7.4), carried them even where they yield no claim (7.5), recorded their vocabulary standing
+    per file (7.6), required every producer to write the block (7.7), and ran a comparison after
+    resolution that recommended without adopting (7.8, 7.9), in a repository-neutral vocabulary (7.11).
+    Each described the block or the report, and neither exists. What they protected is kept elsewhere:
+    the values reach the answer only through reconcile, as one input equal to the others (4.2);
+    a published value no authored row maps, such as `GRCm39`, is listed with its file count in the
+    review queue (5.2) rather than on a record; and which repository published a value is its evidence
+    envelope's to say (2.1), not a field a run fills in.
 
 7.10 Agreement is only decidable **after mapping**. `GRCh38 + Gencode40` and `GRCh38` are the same
-     assembly and different strings, so until #414's value mappings exist the comparison names the pair
-     rather than judging it. Guessing at equality would be 3.5's similarity matching by another route.
-
-     To be exact about what does not exist: `generate_validation_report` carried two hand-written dicts,
-     `ANVIL_MODALITY_MAP` and `ANVIL_REFERENCE_MAP`, holding these very mappings, and scored agreement
-     through them. They were script-local, carried no row ids, and were checked against no vocabulary, so
-     they are not a mapping table under 3.8 and 5.4 — nothing could cite one as the rule behind a claim.
-     #424 removed that second comparison rather than leave two reports scoring the same files by different
-     rules, and recorded the five mappings in that script's docstring as #414's seed. So the absent thing
-     is a *reviewable, cited* mapping, not the knowledge of what maps to what.
-
-7.11 The vocabulary is **repository-neutral**, because the report is addressed to whichever repository's
-     data team reads it. `add` / `keep` / `review` / `none` are what that team should do; no recommendation
-     names a publisher. Only `source` does — and once the block is built from the published importer's
-     evidence, `source` is that importer's envelope: its repository and version, not a name a run guessed.
+     assembly and different strings, so reconcile compares a published value only through the
+     translation table's row for it (3.9); guessing at equality would be 3.5's similarity matching by
+     another route.
 
 7.12 **Every repository has exactly one published source**, and exactly one importer reads it. Which
      table it is, is declared once (`pipeline.PUBLISHED_TABLES`: AnVIL's is the `anvil_file` table of
@@ -405,16 +368,19 @@ depends on that, and a second repository needs no change to these assertions.
      declared — HPRC today, see "What is not true yet" — can have no file claim one until it is. The
      compact Azul manifest is
      not a published source: it is a join AnVIL's index produces, and may hand a run its own output back.
-     Until a TDR reader exists (#478), the verbatim manifest — the TDR tables synced down as a file, one
-     row per line in TDR's column names — stands in for the tables, and the published importer is the
+     Until the published importer reads a snapshot's tables through either reader (#508), the verbatim
+     manifest — the TDR tables synced down as a file, one row per line in TDR's column names — stands
+     in for the tables, and the published importer is the
      submitter-table importer run over a second slot map (`anvil_published_slot_map.yaml`).
 
 ---
 
 ## What is not true yet
 
-No code reads this document, and the pipeline it describes does not exist — with section 7 excepted, which
-describes what #424 built rather than what is intended. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
+No code reads this document, and the pipeline it describes does not exist. In section 7, the importer's
+half is built — 7.12 is enforced (below), and the published importer reads the system of record (7.1, today through the verbatim manifest, 7.12)
+and transcribes verbatim (7.3, #497, #421) — while what 7.1, 7.2 and 7.10 say about claims and comparison
+is the reconcile stage's (#432), which is not built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
@@ -437,7 +403,7 @@ describes what #424 built rather than what is intended. Parts of it *are* enforc
   catalog is the system of record for what HPRC publishes is undecided, so the HPRC run has no published
   evidence and a file claiming to be it is refused until the declaration exists.
 - **There is no read-sources stage and no reconcile stage** (#402 and #432). A run has the three inference phases, plus `report_evidence_files`, which names the evidence files it found and consumes none of them.
-- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. 7.4's second half depends on it too: the `published` block is on the inference record because there is no reconciled one to put it on, and moves when there is. **Until then that block is still built from the input snapshot** — the two columns the downloader copies off the compact manifest — and its `source` from the input envelope, not from the published importer's evidence (7.11's second sentence). The evidence exists on disk (7.12) and nothing in a run reads it; #432 builds the block from it.
+- **There is no reconciled artifact** (#432). Inference output is the only output, so 6.3 and 6.6 describe a distinction that does not exist yet. Until it exists, **no output shows what a repository publishes for a file**: the published evidence is on disk (7.12) and nothing in a run reads it, and the `published` block that used to carry the values on the inference record is deleted (#513).
 - **Cross-source conflict does not happen.** `evaluate_claims` produces a conflict only from same-tier disagreement inside inference, and it explicitly drops any claim carrying a `source` — the operational form of the decision this contract reverses.
 
 A line leaves this section when the assertion above it is enforced, not when it is merely intended.

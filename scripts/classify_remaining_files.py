@@ -30,7 +30,7 @@ from meta_disco.pipeline import (
     RecordKey,
     input_key_value,
     keyed_rows,
-    load_classifiable_snapshot,
+    load_classifiable_records,
     load_envelope,
     record_key,
     repeated_key_values,
@@ -74,8 +74,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
     # The load also records what it excluded into the run directory this output lands in.
-    snapshot = load_classifiable_snapshot(metadata_path, output_path.parent)
-    source, files = snapshot.source, snapshot.records
+    files = load_classifiable_records(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
     # A key two input records share would let one hide behind the other: the earlier
@@ -121,9 +120,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
             # drifted identity (a null or non-string `file_name`) that `from_record`
             # would echo as-is into a row typed `str`.
             item = InvalidRecord.from_record(rec, classification_blocking_reasons(rec))
-            results.append(
-                OutputRecord.from_work_item(item, validation_failed_classifications(item.reasons), source).to_dict()
-            )
+            results.append(OutputRecord.from_work_item(item, validation_failed_classifications(item.reasons)).to_dict())
             continue
 
         file_info = FileInfo.from_filename(
@@ -142,7 +139,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
         ext_counts[ext] += 1
 
         # One record shape for every producer (#450).
-        results.append(OutputRecord.from_record(rec, result.to_output_dict(), source).to_dict())
+        results.append(OutputRecord.from_record(rec, result.to_output_dict()).to_dict())
 
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")

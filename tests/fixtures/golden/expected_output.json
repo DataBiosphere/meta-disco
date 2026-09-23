@@ -73,23 +73,7 @@
         "file_id": "g-file-b",
         "file_name": "sample.flnc.bam",
         "file_size": 12345678,
-        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "published": {
-          "data_modality": [
-            "single-nucleus ATAC-seq"
-          ],
-          "in_vocabulary": {
-            "data_modality": [],
-            "reference_assembly": [
-              "GRCh38"
-            ]
-          },
-          "reference_assembly": [
-            "GRCh38",
-            "GRCm39"
-          ],
-          "source": "anvil/anvil15"
-        }
+        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
     ],
     "metadata": {
@@ -198,8 +182,7 @@
         "file_id": "g-file-7",
         "file_name": "sample.regions.bed.gz",
         "file_size": 45000,
-        "md5sum": "77777777777777777777777777777777",
-        "published": null
+        "md5sum": "77777777777777777777777777777777"
       }
     ],
     "metadata": {
@@ -322,8 +305,7 @@
         "file_id": "g-file-a",
         "file_name": "hapdup_contigs.hap1.fasta",
         "file_size": 2974881710,
-        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "published": null
+        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     ],
     "metadata": {
@@ -419,8 +401,7 @@
         "file_id": "g-file-d",
         "file_name": "sample.fastq.gz",
         "file_size": 8000,
-        "md5sum": "dddddddddddddddddddddddddddddddd",
-        "published": null
+        "md5sum": "dddddddddddddddddddddddddddddddd"
       }
     ],
     "metadata": {
@@ -522,8 +503,7 @@
         "file_id": "g-file-e",
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
         "file_size": 848467761,
-        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "published": null
+        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       }
     ],
     "metadata": {
@@ -612,8 +592,7 @@
         "file_id": "g-file-f",
         "file_name": "chr5.136400001_136500001.tar",
         "file_size": 45516800,
-        "md5sum": "ffffffffffffffffffffffffffffffff",
-        "published": null
+        "md5sum": "ffffffffffffffffffffffffffffffff"
       }
     ],
     "metadata": {
@@ -702,17 +681,7 @@
         "file_id": "g-file-c",
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
-        "md5sum": "cccccccccccccccccccccccccccccccc",
-        "published": {
-          "data_modality": null,
-          "in_vocabulary": {
-            "reference_assembly": []
-          },
-          "reference_assembly": [
-            "GRCh38 + Gencode40"
-          ],
-          "source": "anvil/anvil15"
-        }
+        "md5sum": "cccccccccccccccccccccccccccccccc"
       },
       {
         "classifications": {
@@ -802,8 +771,7 @@
         "file_id": "g-file-8",
         "file_name": "sample.chm13.hg38.vcf.gz",
         "file_size": 5001,
-        "md5sum": "88888888888888888888888888888888",
-        "published": null
+        "md5sum": "88888888888888888888888888888888"
       }
     ],
     "metadata": {

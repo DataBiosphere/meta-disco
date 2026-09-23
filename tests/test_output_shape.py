@@ -65,13 +65,12 @@ from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, ENTRY_KEYS
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import PRODUCERS
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
-from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record
+from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record, write_metadata
 from tests.producer_sweep import (
     STANDALONE_PRODUCERS,
     run_index_producer,
     run_producer,
     run_producer_envelope,
-    write_snapshot,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "golden"
@@ -92,21 +91,6 @@ REGEN = "python -m tests.test_output_shape"
 # validates every routed record and diverts a classifier-relevant violation to
 # validation_failed before classifying — so the md5s are lowercase-hex and the
 # contract's other required fields are present (via _golden_record).
-#
-# Two of the seven carry published values, so the `published` block the pipeline writes
-# reaches the schema gate as a record rather than as a dict typed by hand there (#465).
-# The other five publish nothing, keeping real `published: null` rows in the gate too.
-
-# GRCh38 is a reference_assembly_enum term and GRCm39 is not, so one published list
-# yields both halves of `in_vocabulary`: a populated entry and, on the other dimension,
-# an empty one.
-PUBLISHED_BOTH = {
-    "data_modality": ["single-nucleus ATAC-seq"],
-    "reference_assembly": ["GRCh38", "GRCm39"],
-}
-# The one-sided shape, where the dimension the repository says nothing for is absent
-# from `in_vocabulary` entirely rather than present and empty.
-PUBLISHED_ASSEMBLY_ONLY = {"reference_assembly": ["GRCh38 + Gencode40"]}
 
 
 def _golden_record(md5_seed: str, **fields):
@@ -144,7 +128,6 @@ GOLDEN_INPUTS = {
             file_size=12345678,
             file_format=".bam",
             entry_id="g-bam-1",
-            **PUBLISHED_BOTH,
         ),
     ],
     "vcf": [
@@ -154,7 +137,6 @@ GOLDEN_INPUTS = {
             file_size=5000,
             file_format=".vcf.gz",
             entry_id="g-vcf-1",
-            **PUBLISHED_ASSEMBLY_ONLY,
         ),
         # Names two assemblies, so two tier-2 filename rules disagree and the slot is a
         # `conflict` (#88) — the only record here that carries one, so the schema gate
@@ -292,11 +274,8 @@ def build_output(tmp_path: Path) -> dict:
     FileTypeConfig (real classifier + ``to_output_dict``) with the fetcher swapped
     out, so the shape is real but the run is deterministic and network-free.
 
-    The input goes through ``write_snapshot``, the same envelope builder the standalone
-    producers' tests use, so the golden's input names a repository and a catalog —
-    without which ``published_source`` returns None and every ``published`` block in the
-    golden would carry a null ``source`` (#465). Each type gets its own directory
-    because that builder writes one fixed filename.
+    The input goes through ``write_metadata``, the same envelope builder the standalone
+    producers' tests use (#465). Each type gets its own directory so the inputs stay apart.
     """
     out = {}
     for ftype, records in GOLDEN_INPUTS.items():
@@ -306,7 +285,7 @@ def build_output(tmp_path: Path) -> dict:
         config = dataclasses.replace(FILE_TYPE_REGISTRY[ftype], fetcher=_make_stub_fetcher(ftype), preflight=None)
         input_dir = tmp_path / f"{ftype}_input"
         input_dir.mkdir()
-        input_path = write_snapshot(input_dir, records)
+        input_path = write_metadata(input_dir / "metadata.json", records)
         # workers=1 forces sequential processing so the record order in the output
         # is the input order (the parallel path writes in thread-completion order,
         # which is nondeterministic) — keeps the deep-equal golden stable even if
@@ -358,16 +337,12 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
         # Each producer writes one fixed filename, so each gets its own directory.
         work = tmp_path / name
         work.mkdir()
-        # Published values on all three, so the `published` block reaches the gate off
-        # `OutputRecord.from_record` as well as off the pipeline's `from_work_item`;
-        # the index rows below carry none, keeping `published: null` rows here too.
         record = _golden_record(
             seed,
             file_name=file_name,
             file_size=1000,
             file_format=file_format,
             entry_id=f"g-{name}-1",
-            **PUBLISHED_BOTH,
         )
         assert record["file_md5sum"] not in SEEDS_TAKEN, (
             f"the {name!r} input's md5 seed {seed!r} is already used by another fixture input"
@@ -439,7 +414,7 @@ def _assert_matches_fixture(actual: dict, path: Path, what: str):
 
     Shared by both fixtures' guards, so a change to the regen flow or to either message
     is made once. Deep-equal is what makes the schema gate bite: that gate reads
-    committed files, so without this a change to `build_published` or `derivation_edge`
+    committed files, so without this a change to `OutputRecord` or `derivation_edge`
     would leave a fixture stale and the gate green.
     """
     assert path.exists(), f"{what} fixture missing at {path}. Regenerate with `{REGEN}`."
@@ -564,8 +539,8 @@ def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, f
 
     The golden fixture covers the seven the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
-    `published` (#424) and the catalog identity (#433) each needed a sweep for, and what
-    building `OutputRecord` makes structural instead.
+    the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
+    makes structural instead.
     """
     [row] = run_producer(producer, tmp_path, [valid_record(file_name=name, file_format=fmt)])
     assert set(row) == RECORD_KEYS, f"{name}: {set(row) ^ RECORD_KEYS}"

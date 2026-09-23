@@ -240,7 +240,7 @@ def main():
         # every classifier loads it, so the mapped HPRC input is shape-identical to AnVIL's.
         # The envelope names the repository so a run can read this source's record key
         # (`pipeline.SOURCE_RECORD_KEYS`, #446). No `catalog`: the HPRC catalogs carry no
-        # generation, so `published.source` stays null.
+        # generation.
         json.dump({"metadata": {"repository": HPRC_REPOSITORY}, "files": all_records}, f)
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 

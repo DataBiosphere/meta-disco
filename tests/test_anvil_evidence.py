@@ -4,6 +4,7 @@ column, and an import that is a generation — on synthetic manifests small enou
 read, plus the bundled map against the real anvil15 manifests where they are on disk."""
 
 import json
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,6 @@ from meta_disco.azul_manifest import (
 )
 from meta_disco.deployments import PROD
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
-from meta_disco.records import PUBLISHED_FIELDS
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
 from meta_disco.source_evidence import (
     discover,
@@ -656,7 +656,7 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
     imports = ae.import_all(
         published, PROD.input_root, CATALOG, PROD.service, tmp_path / "ev", generation="20260920T000000Z"
     )
-    files: dict[str, set[str]] = {field: set() for field in PUBLISHED_FIELDS}
+    files: dict[str, set[str]] = defaultdict(set)
     two_valued = 0
     for run in imports:
         (table,) = run.tables

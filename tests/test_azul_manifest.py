@@ -477,7 +477,6 @@ class TestRecordMapping:
             file_format=".bam",
             file_size=1000,
             file_md5sum="0" * 32,
-            reference_assembly=["GRCh38"],
             drs_uri="drs://drs.anv0:v2_0",
             dataset_id="ds-1",
             dataset_title="ds",
@@ -486,30 +485,16 @@ class TestRecordMapping:
         )
         assert validate_record(record) == []
 
+    def test_the_published_columns_are_not_copied_onto_the_record(self, tmp_path):
+        # They enter as the published importer's evidence, read from anvil_file (#513).
+        (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))
+        [record] = am.iter_compact_records(tmp_path / "c.tsv")
+        assert "data_modality" not in record and "reference_assembly" not in record
+
     def test_a_multi_valued_cell_takes_its_first_value(self):
-        # _first survives for the two donor fields only; the published dimensions read
-        # _published instead (#424).
+        # _first survives for the two donor fields only.
         assert am._first("genomic || transcriptomic") == "genomic"
         assert am._first("") is None
-
-    def test_a_published_cell_keeps_every_value_verbatim(self):
-        # Element zero was not dropping data, it was manufacturing a wrong answer: the
-        # twelve IGVF files declaring two modalities all arrived as the first (#424).
-        assert am._published("snATAC-seq || snRNA-seq") == ["snATAC-seq", "snRNA-seq"]
-        assert am._published("GRCh38 + Gencode40") == ["GRCh38 + Gencode40"]
-        assert am._published("") is None
-
-    def test_a_published_cell_of_nothing_but_separators_yields_nothing(self):
-        # An empty element declares nothing, so it is dropped rather than transcribed,
-        # and a cell left with none reads like a blank one.
-        assert am._published(" || ") is None
-        assert am._published("genomic ||  || ") == ["genomic"]
-
-    def test_a_multi_valued_declaration_survives_into_the_record(self, tmp_path):
-        payload = compact_payload("ds", 1).replace(b"\tGRCh38\t", b"\tGRCh38 || CHM13\t")
-        (tmp_path / "c.tsv").write_bytes(payload)
-        [record] = am.iter_compact_records(tmp_path / "c.tsv")
-        assert record["reference_assembly"] == ["GRCh38", "CHM13"]
 
     def test_a_boolean_cell_that_is_neither_spelling_is_refused(self, tmp_path):
         payload = compact_payload("ds", 1).replace(b"\tFalse\t", b"\ttrue\t")
@@ -567,7 +552,7 @@ class TestRecordMapping:
         when = datetime(2026, 9, 22)
         direct = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, when, am.INPUT_SOURCE_TDR_DIRECT)
         assert (direct["api_url"], direct["source"], direct["input_source"]) == (None, None, "tdr-direct")
-        # The catalog is the deployment's on every kind, so `published_source` still names one.
+        # The catalog is the deployment's on every kind.
         assert direct["catalog"] == "anvil15"
         verbatim = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, when, am.INPUT_SOURCE_AZUL_VERBATIM)
         assert (verbatim["api_url"], verbatim["source"]) == (am.manifest_url(SERVICE), "manifest")
@@ -575,15 +560,6 @@ class TestRecordMapping:
     def test_an_input_source_that_is_not_one_of_the_three_is_refused(self):
         with pytest.raises(ValueError, match="input_source 'manifest' is not one of"):
             am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, datetime(2026, 9, 4), "manifest")
-
-    def test_the_snapshot_names_its_publisher_so_a_reader_need_not_infer_one(self):
-        # `pipeline.published_source` reads `repository` with `catalog` (#424). It used
-        # to prefix a hard-coded "anvil", which would mislabel any other repository's
-        # snapshot loaded through the same shared path.
-        from meta_disco.pipeline import published_source
-
-        block = am.metadata_block(DEPLOYMENT, {"a": _entry(1)}, datetime(2026, 9, 4), am.INPUT_SOURCE_AZUL_COMPACT)
-        assert published_source(block) == "anvil/anvil15"
 
 
 DEPLOYMENT = deployment(Path("unused"))

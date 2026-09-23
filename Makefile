@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report published-comparison manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -34,10 +34,9 @@ help:
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
 	@echo "  make review-queue       List every evidence value whose value-map row is not authored (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
-	@echo "  make published-comparison Compare a run against the values the repository publishes"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label)"
-	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, published)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
@@ -245,19 +244,13 @@ review-queue:
 	uv run python scripts/value_map.py $(ARGS) queue
 
 # Depends on validate-hprc because HPRC is now its only source (#424 moved the AnVIL
-# comparison to published-comparison). Its input, output/hprc/hprc_validation_results.json,
-# is generated and gitignored, so without this prerequisite a standalone run on a fresh
+# comparison out of this report, and #513 deleted it: AnVIL's published values are
+# evidence, which the reconcile stage (#432, not built) is to read). Its input,
+# output/hprc/hprc_validation_results.json, is generated and gitignored, so without this prerequisite a standalone run on a fresh
 # checkout finds no sources and exits 1 — which it did not before, when the AnVIL branch
 # keyed off the always-present downloaded metadata.
 validation-report: validate-hprc
 	uv run python scripts/generate_validation_report.py
-
-# This run's inferred values beside the ones the repository publishes (#424): what each
-# side has per file, and what the repository should do about the difference. Offline —
-# the pipeline carries the published values into each record, so it reads only the run's
-# own output.
-published-comparison:
-	uv run python scripts/generate_published_comparison.py
 
 # Compare two corpus generations: input snapshots file-by-file by md5, and run
 # outputs by label, splitting each coverage delta into corpus loss / corpus gain /
@@ -268,7 +261,7 @@ published-comparison:
 corpus-diff:
 	uv run python scripts/compare_corpus.py $(ARGS)
 
-all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report published-comparison
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py

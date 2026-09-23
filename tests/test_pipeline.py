@@ -1,18 +1,35 @@
 """Tests for the shared ClassifyPipeline infrastructure."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from meta_disco.exclusions import read_excluded
 from meta_disco.pipeline import ClassifyPipeline, FileTypeConfig, NdjsonWriter
-from meta_disco.records import ClassifierRecord, InvalidRecord
+from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord
 from tests.metadata_fixtures import RECORD_KEYS
 from tests.metadata_fixtures import valid_record as _valid_record
-from tests.pipeline_fixtures import make_config as _make_config
 
 # --- Test fixtures ---
+
+
+def _make_config(**overrides):
+    """Create a FileTypeConfig with test defaults.
+
+    The fetcher returns a string derived from the md5 instead of reading anything, and
+    the classifier claims `data_modality: genomic` for every input.
+    """
+    return replace(
+        FileTypeConfig(
+            name="test",
+            extensions=(".test",),
+            fetcher=lambda evidence_dir, md5, **kw: f"header_for_{md5}",
+            classifier=lambda raw_data, **kw: {"data_modality": {"value": "genomic"}},
+        ),
+        **overrides,
+    )
 
 
 @pytest.fixture
@@ -471,24 +488,15 @@ class TestPipelineRun:
         assert isinstance(work[2], InvalidRecord)  # file_size drift is blocking
         assert any("file_size" in reason for reason in work[2].reasons)
 
-    def test_build_record_echoes_typed_item_identity(self, tmp_path):
-        # _build_record reads identity off the typed work item into an OutputRecord. On
+    def test_the_output_record_echoes_typed_item_identity(self):
+        # The pipeline reads identity off the typed work item into an OutputRecord. On
         # the validation_failed path that is an InvalidRecord, which has already coerced
         # file_name/file_format to str, so the output types stay stable.
-        pipeline = ClassifyPipeline(
-            _make_config(),
-            tmp_path / "in.json",
-            tmp_path / "out.json",
-            evidence_base=tmp_path / "evidence",
-        )
         item = InvalidRecord.from_record({"file_name": 123, "file_format": None, "file_md5sum": "x"}, [])
-        out = pipeline._build_record(item, {})
+        out = OutputRecord.from_work_item(item, {})
         assert out.file_name == "123"
         assert out.file_format == ""
         assert isinstance(out.file_name, str) and isinstance(out.file_format, str)
-        # The repository publishes nothing for it, so the envelope carries the key with
-        # no block (#424).
-        assert out.published is None
 
     @pytest.mark.parametrize("workers", [1, 2])
     def test_non_string_file_name_does_not_crash_progress(self, tmp_path, workers):
@@ -569,7 +577,7 @@ class TestPipelineRun:
         # classify_single emits the same canonical envelope as every other producer
         # (#204, widened to all eleven by #450). Every field it has no input record to
         # carry is present and None: dataset_title/entry_id, file_id/drs_uri (#433),
-        # published (#424), and derived_from (#450).
+        # and derived_from (#450).
         assert set(result) == RECORD_KEYS
         for absent in ("dataset_title", "entry_id", "file_id", "drs_uri", "derived_from"):
             assert result[absent] is None, f"{absent} has no source on the single-file path"
