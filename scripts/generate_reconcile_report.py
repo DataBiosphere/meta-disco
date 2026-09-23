@@ -197,7 +197,7 @@ def evidence_rows(report: dict, dataset: str | None = None) -> list[dict]:
 
 
 def change(new: dict, old: dict, dataset: str | None = None) -> list[dict]:
-    """Per dimension, each category's count in ``new`` minus ``old``, and the two added/filled counts'."""
+    """Per dimension, each category's count in ``new`` minus ``old``, and the same for added over published and filled over inference."""
     before = {row["dimension"]: row for row in headline(old, dataset)}
     rows = []
     for row in headline(new, dataset):
