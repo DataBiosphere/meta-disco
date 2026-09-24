@@ -804,9 +804,9 @@ class TestDerivedFileTierPrecedence:
     """Which derived-file rules stamp `not_applicable`, and which stay silent so a
     filename rule can speak.
 
-    `not_applicable` is terminal in the evaluator, so a rule claiming it beats a
-    tier-2 `filename_ref_*` claim. #106 removed it from `reference_assembly` on
-    blanket rules for exactly that reason, and #437 finished the job for the three
+    `not_applicable` wins only by tier (#523). #106 removed it from
+    `reference_assembly` on blanket rules because, when it still beat a same-tier
+    value, it blocked `filename_ref_*`; #437 finished the job for the three
     dimensions #106 left to reconsider: the index rule now claims only `data_type`.
     The checksum rule still claims all four, which is the contrast — a checksum is
     about bytes and has no coordinate space, while an index indexes coordinates into
@@ -878,9 +878,10 @@ class TestDerivedFileTierPrecedence:
     # --- Stats files: reference_assembly applicable, other fields not_applicable (#106) ---
 
     def test_stats_with_reference_in_filename(self):
-        """Stats file with CHM13 in filename should get reference_assembly=CHM13."""
+        """A reference in a stats file's name names the alignment the stats came from,
+        not the file: text is not a kind the reference rules claim on (#523)."""
         result = engine.classify_extended(FileInfo.from_filename("HG01879.CHM13v2.chrX.samtools.stats.txt"))
-        assert result.reference_assembly == "CHM13"
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
         assert result.status_of("data_modality") == NOT_APPLICABLE
         assert result.status_of("platform") == NOT_APPLICABLE
 

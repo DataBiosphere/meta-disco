@@ -924,13 +924,13 @@ class TestConflictingReferenceRules:
 
     def test_ambiguous_filename_two_refs(self, engine):
         """Filename with both CHM13 and hg38 is a conflict, with no value (#88)."""
-        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.bed"))
         assert result.status_of("reference_assembly") == CONFLICT
         assert result.reference_assembly is None
 
-    def test_liftover_chain_two_refs(self, engine):
-        """Liftover chain with two references is a conflict (#88)."""
-        result = engine.classify_extended(FileInfo.from_filename("liftover.hg19.to.hg38.chain"))
+    def test_liftover_vcf_two_refs(self, engine):
+        """A lifted-over VCF named for two references is a conflict (#88)."""
+        result = engine.classify_extended(FileInfo.from_filename("calls.hg19.to.hg38.vcf.gz"))
         assert result.status_of("reference_assembly") == CONFLICT
 
     def test_single_ref_not_affected(self, engine):
@@ -940,11 +940,85 @@ class TestConflictingReferenceRules:
 
     def test_conflict_evidence_recorded(self, engine):
         """Conflict should produce a conflict marker in reference_assembly evidence."""
-        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.bed"))
         ref_evidence = result.field_evidence.get("reference_assembly", [])
         assert any(e.get("marker") == "conflict" for e in ref_evidence)
         # Prior evidence should also be preserved
         assert len(ref_evidence) >= 2
+
+
+class TestReferenceRuleFileKinds:
+    """The four reference rules claim only on the file kinds their include list names (#523)."""
+
+    @pytest.mark.parametrize(
+        ("filename", "rule_id", "expected"),
+        [
+            ("HG02080.maternal.GRCh38_no_alt.bam", "filename_ref_grch38", "GRCh38"),
+            ("HG02080vCHM13_20200921_wm_ONT.sort.cram", "filename_ref_chm13", "CHM13"),
+            ("dbSNP.build_154.GRCh38.chr2.vcf.gz", "filename_ref_grch38", "GRCh38"),
+            ("grch37_vntr.bed", "filename_ref_grch37", "GRCh37"),
+            ("chm13v2.0.XX.fasta", "filename_ref_chm13", "CHM13"),
+            ("hprc-v1.0-mc-grch38.gbz", "filename_ref_grch38", "GRCh38"),
+            ("all_hg38_ns.pgen", "filename_ref_grch38", "GRCh38"),
+            ("sample.GRCh38.bam.bai", "filename_ref_grch38", "GRCh38"),
+            # An archive named for its inner format describes that content (#523).
+            ("x.GRCh38.bam.tar.gz", "filename_ref_grch38", "GRCh38"),
+        ],
+    )
+    def test_reference_bearing_kind_is_claimed(self, engine, filename, rule_id, expected):
+        result = engine.classify_extended(FileInfo.from_filename(filename))
+        assert rule_id in result.rules_matched
+        assert result.reference_assembly == expected
+
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "hprc-v1.0-minigraph-grch38.gfa.log",
+            "HG02080.maternal.GRCh38_no_alt.bam.md5",
+            "README_GRCh38_panel.pdf",
+            "chm13v2.0.XY.tar.gz",
+            "NA19331.CHM13v2.chrY.samtools.stats.txt",
+            "chm13_ash_fixed.merged.tsv",
+            "HG03050_pat_hprc_r2_v1.0.1_vs_CHM13.chain.gz",
+            "CHM13.combined.v4.gff3.gz",
+            "sample.GRCh38.fastq.gz",
+            "all_hg38_ns.psam",
+        ],
+    )
+    def test_other_kind_is_not_claimed(self, engine, filename):
+        result = engine.classify_extended(FileInfo.from_filename(filename))
+        assert not any(r.startswith("filename_ref_") for r in result.rules_matched)
+
+    @pytest.mark.parametrize(
+        ("filename", "claimed"),
+        [
+            ("IBS.3.pgen", True),
+            ("ALL.chr19.genotypes.vcf.bgz", True),
+            ("CHS.19.log", False),
+            ("PJL.19.psam", False),
+            ("sequencing_dataset.tsv", False),
+        ],
+    )
+    def test_dataset_rule_claims_only_listed_kinds(self, engine, filename, claimed):
+        info = FileInfo.from_filename(filename, dataset_title="ANVIL_1000G_PRIMED_data_model")
+        assert ("dataset_1000g_reference" in engine.classify_extended(info).rules_matched) is claimed
+
+
+class TestSameTierNotApplicableConflicts:
+    """A not_applicable and a value from two same-tier rules are a conflict, not a
+    not_applicable win (#523). No corpus file hit either case when the terminal rule
+    was removed; these pin the outcome for names that would."""
+
+    def test_assembly_fasta_named_for_a_reference(self, engine):
+        # fasta_assembly_filename says not_applicable; filename_ref_chm13 says CHM13.
+        result = engine.classify_extended(FileInfo.from_filename("HG002.CHM13.hap1.fasta"))
+        assert result.status_of("reference_assembly") == CONFLICT
+
+    def test_stats_file_named_for_expression(self, engine):
+        # text_stats says not_applicable; text_expression says a value.
+        result = engine.classify_extended(FileInfo.from_filename("gene_expression.stats.txt"))
+        assert result.status_of("data_modality") == CONFLICT
+        assert result.status_of("data_type") == CONFLICT
 
 
 class TestConflictingClassificationFields:
@@ -960,7 +1034,7 @@ class TestConflictingClassificationFields:
 
     def test_conflict_preserves_prior_evidence(self, engine):
         """Conflict marker is appended to existing evidence, not replaced."""
-        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.bed"))
         evidence = result.field_evidence.get("reference_assembly", [])
         rule_ids = [e.get("rule_id") for e in evidence]
         # Both the original rule and the conflict marker should be present
@@ -970,7 +1044,7 @@ class TestConflictingClassificationFields:
     def test_conflict_evidence_has_status_and_competing_values(self, engine):
         """The conflict marker carries the field's own conflict status (in the
         status field, not the value slot) and the structured competing_values."""
-        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.gff3.gz"))
+        result = engine.classify_extended(FileInfo.from_filename("CHM13.hg38.bed"))
         evidence = result.field_evidence.get("reference_assembly", [])
         conflict = next(e for e in evidence if e.get("marker") == "conflict")
         assert conflict["status"] == CONFLICT
@@ -1123,18 +1197,19 @@ class TestEvaluateClaims:
         assert result.value is None
         assert result.reason == ResolutionReason.SINGLE_CLAIM
 
-    def test_not_applicable_wins_over_real_value_same_tier(self):
-        """NOT_APPLICABLE is a terminal declaration — wins without conflict."""
+    def test_not_applicable_and_real_value_same_tier_conflict(self):
+        """A not_applicable and a value at the same tier disagree like any two
+        declarations, and only tier settles that: a conflict, not a win (#523)."""
         result = evaluate_claims(
             [
                 {"rule_id": "r1", "status": NOT_APPLICABLE, "tier": 1},
                 {"rule_id": "r2", "value": "genomic", "tier": 1},
             ]
         )
-        assert result.status == NOT_APPLICABLE
+        assert result.status == CONFLICT
         assert result.value is None
-        assert result.is_conflict is False
-        assert result.reason == ResolutionReason.NOT_APPLICABLE_TERMINAL
+        assert result.competing_values == ["genomic", NOT_APPLICABLE]
+        assert result.reason == ResolutionReason.CONFLICT
 
     def test_rule_authored_not_classified_is_not_no_claims(self):
         """A rule that intentionally declares not_classified is a real claim, not no_claims."""
@@ -1229,7 +1304,7 @@ class TestClaimStatesDoNotResolve:
 
     def test_declined_is_distinguishable_from_not_applicable_and_from_absence(self):
         # All three leave the field without a value; the evidence tells them apart.
-        # not_applicable is a positive determination and is terminal in resolution;
+        # not_applicable is a positive determination and competes by tier;
         # declined asserts nothing; an absent claim leaves nothing behind at all.
         declined = ExtendedClassificationResult()
         declined.add_claim(
@@ -1300,8 +1375,8 @@ class TestContentTier:
     ``CONTENT_TIER`` is a unique tier above the rule tiers (1-3), so
     ``evaluate_claims`` resolves a byte-derived claim over any disagreeing rule
     without a special case. These pin the resolution semantics the migration
-    (#227) relies on — that content wins its field, and content ``not_applicable``
-    stays terminal — not the rule tiers themselves.
+    (#227) relies on — that content wins its field, whether it declares a value or
+    ``not_applicable`` — not the rule tiers themselves.
     """
 
     def test_content_tier_is_above_the_rule_tiers(self):
@@ -1321,7 +1396,7 @@ class TestContentTier:
         assert result.reason == ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE
 
     def test_content_not_applicable_beats_tier3_real_value(self):
-        """A tier-4 content not_applicable wins terminally over a tier-3 real value."""
+        """A tier-4 content not_applicable beats a tier-3 real value by tier alone."""
         result = evaluate_claims(
             [
                 {"rule_id": "filename_ref_grch38", "value": "GRCh38", "tier": 3},
@@ -1331,7 +1406,7 @@ class TestContentTier:
         assert result.status == NOT_APPLICABLE
         assert result.value is None
         assert result.is_conflict is False
-        assert result.reason == ResolutionReason.NOT_APPLICABLE_TERMINAL
+        assert result.reason == ResolutionReason.HIGHER_SPECIFICITY_OVERRIDE
 
     def test_content_claim_agreeing_with_rule_stays_unanimous(self):
         """When content agrees with the rule, the field is unanimous, not a conflict."""

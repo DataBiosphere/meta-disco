@@ -34,7 +34,8 @@
 #
 # 6. RESOLUTION: After all rules run, each field resolves from its claims: they
 #    agree, or the highest tier wins, or same-tier claims disagree and the field is
-#    a conflict. A not_applicable at the top tier wins over a value there.
+#    a conflict. A not_applicable is a declaration like a value: it wins only by
+#    tier, and against a value at its own tier the field is a conflict (#523).
 #
 # 7. REASONS: Each matching rule adds its rationale to the reasons list.
 #
@@ -183,7 +184,7 @@ rules:
   # It claims nothing else, which finishes what #106 began. That issue removed
   # `reference_assembly: not_applicable` from blanket rules like this one, because a
   # file named for CHM13 *is* associated with CHM13 and the stamp — terminal in the
-  # evaluator — was blocking `filename_ref_*` from saying so. It left `data_modality`
+  # evaluator until #523 — was blocking `filename_ref_*` from saying so. It left `data_modality`
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
   # four dimensions a parent supplies all behave alike now, and none is stamped.
   #
@@ -483,10 +484,31 @@ rules:
   # ---------------------------------------------------------------------------
   # Reference assembly in filename
   # ---------------------------------------------------------------------------
+  # A name or dataset that mentions a reference says nothing about whether the
+  # file can have one, so these four rules claim only on the file kinds that hold
+  # coordinates on a reference: alignments, variants, intervals and signal tracks,
+  # sequence, pangenome graphs, PLINK genotypes and variants (`.pgen` / `.pvar`; a
+  # `.psam` is a sample table with no coordinates), and the indexes `.bai` / `.crai` /
+  # `.tbi` / `.csi` / `.fai` (not `.idx` or `.pbi`, which `index_file` lists too). The list
+  # is an include list rather than an exclude list so that a file kind it does not
+  # name — a log, a checksum, a PDF, an archive with no inner format, a text table,
+  # or one the name parser does not recognize — gets no claim until someone adds it
+  # on purpose (#523). An archive whose name keeps an inner format
+  # (`x.GRCh38.bam.tar.gz`) parses to that format's extension, so it is claimed as
+  # the content it holds, the way the tar producer claims its `data_type` from the
+  # members it reads. The anchor is defined here and reused by the other three rules.
   - id: filename_ref_grch38
     tier: 2
     scope: filename
     when:
+      extensions: &reference_bearing_extensions
+        [".bam", ".cram", ".sam",
+         ".vcf", ".bcf", ".gvcf", ".g.vcf",
+         ".bed", ".narrowpeak", ".broadpeak", ".bigwig", ".bw", ".bedgraph",
+         ".fasta", ".fa",
+         ".gfa", ".rgfa", ".gbz", ".vg", ".gbwt", ".xg",
+         ".pgen", ".pvar",
+         ".bai", ".crai", ".tbi", ".csi", ".fai"]
       filename_pattern: "(?i)hg38|grch38|hs38"
     then:
       reference_assembly: GRCh38
@@ -496,6 +518,7 @@ rules:
     tier: 2
     scope: filename
     when:
+      extensions: *reference_bearing_extensions
       filename_pattern: "(?i)hg19|grch37|hs37|b37"
     then:
       reference_assembly: GRCh37
@@ -505,6 +528,7 @@ rules:
     tier: 2
     scope: filename
     when:
+      extensions: *reference_bearing_extensions
       filename_pattern: "(?i)chm13|t2t|CHM13v2|hs1"
     then:
       reference_assembly: CHM13
@@ -522,6 +546,7 @@ rules:
     tier: 2
     scope: filename
     when:
+      extensions: *reference_bearing_extensions
       dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
     then:
       reference_assembly: GRCh38

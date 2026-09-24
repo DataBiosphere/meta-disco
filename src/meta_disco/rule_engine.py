@@ -16,7 +16,6 @@ from .models import (
     CONFLICT,
     EXTERNAL_SOURCE_TYPES,
     NO_VOCABULARY_TERM,
-    NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
@@ -717,7 +716,6 @@ class ResolutionReason(str, Enum):
     SINGLE_CLAIM = "single_claim"
     UNANIMOUS = "unanimous"
     HIGHER_SPECIFICITY_OVERRIDE = "higher_specificity_override"
-    NOT_APPLICABLE_TERMINAL = "not_applicable_terminal"
     CONFLICT = "conflict"
 
     def __str__(self) -> str:
@@ -789,15 +787,16 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     - Single claim → use it
     - All claims agree → use that declaration
     - Claims disagree, highest tier is unique → highest tier wins (override)
-    - Claims disagree, NOT_APPLICABLE at top tier → not_applicable wins (terminal)
-    - Claims disagree, same max tier → conflict (status ``conflict``, no value, #88)
+    - Claims disagree, same max tier → conflict (status ``conflict``, no value, #88).
+      A ``not_applicable`` is a declaration like any other: against a value at the
+      same tier, the result is a conflict (#523).
 
     Tier ladder: tiers 1-3 are the rule tiers (extension / filename / header,
     declared in ``unified_rules.yaml``); ``CONTENT_TIER`` (4) is reserved for
     claims derived from reading file bytes. Because it is a unique tier above
-    every rule, the "highest unique tier wins" rule above makes a content claim
-    override a disagreeing tier-3 rule, and a content ``not_applicable`` win via
-    the terminal rule — no special case needed here (issue #226).
+    every rule, the "highest unique tier wins" rule above makes a content claim —
+    a value or a ``not_applicable`` — override a disagreeing tier-3 rule, with no
+    special case needed here (issue #226).
 
     Args:
         claims: List of evidence dicts. Those declaring a ``value`` or a
@@ -870,12 +869,6 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     # Declarations are non-None here (real_claims already dropped None ones); the
     # explicit filter restates that so the set is set[str] and sorted() type-checks.
     top_tier_decls = {d for c in top_tier_claims if (d := _claim_declaration(c)) is not None}
-
-    # NOT_APPLICABLE is a terminal declaration — it wins over real values
-    # at the same tier without triggering a conflict (e.g., text_stats
-    # setting not_applicable shouldn't conflict with filename_ref patterns)
-    if NOT_APPLICABLE in top_tier_decls:
-        return _resolved(NOT_APPLICABLE, ResolutionReason.NOT_APPLICABLE_TERMINAL)
 
     if len(top_tier_decls) == 1:
         # Highest tier is unanimous — override lower tiers
