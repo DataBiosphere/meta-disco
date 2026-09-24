@@ -740,8 +740,11 @@ def _values(values) -> str:
 
 MAPPING_COLUMNS = (
     ReportColumn("files", "num", lambda m: f"{m.total:,}"),
-    ReportColumn("published", "num", lambda m: f"{m.files.get(SOURCE_PUBLISHED_VALUE, 0):,}"),
-    ReportColumn("submitter", "num", lambda m: f"{m.files.get(SOURCE_REPOSITORY_METADATA, 0):,}"),
+    # One count per importer source, from SOURCE_PRECEDENCE, so the total is the sum of what is shown.
+    *(
+        ReportColumn(name, "num", lambda m, source_type=source_type: f"{m.files.get(source_type, 0):,}")
+        for source_type, name in SOURCE_PRECEDENCE
+    ),
     ReportColumn("row", "plain", lambda m: m.row.id),
     ReportColumn("slot", "plain", lambda m: m.row.slot),
     ReportColumn(
@@ -762,8 +765,8 @@ MAPPING_COLUMNS = (
 MAPPINGS_HEADING = "Authored mappings: what each translation row declares"
 MAPPINGS_INTRO = (
     "Every authored translation row, most files first: the source values it matches and what it declares. "
-    "Files are those it matched in the same evidence as the queue above, from published and from submitter "
-    "sources; a row that matched nothing shows 0."
+    "Files are those it matched in the same evidence as the queue above, per kind of source; a row that "
+    "matched nothing shows 0."
 )
 
 

@@ -1142,8 +1142,8 @@ def test_authored_mappings_list_every_authored_row_with_its_files_per_source(tmp
     assert [m.row.id for m in found.mappings] == ["reference_assembly.grch38", "platform.unused"]  # most files first
     rendered = render_queue(found.queue, two_sources, None, found.mappings)
     mappings = rendered.split("## Authored mappings", 1)[1]
-    assert "| 3 | 1 | 2 | reference_assembly.grch38 | reference_assembly | `any` |" in mappings
+    assert "| 3 | 1 | 2 | 0 | reference_assembly.grch38 | reference_assembly | `any` |" in mappings
     assert "`'GRCh38' · 'GRCh38 + Gencode40'`" in mappings
-    assert "| 0 | 0 | 0 | platform.unused |" in mappings and "nothing (reviewed, no claim)" in mappings
+    assert "| 0 | 0 | 0 | 0 | platform.unused |" in mappings and "nothing (reviewed, no claim)" in mappings
     page = grq.render_html(found.queue, two_sources, TEMPLATE, None, found.mappings)
     assert "Authored mappings" in page and "platform.unused" in page
