@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers five classification dimensions from file metadata without requiring full file downloads.
+This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers six classification dimensions from file metadata without requiring full file downloads.
 
 ### Classification Dimensions
 
-The classifier populates five orthogonal metadata fields:
+The classifier populates six metadata fields:
 
 | Field | Question Answered | Example Values |
 | ----- | ----------------- | -------------- |
@@ -15,6 +15,7 @@ The classifier populates five orthogonal metadata fields:
 | `platform` | What sequencing instrument? | ILLUMINA, PACBIO, ONT |
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 |
 | `assay_type` | What method class? | WGS, WES, RNAseq |
+| `instrument_model` | Which instrument model? | Illumina NovaSeq 6000, Revio, PromethION |
 
 #### data_modality
 
@@ -159,7 +160,7 @@ Each JSON file contains:
 
 #### Classification Record Structure
 
-Each record in `classifications` contains all five classification dimensions:
+Each record in `classifications` contains every classification dimension:
 
 ```json
 {
@@ -766,7 +767,7 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
+**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
 - `file_name`, `file_format`, `file_md5sum`, `entry_id`, `file_id`, `drs_uri`, `dataset_id`, `dataset_title`: the file's identity
 - `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
@@ -783,7 +784,7 @@ The `metadata` block counts the two separately, as `unmatched` and `ambiguous_pa
 
 Both kinds get a record because the alternative was worse. Dropping them sent the files to the catch-all producer instead, which classified them from the extension alone — and coverage counts `not_applicable` as *classified*, so a file was reported as determined precisely where it is not.
 
-What the catch-all's tier-1 `index_file` rule says today: `data_type: index`, and nothing else (#437). It is the backstop for an index file the index producer misses; it fires on nothing in the current corpus because the producer misses nothing, and #430 kept it for that reason. The four dimensions a parent supplies stay open — they apply to an index file, and a rule that cannot see the parent cannot determine them, so denying them would be a confident wrong answer that coverage counts as classified. That is the same shape `classify_index_files` gives a parentless index, so the two agree. Neither ever sees the same file, because the catch-all skips whatever the producer wrote; the rule is what answers an index file the producer did not reach, such as a partial run.
+What the catch-all's tier-1 `index_file` rule says today: `data_type: index`, and nothing else (#437). It is the backstop for an index file the index producer misses; it fires on nothing in the current corpus because the producer misses nothing, and #430 kept it for that reason. The dimensions a parent supplies stay open — they apply to an index file, and a rule that cannot see the parent cannot determine them, so denying them would be a confident wrong answer that coverage counts as classified. That is the same shape `classify_index_files` gives a parentless index, so the two agree. Neither ever sees the same file, because the catch-all skips whatever the producer wrote; the rule is what answers an index file the producer did not reach, such as a partial run.
 
 ### 6.2 Recommendations
 

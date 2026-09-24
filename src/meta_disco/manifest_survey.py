@@ -104,7 +104,7 @@ DIMENSION_COLUMNS = (
 READY_HIGH = 0.90
 READY_LOW = 0.10
 
-# Tokens in a submitter table's *name* that point at one of the five dimensions,
+# Tokens in a submitter table's *name* that point at one of the dimensions,
 # mapped to the schema's term for what the name says — or to ``None`` where the
 # controlled vocabulary has no term for it.
 #

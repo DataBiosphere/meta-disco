@@ -8,9 +8,9 @@
 
 ## 1. What this document decides
 
-Meta-disco classifies files into five dimensions: `data_modality`, `data_type`,
-`reference_assembly`, `assay_type`, `platform`. Most of our thinking has been
-about *primary* data files — a BAM, a VCF, a FASTQ — where the question "what is
+Meta-disco classifies files into six dimensions: `data_modality`, `data_type`,
+`reference_assembly`, `assay_type`, `platform`, `instrument_model` (the last added
+in #532). Most of our thinking has been about *primary* data files — a BAM, a VCF, a FASTQ — where the question "what is
 this file?" has a direct answer.
 
 This document is about a particular class of files: indexes (`.bai`, `.tbi`,
@@ -659,7 +659,7 @@ permissible slot values:
   `epigenomic.histone_modification`, `epigenomic.methylation`, `imaging.histology`.
   Neither `not_applicable` nor `not_classified` was modeled anywhere in the schema.
   **Resolved:** `anvil_file.yaml` was retired (#134) and replaced by
-  `classification.yaml`, which models all five dimensions, the full vocabulary, and
+  `classification.yaml`, which models every dimension, the full vocabulary, and
   `classification_status_enum`; whole records now validate against it.
 - The **de-facto vocabulary** therefore lives, unenforced, in the `then:` blocks
   of `src/meta_disco/rules/unified_rules.yaml` (plus partial external mappings in
@@ -706,7 +706,7 @@ fix is wiring a drift check into CI, which is needed regardless of tool.
 
 **Keep LinkML as the source of truth; compile down; make it load-bearing.**
 
-1. **LinkML = canonical vocabulary** (the five dimension enums, `classification_status`,
+1. **LinkML = canonical vocabulary** (the dimension enums, `classification_status`,
    `parent_kind`, `relation`, and the record/edge/evidence classes). Model sentinels
    as a separate `classification_status` rather than smuggling `not_applicable` into
    every value enum (see #56/#88). This subsumes #33.
