@@ -773,7 +773,8 @@ rules:
   # ---------------------------------------------------------------------------
   # Instrument model from the @RG PM field (#532). The SAM spec defines PM as the
   # platform model but leaves its text free, so each rule matches one whole value
-  # that names exactly one ENA/SRA model. Values that name several are not read:
+  # that names exactly one ENA/SRA model, and declares the platform that model
+  # implies from the same evidence. Values that name several are not read:
   # `SEQUELII` (Sequel II and Sequel IIe both), `SEQUEL` (written on Sequel II runs
   # too: in the corpus it sits on m64 movies, and a submitter says Sequel II on 124
   # such files), `NovaSeq` (a family), and the ONT
@@ -791,7 +792,8 @@ rules:
       header_pattern: "^REVIO$"
     then:
       instrument_model: Revio
-    rationale: "@RG PM is REVIO, which names the PacBio Revio"
+      platform: PACBIO
+    rationale: "@RG PM is REVIO, which names the PacBio Revio; the model implies the platform"
 
   - id: instrument_model_novaseq_x
     tier: 3
@@ -803,7 +805,8 @@ rules:
       header_pattern: "^NovaSeq X$"
     then:
       instrument_model: Illumina NovaSeq X
-    rationale: "PM:NovaSeq X names the Illumina NovaSeq X; `NovaSeq X Plus` is a different value and not matched"
+      platform: ILLUMINA
+    rationale: "PM:NovaSeq X names the Illumina NovaSeq X, and so the platform; `NovaSeq X Plus` is a different value and not matched"
 
   - id: ont_basecall_dna
     tier: 3

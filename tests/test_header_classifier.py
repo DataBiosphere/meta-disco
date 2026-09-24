@@ -565,6 +565,12 @@ class TestBamCramClassification:
         assert field_value(result, "instrument_model") == model
         assert field_status(result, "instrument_model") == (CLASSIFIED if model else NOT_CLASSIFIED)
 
+    @pytest.mark.parametrize(("pm", "platform"), [("REVIO", "PACBIO"), ("NovaSeq X", "ILLUMINA")])
+    def test_a_pm_model_declares_its_platform_without_pl(self, pm, platform):
+        """The model implies the platform, so a header with PM and no PL still has one."""
+        result = classify_from_header(f"@HD\tVN:1.6\n@RG\tID:rg1\tPM:{pm}\tSM:s")
+        assert field_value(result, "platform") == platform
+
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""
         header = """@HD\tVN:1.6
