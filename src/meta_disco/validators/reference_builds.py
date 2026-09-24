@@ -149,9 +149,9 @@ NAME_SOURCE_COMMAND_LINE = "command_line"
 # The reference-flag spellings issue #354 names, and what a reference path
 # looks like; the rule that uses them is :func:`reference_from_command_line`.
 # The extension set is kept apart from ``file_name.EXTENSION_TO_FORMAT`` on
-# purpose: that vocabulary says which files this pipeline classifies, and
-# ``.fna`` — common for reference FASTAs named on command lines — is not one
-# of them. Widening it here would change classification, not just this parse.
+# purpose: that vocabulary says which files this pipeline classifies, and a
+# spelling added here for a command-line path would change classification if
+# it were shared. The two hold the same three FASTA spellings today (#526).
 _REFERENCE_FLAGS = frozenset({"--reference", "-R", "-r"})
 _FASTA_PATH_RE = re.compile(r"\.(fa|fasta|fna)(\.gz)?$", re.IGNORECASE)
 

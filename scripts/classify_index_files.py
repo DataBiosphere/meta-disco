@@ -114,7 +114,7 @@ def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
 def _declared_kind(index_ext: str) -> str | None:
     """The kind every parent ``INDEX_TO_PARENT`` declares for this index agrees on.
 
-    Cached: this is a pure function of the seven index extensions, and the declined path
+    Cached: this is a pure function of the index extensions `INDEX_TO_PARENT` declares, and the declined path
     asks it once per record.
     """
     return _agreed_kind(INDEX_TO_PARENT.get(index_ext, []))

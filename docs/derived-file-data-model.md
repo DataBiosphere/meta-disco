@@ -511,7 +511,7 @@ several of those categories *are* descriptive-content types:
 
 | Existing `extension_map` category | Extensions | Becomes `data_type` (descriptive class) |
 | --- | --- | --- |
-| `index` | `.bai .crai .tbi .csi .fai .idx .pbi` | `index` |
+| `index` | `.bai .crai .tbi .csi .fai .gzi .idx .pbi` | `index` |
 | `checksum` | `.md5` | `checksum` |
 | `log_file` | `.log` | `log` |
 | `archive` | `.tar .tar.gz .zip` | `archive` |

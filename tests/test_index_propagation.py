@@ -128,6 +128,13 @@ def _classified_record(
         pytest.param("sample.cram.crai", ".crai", "sample.cram", True, id="cram.crai finds cram"),
         pytest.param("movie.subreads.bam.pbi", ".pbi", "movie.subreads.bam", False, id="pbi (PacBio index) finds bam"),
         pytest.param("HG03652.regions.bed.gz.csi", ".csi", "HG03652.regions.bed.gz", True, id="csi finds bed.gz"),
+        pytest.param(
+            "NA20799_hap2_hprc_r2_v1.0.1.fa.gz.gzi",
+            ".gzi",
+            "NA20799_hap2_hprc_r2_v1.0.1.fa.gz",
+            True,
+            id="gzi (bgzip index) finds fa.gz",
+        ),
         # Pattern 2: the index extension replaces the parent's (rare); no .bam in the name.
         pytest.param("sample.bai", ".bai", "sample.bam", False, id="pattern 2 replaces the extension"),
         pytest.param(
@@ -489,6 +496,25 @@ class TestLoadClassifications:
         assert field_value(ref_fai, "reference_assembly") == "GRCh38"
         assert field_value(asm_fai, "reference_assembly") is None
         assert field_status(asm_fai, "reference_assembly") == NOT_APPLICABLE
+
+    def test_gzi_inherits_from_its_fasta_parent(self, tmp_path):
+        """End-to-end: a bgzip index takes its data_type from its own extension and the
+        other four dimensions from the `.fa.gz` it indexes (#526)."""
+        output = run_index_producer(
+            tmp_path,
+            [
+                _file("chm13v2.0.fa.gz", ".fa.gz", "7" * 32, "e1"),
+                _file("chm13v2.0.fa.gz.gzi", ".gzi", "6" * 32, "e2"),
+            ],
+            [_classified_record("7" * 32, "CHM13", "chm13v2.0.fa.gz", data_type="sequence")],
+        )
+        row = output["classifications"][0]
+        cls = row["classifications"]
+        assert field_value(cls, "data_type") == "index"
+        assert field_value(cls, "reference_assembly") == "CHM13"
+        assert field_value(cls, "data_modality") == "genomic"
+        assert row["derived_from"]["parent_file"] == "chm13v2.0.fa.gz"
+        assert row["derived_from"]["parent_kind"] == "sequence"
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
         """End-to-end: a .tbi index inherits from its .vcf.gz parent.

@@ -126,6 +126,23 @@ class TestContainersArePeeled:
             ("regions.bed.gz", ".bed", (".gz",)),
             ("graph.gfa.gz", ".gfa", (".gz",)),
             ("run.fast5.tar.gz", ".fast5", (".tar", ".gz")),
+            # Reference-bearing kinds recognized in #526.
+            ("HG03050_pat_hprc_r2_v1.0.1_vs_CHM13.chain.gz", ".chain", (".gz",)),
+            ("t2t-chm13-v1.0.hg38.over.chain", ".chain", ()),
+            ("HG00438.f1_assembly_v2.hap1.paf.gz", ".paf", (".gz",)),
+            ("hprc-v1.0-pggb.all.vs.grch38.untangle-m10000-s0-j0.delta.gz", ".delta", (".gz",)),
+            ("hprc-v1.0-mc-grch38.hal", ".hal", ()),
+            ("CHM13.combined.v4.gff3.gz", ".gff3", (".gz",)),
+            ("chm13v2.0.XY.dict", ".dict", ()),
+            ("GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz", ".fna", (".gz",)),
+            ("grch38.sizes", ".sizes", ()),
+            ("hprc-v1.0-mc-grch38-maxdel.10mb.snarls", ".snarls", ()),
+            ("hprc-v1.0-mc-grch38.dist", ".dist", ()),
+            ("hprc-v1.0-mc-chm13-minaf.0.1.min", ".min", ()),
+            ("hprc-v1.0-mc-chm13-minaf.0.1.gg", ".gg", ()),
+            ("hprc-v2.0-mc-grch38.hapl", ".hapl", ()),
+            ("hprc-v1.0-mc-chm13.trans.gz", ".trans", (".gz",)),
+            ("chm13v2.0_maskedY_rCRS.fa.PanSN.fa.gz.gzi", ".gzi", ()),
             # Containers with no inner format → no core, containers as wrappers.
             ("archive.tar.gz", None, (".tar", ".gz")),
             ("bundle.zip", None, (".zip",)),
@@ -143,8 +160,8 @@ class TestFormat:
     the provenance recorded in format_source. Set together or both None."""
 
     def test_spelling_and_compression_variants_collapse_to_one_format(self):
-        """The point of format: four extensions, one identity."""
-        for name in ("genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz"):
+        """The point of format: every spelling and compression variant, one identity."""
+        for name in ("genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz", "genome.fna", "genome.fna.gz"):
             fn = parse(name)
             assert fn.format is Format.FASTA
             assert fn.format_source is FormatSource.EXTENSION

@@ -34,7 +34,11 @@ INDEX_TO_PARENT = {
     # here, so those files never reached this producer at all. Declaring them lets the
     # four dimensions a parent supplies be inherited rather than left to the catch-all,
     # which sees only the extension.
-    ".fai": [".fa.gz", ".fasta", ".fa"],
+    ".fai": [".fa.gz", ".fasta.gz", ".fasta", ".fa", ".fna.gz", ".fna"],
+    # Declared as a FASTA index, as every corpus `.gzi` is (#526), so an unmatched one
+    # takes `sequence` as its parent kind. bgzip can index any bgzip file; a `.gzi` of
+    # another kind finds no parent here.
+    ".gzi": [".fa.gz", ".fasta.gz", ".fna.gz"],
     ".idx": [".vcf"],
 }
 
