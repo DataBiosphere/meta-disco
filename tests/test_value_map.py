@@ -1079,7 +1079,8 @@ def test_an_empty_group_says_so_in_one_line(tmp_path, evidence_root):
     write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
     rendered = render_queue(review_queue(evidence_root, load(tmp_path, "rows:\n")), evidence_root)
     assert section(rendered, "Published").strip().endswith("No unreviewed values.")
-    assert "| 1 | platform |" in section(rendered, "Submitter")
+    submitter = section(rendered, "Submitter")
+    assert "### platform" in submitter and "| 1 | `'Revio'` |" in submitter
 
 
 def test_catalog_text_is_inert_in_the_markdown_and_the_html(tmp_path, evidence_root):
@@ -1142,8 +1143,19 @@ def test_authored_mappings_list_every_authored_row_with_its_files_per_source(tmp
     assert [m.row.id for m in found.mappings] == ["reference_assembly.grch38", "platform.unused"]  # most files first
     rendered = render_queue(found.queue, two_sources, None, found.mappings)
     mappings = rendered.split("## Authored mappings", 1)[1]
-    assert "| 3 | 1 | 2 | 0 | reference_assembly.grch38 | reference_assembly | `any` |" in mappings
+    assert "| 3 | 1 | 2 | 0 | reference_assembly.grch38 | `any` |" in mappings
     assert "`'GRCh38' · 'GRCh38 + Gencode40'`" in mappings
     assert "| 0 | 0 | 0 | 0 | platform.unused |" in mappings and "nothing (reviewed, no claim)" in mappings
     page = grq.render_html(found.queue, two_sources, TEMPLATE, None, found.mappings)
     assert "Authored mappings" in page and "platform.unused" in page
+
+
+def test_the_queue_and_the_mappings_are_organized_by_slot(tmp_path, two_sources):
+    queue = review(two_sources, load(tmp_path, "rows:\n")).queue
+    submitter = section(render_queue(queue, two_sources), "Submitter")
+    # Slots in CLASSIFICATION_FIELDS order: platform before reference_assembly.
+    assert submitter.index("### platform") < submitter.index("### reference_assembly")
+    found = review(two_sources, load(tmp_path, MAPPED))
+    mappings = render_queue(found.queue, two_sources, None, found.mappings).split("## Authored mappings", 1)[1]
+    assert mappings.index("### platform") < mappings.index("### reference_assembly")
+    assert "| rule |" in mappings and "| rule it would use |" in submitter

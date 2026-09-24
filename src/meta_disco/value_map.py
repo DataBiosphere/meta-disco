@@ -720,7 +720,6 @@ class ReportColumn:
 
 QUEUE_COLUMNS = (
     ReportColumn("files", "num", lambda e: f"{e.files:,}"),
-    ReportColumn("slot", "plain", lambda e: e.slot),
     # The raw value as its Python ``repr``: quoted, with every non-printable character and
     # backslash spelled out, so an empty string, boundary spaces and a control character
     # each read as what they are.
@@ -729,7 +728,7 @@ QUEUE_COLUMNS = (
     ReportColumn("dataset", "catalog", lambda e: e.dataset or ""),
     ReportColumn("table", "catalog", lambda e: e.table or ""),
     ReportColumn("column", "catalog", lambda e: e.column or ""),
-    ReportColumn("row", "plain", lambda e: e.row_id or "—"),
+    ReportColumn("rule it would use", "plain", lambda e: e.row_id or "—"),
 )
 
 
@@ -745,8 +744,7 @@ MAPPING_COLUMNS = (
         ReportColumn(name, "num", lambda m, source_type=source_type: f"{m.files.get(source_type, 0):,}")
         for source_type, name in SOURCE_PRECEDENCE
     ),
-    ReportColumn("row", "plain", lambda m: m.row.id),
-    ReportColumn("slot", "plain", lambda m: m.row.slot),
+    ReportColumn("rule", "plain", lambda m: m.row.id),
     ReportColumn(
         "scope",
         "catalog",
@@ -762,12 +760,18 @@ MAPPING_COLUMNS = (
     ),
     ReportColumn("reason", "plain", lambda m: " ".join((m.row.reason or "").split())),
 )
-MAPPINGS_HEADING = "Authored mappings: what each translation row declares"
+MAPPINGS_HEADING = "Authored mappings: what each translation rule declares"
 MAPPINGS_INTRO = (
-    "Every authored translation row, most files first: the source values it matches and what it declares. "
+    "Every authored translation rule, by slot and most files first: the source values it matches in that "
+    "slot, wherever the slot map found them, and what it declares. "
     "Files are those it matched in the same evidence as the queue above, per kind of source; a row that "
     "matched nothing shows 0."
 )
+
+
+def by_slot(items, slot_of) -> list[tuple[str, list]]:
+    """``items`` split by slot, in CLASSIFICATION_FIELDS order, each keeping its order; empty slots left out."""
+    return [(slot, group) for slot in CLASSIFICATION_FIELDS if (group := [i for i in items if slot_of(i) == slot])]
 
 
 def md_rows(columns, items) -> list[str]:
@@ -799,10 +803,11 @@ def queue_intro(entries: list[QueueEntry], evidence_root: Path, datasets: Iterab
     when the queue was limited to some, so a partial queue cannot pass for the whole one."""
     scope = f" for {', '.join(sorted(datasets))} only" if datasets else ""
     return (
-        "Source values that no authored translation row reads yet, so they make no claim (contract 5.2). "
-        "A value is listed once per source, dataset, table and column it arrives through; the row column "
-        f"names the seeded row it selects, or — where no row matches. {len(entries):,} listed, from "
-        f"evidence{scope} under {_shown_root(evidence_root)}."
+        "Source values the slot map routed to a slot but that no authored translation rule reads yet, so "
+        "they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per "
+        'source, dataset, table and column it was found in; "rule it would use" names the seeded rule '
+        f"that matches it, or — where none does. {len(entries):,} listed, from evidence{scope} under "
+        f"{_shown_root(evidence_root)}."
     )
 
 
@@ -846,10 +851,15 @@ def render_queue(
         if not group:
             lines.append("No unreviewed values.")
             continue
-        lines += md_rows(QUEUE_COLUMNS, group)
+        for slot, entries_in_slot in by_slot(group, lambda e: e.slot):
+            lines += [f"### {slot}", "", *md_rows(QUEUE_COLUMNS, entries_in_slot), ""]
+        lines.pop()
     if mappings is not None:
-        lines += ["", f"## {MAPPINGS_HEADING}", "", MAPPINGS_INTRO, ""]
-        lines += md_rows(MAPPING_COLUMNS, mappings) if mappings else ["No authored rows."]
+        lines += ["", f"## {MAPPINGS_HEADING}", "", MAPPINGS_INTRO]
+        if not mappings:
+            lines += ["", "No authored rules."]
+        for slot, rules in by_slot(mappings, lambda m: m.row.slot):
+            lines += ["", f"### {slot}", "", *md_rows(MAPPING_COLUMNS, rules)]
     return "\n".join(lines) + "\n"
 
 

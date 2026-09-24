@@ -31,6 +31,7 @@ from meta_disco.value_map import (
     QUEUE_COLUMNS,
     MappingLine,
     QueueEntry,
+    by_slot,
     default_value_map_resource,
     load_value_map,
     queue_groups,
@@ -70,10 +71,16 @@ def render_html(
     parts = [f'<p class="note">{esc(queue_intro(entries, evidence_root, datasets))}</p>']
     for label, description, group in queue_groups(entries):
         parts.append(f"<h2>{esc(label)}: {esc(description)}</h2>")
-        parts.append(_table(QUEUE_COLUMNS, group) if group else "<p>No unreviewed values.</p>")
+        if not group:
+            parts.append("<p>No unreviewed values.</p>")
+        for slot, entries_in_slot in by_slot(group, lambda e: e.slot):
+            parts += [f"<h3>{esc(slot)}</h3>", _table(QUEUE_COLUMNS, entries_in_slot)]
     if mappings is not None:
         parts += [f"<h2>{esc(MAPPINGS_HEADING)}</h2>", f'<p class="note">{esc(MAPPINGS_INTRO)}</p>']
-        parts.append(_table(MAPPING_COLUMNS, mappings) if mappings else "<p>No authored rows.</p>")
+        if not mappings:
+            parts.append("<p>No authored rules.</p>")
+        for slot, rules in by_slot(mappings, lambda m: m.row.slot):
+            parts += [f"<h3>{esc(slot)}</h3>", _table(MAPPING_COLUMNS, rules)]
     return template.replace(PLACEHOLDER, "\n".join(parts))
 
 
