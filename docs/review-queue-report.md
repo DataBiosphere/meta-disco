@@ -754,3 +754,42 @@ Source values that no authored translation row reads yet, so they make no claim 
 | 2 | platform | `'Illumina NovaSeq 6697'` | `anvil` | `ANVIL_1000G_high_coverage_2019` | `participant` | `instrument_model` | — |
 | 2 | platform | `'Illumina NovaSeq 6698'` | `anvil` | `ANVIL_1000G_high_coverage_2019` | `participant` | `instrument_model` | — |
 | 2 | platform | `'ONT PromethION 2 Solo'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `sequencing_platform` | — |
+
+## Authored mappings: what each translation row declares
+
+Every authored translation row, most files first: the source values it matches and what it declares. Files are those it matched in the same evidence as the queue above, from published and from submitter sources; a row that matched nothing shows 0.
+
+| files | published | submitter | row | slot | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 48,613 | 0 | 48,613 | reference_assembly.grch38 | reference_assembly | `any` | `'grch38' · 'hg38'` | reference_assembly: GRCh38 | Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly. |
+| 19,807 | 0 | 19,807 | platform.illumina_novaseq_6000 | platform | `any` | `'Illumina NovaSeq 6000'` | platform: ILLUMINA | An Illumina instrument model; the model implies the platform. |
+| 15,222 | 0 | 15,222 | data_modality.genomic | data_modality | `any` | `'GENOMIC'` | data_modality: genomic | SRA's library_source value for genomic DNA, spelled as our term. Identity by ruling, not by spelling; if a bisulfite or ATAC library ever arrives under it, narrow this row rather than rank it. |
+| 12,426 | 0 | 12,426 | assay_type.wgs | assay_type | `any` | `'WGS'` | assay_type: WGS; data_modality: genomic | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. |
+| 9,600 | 0 | 9,600 | platform.illumina | platform | `any` | `'ILLUMINA' · 'illumina'` | platform: ILLUMINA | Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling. |
+| 4,690 | 0 | 4,690 | data_type.unaligned_reads | data_type | `any` | `'unaligned reads'` | data_type: reads | Reads, as the source says; whether aligned is not the data type. |
+| 3,770 | 0 | 3,770 | assay_type.hi_c | assay_type | `any` | `'Hi-C' · 'hic'` | data_modality: genomic | Hi-C is chromatin-conformation sequencing of genomic DNA, so the modality is genomic. The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. |
+| 3,002 | 0 | 3,002 | reference_assembly.unaligned | reference_assembly | `any` | `'unaligned'` | reference_assembly: not_applicable | The source's word for a file with no reference; the slot does not apply. |
+| 1,688 | 0 | 1,688 | platform.pacbio_smrt | platform | `any` | `'PACBIO_SMRT'` | platform: PACBIO | SRA's platform value for PacBio. |
+| 1,391 | 0 | 1,391 | platform.ont | platform | `any` | `'ont'` | platform: ONT | Spelled as our term, as a table-name span. Identity by ruling. |
+| 1,292 | 0 | 1,292 | platform.hifi | platform | `any` | `'hifi'` | platform: PACBIO | HiFi reads are PacBio's; the span says platform only and implies no assay (#430). |
+| 1,235 | 0 | 1,235 | platform.sequel_ii | platform | `any` | `'Sequel II'` | platform: PACBIO | A PacBio instrument. |
+| 1,018 | 0 | 1,018 | data_type.repeat_masker | data_type | `any` | `'repeat_masker'` | data_type: annotations | RepeatMasker repeat annotations of an assembly (BED and .out). |
+| 929 | 0 | 929 | platform.oxford_nanopore | platform | `any` | `'OXFORD_NANOPORE'` | platform: ONT | SRA's platform value for Oxford Nanopore. |
+| 925 | 0 | 925 | platform.promethion | platform | `any` | `'PromethION'` | platform: ONT | An Oxford Nanopore instrument. |
+| 881 | 0 | 881 | data_type.annotation | data_type | `any` | `'annotation'` | data_type: annotations | The `assembly_annotation` table-name span; its files are feature annotations of an assembly. |
+| 683 | 0 | 683 | platform.revio | platform | `any` | `'Revio' · 'REVIO'` | platform: PACBIO | A PacBio instrument; the kinnex table spells it in capitals. |
+| 641 | 0 | 641 | data_type.unaligned_reads_with_5mc_mods | data_type | `any` | `'unaligned reads with 5mC mods'` | data_type: reads | Reads carrying base-modification calls; the modification tags do not change the data type. |
+| 619 | 0 | 619 | platform.deepconsensus | platform | `any` | `'deepconsensus'` | platform: PACBIO | DeepConsensus is PacBio's HiFi read-polishing method; the span names PacBio data. Platform only. |
+| 466 | 0 | 466 | data_type.assembly | data_type | `any` | `'assembly'` | data_type: assembly | The `assembly` table-name span; its files are the de-novo assemblies (.fa.gz). |
+| 462 | 0 | 462 | data_modality.methylation | data_modality | `any` | `'methylation'` | data_modality: epigenomic.methylation | The `ont_methylation` table-name span; its files are bigwig methylation tracks. |
+| 462 | 0 | 462 | data_type.censat | data_type | `any` | `'censat'` | data_type: annotations | Centromeric satellite annotation tracks (BED) of an assembly. |
+| 462 | 0 | 462 | data_type.censat_centromeres | data_type | `any` | `'censat_centromeres'` | data_type: annotations | Centromere annotation tracks (BED) of an assembly. |
+| 462 | 0 | 462 | data_type.liftoff | data_type | `any` | `'liftoff'` | data_type: annotations | Gene annotations lifted onto an assembly with Liftoff (GFF3). |
+| 462 | 0 | 462 | data_type.segdups | data_type | `any` | `'segdups'` | data_type: annotations | Segmental duplication tracks (BED) of an assembly. |
+| 288 | 0 | 288 | data_type.unaligned_reads_with_5mcg_5hmcg_mods | data_type | `any` | `'unaligned reads with 5mCG_5hmCG mods'` | data_type: reads | Reads carrying base-modification calls; the modification tags do not change the data type. |
+| 230 | 0 | 230 | data_type.bam | data_type | `any` | `'bam'` | nothing (reviewed, no claim) | A file format, not a data type: the kinnex table's data_type column holds what its filetype column should. Ruled to mean nothing here rather than left queued. |
+| 230 | 0 | 230 | platform.kinnex | platform | `any` | `'kinnex'` | platform: PACBIO | Kinnex is a PacBio library kit; the span names PacBio data. Platform only. |
+| 230 | 0 | 230 | platform.pacbio | platform | `any` | `'PACBIO'` | platform: PACBIO | Spelled as our term (the kinnex table's spelling). Identity by ruling. |
+| 120 | 0 | 120 | platform.nanopore | platform | `any` | `'nanopore'` | platform: ONT | A column-name span naming Oxford Nanopore data. |
+| 2 | 0 | 2 | platform.gridion | platform | `any` | `'GridION'` | platform: ONT | An Oxford Nanopore instrument. |
+| 2 | 0 | 2 | platform.minion | platform | `any` | `'MinION'` | platform: ONT | An Oxford Nanopore instrument. |

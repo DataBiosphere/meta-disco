@@ -57,6 +57,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import yaml
@@ -623,8 +624,34 @@ class QueueEntry:
 _Group = tuple[str, str, str | None, str | None, str | None, str, str]
 
 
+@dataclass(frozen=True)
+class MappingLine:
+    """One authored row and the files it matched in the current evidence, per source type."""
+
+    row: Row
+    files: Mapping[str, int]
+
+    @property
+    def total(self) -> int:
+        return sum(self.files.values())
+
+
+@dataclass(frozen=True)
+class Review:
+    """What one pass over the evidence finds: the queue, and every authored row with its matches."""
+
+    queue: list[QueueEntry]
+    mappings: list[MappingLine]
+
+
 def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> list[QueueEntry]:
-    """Every evidence value whose selected row is not authored, grouped by provenance and slot, most files first.
+    """The queue alone: :func:`review`'s ``queue``."""
+    return review(evidence_root, table, datasets).queue
+
+
+def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> Review:
+    """Every evidence value whose selected row is not authored, grouped by provenance and slot, most files first;
+    and every authored row with the files it matched, per source type, most files first (0 where it matched none).
 
     Driven by the evidence, not the rows (5.2): a value with no row and a value with a
     seeded row are listed the same way; a value whose selected row is an authored no-op
@@ -635,12 +662,15 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
     """
     files: dict[_Group, int] = {}
     row_ids: dict[_Group, str | None] = {}
+    usage: dict[str, dict[str, int]] = {r.id: {} for r in table.rows if r.authored}
     for path in _current_paths(evidence_root, datasets):
         source_type = read_envelope(path).source_type
         targets: dict[_Group, set[str]] = {}
+        matched: dict[str, set[str]] = {}
         for entry in iter_evidence(path):
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
+                matched.setdefault(row.id, set()).add(entry.target_key_value)
                 continue
             src = entry.source
             group = (source_type, src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
@@ -648,6 +678,8 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
             row_ids.setdefault(group, None if row is None else row.id)
         for group, seen in targets.items():
             files[group] = files.get(group, 0) + len(seen)
+        for row_id, seen in matched.items():
+            usage[row_id][source_type] = usage[row_id].get(source_type, 0) + len(seen)
     # A group's fields are QueueEntry's first seven, in order.
     entries = [QueueEntry(*group, files=count, row_id=row_ids[group]) for group, count in files.items()]
     entries.sort(
@@ -662,7 +694,9 @@ def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] |
             e.column or "",
         )
     )
-    return entries
+    mappings = [MappingLine(table.by_id(row_id), counts) for row_id, counts in usage.items()]
+    mappings.sort(key=lambda m: (-m.total, m.row.id))
+    return Review(entries, mappings)
 
 
 # The queue's groups: one per importer source, in SOURCE_PRECEDENCE order, with its heading
@@ -675,28 +709,70 @@ QUEUE_GROUP_TEXT = {
 
 
 @dataclass(frozen=True)
-class QueueColumn:
-    """One column of the rendered queue. ``kind`` says how a renderer shows it: ``num`` right-aligned,
+class ReportColumn:
+    """One column of a rendered table. ``kind`` says how a renderer shows it: ``num`` right-aligned,
     ``catalog`` text a source wrote (shown so it cannot render as markup), ``plain`` our own words."""
 
     header: str
     kind: str
-    cell: Callable[[QueueEntry], str]
+    cell: Callable[[Any], str]
 
 
 QUEUE_COLUMNS = (
-    QueueColumn("files", "num", lambda e: f"{e.files:,}"),
-    QueueColumn("slot", "plain", lambda e: e.slot),
+    ReportColumn("files", "num", lambda e: f"{e.files:,}"),
+    ReportColumn("slot", "plain", lambda e: e.slot),
     # The raw value as its Python ``repr``: quoted, with every non-printable character and
     # backslash spelled out, so an empty string, boundary spaces and a control character
     # each read as what they are.
-    QueueColumn("raw value", "catalog", lambda e: repr(e.raw_value)),
-    QueueColumn("source", "catalog", lambda e: e.source),
-    QueueColumn("dataset", "catalog", lambda e: e.dataset or ""),
-    QueueColumn("table", "catalog", lambda e: e.table or ""),
-    QueueColumn("column", "catalog", lambda e: e.column or ""),
-    QueueColumn("row", "plain", lambda e: e.row_id or "—"),
+    ReportColumn("raw value", "catalog", lambda e: repr(e.raw_value)),
+    ReportColumn("source", "catalog", lambda e: e.source),
+    ReportColumn("dataset", "catalog", lambda e: e.dataset or ""),
+    ReportColumn("table", "catalog", lambda e: e.table or ""),
+    ReportColumn("column", "catalog", lambda e: e.column or ""),
+    ReportColumn("row", "plain", lambda e: e.row_id or "—"),
 )
+
+
+def _values(values) -> str:
+    """A row's matched values, each as its Python ``repr``, one-element list cells as lists."""
+    return " · ".join(repr(list(v) if isinstance(v, tuple) else v) for v in values)
+
+
+MAPPING_COLUMNS = (
+    ReportColumn("files", "num", lambda m: f"{m.total:,}"),
+    ReportColumn("published", "num", lambda m: f"{m.files.get(SOURCE_PUBLISHED_VALUE, 0):,}"),
+    ReportColumn("submitter", "num", lambda m: f"{m.files.get(SOURCE_REPOSITORY_METADATA, 0):,}"),
+    ReportColumn("row", "plain", lambda m: m.row.id),
+    ReportColumn("slot", "plain", lambda m: m.row.slot),
+    ReportColumn(
+        "scope",
+        "catalog",
+        lambda m: (
+            "any" if m.row.scope is None else " / ".join(p for p in (m.row.scope.source, m.row.scope.dataset) if p)
+        ),
+    ),
+    ReportColumn("matches", "catalog", lambda m: _values((m.row.value, *m.row.alternates))),
+    ReportColumn(
+        "declares",
+        "plain",
+        lambda m: "; ".join(f"{k}: {v}" for k, v in m.row.declares.items()) or "nothing (reviewed, no claim)",
+    ),
+    ReportColumn("reason", "plain", lambda m: " ".join((m.row.reason or "").split())),
+)
+MAPPINGS_HEADING = "Authored mappings: what each translation row declares"
+MAPPINGS_INTRO = (
+    "Every authored translation row, most files first: the source values it matches and what it declares. "
+    "Files are those it matched in the same evidence as the queue above, from published and from submitter "
+    "sources; a row that matched nothing shows 0."
+)
+
+
+def md_rows(columns, items) -> list[str]:
+    """``items`` as a markdown table over ``columns``; a non-empty catalog cell is a code span."""
+    return md_table(
+        [c.header for c in columns],
+        [[md_code(v) if c.kind == "catalog" and v else v for c in columns for v in (c.cell(i),)] for i in items],
+    )
 
 
 def queue_groups(entries: list[QueueEntry]) -> list[tuple[str, str, list[QueueEntry]]]:
@@ -749,8 +825,14 @@ def queue_summary(entries: list[QueueEntry]) -> list[str]:
     ]
 
 
-def render_queue(entries: list[QueueEntry], evidence_root: Path, datasets: Iterable[str] | None = None) -> str:
-    """The queue as markdown, one section per source type (:func:`queue_groups`).
+def render_queue(
+    entries: list[QueueEntry],
+    evidence_root: Path,
+    datasets: Iterable[str] | None = None,
+    mappings: list[MappingLine] | None = None,
+) -> str:
+    """The queue as markdown, one section per source type (:func:`queue_groups`), then the
+    authored mappings when given.
 
     A catalog cell is a code span (:func:`md_code`), so no value renders as markup or a
     link; an empty one stays empty.
@@ -761,13 +843,10 @@ def render_queue(entries: list[QueueEntry], evidence_root: Path, datasets: Itera
         if not group:
             lines.append("No unreviewed values.")
             continue
-        lines += md_table(
-            [c.header for c in QUEUE_COLUMNS],
-            [
-                [md_code(v) if c.kind == "catalog" and v else v for c in QUEUE_COLUMNS for v in (c.cell(e),)]
-                for e in group
-            ],
-        )
+        lines += md_rows(QUEUE_COLUMNS, group)
+    if mappings is not None:
+        lines += ["", f"## {MAPPINGS_HEADING}", "", MAPPINGS_INTRO, ""]
+        lines += md_rows(MAPPING_COLUMNS, mappings) if mappings else ["No authored rows."]
     return "\n".join(lines) + "\n"
 
 
@@ -800,8 +879,9 @@ def main(argv: list[str] | None = None) -> int:
         for id in result.rows_added:
             print(f"  {id}", file=sys.stderr)
         return 0
-    entries = review_queue(args.evidence_root, load_value_map(table_path), args.dataset)
-    report = render_queue(entries, args.evidence_root, args.dataset)
+    found = review(args.evidence_root, load_value_map(table_path), args.dataset)
+    entries = found.queue
+    report = render_queue(entries, args.evidence_root, args.dataset, found.mappings)
     if args.output is not None:
         args.output.write_text(report)
         print(f"Wrote {args.output}", file=sys.stderr)

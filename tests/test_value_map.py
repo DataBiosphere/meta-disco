@@ -38,6 +38,7 @@ from meta_disco.value_map import (
     match_key,
     normalize,
     render_queue,
+    review,
     review_queue,
     row_id,
     seed,
@@ -1112,3 +1113,37 @@ def test_every_importer_source_has_a_queue_group():
 def test_a_queue_limited_to_some_datasets_says_so(tmp_path, two_sources):
     entries = review_queue(two_sources, load(tmp_path, "rows:\n"), ["AnVIL_ENCORE_293T"])
     assert "from evidence for AnVIL_ENCORE_293T only under" in render_queue(entries, two_sources, ["AnVIL_ENCORE_293T"])
+
+
+MAPPED = """
+rows:
+  - id: reference_assembly.grch38
+    match: {slot: reference_assembly, value: GRCh38, alternates: ["GRCh38 + Gencode40"]}
+    declares: {reference_assembly: GRCh38}
+    reason: The GRCh38 assembly.
+  - id: platform.unused
+    match: {slot: platform, value: NEVER SEEN}
+    declares: {}
+    reason: Reviewed; says nothing.
+  - id: platform.seeded
+    match: {slot: platform, value: Illumina NovaSeq X}
+    seeded_from: [x]
+"""
+
+
+def test_authored_mappings_list_every_authored_row_with_its_files_per_source(tmp_path, two_sources):
+    found = review(two_sources, load(tmp_path, MAPPED))
+    lines = {m.row.id: dict(m.files) for m in found.mappings}
+    # Authored rows only, a seeded one is the queue's; a row that matched nothing is listed empty.
+    assert lines == {
+        "reference_assembly.grch38": {"repository_metadata": 2, "published_value": 1},
+        "platform.unused": {},
+    }
+    assert [m.row.id for m in found.mappings] == ["reference_assembly.grch38", "platform.unused"]  # most files first
+    rendered = render_queue(found.queue, two_sources, None, found.mappings)
+    mappings = rendered.split("## Authored mappings", 1)[1]
+    assert "| 3 | 1 | 2 | reference_assembly.grch38 | reference_assembly | `any` |" in mappings
+    assert "`'GRCh38' · 'GRCh38 + Gencode40'`" in mappings
+    assert "| 0 | 0 | 0 | platform.unused |" in mappings and "nothing (reviewed, no claim)" in mappings
+    page = grq.render_html(found.queue, two_sources, TEMPLATE, None, found.mappings)
+    assert "Authored mappings" in page and "platform.unused" in page
