@@ -961,6 +961,8 @@ class TestReferenceRuleFileKinds:
             ("hprc-v1.0-mc-grch38.gbz", "filename_ref_grch38", "GRCh38"),
             ("all_hg38_ns.pgen", "filename_ref_grch38", "GRCh38"),
             ("sample.GRCh38.bam.bai", "filename_ref_grch38", "GRCh38"),
+            # An archive named for its inner format describes that content (#523).
+            ("x.GRCh38.bam.tar.gz", "filename_ref_grch38", "GRCh38"),
         ],
     )
     def test_reference_bearing_kind_is_claimed(self, engine, filename, rule_id, expected):

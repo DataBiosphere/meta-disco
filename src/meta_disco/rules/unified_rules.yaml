@@ -491,9 +491,12 @@ rules:
   # `.psam` is a sample table with no coordinates), and the indexes `.bai` / `.crai` /
   # `.tbi` / `.csi` / `.fai` (not `.idx` or `.pbi`, which `index_file` lists too). The list
   # is an include list rather than an exclude list so that a file kind it does not
-  # name — a log, a checksum, a PDF, an archive, a text table, or one the name
-  # parser does not recognize — gets no claim until someone adds it on purpose
-  # (#523). The anchor is defined here and reused by the other three rules.
+  # name — a log, a checksum, a PDF, an archive with no inner format, a text table,
+  # or one the name parser does not recognize — gets no claim until someone adds it
+  # on purpose (#523). An archive whose name keeps an inner format
+  # (`x.GRCh38.bam.tar.gz`) parses to that format's extension, so it is claimed as
+  # the content it holds, the way the tar producer claims its `data_type` from the
+  # members it reads. The anchor is defined here and reused by the other three rules.
   - id: filename_ref_grch38
     tier: 2
     scope: filename
