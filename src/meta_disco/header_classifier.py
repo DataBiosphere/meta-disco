@@ -329,16 +329,12 @@ def classify_from_fastq_header(
 
     Returns:
         Dict with:
-            - data_modality: str or None
-            - data_type: str (typically "reads")
-            - platform: str or None (ILLUMINA, PACBIO, ONT, etc.)
+            - {field}: {value, status, evidence[]} for each of CLASSIFICATION_FIELDS;
+              no rule reads ``instrument_model`` from a read name (#532)
             - is_paired_end: bool or None
-            - instrument_model: {value, status, evidence}; no rule reads it from a read name (#532)
             - instrument_hint: str or None (instrument ID from read name)
             - archive_accession: str or None (ENA/SRA accession if present)
             - archive_source: str or None (ENA, SRA, DDBJ)
-            - matched_rules: list of rule IDs
-            - evidence: list of dicts
     """
     from .rule_engine import ExtendedFileInfo
 
