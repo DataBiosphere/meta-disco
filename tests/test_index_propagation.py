@@ -5,6 +5,7 @@ import json
 import pytest
 from classify_index_files import (
     AMBIGUOUS_PARENT,
+    INHERITED_FIELDS,
     NO_MATCHING_PARENT,
     get_parent_candidates,
     load_classifications,
@@ -35,7 +36,7 @@ def _assert_declined(output: dict, file_name: str) -> dict:
     """An index file that took no parent: `index` by extension, the rest unknown.
 
     `data_type` is knowable without a parent — the extension says so — and the other
-    four are properties of the data the index points into, so they are not_classified
+    five are properties of the data the index points into, so they are not_classified
     rather than not_applicable: they apply, and nothing here can determine them (#438).
     """
     records = [r for r in output["classifications"] if r["file_name"] == file_name]
@@ -43,7 +44,7 @@ def _assert_declined(output: dict, file_name: str) -> dict:
     cls = records[0]["classifications"]
     assert field_status(cls, "data_type") == CLASSIFIED
     assert field_value(cls, "data_type") == "index"
-    for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
+    for fld in INHERITED_FIELDS:
         assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified, not asserted"
     # A declined record still carries a typed edge — the extension says it indexes
     # something — with the grounding null (#450).
@@ -262,6 +263,7 @@ class TestLoadClassifications:
             "assay_type",
             "platform",
             "reference_assembly",
+            "instrument_model",
             "detail",
         }
 
@@ -405,7 +407,7 @@ class TestLoadClassifications:
         output = run_index_producer(tmp_path, [txt, index])
         [row] = [r for r in output["classifications"] if r["file_name"] == "notes.txt.gz.tbi"]
         assert row["derived_from"]["parent_file"] == "notes.txt.gz"
-        for fld in ("data_modality", "platform", "reference_assembly", "assay_type"):
+        for fld in INHERITED_FIELDS:
             entry = row["classifications"][fld]
             assert field_status(row["classifications"], fld) == NOT_CLASSIFIED
             assert entry["evidence"][0]["reason"] == "No classification row for parent file notes.txt.gz"
@@ -620,10 +622,10 @@ class TestLoadClassifications:
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         # `data_type` does not depend on the parent being classified — the extension
-        # settles it (#437). The other four have nothing to inherit.
+        # settles it (#437). The other five have nothing to inherit.
         assert field_status(cls, "data_type") == CLASSIFIED
         assert field_value(cls, "data_type") == "index"
-        for fld in ["data_modality", "platform", "reference_assembly", "assay_type"]:
+        for fld in INHERITED_FIELDS:
             assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified"
         assert cls["data_modality"]["evidence"][0]["reason"] == "No classification row for parent file sample.bam"
 

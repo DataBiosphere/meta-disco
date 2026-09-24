@@ -433,6 +433,7 @@ class ExtendedClassificationResult:
     reference_assembly: str | None = None
     assay_type: str | None = None
     platform: str | None = None
+    instrument_model: str | None = None
     field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /

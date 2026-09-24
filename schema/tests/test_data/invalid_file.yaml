@@ -28,3 +28,7 @@ classifications:
     value: "ILLUMINA"
     status: "classified"
     evidence: []
+  instrument_model:
+    value: null
+    status: "not_classified"
+    evidence: []

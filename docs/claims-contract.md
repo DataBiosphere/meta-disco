@@ -31,7 +31,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 2. Source evidence
 
 2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
-    A **slot** is one of the five classification dimensions; it is spelled `field` on the wire and in the code.
+    A **slot** is one of the six classification dimensions; it is spelled `field` on the wire and in the code.
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
     **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather

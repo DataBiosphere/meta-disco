@@ -1005,6 +1005,22 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert all(row.scope is None for row in table.rows)
 
 
+def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():
+    """An instrument value declares both slots (contract 3.10), the autofilled numbers only the platform (#532)."""
+    table = load_value_map()
+    models = {row.id: row.declares for row in table.rows if "instrument_model" in row.declares}
+    assert models["platform.illumina_novaseq_6000"] == {
+        "platform": "ILLUMINA",
+        "instrument_model": "Illumina NovaSeq 6000",
+    }
+    assert models["platform.ont_promethion_2_solo"] == {"platform": "ONT", "instrument_model": "PromethION"}
+    assert all("platform" in declares for declares in models.values())
+    autofill = table.by_id("platform.illumina_novaseq_6001_to_6698")
+    assert autofill.declares == {"platform": "ILLUMINA"}
+    spellings = [autofill.value, *autofill.alternates]
+    assert spellings == [f"Illumina NovaSeq {n}" for n in range(6001, 6699)]
+
+
 # --- the review queue as a report (#524) ---------------------------------------------
 
 TEMPLATE = f"<main>{grq.PLACEHOLDER}</main>"

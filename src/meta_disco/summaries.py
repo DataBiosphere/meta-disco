@@ -182,8 +182,9 @@ def print_fastq_summary(classifications: list[dict]):
         modalities[mod] = modalities.get(mod, 0) + 1
 
         # Dimensions above use field_label so unclassified files bucket as a
-        # sentinel; these scalar metadata fields have no sentinel convention, so
-        # they use field_value and are simply skipped when absent.
+        # sentinel. The scalar metadata fields have no sentinel convention, so they
+        # use field_value and are skipped when absent; so does instrument_model, a
+        # dimension (#532), whose table lists only the files with a model.
         if field_value(c, "is_paired_end"):
             paired_count += 1
 

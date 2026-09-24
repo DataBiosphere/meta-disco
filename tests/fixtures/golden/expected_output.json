@@ -40,6 +40,17 @@
             "status": "classified",
             "value": "alignments"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -146,6 +157,19 @@
             ],
             "status": "classified",
             "value": "annotations"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
+                "rule_id": "intervals_targets",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           },
           "platform": {
             "evidence": [
@@ -263,6 +287,19 @@
             "status": "classified",
             "value": "assembly"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -366,7 +403,17 @@
             "value": "reads"
           },
           "instrument_hint": null,
-          "instrument_model": null,
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "is_paired_end": false,
           "platform": {
             "evidence": [
@@ -468,6 +515,19 @@
             "status": "classified",
             "value": "pangenome.reference"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
+                "rule_id": "pangenome_graph",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -561,6 +621,17 @@
             "status": "classified",
             "value": "variants"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -650,6 +721,17 @@
             "status": "classified",
             "value": "variants"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -721,6 +803,17 @@
             ],
             "status": "classified",
             "value": "variants"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           },
           "platform": {
             "evidence": [

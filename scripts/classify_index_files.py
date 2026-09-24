@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-An index file's ``data_type`` is ``index``, from its extension. The other four of
+An index file's ``data_type`` is ``index``, from its extension. The other five of
 ``CLASSIFICATION_FIELDS`` describe the data it points into, so they are inherited from
 its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
@@ -11,10 +11,10 @@ as routing compares extensions (#449), so two files in a dataset whose names dif
 only by case identify neither (#455). Where two files in a dataset share — up to case —
 the name an index points at, no parent is chosen. Such a file still gets a record,
 but it inherits nothing: ``declined_record`` gives it ``data_type: index``, which the
-extension establishes without a parent, and ``not_classified`` on the other four,
+extension establishes without a parent, and ``not_classified`` on the other five,
 which only a parent could supply. Why no parent was taken is listed separately in
 ``unmatched_files``, with reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT``
-(#438). So this module has two behaviours, and they differ only in the four inherited
+(#438). So this module has two behaviours, and they differ only in the five inherited
 dimensions: with a unique parent they are the parent's, without one they are
 ``not_classified``. ``data_type`` is the same either way (#437).
 
@@ -237,6 +237,8 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
 
 
 DATA_TYPE = "data_type"
+# The dimensions an index file takes from its parent: every one but its own kind.
+INHERITED_FIELDS = tuple(fld for fld in CLASSIFICATION_FIELDS if fld != DATA_TYPE)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
 # The derivation verb this producer emits, a term in `relation_enum`. Pinned to the
 # schema by `test_rule_vocabulary`, as `INDEX_DATA_TYPE` is.
@@ -263,7 +265,7 @@ def index_data_type_entry(index_ext: str) -> dict:
 
     Before #437 a *matched* index inherited this dimension with the rest, so a ``.crai``
     reported ``alignments`` and a ``.tbi`` reported ``variants.germline`` — the parent's kind
-    copied onto a file that is not of that kind. The other four dimensions inherit
+    copied onto a file that is not of that kind. The other five dimensions inherit
     honestly, because they describe the data the index points into; ``data_type``
     describes the file itself, and is the one that must not be borrowed.
 
@@ -290,11 +292,11 @@ def index_data_type_entry(index_ext: str) -> dict:
 def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     """One output record for an index file this producer took no parent for.
 
-    Says the one thing that is known and refuses the four that are not. The extension
+    Says the one thing that is known and refuses the five that are not. The extension
     identifies the file as an index without any parent — it is how this producer found
     it — so ``data_type`` is ``index``, claimed the way an ``extension``-scope rule
     would claim it (``SOURCE_FILENAME_RULE``, per ``rule_engine._RULE_SOURCE_TYPES``).
-    The other four dimensions are properties of the data the index points into, which
+    The other five dimensions are properties of the data the index points into, which
     only the parent can supply, so they are ``not_classified``: they *apply*, and
     nothing here can determine them. ``not_applicable`` would assert they cannot apply,
     which the matched case disproves by filling them in.
@@ -315,7 +317,7 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     was reported as determined precisely where it is not.
 
     #437 removed that hazard at the source: the rule is now ``index_file`` and claims
-    only ``data_type: index``, leaving the four a parent supplies open. It is the
+    only ``data_type: index``, leaving the five a parent supplies open. It is the
     engine's backstop for an index this producer misses; it fires on nothing today
     because this producer misses nothing, and that is why it stays (#430). So the three
     ways an index file can be classified — inherited from a matched parent, declined
@@ -383,10 +385,7 @@ def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, An
                 f"`make classify` runs."
             )
         classifications[value] = {
-            "data_modality": field_label(c, "data_modality"),
-            "assay_type": field_label(c, "assay_type"),
-            "platform": field_label(c, "platform"),
-            "reference_assembly": field_label(c, "reference_assembly"),
+            **{fld: field_label(c, fld) for fld in INHERITED_FIELDS},
             # Per-field detail (the first is reference_assembly's build, #340)
             # rides along with the labels: an index record must not describe
             # its parent less precisely than the parent does.
@@ -583,10 +582,7 @@ def propagate_to_index_files(
                 "parent_file": parent_name,
                 "parent_md5sum": parent_md5,
                 "parent_row_found": parent_row_found,
-                "data_modality": parent_class.get("data_modality") or nc,
-                "assay_type": parent_class.get("assay_type") or nc,
-                "platform": parent_class.get("platform") or nc,
-                "reference_assembly": parent_class.get("reference_assembly") or nc,
+                **{fld: parent_class.get(fld) or nc for fld in INHERITED_FIELDS},
                 "detail": parent_class.get("detail", {}),
             }
 
@@ -730,8 +726,8 @@ def propagate_to_index_files(
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
         classifications = {}
         for fld in CLASSIFICATION_FIELDS:
-            # `data_type` is the file's own kind and is never inherited (#437); the other
-            # four are properties of the data the index points into, so they are.
+            # `data_type` is the file's own kind and is never inherited (#437); the
+            # others are properties of the data the index points into, so they are.
             if fld == DATA_TYPE:
                 classifications[fld] = index_data_type_entry(r["index_extension"])
                 continue

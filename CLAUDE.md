@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers five dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content), using a deterministic tiered rule engine.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers six dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content), using a deterministic tiered rule engine.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ The project has two main components:
 1. **Classification** (`src/meta_disco/`, `src/meta_disco/rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
 
 2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
-   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the five metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
+   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the six metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
    - Uses uv for dependency management (Python 3.10+); its own env, separate from the runtime
 
@@ -90,11 +90,13 @@ make probe-tdr PROJECT=<tdr data project> SNAPSHOT=<snapshot name>
 ## Schema Details
 
 The LinkML schema (`classification.yaml`) defines the `ClassificationRecord` — the
-five metadata dimensions nested under `classifications`, each a `{value, status,
+six metadata dimensions nested under `classifications`, each a `{value, status,
 evidence}` entry — plus the controlled vocabulary:
 - **reference_assembly_enum**: GRCh37, GRCh38, CHM13
 - **data_modality_enum**: genomic, transcriptomic.*, epigenomic.*, imaging.histology
 - **classification_status_enum**: classified, not_applicable, not_classified, conflict
+- **instrument_model_enum**: ENA/SRA's instrument-model strings for the platforms in
+  `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532)
 - also **data_type_enum**, **assay_type_enum**, **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.

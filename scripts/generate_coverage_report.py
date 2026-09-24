@@ -49,6 +49,14 @@ DIMENSIONS = [
         "or infers WGS from a long-read platform (#430). The high not-classified rate "
         "is expected.",
     ),
+    (
+        "instrument_model",
+        "Instrument Model",
+        "**Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` "
+        "value that names exactly one model (#532); a read-name serial prefix is a "
+        "vendor numbering convention and is not read. Most files carry no such value, "
+        "so the high not-classified rate is expected; the sources supply most models.",
+    ),
 ]
 
 
@@ -68,7 +76,7 @@ def load_records(run_dir: Path) -> list[dict]:
             data = json.load(f)
         for r in data.get("classifications", data.get("results", [])):
             rec = {"file_name": r.get("file_name", "")}
-            for field in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+            for field, _, _ in DIMENSIONS:
                 rec[field] = field_label(r, field)
                 evidence = field_evidence(r, field)
                 # Store the first evidence reason (used for not_classified aggregation)
