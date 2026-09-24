@@ -644,6 +644,8 @@ class Review:
 
     queue: list[QueueEntry]
     mappings: list[MappingLine]
+    source_types: frozenset[str] = frozenset()
+    """The source types whose evidence the pass read, whether or not any of it is queued."""
 
 
 def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> list[QueueEntry]:
@@ -666,9 +668,11 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
     targets: dict[_Group, set[_Target]] = {}
     row_ids: dict[_Group, str | None] = {}
     matched: dict[str, dict[str, set[_Target]]] = {r.id: {} for r in table.rows if r.authored}
+    read: set[str] = set()
     for path in _current_paths(evidence_root, datasets):
         envelope = read_envelope(path)
         source_type = envelope.source_type
+        read.add(source_type)
         # A join key is unique within its target system and dataset, not across them (a
         # file_md5sum or file_name can repeat), so a file's identity carries both.
         scope = (envelope.target.system, envelope.target.dataset)
@@ -700,7 +704,7 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
     )
     mappings = [MappingLine(table.by_id(row_id), counts) for row_id, counts in usage.items()]
     mappings.sort(key=lambda m: (-m.total, m.row.id))
-    return Review(entries, mappings)
+    return Review(entries, mappings, frozenset(read))
 
 
 # The queue's groups: one per importer source, in SOURCE_PRECEDENCE order, with its heading
@@ -786,10 +790,11 @@ def md_rows(columns, items) -> list[str]:
     )
 
 
-def queue_groups(entries: list[QueueEntry]) -> list[tuple[str, str, list[QueueEntry]]]:
+def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tuple[str, str, list[QueueEntry]]]:
     """``(label, description, entries)`` per importer source in SOURCE_PRECEDENCE order, entries in queue order.
 
-    A group listed only when not empty is left out while it is. Every entry lands in a
+    A group listed only when not empty is listed too when its source type is in ``read``
+    (evidence of it was read, all of it reviewed), so an empty group is told from an unread one. Every entry lands in a
     group: an envelope's source type is one of ``IMPORTER_SOURCE_TYPES``, which a test holds
     equal to SOURCE_PRECEDENCE's, and another test holds QUEUE_GROUP_TEXT to the same set.
     """
@@ -797,7 +802,7 @@ def queue_groups(entries: list[QueueEntry]) -> list[tuple[str, str, list[QueueEn
     for source_type, _ in SOURCE_PRECEDENCE:
         label, description, always = QUEUE_GROUP_TEXT[source_type]
         group = [e for e in entries if e.source_type == source_type]
-        if group or always:
+        if group or always or source_type in read:
             groups.append((label, description, group))
     return groups
 
@@ -829,11 +834,11 @@ def _shown_root(evidence_root: Path) -> str:
         return str(evidence_root)
 
 
-def queue_summary(entries: list[QueueEntry]) -> list[str]:
+def queue_summary(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[str]:
     """One line per group: its label, how many values and how many files."""
     return [
         f"  {label}: {len(group)} values, {sum(e.files for e in group):,} files"
-        for label, _, group in queue_groups(entries)
+        for label, _, group in queue_groups(entries, read)
     ]
 
 
@@ -842,15 +847,16 @@ def render_queue(
     evidence_root: Path,
     datasets: Iterable[str] | None = None,
     mappings: list[MappingLine] | None = None,
+    read: Iterable[str] = (),
 ) -> str:
-    """The queue as markdown, one section per source type (:func:`queue_groups`), then the
-    authored mappings when given.
+    """The queue as markdown, one section per source type (:func:`queue_groups`, with the
+    source types ``read``), then the authored mappings when given.
 
     A catalog cell is a code span (:func:`md_code`), so no value renders as markup or a
     link; an empty one stays empty.
     """
     lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets)]
-    for label, description, group in queue_groups(entries):
+    for label, description, group in queue_groups(entries, read):
         lines += ["", f"## {label}: {description}", ""]
         if not group:
             lines.append("No unreviewed values.")
@@ -898,12 +904,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     found = review(args.evidence_root, load_value_map(table_path), args.dataset)
     entries = found.queue
-    report = render_queue(entries, args.evidence_root, args.dataset, found.mappings)
+    report = render_queue(entries, args.evidence_root, args.dataset, found.mappings, found.source_types)
     if args.output is not None:
         args.output.write_text(report)
         print(f"Wrote {args.output}", file=sys.stderr)
     else:
         print(report, end="")
-    for line in queue_summary(entries):
+    for line in queue_summary(entries, found.source_types):
         print(line, file=sys.stderr)
     return 0

@@ -1189,3 +1189,29 @@ def test_one_key_in_two_datasets_is_two_files(tmp_path, evidence_root):
         write_generation(evidence_root, ds, "hifi", [entry("platform", "Revio", "same-key", dataset=ds)])
     (line,) = review(evidence_root, table).mappings
     assert dict(line.files) == {"repository_metadata": 2}
+
+
+def test_a_group_whose_evidence_was_read_but_is_all_reviewed_says_so(tmp_path, evidence_root):
+    """External evidence fully covered by rules is listed as empty, not left out as if it were never read."""
+    from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
+
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    source = file_source()
+    envelope = evidence_file_envelope(
+        source=source,
+        source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+        source_version="v1",
+        source_key=JOIN_KEY_DRS_URI,
+        target=EvidenceTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil15"),
+        target_key=JOIN_KEY_DRS_URI,
+    )
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")], envelope=envelope)
+    found = review(evidence_root, table)
+    assert found.queue == [] and SOURCE_EXTERNAL_GROUND_TRUTH in found.source_types
+    rendered = render_queue(found.queue, evidence_root, None, None, found.source_types)
+    assert section(rendered, "External").strip().endswith("No unreviewed values.")
+    assert "## External" not in render_queue(found.queue, evidence_root)

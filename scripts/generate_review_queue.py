@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import html
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
@@ -61,6 +62,7 @@ def render_html(
     template: str,
     datasets: list[str] | None = None,
     mappings: list[MappingLine] | None = None,
+    read: Iterable[str] = (),
 ) -> str:
     """The queue as a static page: ``template`` with its placeholder replaced by the groups' tables.
 
@@ -69,7 +71,7 @@ def render_html(
     """
     esc = html.escape
     parts = [f'<p class="note">{esc(queue_intro(entries, evidence_root, datasets))}</p>']
-    for label, description, group in queue_groups(entries):
+    for label, description, group in queue_groups(entries, read):
         parts.append(f"<h2>{esc(label)}: {esc(description)}</h2>")
         if not group:
             parts.append("<p>No unreviewed values.</p>")
@@ -95,10 +97,15 @@ def main(argv: list[str] | None = None) -> int:
     table_path = args.table if args.table is not None else Path(str(default_value_map_resource()))
     found = review(args.evidence_root, load_value_map(table_path), args.dataset)
     entries = found.queue
-    args.markdown.write_text(render_queue(entries, args.evidence_root, args.dataset, found.mappings))
-    args.html.write_text(render_html(entries, args.evidence_root, TEMPLATE.read_text(), args.dataset, found.mappings))
+    args.markdown.write_text(
+        render_queue(entries, args.evidence_root, args.dataset, found.mappings, found.source_types)
+    )
+    page = render_html(
+        entries, args.evidence_root, TEMPLATE.read_text(), args.dataset, found.mappings, found.source_types
+    )
+    args.html.write_text(page)
     print(f"Review queue -> {args.markdown}, {args.html}")
-    print("\n".join(queue_summary(entries)))
+    print("\n".join(queue_summary(entries, found.source_types)))
     return 0
 
 
