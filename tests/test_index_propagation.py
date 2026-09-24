@@ -35,8 +35,8 @@ HPRC_KEY = SOURCE_RECORD_KEYS["hprc"]
 def _assert_declined(output: dict, file_name: str) -> dict:
     """An index file that took no parent: `index` by extension, the rest unknown.
 
-    `data_type` is knowable without a parent — the extension says so — and the other
-    five are properties of the data the index points into, so they are not_classified
+    `data_type` is knowable without a parent — the extension says so — and the others
+    are properties of the data the index points into, so they are not_classified
     rather than not_applicable: they apply, and nothing here can determine them (#438).
     """
     records = [r for r in output["classifications"] if r["file_name"] == file_name]
@@ -258,14 +258,7 @@ class TestLoadClassifications:
         # The map holds only what an index inherits. `data_type` is not inherited
         # since #437 — an index has its own — so the parent's is not read at all.
         assert "data_type" not in result[bed_key]
-        assert set(result[bed_key]) == {
-            "data_modality",
-            "assay_type",
-            "platform",
-            "reference_assembly",
-            "instrument_model",
-            "detail",
-        }
+        assert set(result[bed_key]) == {*INHERITED_FIELDS, "detail"}
 
     def test_skips_missing_files(self, tmp_path):
         """Missing files are silently skipped."""
@@ -501,7 +494,7 @@ class TestLoadClassifications:
 
     def test_gzi_inherits_from_its_fasta_parent(self, tmp_path):
         """End-to-end: a bgzip index takes its data_type from its own extension and the
-        other four dimensions from the `.fa.gz` it indexes (#526)."""
+        other dimensions from the `.fa.gz` it indexes (#526)."""
         output = run_index_producer(
             tmp_path,
             [
@@ -622,7 +615,7 @@ class TestLoadClassifications:
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
         # `data_type` does not depend on the parent being classified — the extension
-        # settles it (#437). The other five have nothing to inherit.
+        # settles it (#437). The others have nothing to inherit.
         assert field_status(cls, "data_type") == CLASSIFIED
         assert field_value(cls, "data_type") == "index"
         for fld in INHERITED_FIELDS:

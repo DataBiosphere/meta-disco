@@ -183,7 +183,7 @@ def _reason_for(record: dict) -> Reason | None:
     Reads the evidence ``rule_id`` on the classification fields, through
     ``models.field_evidence`` — the same layout normalization every other reader of a
     classification record uses, so this report sees a record's evidence wherever the
-    other readers would. Both producers stamp the same rule_id on every one of the five
+    other readers would. Both producers stamp the same rule_id on every one of the
     dimensions, so the first field carrying a recognized id settles it; scanning them
     all rather than assuming a fixed field keeps this correct if a producer ever marks
     a subset.

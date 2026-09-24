@@ -304,15 +304,6 @@ class RuleLoader:
         if len(docs) > 1 and docs[1]:
             validators = self._parse_validators(docs[1].get("validators", {}))
 
-        # Documents are positional, so a document removed from the layout is refused
-        # by name rather than read as the one now in its place. The assay-inference
-        # document is gone (#88): no rule reads another rule's answer. The Illumina
-        # instrument-prefix table is gone (#532): a serial-number prefix is a vendor
-        # numbering convention, not a statement of the model, so no rule reads it.
-        for removed, issue in (("assay_type_rules", "#88"), ("illumina_instruments", "#532")):
-            if any(isinstance(d, dict) and removed in d for d in docs):
-                raise ValueError(f"Rules file carries an `{removed}` document, removed in {issue}; delete it")
-
         # Third document: reference tables (both optional). Contig lengths drive
         # the coarse family detection; reference_builds is the finer build table
         # read by validators.reference_builds (#340). They share a document

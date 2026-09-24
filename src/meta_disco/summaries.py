@@ -91,10 +91,14 @@ def print_bam_summary(classifications: list[dict]):
     modalities = {}
     references = {}
     platforms = {}
+    instrument_models = {}
 
     for c in classifications:
         mod = field_label(c, "data_modality")
         modalities[mod] = modalities.get(mod, 0) + 1
+
+        model = field_label(c, "instrument_model")
+        instrument_models[model] = instrument_models.get(model, 0) + 1
 
         ref = field_label(c, "reference_assembly")
         references[ref] = references.get(ref, 0) + 1
@@ -107,6 +111,7 @@ def print_bam_summary(classifications: list[dict]):
     _print_field_table("Data Modalities", modalities)
     _print_field_table("Reference Assemblies", references)
     _print_field_table("Platforms", platforms)
+    _print_field_table("Instrument Models", instrument_models)
 
     _print_sample_evidence(
         classifications,
@@ -114,6 +119,7 @@ def print_bam_summary(classifications: list[dict]):
             ("Modality", "data_modality"),
             ("Reference", "reference_assembly"),
             ("Platform", "platform"),
+            ("Instrument", "instrument_model"),
         ],
     )
 
@@ -171,7 +177,6 @@ def print_fastq_summary(classifications: list[dict]):
     platforms = {}
     modalities = {}
     paired_count = 0
-    instrument_models = {}
     archive_sources = {}
 
     for c in classifications:
@@ -182,15 +187,11 @@ def print_fastq_summary(classifications: list[dict]):
         modalities[mod] = modalities.get(mod, 0) + 1
 
         # Dimensions above use field_label so unclassified files bucket as a
-        # sentinel. The scalar metadata fields have no sentinel convention, so they
-        # use field_value and are skipped when absent; so does instrument_model, a
-        # dimension (#532), whose table lists only the files with a model.
+        # sentinel; these scalar metadata fields have no sentinel convention, so
+        # they use field_value and are simply skipped when absent. No FASTQ has an
+        # instrument_model: no rule reads one from a read name (#532).
         if field_value(c, "is_paired_end"):
             paired_count += 1
-
-        model = field_value(c, "instrument_model")
-        if model:
-            instrument_models[model] = instrument_models.get(model, 0) + 1
 
         source = field_value(c, "archive_source")
         if source:
@@ -202,9 +203,6 @@ def print_fastq_summary(classifications: list[dict]):
     _print_field_table("Platforms", platforms, width=30)
     _print_field_table("Data Modalities", modalities, width=30)
 
-    if instrument_models:
-        _print_field_table("Instrument Models", instrument_models, width=30)
-
     if archive_sources:
         _print_field_table("Archive Sources", archive_sources, width=30)
 
@@ -214,7 +212,6 @@ def print_fastq_summary(classifications: list[dict]):
             ("Platform", "platform"),
             ("Modality", "data_modality"),
             ("Paired-end", "is_paired_end"),
-            ("Instrument", "instrument_model"),
             ("Archive", "archive_accession"),
         ],
     )

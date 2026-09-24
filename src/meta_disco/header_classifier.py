@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
 from .models import (
+    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -49,9 +50,9 @@ class FastqReadMetadata:
     file's reads: the paired-end flag (from read names, falling back to the
     filename), the Illumina instrument hint, and the ENA/SRA archive accession and
     source. The instrument *model* is not among them: it is the ``instrument_model``
-    dimension, and no rule reads it from a read name (#532). Both build sites in that function construct this and call
-    ``merge_into``, so the key set is declared in one place instead of two
-    literals that must be kept in sync.
+    dimension, and no rule reads it from a read name (#532). Both build sites in
+    that function construct this and call ``merge_into``, so the key set is
+    declared in one place instead of two literals that must be kept in sync.
     """
 
     is_paired_end: bool | None = None
@@ -347,14 +348,9 @@ def classify_from_fastq_header(
     # (reads are unaligned), matching the non-empty path (#131); the remaining
     # dimensions are not_classified.
     if not reads or not reads[0]:
-        entries = {
-            "data_modality": build_field_entry(None, status=NOT_CLASSIFIED),
-            "data_type": build_field_entry("reads", status=CLASSIFIED),
-            "platform": build_field_entry(None, status=NOT_CLASSIFIED),
-            "reference_assembly": build_field_entry(None, status=NOT_APPLICABLE),
-            "assay_type": build_field_entry(None, status=NOT_CLASSIFIED),
-            "instrument_model": build_field_entry(None, status=NOT_CLASSIFIED),
-        }
+        entries = {fld: build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS}
+        entries["data_type"] = build_field_entry("reads", status=CLASSIFIED)
+        entries["reference_assembly"] = build_field_entry(None, status=NOT_APPLICABLE)
         FastqReadMetadata().merge_into(entries)
         return entries
 

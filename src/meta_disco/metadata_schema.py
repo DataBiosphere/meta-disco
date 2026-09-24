@@ -154,7 +154,7 @@ def validation_failed_classifications(reasons: list[str]) -> dict:
     """Build a classifications dict marking every dimension ``not_classified``.
 
     A record that fails the input contract is written but classified as nothing:
-    each of the five dimensions carries ``not_classified`` status and the
+    each dimension carries ``not_classified`` status and the
     validation reasons as evidence. It is never dropped — a missing row is
     indistinguishable from a file that was never seen (issue #155).
 

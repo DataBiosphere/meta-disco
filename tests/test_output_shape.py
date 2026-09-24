@@ -466,8 +466,8 @@ def test_output_structural_contract(output):
     for ftype, record in _all_records(output):
         assert set(record) == RECORD_KEYS, f"{ftype}: {set(record) ^ RECORD_KEYS}"
         classifications = record["classifications"]
-        # The 5 dimensions must be present; some classifiers (fastq) also emit
-        # extra type-specific scalar keys (instrument_model, is_paired_end, ...)
+        # Every dimension must be present; some classifiers (fastq) also emit
+        # extra type-specific scalar keys (instrument_hint, is_paired_end, ...)
         # which the deep-equal golden pins but are outside the dimension contract.
         assert set(CLASSIFICATION_FIELDS) <= set(classifications), ftype
         for field in CLASSIFICATION_FIELDS:
@@ -528,8 +528,8 @@ def test_the_golden_carries_a_conflict(output):
 def test_output_values_in_vocabulary(output):
     """Every classification *dimension* value must be in the schema vocabulary.
 
-    Scoped to the five CLASSIFICATION_FIELDS (or null/sentinel). Type-specific
-    scalar keys some classifiers add (fastq's instrument_model, is_paired_end, ...)
+    Scoped to CLASSIFICATION_FIELDS (or null/sentinel). Type-specific
+    scalar keys some classifiers add (fastq's instrument_hint, is_paired_end, ...)
     are not enum-backed, so they have no vocabulary to check against.
     """
     violations = []

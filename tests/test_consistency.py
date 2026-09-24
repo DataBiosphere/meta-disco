@@ -8,11 +8,12 @@ from typing import TypedDict
 import pytest
 
 from meta_disco.consistency import check_record, load_rules, render_report
+from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.output_utils import iter_records
 
 RULES = load_rules()
 
-_DIMS = ("data_modality", "data_type", "reference_assembly", "assay_type", "platform")
+_DIMS = CLASSIFICATION_FIELDS
 
 
 class _Record(TypedDict):

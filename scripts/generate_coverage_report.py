@@ -55,7 +55,8 @@ DIMENSIONS = [
         "**Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` "
         "value that names exactly one model (#532); a read-name serial prefix is a "
         "vendor numbering convention and is not read. Most files carry no such value, "
-        "so the high not-classified rate is expected; the sources supply most models.",
+        "so the high not-classified rate is expected. This report reads inference "
+        "only; the submitter tables, which reconcile reads, name models far more often.",
     ),
 ]
 

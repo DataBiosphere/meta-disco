@@ -715,22 +715,6 @@ def test_every_rule_that_rules_out_a_platform_rules_out_an_instrument_model():
     assert not missing, f"rules stamp platform not_applicable but not instrument_model: {missing}"
 
 
-@pytest.mark.parametrize(("document", "issue"), [("assay_type_rules", "#88"), ("illumina_instruments", "#532")])
-def test_loader_refuses_a_removed_document_by_name(tmp_path, document, issue):
-    """Documents are positional, so a removed one would be read as the one now in its place."""
-    rule = {
-        "id": "r",
-        "tier": 1,
-        "scope": "extension",
-        "when": {"extensions": [".bam"]},
-        "then": {"data_type": "alignments"},
-    }
-    path = tmp_path / "rules.yaml"
-    path.write_text(yaml.safe_dump_all([{"rules": [rule]}, {"validators": {}}, {document: []}]), encoding="utf-8")
-    with pytest.raises(ValueError, match=f"`{document}` document, removed in {issue}"):
-        RuleLoader(path).load()
-
-
 def test_loader_rejects_unknown_when_key(tmp_path):
     path = _write_rules_file(
         tmp_path,

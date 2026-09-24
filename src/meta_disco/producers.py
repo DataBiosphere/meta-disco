@@ -32,7 +32,7 @@ INDEX_TO_PARENT = {
     # `.fai` and `.idx` are in the `index_file` rule's extension list — the engine's
     # backstop for an index this producer misses — and were missing
     # here, so those files never reached this producer at all. Declaring them lets the
-    # four dimensions a parent supplies be inherited rather than left to the catch-all,
+    # dimensions a parent supplies be inherited rather than left to the catch-all,
     # which sees only the extension.
     ".fai": [".fa.gz", ".fasta.gz", ".fasta", ".fa", ".fna.gz", ".fna"],
     # Declared as a FASTA index, as every corpus `.gzi` is (#526), so an unmatched one

@@ -190,7 +190,7 @@ rules:
   # file named for CHM13 *is* associated with CHM13 and the stamp — terminal in the
   # evaluator until #523 — was blocking `filename_ref_*` from saying so. It left `data_modality`
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
-  # five dimensions a parent supplies all behave alike now, and none is stamped.
+  # dimensions a parent supplies all behave alike now, and none is stamped.
   #
   # They *do* apply to an index file. The matched path in `classify_index_files`
   # proves it by inheriting `genomic` / `CHM13` / `ILLUMINA` / `WGS` from the parent;
@@ -774,7 +774,9 @@ rules:
   # Instrument model from the @RG PM field (#532). The SAM spec defines PM as the
   # platform model but leaves its text free, so each rule matches one whole value
   # that names exactly one ENA/SRA model. Values that name several are not read:
-  # `SEQUELII` (Sequel II and Sequel IIe both), `NovaSeq` (a family), and the ONT
+  # `SEQUELII` (Sequel II and Sequel IIe both), `SEQUEL` (written on Sequel II runs
+  # too: in the corpus it sits on m64 movies, and a submitter says Sequel II on 124
+  # such files), `NovaSeq` (a family), and the ONT
   # flow-cell positions and device serials (`1A`, `PC48B200`) written into the
   # same field. Nor is any read-name serial prefix (`A00297`, `m84046`): that is a
   # vendor numbering convention no standard states, not the file naming its model.
@@ -790,18 +792,6 @@ rules:
     then:
       instrument_model: Revio
     rationale: "PM:REVIO — PacBio's software names the Revio instrument"
-
-  - id: instrument_model_sequel
-    tier: 3
-    scope: header
-    when:
-      extensions: [".bam", ".cram"]
-      header_section: "@RG"
-      header_field: "PM"
-      header_pattern: "^SEQUEL$"
-    then:
-      instrument_model: Sequel
-    rationale: "PM:SEQUEL — PacBio's software names the (first) Sequel instrument; SEQUELII is a different value and not matched"
 
   - id: instrument_model_novaseq_x
     tier: 3

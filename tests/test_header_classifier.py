@@ -19,7 +19,15 @@ from meta_disco.header_classifier import (
     parse_ont_read_name,
     parse_pacbio_read_name,
 )
-from meta_disco.models import CLASSIFIED, CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    CLASSIFIED,
+    CONFLICT,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    field_status,
+    field_value,
+)
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 
@@ -254,22 +262,14 @@ class TestFastqReadMetadata:
         }
 
     def test_empty_input_path_produces_ten_keys_in_order(self):
-        """The empty-reads path returns the six entry keys then the four scalars.
+        """The empty-reads path returns the dimension entries then the four scalars.
 
         Asserts insertion order, not just the key set: the output is json-dumped
         to NDJSON and the PR's contract is byte-identical output, so key order is
         part of what must not regress.
         """
         result = classify_from_fastq_header([])
-        assert list(result.keys()) == [
-            "data_modality",
-            "data_type",
-            "platform",
-            "reference_assembly",
-            "assay_type",
-            "instrument_model",
-            *self.SCALAR_KEYS,
-        ]
+        assert list(result.keys()) == [*CLASSIFICATION_FIELDS, *self.SCALAR_KEYS]
         for key in self.SCALAR_KEYS:
             assert result[key] is None
 
@@ -549,7 +549,7 @@ class TestBamCramClassification:
         ("pl", "pm", "model"),
         [
             pytest.param("PACBIO", "REVIO", "Revio", id="REVIO names Revio"),
-            pytest.param("PACBIO", "SEQUEL", "Sequel", id="SEQUEL names the first Sequel"),
+            pytest.param("PACBIO", "SEQUEL", None, id="SEQUEL is written on Sequel II runs too"),
             pytest.param("ILLUMINA", "NovaSeq X", "Illumina NovaSeq X", id="NovaSeq X"),
             pytest.param("PACBIO", "SEQUELII", None, id="SEQUELII is Sequel II or IIe"),
             pytest.param("ILLUMINA", "NovaSeq", None, id="NovaSeq is a family"),

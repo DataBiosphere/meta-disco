@@ -40,7 +40,7 @@ def write_run(run_dir: Path, records, fname: str = OUTPUT_FILE) -> Path:
 
 
 def classifications(**dims) -> dict:
-    """The five-dimension ``classifications`` block, each entry from ``build_field_entry``.
+    """The ``classifications`` block, one entry per dimension, each entry from ``build_field_entry``.
 
     A dimension not named, or named as ``None``, is ``not_classified``. Otherwise it takes a real value
     or a status label from ``models.STATUS_LABELS`` (``not_classified``,

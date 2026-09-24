@@ -34,6 +34,7 @@ from meta_disco.file_name import FileName
 from meta_disco.file_types import BAM_CONFIG, FASTA_CONFIG, FASTQ_CONFIG, VCF_CONFIG
 from meta_disco.header_classifier import classify_from_gfa_segment_tags
 from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     FileInfo,
@@ -89,7 +90,7 @@ def assert_output_format(record):
     assert "md5sum" in record, "Missing md5sum"
     assert "classifications" in record, "Missing classifications wrapper"
     cls = record["classifications"]
-    for field in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+    for field in CLASSIFICATION_FIELDS:
         assert field in cls, f"Missing classification field: {field}"
         entry = cls[field]
         assert isinstance(entry, dict), f"{field} should be dict"
@@ -385,7 +386,7 @@ class TestRuleEngineE2E:
             pytest.param("HG01928.paternal.f1_assembly.hap1.bed", {"data_modality": "genomic"}, id="bed assembly qc"),
             # A checksum file is a checksum — a term the vocabulary has (#437). The rule used
             # to stamp `data_type: not_applicable`, asserting the file has no kind while
-            # `data_type_enum` carried a word for its kind. The other four still do not
+            # `data_type_enum` carried a word for its kind. The others still do not
             # apply: a checksum is about a file, not about any data of its own.
             pytest.param(
                 "sample.md5",
@@ -395,11 +396,12 @@ class TestRuleEngineE2E:
                     "reference_assembly": NOT_APPLICABLE,
                     "assay_type": NOT_APPLICABLE,
                     "platform": NOT_APPLICABLE,
+                    "instrument_model": NOT_APPLICABLE,
                 },
                 id="checksum file is data_type checksum, the rest not_applicable",
             ),
             # An index extension claims the kind and stays silent on the rest (#437). The
-            # four a parent supplies do apply to an index file — the matched path in
+            # dimensions a parent supplies do apply to an index file — the matched path in
             # `classify_index_files` proves it by inheriting them — so a rule that cannot
             # see the parent leaves them open rather than asserting they cannot apply.
             pytest.param(
@@ -813,7 +815,7 @@ class TestDerivedFileTierPrecedence:
     one.
     """
 
-    # --- Index files: the four a parent supplies stay open (#106, #437) ---
+    # --- Index files: the dimensions a parent supplies stay open (#106, #437) ---
 
     def test_index_with_reference_in_filename(self):
         """A filename reference reaches an index file; nothing stamps over it."""
@@ -833,7 +835,7 @@ class TestDerivedFileTierPrecedence:
         """No hint, so nothing claims it: applicable and undetermined, not inapplicable."""
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
         assert result.data_type == "index"
-        for field in ("reference_assembly", "data_modality", "assay_type", "platform"):
+        for field in (f for f in CLASSIFICATION_FIELDS if f != "data_type"):
             assert result.status_of(field) == NOT_CLASSIFIED, f"{field} should be open"
 
     # --- Checksum files: `data_type` is `checksum`, the rest not_applicable — even
