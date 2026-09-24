@@ -947,6 +947,14 @@ class TestConflictingReferenceRules:
         assert len(ref_evidence) >= 2
 
 
+# The categories #526 added for reference-bearing kinds. Checked against `EXTENSION_MAP` so a
+# renamed category fails the test below instead of leaving it parametrized over nothing.
+_REFERENCE_BEARING_CATEGORIES_526 = frozenset(
+    {"genome_alignment", "annotation", "sequence_dictionary", "chrom_sizes", "pangenome_index"}
+)
+assert _REFERENCE_BEARING_CATEGORIES_526.issubset(EXTENSION_MAP.values())
+
+
 class TestReferenceRuleFileKinds:
     """The four reference rules claim only on the file kinds their include list names (#523)."""
 
@@ -1003,6 +1011,17 @@ class TestReferenceRuleFileKinds:
     def test_other_kind_is_not_claimed(self, engine, filename):
         result = engine.classify_extended(FileInfo.from_filename(filename))
         assert not any(r.startswith("filename_ref_") for r in result.rules_matched)
+
+    @pytest.mark.parametrize(
+        "extension",
+        sorted(ext for ext, category in EXTENSION_MAP.items() if category in _REFERENCE_BEARING_CATEGORIES_526),
+    )
+    def test_every_extension_of_a_reference_bearing_category_is_claimed(self, engine, extension):
+        """Every extension in the five categories #526 added is in the include list, read off
+        `EXTENSION_MAP`, so one added to them without the list fails here rather than claiming
+        nothing. (`.fna` and `.gzi` joined existing categories and are pinned by name above.)"""
+        result = engine.classify_extended(FileInfo.from_filename(f"x.grch38{extension}"))
+        assert result.reference_assembly == "GRCh38"
 
     def test_chain_between_two_references_is_a_conflict(self, engine):
         """A liftover chain names both of the assemblies it relates, so the two tier-2

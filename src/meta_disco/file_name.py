@@ -170,10 +170,9 @@ EXTENSION_MAP: dict[str, str] = {
     ".fasta": "sequence",
     ".fa": "sequence",
     ".fna": "sequence",
-    # Files that hold coordinates on a reference but are none of the kinds above
-    # (#526). A chain, PAF, delta or HAL file relates two coordinate spaces, most often
-    # a de novo assembly to a reference; the vg indexes (`.snarls` ... `.trans`) index a
-    # pangenome graph rather than being one, which is why they are not `pangenome`.
+    # Recognized so the reference rules can name them (#526); no producer routes on
+    # these categories. The vg indexes (`.snarls` ... `.trans`) index a graph rather
+    # than being one, so they are not `pangenome`.
     ".chain": "genome_alignment",
     ".paf": "genome_alignment",
     ".delta": "genome_alignment",

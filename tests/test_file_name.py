@@ -160,7 +160,7 @@ class TestFormat:
     the provenance recorded in format_source. Set together or both None."""
 
     def test_spelling_and_compression_variants_collapse_to_one_format(self):
-        """The point of format: six spellings, one identity."""
+        """The point of format: every spelling and compression variant, one identity."""
         for name in ("genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz", "genome.fna", "genome.fna.gz"):
             fn = parse(name)
             assert fn.format is Format.FASTA
