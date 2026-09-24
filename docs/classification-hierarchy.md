@@ -85,7 +85,7 @@ file_format (extension)
 
 ---
 
-## Sequences (.fasta, .fasta.gz, .fa, .fa.gz)
+## Sequences (.fasta, .fasta.gz, .fa, .fa.gz, .fna, .fna.gz)
 
 **data_type**: `sequence`, `assembly`, `assembly.reference`
 
@@ -124,7 +124,7 @@ PGGB and single-sample assembly graphs stay `pangenome`.
 
 **reference_assembly**: `GRCh38/GRCh37/CHM13` ← filename (shared `filename_ref_*` rules; e.g. an `mc-grch38` graph's coordinate system). Not derived from graph content: no sequence lengths are parsed, so contig-length detection cannot run, and the stable names in the fetched head (`chr1`) are shared between GRCh38 and CHM13.
 
-**Coverage**: Extension-driven, so all listed formats classify. Content inspection covers the text GFA formats (`.gfa`, `.gfa.gz`, `.rgfa`, `.rgfa.gz`); the binary vg/GBWT formats (`.gbz`, `.vg`, `.gbwt`, `.xg`) classify from extension and filename alone. Auxiliary vg indices (`.min`, `.dist`, `.snarls`, `.gg`) are out of scope (issue #144). Single- vs multi-sample graph distinction is deferred (issue #147).
+**Coverage**: Extension-driven, so all listed formats classify. Content inspection covers the text GFA formats (`.gfa`, `.gfa.gz`, `.rgfa`, `.rgfa.gz`); the binary vg/GBWT formats (`.gbz`, `.vg`, `.gbwt`, `.xg`) classify from extension and filename alone. Auxiliary vg indices (`.snarls`, `.dist`, `.min`, `.gg`, `.hapl`, `.trans`) are recognized and claim only a `reference_assembly` from the filename (#526); the pangenome rules give them no `data_type` (issue #144 left them out). Single- vs multi-sample graph distinction is deferred (issue #147).
 
 ---
 
@@ -208,7 +208,7 @@ RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
 | .idat | array_signal | epigenomic.methylation | Illumina methylation arrays |
 | .svs | images | imaging.histology | Whole-slide histology |
 | .png/.jpg/.jpeg/.tiff/.tif | images | not_applicable | Derived plots/QC |
-| .bai/.crai/.tbi/.csi/.pbi/.fai/.idx | index | _(inherited from parent)_ | Index files — `data_type` is the file's own kind, the rest describe the data it points into (#437) |
+| .bai/.crai/.tbi/.csi/.pbi/.fai/.gzi/.idx | index | _(inherited from parent)_ | Index files — `data_type` is the file's own kind, the rest describe the data it points into (#437) |
 | .md5 | checksum | not_applicable | Checksums |
 | .log | log | not_applicable | Log files |
 

@@ -35,6 +35,9 @@ INDEX_TO_PARENT = {
     # four dimensions a parent supplies be inherited rather than left to the catch-all,
     # which sees only the extension.
     ".fai": [".fa.gz", ".fasta", ".fa"],
+    # A bgzip index names the compressed file it indexes; in the corpus every one is a
+    # FASTA's (#526).
+    ".gzi": [".fa.gz", ".fasta.gz"],
     ".idx": [".vcf"],
 }
 

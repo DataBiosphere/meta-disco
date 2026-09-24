@@ -963,6 +963,21 @@ class TestReferenceRuleFileKinds:
             ("sample.GRCh38.bam.bai", "filename_ref_grch38", "GRCh38"),
             # An archive named for its inner format describes that content (#523).
             ("x.GRCh38.bam.tar.gz", "filename_ref_grch38", "GRCh38"),
+            # Kinds the name parser learned in #526, one name from the corpus each.
+            ("HG03050_pat_hprc_r2_v1.0.1_vs_CHM13.chain.gz", "filename_ref_chm13", "CHM13"),
+            ("hprc-v1.0-pggb.all.vs.grch38.untangle-m10000-s0-j0.paf.gz", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-pggb.all.vs.grch38.untangle-m10000-s0-j0.delta.gz", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-mc-grch38.hal", "filename_ref_grch38", "GRCh38"),
+            ("CHM13.combined.v4.gff3.gz", "filename_ref_chm13", "CHM13"),
+            ("chm13v2.0.XY.dict", "filename_ref_chm13", "CHM13"),
+            ("GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz", "filename_ref_grch38", "GRCh38"),
+            ("grch38.sizes", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-mc-grch38-maxdel.10mb.snarls", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-mc-grch38.dist", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-mc-chm13-minaf.0.1.min", "filename_ref_chm13", "CHM13"),
+            ("hprc-v1.0-mc-chm13-minaf.0.1.gg", "filename_ref_chm13", "CHM13"),
+            ("hprc-v2.0-mc-grch38.hapl", "filename_ref_grch38", "GRCh38"),
+            ("hprc-v1.0-mc-chm13.trans.gz", "filename_ref_chm13", "CHM13"),
         ],
     )
     def test_reference_bearing_kind_is_claimed(self, engine, filename, rule_id, expected):
@@ -979,15 +994,23 @@ class TestReferenceRuleFileKinds:
             "chm13v2.0.XY.tar.gz",
             "NA19331.CHM13v2.chrY.samtools.stats.txt",
             "chm13_ash_fixed.merged.tsv",
-            "HG03050_pat_hprc_r2_v1.0.1_vs_CHM13.chain.gz",
-            "CHM13.combined.v4.gff3.gz",
             "sample.GRCh38.fastq.gz",
+            # A bgzip index's reference is its parent's, inherited by the index producer.
+            "GCA_000001405.15_GRCh38_no_alt_analysis_set.PanSN.fa.gz.gzi",
             "all_hg38_ns.psam",
         ],
     )
     def test_other_kind_is_not_claimed(self, engine, filename):
         result = engine.classify_extended(FileInfo.from_filename(filename))
         assert not any(r.startswith("filename_ref_") for r in result.rules_matched)
+
+    def test_chain_between_two_references_is_a_conflict(self, engine):
+        """A liftover chain names both of the assemblies it relates, so the two tier-2
+        claims disagree and neither is taken (#526)."""
+        result = engine.classify_extended(FileInfo.from_filename("t2t-chm13-v1.0.hg38.over.chain"))
+        assert {"filename_ref_grch38", "filename_ref_chm13"} <= set(result.rules_matched)
+        assert result.reference_assembly is None
+        assert any(e.get("marker") == "conflict" for e in result.field_evidence["reference_assembly"])
 
     @pytest.mark.parametrize(
         ("filename", "claimed"),

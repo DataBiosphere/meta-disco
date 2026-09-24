@@ -85,7 +85,7 @@ FASTQ_CONFIG = FileTypeConfig(
 
 FASTA_CONFIG = FileTypeConfig(
     name="fasta",
-    extensions=(".fasta", ".fasta.gz", ".fa", ".fa.gz"),
+    extensions=(".fasta", ".fasta.gz", ".fa", ".fa.gz", ".fna", ".fna.gz"),
     fetcher=fetch_fasta_headers,
     classifier=classify_from_fasta_header,
 )

@@ -128,6 +128,13 @@ def _classified_record(
         pytest.param("sample.cram.crai", ".crai", "sample.cram", True, id="cram.crai finds cram"),
         pytest.param("movie.subreads.bam.pbi", ".pbi", "movie.subreads.bam", False, id="pbi (PacBio index) finds bam"),
         pytest.param("HG03652.regions.bed.gz.csi", ".csi", "HG03652.regions.bed.gz", True, id="csi finds bed.gz"),
+        pytest.param(
+            "NA20799_hap2_hprc_r2_v1.0.1.fa.gz.gzi",
+            ".gzi",
+            "NA20799_hap2_hprc_r2_v1.0.1.fa.gz",
+            True,
+            id="gzi (bgzip index) finds fa.gz",
+        ),
         # Pattern 2: the index extension replaces the parent's (rare); no .bam in the name.
         pytest.param("sample.bai", ".bai", "sample.bam", False, id="pattern 2 replaces the extension"),
         pytest.param(
