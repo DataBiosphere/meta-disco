@@ -815,7 +815,7 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 19,807 | 0 | 19,807 | 0 | platform.illumina_novaseq_6000 | `any` | `'Illumina NovaSeq 6000'` | platform: ILLUMINA | An Illumina instrument model; the model implies the platform. |
+| 14,805 | 0 | 14,805 | 0 | platform.illumina_novaseq_6000 | `any` | `'Illumina NovaSeq 6000'` | platform: ILLUMINA | An Illumina instrument model; the model implies the platform. |
 | 9,600 | 0 | 9,600 | 0 | platform.illumina | `any` | `'ILLUMINA' · 'illumina'` | platform: ILLUMINA | Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling. |
 | 1,688 | 0 | 1,688 | 0 | platform.pacbio_smrt | `any` | `'PACBIO_SMRT'` | platform: PACBIO | SRA's platform value for PacBio. |
 | 1,391 | 0 | 1,391 | 0 | platform.ont | `any` | `'ont'` | platform: ONT | Spelled as our term, as a table-name span. Identity by ruling. |

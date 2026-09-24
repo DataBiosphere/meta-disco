@@ -655,31 +655,27 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
 
     Driven by the evidence, not the rows (5.2): a value with no row and a value with a
     seeded row are listed the same way; a value whose selected row is an authored no-op
-    is not listed. ``files`` counts distinct target key values within each file and sums
-    across files — a group's table names one current file per dataset in the generation
-    layout, so the sum is exact there, and the per-file fold keeps memory at the largest
-    file rather than the corpus.
+    is not listed. ``files`` counts distinct target key values across every evidence file
+    contributing to a line or a rule's source type, so a file seen through two evidence files
+    (two catalog versions of a dataset, or two tables a rule matches in) is counted once. The
+    sets are held for the whole pass, which costs memory in proportion to the evidence lines.
     """
-    files: dict[_Group, int] = {}
+    targets: dict[_Group, set[str]] = {}
     row_ids: dict[_Group, str | None] = {}
-    usage: dict[str, dict[str, int]] = {r.id: {} for r in table.rows if r.authored}
+    matched: dict[str, dict[str, set[str]]] = {r.id: {} for r in table.rows if r.authored}
     for path in _current_paths(evidence_root, datasets):
         source_type = read_envelope(path).source_type
-        targets: dict[_Group, set[str]] = {}
-        matched: dict[str, set[str]] = {}
         for entry in iter_evidence(path):
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
-                matched.setdefault(row.id, set()).add(entry.target_key_value)
+                matched[row.id].setdefault(source_type, set()).add(entry.target_key_value)
                 continue
             src = entry.source
             group = (source_type, src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
             targets.setdefault(group, set()).add(entry.target_key_value)
             row_ids.setdefault(group, None if row is None else row.id)
-        for group, seen in targets.items():
-            files[group] = files.get(group, 0) + len(seen)
-        for row_id, seen in matched.items():
-            usage[row_id][source_type] = usage[row_id].get(source_type, 0) + len(seen)
+    files = {group: len(seen) for group, seen in targets.items()}
+    usage = {row_id: {t: len(seen) for t, seen in by_type.items()} for row_id, by_type in matched.items()}
     # A group's fields are QueueEntry's first seven, in order.
     entries = [QueueEntry(*group, files=count, row_id=row_ids[group]) for group, count in files.items()]
     entries.sort(

@@ -1159,3 +1159,20 @@ def test_the_queue_and_the_mappings_are_organized_by_slot(tmp_path, two_sources)
     mappings = render_queue(found.queue, two_sources, None, found.mappings).split("## Authored mappings", 1)[1]
     assert mappings.index("### platform") < mappings.index("### reference_assembly")
     assert "| rule |" in mappings and "| rule it would use |" in submitter
+
+
+def test_a_file_seen_through_two_evidence_files_is_counted_once(tmp_path, evidence_root):
+    """Two current files for one dataset (two catalog versions, or two tables one rule matches in) repeat a key."""
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", v, "drs://1") for v in ("Revio", "Mystery")]
+    )
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "kinnex", [entry("platform", v, "drs://1", table="kinnex") for v in ("Revio",)]
+    )
+    found = review(evidence_root, table)
+    assert {m.row.id: dict(m.files) for m in found.mappings} == {"platform.revio": {"repository_metadata": 1}}
