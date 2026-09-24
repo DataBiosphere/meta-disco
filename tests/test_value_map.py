@@ -1009,6 +1009,18 @@ def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():
     """An instrument value declares both slots (contract 3.10), the autofilled numbers only the platform (#532)."""
     table = load_value_map()
     models = {row.id: row.declares for row in table.rows if "instrument_model" in row.declares}
+    assert sorted(models) == [
+        "platform.gridion",
+        "platform.illumina_nextseq_2000",
+        "platform.illumina_novaseq_6000",
+        "platform.illumina_novaseq_x",
+        "platform.minion",
+        "platform.ont_gridion_x5",
+        "platform.ont_promethion_2_solo",
+        "platform.promethion",
+        "platform.revio",
+        "platform.sequel_ii",
+    ]
     assert models["platform.illumina_novaseq_6000"] == {
         "platform": "ILLUMINA",
         "instrument_model": "Illumina NovaSeq 6000",

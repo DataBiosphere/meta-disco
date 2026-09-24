@@ -172,6 +172,7 @@ Each record in `classifications` contains every classification dimension:
   "platform": "ILLUMINA",
   "reference_assembly": "CHM13",
   "assay_type": "WGS",
+  "instrument_model": null,
   "confidence": 0.90,
   "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller"],
   "evidence": [

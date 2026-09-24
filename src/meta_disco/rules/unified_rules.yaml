@@ -791,7 +791,7 @@ rules:
       header_pattern: "^REVIO$"
     then:
       instrument_model: Revio
-    rationale: "PM:REVIO — PacBio's software names the Revio instrument"
+    rationale: "@RG PM is REVIO, which names the PacBio Revio"
 
   - id: instrument_model_novaseq_x
     tier: 3
