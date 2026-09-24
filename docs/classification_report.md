@@ -160,30 +160,53 @@ Each JSON file contains:
 
 #### Classification Record Structure
 
-Each record in `classifications` contains every classification dimension:
+Each record carries the file's identity and a `classifications` object with one
+`{value, status, evidence}` entry per dimension; `value` is null unless `status` is
+`classified`. An abridged record from the output-shape golden fixture
+(`tests/fixtures/golden/expected_output.json`), with two of the six entries shown
+in full:
 
 ```json
 {
-  "file_name": "HG01874.chr17.hc.vcf.gz",
-  "md5sum": "e1dca89aef536083f15093c39a0daa8f",
-  "file_size": 158571384,
-  "data_modality": "genomic",
-  "data_type": "variant_calls",
-  "platform": "ILLUMINA",
-  "reference_assembly": "CHM13",
-  "assay_type": "WGS",
-  "instrument_model": null,
-  "confidence": 0.90,
-  "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller"],
-  "evidence": [
-    {
-      "rule_id": "vcf_contig_length",
-      "matched": "4 contigs matched CHM13 chromosome lengths",
-      "classification": "CHM13",
-      "confidence": 0.98,
-      "rationale": "Chromosome lengths are unique to each reference assembly..."
+  "file_name": "sample.vcf.gz",
+  "file_format": ".vcf.gz",
+  "file_size": 5000,
+  "md5sum": "cccccccccccccccccccccccccccccccc",
+  "entry_id": "g-vcf-1",
+  "file_id": "g-file-c",
+  "drs_uri": "drs://golden/v2_g-object-c",
+  "dataset_title": "GOLDEN_FIXTURE",
+  "derived_from": null,
+  "classifications": {
+    "data_modality": {
+      "value": "genomic",
+      "status": "classified",
+      "evidence": [
+        {
+          "rule_id": "variant_default_genomic",
+          "reason": "VCF files contain variant calls (genomic data)",
+          "value": "genomic",
+          "tier": 1,
+          "source_type": "filename_rule"
+        }
+      ]
+    },
+    "data_type": {"value": "variants", "status": "classified", "evidence": ["..."]},
+    "platform": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "reference_assembly": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "assay_type": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "instrument_model": {
+      "value": null,
+      "status": "not_classified",
+      "evidence": [
+        {
+          "marker": "not_classified",
+          "reason": "No rule determined a value for instrument_model",
+          "status": "not_classified"
+        }
+      ]
     }
-  ]
+  }
 }
 ```
 
