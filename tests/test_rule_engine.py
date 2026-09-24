@@ -142,7 +142,9 @@ class TestFormatMatching:
     were migrated to `format: FASTA`, so these both prove the new keying works
     and pin the migration as behavior-preserving."""
 
-    @pytest.mark.parametrize("name", ["genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz"])
+    @pytest.mark.parametrize(
+        "name", ["genome.fa", "genome.fasta", "genome.fa.gz", "genome.fasta.gz", "genome.fna", "genome.fna.gz"]
+    )
     def test_format_keyed_rule_matches_every_spelling(self, engine, name):
         """One `format: FASTA` rule fires for every FASTA spelling/compression
         variant — the collapse the extension list used to enumerate by hand."""

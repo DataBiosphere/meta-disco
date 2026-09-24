@@ -439,14 +439,14 @@ class TestRuleEngineE2E:
                 {"data_modality": NOT_APPLICABLE, "platform": NOT_APPLICABLE, "reference_assembly": NOT_APPLICABLE},
                 id="png derived",
             ),
-            # All seven index extensions the rule declares, not the five this once covered (#437).
+            # Every index extension the rule declares, not the five this once covered (#437).
             *[
                 pytest.param(
                     f"sample{ext}",
                     {"data_type": "index", "data_modality": NOT_CLASSIFIED},
                     id=f"{ext} is index with modality open",
                 )
-                for ext in (".bai", ".crai", ".tbi", ".csi", ".pbi", ".fai", ".idx")
+                for ext in (".bai", ".crai", ".tbi", ".csi", ".pbi", ".fai", ".gzi", ".idx")
             ],
             pytest.param("sample.hg38.regions.bed", {"reference_assembly": "GRCh38"}, id="BED with hg38 in the name"),
             pytest.param(
@@ -465,7 +465,7 @@ class TestRuleEngineE2E:
                     {"data_type": "sequence", "platform": NOT_APPLICABLE, "assay_type": NOT_APPLICABLE},
                     id=f"FASTA base rule for {ext}",
                 )
-                for ext in (".fa", ".fasta", ".fa.gz", ".fasta.gz")
+                for ext in (".fa", ".fasta", ".fa.gz", ".fasta.gz", ".fna", ".fna.gz")
             ],
             pytest.param(
                 "HG00673.paternal.f1_assembly_v1.fa.gz",
