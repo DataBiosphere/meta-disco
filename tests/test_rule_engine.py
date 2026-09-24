@@ -951,21 +951,22 @@ class TestReferenceRuleFileKinds:
     """The four reference rules claim only on the file kinds their include list names (#523)."""
 
     @pytest.mark.parametrize(
-        "filename",
+        ("filename", "rule_id", "expected"),
         [
-            "HG02080.maternal.GRCh38_no_alt.bam",
-            "HG02080vCHM13_20200921_wm_ONT.sort.cram",
-            "dbSNP.build_154.GRCh38.chr2.vcf.gz",
-            "chm13v2.0.chrY.issues.bed",
-            "chm13v2.0.XX.fasta",
-            "hprc-v1.0-mc-grch38.gbz",
-            "all_hg38_ns.pgen",
-            "sample.GRCh38.bam.bai",
+            ("HG02080.maternal.GRCh38_no_alt.bam", "filename_ref_grch38", "GRCh38"),
+            ("HG02080vCHM13_20200921_wm_ONT.sort.cram", "filename_ref_chm13", "CHM13"),
+            ("dbSNP.build_154.GRCh38.chr2.vcf.gz", "filename_ref_grch38", "GRCh38"),
+            ("grch37_vntr.bed", "filename_ref_grch37", "GRCh37"),
+            ("chm13v2.0.XX.fasta", "filename_ref_chm13", "CHM13"),
+            ("hprc-v1.0-mc-grch38.gbz", "filename_ref_grch38", "GRCh38"),
+            ("all_hg38_ns.pgen", "filename_ref_grch38", "GRCh38"),
+            ("sample.GRCh38.bam.bai", "filename_ref_grch38", "GRCh38"),
         ],
     )
-    def test_reference_bearing_kind_is_claimed(self, engine, filename):
+    def test_reference_bearing_kind_is_claimed(self, engine, filename, rule_id, expected):
         result = engine.classify_extended(FileInfo.from_filename(filename))
-        assert result.status_of("reference_assembly") == CLASSIFIED
+        assert rule_id in result.rules_matched
+        assert result.reference_assembly == expected
 
     @pytest.mark.parametrize(
         "filename",
@@ -979,12 +980,12 @@ class TestReferenceRuleFileKinds:
             "HG03050_pat_hprc_r2_v1.0.1_vs_CHM13.chain.gz",
             "CHM13.combined.v4.gff3.gz",
             "sample.GRCh38.fastq.gz",
+            "all_hg38_ns.psam",
         ],
     )
     def test_other_kind_is_not_claimed(self, engine, filename):
         result = engine.classify_extended(FileInfo.from_filename(filename))
-        evidence = result.field_evidence.get("reference_assembly", [])
-        assert not any(e.get("rule_id", "").startswith("filename_ref_") for e in evidence)
+        assert not any(r.startswith("filename_ref_") for r in result.rules_matched)
 
     @pytest.mark.parametrize(
         ("filename", "claimed"),
@@ -992,13 +993,30 @@ class TestReferenceRuleFileKinds:
             ("IBS.3.pgen", True),
             ("ALL.chr19.genotypes.vcf.bgz", True),
             ("CHS.19.log", False),
+            ("PJL.19.psam", False),
             ("sequencing_dataset.tsv", False),
         ],
     )
     def test_dataset_rule_claims_only_listed_kinds(self, engine, filename, claimed):
         info = FileInfo.from_filename(filename, dataset_title="ANVIL_1000G_PRIMED_data_model")
-        evidence = engine.classify_extended(info).field_evidence.get("reference_assembly", [])
-        assert any(e.get("rule_id") == "dataset_1000g_reference" for e in evidence) is claimed
+        assert ("dataset_1000g_reference" in engine.classify_extended(info).rules_matched) is claimed
+
+
+class TestSameTierNotApplicableConflicts:
+    """A not_applicable and a value from two same-tier rules are a conflict, not a
+    not_applicable win (#523). No corpus file hit either case when the terminal rule
+    was removed; these pin the outcome for names that would."""
+
+    def test_assembly_fasta_named_for_a_reference(self, engine):
+        # fasta_assembly_filename says not_applicable; filename_ref_chm13 says CHM13.
+        result = engine.classify_extended(FileInfo.from_filename("HG002.CHM13.hap1.fasta"))
+        assert result.status_of("reference_assembly") == CONFLICT
+
+    def test_stats_file_named_for_expression(self, engine):
+        # text_stats says not_applicable; text_expression says a value.
+        result = engine.classify_extended(FileInfo.from_filename("gene_expression.stats.txt"))
+        assert result.status_of("data_modality") == CONFLICT
+        assert result.status_of("data_type") == CONFLICT
 
 
 class TestConflictingClassificationFields:
@@ -1284,7 +1302,7 @@ class TestClaimStatesDoNotResolve:
 
     def test_declined_is_distinguishable_from_not_applicable_and_from_absence(self):
         # All three leave the field without a value; the evidence tells them apart.
-        # not_applicable is a positive determination and is terminal in resolution;
+        # not_applicable is a positive determination and competes by tier;
         # declined asserts nothing; an absent claim leaves nothing behind at all.
         declined = ExtendedClassificationResult()
         declined.add_claim(

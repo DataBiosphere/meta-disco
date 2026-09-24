@@ -34,7 +34,8 @@
 #
 # 6. RESOLUTION: After all rules run, each field resolves from its claims: they
 #    agree, or the highest tier wins, or same-tier claims disagree and the field is
-#    a conflict. A not_applicable at the top tier wins over a value there.
+#    a conflict. A not_applicable is a declaration like a value: it wins only by
+#    tier, and against a value at its own tier the field is a conflict (#523).
 #
 # 7. REASONS: Each matching rule adds its rationale to the reasons list.
 #
@@ -486,7 +487,9 @@ rules:
   # A name or dataset that mentions a reference says nothing about whether the
   # file can have one, so these four rules claim only on the file kinds that hold
   # coordinates on a reference: alignments, variants, intervals and signal tracks,
-  # sequence, pangenome graphs, PLINK genotypes, and indexes into those. The list
+  # sequence, pangenome graphs, PLINK genotypes and variants (`.pgen` / `.pvar`; a
+  # `.psam` is a sample table with no coordinates), and the indexes `.bai` / `.crai` /
+  # `.tbi` / `.csi` / `.fai` (not `.idx` or `.pbi`, which `index_file` lists too). The list
   # is an include list rather than an exclude list so that a file kind it does not
   # name — a log, a checksum, a PDF, an archive, a text table, or one the name
   # parser does not recognize — gets no claim until someone adds it on purpose
@@ -501,7 +504,7 @@ rules:
          ".bed", ".narrowpeak", ".broadpeak", ".bigwig", ".bw", ".bedgraph",
          ".fasta", ".fa",
          ".gfa", ".rgfa", ".gbz", ".vg", ".gbwt", ".xg",
-         ".pgen", ".pvar", ".psam",
+         ".pgen", ".pvar",
          ".bai", ".crai", ".tbi", ".csi", ".fai"]
       filename_pattern: "(?i)hg38|grch38|hs38"
     then:

@@ -788,9 +788,8 @@ def evaluate_claims(claims: list[dict]) -> ClaimResolution:
     - All claims agree → use that declaration
     - Claims disagree, highest tier is unique → highest tier wins (override)
     - Claims disagree, same max tier → conflict (status ``conflict``, no value, #88).
-      A ``not_applicable`` is a declaration like any other here: it no longer wins
-      over a value at its own tier (#523), since only tier or a curator settles a
-      disagreement (#88).
+      A ``not_applicable`` is a declaration like any other: against a value at the
+      same tier, the result is a conflict (#523).
 
     Tier ladder: tiers 1-3 are the rule tiers (extension / filename / header,
     declared in ``unified_rules.yaml``); ``CONTENT_TIER`` (4) is reserved for

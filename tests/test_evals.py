@@ -804,14 +804,13 @@ class TestDerivedFileTierPrecedence:
     """Which derived-file rules stamp `not_applicable`, and which stay silent so a
     filename rule can speak.
 
-    `not_applicable` was once terminal in the evaluator, so a rule claiming it beat a
-    tier-2 `filename_ref_*` claim. #106 removed it from `reference_assembly` on
-    blanket rules for exactly that reason, and #437 finished the job for the three
+    `not_applicable` wins only by tier (#523). #106 removed it from
+    `reference_assembly` on blanket rules because, when it still beat a same-tier
+    value, it blocked `filename_ref_*`; #437 finished the job for the three
     dimensions #106 left to reconsider: the index rule now claims only `data_type`.
     The checksum rule still claims all four, which is the contrast — a checksum is
     about bytes and has no coordinate space, while an index indexes coordinates into
-    one. Since #523 a `not_applicable` wins only by tier, and the reference rules do
-    not claim on a checksum at all, so the two never meet there.
+    one.
     """
 
     # --- Index files: the four a parent supplies stay open (#106, #437) ---

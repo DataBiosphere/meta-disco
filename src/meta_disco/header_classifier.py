@@ -717,8 +717,10 @@ def classify_from_tar_members(
 
     engine = _get_engine()
 
-    # Base pass over the archive's own name — its tokens may still carry a reference
-    # or other filename signal, and it seeds the result the content claims layer on.
+    # Base pass over the archive's own name — its tokens may still carry a filename
+    # signal, and it seeds the result the content claims layer on. A reference comes
+    # from it only when the name keeps an inner format the reference rules list
+    # (`x.GRCh38.bam.tar.gz`); a bare `grch38.XX.tar.gz` parses to no extension (#523).
     result = engine.classify_extended(ExtendedFileInfo(name=name), include_tier3=False)
 
     def _claim_content(data_modality: str | None, data_type: str | None, reason: str) -> None:
