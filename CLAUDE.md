@@ -180,7 +180,8 @@ evidence}` entry — plus the controlled vocabulary:
     scope 3.12, the queue 5.2). A row without a `reason` is seeded and declares nothing.
     Row ids are `<slot>.<slug>`, and no rule id contains a dot, which is what keeps the
     two apart. `make seed-value-map` appends seeded rows and never rewrites one;
-    `make review-queue` lists the unauthored values. `claims_from` builds a line's
+    `make review-queue` writes the unauthored values, grouped by source type, to
+    `docs/review-queue-report.md` and `docs/review-queue.html` (#524). `claims_from` builds a line's
     claims through `make_claim`; reconcile is its one caller in a run.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches inference and a run with evidence files present writes the

@@ -10,6 +10,7 @@ import pytest
 from meta_disco.models import SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
 from meta_disco.reconcile import REPORT_FILE
+from meta_disco.summaries import md_code
 from tests.run_fixtures import write_run
 from tests.test_reconcile import DATASET, TABLE, drs, go, published, record, write_evidence
 from tests.test_value_map import load
@@ -184,9 +185,9 @@ def test_catalog_text_is_a_code_span_in_the_markdown():
 
 
 def test_a_code_span_outlasts_the_backticks_in_its_value():
-    assert rr.code("a`b") == "``a`b``"
-    assert rr.code("`x`") == "`` `x` ``"
-    assert rr.code("one\ntwo") == "`one two`"
+    assert md_code("a`b") == "``a`b``"
+    assert md_code("`x`") == "`` `x` ``"
+    assert md_code("one\ntwo") == "`one two`"
 
 
 def test_no_catalog_text_can_close_the_dashboards_script_tag():

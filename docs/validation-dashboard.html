@@ -37,6 +37,8 @@
     <strong style="color: #24292f;">Validation Report</strong>
     &middot;
     <a href="reconcile-dashboard.html" style="color: #0969da; text-decoration: none;">Reconciliation Report</a>
+    &middot;
+    <a href="review-queue.html" style="color: #0969da; text-decoration: none;">Review Queue</a>
   </nav>
   <h1>Validation Report Dashboard <span id="run-time" style="font-size: 16px; font-weight: normal; color: #656d76;"></span></h1>
   <p id="subtitle"></p>
@@ -48,7 +50,7 @@
   <div id="tab-contents"></div>
 
   <script type="module">
-    const DATA = {"run_time": "2026-09-22 23:05:21", "sources": {"HPRC": {"matched": 6048, "unmatched": 0, "dimensions": {"platform": {"agree": 6039, "discrepancy": 0, "we_inferred": 0, "not_classified": 9, "no_truth": 0, "discrepancy_categories": {}}, "data_modality": {"agree": 1151, "discrepancy": 0, "we_inferred": 0, "not_classified": 4697, "no_truth": 0, "discrepancy_categories": {}}, "assay_type": {"agree": 0, "discrepancy": 225, "we_inferred": 0, "not_classified": 5823, "no_truth": 0, "discrepancy_categories": {"RNA-seq vs ISO-seq": {"ours": "RNA-seq", "truth_mapped": "ISO-seq", "count": 225, "example": "HG00099.lymph.m84081_240722_230051_s3-m84081_240723_010018_s4.flnc.bam"}}}, "reference_assembly": {"agree": 1633, "discrepancy": 5, "we_inferred": 0, "not_classified": 931, "no_truth": 0, "discrepancy_categories": {"GRCh38 vs CHM13": {"ours": "GRCh38", "truth_mapped": "CHM13", "count": 4, "example": "hprc-v1.0-mc-chm13.grch38.vcf.gz.tbi"}, "CHM13 vs GRCh38": {"ours": "CHM13", "truth_mapped": "GRCh38", "count": 1, "example": "hprc-v1.0-mc-chm13-minaf.0.1.min.old"}}}}, "metadata_coverage": {"platform": 6048, "data_modality": 5848, "assay_type": 6048, "reference_assembly": 2569}}}, "source_descriptions": {"HPRC": "Validated against sequencing, alignment, and annotation catalogs from the <a href=\"https://data.humanpangenome.org/\">HPRC Data Explorer<\/a>."}};
+    const DATA = {"run_time": "2026-09-23 20:29:01", "sources": {"HPRC": {"matched": 6048, "unmatched": 0, "dimensions": {"platform": {"agree": 6045, "discrepancy": 0, "we_inferred": 0, "not_classified": 3, "no_truth": 0, "discrepancy_categories": {}}, "data_modality": {"agree": 1154, "discrepancy": 0, "we_inferred": 0, "not_classified": 4694, "no_truth": 0, "discrepancy_categories": {}}, "assay_type": {"agree": 0, "discrepancy": 0, "we_inferred": 0, "not_classified": 6048, "no_truth": 0, "discrepancy_categories": {}}, "reference_assembly": {"agree": 44, "discrepancy": 2, "we_inferred": 0, "not_classified": 2523, "no_truth": 0, "discrepancy_categories": {"GRCh38 vs CHM13": {"ours": "GRCh38", "truth_mapped": "CHM13", "count": 2, "example": "hprc-v1.0-mc-chm13.grch38.vcf.gz.tbi"}}}}, "metadata_coverage": {"platform": 6048, "data_modality": 5848, "assay_type": 6048, "reference_assembly": 2569}}}, "source_descriptions": {"HPRC": "Validated against sequencing, alignment, and annotation catalogs from the <a href=\"https://data.humanpangenome.org/\">HPRC Data Explorer<\/a>."}};
 
     const escapeHtml = (value) => {
       const div = document.createElement('div');

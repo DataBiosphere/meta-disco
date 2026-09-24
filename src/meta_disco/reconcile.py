@@ -57,9 +57,8 @@ from .models import (
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
-    SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
-    SOURCE_REPOSITORY_METADATA,
     UNMAPPED,
     field_detail,
 )
@@ -137,14 +136,6 @@ CONFLICT_SOURCES = "conflict_sources"
 CONFLICT_CATEGORIES = (CONFLICT_INFERENCE, CONFLICT_SOURCES, CONFLICT_PUBLISHED)
 # The report's name for evidence that names no dataset, and so covers every one.
 EVERY_DATASET = "(every dataset)"
-
-# The order a delivered value is attributed in, with each source's name in the report:
-# what the repository publishes, then what its submitters wrote, then other catalogs.
-SOURCE_PRECEDENCE = (
-    (SOURCE_PUBLISHED_VALUE, "published"),
-    (SOURCE_REPOSITORY_METADATA, "submitter"),
-    (SOURCE_EXTERNAL_GROUND_TRUTH, "external"),
-)
 
 
 def fill_category(name: str, harmonized: bool) -> str:

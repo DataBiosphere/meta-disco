@@ -10,6 +10,7 @@ import ast
 import re
 from pathlib import Path
 
+import generate_review_queue as grq
 import pytest
 import yaml
 from classify_index_files import AMBIGUOUS_PARENT, NO_MATCHING_PARENT
@@ -33,14 +34,16 @@ from meta_disco.value_map import (
     ValueMap,
     claims_from,
     load_value_map,
+    main,
     match_key,
     normalize,
     render_queue,
+    review,
     review_queue,
     row_id,
     seed,
 )
-from tests.test_source_evidence import evidence_file_envelope
+from tests.test_source_evidence import evidence_file_envelope, published_envelope
 
 REAL_EVIDENCE_ROOT = Path("data/source_evidence")
 HPRC_VALUES = Path("tests/fixtures/hprc_evidence_values.yaml")
@@ -802,10 +805,11 @@ def test_two_rows_keyed_alike_are_refused_by_the_table_itself(tmp_path):
 def test_ac26_nothing_but_reconcile_imports_the_table():
     """Inference output is unchanged because no classification code reaches the module: the argument the
     issue allows in place of a corpus diff, made checkable over every module and script but the table's own.
-    The reconcile stage is the table's one reader (#432), and it writes its own artifact, never inference's."""
+    The reconcile stage is the table's one reader in a run (#432), and it writes its own artifact, never
+    inference's; the review-queue report (#524) reads it too and writes only its two report files."""
     sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
-    assert importers == ["src/meta_disco/reconcile.py"], importers
+    assert importers == ["scripts/generate_review_queue.py", "src/meta_disco/reconcile.py"], importers
 
 
 def test_ac27_the_seeder_and_the_queue_read_every_line_through_iter_evidence(empty_table, evidence_root, monkeypatch):
@@ -999,3 +1003,215 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
     assert all(row.scope is None for row in table.rows)
+
+
+# --- the review queue as a report (#524) ---------------------------------------------
+
+TEMPLATE = f"<main>{grq.PLACEHOLDER}</main>"
+
+
+@pytest.fixture
+def two_sources(tmp_path: Path, evidence_root: Path) -> Path:
+    """One raw value through a submitter table and the published column, plus one value only a submitter gives."""
+    ds = "AnVIL_ENCORE_293T"
+    write_generation(
+        evidence_root,
+        ds,
+        "file",
+        [
+            entry("reference_assembly", "GRCh38 + Gencode40", f"drs://{n}", ds, "file", "reference_assembly")
+            for n in (1, 2)
+        ]
+        + [entry("platform", "Illumina NovaSeq X", "drs://1", ds, "file", "sequencing_platform")],
+    )
+    envelope = published_envelope(dataset=ds, table="anvil_file")
+    cell = EvidenceEntry(
+        field="reference_assembly",
+        target_key_value="drs://1",
+        raw_value='["GRCh38 + Gencode40"]',
+        source=claim_source_for(envelope.source, "reference_assembly"),
+    )
+    write_generation(evidence_root, ds, "anvil_file", [cell], envelope=envelope, source="anvil_published")
+    return evidence_root
+
+
+def section(rendered: str, heading: str) -> str:
+    return rendered.split(f"## {heading}", 1)[1].split("\n## ", 1)[0]
+
+
+def test_a_published_value_is_listed_under_published_never_submitter(tmp_path, two_sources):
+    rendered = render_queue(review_queue(two_sources, load(tmp_path, "rows:\n")), two_sources)
+    published, submitter = section(rendered, "Published"), section(rendered, "Submitter")
+    assert "anvil_file" in published and "anvil_file" not in submitter
+    assert "`file`" in submitter and "`file`" not in published
+
+
+def test_one_value_through_two_tables_is_two_lines_with_their_own_type_and_count(tmp_path, two_sources):
+    listed = [e for e in review_queue(two_sources, load(tmp_path, "rows:\n")) if e.slot == "reference_assembly"]
+    assert sorted((e.source_type, e.table, e.files) for e in listed) == [
+        ("published_value", "anvil_file", 1),
+        ("repository_metadata", "file", 2),
+    ]
+
+
+def test_the_printed_queue_is_the_written_one(tmp_path, two_sources, capsys, empty_table):
+    out = tmp_path / "queue.md"
+    args = ["--table", str(empty_table), "--evidence-root", str(two_sources)]
+    assert main([*args, "queue"]) == 0
+    printed = capsys.readouterr().out
+    assert main([*args, "--output", str(out), "queue"]) == 0
+    assert printed == out.read_text()
+
+
+def test_a_seeded_row_is_named_and_no_row_is_a_dash(tmp_path, two_sources):
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.illumina_novaseq_x\n    match: {slot: platform, value: Illumina NovaSeq X}\n"
+        "    seeded_from: [x]\n",
+    )
+    rendered = render_queue(review_queue(two_sources, table), two_sources)
+    (novaseq,) = [line for line in rendered.splitlines() if "NovaSeq" in line]
+    assert novaseq.endswith("| platform.illumina_novaseq_x |")
+    assert all(line.endswith("| — |") for line in rendered.splitlines() if "Gencode40" in line)
+
+
+def test_an_empty_group_says_so_in_one_line(tmp_path, evidence_root):
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")])
+    rendered = render_queue(review_queue(evidence_root, load(tmp_path, "rows:\n")), evidence_root)
+    assert section(rendered, "Published").strip().endswith("No unreviewed values.")
+    submitter = section(rendered, "Submitter")
+    assert "### platform" in submitter and "| 1 | `'Revio'` |" in submitter
+
+
+def test_catalog_text_is_inert_in_the_markdown_and_the_html(tmp_path, evidence_root):
+    hostile = '![x](https://example.invalid/t) <img src=x onerror="a()">'
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", hostile)])
+    entries = review_queue(evidence_root, load(tmp_path, "rows:\n"))
+    rendered = render_queue(entries, evidence_root)
+    assert f"`{hostile!r}`" in rendered  # a code span: shown literally
+    page = grq.render_html(entries, evidence_root, TEMPLATE)
+    assert "<img" not in page and "&lt;img src=x onerror=&quot;a()&quot;&gt;" in page
+
+
+def test_an_authored_value_leaves_the_report(tmp_path, two_sources):
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.illumina_novaseq_x\n    match: {slot: platform, value: Illumina NovaSeq X}\n"
+        "    declares: {platform: ILLUMINA}\n    reason: An Illumina instrument.\n",
+    )
+    entries = review_queue(two_sources, table)
+    assert not any("NovaSeq" in e.raw_value for e in entries)
+    assert "NovaSeq" not in grq.render_html(entries, two_sources, TEMPLATE)
+
+
+def test_every_importer_source_has_a_queue_group():
+    from meta_disco.models import SOURCE_PRECEDENCE
+    from meta_disco.value_map import QUEUE_GROUP_TEXT
+
+    assert set(QUEUE_GROUP_TEXT) == {source_type for source_type, _ in SOURCE_PRECEDENCE}
+
+
+def test_a_queue_limited_to_some_datasets_says_so(tmp_path, two_sources):
+    entries = review_queue(two_sources, load(tmp_path, "rows:\n"), ["AnVIL_ENCORE_293T"])
+    assert "from evidence for AnVIL_ENCORE_293T only under" in render_queue(entries, two_sources, ["AnVIL_ENCORE_293T"])
+
+
+MAPPED = """
+rows:
+  - id: reference_assembly.grch38
+    match: {slot: reference_assembly, value: GRCh38, alternates: ["GRCh38 + Gencode40"]}
+    declares: {reference_assembly: GRCh38}
+    reason: The GRCh38 assembly.
+  - id: platform.unused
+    match: {slot: platform, value: NEVER SEEN}
+    declares: {}
+    reason: Reviewed; says nothing.
+  - id: platform.seeded
+    match: {slot: platform, value: Illumina NovaSeq X}
+    seeded_from: [x]
+"""
+
+
+def test_authored_mappings_list_every_authored_row_with_its_files_per_source(tmp_path, two_sources):
+    found = review(two_sources, load(tmp_path, MAPPED))
+    lines = {m.row.id: dict(m.files) for m in found.mappings}
+    # Authored rows only, a seeded one is the queue's; a row that matched nothing is listed empty.
+    assert lines == {
+        "reference_assembly.grch38": {"repository_metadata": 2, "published_value": 1},
+        "platform.unused": {},
+    }
+    assert [m.row.id for m in found.mappings] == ["reference_assembly.grch38", "platform.unused"]  # most files first
+    rendered = render_queue(found.queue, two_sources, None, found.mappings)
+    mappings = rendered.split("## Authored mappings", 1)[1]
+    assert "| 3 | 1 | 2 | 0 | reference_assembly.grch38 | `any` |" in mappings
+    assert "`'GRCh38' · 'GRCh38 + Gencode40'`" in mappings
+    assert "| 0 | 0 | 0 | 0 | platform.unused |" in mappings and "nothing (reviewed, no claim)" in mappings
+    page = grq.render_html(found.queue, two_sources, TEMPLATE, None, found.mappings)
+    assert "Authored mappings" in page and "platform.unused" in page
+
+
+def test_the_queue_and_the_mappings_are_organized_by_slot(tmp_path, two_sources):
+    queue = review(two_sources, load(tmp_path, "rows:\n")).queue
+    submitter = section(render_queue(queue, two_sources), "Submitter")
+    # Slots in CLASSIFICATION_FIELDS order: platform before reference_assembly.
+    assert submitter.index("### platform") < submitter.index("### reference_assembly")
+    found = review(two_sources, load(tmp_path, MAPPED))
+    mappings = render_queue(found.queue, two_sources, None, found.mappings).split("## Authored mappings", 1)[1]
+    assert mappings.index("### platform") < mappings.index("### reference_assembly")
+    assert "| rule |" in mappings and "| rule it would use |" in submitter
+
+
+def test_a_file_seen_through_two_evidence_files_is_counted_once(tmp_path, evidence_root):
+    """Two current files for one dataset (two catalog versions, or two tables one rule matches in) repeat a key."""
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", v, "drs://1") for v in ("Revio", "Mystery")]
+    )
+    write_generation(
+        evidence_root, "AnVIL_HPRC_R2", "kinnex", [entry("platform", v, "drs://1", table="kinnex") for v in ("Revio",)]
+    )
+    found = review(evidence_root, table)
+    assert {m.row.id: dict(m.files) for m in found.mappings} == {"platform.revio": {"repository_metadata": 1}}
+
+
+def test_one_key_in_two_datasets_is_two_files(tmp_path, evidence_root):
+    """A join key is unique only within its target dataset: the same value in two datasets names two files."""
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    for ds in ("AnVIL_HPRC_R2", "ANVIL_HPRC"):
+        write_generation(evidence_root, ds, "hifi", [entry("platform", "Revio", "same-key", dataset=ds)])
+    (line,) = review(evidence_root, table).mappings
+    assert dict(line.files) == {"repository_metadata": 2}
+
+
+def test_a_group_whose_evidence_was_read_but_is_all_reviewed_says_so(tmp_path, evidence_root):
+    """External evidence fully covered by rules is listed as empty, not left out as if it were never read."""
+    from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
+
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    source = file_source()
+    envelope = evidence_file_envelope(
+        source=source,
+        source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+        source_version="v1",
+        source_key=JOIN_KEY_DRS_URI,
+        target=EvidenceTarget(system="anvil", dataset="AnVIL_HPRC_R2", version="anvil15"),
+        target_key=JOIN_KEY_DRS_URI,
+    )
+    write_generation(evidence_root, "AnVIL_HPRC_R2", "hifi", [entry("platform", "Revio")], envelope=envelope)
+    found = review(evidence_root, table)
+    assert found.queue == [] and SOURCE_EXTERNAL_GROUND_TRUTH in found.source_types
+    rendered = render_queue(found.queue, evidence_root, None, None, found.source_types)
+    assert section(rendered, "External").strip().endswith("No unreviewed values.")
+    assert "## External" not in render_queue(found.queue, evidence_root)
