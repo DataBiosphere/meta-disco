@@ -622,6 +622,8 @@ class QueueEntry:
 
 
 _Group = tuple[str, str, str | None, str | None, str | None, str, str]
+# A file's identity in the evidence: target system, target dataset, join key value.
+_Target = tuple[str, str | None, str]
 
 
 @dataclass(frozen=True)
@@ -655,24 +657,30 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
 
     Driven by the evidence, not the rows (5.2): a value with no row and a value with a
     seeded row are listed the same way; a value whose selected row is an authored no-op
-    is not listed. ``files`` counts distinct target key values across every evidence file
+    is not listed. ``files`` counts distinct files — a target key value within its target
+    system and dataset — across every evidence file
     contributing to a line or a rule's source type, so a file seen through two evidence files
     (two catalog versions of a dataset, or two tables a rule matches in) is counted once. The
     sets are held for the whole pass, which costs memory in proportion to the evidence lines.
     """
-    targets: dict[_Group, set[str]] = {}
+    targets: dict[_Group, set[_Target]] = {}
     row_ids: dict[_Group, str | None] = {}
-    matched: dict[str, dict[str, set[str]]] = {r.id: {} for r in table.rows if r.authored}
+    matched: dict[str, dict[str, set[_Target]]] = {r.id: {} for r in table.rows if r.authored}
     for path in _current_paths(evidence_root, datasets):
-        source_type = read_envelope(path).source_type
+        envelope = read_envelope(path)
+        source_type = envelope.source_type
+        # A join key is unique within its target system and dataset, not across them (a
+        # file_md5sum or file_name can repeat), so a file's identity carries both.
+        scope = (envelope.target.system, envelope.target.dataset)
         for entry in iter_evidence(path):
+            target = (*scope, entry.target_key_value)
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
-                matched[row.id].setdefault(source_type, set()).add(entry.target_key_value)
+                matched[row.id].setdefault(source_type, set()).add(target)
                 continue
             src = entry.source
             group = (source_type, src.name, src.dataset, src.table, src.column, entry.field, entry.raw_value)
-            targets.setdefault(group, set()).add(entry.target_key_value)
+            targets.setdefault(group, set()).add(target)
             row_ids.setdefault(group, None if row is None else row.id)
     files = {group: len(seen) for group, seen in targets.items()}
     usage = {row_id: {t: len(seen) for t, seen in by_type.items()} for row_id, by_type in matched.items()}

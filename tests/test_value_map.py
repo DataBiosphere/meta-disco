@@ -1176,3 +1176,16 @@ def test_a_file_seen_through_two_evidence_files_is_counted_once(tmp_path, eviden
     )
     found = review(evidence_root, table)
     assert {m.row.id: dict(m.files) for m in found.mappings} == {"platform.revio": {"repository_metadata": 1}}
+
+
+def test_one_key_in_two_datasets_is_two_files(tmp_path, evidence_root):
+    """A join key is unique only within its target dataset: the same value in two datasets names two files."""
+    table = load(
+        tmp_path,
+        "rows:\n  - id: platform.revio\n    match: {slot: platform, value: Revio}\n"
+        "    declares: {platform: PACBIO}\n    reason: a PacBio instrument\n",
+    )
+    for ds in ("AnVIL_HPRC_R2", "ANVIL_HPRC"):
+        write_generation(evidence_root, ds, "hifi", [entry("platform", "Revio", "same-key", dataset=ds)])
+    (line,) = review(evidence_root, table).mappings
+    assert dict(line.files) == {"repository_metadata": 2}
