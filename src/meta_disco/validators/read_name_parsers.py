@@ -94,6 +94,29 @@ class MgiReadName:
     format: str = "mgi"
 
 
+# Names this module and its re-exporters no longer provide, each with why. Importing
+# one raises an ImportError that says so, instead of Python's bare "cannot import".
+REMOVED_NAMES = {
+    "infer_illumina_instrument_model": (
+        "removed in #532: an instrument-serial prefix is a vendor numbering convention, not "
+        "a statement of the model; the instrument_model dimension reads @RG PM instead"
+    ),
+}
+
+
+def removed_name(module: str, name: str) -> ImportError | None:
+    """The ImportError for a name in ``REMOVED_NAMES``, or None for any other name."""
+    why = REMOVED_NAMES.get(name)
+    return ImportError(f"{module}.{name} was {why}") if why else None
+
+
+def __getattr__(name: str):
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, str]:
     """
     Extract ENA/SRA/DDBJ accession from a FASTQ read name.

@@ -95,3 +95,13 @@ __all__ = [
     "detect_paired_end_indicators",
     "detect_platform_from_read_name",
 ]
+
+
+def __getattr__(name: str):
+    """Say why a removed name is gone (``read_name_parsers.REMOVED_NAMES``)."""
+    from .read_name_parsers import removed_name
+
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

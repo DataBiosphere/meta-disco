@@ -1,5 +1,7 @@
 """Tests for the header classifier module."""
 
+import importlib
+
 import pytest
 
 from meta_disco.file_name import FileName
@@ -223,6 +225,15 @@ def test_parse_ont_read_name(read_name, expected):
 # =============================================================================
 # FASTQ CLASSIFICATION TESTS
 # =============================================================================
+
+
+@pytest.mark.parametrize(
+    "module", ["meta_disco.header_classifier", "meta_disco.validators", "meta_disco.validators.read_name_parsers"]
+)
+def test_importing_the_removed_prefix_guess_says_why(module):
+    """The break is explicit: the ImportError names #532 rather than a bare missing name."""
+    with pytest.raises(ImportError, match="removed in #532"):
+        importlib.import_module(module).infer_illumina_instrument_model  # noqa: B018  the access is the test
 
 
 class TestFastqReadMetadata:

@@ -1102,3 +1102,13 @@ def classify_from_bed_signals(
             )
 
     return result.to_output_dict()
+
+
+def __getattr__(name: str):
+    """Say why a removed name is gone (``read_name_parsers.REMOVED_NAMES``)."""
+    from .validators.read_name_parsers import removed_name
+
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
