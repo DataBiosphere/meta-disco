@@ -21,44 +21,49 @@ from typing import TypedDict
 
 from meta_disco.deployments import PROD
 from meta_disco.file_name import FileName
-from meta_disco.models import CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
+from meta_disco.models import CLASSIFICATION_FIELDS, CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 from meta_disco.rule_engine import CONFLICT_MARKER
 from meta_disco.summaries import escape_md_cell
 
-DIMENSIONS = [
-    ("data_modality", "Data Modality", ""),
-    ("data_type", "Data Type", ""),
-    ("reference_assembly", "Reference Assembly", ""),
-    (
-        "platform",
+# Each dimension's report label and note. The report covers CLASSIFICATION_FIELDS, in
+# its order; a dimension added there without an entry here fails at import.
+_DIMENSION_TEXT = {
+    "data_modality": ("Data Modality", ""),
+    "data_type": ("Data Type", ""),
+    "reference_assembly": ("Reference Assembly", ""),
+    "platform": (
         "Platform",
-        "**Note**: Platform is inherently unknowable for most derived formats "
-        "(VCF, BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ "
-        "(via read name patterns) can encode platform. The high not-classified "
-        "rate is expected.",
+        (
+            "**Note**: Platform is inherently unknowable for most derived formats (VCF, "
+            "BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ (via read name "
+            "patterns) can encode platform. The high not-classified rate is expected."
+        ),
     ),
-    (
-        "assay_type",
+    "assay_type": (
         "Assay Type",
-        "**Note**: Like platform, assay type is inherently unknowable for most "
-        "derived formats. It is determined only by a rule that sees evidence of the "
-        "assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), "
-        "and extension where the format implies it (`.idat` is a methylation array, "
-        "`.svs` histology). Nothing infers it from the modality (#88), reads file size, "
-        "or infers WGS from a long-read platform (#430). The high not-classified rate "
-        "is expected.",
+        (
+            "**Note**: Like platform, assay type is inherently unknowable for most derived "
+            "formats. It is determined only by a rule that sees evidence of the assay: a "
+            "STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and "
+            "extension where the format implies it (`.idat` is a methylation array, `.svs` "
+            "histology). Nothing infers it from the modality (#88), reads file size, or "
+            "infers WGS from a long-read platform (#430). The high not-classified rate is "
+            "expected."
+        ),
     ),
-    (
-        "instrument_model",
+    "instrument_model": (
         "Instrument Model",
-        "**Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` "
-        "value that names exactly one model (#532); a read-name serial prefix is a "
-        "vendor numbering convention and is not read. Most files carry no such value, "
-        "so the high not-classified rate is expected. This report reads inference "
-        "only; the submitter tables, which reconcile reads, name models far more often.",
+        (
+            "**Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` "
+            "value that names exactly one model (#532); a read-name serial prefix is a "
+            "vendor numbering convention and is not read. Most files carry no such value, "
+            "so the high not-classified rate is expected. This report reads inference only;"
+            " the submitter tables, which reconcile reads, name models far more often."
+        ),
     ),
-]
+}
+DIMENSIONS = [(field, *_DIMENSION_TEXT[field]) for field in CLASSIFICATION_FIELDS]
 
 
 def get_extension(filename: str) -> str:
